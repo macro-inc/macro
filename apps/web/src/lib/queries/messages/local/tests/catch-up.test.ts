@@ -288,7 +288,7 @@ describe('pushes a page that is gone left unstored', () => {
 });
 
 describe('rereadChannelsAfterStorageReset', () => {
-  it('has the loaded channel pages and threads read again, and nothing else', () => {
+  it('has channel pages and threads read again, and nothing else', () => {
     invalidateQueries.mockClear();
 
     rereadChannelsAfterStorageReset();
@@ -304,6 +304,16 @@ describe('rereadChannelsAfterStorageReset', () => {
       ).toBe(true);
       expect(
         filter.predicate({ queryKey: messageKeys.messages(document).queryKey })
+      ).toBe(false);
+      expect(
+        filter.predicate({
+          queryKey: messageKeys.threadReplies(channel, 'a-root').queryKey,
+        })
+      ).toBe(true);
+      expect(
+        filter.predicate({
+          queryKey: messageKeys.threadReplies(document, 'a-root').queryKey,
+        })
       ).toBe(false);
     }
   });

@@ -338,9 +338,10 @@ export async function storeUnstoredPushes(
 
 /**
  * The device lost everything it held: its storage was reset under this page.
- * Forgets what the page knew of it and has every loaded channel page and
- * thread read again, so the device holds what is on screen once more. Without
- * this a channel read before the reset opens offline with nothing.
+ * Forgets what the page knew of it and has the pages and threads of the open
+ * channels read again, so the device holds what is on screen once more; a
+ * channel not on screen is read again when it is next opened. Without this a
+ * channel read before the reset opens offline with nothing.
  */
 export function rereadChannelsAfterStorageReset(): void {
   resetChannelSync();
