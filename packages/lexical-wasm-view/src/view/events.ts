@@ -13,7 +13,7 @@ import { textLeaf } from './dom';
 import { DragAccess } from './drag';
 import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
-import { keyboardShortcut } from './keyboard-shortcuts';
+import { keyboardShortcut, macroFormatShortcut } from './keyboard-shortcuts';
 import {
   isSelectionCapturedInDecoratorInput,
   isSelectionWithinEditor,
@@ -443,6 +443,11 @@ export function registerEvents(view: EditorView): {
           formatArgument = 3;
           break;
       }
+    }
+    if (formatArgument === undefined) {
+      formatArgument = macroFormatShortcut(event, navigator.platform);
+      // Source keyboardShortcutsPlugin stops these at the editor.
+      if (formatArgument !== undefined) event.stopPropagation();
     }
     if (wordDelete || lineDelete || formatArgument !== undefined) {
       event.preventDefault();

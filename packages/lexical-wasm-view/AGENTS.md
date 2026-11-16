@@ -56,6 +56,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Carry ephemeral clipboard host facts through registerFacts; release them after native admission or cancellation, and deliver typed plugin host requests through onPluginEvent after Diff.
 - Capture window Shift state at paste invocation and send typed intent on additive input tag 10 only when true; preserve legacy tag 4 for ordinary paste/drop and retain MIME precedence across lazy HTML import.
 - Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks. Set preventDefault=false for layout-dependent routes that leave unhandled movement to the browser, and consume native prevention plus short-circuiting after-listeners.
+- Route Macro's format shortcuts (Ctrl/Cmd+Shift+X strikethrough, +E code, +H highlight) through macroFormatShortcut into the same FormatText keydown as B/I/U, matching Source keyboardShortcutsPlugin's physical-code tests and stopPropagation.
 - Share wordKeyCommand between the root command classifier and application word routes so exact platform Control-or-Meta Left/Right offers MoveToStart/End to both before and after listeners; keep generic KeyDown first and portable hot input behavior separate.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach
   lower-priority view listeners, including queued inputs.

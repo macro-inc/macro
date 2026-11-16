@@ -34,3 +34,20 @@ export function keyboardShortcut(
   if (matchesKey(event, 'a')) return CommandCode.SelectAll;
   return 0;
 }
+
+/**
+ * Macro keyboardShortcutsPlugin DefaultShortcuts: the physical key with the
+ * platform Control-or-Meta key, ignoring the other modifiers it ignores.
+ * Returns the FormatText argument (TextFormatType index), or undefined.
+ */
+export function macroFormatShortcut(
+  event: ShortcutEvent,
+  platform: string
+): number | undefined {
+  const apple = /Mac|iPod|iPhone|iPad/.test(platform);
+  if (!(apple ? event.metaKey : event.ctrlKey)) return undefined;
+  if (event.code === 'KeyX' && event.shiftKey) return 2;
+  if (event.code === 'KeyE') return 4;
+  if (event.code === 'KeyH') return 7;
+  return undefined;
+}
