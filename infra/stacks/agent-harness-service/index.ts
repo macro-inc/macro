@@ -24,7 +24,7 @@ const tags = {
 };
 
 // ── Secrets ──────────────────────────────────────────────────────────────────
-// Config (DATABASE_URL, DAYTONA_API_KEY, KAFKA_BROKERS, AI tool config, ...)
+// Config (DATABASE_URL, KAFKA_BROKERS, AI tool config, ...)
 // arrives through the Doppler-synced APP_SECRETS_JSON. Some values hold
 // Secrets Manager secret *names* that the service resolves at runtime, so the
 // task role needs access to both its auth secrets and the shared AI tool

@@ -1,8 +1,8 @@
 //! Bridge a sidecar WebSocket to typed ACP frames.
 //!
-//! Shared by both providers: Daytona dials the sidecar through a preview URL
-//! and Namespace through an ingress, but past the dial the protocol is
-//! identical, so the pump is written once here.
+//! Shared by every sidecar provider: local Docker dials the sidecar by
+//! container name and Namespace through an ingress, but past the dial the
+//! protocol is identical, so the pump is written once here.
 //!
 //! ## One message, one frame
 //!

@@ -17,8 +17,9 @@ between the sandbox and the rest of the product.
 - `src/domain/codex.rs`: per-runtime session setup.
 - `src/outbound/sidecar.rs` + `sidecar_pump.rs`: the container sidecar
   transport that speaks `agent_runtime_protocol`.
-- `src/outbound/containers.rs` / `managed_containers.rs`: container
-  provisioning.
+- `src/outbound/containers.rs` / `local/manager.rs`: container
+  provisioning. Local Docker serves `run_local`; deployed harnesses have no
+  sandbox provider and decline `@coder` with a pointer to Runtimes settings.
 - `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
   prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.

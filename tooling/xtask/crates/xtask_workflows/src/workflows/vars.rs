@@ -16,7 +16,6 @@ secret!(ANDROID_RELEASE_DOPPLER_TOKEN);
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);
-secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DOPPLER_TOKEN);
@@ -105,10 +104,6 @@ pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 /// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
 /// on the cache volume, which PR jobs write. Off the volume on purpose.
 pub const DEPLOY_WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs-deploy";
-
-/// GHCR repository for the agent-harness sandbox image (the same Dockerfile
-/// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
-pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

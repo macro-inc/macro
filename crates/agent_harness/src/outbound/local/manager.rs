@@ -8,7 +8,6 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{SandboxEgress, SpawnContainer};
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect};
-use crate::outbound::daytona::AnthropicApiKey;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
@@ -30,16 +29,34 @@ pub struct LocalSettings {
     pub anthropic_api_key: AnthropicApiKey,
 }
 
+/// API key sandboxes use to run Anthropic models.
+///
+/// opencode activates its `anthropic` provider on this variable's value —
+/// empty behaves like absent — so it wraps a possibly empty string and is
+/// always injected. Empty means the sandbox has no model provider at all
+/// (`container/opencode.json` enables only `anthropic`), so managed sessions
+/// advertise no models and cannot prompt.
+#[derive(Clone)]
+pub struct AnthropicApiKey(String);
+
+impl AnthropicApiKey {
+    /// Wrap an Anthropic API credential.
+    #[must_use]
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Hands out containers on the local Docker daemon.
 ///
-/// The development counterpart to the Daytona provider, and deliberately the
-/// same shape: it runs the same image, execs the same readiness recipe, and
-/// dials the same sidecar, so what it exercises is what a deployed sandbox
-/// does.
-///
-/// What it does not have is Daytona's idle reaper. A local sandbox costs
-/// nothing per hour; `teardown` and [`Self::shutdown_all`] still remove
-/// containers so nothing outlives a deleted session or a stopped stack.
+/// It runs the harness image, execs the shared readiness recipe, and dials
+/// the sidecar. There is no idle reaper: a local sandbox costs nothing per
+/// hour; `teardown` and [`Self::shutdown_all`] still remove containers so
+/// nothing outlives a deleted session or a stopped stack.
 #[derive(Clone)]
 pub struct LocalContainerManager {
     docker: Docker,

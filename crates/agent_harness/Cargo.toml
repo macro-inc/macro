@@ -53,7 +53,6 @@ github = { path = "../github", default-features = false, features = [
 ] }
 feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev" }
-macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { path = "../mcp_client" }
 mcp_select = { path = "../mcp_select" }

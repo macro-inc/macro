@@ -38,8 +38,7 @@ payloads.
 ## Recipes
 
 - Add a new message type: `src/domain/` (schema) → `src/testing/wire_conformance.rs`
-  (conformance test) → `src/bin/export_types.rs` if the frontend needs the
-  generated type.
+  (conformance test).
 
 `domain/notification.rs` owns typed system events and their ACP metadata/XML.
 Notification-only invocations use `AgentAction::notification`; public control must

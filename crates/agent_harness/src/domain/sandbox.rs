@@ -1,8 +1,6 @@
 //! Compute resources for a [`SandboxSize`].
 //!
-//! Named-tier CPU, RAM, and disk come from [`SANDBOX_SIZES_JSON`]. Daytona
-//! snapshot creates inherit [`snapshot`] until the org quota can take the
-//! product default disk.
+//! Named-tier CPU, RAM, and disk come from [`SANDBOX_SIZES_JSON`].
 
 use std::sync::OnceLock;
 
@@ -29,7 +27,6 @@ struct SizeTable {
     small: Quota,
     default: Quota,
     large: Quota,
-    snapshot: Quota,
 }
 
 fn table() -> &'static SizeTable {
@@ -87,17 +84,9 @@ pub fn resources(size: SandboxSize) -> SandboxResources {
     })
 }
 
-/// Daytona snapshot bake size from [`SANDBOX_SIZES_JSON`].
-#[must_use]
-pub fn snapshot() -> SandboxResources {
-    resources_from(&table().snapshot)
-}
-
 /// CPU/RAM comparison used by managers that can resize a live container.
 ///
-/// Disk is ignored: Daytona resize does not send disk, so a live session keeps
-/// the snapshot's disk. Spawn uses this against a snapshot's live CPU/RAM
-/// because `POST /sandbox` with a snapshot cannot set resources.
+/// Disk is ignored: a live container keeps the disk it was created with.
 #[must_use]
 pub fn resize_effect(from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
     resize_effect_from_resources(resources(from), resources(to))

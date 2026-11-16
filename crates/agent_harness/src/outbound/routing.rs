@@ -1,7 +1,7 @@
 //! Routing between coexisting container providers.
 //!
-//! The sandbox provider (Daytona today) and the Cursor provider are not a
-//! deployment choice between which the composition root picks one — they run
+//! The sandbox, Cursor, and Codex providers are not a deployment choice
+//! between which the composition root picks one — they run
 //! side by side, and which one serves a session is a per-session fact: the
 //! session's bot. This manager is that fact turned into dispatch, so the
 //! domain keeps talking to a single [`ContainerManager`].

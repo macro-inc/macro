@@ -156,7 +156,6 @@ fn emits_required_keys() {
         "DEV_DANGEROUS_LOCAL_CONTAINERS",
         "LOCAL_CONTAINER_IMAGE",
         "LOCAL_CONTAINER_NETWORK",
-        "DAYTONA_API_KEY",
         "HARNESS_BOT_ID",
         "REPO_STORAGE_ROOT",
         "MAX_REPO_SIZE_BYTES",
@@ -431,10 +430,9 @@ fn fusionauth_public_url_uses_the_instance_host_port() {
     );
 }
 
-/// A local stack runs sandboxes on the developer's own daemon, so it needs no
-/// Daytona account to exercise the sandbox path.
+/// A local stack runs sandboxes on the developer's own Docker daemon.
 #[test]
-fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
+fn the_agent_harness_uses_local_containers() {
     let env = local_env();
 
     assert_eq!(
@@ -442,7 +440,6 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
             .map(String::as_str),
         Some("true")
     );
-    assert_eq!(env.get("DAYTONA_API_KEY").map(String::as_str), Some(""));
     // No `GITHUB_TOKEN`: the sandbox clones through the egress proxy, which
     // holds the credential on its behalf.
     assert!(!env.contains_key("GITHUB_TOKEN"));

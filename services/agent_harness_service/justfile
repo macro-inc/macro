@@ -1,19 +1,14 @@
-# The agent harness service: agent-session trigger events in, sandboxed
-# coding agent sessions out.
+# Agent-session triggers and runtime orchestration.
 #
-# `run-local` mirrors agent_trigger_service's recipe: the binary runs on the
-# host against the compose-exposed Postgres/Kafka/connection-gateway. The
-# Daytona credentials are the only values with no local default - export them
-# (or put them in a `.env` next to this justfile) before running.
+# `run-local` runs on the host against compose-exposed local services,
+# with no sandbox provider.
 set dotenv-load := true
 
 check:
   SQLX_OFFLINE=true cargo check
 
-# Run against host-exposed local Postgres, Kafka, and connection gateway.
-# Needs DAYTONA_API_KEY, DAYTONA_SNAPSHOT, and GITHUB_TOKEN in the environment.
-#
-# Two managed bots: @coder (HARNESS_BOT_ID) runs in a Daytona sandbox,
+# Deployed harnesses have no sandbox provider: @coder is declined with a
+# pointer to Runtimes settings. Root `just run_local` uses local Docker.
 # @macro-new (INMEM_BOT_ID) runs on the in-process ACP runtime.
 run-local:
   ENVIRONMENT=local \

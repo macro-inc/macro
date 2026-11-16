@@ -4,7 +4,7 @@
 //! Spawning wires an in-process ACP agent (`cursor_cloud_agents::serve`) to a
 //! [`PipeTransport`] over a `tokio::io::duplex`, and the actual work happens
 //! on a Cursor cloud agent in Cursor's VMs. That is why the lifecycle is so
-//! much smaller than Daytona's — no image, no readiness recipe, no idle
+//! much smaller than a sandbox provider's — no image, no readiness recipe, no idle
 //! reaper (an idle cloud agent costs us nothing), and teardown archives the
 //! agent on cursor.com rather than destroying anything.
 //!
@@ -74,7 +74,7 @@ const PIPE_CAPACITY: usize = 64 * 1024;
 /// Cursor is slowest.
 const FOREIGN_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// A pipe idle this long is shut down, Daytona's reaper made local: the
+/// A pipe idle this long is shut down: the
 /// session actor sees a clean disconnect and the next prompt resumes through
 /// [`ContainerManager::resume`]. What this reclaims is not a sandbox — there
 /// is none — but the pipe's tasks and its per-second cursor.com poll.
