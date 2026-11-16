@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "macro",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Search, read, and create documents, messages, and tasks in your Macro workspace.",
   "author": { "name": "Macro", "email": "support@macro.com", "url": "https://macro.com" },
   "homepage": "https://macro.com",
@@ -47,7 +47,7 @@
         "commerce": false
       },
       "publication": {
-        "release_notes": "First release: search, read, and create in your Macro workspace."
+        "release_notes": "Search, read, and create in your Macro workspace. Tool results no longer include people's user ids or email addresses, and only the tools this plugin needs are offered."
       }
     }
   }
