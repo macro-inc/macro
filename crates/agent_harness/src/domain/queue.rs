@@ -176,7 +176,7 @@ impl QueuedEntry {
         {
             PrompterKind::System
         } else {
-            PrompterKind::User
+            self.prompter
         }
     }
 
@@ -365,7 +365,8 @@ impl SessionQueues {
     ///
     /// `actor` becomes the entry's actor: the user who rewrote the text is
     /// who later dispatch announces and logs as, so an edit cannot keep
-    /// someone else's name on words they did not type.
+    /// someone else's name on words they did not type. A program's edit
+    /// makes the entry a program's, and no later edit makes it a person's.
     pub fn edit_prompt(
         &self,
         session: AgentSessionId,
@@ -374,7 +375,6 @@ impl SessionQueues {
         actor: Option<MacroUserIdStr<'static>>,
         prompter: PrompterKind,
     ) -> Result<(), QueueError> {
-        let _ = prompter;
         let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
         let entry = queue
             .iter_mut()
@@ -384,6 +384,7 @@ impl SessionQueues {
             AgentAction::Prompt(action) => {
                 action.prompt = prompt;
                 entry.actor = actor;
+                entry.prompter = entry.prompter.after_edit(prompter);
                 Ok(())
             }
             AgentAction::SetModel(_)

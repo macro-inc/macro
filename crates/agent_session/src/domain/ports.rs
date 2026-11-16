@@ -1435,13 +1435,15 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     ///
     /// `actor` is the user responsible, judged by the same gates as sending:
     /// whoever may not prompt a session may not rewrite what it is about to
-    /// be prompted with.
+    /// be prompted with. `prompter` says whether a program rewrote it, which
+    /// makes the entry a program's for good.
     fn edit_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: super::model::PrompterKind,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Remove a queued action before it dispatches.

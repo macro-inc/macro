@@ -663,6 +663,17 @@ impl PrompterKind {
     pub fn from_stored(value: &str) -> Self {
         value.parse().unwrap_or_default()
     }
+
+    /// The kind a prompt keeps when `edit` rewrites it: once a program has
+    /// written it, it stays a program's.
+    #[must_use]
+    pub fn after_edit(self, edit: Self) -> Self {
+        if edit == Self::Program {
+            Self::Program
+        } else {
+            self
+        }
+    }
 }
 
 /// Who prompted the turn a session is running, or last ran.
@@ -714,8 +725,10 @@ impl std::fmt::Display for UiClientId {
 impl TurnPrompter {
     /// Effective human authority. System turns never act as a user even if
     /// malformed or old storage includes a user alongside the system kind.
+    /// A program's turn acts with the user's access; checks that need the
+    /// person's own word read `kind` too.
     pub fn acting_user(&self) -> Option<&MacroUserIdStr<'static>> {
-        (self.kind == PrompterKind::User)
+        matches!(self.kind, PrompterKind::User | PrompterKind::Program)
             .then_some(self.user.as_ref())
             .flatten()
     }

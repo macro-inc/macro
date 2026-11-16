@@ -2775,6 +2775,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
             second.action_id,
             "second, rewritten".to_owned(),
             Some(staff_sender()),
+            agent_session::domain::model::PrompterKind::User,
         )
         .await
         .expect("a waiting prompt is editable");
@@ -2808,7 +2809,13 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         .expect_err("a dispatched prompt is not removable");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
     let error = service
-        .edit_queued_control(id, third.action_id, "resurrect".to_owned(), Some(sender()))
+        .edit_queued_control(
+            id,
+            third.action_id,
+            "resurrect".to_owned(),
+            Some(sender()),
+            agent_session::domain::model::PrompterKind::User,
+        )
         .await
         .expect_err("a removed prompt is gone");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
