@@ -31,6 +31,7 @@ import {
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
   isStorageTransactionRequest,
   operationCategoryForRequest,
@@ -1133,7 +1134,7 @@ export class CacheWorkerCore {
           name: 'graphql_cache.queue_diagnostics',
           operationCategory: 'queue',
           outcome: 'error',
-          errorCode: classifyCacheError(outcome.error),
+          ...describeCacheError(outcome.error),
           queueDiagnosticsAvailability: this.latestQueueDiagnostics
             ? 'available'
             : 'unavailable',
@@ -1178,7 +1179,7 @@ export class CacheWorkerCore {
         name: 'graphql_cache.queue_diagnostics',
         operationCategory: 'queue',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         queueDiagnosticsAvailability: this.latestQueueDiagnostics
           ? 'available'
           : 'unavailable',
@@ -1298,7 +1299,7 @@ export class CacheWorkerCore {
           name: 'graphql_cache.schema_init',
           operationCategory: 'initialization',
           outcome: 'error',
-          errorCode: classifyCacheError(error),
+          ...describeCacheError(error),
           durationMs: this.now() - schemaStartedAt,
         });
         throw error;

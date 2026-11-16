@@ -594,6 +594,13 @@ export function CrmWorkspaceView(props: {
                 onClose={view.host.record.close}
                 onOpenPipeline={selectPipeline}
                 navigation={<CrmNavigationControls />}
+                deniedHeader={
+                  <Show when={!isTouchDevice()}>
+                    <ViewShell.Header>
+                      <CrmNavigationControls />
+                    </ViewShell.Header>
+                  </Show>
+                }
               />
             </Show>
             <Show when={!recordOpen() && !itemOpen() && pipelineId()} keyed>

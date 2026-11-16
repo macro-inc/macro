@@ -453,6 +453,11 @@ it('can reopen collapsed desktop navigation after a pipeline record is denied', 
             onSectionChange={() => {}}
             onClose={() => setRecordOpen(false)}
             navigation={<ViewNavigationControls />}
+            deniedHeader={
+              <ViewShell.Header>
+                <ViewNavigationControls />
+              </ViewShell.Header>
+            }
           />
         </Show>
       </ViewShell.Main>

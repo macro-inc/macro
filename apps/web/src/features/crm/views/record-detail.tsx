@@ -1,4 +1,4 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
@@ -79,6 +79,7 @@ type CrmRecordDetailProps = {
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
   navigation: JSX.Element;
+  deniedHeader?: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 };
 
@@ -89,9 +90,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
       when={canAccess()}
       fallback={
         <>
-          <Show when={!isTouchDevice()}>
-            <ViewShell.Header>{props.navigation}</ViewShell.Header>
-          </Show>
+          {props.deniedHeader}
           <CrmAccessDenied />
         </>
       }

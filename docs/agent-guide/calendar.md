@@ -542,9 +542,13 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 Phones have no sidebar, so the header gear's settings sheet carries the same list under
-`Calendars`, between Period and Display: each account row shows or hides all of its
-calendars (a minus when only some show), and its trailing caret (`Expand <address>`)
-opens one check row per calendar with the same swatch, warning and RSS marks. Accounts
+`Calendars`, between Period and Display, laid out like the mobile filter drawer's
+groups (Tasks → Filters): each account is its own card whose header row shows or hides
+all of its calendars (a minus when only some show) with its selection filling the whole
+row, caret included. The trailing caret (`Expand <address>`) opens one
+`MobileFilterDrawer.Option` per calendar with the same swatch, warning and RSS marks, so
+neighbouring shown calendars join into one selection. Period, Week starts on and Time
+format use the same options as single choices, and Show weekends as a checkbox. Accounts
 start collapsed each time the sheet opens. The rows write the same browser-local
 visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
 expanded the sheet scrolls under its pinned handle. The dropdown form of the header

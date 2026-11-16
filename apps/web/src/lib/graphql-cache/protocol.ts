@@ -987,6 +987,7 @@ export type CacheRequest = {
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
   | 'owner-lock-unavailable'
+  | 'cache-superseded'
   | 'owner-handoff-blocked'
   | 'admitted-enqueue-uncertain';
 
@@ -1001,6 +1002,14 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/**
+ * A newer app build took the database over. Like an unavailable owner lock the
+ * request never reached an engine, but this build never gets the cache back:
+ * only a reload into the newer build does.
+ */
+export const CACHE_SUPERSEDED_ERROR_CODE: CacheResponseErrorCode =
+  'cache-superseded';
 
 /** A text search someone is waiting on; an empty query only browses a list. */
 export function isTypedSearch(request: CacheRequest): boolean {
@@ -1089,6 +1098,7 @@ export const isCacheResponseErrorCode = (
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+  value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
@@ -1100,13 +1110,26 @@ export const isOwnerEpochLostError = (
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
-/** Identifies a request refused because another context holds the database. */
+/** Identifies a request refused because another context holds the database,
+ * including a newer build that took it over. */
 export const isOwnerLockUnavailableError = (
   value: unknown
-): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+): value is Error & {
+  errorCode: 'owner-lock-unavailable' | 'cache-superseded';
+} =>
   value instanceof Error &&
   'errorCode' in value &&
-  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+  (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+    value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because a newer build took the database over;
+ * this page session never gets the cache back. */
+export const isCacheSupersededError = (
+  value: unknown
+): value is Error & { errorCode: 'cache-superseded' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === CACHE_SUPERSEDED_ERROR_CODE;
 
 /** Identifies a read refused while the database moved between owners. */
 export const isOwnerHandoffBlockedError = (
