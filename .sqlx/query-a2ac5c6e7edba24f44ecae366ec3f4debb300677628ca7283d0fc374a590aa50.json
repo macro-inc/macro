@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH grants AS MATERIALIZED (\n            SELECT ea.source_type, ea.source_id::uuid AS source_id FROM entity_access ea\n            WHERE ea.entity_id = $1 AND ea.entity_type = $2\n              AND ea.source_type IN ('team', 'channel')\n              AND ($3::text IS NULL OR ea.access_level >= $3::text::\"AccessLevel\")\n        )\n        SELECT team_id AS \"team_id!\" FROM (\n            SELECT g.source_id AS team_id FROM grants g WHERE g.source_type = 'team'\n\n            UNION\n\n            SELECT c.team_id FROM grants g\n            JOIN comms_channels c ON c.id = g.source_id\n            WHERE g.source_type = 'channel' AND c.team_id IS NOT NULL\n        ) AS granted\n        ORDER BY team_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a2ac5c6e7edba24f44ecae366ec3f4debb300677628ca7283d0fc374a590aa50"
+}

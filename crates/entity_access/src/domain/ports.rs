@@ -379,6 +379,30 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         principal_id: &str,
     ) -> impl Future<Output = Result<bool, AccessError>> + Send;
 
+    /// The teams an entity's own grants name, uncached: `team` grants, and
+    /// grants to a channel a team owns (a team channel), at `min_level` or
+    /// above when given. Not the teams of the entity's individual accessors.
+    fn get_entity_granted_teams(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// The team that owns a team channel; `None` for any other channel.
+    fn get_channel_team(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
+    /// The team owning a CRM company or contact that every member may see;
+    /// `None` when it is hidden (admins only) or missing.
+    fn get_crm_entity_team(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
     /// The members of [`Self::get_entity_users`]'s generic union reached
     /// through a grant at `min_level` or above, in one read, uncached.
     fn get_entity_users_at_least(
@@ -999,6 +1023,28 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
         ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+}
+
+/// Which teams hold access to an entity as a team.
+///
+/// A team holds access when the entity is granted to the team itself, not
+/// when one of its members can open it: a `team` grant, a grant to a channel
+/// the team owns, membership of a team channel for that channel (and its
+/// calls), or a CRM record the team owns that every member may see. Link
+/// shares never count. Team-workspace webhooks match entity events through it
+/// (`crates/event_access/ACCESS_MODEL.md`, "Team webhooks").
+pub trait EntityTeamAccess: Clone + Send + Sync + 'static {
+    /// The teams holding access to the entity, sorted and deduplicated, read
+    /// through to the database. With `min_level`, only grants at or above it
+    /// count; channels and CRM records carry no team-level grant, so they
+    /// reach no team under a floor. Unsupported entity types and malformed
+    /// ids return [`AccessError::BadRequest`].
+    fn get_teams_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 }
 
 /// Resolves the current users of many entities of one type at once.

@@ -37,6 +37,7 @@ pub mod database_row_access;
 pub mod document_access;
 pub mod entity_accessor;
 pub mod entity_audiences;
+pub mod entity_teams;
 pub mod foreign_entity_access;
 pub mod form_access;
 pub mod initiative_access;

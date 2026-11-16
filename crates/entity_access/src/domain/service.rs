@@ -11,7 +11,7 @@ use crate::domain::{
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
+        EntityAccessService, EntityAudienceLookup, EntityTeamAccess, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -1189,6 +1189,81 @@ pub(crate) const GRANT_AUDIENCE_KINDS: [EntityType; 9] = [
     EntityType::ExternalChat,
     EntityType::Form,
 ];
+
+impl<R: AccessRepository> EntityTeamAccess for EntityAccessServiceImpl<R> {
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn get_teams_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        let id = Uuid::parse_str(entity_id)
+            .map_err(|_| AccessError::BadRequest("invalid entity_id for get_teams_by_entity"))?;
+        // Each arm mirrors the same arm of `users_by_entity`: the teams that
+        // hold, as a team, the access its users have.
+        let mut teams = match entity_type {
+            EntityType::ForeignEntity
+            | EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::AgentSession
+            | EntityType::Initiative
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form => {
+                self.repo
+                    .get_entity_granted_teams(&id, entity_type, min_level)
+                    .await?
+            }
+            EntityType::DatabaseRow => match self.repo.get_database_row_database(&id).await? {
+                Some(database_id) => {
+                    self.repo
+                        .get_entity_granted_teams(&database_id, EntityType::Database, min_level)
+                        .await?
+                }
+                None => Vec::new(),
+            },
+            // Channels and CRM records carry no team-level grant: under an
+            // access floor they reach no team.
+            EntityType::Channel
+            | EntityType::Call
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+                if min_level.is_some() =>
+            {
+                Vec::new()
+            }
+            EntityType::Channel => self.repo.get_channel_team(&id).await?.into_iter().collect(),
+            // A call outside a channel is reached only by its direct users.
+            EntityType::Call => match self.resolve_call_channel_id(entity_id).await? {
+                Some(channel_id) => self
+                    .repo
+                    .get_channel_team(&channel_id)
+                    .await?
+                    .into_iter()
+                    .collect(),
+                None => Vec::new(),
+            },
+            EntityType::CrmCompany | EntityType::CrmContact => self
+                .repo
+                .get_crm_entity_team(&id, entity_type)
+                .await?
+                .into_iter()
+                .collect(),
+            _ => {
+                return Err(AccessError::BadRequest(
+                    "get_teams_by_entity does not support this entity type",
+                ));
+            }
+        };
+        teams.sort_unstable();
+        teams.dedup();
+        Ok(teams)
+    }
+}
 
 impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
     #[tracing::instrument(

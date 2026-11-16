@@ -12,7 +12,7 @@ use crate::domain::models::{
     MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
     ViewAccessLevel, ViewOnly,
 };
-use crate::domain::ports::{AccessibleForms, ScheduledActionGrants};
+use crate::domain::ports::{AccessibleForms, EntityTeamAccess, ScheduledActionGrants};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
@@ -79,6 +79,8 @@ struct MockRepo {
     call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
     grant_audience_lookups: Arc<AtomicUsize>,
+    granted_teams: Arc<Mutex<Vec<Uuid>>>,
+    channel_team: Arc<Mutex<Option<Uuid>>>,
 }
 
 impl MockRepo {
@@ -141,6 +143,8 @@ impl MockRepo {
             call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
             grant_audience_lookups: Arc::new(AtomicUsize::new(0)),
+            granted_teams: Arc::default(),
+            channel_team: Arc::default(),
         }
     }
 
@@ -734,6 +738,27 @@ impl AccessRepository for MockRepo {
         _min_level: AccessLevel,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         self.get_entity_users(entity_id, entity_type).await
+    }
+
+    async fn get_entity_granted_teams(
+        &self,
+        _entity_id: &Uuid,
+        _entity_type: EntityType,
+        _min_level: Option<AccessLevel>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(self.granted_teams.lock().await.clone())
+    }
+
+    async fn get_channel_team(&self, _channel_id: &Uuid) -> Result<Option<Uuid>, AccessError> {
+        Ok(*self.channel_team.lock().await)
+    }
+
+    async fn get_crm_entity_team(
+        &self,
+        _entity_id: &Uuid,
+        _entity_type: EntityType,
+    ) -> Result<Option<Uuid>, AccessError> {
+        Ok(None)
     }
 
     async fn is_entity_user(
@@ -3223,4 +3248,45 @@ async fn a_external_chat_permission_is_the_repository_group_access() {
         *callers.lock().await,
         vec![Some(user_id.as_ref().to_string())]
     );
+}
+
+/// A team holds a channel through owning it, but channels carry no team-level
+/// grant, so an access floor reaches no team; grant-based kinds pass the floor
+/// to the grants.
+#[tokio::test]
+async fn teams_by_entity_follow_each_kinds_access() {
+    let team = Uuid::now_v7();
+    let repo = MockRepo::new();
+    *repo.granted_teams.lock().await = vec![team, team];
+    *repo.channel_team.lock().await = Some(team);
+    let service = EntityAccessServiceImpl::new(repo);
+    let id = Uuid::now_v7().to_string();
+
+    assert_eq!(
+        service
+            .get_teams_by_entity(&id, EntityType::Document, Some(AccessLevel::Edit))
+            .await
+            .unwrap(),
+        vec![team]
+    );
+    assert_eq!(
+        service
+            .get_teams_by_entity(&id, EntityType::Channel, None)
+            .await
+            .unwrap(),
+        vec![team]
+    );
+    assert!(
+        service
+            .get_teams_by_entity(&id, EntityType::Channel, Some(AccessLevel::Comment))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        service
+            .get_teams_by_entity("not-a-uuid", EntityType::Document, None)
+            .await,
+        Err(AccessError::BadRequest(_))
+    ));
 }

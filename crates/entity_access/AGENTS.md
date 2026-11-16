@@ -75,6 +75,11 @@ the entity-access domain service.
   wraps its checks in `observe_source_ids` to record the count on its own span,
   as `initiative.read` does. A new check that fetches source ids goes through
   `user_source_ids` so its span gets the count.
+- `EntityTeamAccess::get_teams_by_entity` answers which teams hold an
+  entity as a team (team grants, grants to a team's own channel, a team
+  channel, a visible CRM record; `queries/entity_teams.rs`), uncached, for
+  team-workspace webhooks. Its arms mirror `users_by_entity`'s; change them
+  together.
 - `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
   once: kinds whose users are exactly their `entity_access` grants go through
   one grouped lookup (`queries/entity_audiences.rs`: grants, then team and

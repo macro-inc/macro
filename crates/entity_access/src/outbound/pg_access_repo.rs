@@ -991,6 +991,33 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_entity_granted_teams(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(
+            queries::entity_teams::granted_teams(&self.pool, entity_id, entity_type, min_level)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_team(&self, channel_id: &Uuid) -> Result<Option<Uuid>, AccessError> {
+        Ok(queries::entity_teams::channel_team(&self.pool, channel_id).await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_crm_entity_team(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Option<Uuid>, AccessError> {
+        Ok(queries::entity_teams::crm_team(&self.pool, entity_id, entity_type).await?)
+    }
+
     #[tracing::instrument(err, skip(self, principal_id))]
     async fn is_entity_user(
         &self,
