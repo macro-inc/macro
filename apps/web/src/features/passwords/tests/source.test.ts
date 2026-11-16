@@ -3,6 +3,7 @@ import type { PasswordItemMetadata } from '@service-storage/generated/schemas/pa
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
 import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ImportBatchBody } from '../context/passwords-context';
 import { createPasswordSource } from '../queries/source';
 
 const mocks = vi.hoisted(() => ({
@@ -480,4 +481,47 @@ it('marks a failed folder request in its action trace without recording its name
   expect(JSON.stringify(mocks.attributes.mock.calls)).not.toContain(
     'Synthetic private folder'
   );
+});
+
+it('tells an unreachable vault from a server error and a rejected batch', async () => {
+  const batch = {
+    format: 'bitwarden_json',
+    target: { kind: 'root' },
+    private: false,
+    folders: [],
+    items: [],
+  } satisfies ImportBatchBody;
+  const answers = [
+    [
+      new Response('', { status: 502 }),
+      { retryable: true, reason: 'unreachable' },
+    ],
+    [
+      new Response('', { status: 500 }),
+      { retryable: true, reason: 'server_error' },
+    ],
+    [
+      new Response(JSON.stringify({ code: PasswordErrorCode.forbidden }), {
+        status: 403,
+      }),
+      { retryable: false, reason: 'refused' },
+    ],
+  ] as const;
+  for (const [response, failure] of answers) {
+    mocks.fetch.mockResolvedValueOnce(response);
+    const result = await createPasswordSource('team', CURRENT).importBatch(
+      'import',
+      batch
+    );
+    expect(result.isErr() && result.error).toEqual(failure);
+  }
+  mocks.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  const offline = await createPasswordSource('team', CURRENT).importBatch(
+    'import',
+    batch
+  );
+  expect(offline.isErr() && offline.error).toEqual({
+    retryable: true,
+    reason: 'unreachable',
+  });
 });
