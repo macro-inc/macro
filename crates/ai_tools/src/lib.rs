@@ -340,8 +340,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// The native tools an agent session's code-mode turn gets beside
 /// `ExecuteCode`: only what a program cannot do through the Macro SDK.
 ///
-/// - `IssueBotCredential`: its card mints the secret without the model
-///   reading it.
 /// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
 ///   plan an import review presents.
 /// - `SelfKnowledge`, the Anthropic code-execution tools, and `SearchTools`
@@ -349,7 +347,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
-        .add_tool::<bots::inbound::toolset::IssueBotCredential, ToolBotToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()
