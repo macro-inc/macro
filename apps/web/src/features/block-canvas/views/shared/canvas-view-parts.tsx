@@ -35,6 +35,8 @@ import type { CanvasClipboard } from '../../clipboard';
 import type { CanvasEmbedViewProps } from '../../components/embed-view';
 import { EraserTrail } from '../../components/eraser-trail';
 import { MediaUploadPreviews } from '../../components/media-upload-previews';
+import type { CanvasAsset } from '../../core/assets';
+import type { CanvasInsertMode } from '../../core/insert';
 import { registerCanvasZoomHotkeys } from '../../hotkeys';
 import { createCanvasAssetDrop } from '../../primitives/asset-drop';
 import type { CanvasAssetState } from '../../primitives/create-asset-state';
@@ -43,13 +45,13 @@ import type {
   CanvasTool,
 } from '../../primitives/create-canvas-state';
 import type { CanvasInsertState } from '../../primitives/create-insert-state';
+import { pickCanvasMedia } from '../../primitives/pick-media';
 import { attachTextInput } from '../../primitives/text-input';
 import { useCanvasMediaSource } from '../../queries/media';
 import { ArtifactPresentation } from '../artifact-presentation';
 import { CanvasArtifactView } from '../artifact-view';
 import { ConnectorTargets } from '../connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from '../embedded-items';
-import { CanvasInsertMenu } from '../insert-menu';
 import { CanvasTextContent } from '../text-content';
 import { TextEditingView } from '../text-editing-view';
 
@@ -118,6 +120,50 @@ function createCanvasView(props: CanvasViewProps) {
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
 
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
+  /** Run `place` where the Attach menu was opened, and close the menu. */
+  const insertAt = (place: (world: Point) => void) => {
+    const location = props.insert.location();
+    if (!location) return;
+    place(location.world);
+    props.insert.close();
+  };
+  /**
+   * What the Attach menu's choices do, at the place the menu was opened for.
+   * Each view draws the menu itself.
+   */
+  const insert = {
+    location: props.insert.location,
+    close: props.insert.close,
+    select: (asset: CanvasAsset, mode: CanvasInsertMode) =>
+      insertAt((world) => {
+        if (mode === 'media')
+          fireAndForget(props.assets.media(asset, world), 'canvas-assets');
+        else props.assets.document(asset, world, 'preview');
+      }),
+    /** Files dropped on the menu. */
+    files: (files: File[]) =>
+      insertAt((world) =>
+        fireAndForget(props.assets.files(files, world), 'canvas-assets')
+      ),
+    /**
+     * Ask the device for images or videos. The menu closes at once; the files
+     * arrive whenever the picker answers.
+     */
+    upload: () =>
+      insertAt((world) =>
+        fireAndForget(
+          pickCanvasMedia((files) =>
+            fireAndForget(props.assets.files(files, world), 'canvas-assets')
+          ),
+          'canvas-assets'
+        )
+      ),
+    /** Absent while artifacts are off for this user. */
+    artifact: () =>
+      artifactsFlag().enabled
+        ? () => insertAt(props.assets.artifact)
+        : undefined,
+  };
   const [presenting, setPresenting] = createSignal<string>();
   // Outlives the inspector, which unmounts whenever nothing is selected.
   const [lockAspectRatio, setLockAspectRatio] = createSignal(false);
@@ -155,6 +201,7 @@ function createCanvasView(props: CanvasViewProps) {
           }
         : undefined,
     artifactsEnabled: () => artifactsFlag().enabled,
+    insert,
     presenting,
     setPresenting,
     lockAspectRatio,
@@ -500,47 +547,6 @@ function Surface(props: {
   );
 }
 
-/** The Attach menu and its pickers, open wherever the insert state points. */
-function InsertMenu() {
-  const view = useCanvasView();
-  const { props } = view;
-  return (
-    <Show when={props.insert.location()} keyed>
-      {(location) => (
-        <CanvasInsertMenu
-          location={location}
-          onClose={props.insert.close}
-          onRestoreFocus={view.focus}
-          onArtifact={
-            view.artifactsEnabled()
-              ? () => {
-                  props.assets.artifact(location.world);
-                  props.insert.close();
-                }
-              : undefined
-          }
-          onSelect={(asset, mode) => {
-            if (mode === 'media')
-              fireAndForget(
-                props.assets.media(asset, location.world),
-                'canvas-assets'
-              );
-            else props.assets.document(asset, location.world, 'preview');
-            props.insert.close();
-          }}
-          onFiles={(files) => {
-            fireAndForget(
-              props.assets.files(files, location.world),
-              'canvas-assets'
-            );
-            props.insert.close();
-          }}
-        />
-      )}
-    </Show>
-  );
-}
-
 /** Artifacts shown full screen, from the one Present was chosen on. */
 function Presentation() {
   const view = useCanvasView();
@@ -581,7 +587,6 @@ function EmptyState() {
 export const CanvasViewParts = {
   Root,
   Surface,
-  InsertMenu,
   Presentation,
   EmptyState,
 };

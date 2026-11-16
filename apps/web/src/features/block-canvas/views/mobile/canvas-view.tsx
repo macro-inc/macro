@@ -16,6 +16,7 @@ import {
   MobileCanvasViewButton,
 } from './canvas-action-islands';
 import { MobileCanvasChrome } from './canvas-chrome';
+import { MobileCanvasInsertMenu } from './canvas-insert';
 import {
   MobileCanvasInspectorPanel,
   MobileCanvasInspectorSheet,
@@ -200,7 +201,13 @@ function MobileCanvasLayout() {
   return (
     <>
       <CanvasViewParts.Presentation />
-      <CanvasViewParts.InsertMenu />
+      <MobileCanvasInsertMenu
+        location={view.insert.location()}
+        onSelect={view.insert.select}
+        onUpload={view.insert.upload}
+        onArtifact={view.insert.artifact()}
+        onClose={view.insert.close}
+      />
       <Show when={!isMobile() && hasSelection() && !panelCollapsed()}>
         <MobileCanvasInspectorPanel />
       </Show>

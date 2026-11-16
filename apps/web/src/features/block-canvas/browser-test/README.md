@@ -30,8 +30,9 @@ tools; the selection's actions and their undo steps; the inspector sheet
 resting under the shape and closing with the selection kept; the long-press
 menu outliving the lift (and a drag not opening it); the zoom sheet; the
 in-canvas placement without the app's chrome; a corner taken from 12px outside
-it and the shape moved from its middle; and an outlined shape selected by a tap
-near its stroke. The long-press cases advance Playwright's clock rather than
+it and the shape moved from its middle; an outlined shape selected by a tap
+near its stroke; and the Attach sheet, whose Upload media row reaches the file
+picker and hands over the chosen file after the sheet has closed. The long-press cases advance Playwright's clock rather than
 waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 

@@ -24,9 +24,12 @@ while it is selected to choose another. **Style** opens the inspector in a
 bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
-under the finger first. Check that nothing sits under the dock or the home
-indicator, that every button answers a real tap, and that closing a sheet
-leaves the selection as it was.
+under the finger first. **Attach** opens a sheet with Media, Upload media,
+Reference and Artifact: Media and Reference open a searchable picker in a second
+sheet, and Upload media opens the device's photo library or file picker and
+places what is chosen at the middle of the view. Check that nothing sits under
+the dock or the home indicator, that every button answers a real tap, and that
+closing a sheet leaves the selection as it was.
 
 Handles are drawn small but a finger takes them from further away: a drag that
 starts within 16px of a corner or of the rotation knob, or within 12px outside

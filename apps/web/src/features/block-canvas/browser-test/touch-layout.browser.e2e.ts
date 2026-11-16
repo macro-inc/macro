@@ -1,4 +1,10 @@
-import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import {
+  type CDPSession,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from '@playwright/test';
 
 type Point = { x: number; y: number };
 
@@ -30,6 +36,19 @@ async function filledShape(page: Page): Promise<Point> {
   const box = await page.locator('[data-graphics-item="filled"]').boundingBox();
   if (!box) throw new Error('The filled rectangle is not rendered');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** Wait until a sheet has stopped sliding. */
+async function settle(sheet: Locator) {
+  let lastTop: number | undefined;
+  await expect
+    .poll(async () => {
+      const top = (await sheet.boundingBox())?.y;
+      const settled = top !== undefined && top === lastTop;
+      lastTop = top;
+      return settled;
+    })
+    .toBe(true);
 }
 
 test.beforeEach(async ({ page, isMobile }) => {
@@ -128,15 +147,7 @@ test('Style opens the inspector under the shape and a tap on the canvas closes i
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText('Fill', { exact: true })).toBeAttached();
   // The sheet slides up; a tap during the slide is not yet a dismissal.
-  let lastTop: number | undefined;
-  await expect
-    .poll(async () => {
-      const top = (await sheet.boundingBox())?.y;
-      const settled = top !== undefined && top === lastTop;
-      lastTop = top;
-      return settled;
-    })
-    .toBe(true);
+  await settle(sheet);
   // It rests below the selected shape and its handles.
   const [sheetBox, boundsBox] = await Promise.all([
     sheet.boundingBox(),
@@ -255,4 +266,61 @@ test('a tap near the stroke of an outlined shape selects it', async ({
   await page.touchscreen.tap(box.x + 8, box.y + box.height / 2);
 
   expect((await canvas(page)).selectedIds).toEqual(['outline']);
+});
+
+/** The smallest valid PNG: one transparent pixel. */
+const PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+test('Attach is a sheet of finger-sized rows, and Upload media reaches the file picker', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Attach' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Attach' });
+  for (const name of ['Media', 'Upload media', 'Reference']) {
+    const row = await sheet
+      .getByRole('button', { name, exact: true })
+      .boundingBox();
+    expect(row?.height, name).toBeGreaterThanOrEqual(44);
+  }
+
+  const opened = page.waitForEvent('filechooser');
+  await sheet.getByRole('button', { name: 'Upload media' }).tap();
+  const picker = await opened;
+  expect(picker.isMultiple()).toBe(true);
+
+  // The sheet is gone while the picker is open, and the files still arrive.
+  await expect(sheet).toBeHidden();
+  await picker.setFiles({
+    name: 'photo.png',
+    mimeType: 'image/png',
+    buffer: PIXEL_PNG,
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.canvasTouchFixture.uploads))
+    .toEqual(['photo.png']);
+});
+
+test('Attach starts from its rows again after a picker was dismissed', async ({
+  page,
+}) => {
+  const attach = page.getByRole('button', { name: 'Attach' });
+  const rows = page.getByRole('dialog', { name: 'Attach' });
+  const picker = page.getByRole('dialog', { name: 'Insert media' });
+  await attach.tap();
+  await rows.getByRole('button', { name: 'Media', exact: true }).tap();
+  await expect(picker).toBeVisible();
+  await expect(rows).toBeHidden();
+
+  // The picker slides up; a tap during the slide is not yet a dismissal.
+  await settle(picker);
+  await page.touchscreen.tap(200, 40);
+  await expect(picker).toBeHidden();
+  await expect(attach).toHaveAttribute('aria-expanded', 'false');
+
+  await attach.tap();
+  await expect(rows).toBeVisible();
+  await expect(picker).toBeHidden();
 });
