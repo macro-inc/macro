@@ -106,6 +106,9 @@ export type ConversationListControlsProps = {
   /** Whether the list includes unlisted sessions: routine runs it hides by default. */
   showUnlistedRuns: boolean;
   onShowUnlistedRunsChange: (show: boolean) => void;
+  /** Whether the list includes archived sessions, which it hides by default. */
+  showArchived: boolean;
+  onShowArchivedChange: (show: boolean) => void;
 };
 
 /** The Tasks-style Group and Filter menus for the conversation list. */
@@ -115,11 +118,14 @@ export function ConversationListControls(props: ConversationListControlsProps) {
     value: FilterValue
   ) => (props.filters[category] as readonly FilterValue[]).includes(value);
   const activeCount = () =>
-    activeFilterCount(props.filters) + (props.showUnlistedRuns ? 1 : 0);
+    activeFilterCount(props.filters) +
+    (props.showUnlistedRuns ? 1 : 0) +
+    (props.showArchived ? 1 : 0);
   const clearAll = () => {
     batch(() => {
       props.onClearFilters();
       props.onShowUnlistedRunsChange(false);
+      props.onShowArchivedChange(false);
     });
   };
 
@@ -151,6 +157,13 @@ export function ConversationListControls(props: ConversationListControlsProps) {
                   <span class="flex-1">
                     {t('viewMenus.showHiddenRoutineRuns')}
                   </span>
+                </Dropdown.CheckboxItem>
+                <Dropdown.CheckboxItem
+                  closeOnSelect
+                  checked={props.showArchived}
+                  onChange={props.onShowArchivedChange}
+                >
+                  <span class="flex-1">{t('viewMenus.showArchived')}</span>
                 </Dropdown.CheckboxItem>
               </Dropdown.Group>
               <Dropdown.Group>

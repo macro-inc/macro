@@ -30,7 +30,6 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plugs-connected.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
-import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
@@ -83,7 +82,6 @@ export type AgentsSidebarProps = Omit<
   activeConversationId: string | undefined;
   search: string;
   conversations: AgentConversationEntity[];
-  archived: AgentConversationEntity[];
   loading: boolean;
   error: boolean;
   hasNextPage: boolean;
@@ -168,9 +166,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
-  const [archivedOpen, setArchivedOpen] = makePersisted(createSignal(false), {
-    name: 'agents-archived-open',
-  });
   let searchInput: HTMLInputElement | undefined;
   const factsOf = (conversation: AgentConversationEntity) =>
     conversationFacts(
@@ -189,7 +184,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
       userId(),
       props.modeForConversation
     );
-  const archived = () => matching(props.archived);
   const groups = () =>
     groupConversations(conversations(), factsOf, props.grouping);
   const filtering = () => activeFilterCount(props.filters) > 0;
@@ -199,7 +193,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         [
           ...(agentUpdates().enabled ? openPullRequests() : []),
           ...conversations(),
-          ...archived(),
         ].map((conversation) => [conversation.id, conversation])
       ).values(),
     ],
@@ -210,7 +203,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     controller: actionController,
     getEntity: (conversation) => conversation,
   });
-  const total = () => conversations().length + archived().length;
+  const total = () => conversations().length;
   // Filters apply to one mixed query, so a short filtered list never scrolls
   // far enough to ask for more; keep paging until it fills.
   createEffect(() => {
@@ -223,7 +216,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     )
       props.onLoadMore();
   });
-  // Both lists page through one query, so either reaching its end loads more.
   const loadMoreNearEnd = (event: Event & { currentTarget: HTMLElement }) => {
     const list = event.currentTarget;
     if (!props.hasNextPage || props.loadingNextPage) return;
@@ -393,6 +385,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 onGroupingChange={props.onGroupingChange}
                 showUnlistedRuns={props.showUnlistedRuns}
                 onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
+                showArchived={props.showArchived}
+                onShowArchivedChange={props.onShowArchivedChange}
               />
               <Show when={isTouchDevice()}>
                 <CollapsibleSection.Action
@@ -472,36 +466,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
-          <Show when={archived().length}>
-            <CollapsibleSection.Root
-              open={archivedOpen()}
-              onOpenChange={setArchivedOpen}
-              as="section"
-              aria-label="Archived conversations"
-              class={cn(
-                'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
-                archivedOpen() ? 'basis-1/4' : 'shrink-0'
-              )}
-            >
-              <CollapsibleSection.Header>
-                <CollapsibleSection.Trigger>
-                  <span class="min-w-0 truncate">Archived</span>
-                  <span class="text-ink-extra-muted tabular-nums">
-                    {archived().length}
-                  </span>
-                  <CollapsibleSection.Indicator />
-                </CollapsibleSection.Trigger>
-              </CollapsibleSection.Header>
-              <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
-                <ViewSidebar.Nav
-                  class="min-h-0 flex-1 shrink overflow-auto"
-                  onScroll={loadMoreNearEnd}
-                >
-                  {rows(archived)}
-                </ViewSidebar.Nav>
-              </CollapsibleSection.Content>
-            </CollapsibleSection.Root>
-          </Show>
         </ViewSidebar.Content>
       </ViewSidebar.Root>
     </MaybeSoupEntityActionDrawerManager>

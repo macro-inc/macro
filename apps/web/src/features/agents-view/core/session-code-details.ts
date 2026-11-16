@@ -1,12 +1,14 @@
-/** The persisted coding context rendered beneath an agent conversation. */
+export type SessionPullRequest = {
+  number: number;
+  url: string;
+  status?: 'open' | 'draft' | 'merged' | 'closed';
+};
+
+/** The persisted coding context shown with an agent conversation. */
 export type SessionCodeDetails = {
   repository?: string;
   branch?: string;
-  pullRequest?: {
-    number: number;
-    url: string;
-    status?: 'open' | 'draft' | 'merged' | 'closed';
-  };
+  pullRequest?: SessionPullRequest;
 };
 
 /** Accept repository URLs and SSH remotes without displaying credentials. */

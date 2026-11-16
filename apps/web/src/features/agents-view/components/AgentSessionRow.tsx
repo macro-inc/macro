@@ -1,5 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { cn, pressHandlers } from '@ui';
+import { cn, pressHandlers, Spinner } from '@ui';
 import { children, type JSX, Show } from 'solid-js';
 import {
   type ConversationState,
@@ -72,35 +72,45 @@ export function AgentSessionRow(props: {
   );
 }
 
-/** One dot combines turn failure, activity, and unread state. */
+/**
+ * A spinner while the agent works; otherwise one dot for failure, a question
+ * waiting on you, or unread output.
+ */
 export function AgentSessionStatusIndicator(props: {
   state: ConversationState;
   unread?: boolean;
   failed?: boolean;
 }) {
+  const busy = () =>
+    !props.failed && (props.state === 'starting' || props.state === 'working');
+  const label = () => (props.unread ? 'Unread' : undefined);
+
   return (
     <Show
-      when={
-        props.state === 'starting' ||
-        props.state === 'working' ||
-        props.state === 'waiting' ||
-        props.failed ||
-        props.unread
+      when={busy()}
+      fallback={
+        <Show when={props.state === 'waiting' || props.failed || props.unread}>
+          <span
+            data-agent-status-indicator
+            aria-label={label()}
+            class={cn(
+              'size-1.5 shrink-0 rounded-full',
+              props.failed && 'bg-failure',
+              !props.failed &&
+                (props.state === 'waiting' ? 'bg-warning' : 'bg-accent')
+            )}
+          />
+        </Show>
       }
     >
       <span
         data-agent-status-indicator
-        aria-label={props.unread ? 'Unread' : undefined}
-        class={cn(
-          'size-1.5 shrink-0 rounded-full',
-          props.failed && 'bg-failure',
-          !props.failed &&
-            (props.state === 'waiting' ? 'bg-warning' : 'bg-accent'),
-          !props.failed &&
-            (props.state === 'starting' || props.state === 'working') &&
-            'motion-safe:animate-pulse'
-        )}
-      />
+        data-agent-working
+        aria-label={label()}
+        class="flex shrink-0 text-accent"
+      >
+        <Spinner decorative size="sm" class="size-3" />
+      </span>
     </Show>
   );
 }

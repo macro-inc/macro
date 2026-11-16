@@ -115,16 +115,11 @@ const STATUS_GROUPS: GroupDefinition[] = [
     label: 'Needs you',
     contains: (facts) => facts.state === 'waiting',
   },
-  {
-    id: 'working',
-    label: 'Working',
-    contains: (facts) =>
-      facts.state === 'working' || facts.state === 'starting',
-  },
+  // Running sessions stay in place; their row spinner says they are working.
   {
     id: 'recent',
     label: 'Recent',
-    contains: (facts) => facts.state === 'dormant',
+    contains: (facts) => facts.state !== 'waiting',
   },
 ];
 
