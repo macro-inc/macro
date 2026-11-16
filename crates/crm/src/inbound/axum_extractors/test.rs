@@ -236,6 +236,15 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeCrmService;
 
 impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
+    async fn excluded_email_threads(
+        &self,
+        _: &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        _: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, crate::domain::model::CrmError>
+    {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,

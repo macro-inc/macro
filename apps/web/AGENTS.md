@@ -733,6 +733,8 @@ reads retain client-scoped denial state across remounts and immediately reauthor
 previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
+Keep editable breadcrumb icons on that identity read, including owner metadata;
+never load project counts or task membership just to open the appearance editor.
 Project reads refresh only through the activity registry (pushes, websocket
 connects, the app's own project writes; `registerProjectRevalidation`); never
 add a timer or focus refetch to them.
@@ -818,6 +820,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1028,7 +1039,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. It registers the
+  row with no code in the view. `wide` lets the open field take the rest of
+  the header (the view hides its other actions from `onOpenChange`), and
+  `suggestions` lists rows under the field that the arrows walk before the
+  results; Email's wide search uses both. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
@@ -1410,6 +1424,18 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+## Videos stay out of native bundles
+
+Vite writes imported videos (`.mp4`, `.webm`, `.mov`) to `dist/web-hosted/`,
+which the web deploy publishes and every native bundle deletes: `build-tauri`,
+`build-tauri-dev`, the OTA archive (`infra/stacks/web-app`) and the desktop
+derivation (`nix/tauri-desktop.nix`). Pass a video import's URL through
+`webHostedUrl` (`@core/util/webHostedUrl`) so the apps load the web deploy's
+copy; a bare import 404s in a native build. Retained-build pruning keeps
+`web-hosted/` for apps stuck on old bundles. `scripts/web-hosted.test.ts`
+checks the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
+to each app binary and OTA download.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,
@@ -1675,6 +1701,18 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
+### Tag picker selection and creation
+
+Keep tag checkbox toggles open for pointer and keyboard input; desktop row picks
+save the staged selection and close only the picker, while touch sheets retain
+explicit Done. Keep the parent More menu open after a tag pick or Escape, and
+prevent reopening the picker until its pending selection save settles. Dismiss
+the parent only when opening the tag editor or navigating to tagged items.
+Return from sharing to color to name with Back or Escape, preserving the draft
+and chosen color; native Back-button activation must not advance the flow.
+Keep tag-creation headers compact beside Back and show the current draft color
+beside the title throughout the color and sharing steps.
+
 ### Sidebar tag dragging
 
 The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
@@ -1775,6 +1813,12 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
 ### Passwords
+
+Keep agent-request loading and read failures inside the item pane using shared
+skeletons and local Retry; after a stale decision, hide cached actions until a
+successful refresh. Team inbox groups are notification-only: show only valid
+password requests for the current team while Passwords is enabled, and open
+the request's vault target without a generic Team preview or fallback page.
 
 The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
 source; the rail and phone dock show it only for team members (flag and team).

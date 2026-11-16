@@ -5,6 +5,9 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
   __typename
   id
   displayName
+  metadata {
+    ownerId
+  }
   viewerPermission {
     __typename
     ... on GraphqlAccessLevelPermission {

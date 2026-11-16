@@ -626,6 +626,8 @@ where
     /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
     /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
+    /// Absent means thread-exclusion writes are unavailable.
+    thread_exclusion_gate: Option<std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>>,
 }
 
 impl<CR, R> Clone for CrmServiceImpl<CR, R>
@@ -637,6 +639,7 @@ where
         Self {
             companies_repository: self.companies_repository.clone(),
             metadata_resolver: self.metadata_resolver.clone(),
+            thread_exclusion_gate: self.thread_exclusion_gate.clone(),
         }
     }
 }
@@ -651,7 +654,17 @@ where
         Self {
             companies_repository,
             metadata_resolver,
+            thread_exclusion_gate: None,
         }
+    }
+
+    /// Supply the rollout gate for thread-exclusion writes; otherwise they stay off.
+    pub fn with_thread_exclusion_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>,
+    ) -> Self {
+        self.thread_exclusion_gate = Some(gate);
+        self
     }
 
     /// Resolves one batch of pending `crm_domain_directory` entries
