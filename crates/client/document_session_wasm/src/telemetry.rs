@@ -12,6 +12,31 @@ impl Capture {
         vec![]
     }
 }
+/// Messages captured for the current boundary entry.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default)]
+struct Captured {
+    enabled: bool,
+    messages: Vec<wire::TelemetryMsg>,
+}
+#[cfg(any(target_arch = "wasm32", test))]
+impl Captured {
+    /// Start capturing for an entry. A nested entry (a host callback driving
+    /// another session) sets the outer capture aside; `finish` restores it.
+    fn begin(&mut self) -> Captured {
+        std::mem::replace(
+            self,
+            Captured {
+                enabled: true,
+                messages: Vec::new(),
+            },
+        )
+    }
+    /// End the entry's capture, restore the enclosing one and return its messages.
+    fn finish(&mut self, outer: Captured) -> Vec<wire::TelemetryMsg> {
+        std::mem::replace(self, outer).messages
+    }
+}
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use super::*;
@@ -24,11 +49,10 @@ mod wasm {
     };
     #[derive(Default)]
     struct State {
-        enabled: bool,
+        captured: Captured,
         next: u64,
         stack: Vec<u64>,
         refs: BTreeMap<u64, u32>,
-        messages: Vec<wire::TelemetryMsg>,
     }
     thread_local! {static STATE:RefCell<State>=RefCell::new(State{next:1u64<<63,..State::default()});}
     static INSTALL: Once = Once::new();
@@ -108,7 +132,7 @@ mod wasm {
             metadata.level() <= &tracing::Level::INFO
                 && (metadata.target().starts_with("document_session")
                     || metadata.target().starts_with("lexical_loro"))
-                && STATE.with(|s| s.borrow().enabled)
+                && STATE.with(|s| s.borrow().captured.enabled)
         }
         fn register_callsite(&self, _metadata: &'static Metadata<'static>) -> Interest {
             Interest::sometimes()
@@ -126,7 +150,7 @@ mod wasm {
                     .or_else(|| s.stack.last().copied())
                     .unwrap_or(0);
                 s.refs.insert(id, 1);
-                s.messages.push(message(
+                s.captured.messages.push(message(
                     id,
                     parent,
                     0,
@@ -141,7 +165,7 @@ mod wasm {
             values.record(&mut fields);
             if !fields.0.is_empty() {
                 STATE.with(|s| {
-                    s.borrow_mut().messages.push(message(
+                    s.borrow_mut().captured.messages.push(message(
                         id.into_u64(),
                         0,
                         1,
@@ -156,7 +180,7 @@ mod wasm {
             STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 if let Some(span) = state.stack.last().copied() {
-                    state.messages.push(message(
+                    state.captured.messages.push(message(
                         span,
                         0,
                         1,
@@ -195,43 +219,34 @@ mod wasm {
                     }
                 }
                 s.refs.remove(&id.into_u64());
-                s.messages
+                s.captured
+                    .messages
                     .push(message(id.into_u64(), 0, 2, String::new(), vec![]));
                 true
             })
         }
     }
     pub(crate) struct Capture {
-        finished: bool,
+        outer: Option<Captured>,
     }
     pub(crate) fn begin() -> Capture {
         INSTALL.call_once(|| {
             let _installed = tracing::subscriber::set_global_default(HostSubscriber);
         });
-        STATE.with(|s| {
-            let mut s = s.borrow_mut();
-            s.enabled = true;
-            s.messages.clear();
-        });
-        Capture { finished: false }
+        let outer = STATE.with(|s| s.borrow_mut().captured.begin());
+        Capture { outer: Some(outer) }
     }
     impl Capture {
         pub(crate) fn finish(mut self) -> Vec<wire::TelemetryMsg> {
-            self.finished = true;
-            STATE.with(|s| {
-                let mut s = s.borrow_mut();
-                s.enabled = false;
-                std::mem::take(&mut s.messages)
-            })
+            let outer = self.outer.take().unwrap_or_default();
+            STATE.with(|s| s.borrow_mut().captured.finish(outer))
         }
     }
     impl Drop for Capture {
         fn drop(&mut self) {
-            if !self.finished {
+            if let Some(outer) = self.outer.take() {
                 STATE.with(|s| {
-                    let mut s = s.borrow_mut();
-                    s.enabled = false;
-                    s.messages.clear();
+                    s.borrow_mut().captured.finish(outer);
                 });
             }
         }
@@ -290,4 +305,31 @@ pub(crate) fn append(
     }
     buffer[20..24].copy_from_slice(&(count + added).to_le_bytes());
     Ok(2)
+}
+#[cfg(test)]
+#[test]
+fn a_nested_capture_keeps_the_outer_entry_capturing_its_own_spans() {
+    fn span(id: u64) -> wire::TelemetryMsg {
+        wire::TelemetryMsg {
+            span: id,
+            parent: 0,
+            kind: 0,
+            name: format!("span-{id}"),
+            outcome: String::new(),
+            error: false,
+            attrs: vec![],
+        }
+    }
+    let mut captured = Captured::default();
+    let outer = captured.begin();
+    captured.messages.push(span(1));
+    let inner = captured.begin();
+    captured.messages.push(span(2));
+    let nested = captured.finish(inner);
+    assert_eq!(nested.iter().map(|m| m.span).collect::<Vec<_>>(), vec![2]);
+    assert!(captured.enabled, "the outer entry is still capturing");
+    captured.messages.push(span(3));
+    let all = captured.finish(outer);
+    assert_eq!(all.iter().map(|m| m.span).collect::<Vec<_>>(), vec![1, 3]);
+    assert!(!captured.enabled);
 }
