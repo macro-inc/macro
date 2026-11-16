@@ -13,10 +13,15 @@ host lives in `../block-calendar/`.
   retains FullCalendar handles, three-page transitions, and occurrence data;
   `../calendar-view/views/grid-navigation/CalendarGridNavigation.tsx` adapts it at the host boundary.
 - `components/CalendarViewContext.tsx`: selection, source visibility, and display preferences.
+- `context/event-rsvp-context.ts` and `components/event-rsvp/`: shared response state
+  and composable choices, feedback, and recurring-scope controls for event rows and cards.
+- `../calendar-view/views/needs-reply/`: calendar-only invitation list over the existing
+  progressive occurrence source; keep the shared call sidebar unchanged.
 - `hooks/use-calendar-occurrence-data.ts`: range reads and event projection.
 - `components/composer/create-calendar-event-form-controller.ts` and
   `hooks/use-event-editor.ts`: draft validation, permissions, and submission.
-- `types.ts`: occurrence identity, source metadata, and viewer capabilities.
+- `types.ts`: occurrence identity, source metadata, viewer capabilities, and the
+  grid-only `CalendarGridPeriodView` versus route-level `CalendarPeriodView`.
 
 ## Boundaries
 
@@ -37,6 +42,8 @@ host lives in `../block-calendar/`.
   `CalendarPagerContext.tsx`.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
+- Keep Agenda on the navigation context, with five fourteen-day windows clipped
+  to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,
   and REST/GraphQL handoff; never add a parallel event cache.
 
@@ -51,6 +58,7 @@ From `apps/web`:
   [calendar walkthrough](../../../../../docs/agent-guide/calendar.md).
 
 From the repository root: `just check`.
+- Verify visual changes on the real signed-in Calendar route; gallery and fixture checks supplement, but never replace, that verification.
 
 ## Gotchas
 

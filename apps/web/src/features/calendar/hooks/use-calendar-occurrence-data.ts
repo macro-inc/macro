@@ -54,14 +54,20 @@ export function useCalendarOccurrenceData(
     }
   );
   const events = createMemo(() => {
+    const hasSettled = occurrencesQuery.isSuccess || occurrencesQuery.isError;
     if (
       !isRangeSupported() ||
-      !occurrencesQuery.isSuccess ||
+      !hasSettled ||
+      occurrencesQuery.isPlaceholderData ||
       options.sourcesReady?.() === false
     )
       return [];
+    // A failed background refresh still owns the same account/range cache.
+    // Initial failures and another query's placeholder data cannot supply rows.
+    const data = occurrencesQuery.data;
+    if (!data) return [];
     const sourceById = options.sourceById?.();
-    return (occurrencesQuery.data?.items ?? []).map((item) =>
+    return data.items.map((item) =>
       mapCalendarOccurrence(item, {
         sourceById,
         isSourceVisible: options.isSourceVisible,

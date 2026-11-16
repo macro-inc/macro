@@ -192,6 +192,30 @@ afterEach(() => {
 });
 
 describe('calendar occurrence presentation readiness', () => {
+  it('keeps current rows when a background occurrence refresh fails', async () => {
+    requests.calendars.mockResolvedValue([calendar]);
+    requests.occurrences.mockResolvedValue(occurrenceData());
+    const data = renderCalendarData();
+    await waitFor(() => expect(screen.getByText('Planning')).toBeTruthy());
+
+    requests.occurrences.mockRejectedValue(new Error('Network unavailable'));
+    await data.occurrencesQuery.refetch();
+    expect(data.occurrencesQuery.isError).toBe(true);
+    expect(data.visibleEvents()).toHaveLength(1);
+    expect(screen.getByText('Planning').getAttribute('data-color')).toBe(
+      calendar.color
+    );
+    expect(data.isLoading()).toBe(false);
+  });
+
+  it('does not fabricate rows when the initial occurrence request fails', async () => {
+    requests.calendars.mockResolvedValue([calendar]);
+    requests.occurrences.mockRejectedValue(new Error('Network unavailable'));
+    const data = renderCalendarData();
+    await waitFor(() => expect(data.occurrencesQuery.isError).toBe(true));
+    expect(data.visibleEvents()).toEqual([]);
+    expect(screen.queryByText('Planning')).toBeNull();
+  });
   it('keeps colored events visible during a same-range transport handoff', async () => {
     const [transport, setTransport] = createSignal('rest');
     requests.transport = transport;

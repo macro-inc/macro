@@ -234,6 +234,8 @@ function useTeamOooItems(
 export interface TeamOooEventData {
   events: Accessor<CalendarEvent[]>;
   eventsById: Accessor<Map<string, CalendarEvent>>;
+  isPending: Accessor<boolean>;
+  isError: Accessor<boolean>;
 }
 
 export interface TeamOooEventOptions {
@@ -265,7 +267,14 @@ export function useTeamOooEvents(
     () => new Map(events().map((event) => [event.id, event]))
   );
 
-  return { events, eventsById };
+  return {
+    events,
+    eventsById,
+    isPending: () =>
+      isRangeSupported() && isOverlayVisible() && teamOoo.isPending(),
+    isError: () =>
+      isRangeSupported() && isOverlayVisible() && teamOoo.isError(),
+  };
 }
 
 /** One teammate absence window for list surfaces. */

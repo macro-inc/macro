@@ -6,6 +6,7 @@ import { ok } from 'neverthrow';
 import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type CalendarEvent,
   type CalendarSource,
   DEFAULT_GUEST_POLICY,
   NO_VIEWER_CAPABILITIES,
@@ -85,7 +86,10 @@ function respond(items: CalendarOccurrenceItem[]) {
   list.mockResolvedValue(ok({ items, hasMore: false, syncStatus: 'ready' }));
 }
 
-function setup(metadataReady = true) {
+function setup(
+  metadataReady = true,
+  includeEvent?: (event: CalendarEvent) => boolean
+) {
   const [now, setNow] = createSignal(today);
   const [userId, setUserId] = createSignal<string | undefined>(
     'macro|self@example.com'
@@ -100,6 +104,7 @@ function setup(metadataReady = true) {
       sourceById: () => sources,
       sourcesReady,
       isSourceVisible: (id) => !hidden().has(id),
+      includeEvent,
     });
     return null;
   };
@@ -175,6 +180,37 @@ describe('upcoming calendar events source', () => {
       [16, 17, 18, 19, 20].map((day) => `event-${day}`)
     );
     expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues to later windows until the requested subset has five events', async () => {
+    list
+      .mockResolvedValueOnce(
+        ok({
+          items: [1, 2, 3, 4, 5].map((day) => occurrence(day)),
+          hasMore: false,
+          syncStatus: 'ready',
+        })
+      )
+      .mockResolvedValueOnce(
+        ok({
+          items: [16, 17, 18, 19, 20].map((day) =>
+            occurrence(day, { title: 'Needs response' })
+          ),
+          hasMore: false,
+          syncStatus: 'ready',
+        })
+      );
+    const { result } = setup(true, (event) => event.title === 'Needs response');
+    await vi.waitFor(() => expect(result.events()).toHaveLength(5));
+    expect(
+      result.events().every((event) => event.title === 'Needs response')
+    ).toBe(true);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(
+      result.findEvent(
+        JSON.stringify(['event-1', occurrence(1).occurrence.occurrenceKey])
+      )?.title
+    ).toBe('event-1');
   });
 
   it('stops after the first window when five events are available', async () => {

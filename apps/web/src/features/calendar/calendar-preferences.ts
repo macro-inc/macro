@@ -8,7 +8,8 @@ function isCalendarPeriodView(value: unknown): value is CalendarPeriodView {
   return (
     value === 'dayGridMonth' ||
     value === 'timeGridWeek' ||
-    value === 'timeGridDay'
+    value === 'timeGridDay' ||
+    value === 'agenda'
   );
 }
 

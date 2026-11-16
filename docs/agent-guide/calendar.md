@@ -1,6 +1,6 @@
 # Calendar
 
-## Calendar — `/app/calendar/<month-or-week-or-day>`
+## Calendar — `/app/calendar/<month-or-week-or-day-or-agenda>`
 
 The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
@@ -13,7 +13,7 @@ the connected calendar mailbox. Outlook out-of-office automatic replies show an
 uncertainty notice if a provider response cannot be confirmed; a reconnect must
 not resend an already attempted automatic reply.
 
-Google Meet joins from event details, the upcoming-events sidebar, and calendar
+Google Meet joins from event details, the app rail's upcoming-events list, and calendar
 search use the displayed occurrence's connected calendar email as `authuser` when
 that account is known. Existing parameters such as `hs` are preserved. Copied call
 links keep their original URL so they can be shared with other attendees. Verify
@@ -64,10 +64,18 @@ the date, fit 18px event rows to the available height, and expose overflowing
 events through `+N more`; that opens the whole day's events in a menu-surface
 popover.
 
-The path selects the Month, Week, or Day period, and choosing another period updates
+The path selects Month, Week, Day, or Agenda, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
+
+Agenda uses an hourly list with sticky stacked day headers and all-day events
+first. Its period arrows step one week; it has no single-letter view shortcut.
+Scrolling loads earlier or later two-week windows, with five windows mounted at
+once. Reads stop at the supported occurrence-range boundaries without hiding
+supported days in a partially covered window. Loading, failed, unsupported, and
+empty days remain distinct. Choosing an occurrence opens the same event details
+as the grid; event links retain occurrence identity and focus their list row.
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid
@@ -76,7 +84,7 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
-Opening the calendar draws the visible period alone. The two neighboring periods
+Opening a grid view draws the visible period alone. The two neighboring periods
 mount on later tasks once the visible period has its events, or after a moment
 when that load is slow. They start beside whatever period is on screen by then,
 and paging waits for them. On the iOS and Android apps the periods seen last and
@@ -127,7 +135,7 @@ normalized one-day occurrence beside a timed event on the same date.
 
 Imported timed events with identical start and end are points: they show a compact
 chip with one time and `No duration` in details, and do not block availability.
-Future points also appear in Upcoming events, without becoming ongoing meetings.
+Future points also appear in the app rail's Upcoming events, without becoming ongoing meetings.
 Grid dragging and resizing are disabled for points. An owned point's metadata,
 RSVP, and deletion still work; metadata saves preserve its exact provider time.
 Creating an event or changing its time requires positive duration. Shared points
@@ -164,7 +172,7 @@ Touch swipes retain their page-readiness gates.
 Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
 the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
 flag loads or is off, those controls stay hidden and meeting routes do not mount
-call setup. Existing channel calls and the upcoming-events list remain available.
+call setup. Existing channel calls and the app rail's upcoming-events list remain available.
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
@@ -286,7 +294,7 @@ Calendar button beside the switch, with a sample `23m` pill only while it is on.
 The calendar header has a `Booking links` dropdown. Select an active link to
 copy it. The `Manage booking links` footer opens the Scheduling workspace, even
 while links load or when none are active. At narrow desktop pane widths, the
-dropdown moves from the header into the calendar sidebar above `Upcoming events`
+dropdown moves from the header into the calendar sidebar above `Needs reply`
 and its menu matches the trigger's width. Phones retain the header dropdown
 because they do not expose that sidebar. The calendar automatically sets up a
 default personal link for a new profile. Public
@@ -327,8 +335,8 @@ failing`, under the `scheduling.busy_time` span, carry `calendar_id`,
 `email_link_id` and `reason`.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
-above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
-`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+above the mini calendar offers `Event`, feature-gated `Call`, and `Booking link`.
+An icon-only shortcut in the `Needs reply` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
 copy ranges that wrap on narrow screens. The dialog checks all ranges using one
 calendar-occurrence query; ranges without free time are disabled, show an X
@@ -338,7 +346,7 @@ Copying rechecks the occurrences and current time, so changes since opening do
 not enter the copied text. The option keeps its width while a left spinner and
 `Copying…` crossfade to `Copied` with a green check icon; the button keeps its
 neutral styling. Reduced-motion preferences skip the crossfade and spin.
-Collapsible `Upcoming events` and `Calendars` sections follow; calendar
+Collapsible `Needs reply` and `Calendars` sections follow; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
 separate account and individual-calendar visibility controls. `Team out of office`
@@ -354,10 +362,20 @@ A card opened beside a row stays there when the event's chip mounts later. The l
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
-responds immediately; the upcoming list and each grid page refresh on deferred
-tasks rather than re-rendering all pages during the click.
+responds immediately; Needs reply filters hidden sources immediately, while each grid
+page refreshes on deferred tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
 it opens over the grid. Phones do not show the sidebar or its navigation drawer.
+
+`Needs reply` shows up to five actionable unanswered invitations from the existing
+progressive upcoming-calendar source. It searches 14 days first and extends through
+30, 90, 180, 365, then 729 days only while fewer than five invitations match. This is
+a bounded upcoming list, not an all-time invitation count. Each row opens the event
+or sends `Yes` / `No` through the shared RSVP mutation. Recurring invitations ask
+`This event` or `All events`; a responding row stays visible until the request
+settles so its selection, pending state, and failure remain visible. Failed writes
+restore the invitation. Switching accounts or hiding its source removes the row
+immediately. Loading, empty, and error/retry states are distinct.
 The mobile split header places a month selector and Today in its left island;
 selecting the month opens the date-selection drawer. The right island keeps
 full-sized Availability, Search, and Settings actions. The New menu
@@ -439,13 +457,14 @@ All Join buttons use a camera icon. Generated Macro invitation paragraphs are
 hidden from event descriptions. Google Meet URLs in an event's location or
 description also supply Join actions. Recurring results wait for matching
 occurrence details before showing Join. Selecting a result preserves the search
-text. Availability lives in the desktop sidebar's Upcoming events section and
+text. Availability lives in the desktop sidebar's Needs reply section and
 in the mobile header.
 
-The period controls move into a separate row below 600px of calendar-pane width.
+Desktop Day, Week, Month, and Agenda tabs sit beside the title. The period
+controls use a dropdown and move into a separate row below 880px of calendar-pane width.
 The shared outlined `New` menu remains at the right end, even with the sidebar
 open; the sidebar places its full-width version below the title. With a docked
-sidebar, the header stays inline down to 580px. This avoids wrapping
+sidebar, the header stays inline down to 860px. This avoids wrapping
 and immediately unwrapping when the sidebar hides. Expanded search does not
 force early wrapping; its results popup stays directly below the search field.
 Below 1040px, search slides over the month title without moving any controls or
@@ -467,8 +486,8 @@ selected day and week highlight without resetting the month being browsed.
 When browsing from a month's last day to a shorter month, keyboard focus stays
 on the shorter month's last day so Tab and arrow-key navigation remain usable.
 
-Active Quick Calls you created, participated in, or were invited to appear above your
-next five events (including ones in progress), whether or not they have call links.
+The app rail's Calendar menu continues to show active Quick Calls above upcoming
+events (including ones in progress), whether or not they have call links.
 The active area is hidden when no calls are active. Upcoming event rows show a
 calendar color swatch, the name, and the time; click one to open its details and
 highlight the active row.
@@ -606,10 +625,11 @@ pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline m
 `Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
 When editing an existing event the kind is read-only (Google treats it as immutable), and an
 out-of-office event's decline settings can still be changed — they read as unset because the
-provider does not report the stored ones. Timed and all-day events use calendar-color
-translucent fills over the panel with theme-aware text. Unanswered invitations are
-outlined, tentative invitations have a softer fill, and declined events are muted
-and struck through. Drafts have a dashed edge. Month-view timed events
+provider does not report the stored ones. Timed and all-day event blocks retain the
+existing rich, opaque calendar-colour fills and dark text. Unanswered and tentative
+invitations use the existing softer fill; declined events are muted and struck
+through. Selected events use the existing solid accent fill. Drafts have a dashed
+edge. Month-view timed events
 keep their compact dot treatment. Out-of-office details show an `Out of office` line under
 the schedule. The details' calendar row names the calendar the event is on. A primary
 calendar reads as its inbox address, as in the calendar pickers, because Outlook names an

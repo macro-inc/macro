@@ -5,6 +5,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
+import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/CalendarViewTabs';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
@@ -98,7 +99,7 @@ export function Header(props: {
   const breakpoints = createSizeBreakpoints(
     () => paneSize.width ?? 0,
     () => ({
-      fullHeader: { min: hasDockedSidebar() ? 580 : 600 },
+      fullHeader: { min: hasDockedSidebar() ? 860 : 880 },
       inlineSearch: { min: 1040 },
       labeledNew: { min: 360 },
       labeledToday: { min: 304 },
@@ -167,9 +168,12 @@ export function Header(props: {
   const currentDate = createMemo(
     () => navigation.navigationDate() ?? initialDate
   );
-  const periodLabel = createMemo(() =>
-    calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
-  );
+  const periodLabel = createMemo(() => {
+    const period = calendarView.displaySettings.periodView;
+    return calendarPeriodLabel(
+      period === 'agenda' ? 'timeGridWeek' : period
+    ).toLowerCase();
+  });
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
   const showBookingLinks = () => isMobile() || !shell?.breakpoints.narrow?.();
   const usesSplitHeader = () => isTouchDevice();
@@ -359,6 +363,12 @@ export function Header(props: {
                 onSelect={selectDate}
               />
             </h1>
+            <Show when={!isCompactHeader()}>
+              <CalendarViewTabs
+                value={navigation.periodView()}
+                onChange={navigation.changeView}
+              />
+            </Show>
           </div>
           <div
             class={cn(
@@ -385,9 +395,11 @@ export function Header(props: {
                 {previous(true)}
                 {next(true)}
               </HeaderActionGroup>
-              <HeaderActionGroup label="Calendar view" size="md">
-                <PeriodSelector isNarrow={isNarrow()} compact grouped />
-              </HeaderActionGroup>
+              <Show when={isCompactHeader()}>
+                <HeaderActionGroup label="Calendar view" size="md">
+                  <PeriodSelector isNarrow={isNarrow()} compact grouped />
+                </HeaderActionGroup>
+              </Show>
               {headerCreateMenu()}
             </div>
             <div

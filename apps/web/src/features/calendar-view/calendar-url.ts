@@ -11,14 +11,16 @@ const CALENDAR_PERIOD_PATHS = {
   dayGridMonth: 'month',
   timeGridWeek: 'week',
   timeGridDay: 'day',
+  agenda: 'agenda',
 } as const satisfies Record<CalendarPeriodView, string>;
 
 export const calendarPeriodParams = z.object({
   period: z
-    .enum(['month', 'week', 'day'])
+    .enum(['month', 'week', 'day', 'agenda'])
     .transform((period): CalendarPeriodView => {
       if (period === 'month') return 'dayGridMonth';
       if (period === 'day') return 'timeGridDay';
+      if (period === 'agenda') return 'agenda';
       return 'timeGridWeek';
     }),
 });

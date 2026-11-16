@@ -208,7 +208,7 @@ export function Page(props: {
     createSignal(false);
   // Keep the settings object independent of route-period changes. Otherwise
   // reading any grid setting also subscribes FullCalendar to the whole object.
-  const initialView = untrack(() => calendarView.displaySettings.periodView);
+  const initialView = untrack(() => pager.periodView());
   const openEventComposer = useOpenEventComposer();
   const quickCalls = useQuickCallsFlag();
   const calendarsQuery = useVisibleCalendarsQuery();

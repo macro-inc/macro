@@ -22,6 +22,7 @@ import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   type JSX,
@@ -33,6 +34,9 @@ import {
   Switch,
 } from 'solid-js';
 import { CALENDAR_TOUR, calendarTour } from '../tour';
+import { AgendaContent } from '../views/agenda/AgendaContent';
+import { AgendaNavigation } from '../views/agenda/AgendaNavigation';
+import { AgendaSetup } from '../views/agenda/AgendaSetup';
 import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
@@ -185,25 +189,36 @@ function CalendarPages() {
               }
             />
           </Show>
-          <SetupStatus />
+          <SetupStatus
+            data={calendarPager.activeData()}
+            hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
+          />
         </div>
       </div>
     </Layer>
   );
 }
 
-function CalendarPageContent() {
+function CalendarPageContent(props: { agenda: boolean }) {
   return (
     <div
       ref={tourTarget(CALENDAR_TOUR.grid)}
       class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
     >
-      <CalendarPages />
+      <Show when={props.agenda} fallback={<CalendarPages />}>
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <AgendaContent />
+          <AgendaSetup />
+        </div>
+      </Show>
     </div>
   );
 }
 
-function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
+function WorkspaceContent(props: {
+  headerLeading?: JSX.Element;
+  agenda: boolean;
+}) {
   const panel = useSplitPanelOrThrow();
 
   // An inline preview keeps its host's name.
@@ -215,7 +230,7 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
         <div class="flex size-full min-h-0 min-w-0 flex-col">
           <Header presentation="preview" leading={props.headerLeading} />
           <main class="flex min-h-0 flex-1">
-            <CalendarPageContent />
+            <CalendarPageContent agenda={props.agenda} />
           </main>
         </div>
       </Match>
@@ -237,7 +252,7 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
                 <Header presentation="workspace" />
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">
-                  <CalendarPageContent />
+                  <CalendarPageContent agenda={props.agenda} />
                 </ViewShell.Content>
               </ViewShell.Main>
             </ViewShell.Root>
@@ -250,18 +265,44 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
 
 export function Workspace(props: { headerLeading?: JSX.Element }) {
   const calendarView = useCalendarView();
+  // Transfer a snapshot only when changing hosts; the active host owns navigation.
+  const [date, setDate] = createSignal(new Date());
+  const gridView = createMemo(() => {
+    const period = calendarView.displaySettings.periodView;
+    return period === 'agenda' ? undefined : period;
+  });
+  const openAgenda = (currentDate: Date | undefined) => {
+    if (currentDate) setDate(currentDate);
+    calendarView.closeEventDetails();
+    calendarView.setPeriodView('agenda');
+  };
 
   return (
-    <CalendarPagerContextProvider
-      initialView={calendarView.displaySettings.periodView}
-      showWeekends={() => calendarView.displaySettings.showWeekends}
-      weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
-      onNavigate={calendarView.closeEventDetails}
-      onViewChange={calendarView.setPeriodView}
+    <Show
+      when={gridView()}
+      fallback={
+        <AgendaNavigation date={date()} onDateChange={setDate}>
+          <WorkspaceContent headerLeading={props.headerLeading} agenda />
+        </AgendaNavigation>
+      }
     >
-      <CalendarGridNavigation>
-        <WorkspaceContent headerLeading={props.headerLeading} />
-      </CalendarGridNavigation>
-    </CalendarPagerContextProvider>
+      {(period) => (
+        <CalendarPagerContextProvider
+          initialView={period()}
+          initialDate={date()}
+          showWeekends={() => calendarView.displaySettings.showWeekends}
+          weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
+          onNavigate={calendarView.closeEventDetails}
+          onViewChange={calendarView.setPeriodView}
+        >
+          <CalendarGridNavigation onAgendaSelect={openAgenda}>
+            <WorkspaceContent
+              headerLeading={props.headerLeading}
+              agenda={false}
+            />
+          </CalendarGridNavigation>
+        </CalendarPagerContextProvider>
+      )}
+    </Show>
   );
 }

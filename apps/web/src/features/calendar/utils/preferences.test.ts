@@ -8,6 +8,16 @@ afterEach(() => {
 });
 
 describe('calendar preferences', () => {
+  it('restores the saved Agenda preference', async () => {
+    localStorage.setItem(
+      CALENDAR_PREFERENCES_KEY,
+      JSON.stringify({ periodView: 'agenda' })
+    );
+    const { getPreferredCalendarPeriodView } = await import(
+      '../calendar-preferences'
+    );
+    expect(getPreferredCalendarPeriodView()).toBe('agenda');
+  });
   it('keeps a saved team out-of-office hide across reloads', async () => {
     localStorage.setItem(
       CALENDAR_PREFERENCES_KEY,

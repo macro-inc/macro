@@ -7,7 +7,11 @@ import { Pager } from '@ui/components/Pager';
 import type { ParentProps } from 'solid-js';
 
 /** Adapts the grid pager to workspace navigation without exposing its renderer. */
-export function CalendarGridNavigation(props: ParentProps) {
+export function CalendarGridNavigation(
+  props: ParentProps<{
+    onAgendaSelect: (date: Date | undefined) => void;
+  }>
+) {
   const calendarPager = useCalendarPager();
   const navigation: CalendarNavigationContext = {
     periodView: calendarPager.periodView,
@@ -34,7 +38,13 @@ export function CalendarGridNavigation(props: ParentProps) {
     navigateToToday: calendarPager.navigateToToday,
     previousPeriod: calendarPager.previousPeriod,
     nextPeriod: calendarPager.nextPeriod,
-    changeView: calendarPager.changeView,
+    changeView: (period) => {
+      if (period === 'agenda') {
+        props.onAgendaSelect(calendarPager.navigationDate());
+        return;
+      }
+      calendarPager.changeView(period);
+    },
   };
 
   return (

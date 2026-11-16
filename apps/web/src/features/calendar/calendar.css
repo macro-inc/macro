@@ -254,12 +254,14 @@
 	margin-left: 0.375rem;
 }
 
-/* Calendar colors stay theme-aware: translucent ink over the panel surface. */
-.calendar-view .fc .fc-event {
-	--calendar-event-fill: color-mix(in srgb, var(--event-calendar-color, var(--color-calendar)) 30%, var(--color-panel));
-	--calendar-event-ink: var(--color-ink);
+/* Rich, opaque blocks keep busy schedules readable. Bound lightness for
+   dark-text contrast and boost chroma without turning neutral calendars colorful. */
+.calendar-view .fc .fc-event,
+.calendar-agenda-event {
+	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
+	--calendar-event-ink: oklch(0.2 0 0);
 	--fc-event-bg-color: var(--calendar-event-fill);
-	--fc-event-border-color: transparent;
+	--fc-event-border-color: var(--color-panel);
 	--fc-event-text-color: var(--calendar-event-ink);
 	--calendar-event-ring: 0 0 0 0 transparent;
 	border: 1px solid var(--fc-event-border-color);
@@ -311,7 +313,7 @@
 .calendar-view .fc .calendar-multi-day-selection-preview-event {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
 	border-radius: 0.375rem;
-	background: color-mix(in srgb, var(--calendar-selection-color, var(--color-accent)) 30%, var(--color-panel));
+	background: var(--calendar-selection-color, var(--color-accent));
 	box-shadow: none;
 }
 
@@ -321,7 +323,7 @@
 }
 
 .calendar-view .fc .calendar-multi-day-selection-preview-event {
-	color: var(--color-ink);
+	color: var(--calendar-selection-color, var(--color-accent));
 	pointer-events: none;
 }
 
@@ -366,9 +368,9 @@
 	color: inherit;
 }
 
-/* Mirrors keep readable text over the same translucent surface. */
+/* Drag and resize mirrors use a filled accent background. */
 .calendar-view .fc .fc-event-mirror .calendar-event-content {
-	color: var(--color-ink);
+	color: var(--color-surface);
 }
 
 .calendar-view .fc .fc-event-mirror .calendar-event-selection-preview,
@@ -376,7 +378,7 @@
 	.fc
 	.calendar-multi-day-selection-preview-event
 	.calendar-event-selection-preview {
-	color: var(--color-ink);
+	filter: invert(1) grayscale(1) contrast(100);
 }
 
 .calendar-view .fc .fc-timegrid-event .fc-event-main {
@@ -502,20 +504,17 @@
 	background: transparent;
 }
 
-/* Unanswered invitations are outlined; tentative events retain a softer tint. */
-.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="needs_action"]) {
-	--fc-event-bg-color: transparent;
-	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-}
-
-.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="tentative"]) {
-	--fc-event-bg-color: color-mix(in srgb, var(--event-calendar-color, var(--color-calendar)) 18%, var(--color-panel));
+/* Unanswered and tentative invitations stay filled, with a softer tint. */
+.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])),
+.calendar-agenda-event:not([data-selected="true"]):is([data-response-status="tentative"], [data-response-status="needs_action"]) {
+	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
 }
 
 .calendar-view
 	.fc
-	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]) {
-	--fc-event-bg-color: color-mix(in srgb, var(--calendar-event-fill) 50%, var(--color-panel));
+	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]),
+.calendar-agenda-event:not([data-selected="true"])[data-response-status="declined"] {
+	--fc-event-bg-color: oklch(from var(--calendar-event-fill) l calc(c * 0.25) h);
 }
 
 .calendar-view
@@ -546,7 +545,8 @@
 	z-index: 4;
 }
 
-.calendar-view .fc .fc-event:focus-visible {
+.calendar-view .fc .fc-event:focus-visible,
+.calendar-agenda-event:focus-within {
 	z-index: 4;
 	outline: none;
 	--calendar-event-ring: 0 0 0 1px var(--color-ink-muted);
@@ -562,11 +562,12 @@
 	}
 }
 
-.calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
+.calendar-view .fc .fc-event:has(.calendar-event-content-selected),
+.calendar-agenda-event[data-selected="true"] {
 	z-index: 3;
 	--fc-event-border-color: var(--color-accent);
-	--fc-event-bg-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-panel));
-	--fc-event-text-color: var(--color-ink);
+	--fc-event-bg-color: var(--color-accent);
+	--fc-event-text-color: var(--color-surface);
 	opacity: 1;
 }
 
@@ -574,8 +575,8 @@
 	.fc
 	.fc-event:has(.calendar-event-content-selected)
 	.calendar-event-content-selected {
-	background-color: var(--fc-event-bg-color);
-	color: var(--fc-event-text-color);
+	background-color: var(--color-accent);
+	color: var(--color-surface);
 }
 
 .calendar-view

@@ -241,7 +241,10 @@ export function CalendarView(props: CalendarViewProps) {
     <Show
       when={calendarUiEnabled()}
       fallback={
-        <Show when={posthog.flagsLoaded()} fallback={<CalendarViewSkeleton />}>
+        <Show
+          when={posthog.flagsLoaded()}
+          fallback={<CalendarViewSkeleton period={routeParams.period} />}
+        >
           <CalendarDisabledRedirect />
         </Show>
       }

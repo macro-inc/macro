@@ -23,7 +23,7 @@ import {
 import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
 import {
   type CalendarEvent,
-  type CalendarPeriodView,
+  type CalendarGridPeriodView,
   type CalendarTimeFormat,
   type CalendarWeekStart,
   mapCalendarEventToFullCalendar,
@@ -81,7 +81,7 @@ export interface CalendarGridHandle extends FullCalendarContextValue {
 }
 
 export interface CalendarGridSettings {
-  initialView: CalendarPeriodView;
+  initialView: CalendarGridPeriodView;
   /** Consecutive visible days for time-grid embeds. */
   dayCount?: number;
   showDayHeaders?: boolean;

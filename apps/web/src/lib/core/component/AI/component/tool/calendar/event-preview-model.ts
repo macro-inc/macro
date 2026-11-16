@@ -4,7 +4,7 @@ import type {
 } from '@app/features/calendar/components/composer/event-form-model';
 import {
   type CalendarEvent,
-  type CalendarPeriodView,
+  type CalendarGridPeriodView,
   DEFAULT_CALENDAR_SOURCE,
   DEFAULT_GUEST_POLICY,
   NO_VIEWER_CAPABILITIES,
@@ -91,7 +91,7 @@ export function calendarToolPreviewDate(event: CalendarEvent) {
 
 /** Visible period selected for a calendar-tool preview. */
 export interface CalendarToolPreviewWindow {
-  view: CalendarPeriodView;
+  view: CalendarGridPeriodView;
   start: Date;
   end: Date;
   /** Consecutive days shown when previewing one non-recurring multi-day event. */
@@ -171,7 +171,7 @@ export function calendarToolPreviewWindow(
     (localDayNumber(occupiedEnd) - localDayNumber(start)) /
       (24 * 60 * 60 * 1000)
   );
-  const view: CalendarPeriodView = recurrenceFrequency
+  const view: CalendarGridPeriodView = recurrenceFrequency
     ? recurrenceFrequency === 'DAILY' || recurrenceFrequency === 'WEEKLY'
       ? 'timeGridWeek'
       : 'dayGridMonth'

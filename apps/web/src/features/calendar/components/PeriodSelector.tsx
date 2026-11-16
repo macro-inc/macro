@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -14,31 +15,23 @@ import {
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarNavigation } from '../context/calendar-navigation-context';
+import { CALENDAR_PERIODS } from '../core/periods';
 import type { CalendarPeriodView } from '../types';
 import { calendarPeriodLabel } from '../utils/calendar-label';
 import { useCalendarView } from './CalendarViewContext';
 
-const CALENDAR_VIEWS = [
-  {
-    value: 'dayGridMonth',
-    label: calendarPeriodLabel('dayGridMonth'),
-    hotkeyToken: TOKENS.calendar.view.month,
-  },
-  {
-    value: 'timeGridWeek',
-    label: calendarPeriodLabel('timeGridWeek'),
-    hotkeyToken: TOKENS.calendar.view.week,
-  },
-  {
-    value: 'timeGridDay',
-    label: calendarPeriodLabel('timeGridDay'),
-    hotkeyToken: TOKENS.calendar.view.day,
-  },
-] satisfies Array<{
-  value: CalendarPeriodView;
-  label: string;
-  hotkeyToken: HotkeyToken;
-}>;
+const VIEW_HOTKEYS: Partial<Record<CalendarPeriodView, HotkeyToken>> = {
+  timeGridDay: TOKENS.calendar.view.day,
+  timeGridWeek: TOKENS.calendar.view.week,
+  dayGridMonth: TOKENS.calendar.view.month,
+};
+
+const calendarViews = () =>
+  CALENDAR_PERIODS.map((value) => ({
+    value,
+    label: calendarPeriodLabel(value),
+    hotkeyToken: VIEW_HOTKEYS[value],
+  }));
 
 function createCalendarPeriodControls(onSelect?: () => void) {
   const calendarView = useCalendarView();
@@ -144,13 +137,13 @@ export function PeriodSelector(props: {
     >
       <Dropdown.Trigger
         as={props.grouped ? ButtonGroup.Button : Button}
-        aria-label="Choose calendar view"
+        aria-label={t('calendar.viewLabel')}
         variant="ghost"
         size={props.grouped ? undefined : props.compact ? 'md' : 'lg'}
         class="shrink-0 border-transparent bg-transparent text-sm"
       >
-        {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
-          ?.label ?? 'Week'}
+        {calendarViews().find((view) => view.value === controls.activeView())
+          ?.label ?? t('calendar.viewWeek')}
         <CaretDownIcon class="size-4 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
@@ -159,7 +152,7 @@ export function PeriodSelector(props: {
             value={controls.activeView()}
             onChange={(view) => controls.changeView(view as CalendarPeriodView)}
           >
-            <For each={CALENDAR_VIEWS}>
+            <For each={calendarViews()}>
               {(view) => (
                 <Dropdown.RadioItem closeOnSelect value={view.value}>
                   <span class="flex-1">{view.label}</span>
@@ -167,7 +160,9 @@ export function PeriodSelector(props: {
                     <CheckIcon class="size-3.5 text-accent" />
                   </Dropdown.ItemIndicator>
 
-                  <Hotkey token={view.hotkeyToken} theme="subtle" />
+                  <Show when={view.hotkeyToken}>
+                    {(token) => <Hotkey token={token()} theme="subtle" />}
+                  </Show>
                 </Dropdown.RadioItem>
               )}
             </For>
@@ -178,7 +173,7 @@ export function PeriodSelector(props: {
             <Dropdown.Sub>
               <Dropdown.SubTrigger>
                 <CalendarIcon class="size-3.5 text-ink-muted" />
-                <span class="flex-1">Go to date</span>
+                <span class="flex-1">{t('calendar.goToDate')}</span>
                 <CaretRightIcon class="size-3 text-ink-muted" />
               </Dropdown.SubTrigger>
               <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
@@ -200,9 +195,9 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
 
   return (
     <>
-      <MobileDrawer.Label>Period</MobileDrawer.Label>
+      <MobileDrawer.Label>{t('calendar.periodLabel')}</MobileDrawer.Label>
       <MobileDrawer.Section class="flex shrink-0 flex-col">
-        <For each={CALENDAR_VIEWS}>
+        <For each={calendarViews()}>
           {(view) => (
             <MobileDrawer.Item
               aria-pressed={controls.activeView() === view.value}

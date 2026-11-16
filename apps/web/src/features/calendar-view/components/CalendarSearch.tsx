@@ -1,6 +1,7 @@
 import { SearchBar } from '@app/components/view-shell';
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
   type CalendarTimeFormat,
@@ -37,6 +38,7 @@ import {
   useCalendarMentionPreviewQuery,
   useCalendarSearchPreviewsQuery,
 } from '@queries/calendar/mention-preview';
+import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { Button, cn, EmptyStatePanel, Layer } from '@ui';
 import {
@@ -329,7 +331,7 @@ function CalendarSearchControl(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const calendarView = useCalendarView();
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const panel = useSplitPanelOrThrow();
   const [open, setOpenInternal] = createSignal(false);
   const setOpen = (next: boolean) => {
@@ -448,12 +450,25 @@ function CalendarSearchControl(props: {
     return details;
   });
 
+  const visibleOccurrences = useCalendarOccurrenceData({
+    range: () => {
+      const range = navigation.visibleRange();
+      return range
+        ? createCalendarOccurrenceQueryRange(range.start, range.end)
+        : undefined;
+    },
+    sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
+    isSourceVisible: calendarView.isSourceVisible,
+    queryOptions: () => ({ enabled: open(), pollWhileSyncing: false }),
+  });
+
   // Search results have no calendar IDs. Match loaded occurrences for colors
   // and full instance content while the batched preview request resolves.
   const activeEventDetails = createMemo(() => {
     const byId = new Map<string, { color: string; location?: string }>();
     const byOccurrence = new Map<string, CalendarSearchEventDetails>();
-    const data = calendarPager.activeData();
+    const data = visibleOccurrences;
     if (!open() || !data?.occurrencesQuery.isSuccess) {
       return { byId, byOccurrence };
     }

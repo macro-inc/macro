@@ -4,13 +4,13 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalendarPeriodView } from '../types';
+import type { CalendarGridPeriodView } from '../types';
 import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from './CalendarPagerContext';
 
-function mountCalendar(view: CalendarPeriodView = 'timeGridDay') {
+function mountCalendar(view: CalendarGridPeriodView = 'timeGridDay') {
   const element = document.createElement('div');
   let calendar: Calendar;
   let pagerContext: ReturnType<typeof useCalendarPager>;

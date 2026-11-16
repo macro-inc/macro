@@ -14,7 +14,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
-import type { CalendarEvent, CalendarPeriodView } from '../types';
+import type { CalendarEvent, CalendarGridPeriodView } from '../types';
 import { timeGridScroller } from '../utils/time-grid-scroller';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
@@ -34,7 +34,7 @@ interface CalendarPageHandle {
 
 const shiftedDateForView = (
   date: Date,
-  view: CalendarPeriodView,
+  view: CalendarGridPeriodView,
   offset: -1 | 1
 ) => {
   const shifted = new Date(date);
@@ -56,15 +56,16 @@ const navigateCalendar = (api: Calendar, view: string, date?: Date) => {
 
 interface CalendarPagerContextProps extends ParentProps {
   [key: string]: unknown;
-  initialView: CalendarPeriodView;
+  initialView: CalendarGridPeriodView;
+  initialDate?: Date;
   showWeekends: Accessor<boolean>;
   weekStartsOn: Accessor<number>;
   onNavigate: () => void;
-  onViewChange: (view: CalendarPeriodView) => void;
+  onViewChange: (view: CalendarGridPeriodView) => void;
 }
 
 function createCalendarPagerContext(props: CalendarPagerContextProps) {
-  const initialDate = new Date();
+  const initialDate = props.initialDate ?? new Date();
   const initialView = props.initialView;
   const initialDates: Record<CalendarPageId, Date> = {
     previous: shiftedDateForView(initialDate, initialView, -1),
@@ -386,7 +387,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     );
   };
 
-  const changeView = (view: CalendarPeriodView) => {
+  const changeView = (view: CalendarGridPeriodView) => {
     if (periodView() === view) return;
     pager.cancel();
     props.onNavigate();

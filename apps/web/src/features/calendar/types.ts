@@ -13,11 +13,14 @@ import {
 } from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
-/** Supported FullCalendar period views. */
-export type CalendarPeriodView =
+/** Periods rendered by the FullCalendar grid. */
+export type CalendarGridPeriodView =
   | 'dayGridMonth'
   | 'timeGridWeek'
   | 'timeGridDay';
+
+/** Route periods; Agenda is not a FullCalendar view. */
+export type CalendarPeriodView = CalendarGridPeriodView | 'agenda';
 
 /** The conferencing system backing an event's join URL. */
 type ConferenceProvider = 'google_meet' | 'microsoft_teams' | 'other';

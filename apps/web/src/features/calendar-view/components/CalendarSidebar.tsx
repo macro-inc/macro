@@ -33,9 +33,9 @@ import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { addDays, format, getDaysInMonth, startOfWeek } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
+import { NeedsReplyList } from '../views/needs-reply/NeedsReplyList';
 import {
   CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
@@ -100,20 +100,20 @@ export function CalendarMiniCalendar() {
   );
 }
 
-function UpcomingEventsSection() {
+function NeedsReplySection() {
   const [open, setOpen] = createSignal(true);
 
   return (
     <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
       <CollapsibleSection.Header ref={tourTarget(CALENDAR_TOUR.upcoming)}>
         <CollapsibleSection.Trigger class="min-w-0 flex-1">
-          <span class="min-w-0 truncate">Upcoming events</span>
+          <span class="min-w-0 truncate">{t('calendar.needsReply')}</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
         <CopyAvailabilityButton class="size-(--sidebar-control-size) rounded-lg" />
       </CollapsibleSection.Header>
       <CollapsibleSection.Content>
-        <CalendarCallSidebar />
+        <NeedsReplyList />
       </CollapsibleSection.Content>
     </CollapsibleSection.Root>
   );
@@ -391,7 +391,7 @@ export function CalendarSidebar() {
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />
         </Show>
-        <UpcomingEventsSection />
+        <NeedsReplySection />
         <CalendarSourcesSection />
         <ShowFeatureFlag flag={enableCalendarTeamOoo}>
           <CalendarTeamOooSection />

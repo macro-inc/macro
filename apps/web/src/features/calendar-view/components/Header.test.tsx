@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   previous: vi.fn(),
   next: vi.fn(),
   today: vi.fn(),
+  changeView: vi.fn(),
 }));
 
 vi.mock('@ui', async () => ({
@@ -15,6 +16,7 @@ vi.mock('@ui', async () => ({
   ButtonGroup: (await import('@app/components/ui/components/ButtonGroup'))
     .ButtonGroup,
   Layer: (await import('@app/components/ui/components/Layer')).Layer,
+  Tabs: (await import('@app/components/ui/components/Tabs')).Tabs,
   cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
 vi.mock('@app/components/view-shell', () => ({
@@ -45,7 +47,8 @@ vi.mock('@app/features/calendar/context/calendar-navigation-context', () => ({
     previousPeriod: state.previous,
     nextPeriod: state.next,
     navigateToToday: state.today,
-    changeView: vi.fn(),
+    changeView: state.changeView,
+    periodView: () => 'timeGridWeek',
   }),
 }));
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
@@ -139,6 +142,8 @@ describe('calendar headers', () => {
       expect(state.next).toHaveBeenCalledOnce();
       expect(state.today).toHaveBeenCalledOnce();
       expect(goHome).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByRole('radio', { name: 'Agenda' }));
+      expect(state.changeView).toHaveBeenCalledWith('agenda');
     }
   );
 

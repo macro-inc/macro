@@ -13,16 +13,11 @@ const mocks = vi.hoisted(() => ({ startAddInbox: vi.fn() }));
 const [userId, setUserId] = createSignal<string | undefined>('macro|self');
 const [links, setLinks] = createSignal<EmailLink[]>([]);
 
-vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({
-    activeData: () => ({
-      range: () => undefined,
-      occurrencesQuery: { isSuccess: true },
-      events: () => [],
-    }),
-    activeTeamEvents: () => [],
-  }),
-}));
+const viewportData = {
+  range: () => undefined,
+  occurrencesQuery: { isSuccess: true },
+  events: () => [],
+};
 
 vi.mock('@core/context/user', () => ({ useUserId: () => userId }));
 
@@ -78,10 +73,17 @@ afterEach(() => {
 });
 
 describe('SetupStatus', () => {
+  it('keeps setup non-blocking when the data describes only part of a list', () => {
+    render(() => <SetupStatus data={viewportData} allowBlocking={false} />);
+    expect(
+      screen.getByRole('button', { name: 'Connect calendar' })
+    ).toBeTruthy();
+    expect(screen.queryByText(CONNECT_DESCRIPTION)).toBeNull();
+  });
   it('asks a delegate with no inbox of their own to connect one', async () => {
     const user = userEvent.setup();
     setLinks([delegated('shared', { needs_calendar_permission: true })]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.getByText('Connect your calendar')).toBeTruthy();
     expect(screen.getByText(CONNECT_DESCRIPTION)).toBeTruthy();
@@ -99,7 +101,7 @@ describe('SetupStatus', () => {
   it('offers a delegate whose shared calendar works their own without covering the grid', async () => {
     const user = userEvent.setup();
     setLinks([delegated('shared')]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.getByText('Connect your calendar')).toBeTruthy();
     expect(screen.queryByText(CONNECT_DESCRIPTION)).toBeNull();
@@ -118,7 +120,7 @@ describe('SetupStatus', () => {
       delegated('shared'),
       link('own', { needs_calendar_permission: true }),
     ]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.getByRole('button', { name: 'Grant access' })).toBeTruthy();
     expect(
@@ -132,7 +134,7 @@ describe('SetupStatus', () => {
       delegated('shared', { needs_reauth: true }),
       link('own', { needs_calendar_permission: true }),
     ]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.getByText('Enable calendar')).toBeTruthy();
     expect(screen.queryByText('Reconnect calendar')).toBeNull();
@@ -152,7 +154,7 @@ describe('SetupStatus', () => {
       delegated('shared', { needs_calendar_permission: true }),
       link('own', { needs_calendar_permission: true, calendar_disabled: true }),
     ]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.getByText('Calendar is off')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Turn on' }));
@@ -168,7 +170,7 @@ describe('SetupStatus', () => {
       delegated('reauth', { needs_reauth: true }),
       delegated('permission', { needs_calendar_permission: true }),
     ]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
 
     expect(screen.queryByRole('button')).toBeNull();
   });
@@ -176,7 +178,7 @@ describe('SetupStatus', () => {
   it('waits for the viewer’s id before deciding', () => {
     setUserId(undefined);
     setLinks([link('own', { needs_calendar_permission: true })]);
-    render(() => <SetupStatus />);
+    render(() => <SetupStatus data={viewportData} />);
     expect(screen.queryByRole('button')).toBeNull();
 
     setUserId('macro|self');

@@ -1,4 +1,4 @@
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
+import type { CalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -39,9 +39,16 @@ function isWorkingCalendar(link: EmailLink) {
   );
 }
 
+type SetupCalendarData = Pick<CalendarOccurrenceData, 'range' | 'events'> & {
+  occurrencesQuery: { isSuccess: boolean };
+};
 /** Displays account setup actions above the complete calendar pager. */
-export function SetupStatus() {
-  const calendarPager = useCalendarPager();
+export function SetupStatus(props: {
+  data: SetupCalendarData | undefined;
+  hasOverlayEvents?: boolean;
+  /** A partial data window cannot prove that the whole viewport is empty. */
+  allowBlocking?: boolean;
+}) {
   const linksQuery = useEmailLinksQuery();
   const calendarsQuery = useVisibleCalendarsQuery();
   const warnings = createMemo(() =>
@@ -63,8 +70,7 @@ export function SetupStatus() {
       : [];
 
   const hasEvents = () =>
-    (calendarPager.activeData()?.events().length ?? 0) > 0 ||
-    calendarPager.activeTeamEvents().length > 0;
+    (props.data?.events().length ?? 0) > 0 || props.hasOverlayEvents === true;
 
   // A working calendar shared with the viewer still fills the grid, so a week
   // without events is not a sign that nothing is set up: setting up their own
@@ -79,7 +85,7 @@ export function SetupStatus() {
   const setupState = createMemo<
     'connect' | 'permission' | 'reauth' | 'disabled' | undefined
   >(() => {
-    const activeData = calendarPager.activeData();
+    const activeData = props.data;
     const range = activeData?.range();
     if (range && !isCalendarRangeSupported(range)) return undefined;
 
@@ -155,7 +161,11 @@ export function SetupStatus() {
       </Show>
       <Show when={setupState() !== undefined}>
         <Show
-          when={!hasEvents() && !seesWorkingCalendar()}
+          when={
+            props.allowBlocking !== false &&
+            !hasEvents() &&
+            !seesWorkingCalendar()
+          }
           fallback={
             <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
               <span>{setupMessage().title}</span>

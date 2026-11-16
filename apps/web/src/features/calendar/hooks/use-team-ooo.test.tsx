@@ -92,6 +92,41 @@ function TeamOooTitles(props: {
 }
 
 describe('useTeamOooEvents', () => {
+  it('exposes loading and failure only while the overlay is enabled', async () => {
+    let reject!: (error: Error) => void;
+    requests.teamOoo.mockReturnValue(
+      new Promise((_, rejectPromise) => {
+        reject = rejectPromise;
+      })
+    );
+    const [visible, setVisible] = createSignal(true);
+    const range = localRange(new Date(), 7);
+    let data: ReturnType<typeof useTeamOooEvents> | undefined;
+    function Harness() {
+      data = useTeamOooEvents({
+        range: () => range,
+        isSourceVisible: () => visible(),
+      });
+      return null;
+    }
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+    expect(data?.isPending()).toBe(true);
+    await waitFor(() => expect(requests.teamOoo).toHaveBeenCalled());
+    reject(new Error('Unavailable'));
+    await waitFor(() => expect(data?.isError()).toBe(true));
+    expect(data?.events()).toEqual([]);
+    setVisible(false);
+    expect(data?.isError()).toBe(false);
+    expect(data?.isPending()).toBe(false);
+  });
+
   it('drops the overlay and skips the request while team out of office is hidden', async () => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);

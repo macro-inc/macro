@@ -48,7 +48,7 @@ export const calendarTour = defineViewTour({
       target: CALENDAR_TOUR.period,
       title: 'Choose how you see your week',
       description:
-        'Switch between day, week, and month. Move through dates without losing your connected calendars.',
+        'Switch between day, week, month, and agenda. Move through dates without losing your connected calendars.',
     },
     {
       target: CALENDAR_TOUR.grid,

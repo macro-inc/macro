@@ -3,7 +3,7 @@ import { CalendarGridSkeleton } from '@app/features/calendar/components/Calendar
 import type { CalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
-import type { CalendarPeriodView } from '@app/features/calendar/types';
+import type { CalendarGridPeriodView } from '@app/features/calendar/types';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
 import { formatLocalDate } from '@core/util/local-date';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -74,8 +74,8 @@ function CalendarPreviewViewport(props: {
   grid: CalendarGridHandle;
   start: string;
   allDay: boolean;
-  view: CalendarPeriodView;
-  initialView: CalendarPeriodView;
+  view: CalendarGridPeriodView;
+  initialView: CalendarGridPeriodView;
   dayCount?: number;
   eventIds: ReadonlySet<string>;
 }) {
@@ -377,7 +377,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                   }}
                   onDatesSet={(info) => {
                     setDisplayedWindow({
-                      view: info.view.type as CalendarPeriodView,
+                      view: info.view.type as CalendarGridPeriodView,
                       start: info.start,
                       end: info.end,
                       dayCount,

@@ -31,6 +31,8 @@ type SourceOptions = {
   sourcesReady?: Accessor<boolean>;
   isSourceVisible: (sourceId: string) => boolean;
   now: Accessor<Date>;
+  /** Limit both the returned rows and progressive-window completion to this subset. */
+  includeEvent?: (event: CalendarEvent) => boolean;
 };
 
 type OccurrenceWindow = {
@@ -90,24 +92,27 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       });
     });
     const events = createMemo(() =>
-      calendarEvents().map((event): UpcomingCalendarEvent => {
-        const url =
-          calendarMacroCallUrl(event) ?? safeConferenceUrl(event.conferenceUrl);
-        return {
-          id: event.id,
-          title: event.title,
-          color: event.calendar.color,
-          url: url
-            ? conferenceJoinUrl(url, event.calendar.emailAddress)
-            : undefined,
-          start: event.start,
-          end: event.end,
-          allDay: event.allDay,
-          eventId: event.eventId,
-          occurrenceKey: event.occurrenceKey,
-          isMeeting: isMeetingEvent(event, url),
-        };
-      })
+      calendarEvents()
+        .filter((event) => options.includeEvent?.(event) !== false)
+        .map((event): UpcomingCalendarEvent => {
+          const url =
+            calendarMacroCallUrl(event) ??
+            safeConferenceUrl(event.conferenceUrl);
+          return {
+            id: event.id,
+            title: event.title,
+            color: event.calendar.color,
+            url: url
+              ? conferenceJoinUrl(url, event.calendar.emailAddress)
+              : undefined,
+            start: event.start,
+            end: event.end,
+            allDay: event.allDay,
+            eventId: event.eventId,
+            occurrenceKey: event.occurrenceKey,
+            isMeeting: isMeetingEvent(event, url),
+          };
+        })
     );
     windows.push({ query, enabled, events, calendarEvents });
   }
@@ -121,6 +126,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
         options.now()
       );
     }),
+    /** Resolve any visible loaded occurrence, including a response still in flight. */
     findEvent: (id: string) =>
       activeWindows()
         .flatMap((window) => window.calendarEvents())
