@@ -267,8 +267,10 @@ export function useHomeDataSource(
     isLoadingMore: () => active().isLoadingMore(),
     loadMore: () => active().loadMore(),
     refresh: () => active().refresh(),
+    // Feed rows found by a search complete as feed items too; the delegate
+    // passes on rows the feed does not hold.
     markDoneDelegate: () =>
-      usesWorkFeed() ? workFeed.markDoneDelegate() : undefined,
+      listsWorkFeed() ? workFeed.markDoneDelegate() : undefined,
   };
 }
 
@@ -486,7 +488,8 @@ function useSoupHomeDataSource(
               (mergeRecents() ? recentQuery.error : undefined) ??
               undefined)
           : undefined;
-      return search.error();
+      // The feed's matching rows need no request, so they outlast a failed one.
+      return shownEntities().length === 0 ? search.error() : undefined;
     },
     warning: () => {
       if (usesServiceSearch() || (shownEntities().length === 0 && !hasMore()))

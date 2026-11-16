@@ -20,11 +20,20 @@ vi.mock('@app/features/soup', async () => ({
     isSearching: () => options.text().trim().length > 0,
     data: () => serviceSearch.hits,
     isLocalSearchSettling: () => false,
-    usesServiceSearch: () => false,
+    usesServiceSearch: () => serviceSearch.failed,
     isSettling: () => false,
+    isLoading: () => false,
+    isFetching: () => false,
+    hasNextPage: () => false,
+    isFetchingNextPage: () => false,
+    error: () =>
+      serviceSearch.failed ? new Error('search unavailable') : undefined,
   }),
 }));
-const serviceSearch = vi.hoisted(() => ({ hits: [] as unknown[] }));
+const serviceSearch = vi.hoisted(() => ({
+  hits: [] as unknown[],
+  failed: false,
+}));
 // Keep data-only query tests independent of unrelated UI barrel dependencies.
 vi.mock('@entity', async () => ({
   ...(await import('@entity/types/entity')),
@@ -525,6 +534,7 @@ describe('Home work feed', () => {
     touch.device = false;
     workFeedSource.entities = () => [];
     serviceSearch.hits = [];
+    serviceSearch.failed = false;
     workFeedSource.items = () => [
       {
         kind: 'entity',
@@ -548,7 +558,7 @@ describe('Home work feed', () => {
     expect(source.markDoneDelegate()).toBe(workFeedSource.delegate);
   });
 
-  it('keeps Noise and search on the Soup sources', () => {
+  it('keeps Noise on the Soup sources and completes searched rows as feed items', () => {
     const notifications = makeQuery([email('from-soup', 9)], false);
     const activity = makeQuery([], false);
     const { source, setState } = mount(notifications, activity);
@@ -559,7 +569,7 @@ describe('Home work feed', () => {
 
     setState('tab', 'signal');
     setState('search', 'plan');
-    expect(source.markDoneDelegate()).toBeUndefined();
+    expect(source.markDoneDelegate()).toBe(workFeedSource.delegate);
   });
 
   it('finds the rows the work feed lists when searching, ahead of other hits', () => {
@@ -584,6 +594,25 @@ describe('Home work feed', () => {
 
     setState('search', '');
     expect(ids(source)).toEqual(['from-work-feed']);
+  });
+
+  it('keeps the matching feed rows when the search service fails', () => {
+    workFeedSource.entities = () => [
+      { type: 'document', id: 'feed-doc', name: 'Hiring plan' },
+    ];
+    serviceSearch.failed = true;
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+    expect(ids(source)).toEqual(['feed-doc']);
+    expect(source.error()).toBeUndefined();
+
+    setState('search', 'absent');
+    expect(ids(source)).toEqual([]);
+    expect(source.error()?.message).toBe('search unavailable');
   });
 
   it('searches only the Soup sources where Home is not the work feed', () => {
