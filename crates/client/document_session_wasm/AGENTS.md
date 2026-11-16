@@ -60,6 +60,8 @@ Query kind 8 returns the selection's durable Loro cursors in `nodes` and its exa
 
 ## Boundaries
 
+Pin the split root-ID pass before history awareness clear/restore in wire tests; track Source's combined-update gap as C-ROOT-ID-PASS-FOLD-01 without hiding its intermediate effects.
+
 Keep clipboardDom additive to headless clipboard: export plain, internal JSON and themed DOM in that order; the owner browser serializes the DOM tree while Rust retains selection and registry policy.
 
 - Install block Up/Down through the fixed LOW/Before role once per direction; bind one-shot plans to the actual callback, registry epoch, generation and mutation epoch. Consume plans through complete or cancel before validation exits; host keys identify DOM measurements only, never mutation targets. Retire/cancel on teardown or measurement failure without replacing the original thrown cause.

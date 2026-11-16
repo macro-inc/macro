@@ -91,22 +91,47 @@ fn actual_browser_history_packet_orders_the_clear_and_focused_restore() -> Resul
             }
             offset = (end + 3) & !3;
         }
-        assert_eq!(observations.len(), 4);
-        let [content, clear, awareness, restore] = observations.as_slice() else {
-            unreachable!("four ordered effects");
+        // C-ROOT-ID-PASS-FOLD-01: native persists the root-ID pass before the
+        // fallible awareness restore. Source folds both into one queued update;
+        // doing that here would roll back an already durable ID if restore fails.
+        assert_eq!(observations.len(), 6);
+        let [content, ids, id_selection, clear, awareness, restore] = observations.as_slice()
+        else {
+            unreachable!("six ordered effects");
         };
         assert_eq!(content.kind, 11);
-        assert!(content.keys.iter().any(|tag| tag == "skip-dom-selection"));
+        assert_eq!(
+            content.keys,
+            [
+                "collaboration",
+                "from-loro",
+                "historic",
+                "skip-dom-selection"
+            ]
+        );
+        assert_eq!(ids.kind, 11);
+        assert_eq!(ids.keys, ["collab-selection"]);
+        assert_eq!(
+            (
+                id_selection.kind,
+                id_selection.code,
+                id_selection.selection.kind,
+                id_selection.flag,
+                id_selection.format,
+                id_selection.style.as_str(),
+            ),
+            (6, 0, 1, false, 0, "")
+        );
         assert_eq!(
             (clear.kind, clear.code, clear.selection.kind, clear.flag),
             (6, 0, 1, false)
         );
         assert_eq!(awareness.kind, 11);
-        assert!(awareness.keys.iter().any(|tag| tag == "collab-selection"));
-        assert_eq!(
-            awareness.keys.iter().any(|tag| tag == "skip-dom-selection"),
-            !focused
-        );
+        let mut awareness_tags = vec!["collab-selection", "skip-scroll-into-view"];
+        if !focused {
+            awareness_tags.push("skip-dom-selection");
+        }
+        assert_eq!(awareness.keys, awareness_tags);
         assert_eq!(
             (
                 restore.kind,
