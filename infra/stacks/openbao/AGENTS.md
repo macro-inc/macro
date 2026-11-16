@@ -11,9 +11,11 @@ guide; [the Pulumi rule](../../../.agents/rules/infra/pulumi.md) covers deploys.
 
 ## Start here
 
-- `index.ts`: the legacy vault, which calls `account.ts`.
-- `account.ts`: the replacement in the OpenBao account, plus its main-account
+- `index.ts`: the legacy vault, which creates the `AccountVault` component.
+- `vault.ts`: the replacement in the OpenBao account, plus its main-account
   pieces (PrivateLink endpoint, certificate validation, logs destination).
+- `account.ts`: the OpenBao account ID and the one provider for it
+  (`openbaoAccount`). Every file creating resources there imports it.
 - `network.ts`: the replacement's VPC and AWS endpoints.
 - `constants.ts`: names and ports both vaults share.
 - `server-config.ts`: the server HCL. Keep its request duration, Raft layout
@@ -53,12 +55,14 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 - The ALB admits only the document storage service and the OpenBao task's own
   security group (the operator SSM tunnel, README "Operator tunnel"). Never add
   CIDR ingress.
-- In `account.ts`, every resource on the vault side passes the OpenBao account
-  provider. Main-account pieces use the default provider. Each IAM role gets
+- In `vault.ts`, every resource on the vault side passes the OpenBao account
+  provider and the component as parent. Main-account pieces use the default provider. Each IAM role gets
   `path: ROLE_PATH` and `permissionsBoundary`, and each name includes the
   environment: the deploy role can create nothing else. Never add an internet
   or NAT gateway (the SCPs deny them anyway) or a `0.0.0.0/0` rule; a new AWS
-  API the task calls gets an endpoint in `network.ts`.
+  API the task calls gets an endpoint in `network.ts`. Keep the endpoints'
+  `aws:PrincipalAccount` policies and the DNS firewall's AWS-only allowlist:
+  they stop data leaving through another account's credentials or through DNS.
 - DSS's PrivateLink endpoint admits only the document storage service. The NLB
   skips its own inbound rules for PrivateLink traffic, so that endpoint's
   security group is the control.

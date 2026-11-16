@@ -117,7 +117,7 @@ class CopyTeam(unittest.TestCase):
         self.assertEqual(copied["versions"][1]["value"], {"password": SECRET})
         self.assertTrue(copied["versions"][2]["destroyed"])
         self.assertEqual(copied["versions"][3]["value"], {"password": "v3"})
-        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), [])
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
 
     def test_a_repeat_run_writes_nothing_and_a_later_one_appends(self):
         source, destination = vaults()
@@ -151,7 +151,7 @@ class CopyTeam(unittest.TestCase):
 
         self.assertEqual(report["diverged"], ["item-a"])
         self.assertEqual(destination.writes, 0)
-        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ["item-a"])
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), (["item-a"], 0))
 
     def test_versions_pruned_past_max_versions_keep_their_numbers(self):
         source, destination = FakeVault("legacy", max_versions=2), FakeVault("account", max_versions=2)
@@ -164,7 +164,50 @@ class CopyTeam(unittest.TestCase):
         copied = destination.namespaces[TEAM]["items"]["item-a"]
         self.assertEqual((copied["current"], sorted(copied["versions"])), (3, [2, 3]))
         self.assertEqual(copied["versions"][3]["value"], {"password": "v3"})
-        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), [])
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
+
+    def test_a_version_destroyed_after_the_first_pass_is_destroyed_in_the_destination(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", {"password": SECRET}, {"password": "v2"})
+        copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+        source.request("POST", "passwords/destroy/item-a", {"versions": [1]}, TEAM)
+
+        report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+
+        self.assertEqual((report["states_changed"], report["diverged"]), (1, []))
+        self.assertTrue(destination.namespaces[TEAM]["items"]["item-a"]["versions"][1]["destroyed"])
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
+
+    def test_a_placeholder_left_by_a_crashed_run_is_erased_on_the_next(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", None, {"password": "v2"})
+        destination.put(TEAM, "item-a", copy_secrets.PLACEHOLDER)
+
+        report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+
+        self.assertEqual((report["states_changed"], report["versions_copied"], report["diverged"]), (1, 1, []))
+        self.assertTrue(destination.namespaces[TEAM]["items"]["item-a"]["versions"][1]["destroyed"])
+
+    def test_a_destination_ahead_after_the_name_moved_is_not_diverged(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", {"password": "v1"})
+        copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+        destination.put(TEAM, "item-a", {"password": "written-after-the-move"})
+        destination.put(TEAM, "item-new", {"password": "new"})
+
+        report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+
+        self.assertEqual((report["ahead"], report["versions_copied"], report["diverged"]), (1, 0, []))
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 1))
+
+    def test_a_destroyed_destination_version_the_source_still_has_is_diverged(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", {"password": "v1"})
+        destination.put(TEAM, "item-a", None)
+
+        report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+
+        self.assertEqual(report["diverged"], ["item-a"])
 
 
 class CheckVaults(unittest.TestCase):

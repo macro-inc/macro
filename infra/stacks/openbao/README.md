@@ -9,7 +9,7 @@ Until that finishes, the stack runs two vaults:
 
 - **Legacy** (`index.ts`, the table below): the main account's shared VPC. It
   still serves DSS through `openbao-dev.macro-internal.com`.
-- **Replacement** (`account.ts`, "OpenBao account vault"): its own VPC, cluster,
+- **Replacement** (`vault.ts`, "OpenBao account vault"): its own VPC, cluster,
   EFS and seal key in the OpenBao account, reached through PrivateLink. It
   starts empty and gets the data by copy ("Moving the vault to the OpenBao
   account").
@@ -70,7 +70,7 @@ no NAT or internet gateway removes that rule.
 | Piece | Choice |
 | --- | --- |
 | Account | `macro-openbao`. Pulumi keeps the operator's main-account credentials and assumes `openbao:deployRoleArn` (`openbao-deploy-dev`) for this side; that provider tags everything `openbao:env=dev`. Roles live under `/openbao/dev/` with the `openbao-boundary-dev` permissions boundary, as the account bootstrap requires |
-| Network | VPC `10.89.0.0/16` (`network.ts`), two private subnets placed by zone ID (`use1-az6`, `use1-az1`) so they match DSS's subnets across accounts. No internet or NAT gateway; the account's SCPs deny both. Private-DNS endpoints for `ecr.api`, `ecr.dkr`, `logs`, `kms`, `ssmmessages`, and an S3 gateway endpoint that only reads ECR's layer bucket. The KMS and Logs endpoints reach only this account's resources |
+| Network | VPC `10.89.0.0/16` (`network.ts`), two private subnets placed by zone ID (`use1-az6`, `use1-az1`) so they match DSS's subnets across accounts. No internet or NAT gateway; the account's SCPs deny both. Private-DNS endpoints for `ecr.api`, `ecr.dkr`, `logs`, `kms`, `ssmmessages` that admit only this account's principals, and an S3 gateway endpoint that only reads ECR's layer bucket. The KMS and Logs endpoints also reach only this account's resources. A Route 53 Resolver DNS Firewall answers only `amazonaws.com` names, so data can't leave as DNS queries |
 | Egress | Task egress only to those endpoints, the S3 prefix list, its EFS and its NLB; no `0.0.0.0/0` |
 | Server | The same image, pushed to this account's ECR `openbao-dev`; service `openbao-dev` on its own cluster `openbao-dev` |
 | Storage, seal, backup | A fresh EFS volume, a seal key (`alias/openbao-dev`), and an AWS Backup vault, all in this account and all `protect` + `retainOnDelete` |
@@ -78,9 +78,10 @@ no NAT or internet gateway removes that rule.
 | Logs | Log group `openbao-dev`, subscribed to a CloudWatch Logs destination in the main account that writes into the same Datadog Firehose. Datadog names it `service:openbao-dev` |
 | Alarms | ECS deployment failure and no healthy target, to the SNS topic `openbao-alarms-dev` in this account. CloudWatch can't notify a topic in another account, and nothing subscribes to this one yet |
 
-Operators reach it the same way as the legacy vault ("Operator tunnel"), with
-credentials in the OpenBao account (the `OpenBaoOperator` permission set or the
-deploy role) and the values from `pulumi stack output account --json`:
+Operators reach it the same way as the legacy vault ("Operator tunnel"), under
+the `openbao-deploy-dev` role. The `OpenBaoOperator` permission set is
+view-only and can't start ECS Exec. Take the values from
+`pulumi stack output account --json`:
 `clusterName`, and `loadBalancerDnsName` as the tunnel's remote host. Use local
 port 28443 for this vault, so both tunnels can be open at once.
 
@@ -110,9 +111,9 @@ Every step needs explicit permission.
 6. **Point the name at the replacement**, in a follow-up change: the
    `openbao-dev.macro-internal.com` record becomes an alias of the
    `consumerEndpointDnsName` output. DSS follows within the record's TTL.
-7. **Copy again.** This picks up what DSS wrote to the legacy vault before it
-   followed the name. An item the script reports as diverged was written on
-   both sides, so fix it by hand. Every user with a TOTP enrollment must enroll
+7. **Copy again.** This picks up what DSS wrote or erased on the legacy vault
+   before it followed the name. An item the script reports as diverged was
+   written differently on both sides, so fix it by hand. Every user with a TOTP enrollment must enroll
    again: OpenBao never returns a TOTP seed, so the script can't copy one.
 8. **Scale the legacy vault to 0** and keep it for a rollback window. Rolling
    back means pointing the name back and running the copy the other way.

@@ -1,7 +1,7 @@
 // Hosted OpenBao for Passwords, dev only. See AGENTS.md and README.md.
 //
 // This file is the legacy vault in the main account's shared VPC, which still
-// serves DSS. `account.ts` builds its replacement in the OpenBao account beside
+// serves DSS. `vault.ts` builds its replacement in the OpenBao account beside
 // it; a later change moves the DNS name there and removes this one (README
 // "Moving the vault to the OpenBao account").
 import * as aws from '@pulumi/aws';
@@ -21,7 +21,7 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import { createAccountVault } from './account';
+import { AccountVault } from './vault';
 import {
   API_ADDRESS,
   BASE_NAME,
@@ -602,10 +602,10 @@ export const backupVaultName = backupVault.name;
 
 // --- The replacement vault in the OpenBao account ------------------------------
 
-const accountVault = createAccountVault({
+const accountVault = new AccountVault(`${BASE_NAME}-account-vault`, {
   region,
   documentStorageSecurityGroupId,
   sharedVpcId: vpc.vpcId,
   zoneId: zone.zoneId,
 });
-export const account = accountVault;
+export const account = accountVault.outputs;

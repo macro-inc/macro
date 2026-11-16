@@ -27,16 +27,17 @@ const INTERFACE_SERVICES = [
   'kms',
   'ssmmessages',
 ] as const;
-// Endpoints that could carry data to another account's resources (a key, a log
-// group) admit only this account's. ECR keeps the default: the token call
-// names no resource, and pulls only reach repositories the role may read.
-const ACCOUNT_SCOPED_SERVICES: ReadonlySet<string> = new Set(['logs', 'kms']);
+// Every endpoint admits only this account's principals, so code in the task
+// can't use another account's credentials to push data out through it. Logs
+// and KMS also admit only this account's resources (a key, a log group); ECR
+// can't, because its token call names no resource.
+const RESOURCE_SCOPED_SERVICES: ReadonlySet<string> = new Set(['logs', 'kms']);
 
 /**
  * The vault's VPC in the OpenBao account: private subnets only. The account's
  * SCPs deny internet and NAT gateways, and none is created, so the only ways
  * out are the AWS endpoints below and EFS. DSS reaches the vault through
- * PrivateLink (see `account.ts`).
+ * PrivateLink (see `vault.ts`).
  */
 export function createNetwork(args: {
   name: string;
@@ -44,9 +45,10 @@ export function createNetwork(args: {
   accountId: pulumi.Input<string>;
   tags: Record<string, string>;
   provider: aws.Provider;
+  parent: pulumi.Resource;
 }) {
-  const { name, region, accountId, tags, provider } = args;
-  const options = { provider };
+  const { name, region, accountId, tags, provider, parent } = args;
+  const options = { provider, parent };
   const vpc = new aws.ec2.Vpc(
     name,
     {
@@ -106,22 +108,25 @@ export function createNetwork(args: {
           privateDnsEnabled: true,
           subnetIds: subnets.map((subnet) => subnet.id),
           securityGroupIds: [endpointSecurityGroup.id],
-          policy: ACCOUNT_SCOPED_SERVICES.has(service)
-            ? pulumi.jsonStringify({
-                Version: '2012-10-17',
-                Statement: [
-                  {
-                    Effect: 'Allow',
-                    Principal: '*',
-                    Action: '*',
-                    Resource: '*',
-                    Condition: {
-                      StringEquals: { 'aws:ResourceAccount': accountId },
-                    },
+          policy: pulumi.jsonStringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: '*',
+                Action: '*',
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:PrincipalAccount': accountId,
+                    ...(RESOURCE_SCOPED_SERVICES.has(service)
+                      ? { 'aws:ResourceAccount': accountId }
+                      : {}),
                   },
-                ],
-              })
-            : undefined,
+                },
+              },
+            ],
+          }),
           tags: { ...tags, Name: `${name}-${service}` },
         },
         options
@@ -157,11 +162,67 @@ export function createNetwork(args: {
     options
   );
 
+  // The VPC resolver would answer any public name, which lets data leave as DNS
+  // queries. The task only ever resolves AWS names, so answer only those.
+  const awsDomains = new aws.route53.ResolverFirewallDomainList(
+    `${name}-dns-aws`,
+    {
+      name: `${name}-dns-aws`,
+      domains: ['amazonaws.com.', '*.amazonaws.com.'],
+      tags,
+    },
+    options
+  );
+  const allDomains = new aws.route53.ResolverFirewallDomainList(
+    `${name}-dns-all`,
+    { name: `${name}-dns-all`, domains: ['*.'], tags },
+    options
+  );
+  const dnsRules = new aws.route53.ResolverFirewallRuleGroup(
+    `${name}-dns`,
+    { name: `${name}-dns`, tags },
+    options
+  );
+  const dnsAllow = new aws.route53.ResolverFirewallRule(
+    `${name}-dns-allow-aws`,
+    {
+      name: `${name}-dns-allow-aws`,
+      firewallRuleGroupId: dnsRules.id,
+      firewallDomainListId: awsDomains.id,
+      priority: 100,
+      action: 'ALLOW',
+    },
+    options
+  );
+  const dnsBlock = new aws.route53.ResolverFirewallRule(
+    `${name}-dns-block-rest`,
+    {
+      name: `${name}-dns-block-rest`,
+      firewallRuleGroupId: dnsRules.id,
+      firewallDomainListId: allDomains.id,
+      priority: 200,
+      action: 'BLOCK',
+      blockResponse: 'NXDOMAIN',
+    },
+    options
+  );
+  const dnsFirewall = new aws.route53.ResolverFirewallRuleGroupAssociation(
+    `${name}-dns`,
+    {
+      name: `${name}-dns`,
+      firewallRuleGroupId: dnsRules.id,
+      vpcId: vpc.id,
+      priority: 101,
+      tags,
+    },
+    { ...options, dependsOn: [dnsAllow, dnsBlock] }
+  );
+
   return {
     vpcId: vpc.id,
     subnetIds: subnets.map((subnet) => subnet.id),
     endpointSecurityGroupId: endpointSecurityGroup.id,
     s3PrefixListId: s3PrefixList.id,
-    ready: [...associations, ...interfaceEndpoints, s3],
+    ready: [...associations, ...interfaceEndpoints, s3, dnsFirewall],
   };
 }
