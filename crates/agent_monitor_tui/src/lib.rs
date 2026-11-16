@@ -61,7 +61,7 @@ mod unix {
         pub figure: Option<String>,
         /// The colour theme it starts in.
         pub theme: ThemeName,
-        /// A note for the command line until the first key, such as a
+        /// A note for the bottom status bar until the first key, such as a
         /// configured theme that does not exist.
         pub notice: Option<String>,
     }
@@ -110,7 +110,7 @@ mod unix {
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
     /// over a store it hosts; `label` is shown in the bottom status line and `notice` on
-    /// the command line until the first key.
+    /// the bottom status bar until the first key.
     pub async fn run_feed(
         feed: Feed,
         label: Option<String>,

@@ -768,14 +768,14 @@ pub fn fork_order<'a>(lanes: &[&'a Lane]) -> Vec<&'a Lane> {
     ordered
 }
 
-/// Row filtering: command-line words (each must match the kind, the status,
+/// Row filtering: filter words (each must match the kind, the status,
 /// or part of the name, task or program) and a find query (part of the
 /// name, task, doing or tape text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     /// List ended agents too, not only current ones.
     pub all: bool,
-    /// Lowercase command-line words.
+    /// Lowercase filter words.
     pub words: Vec<String>,
     /// Lowercase find query.
     pub find: String,

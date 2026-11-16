@@ -216,13 +216,7 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
     if !app.filter.is_empty() {
         extra.push(Span::styled(" FILTERED ", theme::bold(Token::Highlight)));
     }
-    let toggle = if app.filter.all {
-        "HIDE ENDED"
-    } else {
-        "SHOW ENDED"
-    };
-    let block = theme::pane(area, "1 AGENTS", extra, focused)
-        .title_bottom(theme::hotkeys(&[("a", toggle)]));
+    let block = theme::pane(area, "1 AGENTS", extra, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let [summary, table_area] =

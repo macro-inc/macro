@@ -2,6 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app(), 100, 30)"
 ---
+ FILTER [f] any   ENDED: HIDE [a]  CLEAR [x]
+ SEARCH [/] any  · filters shared across list pages
 ┌ AGENTS  34 SHOWN / 34 TOTAL ─────────────────────────────  [1] ┐┌ SPEND TODAY  ~$25.28 ────  [3] ┐
 │STATUS  WORKING 25  WAITING 0  BLOCKED 1  IDLE 4                ││          █                     │
 │24H     TURNS 234  TOOLS 644  │ TOK/MIN 5.0M                    ││         ██                     │
@@ -17,18 +19,16 @@ expression: "render(&mut app(), 100, 30)"
 │◆ chat-desk           Answer questions    46m   22    53    2.1M││reviewer   ~$3.78  15 ▰▱▱▱▱▱▱▱  │
 │◆ q4-roadmap          Draft the quarter'  21m   15    45    1.8M││manager    ~$3.76  15 ▰▱▱▱▱▱▱▱  │
 │◆ fix-20              Follow-up from rev  12s    1     2  163.5k││chatter    ~$2.47  10 ▰▱▱▱▱▱▱▱  │
-│◆ fix-16/explore the  explore the reduce   2s    1     1       0││other      ~$1.19   5 ▱▱▱▱▱▱▱▱  │
-└──────────────────────────────────────────────── SHOW ENDED [a] ┘└────────────────────────────────┘
+└────────────────────────────────────────────────────────────────┘└────────────────────────────────┘
 ┌ TAPE  500 LINES  ▼ FOLLOWING ────────────  [2] ┐┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ──────  [8] ┐
 │10:01:40 fix-19         TURN turn start         ││  LANE            PR      CI AGE                │
-│10:01:40 rpc-server     TOOL Task explore the re││✕ ui-pages        #4215   ✕   20s               │
-│10:01:40 explore the r… TEND turn end           ││⚠ feat/invoice-e… #4190   ✓    1h               │
-│10:01:40 explore the r… TOOL Read store.rs      ││  feat/trace-gaps —       ·   10s               │
-│10:01:40 rpc-server     CMIT committed 880ed88 c││ ◆ #4188 landed 36m      ▼ 10 more              │
-│10:01:40 agent-toolu_d… GONE removed            │└────────────────────────────────────────────────┘
-│10:01:40 mesh-plan      STAT working            │┌ FAILURES  50 24H ────────────────────────  [4] ┐
-│10:01:40 fix-19         STAT working            ││48 TOOL · 2 AGENT · 7.5% TOOLS FAILED           │
-│10:01:40 explore the r… SPWN subagent explore th││  6s ✕ tool  builder  fix-16         Edit failed│
-│10:01:39 fix-16         TOOL Bash just check    ││  6s ✕ tool  other    lint-sweep se… Read failed│
+│10:01:40 rpc-server     TOOL Task explore the re││⚠ feat/invoice-e… #4190   ✓    1h               │
+│10:01:40 explore the r… TEND turn end           ││  feat/trace-gaps —       ·   10s               │
+│10:01:40 explore the r… TOOL Read store.rs      ││ ◆ #4188 landed 36m      ▼ 11 more              │
+│10:01:40 rpc-server     CMIT committed 880ed88 c│└────────────────────────────────────────────────┘
+│10:01:40 agent-toolu_d… GONE removed            │┌ FAILURES  50 24H ────────────────────────  [4] ┐
+│10:01:40 mesh-plan      STAT working            ││48 TOOL · 2 AGENT · 7.5% TOOLS FAILED           │
+│10:01:40 fix-19         STAT working            ││  6s ✕ tool  builder  fix-16         Edit failed│
+│10:01:40 explore the r… SPWN subagent explore th││  6s ✕ tool  other    lint-sweep se… Read failed│
 └────────────────────────────────────────────────┘└────────────────────────────────────────────────┘
-● LIVE DEMO          PANE [Tab]  FIND [/]  WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]

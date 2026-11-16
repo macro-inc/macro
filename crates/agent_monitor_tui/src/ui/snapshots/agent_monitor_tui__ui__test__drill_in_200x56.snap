@@ -57,4 +57,4 @@ expression: "render(&mut app, 200, 56)"
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:00:59 release-t… TOOL Edit store.rs                                │
 │                                                                                                                              ││                                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────────────────── EXPAND TOOL CALL [Enter] ┘└──────────────────────────────────────────────────────────────────────┘
-● LIVE DEMO                                                            COMMAND [letter]  THEME [`]  QUIT [q]  MOVE [↑↓]  PANE [Tab]  FIND [/]  WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

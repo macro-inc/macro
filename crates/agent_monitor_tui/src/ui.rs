@@ -1,4 +1,4 @@
-//! Drawing: the page body and the command line.
+//! Drawing: the page body, filters and bottom key hints.
 //! Layout degrades by width: under 140 columns BODY and SOURCES drop, under
 //! 100 everything stacks in one column. Above 200 columns BODY takes a quarter
 //! of the width.
@@ -6,6 +6,7 @@
 mod agent_summary;
 mod changes;
 mod drill;
+mod filters;
 mod panes;
 mod tree;
 mod wall;
@@ -60,7 +61,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
     let area = frame.area();
     frame.render_widget(Block::default().style(theme::base()), area);
 
-    let [body, command] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+    let [body, footer] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+
+    let body = filters::draw(frame, body, app);
 
     match app.page().clone() {
         Page::Monitor => draw_monitor(frame, body, app, clock),
@@ -71,7 +74,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
         Page::Lane(repo, branch) => changes::draw_lane(frame, body, app, clock, &repo, &branch),
     }
 
-    draw_command(frame, command, app);
+    draw_footer(frame, footer, app);
     if let Mode::Help { .. } = app.mode {
         draw_help(frame, body);
     }
@@ -141,101 +144,63 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
     panes::draw(frame, failures, app, clock, Pane::Failures, false);
 }
 
-fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let (status, hints) = match &app.mode {
-        Mode::Command { input, .. } | Mode::Find { input, .. } => {
-            let label = if matches!(app.mode, Mode::Find { .. }) {
-                "FIND"
-            } else {
-                "CMD"
-            };
-            (
-                Line::from(prompt(
-                    label,
-                    vec![
-                        Span::styled(format!(" {}", input.value()), theme::bold(Token::Highlight)),
-                        Span::styled("█", theme::ink(Token::Highlight)),
-                    ],
-                )),
-                theme::hotkeys(&[("Enter", "APPLY"), ("Esc", "CANCEL")]),
-            )
+fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let mut spans = Vec::new();
+    match &app.view.link {
+        Link::Live => {}
+        Link::Connecting => spans.push(Span::styled("CONNECTING  ", theme::ink(Token::Highlight))),
+        Link::Reconnecting(reason) => spans.push(Span::styled(
+            format!("{reason}  "),
+            theme::ink(Token::Alert),
+        )),
+        Link::Incompatible(reason) => spans.push(Span::styled(
+            format!("UPDATE MACROD: {reason}  "),
+            theme::ink(Token::Alert),
+        )),
+    }
+    if let Some(label) = &app.label {
+        spans.push(Span::styled(
+            format!("{label}  "),
+            theme::ink(Token::TextDim),
+        ));
+    }
+    if app.theme_notice {
+        spans.push(Span::styled(
+            format!("THEME {}  ", app.theme.to_string().to_uppercase()),
+            theme::bold(Token::Highlight),
+        ));
+    }
+    if let Some(message) = &app.message {
+        spans.push(Span::styled(
+            format!("{message}  "),
+            theme::bold(Token::Alert),
+        ));
+    }
+    let mut keys = vec![("?", "HELP")];
+    if matches!(app.mode, Mode::Filter { .. }) {
+        keys = vec![("Enter", "APPLY"), ("Esc", "CANCEL")];
+    } else {
+        for hint in [
+            ("0-8", "PAGE"),
+            ("w", "WALL"),
+            ("Esc", "BACK"),
+            ("Enter", "OPEN"),
+            ("Tab", "PANE"),
+            ("↑↓", "MOVE"),
+            ("`", "THEME"),
+            ("q", "QUIT"),
+        ] {
+            let width = theme::hotkeys(&keys).width() + theme::hotkeys(&[hint]).width();
+            if width + Line::from(spans.clone()).width() <= usize::from(area.width) {
+                keys.push(hint);
+            }
         }
-        Mode::Base(_) | Mode::Help { .. } => {
-            let (link, color) = match &app.view.link {
-                Link::Connecting => (String::from("○ CONNECTING"), Token::Highlight),
-                Link::Live => (String::from("● LIVE"), Token::Ok),
-                Link::Reconnecting(reason) => (format!("○ {reason}"), Token::Alert),
-                Link::Incompatible(reason) => (format!("UPDATE MACROD: {reason}"), Token::Alert),
-            };
-            let mut spans = vec![Span::styled(link, theme::ink(color))];
-            if let Some(label) = &app.label {
-                spans.push(Span::styled(
-                    format!(" {label}"),
-                    theme::ink(Token::TextDim),
-                ));
-            }
-            if app.theme_notice {
-                spans.push(Span::styled(
-                    format!(" THEME {}", app.theme.to_string().to_uppercase()),
-                    theme::bold(Token::Highlight),
-                ));
-            }
-            if let Some(message) = &app.message {
-                spans.push(Span::styled(
-                    format!(" {message}"),
-                    theme::bold(Token::Alert),
-                ));
-            }
-            if !app.filter.words.is_empty() {
-                spans.push(Span::styled(
-                    format!(" FILTER {}", app.filter.words.join(" ")),
-                    theme::bold(Token::Highlight),
-                ));
-            }
-            if !app.filter.find.is_empty() {
-                spans.push(Span::styled(
-                    format!(" FIND /{}", app.filter.find),
-                    theme::bold(Token::Highlight),
-                ));
-            }
-            let mut keys = vec![("?", "HELP")];
-            for hint in [
-                ("Esc", "BACK"),
-                ("Enter", "OPEN"),
-                ("0-8", "PAGE"),
-                ("w", "WALL"),
-                ("/", "FIND"),
-                ("Tab", "PANE"),
-                ("↑↓", "MOVE"),
-                ("q", "QUIT"),
-                ("`", "THEME"),
-                ("letter", "COMMAND"),
-            ] {
-                let width = theme::hotkeys(&keys).width() + theme::hotkeys(&[hint]).width();
-                if width + 16 <= usize::from(area.width) {
-                    keys.insert(0, hint);
-                }
-            }
-            (Line::from(spans), theme::hotkeys(&keys))
-        }
-    };
-    let hint_width = u16::try_from(hints.width())
-        .unwrap_or(area.width)
-        .min(area.width);
-    let [left, right] =
-        Layout::horizontal([Constraint::Min(0), Constraint::Length(hint_width)]).areas(area);
-    frame.render_widget(Paragraph::new(status), left);
-    frame.render_widget(Paragraph::new(hints), right);
+    }
+    spans.extend(theme::hotkeys(&keys).spans);
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-/// A command-line prompt: a title chip, then `rest`.
-fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
-    let mut spans = theme::strip_title(label);
-    spans.extend(rest);
-    spans
-}
-
-const HELP: [(&str, &str); 22] = [
+const HELP: [(&str, &str); 18] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = changes)",
@@ -250,16 +215,18 @@ const HELP: [(&str, &str); 22] = [
         "open the agent under the cursor (a PR's author); expand a tool call",
     ),
     ("ESC", "back one step"),
-    ("/", "find: filter rows as you type"),
+    (
+        "f",
+        "filter words: kind, status, name, task or program; every word must match",
+    ),
+    ("/", "search text in names, tasks, activity and events"),
+    (
+        "x",
+        "clear shared filters (fields at the top of each list page)",
+    ),
     ("a", "list ended agents too, or only current ones"),
-    (
-        "b  B",
-        "next BODY figure (monitor, BODY); previous (BODY only)",
-    ),
-    (
-        "CTRL-T  `",
-        "next colour theme (` where a browser keeps CTRL-T)",
-    ),
+    ("b  B", "next / previous BODY figure (monitor and BODY)"),
+    ("CTRL-T  `", "cycle themes: classic, ember, phosphor, dusk"),
     (
         "8: + − < > HOME",
         "changes: zoom, pan, back to now; [ ] repository",
@@ -270,24 +237,6 @@ const HELP: [(&str, &str); 22] = [
     ),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
-    ("", ""),
-    (
-        "TYPE A LETTER",
-        "command line, any case (CAPITALS on 0, 7, 8), then ENTER:",
-    ),
-    ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
-    (
-        "FAIL TREE SRC BODY CHG WALL",
-        "failures, tree, sources, body, changes (PRS too), wall",
-    ),
-    (
-        "AGT builder working",
-        "words after a mnemonic filter rows; all lists ended",
-    ),
-    (
-        "THEME [name]",
-        "colour theme: classic, ember, phosphor or dusk; no name = next",
-    ),
 ];
 
 /// The help box: the keys column plus the longest description and borders.
@@ -312,11 +261,7 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         if row >= inner.height {
             break;
         }
-        let key_text = if index < 16 {
-            format!("[{keys}]")
-        } else {
-            (*keys).to_owned()
-        };
+        let key_text = format!("[{keys}]");
         let key_width = u16::try_from(key_text.chars().count())
             .unwrap_or(0)
             .min(inner.width);

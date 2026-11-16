@@ -116,13 +116,13 @@ pub struct App {
     pub filter: Filter,
     /// Cursors.
     pub cursors: Cursors,
-    /// A one-line note for the command line, such as an unknown command.
+    /// A one-line note in the bottom status bar.
     pub message: Option<String>,
     /// A label for the bottom status line, such as `DEMO`.
     pub label: Option<String>,
     /// The colour theme frames are drawn in.
     pub theme: ThemeName,
-    /// Whether the command line names the theme, after Ctrl-T or `THEME`
+    /// Whether the bottom status bar names the theme, after Ctrl-T or backtick
     /// switched it,
     /// until the next key.
     pub theme_notice: bool,
@@ -199,29 +199,31 @@ impl App {
             }
             Action::Move(pane, motion) => self.move_cursor(pane, motion),
             Action::Activate(pane) => self.activate(pane),
-            Action::Run(command) => {
-                // `all` among the words lists ended agents too.
-                let (all, words): (Vec<String>, Vec<String>) =
-                    command.filter.into_iter().partition(|word| word == "all");
-                self.filter.all = !all.is_empty();
-                self.filter.words = words;
-                self.open(command.page);
+            Action::EditFilter(field) => {
+                let original = match field {
+                    keys::FilterField::Words => self.filter.words.join(" "),
+                    keys::FilterField::Search => self.filter.find.clone(),
+                };
+                self.mode = Mode::Filter {
+                    field,
+                    input: tui_input::Input::new(original.clone()),
+                    original,
+                    base: self.mode.base(),
+                };
             }
+            Action::SetFilter(field, value) => match field {
+                keys::FilterField::Words => {
+                    self.filter.words = value.split_whitespace().map(str::to_lowercase).collect();
+                }
+                keys::FilterField::Search => self.filter.find = value.to_lowercase(),
+            },
+            Action::ClearFilters => self.filter = Filter::default(),
             Action::ToggleAll => self.filter.all = !self.filter.all,
             Action::CycleFigure(forward) => self.view.body.cycle(forward),
-            Action::Theme(theme) => {
-                self.set_theme(theme.unwrap_or_else(|| self.theme.next()));
+            Action::NextTheme => {
+                self.set_theme(self.theme.next());
                 self.theme_notice = true;
             }
-            Action::UnknownTheme(name) => {
-                use strum::IntoEnumIterator as _;
-                let known: Vec<String> = ThemeName::iter().map(|name| name.to_string()).collect();
-                self.message = Some(format!("UNKNOWN THEME: {name} ({})", known.join(", ")));
-            }
-            Action::Unknown(line) => {
-                self.message = Some(format!("UNKNOWN COMMAND: {line}"));
-            }
-            Action::Find(query) => self.filter.find = query.to_lowercase(),
             Action::Changes(change) => self.change(change),
         }
     }

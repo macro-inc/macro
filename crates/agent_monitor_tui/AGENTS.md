@@ -44,8 +44,7 @@ times a second, and ticks at `fps` only while something animates.
   frames, orange title chips, segmented meters, the dot grid and the glitch
   on fresh errors. The themes (`ThemeName`: classic, ember, phosphor, dusk)
   are in `src/theme/themes.rs`; Ctrl-T, a backtick (for terminals in a
-  browser, which keeps Ctrl-T) or the `THEME [name]` command line
-  switches them, `[monitor] theme` and `--theme` pick the first (names in any
+  browser, which keeps Ctrl-T) cycle them; `[monitor] theme` and `--theme` pick the first (names in any
   case).
 
 ## Scope
@@ -58,7 +57,7 @@ times a second, and ticks at `fps` only while something animates.
 
 - Add a pane: a `keys::Pane` variant (and `Page::panes` order) → `ui/panes.rs`
   → its slot in `ui::draw_monitor`.
-- Add a command mnemonic: `keys::Command::parse` → `HELP` in `ui.rs` → a key test.
+- Add a page control: `keys::step_base` → its on-page hint and `HELP` in `ui.rs` → a key test for new behavior.
 - Add a theme: a `ThemeName` variant and its `Spec` in `src/theme/themes.rs`
   (keep `text`, `accent` and `bg`: the amber ink is the product's look; keep
   `Ok` and `Info` calm, and `Highlight` near the ink, so `Alert` and
@@ -88,38 +87,32 @@ times a second, and ticks at `fps` only while something animates.
   column when a bucket ends, and commits glitch only when a delta brings
   them (`ViewState::fresh`), never after a snapshot.
 - On the CHANGES page `+ - < > [ ] n N m s p` and Home are page keys
-  (`keys::ChangeKey`), so there a command starting with m, s, p or n is
-  typed in capitals (`MON`, `SPND`, `SRC`, `PRS`; no mnemonic starts with
-  N); on the monitor and BODY pages `b` is a page key too, so BODY is typed
-  in capitals there; elsewhere letters start the command line in any case. Its tabs are
-  the mapped repositories, then `other PRs` (`app::ChangeTab::OtherPrs`)
-  for pull requests in no mapped repository, drawn as PRS rows.
+  (`keys::ChangeKey`). Its tabs are the mapped repositories, then `other PRs`
+  (`app::ChangeTab::OtherPrs`) for pull requests in no mapped repository.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
-- `b` cycles the BODY figure forward on the monitor page and the BODY page;
-  `B` cycles back only on the BODY page, so on the monitor page a capital
-  `B` starts the command line and `BODY` still types. Elsewhere `b` starts
-  the command line.
+- `b` / `B` cycle the BODY figure forward / back on the monitor and BODY pages.
   Every figure follows the theme: `Theme::figure` is the mesh man's
-  `Palette`, and each figure's `Look` maps its parts onto those roles, so a
-  theme change (backtick, Ctrl-T or `THEME`) recolours whichever figure is
-  showing.
+  `Palette`, and each figure's `Look` maps its parts onto those roles.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
-- A bare letter starts the command line, so never bind a lowercase letter
-  that begins a mnemonic (`t` would swallow TAPE and TREE). The
-  exceptions are CHANGES (`m s p n`) and `b` on the monitor and BODY pages; they leave
-  capitals for commands (above).
-  Elsewhere use Ctrl or a command instead, as the theme does (Ctrl-T, `` ` ``, `THEME`). Browsers
-  (ttyd previews) swallow Ctrl-T, Ctrl-W and Ctrl-N, so give every Ctrl key
-  a plain-key twin.
+- Use page controls, not typed commands: `0`–`8` and `w` navigate; `ui/filters.rs`
+  shows shared word filters (`f`), text search (`/`), ended agents (`a`, where
+  applicable), and reset (`x`). Every word must match row metadata; search
+  matches text. Enter keeps edits; Escape restores the field's previous value.
+  The tree always includes ended agents. Spend totals, sources, BODY and
+  detail pages are unfiltered and do not show filter controls.
+- Give every Ctrl shortcut a plain-key twin: browsers hosting ttyd keep
+  Ctrl-T, Ctrl-W and Ctrl-N for themselves.
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never
   write a `Color` outside the theme definitions in `src/theme/themes.rs`.
   `theme::active()` is thread-local and `ui::draw` sets it from `App::theme`
   each frame, so render through `ui::draw` (or call `theme::set_active`). Pick the token
   by role, not by the hue you want: see the doc on each `Token` variant.
 - Put only the title in a pane's chip; render hotkeys in square brackets,
-  right-aligned outside the chip with `theme::hotkeys` (help stays in the bottom bar).
+  right-aligned outside the chip with `theme::hotkeys`; keep the top filter rows
+  and bottom key row left-aligned, and omit the healthy LIVE indicator.
+  Connection problems still appear in the bottom row alongside help.
 - Use thin outlines for every pane through `theme::pane` or `theme::frame`;
   `ui::draw` finishes each frame with `theme::grid` (dots on blank pane rows).
 - The glitch follows the frame clock, so it moves only while frames are drawn

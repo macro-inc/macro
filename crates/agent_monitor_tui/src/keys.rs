@@ -1,5 +1,5 @@
 //! The key machine: one pure function from (state, key, page) to the next
-//! state and the action the viewer takes. Modes are idle, pane, command, find
+//! state and the action the viewer takes. Modes are idle, pane, filter
 //! and help; Esc always returns exactly one state.
 
 #[cfg(test)]
@@ -9,8 +9,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tui_input::{Input, InputRequest};
 
 use agent_monitor::domain::model::{AgentId, RepoId};
-
-use crate::theme::ThemeName;
 
 /// A key the viewer reacts to, decoded from a terminal event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,7 +44,7 @@ pub enum Key {
     /// Ctrl-C.
     Interrupt,
     /// Ctrl-T: the next colour theme, in any mode (a backtick does it outside
-    /// the command line and find).
+    /// filter fields).
     NextTheme,
 }
 
@@ -127,6 +125,22 @@ impl Page {
         }
     }
 
+    /// Whether this page contains rows affected by the shared filters.
+    pub fn has_filters(&self) -> bool {
+        matches!(
+            self,
+            Page::Monitor
+                | Page::Tree
+                | Page::Wall
+                | Page::Zoom(Pane::Agents | Pane::Tape | Pane::Failures | Pane::Changes)
+        )
+    }
+
+    /// Whether the ended-agent toggle applies on this page.
+    pub fn filters_agents(&self) -> bool {
+        matches!(self, Page::Monitor | Page::Wall | Page::Zoom(Pane::Agents))
+    }
+
     /// The page a number key opens.
     fn numbered(digit: char) -> Option<Page> {
         let page = match digit {
@@ -191,40 +205,16 @@ pub enum Motion {
     Right,
 }
 
-/// A parsed command line: the page its mnemonic opens and the filter words
-/// after it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Command {
-    /// The page.
-    pub page: Page,
-    /// Lowercase filter words; empty clears the filter.
-    pub filter: Vec<String>,
+/// An on-page filter field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterField {
+    /// Every word must match the row's metadata.
+    Words,
+    /// Text contained in the row or event.
+    Search,
 }
 
-impl Command {
-    /// Parses `AGT builder working`; mnemonics are case-insensitive.
-    pub fn parse(line: &str) -> Option<Command> {
-        let mut words = line.split_whitespace();
-        let mnemonic = words.next()?.to_ascii_uppercase();
-        let page = match mnemonic.as_str() {
-            "MON" => Page::Monitor,
-            "AGT" | "AGENTS" => Page::Zoom(Pane::Agents),
-            "TAPE" => Page::Zoom(Pane::Tape),
-            "SPND" | "SPEND" => Page::Zoom(Pane::Spend),
-            "FAIL" => Page::Zoom(Pane::Failures),
-            "TREE" => Page::Tree,
-            "SRC" => Page::Zoom(Pane::Sources),
-            "BODY" => Page::Zoom(Pane::Body),
-            "WALL" => Page::Wall,
-            "CHG" | "CHANGES" | "PRS" | "PR" => Page::Zoom(Pane::Changes),
-            _ => return None,
-        };
-        let filter = words.map(str::to_lowercase).collect();
-        Some(Command { page, filter })
-    }
-}
-
-/// The mode the base state returns to after a command, find or help.
+/// The mode the base state returns to after filtering or help.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Base {
     /// No pane focused; cursor keys move the page's default pane.
@@ -238,17 +228,14 @@ pub enum Base {
 pub enum Mode {
     /// Idle or a focused pane.
     Base(Base),
-    /// Typing a command line.
-    Command {
+    /// Editing an on-page filter.
+    Filter {
+        /// The field being edited.
+        field: FilterField,
         /// What is typed so far.
         input: Input,
-        /// Where Esc or Enter returns.
-        base: Base,
-    },
-    /// Typing a find query.
-    Find {
-        /// What is typed so far.
-        input: Input,
+        /// Value restored by Escape.
+        original: String,
         /// Where Esc or Enter returns.
         base: Base,
     },
@@ -266,10 +253,20 @@ impl PartialEq for Mode {
         match (self, other) {
             (Mode::Base(a), Mode::Base(b)) => a == b,
             (Mode::Help { base: a }, Mode::Help { base: b }) => a == b,
-            (Mode::Command { input: a, base: x }, Mode::Command { input: b, base: y })
-            | (Mode::Find { input: a, base: x }, Mode::Find { input: b, base: y }) => {
-                x == y && same_line(a, b)
-            }
+            (
+                Mode::Filter {
+                    field: a,
+                    input: x,
+                    original: old_x,
+                    base: bx,
+                },
+                Mode::Filter {
+                    field: b,
+                    input: y,
+                    original: old_y,
+                    base: by,
+                },
+            ) => a == b && bx == by && old_x == old_y && same_line(x, y),
             _ => false,
         }
     }
@@ -293,10 +290,7 @@ impl Mode {
     /// The base this mode returns to.
     pub fn base(&self) -> Base {
         match self {
-            Mode::Base(base)
-            | Mode::Command { base, .. }
-            | Mode::Find { base, .. }
-            | Mode::Help { base } => *base,
+            Mode::Base(base) | Mode::Filter { base, .. } | Mode::Help { base } => *base,
         }
     }
 }
@@ -316,20 +310,18 @@ pub enum Action {
     Move(Option<Pane>, Motion),
     /// Open the row under the cursor of a pane, or of the page when `None`.
     Activate(Option<Pane>),
-    /// Run a command line.
-    Run(Command),
-    /// An unknown command line, to report.
-    Unknown(String),
-    /// Filter rows by this find query; empty clears it.
-    Find(String),
+    /// Start editing the current value of a filter field.
+    EditFilter(FilterField),
+    /// Update a filter field live.
+    SetFilter(FilterField, String),
+    /// Clear the row filters and hide ended agents again.
+    ClearFilters,
     /// Show ended agents too, or only current ones again.
     ToggleAll,
     /// Show the BODY pane's next figure, or the previous one when false.
     CycleFigure(bool),
-    /// Switch to this colour theme, or to the next one when `None`.
-    Theme(Option<ThemeName>),
-    /// A `THEME` command naming no theme, to report.
-    UnknownTheme(String),
+    /// Switch to the next colour theme.
+    NextTheme,
     /// A CHANGES page key.
     Changes(ChangeKey),
 }
@@ -389,14 +381,18 @@ impl ChangeKey {
 pub fn step(mode: Mode, key: Key, page: &Page) -> (Mode, Action) {
     match key {
         Key::Interrupt => return (mode, Action::Quit),
-        Key::NextTheme => return (mode, Action::Theme(None)),
+        Key::NextTheme => return (mode, Action::NextTheme),
         _ => {}
     }
 
     match mode {
         Mode::Base(base) => step_base(base, key, page),
-        Mode::Command { input, base } => step_command(input, base, key),
-        Mode::Find { input, base } => step_find(input, base, key),
+        Mode::Filter {
+            field,
+            input,
+            original,
+            base,
+        } => step_filter(field, input, original, base, key),
         Mode::Help { base } => match key {
             Key::Esc | Key::Char('?') => (Mode::Base(base), Action::None),
             Key::Char('q') => (Mode::Help { base }, Action::Quit),
@@ -412,7 +408,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
     };
     let stay = Mode::Base(base);
 
-    // The CHANGES page claims a few keys that elsewhere start a command.
+    // The CHANGES page has its own navigation and display controls.
     if *page == Page::Zoom(Pane::Changes)
         && let Some(change) = ChangeKey::of(key)
     {
@@ -437,35 +433,23 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('q') => (stay, Action::Quit),
         // Browsers keep Ctrl-T for a new tab, so a terminal in a browser
         // (ttyd) cycles themes with a backtick.
-        Key::Char('`') => (stay, Action::Theme(None)),
+        Key::Char('`') => (stay, Action::NextTheme),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
-        Key::Char('a') => (stay, Action::ToggleAll),
-        // Only where BODY shows. On the monitor page only lowercase `b`, so a
-        // capital starts the command line and `BODY` still types; elsewhere
-        // `b` starts a command as before.
+        Key::Char('a') if page.filters_agents() => (stay, Action::ToggleAll),
+        Key::Char('x') if page.has_filters() => (stay, Action::ClearFilters),
         Key::Char('b') if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) => {
             (stay, Action::CycleFigure(true))
         }
-        Key::Char('B') if matches!(page, Page::Zoom(Pane::Body)) => {
+        Key::Char('B') if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) => {
             (stay, Action::CycleFigure(false))
         }
-        Key::Char('/') => (
-            Mode::Find {
-                input: Input::default(),
-                base,
-            },
-            Action::Find(String::new()),
-        ),
+        Key::Char('/') if page.has_filters() => (stay, Action::EditFilter(FilterField::Search)),
+        Key::Char('f') if page.has_filters() => (stay, Action::EditFilter(FilterField::Words)),
         Key::Char('?') => (Mode::Help { base }, Action::None),
         Key::Char(digit) if digit.is_ascii_digit() => match Page::numbered(digit) {
             Some(target) => (Mode::Base(Base::Idle), Action::Open(target)),
             None => (stay, Action::None),
         },
-        Key::Char(letter) if letter.is_alphabetic() => {
-            let mut input = Input::default();
-            input.handle(InputRequest::InsertChar(letter));
-            (Mode::Command { input, base }, Action::None)
-        }
         Key::Char(_) | Key::Backspace | Key::Interrupt | Key::NextTheme => (stay, Action::None),
     }
 }
@@ -508,54 +492,31 @@ fn edit(input: &mut Input, key: Key) -> bool {
     true
 }
 
-fn step_command(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
+fn step_filter(
+    field: FilterField,
+    mut input: Input,
+    original: String,
+    base: Base,
+    key: Key,
+) -> (Mode, Action) {
     match key {
-        Key::Esc => (Mode::Base(base), Action::None),
-        Key::Enter => {
-            let line = input.value().trim().to_owned();
-            let action = match (theme_command(&line), Command::parse(&line)) {
-                (Some(Ok(theme)), _) => Action::Theme(theme),
-                (Some(Err(name)), _) => Action::UnknownTheme(name),
-                (None, Some(command)) => Action::Run(command),
-                (None, None) if line.is_empty() => Action::None,
-                (None, None) => Action::Unknown(line),
-            };
-            (Mode::Base(base), action)
-        }
-        Key::Backspace if input.value().is_empty() => (Mode::Base(base), Action::None),
-        _ => {
-            edit(&mut input, key);
-            (Mode::Command { input, base }, Action::None)
-        }
-    }
-}
-
-/// A `THEME [name]` command line: `Ok(None)` for the next theme,
-/// `Ok(Some(name))` for that one, `Err(word)` for a name that is no theme,
-/// and `None` when the line is not a theme command.
-fn theme_command(line: &str) -> Option<Result<Option<ThemeName>, String>> {
-    let mut words = line.split_whitespace();
-    if !words.next()?.eq_ignore_ascii_case("THEME") {
-        return None;
-    }
-    let theme = match words.next() {
-        None => Ok(None),
-        Some(word) => word.parse().map(Some).map_err(|_| word.to_owned()),
-    };
-    Some(theme)
-}
-
-fn step_find(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
-    match key {
-        Key::Esc => (Mode::Base(base), Action::Find(String::new())),
+        Key::Esc => (Mode::Base(base), Action::SetFilter(field, original)),
         Key::Enter => (Mode::Base(base), Action::None),
         _ => {
-            if edit(&mut input, key) {
-                let query = input.value().to_owned();
-                (Mode::Find { input, base }, Action::Find(query))
+            let action = if edit(&mut input, key) {
+                Action::SetFilter(field, input.value().to_owned())
             } else {
-                (Mode::Find { input, base }, Action::None)
-            }
+                Action::None
+            };
+            (
+                Mode::Filter {
+                    field,
+                    input,
+                    original,
+                    base,
+                },
+                action,
+            )
         }
     }
 }

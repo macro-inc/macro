@@ -139,22 +139,18 @@ fn esc_returns_exactly_one_state() {
         (idle(), Action::Back)
     );
 
-    let command = Mode::Command {
-        input: typed("AG"),
+    let filter = Mode::Filter {
+        field: FilterField::Words,
+        input: typed("builder working"),
+        original: String::from("builder"),
         base: Base::Pane(Pane::Spend),
     };
     assert_eq!(
-        step(command, Key::Esc, &Page::Monitor),
-        (focused.clone(), Action::None)
-    );
-
-    let find = Mode::Find {
-        input: typed("rpc"),
-        base: Base::Pane(Pane::Spend),
-    };
-    assert_eq!(
-        step(find, Key::Esc, &Page::Monitor),
-        (focused.clone(), Action::Find(String::new()))
+        step(filter, Key::Esc, &Page::Monitor),
+        (
+            focused.clone(),
+            Action::SetFilter(FilterField::Words, String::from("builder"))
+        )
     );
 
     let help = Mode::Help {
@@ -173,13 +169,15 @@ fn quit_keys() {
         (idle(), Action::Quit)
     );
 
-    let command = Mode::Command {
+    let filter = Mode::Filter {
+        field: FilterField::Search,
+        original: String::new(),
         input: typed("AG"),
         base: Base::Idle,
     };
     assert_eq!(
-        step(command.clone(), Key::Interrupt, &Page::Monitor),
-        (command, Action::Quit)
+        step(filter.clone(), Key::Interrupt, &Page::Monitor),
+        (filter, Action::Quit)
     );
 
     let help = Mode::Help { base: Base::Idle };
@@ -213,32 +211,7 @@ fn w_opens_the_wall_and_question_mark_toggles_help() {
 }
 
 #[test]
-fn a_letter_starts_the_command_line_and_enter_runs_it() {
-    let keys: Vec<Key> = "AGT builder working".chars().map(Key::Char).collect();
-    let (mode, actions) = run(idle(), &keys, &Page::Monitor);
-    assert_eq!(
-        mode,
-        Mode::Command {
-            input: typed("AGT builder working"),
-            base: Base::Idle,
-        }
-    );
-    assert!(actions.iter().all(|action| *action == Action::None));
-
-    assert_eq!(
-        step(mode, Key::Enter, &Page::Monitor),
-        (
-            idle(),
-            Action::Run(Command {
-                page: Page::Zoom(Pane::Agents),
-                filter: vec![String::from("builder"), String::from("working")],
-            })
-        )
-    );
-}
-
-#[test]
-fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
+fn b_cycles_body_figures_only_where_body_shows() {
     for page in [Page::Monitor, Page::Zoom(Pane::Body)] {
         assert_eq!(
             step(idle(), Key::Char('b'), &page),
@@ -251,79 +224,49 @@ fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
     );
     let (mode, action) = step(idle(), Key::Char('b'), &Page::Tree);
     assert_eq!(action, Action::None);
-    assert!(matches!(mode, Mode::Command { .. }));
-}
-
-#[test]
-fn body_typed_in_capitals_on_the_monitor_page_opens_body() {
-    let keys: Vec<Key> = "BODY".chars().map(Key::Char).collect();
-    let (mode, actions) = run(idle(), &keys, &Page::Monitor);
-    assert!(actions.iter().all(|action| *action == Action::None));
-    assert_eq!(
-        step(mode, Key::Enter, &Page::Monitor),
-        (
-            idle(),
-            Action::Run(Command {
-                page: Page::Zoom(Pane::Body),
-                filter: Vec::new(),
-            })
-        )
-    );
-}
-
-#[test]
-fn reserved_letters_do_not_start_the_command_line() {
-    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
-        let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);
-        assert_eq!(mode, idle(), "{letter}");
-    }
-    let (mode, _) = step(idle(), Key::Char('J'), &Page::Monitor);
-    assert!(matches!(mode, Mode::Command { .. }));
-}
-
-#[test]
-fn lowercase_tape_with_a_filter_opens_tape_filtered() {
-    let keys: Vec<Key> = "tape error".chars().map(Key::Char).collect();
-    let (mode, _) = run(idle(), &keys, &Page::Monitor);
-    assert_eq!(
-        step(mode, Key::Enter, &Page::Monitor),
-        (
-            idle(),
-            Action::Run(Command {
-                page: Page::Zoom(Pane::Tape),
-                filter: vec![String::from("error")],
-            })
-        )
-    );
+    assert_eq!(mode, idle());
 }
 
 #[test]
 fn ctrl_t_cycles_the_theme_in_any_mode() {
     let (mode, action) = step(idle(), Key::NextTheme, &Page::Monitor);
     assert_eq!(mode, idle());
-    assert_eq!(action, Action::Theme(None));
+    assert_eq!(action, Action::NextTheme);
 
-    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    let typing = Mode::Filter {
+        field: FilterField::Search,
+        input: typed("T"),
+        original: String::new(),
+        base: Base::Idle,
+    };
     let (mode, action) = step(typing.clone(), Key::NextTheme, &Page::Monitor);
-    assert_eq!(mode, typing, "the command line keeps what was typed");
-    assert_eq!(action, Action::Theme(None));
+    assert_eq!(mode, typing, "the filter keeps what was typed");
+    assert_eq!(action, Action::NextTheme);
 }
 
 #[test]
 fn a_backtick_cycles_the_theme_where_a_browser_keeps_ctrl_t() {
     assert_eq!(
         step(idle(), Key::Char('`'), &Page::Monitor),
-        (idle(), Action::Theme(None))
+        (idle(), Action::NextTheme)
     );
     assert_eq!(
         step(idle(), Key::Char('`'), &Page::Zoom(Pane::Changes)).1,
-        Action::Theme(None)
+        Action::NextTheme
     );
-    // On the command line it is just a character.
-    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    // In a filter it is just a character.
+    let typing = Mode::Filter {
+        field: FilterField::Search,
+        input: typed("T"),
+        original: String::new(),
+        base: Base::Idle,
+    };
     let (mode, action) = step(typing, Key::Char('`'), &Page::Monitor);
-    assert_eq!(action, Action::None);
-    assert!(matches!(mode, Mode::Command { input, .. } if input.value() == "T`"));
+    assert_eq!(
+        action,
+        Action::SetFilter(FilterField::Search, String::from("T`"))
+    );
+    assert!(matches!(mode, Mode::Filter { input, .. } if input.value() == "T`"));
 }
 
 #[test]
@@ -334,127 +277,6 @@ fn ctrl_t_decodes_to_the_theme_key() {
     assert_eq!(Key::from_event(event), Some(Key::NextTheme));
     let event = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE);
     assert_eq!(Key::from_event(event), Some(Key::Char('t')));
-}
-
-#[test]
-fn the_theme_command_picks_or_cycles() {
-    let enter = |line: &str| {
-        let keys: Vec<Key> = line.chars().map(Key::Char).collect();
-        let (mode, _) = run(idle(), &keys, &Page::Monitor);
-        step(mode, Key::Enter, &Page::Monitor).1
-    };
-    assert_eq!(enter("THEME"), Action::Theme(None));
-    assert_eq!(enter("theme dusk"), Action::Theme(Some(ThemeName::Dusk)));
-    assert_eq!(enter("THEME Ember"), Action::Theme(Some(ThemeName::Ember)));
-    assert_eq!(
-        enter("THEME neon"),
-        Action::UnknownTheme(String::from("neon"))
-    );
-}
-
-#[test]
-fn command_line_editing() {
-    let (mode, _) = run(
-        idle(),
-        &[
-            Key::Char('T'),
-            Key::Char('R'),
-            Key::Char('X'),
-            Key::Backspace,
-            Key::Char('E'),
-            Key::Char('E'),
-        ],
-        &Page::Monitor,
-    );
-    assert_eq!(
-        step(mode, Key::Enter, &Page::Monitor),
-        (
-            idle(),
-            Action::Run(Command {
-                page: Page::Tree,
-                filter: Vec::new(),
-            })
-        )
-    );
-
-    // Backspace on an empty line leaves the command line.
-    let (mode, _) = run(
-        idle(),
-        &[Key::Char('T'), Key::Backspace, Key::Backspace],
-        &Page::Monitor,
-    );
-    assert_eq!(mode, idle());
-}
-
-#[test]
-fn unknown_commands_are_reported() {
-    let (mode, _) = run(idle(), &[Key::Char('Z'), Key::Char('Z')], &Page::Monitor);
-    assert_eq!(
-        step(mode, Key::Enter, &Page::Monitor),
-        (idle(), Action::Unknown(String::from("ZZ")))
-    );
-}
-
-#[test]
-fn every_mnemonic_parses_case_insensitively() {
-    let cases = [
-        ("MON", Page::Monitor),
-        ("agt", Page::Zoom(Pane::Agents)),
-        ("TAPE", Page::Zoom(Pane::Tape)),
-        ("SPND", Page::Zoom(Pane::Spend)),
-        ("Spend", Page::Zoom(Pane::Spend)),
-        ("FAIL", Page::Zoom(Pane::Failures)),
-        ("TREE", Page::Tree),
-        ("SRC", Page::Zoom(Pane::Sources)),
-        ("BODY", Page::Zoom(Pane::Body)),
-        ("WALL", Page::Wall),
-        ("PRS", Page::Zoom(Pane::Changes)),
-        ("pr", Page::Zoom(Pane::Changes)),
-        ("CHG", Page::Zoom(Pane::Changes)),
-        ("changes", Page::Zoom(Pane::Changes)),
-    ];
-    for (line, page) in cases {
-        assert_eq!(
-            Command::parse(line),
-            Some(Command {
-                page,
-                filter: Vec::new(),
-            })
-        );
-    }
-    assert_eq!(Command::parse("  "), None);
-}
-
-#[test]
-fn find_filters_live_and_enter_keeps_the_query() {
-    let (mode, actions) = run(
-        idle(),
-        &[
-            Key::Char('/'),
-            Key::Char('r'),
-            Key::Char('p'),
-            Key::Backspace,
-            Key::Char('p'),
-        ],
-        &Page::Monitor,
-    );
-    assert_eq!(
-        actions,
-        vec![
-            Action::Find(String::new()),
-            Action::Find(String::from("r")),
-            Action::Find(String::from("rp")),
-            Action::Find(String::from("r")),
-            Action::Find(String::from("rp")),
-        ]
-    );
-    // Letters reserved in idle mode are text while finding.
-    let (mode, actions) = run(mode, &[Key::Char('q'), Key::Enter], &Page::Monitor);
-    assert_eq!(
-        actions,
-        vec![Action::Find(String::from("rpq")), Action::None]
-    );
-    assert_eq!(mode, idle());
 }
 
 #[test]
@@ -516,12 +338,12 @@ fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
         step(idle(), Key::Enter, &changes).1,
         Action::Activate(Some(Pane::Changes))
     );
-    // Elsewhere `n` starts the command line and Home goes to the top.
+    // Elsewhere `n` does nothing and Home goes to the top.
     let agents = Page::Zoom(Pane::Agents);
-    assert!(matches!(
-        step(idle(), Key::Char('n'), &agents).0,
-        Mode::Command { .. }
-    ));
+    assert_eq!(
+        step(idle(), Key::Char('n'), &agents),
+        (idle(), Action::None)
+    );
     assert_eq!(
         step(idle(), Key::Home, &agents).1,
         Action::Move(Some(Pane::Agents), Motion::Top)
@@ -529,21 +351,26 @@ fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
 }
 
 #[test]
-fn on_changes_lowercase_m_s_p_n_are_page_keys_and_capitals_type_commands() {
-    let page = Page::Zoom(Pane::Changes);
-    let (_, actions) = run(idle(), &[Key::Char('m')], &page);
-    assert_eq!(actions, vec![Action::Changes(ChangeKey::ToggleLanded)]);
-
-    for word in ["MON", "SPND", "SRC", "PRS"] {
-        let mut keys: Vec<Key> = word.chars().map(Key::Char).collect();
-        keys.push(Key::Enter);
-        let (_, actions) = run(idle(), &keys, &page);
-        assert_eq!(
-            actions.last(),
-            Some(&Action::Run(
-                Command::parse(word).expect("a known mnemonic")
-            )),
-            "{word}"
-        );
-    }
+fn filters_edit_live_without_triggering_shortcuts() {
+    let mode = Mode::Filter {
+        field: FilterField::Words,
+        input: typed("builder"),
+        original: String::from("builder"),
+        base: Base::Pane(Pane::Agents),
+    };
+    let (mode, actions) = run(
+        mode,
+        &[Key::Char('q'), Key::Left, Key::Backspace, Key::Enter],
+        &Page::Monitor,
+    );
+    assert_eq!(mode, Mode::Base(Base::Pane(Pane::Agents)));
+    assert_eq!(actions.last(), Some(&Action::None));
+    assert_eq!(
+        actions[0],
+        Action::SetFilter(FilterField::Words, String::from("builderq"))
+    );
+    assert_eq!(
+        actions[2],
+        Action::SetFilter(FilterField::Words, String::from("buildeq"))
+    );
 }

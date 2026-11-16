@@ -2,6 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
+ FILTER [f] any   ENDED: HIDE [a]  CLEAR [x]
+ SEARCH [/] any  · filters shared across list pages
 ┌ WALL  34 AGENTS · PAGE 1/2 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [w] ┐
 │┌◆ explore the reducer  subagent ─────┐┌◆ fix-19  builder ─────────── 0x2BC0 ┐┌◆ rpc-server  builder ─────── 0xC060 ┐┌◆ fix-16  builder ─────────── 0x453D ┐┌◆ release-train  manager ──── 0xC579 ┐   │
 ││WORK   claude-haiku-5-5              ││WORK   claude-sonnet-5-5             ││WORK   claude-opus-5-5               ││WORK   claude-sonnet-5-5             ││WORK building  claude-opus-5-5       │   │
@@ -54,7 +56,5 @@ expression: "render(&mut app, 200, 56)"
 ││                                     ││                                     ││                                     ││                                     ││                                     │   │
 │└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │
 │                                                                                                                                                                                                      │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│                                                                                                                                                                                                      │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── MOVE [←→↑↓]  OPEN [Enter] ┘
-● LIVE DEMO                                                            COMMAND [letter]  THEME [`]  QUIT [q]  MOVE [↑↓]  PANE [Tab]  FIND [/]  WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

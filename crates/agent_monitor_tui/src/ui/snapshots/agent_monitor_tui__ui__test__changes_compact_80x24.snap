@@ -2,6 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 80, 24)"
 ---
+ FILTER [f] any   CLEAR [x]
+ SEARCH [/] any
 ┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────  [8] ┐
 │  LANE            PR      CI REV    12h ········ NOW  AGE                     │
 │  feat/trace-gaps —       ·  —                   ╰◉◎   10s                    │
@@ -21,8 +23,6 @@ expression: "render(&mut app, 80, 24)"
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                              │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│                                                                              │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │ ◆ #4188 landed 36m                                                           │
 └──────────────────────────────────────────────────────────────────────────────┘
-● LIVE DEMO            WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]

@@ -236,14 +236,17 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   away, and a collector started by a later `macrod monitor` takes over.
   Its colours come from `[monitor] theme` (`classic`, the default, `ember`,
   `phosphor` or `dusk`, in any case; `--theme` overrides it). A name that is
-  no theme draws in `classic` with a warning on the command line; the
+  no theme draws in `classic` with a warning in the bottom status bar; the
   collector ignores the key. In the viewer, Ctrl-T (or a backtick, for a
-  terminal in a browser, which keeps Ctrl-T) cycles the themes and the
-  `THEME [name]` command picks one. The AGENTS pane and page separate
+  terminal in a browser, which keeps Ctrl-T) cycles the themes. Navigate
+  with `0`–`8` or `w`; list pages have shared word filters (`f`), text search
+  (`/`), reset (`x`), and an ended-agent toggle (`a`) where applicable.
+  Enter keeps a filter edit; Escape cancels it. The AGENTS pane and page separate
   current status from 24-hour activity. SPEND owns cost figures (including
   lifetime cost by agent on its full page); FAILURES owns error totals.
   Pane titles contain only names, with bracketed hotkeys on the right;
-  the bottom bar includes `HELP [?]`.
+  the top filter rows and bottom key row are left-aligned. The bottom row
+  includes `HELP [?]` and connection problems, without a healthy LIVE indicator.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
   or the `--config` / `--profile` it is given (resolved as for

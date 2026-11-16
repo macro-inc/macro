@@ -2,6 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 240, 45)"
 ---
+ FILTER [f] any   CLEAR [x]
+ SEARCH [/] any  · filters shared across list pages
 ┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [8] ┐
 │REPO  app 13 ✕    origin/main 4be30b8 · fetched 5m ago · local main −37                                                                                                                          1 col = 5m  ◂ 15h ▸  SORT fork  LANDED shown │
 │┄┄┄┄┄┄┄┄┄┄┼-14h┄┄┄┄┄┄┄┼-13h┄┄┄┄┄┄┄┼-12h┄┄┄┄┄┄┄┼-11h┄┄┄┄┄┄┄┼-10h┄┄┄┄┄┄┄┼-9h┄┄┄┄┄┄┄┄┼-8h┄┄┄┄┄┄┄┄┼-7h┄┄┄┄┄┄┄┄┼-6h┄┄┄┄┄┄┄┄┼-5h┄┄┄┄┄┄┄┄┼-4h┄┄┄┄┄┄┄┄┼-3h┄┄┄┄┄┄┄┄┼-2h┄┄┄┄┄┄┄┄┼-1h┄┄┄┄┄┄┄NOW LANE              PR      CI REV    ±MAIN      ↑    AGE  │
@@ -38,12 +40,10 @@ expression: "render(&mut app, 240, 45)"
 │                                                                                                                                                                                                                                              │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                                                                                                              │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│                                                                                                                                                                                                                                              │
 │ · 3 quieter branches not mapped                                                                                                                                                                                                              │
 │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
 │ ▌feat/ui-pages  #4215 feat(monitor): pages and drill-in   ✕ CI  draft  draft  stacked on feat/store-reducer  ui-pages IDLE                                                                                                                   │
 │  … ● b9635c1 7m fix(viewer): keep the cursor on resize   ● c5c1ccd 1m perf(feed): batch avatar lookups   ○ b934cb6 50s feat(channels): pin a message to the header ↑   ⟦○ aca7c9f 20s test(email): snapshot the digest renderer ↑⟧           │
 │                                                                                                      LANE [↑↓]  COMMIT [←→]  AGENT [Enter]  LANE PAGE [p]  NEXT ✕ [n N]  ZOOM [+ −]  PAN [< >]  NOW [Home]  REPO [[ ]]  LANDED [m]  SORT [s] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-● LIVE DEMO                                                                                                    COMMAND [letter]  THEME [`]  QUIT [q]  MOVE [↑↓]  PANE [Tab]  FIND [/]  WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

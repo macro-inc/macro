@@ -45,7 +45,7 @@ pub enum Token {
     /// The brand orange: title chips, spend meters and warnings.
     Accent,
     /// What the eye should find next: the focused frame, key hints, the
-    /// command line, live numbers (cost, tokens, counts) and in-flight states
+    /// filter inputs, live numbers (cost, tokens, counts) and in-flight states
     /// (CI running, a tool call pending, a source starting).
     Highlight,
     /// Waiting on a person: a waiting agent, a PR that needs review.

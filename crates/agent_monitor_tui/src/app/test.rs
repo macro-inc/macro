@@ -17,17 +17,46 @@ fn type_line(app: &mut App, line: &str) {
 }
 
 #[test]
-fn all_on_the_command_line_lists_ended_agents() {
-    let mut app = app();
-    type_line(&mut app, "AGT all builder");
+fn page_filters_reopen_cancel_and_clear_without_navigating() {
+    let mut app = changes_app();
+    app.key(Key::Char('1'));
+    type_line(&mut app, "fBUILDER working");
+    let rows = app.view.sorted_agents(&app.filter);
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|agent| agent.kind.label() == "builder"
+        && agent.status == agent_monitor::domain::model::Status::Working));
+    app.key(Key::Char('a'));
+    type_line(&mut app, "/task");
     assert!(app.filter.all);
-    assert_eq!(app.filter.words, vec![String::from("builder")]);
+    assert_eq!(
+        app.filter.words,
+        vec![String::from("builder"), String::from("working")]
+    );
+    assert_eq!(app.filter.find, "task");
     assert_eq!(*app.page(), Page::Zoom(Pane::Agents));
 
-    // A command without it lists current agents again.
-    type_line(&mut app, "AGT");
-    assert!(!app.filter.all);
-    assert!(app.filter.words.is_empty());
+    app.key(Key::Char('f'));
+    assert!(matches!(&app.mode, Mode::Filter { input, .. } if input.value() == "builder working"));
+    app.key(Key::Backspace);
+    app.key(Key::Esc);
+    assert_eq!(
+        app.filter.words,
+        vec![String::from("builder"), String::from("working")]
+    );
+    app.key(Key::Char('/'));
+    app.key(Key::Char('s'));
+    app.key(Key::Esc);
+    assert_eq!(app.filter.find, "task");
+
+    app.key(Key::Char('2'));
+    assert_eq!(
+        app.filter.find, "task",
+        "filters stay shared across list pages"
+    );
+    app.key(Key::Char('x'));
+    assert_eq!(app.filter, Filter::default());
+    assert_eq!(*app.page(), Page::Zoom(Pane::Tape));
+    assert!(!app.view.sorted_agents(&app.filter).is_empty());
 }
 
 #[test]
@@ -128,7 +157,7 @@ fn changes_keys_move_lanes_commits_zoom_pan_and_toggles() {
     assert!(app.cursors.changes.hide_landed);
     app.key(Key::Char('s'));
     assert_eq!(app.cursors.changes.sort, LaneSort::Attention);
-    // None of these opened the command line.
+    // These controls stay in the base mode.
     assert_eq!(app.mode, Mode::default());
 }
 
@@ -175,27 +204,6 @@ fn the_cursor_stays_on_its_lane_when_a_new_lane_appears_above_it() {
             .contains(&ChangeRow::Lane(String::from("feat/brand-new")))
     );
     assert_eq!(app.change_row(), chosen);
-}
-
-#[test]
-fn the_theme_command_switches_theme_or_reports_an_unknown_one() {
-    let mut app = app();
-    for key in "THEME phosphor".chars().map(Key::Char) {
-        app.key(key);
-    }
-    app.key(Key::Enter);
-    assert_eq!(app.theme, ThemeName::Phosphor);
-    assert!(app.theme_notice);
-
-    for key in "THEME neon".chars().map(Key::Char) {
-        app.key(key);
-    }
-    app.key(Key::Enter);
-    assert_eq!(app.theme, ThemeName::Phosphor);
-    assert_eq!(
-        app.message.as_deref(),
-        Some("UNKNOWN THEME: neon (classic, ember, phosphor, dusk)")
-    );
 }
 
 #[test]

@@ -52,9 +52,11 @@ fn render(app: &mut App, width: u16, height: u16) -> String {
     let buffer = terminal.backend().buffer();
     let mut text = String::new();
     for y in 0..buffer.area.height {
+        let mut row = String::new();
         for x in 0..buffer.area.width {
-            text.push_str(buffer[(x, y)].symbol());
+            row.push_str(buffer[(x, y)].symbol());
         }
+        text.push_str(row.trim_end());
         text.push('\n');
     }
     text
@@ -299,12 +301,12 @@ fn drill_in_200x56() {
 }
 
 #[test]
-fn ctrl_t_names_the_new_theme_on_the_command_line() {
+fn ctrl_t_names_the_new_theme_in_the_footer() {
     let mut app = app();
     app.key(Key::NextTheme);
     let screen = render(&mut app, 200, 56);
-    let command = screen.lines().last().unwrap_or_default();
-    assert!(command.contains("THEME EMBER"), "{command}");
+    let footer = screen.lines().last().unwrap_or_default();
+    assert!(footer.contains("THEME EMBER"), "{footer}");
     assert_eq!(app.theme, crate::theme::ThemeName::Ember);
 }
 
@@ -313,9 +315,6 @@ fn help_overlay() {
     let mut app = app();
     app.key(Key::Char('?'));
     let screen = render(&mut app, 200, 56);
-    assert!(screen.contains("AGT builder working"));
-    assert!(
-        screen.contains("any case (CAPITALS on 0, 7, 8), then ENTER:"),
-        "{screen}"
-    );
+    assert!(screen.contains("filter words: kind, status, name, task or program"));
+    assert!(screen.contains("clear shared filters"));
 }

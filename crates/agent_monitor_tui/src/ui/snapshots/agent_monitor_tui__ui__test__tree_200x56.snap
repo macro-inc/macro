@@ -2,59 +2,59 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
-┌ TREE  34 AGENTS · 8 ROOTS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [5] ┐                                            
-│▾ ◆ manager  release-train    WORK 09:39:00  22m   9▸  Ship the release branch                                                                            │                                            
-│  ▾ ◆ builder  fix-19         WORK 10:01:11  28s   1▸  Follow-up from review                                                                              │                                            
-│    · ◆ subagent explore the… WORK 10:01:31   9s   0▸  explore the reducer                                                                                │                                            
-│  ▾ ◆ builder  rpc-server     WORK 09:28:00  33m   1▸  Task explore the reducer                                                                           │                                            
-│    · ◆ subagent explore the… WORK 10:01:40   0s   0▸  explore the reducer                                                                                │                                            
-│  ▾ ◆ builder  fix-18         WORK 10:00:45  54s   1▸  Follow-up from review                                                                              │                                            
-│    · ◆ subagent explore the… WORK 10:01:23  16s   0▸  explore the reducer                                                                                │                                            
-│  · ◆ builder  fix-20         WORK 10:01:28  12s   0▸  Follow-up from review                                                                              │                                            
-│  · ◆ subagent explore the r… WORK 10:01:23  16s   0▸  explore the reducer                                                                                │                                            
-│  · ◇ explorer find-21        IDLE 10:01:36   3s   0▸  Follow-up from review                                                                              │                                            
-│  ▾ ◇ reviewer review-rpc     IDLE 09:30:00  31m   1▸  Review the RPC changes                                                                             │                                            
-│    · ◆ subagent explore the… WORK 10:00:54  46s   0▸  explore the reducer                                                                                │                                            
-│  ▾ · builder  store-reducer  DONE 09:35:00  26m   1▸  Single-writer store and reducer                                                                    │                                            
-│    · ◆ subagent explore the… WORK 10:00:37   1m   0▸  explore the reducer                                                                                │                                            
-│  · · explorer find-15        DONE 10:00:12   1m   0▸  Follow-up from review                                                                              │                                            
-│▾ ◆ other    scratch-notes    WORK 09:25:20  36m   1▸  scratch-notes session                                                                              │                                            
-│  · ◆ subagent explore the r… WORK 10:01:33   6s   0▸  explore the reducer                                                                                │                                            
-│· ◆ other    lint-sweep sess… WORK 09:35:20  26m   0▸  lint-sweep session                                                                                 │                                            
-│▾ ◆ chatter  chat-desk        WORK 09:15:00  46m   1▸  Answer questions                                                                                   │                                            
-│  · ◆ subagent explore the r… WORK 10:01:36   4s   0▸  explore the reducer                                                                                │                                            
-│▾ ◆ planner  q4-roadmap       WORK 09:40:00  21m   1▸  Draft the quarter's plan                                                                           │                                            
-│  · ◆ subagent explore the r… WORK 10:01:35   4s   0▸  explore the reducer                                                                                │                                            
-│▾ ▲ manager  billing-revamp   BLCK 09:02:00  59m   5▸  Rework invoice exports                                                                             │                                            
-│  ▾ ◆ builder  fix-16         WORK 10:00:12   1m   1▸  Follow-up from review                                                                              │                                            
-│    · ◆ subagent explore the… WORK 10:01:37   2s   0▸  explore the reducer                                                                                │                                            
-│  ▾ ◆ planner  mesh-plan      WORK 09:30:00  31m   1▸  Plan the figure widget                                                                             │                                            
-│    · ◆ subagent explore the… WORK 10:01:32   8s   0▸  explore the reducer                                                                                │                                            
-│  · ◆ subagent explore the r… WORK 10:01:26  13s   0▸  explore the reducer                                                                                │                                            
-│  ▾ ◇ builder  ui-pages       IDLE 09:33:00  28m   1▸  Pages and drill-in                                                                                 │                                            
-│    · ◆ subagent explore the… WORK 10:01:24  16s   0▸  explore the reducer                                                                                │                                            
-│  ▾ ✕ explorer find-17        FAIL 10:00:42  57s   1▸  Follow-up from review                                                                              │                                            
-│    · ◆ subagent explore the… WORK 10:01:06  34s   0▸  explore the reducer                                                                                │                                            
-│· ◇ shell    logs             IDLE 09:37:00  24m   0▸  tail service logs                                                                                  │                                            
-│· ✕ builder  flaky-tests      FAIL 09:26:00  35m   0▸  Fix the flaky suite                                                                                │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
-│                                                                                                                                                          │                                            
-└───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── FOLD [←→]  OPEN [Enter] ┘                                            
-● LIVE DEMO                                                            COMMAND [letter]  THEME [`]  QUIT [q]  MOVE [↑↓]  PANE [Tab]  FIND [/]  WALL [w]  PAGE [0-8]  OPEN [Enter]  BACK [Esc]  HELP [?]
+ FILTER [f] any   CLEAR [x]
+ SEARCH [/] any  · filters shared across list pages
+┌ TREE  34 AGENTS · 8 ROOTS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [5] ┐
+│▾ ◆ manager  release-train    WORK 09:39:00  22m   9▸  Ship the release branch                                                                            │
+│  ▾ ◆ builder  fix-19         WORK 10:01:11  28s   1▸  Follow-up from review                                                                              │
+│    · ◆ subagent explore the… WORK 10:01:31   9s   0▸  explore the reducer                                                                                │
+│  ▾ ◆ builder  rpc-server     WORK 09:28:00  33m   1▸  Task explore the reducer                                                                           │
+│    · ◆ subagent explore the… WORK 10:01:40   0s   0▸  explore the reducer                                                                                │
+│  ▾ ◆ builder  fix-18         WORK 10:00:45  54s   1▸  Follow-up from review                                                                              │
+│    · ◆ subagent explore the… WORK 10:01:23  16s   0▸  explore the reducer                                                                                │
+│  · ◆ builder  fix-20         WORK 10:01:28  12s   0▸  Follow-up from review                                                                              │
+│  · ◆ subagent explore the r… WORK 10:01:23  16s   0▸  explore the reducer                                                                                │
+│  · ◇ explorer find-21        IDLE 10:01:36   3s   0▸  Follow-up from review                                                                              │
+│  ▾ ◇ reviewer review-rpc     IDLE 09:30:00  31m   1▸  Review the RPC changes                                                                             │
+│    · ◆ subagent explore the… WORK 10:00:54  46s   0▸  explore the reducer                                                                                │
+│  ▾ · builder  store-reducer  DONE 09:35:00  26m   1▸  Single-writer store and reducer                                                                    │
+│    · ◆ subagent explore the… WORK 10:00:37   1m   0▸  explore the reducer                                                                                │
+│  · · explorer find-15        DONE 10:00:12   1m   0▸  Follow-up from review                                                                              │
+│▾ ◆ other    scratch-notes    WORK 09:25:20  36m   1▸  scratch-notes session                                                                              │
+│  · ◆ subagent explore the r… WORK 10:01:33   6s   0▸  explore the reducer                                                                                │
+│· ◆ other    lint-sweep sess… WORK 09:35:20  26m   0▸  lint-sweep session                                                                                 │
+│▾ ◆ chatter  chat-desk        WORK 09:15:00  46m   1▸  Answer questions                                                                                   │
+│  · ◆ subagent explore the r… WORK 10:01:36   4s   0▸  explore the reducer                                                                                │
+│▾ ◆ planner  q4-roadmap       WORK 09:40:00  21m   1▸  Draft the quarter's plan                                                                           │
+│  · ◆ subagent explore the r… WORK 10:01:35   4s   0▸  explore the reducer                                                                                │
+│▾ ▲ manager  billing-revamp   BLCK 09:02:00  59m   5▸  Rework invoice exports                                                                             │
+│  ▾ ◆ builder  fix-16         WORK 10:00:12   1m   1▸  Follow-up from review                                                                              │
+│    · ◆ subagent explore the… WORK 10:01:37   2s   0▸  explore the reducer                                                                                │
+│  ▾ ◆ planner  mesh-plan      WORK 09:30:00  31m   1▸  Plan the figure widget                                                                             │
+│    · ◆ subagent explore the… WORK 10:01:32   8s   0▸  explore the reducer                                                                                │
+│  · ◆ subagent explore the r… WORK 10:01:26  13s   0▸  explore the reducer                                                                                │
+│  ▾ ◇ builder  ui-pages       IDLE 09:33:00  28m   1▸  Pages and drill-in                                                                                 │
+│    · ◆ subagent explore the… WORK 10:01:24  16s   0▸  explore the reducer                                                                                │
+│  ▾ ✕ explorer find-17        FAIL 10:00:42  57s   1▸  Follow-up from review                                                                              │
+│    · ◆ subagent explore the… WORK 10:01:06  34s   0▸  explore the reducer                                                                                │
+│· ◇ shell    logs             IDLE 09:37:00  24m   0▸  tail service logs                                                                                  │
+│· ✕ builder  flaky-tests      FAIL 09:26:00  35m   0▸  Fix the flaky suite                                                                                │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                                                          │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── FOLD [←→]  OPEN [Enter] ┘
+DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

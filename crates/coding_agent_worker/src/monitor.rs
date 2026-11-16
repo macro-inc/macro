@@ -597,7 +597,7 @@ async fn view(
 
 /// The theme the viewer starts in: `--theme`, else `[monitor] theme`. A
 /// configured name that is no theme falls back to classic with a warning for
-/// the command line, rather than stopping the viewer over a cosmetic key.
+/// the bottom status bar, rather than stopping the viewer over a cosmetic key.
 fn viewer_theme(
     flag: Option<agent_monitor_tui::ThemeName>,
     configured: &str,
