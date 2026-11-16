@@ -33,8 +33,9 @@ impl PgRepository {
         })
     }
     /// Whether this namespace has any retained metadata or closure fence.
+    // Order the one-row audit lookup so absent teams cannot scan the growing activity table.
     pub async fn has_team_data(&self, team: TeamId) -> Result<bool, Error> {
-        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) AS "present!""#,team.0)
+        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) OR (SELECT id FROM password_import_activity WHERE team_id=$1 ORDER BY id LIMIT 1) IS NOT NULL AS "present!""#,team.0)
             .fetch_one(&self.pool).await.map_err(database_error)
     }
 
@@ -68,7 +69,12 @@ struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
 }
-impl ItemLock for PgItemLock {}
+#[async_trait]
+impl ItemLock for PgItemLock {
+    async fn release(self: Box<Self>) -> Result<(), Error> {
+        self._transaction.rollback().await.map_err(database_error)
+    }
+}
 
 fn decode(
     metadata: serde_json::Value,
@@ -89,6 +95,11 @@ fn decode(
         totp_key_id: totp_key_id.map(TotpKeyId),
     })
 }
+// `list` and `matching` spell their row cap (500) as a literal, which sqlx
+// needs; keep it the vault's list and match limits.
+const _: () = assert!(password_import::vault::MAX_LIST_ITEMS == 500);
+const _: () = assert!(password_import::vault::MAX_IMPORT_MATCH_NAMES == 500);
+
 #[async_trait]
 impl Repository for PgRepository {
     async fn is_human(
@@ -139,6 +150,13 @@ impl Repository for PgRepository {
             .execute(&mut *transaction)
             .await
             .map_err(database_error)?;
+        sqlx::query!(
+            "DELETE FROM password_import_activity WHERE team_id=$1",
+            team.0
+        )
+        .execute(&mut *transaction)
+        .await
+        .map_err(database_error)?;
         transaction.commit().await.map_err(database_error)
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
@@ -375,6 +393,30 @@ impl Repository for PgRepository {
             })
             .collect()
     }
+    async fn matching(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        names: &[String],
+    ) -> Result<Vec<Record>, Error> {
+        let mut transaction = self.bounded_transaction().await?;
+        let user_grant = serde_json::json!([{"kind":"user","id":actor.user_id.as_ref()}]);
+        let team_grant = serde_json::json!([{"kind":"team","id":team.0.to_string()}]);
+        let rows=sqlx::query!(r#"SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND EXISTS(SELECT 1 FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$3 AND NOT profile."isAgent") AND (user_id=$3 OR grants @> $4 OR grants @> $5 OR EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$3 AND team_role IN ('owner','admin'))) AND lower(metadata->>'name') = ANY($2::text[]) ORDER BY id DESC LIMIT 500"#,team.0,names,actor.user_id.as_ref(),user_grant,team_grant).fetch_all(&mut *transaction).await.map_err(database_error)?;
+        transaction.commit().await.map_err(database_error)?;
+        rows.into_iter()
+            .map(|row| {
+                decode(
+                    row.metadata,
+                    row.user_id,
+                    row.grants,
+                    row.deleting,
+                    row.revision,
+                    row.totp_key_id,
+                )
+            })
+            .collect()
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         let row=sqlx::query!(r#"SELECT metadata,user_id,grants,(deleting OR deleted_at IS NOT NULL) AS "deleting!",revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND id=$2"#,team.0,item.0).fetch_optional(&self.pool).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
         decode(
@@ -465,6 +507,26 @@ impl Repository for PgRepository {
     async fn folders(&self, team: TeamId) -> Result<Vec<Folder>, Error> {
         self.list_folders(team).await
     }
+    async fn ensure_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        self.ensure_stored_folder(team, id, name, parent_id).await
+    }
+    async fn audit_import(
+        &self,
+        team: TeamId,
+        import_id: Uuid,
+        actor: &Actor,
+        format: ImportFormat,
+        counts: ImportCounts,
+    ) -> Result<(), Error> {
+        self.record_import(team, import_id, actor, format, counts)
+            .await
+    }
     async fn save_folder(&self, folder: &Folder) -> Result<(), Error> {
         self.create_folder(folder).await
     }
@@ -489,3 +551,5 @@ mod test;
 
 mod cleanup;
 mod folders;
+
+mod import;
