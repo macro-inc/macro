@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT item_id, item_type, snoozed_until\n               FROM user_notification_item_unsubscribe\n               WHERE user_id = $1 AND (snoozed_until IS NULL OR snoozed_until > NOW())\n               ORDER BY snoozed_until NULLS LAST, item_id",
+  "query": "SELECT item_id, item_type, snoozed_until, mentions_only\n               FROM user_notification_item_unsubscribe\n               WHERE user_id = $1 AND (snoozed_until IS NULL OR snoozed_until > NOW())\n               ORDER BY snoozed_until NULLS LAST, item_id",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "snoozed_until",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "mentions_only",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "6b45324af9f3354b5b894dd7d46a944fc33313ab10f71c6b0ababf5e57842d28"
+  "hash": "1f975189250a613e32930c7047e8005772dd2bc19b264339141bf8bcaff6c863"
 }
