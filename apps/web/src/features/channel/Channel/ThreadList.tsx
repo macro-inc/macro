@@ -884,6 +884,7 @@ export function ThreadList(props: ThreadListProps) {
       <div
         ref={scrollRef}
         data-channel-scroll
+        data-scroll-phase={lifecycle.phase()}
         class="scrollbar-hidden px-2"
         {...scrollIntent.handlers}
         onScroll={scheduleScrollState}
