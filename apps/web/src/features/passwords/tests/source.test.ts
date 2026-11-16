@@ -483,6 +483,26 @@ it('marks a failed folder request in its action trace without recording its name
   );
 });
 
+it('keeps agent grants out of the human sharing contract', async () => {
+  const humanGrants = [
+    { kind: 'user', id: 'macro|viewer@example.test', permission: 'edit' },
+    { kind: 'team', id: 'team', permission: 'view' },
+  ];
+  mocks.fetch.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify([
+        ...humanGrants,
+        { kind: 'agent', id: 'macro|agent@example.test', permission: 'edit' },
+      ]),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    )
+  );
+
+  const result = await createPasswordSource('team', CURRENT).grants('item');
+  expect(result.isOk()).toBe(true);
+  expect(result.isOk() && result.value).toEqual(humanGrants);
+});
+
 it('tells an unreachable vault from a server error and a rejected batch', async () => {
   const batch = {
     format: 'bitwarden_json',
