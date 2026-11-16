@@ -10,7 +10,7 @@ use notification::domain::service::SendNotificationError;
 use rootcause::Report;
 use serde::Serialize;
 use serde_json::json;
-use team_agents::domain::models::{NewAgentAccount, PersonaSeed, TeamAgentRecord};
+use team_agents::domain::models::{CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgentRecord};
 
 use super::*;
 
@@ -93,7 +93,7 @@ struct Unused;
 impl TeamAgentRepository for Agents {
     type Err = Unused;
 
-    async fn create_account(&self, _: &NewAgentAccount) -> Result<(), Unused> {
+    async fn create_account(&self, _: &NewAgentAccount) -> Result<CreatedAccount, Unused> {
         Err(Unused)
     }
 

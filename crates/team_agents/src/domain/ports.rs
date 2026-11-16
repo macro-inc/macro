@@ -13,8 +13,8 @@ use uuid::Uuid;
 use super::admission::AgentAccountFacts;
 use super::models::{
     AgentApiKey, AgentRepo, ComputerId, ComputerPurchase, ComputerState, CreateTeamAgent,
-    NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord, TeamAgents,
-    VoiceModel,
+    CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord,
+    TeamAgents, VoiceModel,
 };
 use super::voice::AgentVoice;
 
@@ -24,11 +24,13 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// Create the account (no sign-in, marked as an agent) and its
-    /// `team_agents` row in one transaction.
+    /// `team_agents` row in one transaction. When the team already has an
+    /// agent with the account's purchase key, creates nothing and returns
+    /// that agent, including while another request is still creating it.
     fn create_account(
         &self,
         account: &NewAgentAccount,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreatedAccount, Self::Err>> + Send;
 
     /// Delete the account; its `team_agents` row, membership and repo row
     /// cascade. Only to undo an invite that failed: a removed agent keeps

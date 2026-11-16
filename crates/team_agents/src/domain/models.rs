@@ -135,6 +135,18 @@ pub struct NewAgentAccount {
     pub avatar_url: Option<String>,
     /// Workspace seed.
     pub persona_seed: PersonaSeed,
+    /// The invite's purchase key: one agent per key per team.
+    pub purchase_key: String,
+}
+
+/// What [`super::ports::TeamAgentRepository::create_account`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreatedAccount {
+    /// The account and its `team_agents` row were created.
+    Created,
+    /// The team already invited an agent with this purchase key (a double
+    /// click, or a retry after a lost answer); nothing was created.
+    AlreadyInvited(Box<TeamAgentRecord>),
 }
 
 /// A stored agent, before its computer is read.

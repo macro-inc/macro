@@ -17,6 +17,12 @@ per-computer purchase with the computer linked to the agent
 (`hosted_runtime.agent_user_id`). A failure before the purchase completes
 undoes the repo, membership and account, newest first.
 
+The invite is idempotent on its `purchaseKey` (one per Invite dialog):
+`team_agents` is unique on `(team_id, purchase_key)`, so a double click or a
+retry after a lost answer creates no second account and goes on to the same
+purchase, which hosted_runtimes dedupes on the same key. Only the request that
+created the account undoes it.
+
 When the computer operator creates the guest it calls the internal
 `POST /internal/team_agent_enrollment/{computer}/{generation}`; for an agent
 computer, `issue_enrollment` mints a fresh API key and repo token and returns

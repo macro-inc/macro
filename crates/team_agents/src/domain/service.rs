@@ -15,9 +15,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AGENT_EMAIL_DOMAIN, ComputerId, ComputerPurchase, CreateTeamAgent, MAX_NAME_CHARS,
-    MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord,
-    TeamAgentStatus, TeamAgents,
+    AGENT_EMAIL_DOMAIN, ComputerId, ComputerPurchase, CreateTeamAgent, CreatedAccount,
+    MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError,
+    TeamAgentRecord, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, EnrollmentEnvironment, TeamAgentRepository,
@@ -294,7 +294,8 @@ where
             voice: request.voice.clone(),
         };
 
-        self.repository
+        let created = self
+            .repository
             .create_account(&NewAgentAccount {
                 user_id: user_id.clone(),
                 email,
@@ -303,9 +304,21 @@ where
                 name: request.name.clone(),
                 avatar_url: request.avatar_url.clone(),
                 persona_seed: seed.clone(),
+                purchase_key: request.purchase_key.clone(),
             })
             .await
             .map_err(TeamAgentError::internal)?;
+        if let CreatedAccount::AlreadyInvited(record) = created {
+            // A repeat of an invite (a double click, or a retry after a lost
+            // answer): it goes on to the same purchase, which hosted_runtimes
+            // dedupes on the same key. The first request owns any undo, so
+            // nothing is recorded here.
+            tracing::Span::current().record(
+                "agent_user_id",
+                tracing::field::display(agent_credentials::telemetry_id(record.user_id.as_ref())),
+            );
+            return Ok((record.user_id, record.persona_seed));
+        }
         undo.account = Some(user_id.clone());
 
         self.membership.add_agent(receipt.clone(), &user_id).await?;
