@@ -180,7 +180,7 @@ function projectMenuEntries(
               triggerFocusNewElement(RENAME_FIELD_SELECTOR, {
                 touchOnly: true,
               });
-              single(props.onRename)();
+              return single(props.onRename)();
             },
             PencilIcon
           )
