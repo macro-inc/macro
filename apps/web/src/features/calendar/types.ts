@@ -5,6 +5,7 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventTransparency } from '@service-storage/generated/schemas/eventTransparency';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
+import type { EventVisibility } from '@service-storage/generated/schemas/eventVisibility';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import type { ViewerCapabilities } from '@service-storage/generated/schemas/viewerCapabilities';
 import {
@@ -120,6 +121,8 @@ export interface CalendarEvent {
   eventType?: EventType;
   /** `transparent` events show the owner as free; absent means busy. */
   transparency?: EventTransparency;
+  /** Sharing visibility of the displayed calendar copy. */
+  visibility?: EventVisibility;
   /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
@@ -308,6 +311,7 @@ export function mapCalendarOccurrence(
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
     transparency: content.transparency,
+    visibility: content.visibility,
     calendarId,
     sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,

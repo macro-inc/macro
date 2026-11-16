@@ -14,7 +14,7 @@ export function ComposerSubmit() {
       form={model.ids.form}
       variant="primary"
       aria-label={label()}
-      disabled={model.formIsDisabled() || !model.controller.canSave()}
+      disabled={model.formIsDisabled() || !model.canSave()}
     >
       <Show when={model.options.pending} fallback={label()}>
         <SpinnerIcon class="size-4 animate-spin" />

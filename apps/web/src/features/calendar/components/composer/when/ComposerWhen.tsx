@@ -1,6 +1,7 @@
 import { DateTimeRange } from '@app/components/date-time-range/date-time-range-fields';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { ComposerDuration } from './ComposerDuration';
+import { ComposerRangeFeedback } from './ComposerRangeFeedback';
 
 export function ComposerWhen() {
   const model = useCalendarComposer();
@@ -16,6 +17,7 @@ export function ComposerWhen() {
         <DateTimeRange.EndTime />
         <ComposerDuration />
       </div>
+      <ComposerRangeFeedback />
     </DateTimeRange.Root>
   );
 }

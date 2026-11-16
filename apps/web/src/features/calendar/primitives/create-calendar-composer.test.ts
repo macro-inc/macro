@@ -24,6 +24,74 @@ function createController() {
 }
 
 describe('calendar composer model', () => {
+  it('blocks a DST-gap submission and recovers when the range is corrected', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const controller = createController();
+      const onSubmit = vi.fn();
+      const model = createCalendarComposer({
+        controller,
+        pending: false,
+        onSubmit,
+      });
+      controller.setStart('2026-03-08T02:30');
+      controller.setEnd('2026-03-08T03:30');
+      model.setTimeZone('America/New_York');
+      expect(model.timeZoneRangeInvalid()).toBe(true);
+      expect(model.canSave()).toBe(false);
+      model.submit();
+      expect(onSubmit).not.toHaveBeenCalled();
+      controller.setStart('2026-03-08T03:30');
+      controller.setEnd('2026-03-08T04:30');
+      expect(model.timeZoneRangeInvalid()).toBe(false);
+      expect(model.canSave()).toBe(true);
+      model.submit();
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+  });
+  it('drops a visibility draft when switching to an unsupported occurrence scope', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const onSubmit = vi.fn();
+      const model = createCalendarComposer({
+        controller: createController(),
+        pending: false,
+        isEdit: true,
+        showRecurringEditNotice: true,
+        initialMetadata: { visibility: 'private', timeZone: 'UTC' },
+        onSubmit,
+      });
+      model.setVisibility('public');
+      expect(model.isDirty()).toBe(true);
+      model.changeEditScope('this_event');
+      expect(model.visibility()).toBe('private');
+      expect(model.visibilityIsDisabled()).toBe(true);
+      model.setVisibility('public');
+      model.submit();
+      expect(onSubmit.mock.lastCall?.[1]).toBe('this_event');
+      expect(onSubmit.mock.lastCall?.[2]).toBeUndefined();
+    });
+  });
+
+  it('resets metadata with locked event details', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const model = createCalendarComposer({
+        controller: createController(),
+        pending: false,
+        initialMetadata: { visibility: 'default', timeZone: 'UTC' },
+        onSubmit: vi.fn(),
+      });
+      model.setVisibility('private');
+      expect(model.setTimeZone('America/New_York')).toBe(true);
+      expect(model.isDirty()).toBe(true);
+      model.resetDetails();
+      expect(model.visibility()).toBe('default');
+      expect(model.timeZone()).toBe('UTC');
+      expect(model.isDirty()).toBe(false);
+    });
+  });
+
   it('reacts to pending state without losing the draft or field-level permissions', () => {
     createRoot((dispose) => {
       disposers.push(dispose);

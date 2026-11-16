@@ -106,6 +106,23 @@ const hidden = (...ids: string[]) => {
 describe('mapCalendarOccurrence', () => {
   const twoCopies = () => item([copy('primary'), sharedCopy]);
 
+  it('keeps the displayed copy visibility rather than borrowing another copy', () => {
+    const occurrence = item([
+      copy('primary', { visibility: 'private' }),
+      copy('shared', { visibility: 'public' }),
+    ]);
+    expect(mapCalendarOccurrence(occurrence, { sourceById }).visibility).toBe(
+      'private'
+    );
+    expect(
+      mapCalendarOccurrence(occurrence, {
+        sourceById,
+        isSourceVisible: hidden('primary'),
+      }).visibility
+    ).toBe('public');
+    expect(mapCalendarOccurrence(item([])).visibility).toBe('private');
+  });
+
   it('folds every copy into one chip showing the primary copy', () => {
     const event = mapCalendarOccurrence(twoCopies(), {
       sourceById,

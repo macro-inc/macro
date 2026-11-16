@@ -713,7 +713,7 @@ type UpdateCallbacks = MutationCallbacks<
 function applyCopyPatch<
   T extends Pick<
     CalendarEventEntity,
-    'title' | 'description' | 'location' | 'reminders'
+    'title' | 'description' | 'location' | 'reminders' | 'visibility'
   >,
 >(copy: T, patch: UpdateCalendarEventArgs['patch']): T {
   const next = { ...copy };
@@ -725,6 +725,9 @@ function applyCopyPatch<
   }
   if (patch.location !== undefined) {
     next.location = patch.location;
+  }
+  if (patch.visibility !== undefined && patch.visibility !== null) {
+    next.visibility = patch.visibility;
   }
   if (patch.reminders !== undefined && patch.reminders !== null) {
     next.reminders = patch.reminders;

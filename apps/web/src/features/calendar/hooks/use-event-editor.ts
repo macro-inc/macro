@@ -28,6 +28,7 @@ import {
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
 import { eventGuestOptions } from '../components/composer/guest-options';
+import type { ComposerMetadataChanges } from '../core/composer-metadata';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
@@ -305,13 +306,19 @@ export function useEventEditor(props: UseEventEditorProps) {
 
   const save = async (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
   ) => {
     if (pending()) return;
     setPending(true);
     setSaveError(undefined);
 
     const event = props.event();
+    if (event && scope === 'this_event' && metadata.visibility) {
+      setSaveError('Changing visibility for one occurrence is not available.');
+      setPending(false);
+      return;
+    }
     const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
     const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
     const wantsMacroCall =
@@ -367,6 +374,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
+          ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
         });
         props.onCreated?.({ eventId: created.id, time: values.time });
         props.onSaved();
@@ -411,9 +419,11 @@ export function useEventEditor(props: UseEventEditorProps) {
         guestEditing() === 'add'
           ? addedGuestEmails(event, values.guestEmails)
           : [];
+      const timeChanged =
+        metadata.timeZoneChanged || hasTimeChanged(event, values.time);
       const detailChanges = {
         ...(values.title !== event.title ? { title: values.title } : {}),
-        ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
+        ...(timeChanged ? { time: values.time } : {}),
         ...(content.location !== (event.location ?? '')
           ? { location: content.location }
           : {}),
@@ -425,6 +435,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           : {}),
         ...(conference ? { conference } : {}),
         ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+        ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
       };
       const updateArgs = {
         eventId: event.eventId,

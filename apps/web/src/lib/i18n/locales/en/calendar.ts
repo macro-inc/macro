@@ -28,6 +28,8 @@ export default {
   retry: 'Retry',
   allDay: 'All day',
   duration: 'Duration',
+  invalidTimeZoneRange:
+    'These times do not form a valid range in the selected time zone.',
   closeComposer: 'Close event composer',
   moreOptions: 'More options',
   fewerOptions: 'Fewer options',

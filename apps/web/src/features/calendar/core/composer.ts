@@ -5,6 +5,10 @@ import type {
   EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
 import type { CalendarTimeFormat } from '../types';
+import type {
+  ComposerInitialMetadata,
+  ComposerMetadataChanges,
+} from './composer-metadata';
 
 /** Host-owned data and actions for the new calendar composer, without UI slots. */
 export interface CalendarComposerOptions {
@@ -13,6 +17,7 @@ export interface CalendarComposerOptions {
   disabled?: boolean;
   isEdit?: boolean;
   timeFormat?: CalendarTimeFormat;
+  initialMetadata?: ComposerInitialMetadata;
   disabledFields?: EventEditorDisabledFields;
   addOnlyGuests?: boolean;
   guestsReadOnlyReason?: string;
@@ -24,6 +29,7 @@ export interface CalendarComposerOptions {
   onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata?: ComposerMetadataChanges
   ) => void;
 }

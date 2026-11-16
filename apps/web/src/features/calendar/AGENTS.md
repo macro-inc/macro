@@ -26,6 +26,10 @@ host lives in `../block-calendar/`.
   Root/parts over `primitives/create-calendar-composer.ts`; preserved behavior has
   temporary old/new conformance coverage. Keep the current `views/composer/EventForm.tsx`
   and `context/event-form-context.ts` intact until the replacement is ready.
+- `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
+  the optional metadata argument to `useEventEditor.save` preserves legacy callers.
+  Initialize the zone to the zone represented by the form's wall-clock fields.
+  Single-occurrence visibility stays unavailable because neither read API returns its override.
 - `types.ts`: occurrence identity, source metadata, viewer capabilities, and the
   grid-only `CalendarGridPeriodView` versus route-level `CalendarPeriodView`.
 
