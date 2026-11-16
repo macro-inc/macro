@@ -94,6 +94,9 @@ function botProfileQueryOptions(botId: string, seed?: BotProfile) {
     queryFn: () => botProfileLoader.load(botId),
     enabled: botId.length > 0,
     initialData: seed,
+    // A payload's copy may predate a rename, so it shows at once but is
+    // refetched.
+    initialDataUpdatedAt: seed ? 0 : undefined,
   });
 }
 

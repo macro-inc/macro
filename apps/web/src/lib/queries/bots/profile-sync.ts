@@ -21,10 +21,14 @@ export function handleBotProfileChanged(payload: unknown): void {
   if (!parsed.success) return;
   const profile = parsed.data;
 
-  queryClient.setQueryData(
-    botProfileKeys.detail(profile.id).queryKey,
-    toBotProfile(profile)
+  const profileKey = botProfileKeys.detail(profile.id).queryKey;
+  // A fetch already in flight may predate this push; drop it so it can't
+  // overwrite the newer profile.
+  fireAndForget(
+    queryClient.cancelQueries({ queryKey: profileKey, exact: true }),
+    'bot-profile-sync'
   );
+  queryClient.setQueryData(profileKey, toBotProfile(profile));
   fireAndForget(
     Promise.all([
       queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey }),

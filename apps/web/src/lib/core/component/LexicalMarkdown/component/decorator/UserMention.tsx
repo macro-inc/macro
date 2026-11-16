@@ -66,7 +66,9 @@ export function UserMention(props: UserMentionDecoratorProps) {
     () => displayNameParts()?.fullName || mentionDisplayName()
   );
 
+  // The live agent name is display only; the stored name stays as written.
   createEffect(() => {
+    if (botId()) return;
     const nextDisplayName = mentionDisplayName().trim();
     if (!nextDisplayName || nextDisplayName === propDisplayName()) return;
 
