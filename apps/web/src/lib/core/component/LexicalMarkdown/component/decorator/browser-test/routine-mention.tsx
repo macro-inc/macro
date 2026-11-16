@@ -36,7 +36,7 @@ queryClient.setQueryData(previewKeys.item(id).queryKey, {
 } satisfies PreviewItem);
 
 // A pasted routine link is stored without a label.
-const pastedId = '01a16547-2001-7120-96e7-2f9785e39880';
+const pastedId = '01a16547-0000-7000-8000-000000000001';
 const pastedMention = `<m-document-mention>${JSON.stringify({
   documentId: pastedId,
   documentName: '',

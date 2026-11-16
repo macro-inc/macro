@@ -1,5 +1,11 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import type { LexicalEditor } from 'lexical';
 import { afterEach, expect, it, vi } from 'vitest';
+import {
+  type LexicalWrapper,
+  LexicalWrapperContext,
+} from '../../context/LexicalWrapperContext';
+import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { DocumentMention } from './DocumentMention';
 
 type RoutinePreview =
@@ -71,4 +77,34 @@ it('keeps the saved label of a routine picked from the mention menu', () => {
   };
   renderRoutineMention('Weekly digest');
   expect(screen.getByRole('link', { name: 'Weekly digest' })).toBeTruthy();
+});
+
+it("saves a pasted routine link's name on the node, so the sent message carries it", async () => {
+  mocks.preview = {
+    loading: false,
+    id: 'routine-1',
+    type: 'routine',
+    access: 'access',
+    name: 'Daily CRM sweep',
+  };
+  const dispatchCommand = vi.fn();
+  const wrapper = {
+    editor: { dispatchCommand } as unknown as LexicalEditor,
+  } as unknown as LexicalWrapper;
+  render(() => (
+    <LexicalWrapperContext.Provider value={wrapper}>
+      <DocumentMention
+        key="node-1"
+        documentId="routine-1"
+        documentName=""
+        blockName="routine"
+        theme={{}}
+      />
+    </LexicalWrapperContext.Provider>
+  ));
+  await waitFor(() =>
+    expect(dispatchCommand).toHaveBeenCalledWith(UPDATE_DOCUMENT_NAME_COMMAND, {
+      'routine-1': 'Daily CRM sweep',
+    })
+  );
 });

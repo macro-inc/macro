@@ -179,13 +179,15 @@ pub(super) type Turn =
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
 /// check route would, then ends, unless the session `hangs`. Its turn
-/// can't be read while it is `unreadable`.
+/// can't be read while it is `unreadable`, nor stopped while it is
+/// `unstoppable`.
 pub(super) struct Sessions {
     pub(super) rows: Arc<Rows>,
     pub(super) code: Arc<Checker>,
     pub(super) turn: Turn,
     pub(super) hangs: bool,
     pub(super) unreadable: bool,
+    pub(super) unstoppable: bool,
     pub(super) refuses: Option<RoutineSessionError>,
     /// Where preparing waits for its admission.
     pub(super) admitting: Gate,
@@ -207,6 +209,7 @@ impl Sessions {
             turn,
             hangs: false,
             unreadable: false,
+            unstoppable: false,
             refuses: None,
             admitting: Gate::default(),
             stopping: Gate::default(),
@@ -279,6 +282,9 @@ impl RoutineSessions for Sessions {
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.stopping.pass().await;
+        if self.unstoppable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         self.cancelled.lock().unwrap().push(command.session_id);
         Ok(())
     }
@@ -292,7 +298,7 @@ impl RoutineSessions for Sessions {
 
 /// What the check route answers for `routine`: its code type-checked as
 /// saving checks it.
-async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
+pub(super) async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     let mut routine = routine;
     routine.task = code_check::named_steps(&routine.task);
     let (steps, task) = match code_check::checked_task(code, &routine.task, None).await {
@@ -315,7 +321,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
 /// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
-fn agent() -> DraftAgent {
+pub(super) fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
         guide: GUIDE,
@@ -662,6 +668,118 @@ async fn a_session_that_hands_nothing_back_says_the_draft_failed() {
         failed(ROUTINE_FAILED)
     );
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
+}
+
+/// A routine as `macro.routines.check` sends a single agent task, which the
+/// SDK still accepts.
+fn agent_task(name: &str, trigger: Value, task: Value) -> ActionConfiguration {
+    ActionConfiguration {
+        task,
+        ..configuration(name, trigger, json!([]))
+    }
+}
+
+/// A session that checks a single agent task hands back one agent step
+/// holding its prompt and user prompt, which the editor saves as steps.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Recap");
+    assert_eq!(
+        drafted.steps,
+        [json!({
+            "type": "agent",
+            "model": "anthropic/claude-sonnet-5-5",
+            "instructions": "Read the channel.\n\nSummarize it.",
+        })]
+    );
+    let program = RoutineProgram::from_task(&json!({ "steps": drafted.steps })).unwrap();
+    program.validate().unwrap();
+}
+
+/// A single agent task whose step a program wouldn't accept, here blank
+/// instructions, fails the draft as before rather than handing back a step
+/// the editor can't save, and still says what its session created.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
+    let task = json!({ "prompt": " ", "user_prompt": "", "model": "anthropic/claude-sonnet-5-5" });
+    let notes = CreatedItem {
+        entity_type: model_entity::EntityType::Document,
+        entity_id: "recap-notes".into(),
+    };
+    let rows = Arc::new(Rows::default());
+    let named = notes.clone();
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![(
+                agent_task("Recap", message_posted(&[]), task.clone()),
+                vec![named.clone()],
+            )]
+        }),
+    ));
+
+    let Draft::Failed { message, created } =
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await
+    else {
+        panic!("expected a failed draft");
+    };
+
+    assert_eq!(message, ROUTINE_FAILED);
+    assert_eq!(
+        created,
+        [DraftCreated {
+            entity_type: notes.entity_type,
+            entity_id: notes.entity_id,
+            used: false,
+        }]
+    );
+}
+
+/// A single agent task that declares apps fails the draft as before: a
+/// draft holds only steps, so the apps its step needs would be lost.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_with_apps_fails() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+        "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    assert_eq!(
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await,
+        failed(ROUTINE_FAILED)
+    );
 }
 
 #[tokio::test(start_paused = true)]

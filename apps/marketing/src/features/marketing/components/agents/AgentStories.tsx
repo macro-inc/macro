@@ -136,7 +136,7 @@ export function AgentMcpDemo() {
       <div class="dummy-scroll">
         <div class="agent-mcp-page">
           <header class="agent-mcp-header">
-            <span class="text-2xl/tight font-semibold text-ink">
+            <span class="text-2xl/tight font-medium text-ink">
               Macro MCP server
             </span>
             <p class="text-sm text-ink-muted">

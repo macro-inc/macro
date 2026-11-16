@@ -79,7 +79,7 @@ export async function seedProjectDetail(
 }
 
 function createAuthorizedProjectQuery<
-  QueryData extends { user: { id: string } },
+  QueryData extends { user: { id: string; initiative?: unknown } },
   Result,
 >(
   document: DocumentInput<QueryData, InitiativeQueryVariables>,
@@ -159,13 +159,17 @@ function createAuthorizedProjectQuery<
       'project-identity.viewer-recovery'
     );
   });
+  // A project the viewer cannot load (deleted, or never shared with them)
+  // comes back as a NOT_FOUND error beside a user without `initiative`, even
+  // though the schema declares that field non-null.
   const data = createMemo(() => {
     const result = query.data;
     if (
       !active() ||
       authorization().error() ||
       !result ||
-      result.viewerId !== userId()
+      result.viewerId !== userId() ||
+      !result.value.user.initiative
     )
       return undefined;
     return select(result.value, Boolean(query.error));
@@ -229,7 +233,7 @@ export function createProjectDetailQuery(
   );
 }
 
-/** Chips, previews, and labels read only id, name, appearance, and viewer access. */
+/** Chips, previews, and labels read only identity and viewer access. */
 export function createProjectIdentityQuery(
   client: () => Client,
   userId: Accessor<string | undefined>,
@@ -244,6 +248,7 @@ export function createProjectIdentityQuery(
       return {
         id: project.id,
         name: project.name,
+        ownerId: project.ownerId,
         appearance:
           pendingAppearance('initiative', project.id, failedRead) ??
           project.appearance,

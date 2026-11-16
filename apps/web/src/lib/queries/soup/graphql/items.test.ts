@@ -500,6 +500,316 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps missing-record hydration stable when its predicate fails after a page', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const changes = new Set<(revision: string) => void>();
+    const cached = { __typename: 'GraphqlSoupChannel' as const, id: 'cached' };
+    entityFilterMock.mockResolvedValue({
+      kind: 'live-query',
+      revision: parseCacheRevision(REVISION_1),
+      reset: true,
+      keys: ['GraphqlSoupChannel:cached'],
+      upserts: [{ recordKey: 'GraphqlSoupChannel:cached', record: cached }],
+      patches: [],
+      removed: [],
+      retainedKeys: [],
+      optimistic: false,
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_1,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        changes.add(callback);
+        return () => changes.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createSoupLiveQuery(
+        () => ({ sortMethod: 'CREATED_AT', limit: 2 }),
+        () => ({
+          cacheFirstEntities: [
+            { entityType: 'CHANNEL', entityId: 'cached' },
+            { entityType: 'CHANNEL', entityId: 'missing' },
+          ],
+        })
+      ),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+      expect(JSON.stringify(fake.executions[0].variables)).not.toContain(
+        '"channelId":"cached"'
+      );
+      entityFilterMock.mockRejectedValue(new Error('predicate unavailable'));
+      for (const changed of changes) changed(REVISION_1);
+      await vi.waitFor(() => expect(query.cacheStatus()).toBe('error'));
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ ...cached, id: 'missing' }],
+          next_cursor: null,
+        })
+      );
+      await vi.waitFor(() => expect(query.isFetching()).toBe(false));
+      expect(query.data()?.map((row) => row.id)).toEqual(['cached', 'missing']);
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each(['channel-list', undefined] as const)(
+    'falls back to missing-record hydration when cache revisions trail writes (projection: %s)',
+    async (projection) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const changes = new Set<(revision: string) => void>();
+      const reads: ReturnType<typeof deferred<LiveQueryUpdate>>[] = [];
+      const stale: LiveQueryUpdate = {
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_1),
+        reset: true,
+        keys: [],
+        upserts: [],
+        patches: [],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      };
+      entityFilterMock.mockImplementation((args) => {
+        if (!args.liveQuery || args.liveQuery.release)
+          return Promise.resolve({ kind: 'unsupported' });
+        const read = deferred<LiveQueryUpdate>();
+        reads.push(read);
+        return read.promise;
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const { query, dispose } = createRoot((dispose) => ({
+        query: createSoupLiveQuery(
+          () => ({ sortMethod: 'CREATED_AT', limit: 1 }),
+          () => ({
+            projection,
+            cacheFirstEntities: [
+              { entityType: 'CHANNEL', entityId: 'missing' },
+            ],
+          })
+        ),
+        dispose,
+      }));
+      try {
+        expect(reads).toHaveLength(1);
+        for (const changed of changes) changed(REVISION_2);
+        for (let index = 0; index < 3; index++) {
+          reads[index].resolve(stale);
+          await Promise.resolve();
+        }
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+        expect(query.cacheStatus()).toBe('error');
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ __typename: 'GraphqlSoupChannel', id: 'missing' }],
+            next_cursor: null,
+          })
+        );
+        expect(query.data()?.map((row) => row.id)).toEqual(['missing']);
+        expect(query.isFetching()).toBe(false);
+      } finally {
+        dispose();
+        for (const read of reads) read.resolve(stale);
+      }
+    }
+  );
+
+  it.each([
+    { entityType: 'DOCUMENT', typename: 'GraphqlSoupDocument' },
+    { entityType: 'PROJECT', typename: 'GraphqlSoupProject' },
+  ] as const)(
+    'does not refetch 100 warm $entityType favorites after a predicate failure',
+    async ({ entityType, typename }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const changes = new Set<(revision: string) => void>();
+      let fails = false;
+      entityFilterMock.mockImplementation((args) => {
+        if (args.liveQuery?.release)
+          return Promise.resolve({ kind: 'unsupported' });
+        if (fails) return Promise.reject(new Error('predicate unavailable'));
+        const id =
+          args.filters.documentFilter?.literal?.id ??
+          args.filters.projectFilter?.literal?.projectIdSelf;
+        const record = { __typename: typename, id };
+        return Promise.resolve({
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_1),
+          reset: true,
+          keys: [`${typename}:${id}`],
+          upserts: [{ recordKey: `${typename}:${id}`, record }],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const { queries, dispose } = createRoot((dispose) => ({
+        queries: Array.from({ length: 100 }, (_, index) => {
+          const id = `favorite-${index}`;
+          return createSoupLiveQuery(
+            () => ({
+              sortMethod: 'UPDATED_AT',
+              limit: 1,
+              filters:
+                entityType === 'DOCUMENT'
+                  ? { documentFilter: { literal: { id } } }
+                  : { projectFilter: { literal: { projectIdSelf: id } } },
+            }),
+            () => ({ cacheFirstEntities: [{ entityType, entityId: id }] })
+          );
+        }),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() =>
+          expect(
+            queries.every((query) => query.cacheStatus() === 'ready')
+          ).toBe(true)
+        );
+        expect(fake.executions).toHaveLength(0);
+        fails = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() =>
+          expect(
+            queries.every((query) => query.cacheStatus() === 'error')
+          ).toBe(true)
+        );
+        expect(fake.executions).toHaveLength(0);
+        for (const [index, query] of queries.entries()) {
+          expect(query.data()?.map((record) => record.id)).toEqual([
+            `favorite-${index}`,
+          ]);
+        }
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each([
+    {
+      entityType: 'CHANNEL',
+      typename: 'GraphqlSoupChannel',
+      projection: 'channel-list',
+    },
+    {
+      entityType: 'DOCUMENT',
+      typename: 'GraphqlSoupDocument',
+      projection: undefined,
+    },
+  ] as const)(
+    'retains warm $entityType rows on predicate failure and accepts recovered membership',
+    async ({ entityType, typename, projection }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const changes = new Set<(revision: string) => void>();
+      let fails = false;
+      let removed = false;
+      entityFilterMock.mockImplementation((args) => {
+        if (args.liveQuery?.release)
+          return Promise.resolve({ kind: 'unsupported' });
+        if (fails) return Promise.reject(new Error('predicate unavailable'));
+        return Promise.resolve({
+          kind: 'live-query',
+          revision: parseCacheRevision(removed ? REVISION_2 : REVISION_1),
+          reset: true,
+          keys: removed ? [] : [`${typename}:cached`],
+          upserts: removed
+            ? []
+            : [
+                {
+                  recordKey: `${typename}:cached`,
+                  record: { __typename: typename, id: 'cached' },
+                },
+              ],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const { query, dispose } = createRoot((dispose) => ({
+        query: createSoupLiveQuery(
+          () => ({ sortMethod: 'CREATED_AT', limit: 1 }),
+          () => ({
+            projection,
+            cacheFirstEntities: [{ entityType, entityId: 'cached' }],
+          })
+        ),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+        expect(query.data()?.map((row) => row.id)).toEqual(['cached']);
+        expect(fake.executions).toHaveLength(0);
+
+        fails = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('error'));
+        expect(query.data()?.map((row) => row.id)).toEqual(['cached']);
+        expect(query.isFetching()).toBe(false);
+        expect(fake.executions).toHaveLength(0);
+
+        fails = false;
+        removed = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+        expect(query.data()).toEqual([]);
+        // The now-missing identity uses the ordinary one-time hydration path.
+        expect(fake.executions).toHaveLength(1);
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null }),
+          { source: 'live-network', revision: REVISION_2 }
+        );
+        await vi.waitFor(() => expect(query.isFetching()).toBe(false));
+        expect(query.data()).toEqual([]);
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.cacheStatus()).toBe('ready'));
+        expect(fake.executions).toHaveLength(1);
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('restarts missing-ID hydration after a cache generation changes', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

@@ -71,6 +71,9 @@ DMs, and the shared message store other domains discuss things on.
   timeline entry keeps its outcome. Approval adds the member in the request's
   transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
   timeline through `macro.channels` and the activity consumer.
+  The announcement stores the requester's profile name as it was when they asked
+  (`requester_name`, optional), so the timeline entry mounts at its final height;
+  the web app swaps in the current name once it loads.
   Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
   the request has been pending longer than a minute.
   Completing a resolved request's notification attempts every recipient before
@@ -111,3 +114,5 @@ DMs, and the shared message store other domains discuss things on.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.
+
+- CRM attachment-reference lookups authorize the referenced company/contact/pipeline through the comment-parent access port before reading references; a missing adapter or denied target returns no references.

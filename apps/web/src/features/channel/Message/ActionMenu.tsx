@@ -13,7 +13,7 @@ import EditIcon from '@icon/system/regular/pencil-simple.svg';
 import AddEmojiIcon from '@icon/system/regular/smiley.svg';
 import StarIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { cn, Toolbar } from '@ui';
+import { CopyButton, cn, Toolbar } from '@ui';
 import {
   type Component,
   createSignal,
@@ -22,6 +22,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   getRenderedMessageReplyText,
   getSelectedMessageText,
@@ -71,8 +72,17 @@ function ActionButton(props: {
   onClick: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
   onPointerDown?: JSX.EventHandlerUnion<HTMLButtonElement, PointerEvent>;
 }) {
+  const copy = () =>
+    props.action.id === 'copy-link' || props.action.id === 'copy-message-text';
+  const icon = () =>
+    renderIcon(
+      props.action.icon,
+      cn(props.action.iconClass, props.action.class)
+    );
   return (
-    <Toolbar.Button
+    <Dynamic
+      component={copy() ? CopyButton : Toolbar.Button}
+      {...(copy() ? { as: Toolbar.Button, icon: icon() } : {})}
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
@@ -80,11 +90,8 @@ function ActionButton(props: {
       tooltip={props.action.label}
       class={props.action.class}
     >
-      {renderIcon(
-        props.action.icon,
-        cn(props.action.iconClass, props.action.class)
-      )}
-    </Toolbar.Button>
+      <Show when={!copy()}>{icon()}</Show>
+    </Dynamic>
   );
 }
 
@@ -268,6 +275,16 @@ function ActionMenuContent(props: ActionMenuProps) {
                       );
                     }}
                     onClick={(event) => {
+                      if (
+                        action.id === 'copy-link' ||
+                        action.id === 'copy-message-text'
+                      ) {
+                        return action.onClick?.({
+                          message: message(),
+                          event,
+                          silent: true,
+                        });
+                      }
                       const selectedText =
                         action.id === 'reply'
                           ? (selectedReplyText ??

@@ -1,5 +1,7 @@
+import { invoke } from '@tauri-apps/api/core';
 import shortuuid from 'short-uuid';
-import { getNativeMobilePlatform } from './platform';
+import { fireAndForget } from './fireAndForget';
+import { getNativeMobilePlatform, isTauri } from './platform';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -56,13 +58,49 @@ export function openExternalUrl(url: string) {
     return;
   }
 
-  // On desktop, a new-window request reaches the navigation plugin's
-  // new-window hook, which opens the system browser. Never navigate the app's
-  // own page there: that runs its beforeunload handlers (ending a call, or
-  // raising a leave-page prompt that blocks the window) before the native
-  // side cancels the navigation.
+  // The native command takes only absolute URLs; anything else (a typed
+  // `example.com`) opens as a popup while the click's gesture is still live.
+  if (isTauri() && isAbsoluteUrl(url)) {
+    fireAndForget(openFromDesktop(url), 'open-external-url');
+    return;
+  }
 
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+}
+
+// `URL.canParse` is missing from older WebKitGTK releases.
+function isAbsoluteUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Desktop hands the URL to the native navigation policy, which opens the system
+ * browser or routes an app link in-app. Never navigate the app's own page: that
+ * runs its beforeunload handlers (ending a call, or raising a leave-page prompt
+ * that blocks the window) before the native side cancels the navigation. A
+ * popup request is no substitute: WebKitGTK drops one once the click's user
+ * gesture has expired, as it has after an awaited OAuth start.
+ */
+async function openFromDesktop(url: string) {
+  let opened: boolean;
+  try {
+    opened = await invoke<boolean>('open_external_url', { url });
+  } catch (error) {
+    // A native shell older than the command, or a failed call. The popup reaches the
+    // new-window hook on macOS and Windows; WebKitGTK may drop it now that
+    // the click's gesture has expired, as it did before the command existed.
+    window.open(url, '_blank', 'noopener,noreferrer');
+    if (error === 'Command open_external_url not found') return;
+    throw error;
+  }
+  // A standalone document on the app's origin needs a popup webview (no
+  // caller opens one through here today; WebKitGTK may drop it, as above).
+  if (!opened) window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export function transformShortIdInUrlPathname(pathname: string) {

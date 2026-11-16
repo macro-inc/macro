@@ -31,6 +31,13 @@ through the same service.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
+- `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one
+  user's notifications done as a stored action with a per-notification
+  ledger: chunked, leased, resumable and undoable. The inbox's clear runs on
+  it (`crates/notification_inbox`). Every state-changing step is one
+  transaction over the action row, the ledger and `user_notification`; keep
+  it that way. `user_notification.done_by` is cleared by a trigger on any
+  other state change, so new state writers need no change.
 
 ## Scope
 

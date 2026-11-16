@@ -571,6 +571,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             entity_id,
             updated_at: ts(1000),
         })),
+        document_term_matching: None,
     };
 
     let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");

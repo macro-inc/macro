@@ -392,6 +392,230 @@ async fn denies_ambient_io_and_external_module_imports() {
     service.shutdown().await;
 }
 
+/// Every way a program could open its own connection to an API, each sending
+/// the run's token. Only the final `fetch` may arrive, marked as the program's.
+const RAW_REQUESTS: &str = r#"
+const load = (specifier) => import(specifier);
+export async function main() {
+  const host = new URL("HOST");
+  const port = Number(host.port);
+  const request = `GET /raw HTTP/1.1\r\nHost: ${host.host}\r\nAuthorization: Bearer fixture-run-token\r\n\r\n`;
+  const headers = {authorization: "Bearer fixture-run-token"};
+  const send = (net) => net.connect(port, host.hostname).end(request);
+  const attempts = {
+    "Deno.connect": async () => {
+      const connection = await Deno.connect({hostname: host.hostname, port});
+      await connection.write(new TextEncoder().encode(request));
+    },
+    "Deno internals": () => Deno[Deno.internal].core,
+    "WebSocket": () => new WebSocket(`ws://${host.host}/raw`),
+    "Worker": () => new Worker("data:text/javascript,1", {type: "module"}),
+    "node:net": async () => send(await load("node:net")),
+    "net": async () => send(await load("net")),
+    "node:http": async () => (await load("node:http")).get(`${host.origin}/raw`, {headers}),
+    "node:_http_client": async () => new (await load("node:_http_client")).ClientRequest(`${host.origin}/raw`, {headers}).end(),
+    "node:_tls_wrap": async () => (await load("node:_tls_wrap")).connect(port, host.hostname),
+    "node:child_process": async () => (await load("node:child_process")).spawn("curl", [host.origin]),
+    "node:module": async () => send((await load("node:module")).createRequire(import.meta.url)("node:net")),
+    "node:process": async () => send((await load("node:process")).getBuiltinModule("node:net")),
+    "process.getBuiltinModule": () => send(process.getBuiltinModule("node:net")),
+    "process.binding": () => process.binding("tcp_wrap").TCP,
+  };
+  const results = {};
+  for (const [name, attempt] of Object.entries(attempts)) {
+    try {
+      await attempt();
+      results[name] = "sent";
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      results[name] = message.includes("Make requests with fetch") ? "unavailable"
+        : message.includes("do not sleep") ? "refused as a sleep"
+        : error instanceof TypeError ? "removed" : message;
+    }
+  }
+  const response = await fetch(`${host.origin}/marked`, {headers});
+  return {results, status: response.status};
+}
+"#;
+
+/// Accept the program's one request, which must be its marked fetch, and
+/// nothing after it.
+async fn expect_only_the_marked_fetch(listener: TcpListener) {
+    let (mut stream, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    let request = read_request(&mut stream).await;
+    assert!(request.starts_with("GET /marked "), "{request}");
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("x-macro-code-execution: 1\r\n"),
+        "{request}"
+    );
+    respond(&mut stream, "{}").await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+}
+
+/// What each attempt in [`RAW_REQUESTS`] meets; `worker` differs by mode.
+fn every_raw_request_blocked(worker: &str) -> serde_json::Value {
+    serde_json::json!({
+        "results": {
+            "Deno.connect": "removed",
+            "Deno internals": "removed",
+            "WebSocket": "removed",
+            "Worker": worker,
+            "node:net": "unavailable",
+            "net": "unavailable",
+            "node:http": "unavailable",
+            "node:_http_client": "unavailable",
+            "node:_tls_wrap": "unavailable",
+            "node:child_process": "unavailable",
+            "node:module": "unavailable",
+            "node:process": "unavailable",
+            "process.getBuiltinModule": "removed",
+            "process.binding": "removed",
+        },
+        "status": 200,
+    })
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_program_has_no_way_to_the_network_but_fetch() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(expect_only_the_marked_fetch(listener));
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), host.clone())]),
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: RAW_REQUESTS.replace("HOST", &host),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, every_raw_request_blocked("refused as a sleep"));
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_program_has_no_way_to_the_network_but_fetch() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(expect_only_the_marked_fetch(listener));
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone())],
+        serde_json::json!({}),
+        false,
+    );
+    let (_, outcome) =
+        run_unattended(&service, &RAW_REQUESTS.replace("HOST", &host), environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, every_raw_request_blocked("removed"));
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn every_node_builtin_but_the_allowed_ones_is_unavailable() {
+    let (_root, service) = setup(Limits::default()).await;
+    // The pinned runtime lists no built-in the import map doesn't know.
+    let deno = Command::new("deno")
+        .args([
+            "eval",
+            r#"import { builtinModules } from "node:module"; console.log(JSON.stringify(builtinModules));"#,
+        ])
+        .output()
+        .await
+        .unwrap();
+    assert!(deno.status.success());
+    let listed: Vec<String> = serde_json::from_slice(&deno.stdout).unwrap();
+    for name in &listed {
+        let name = name.strip_prefix("node:").unwrap_or(name);
+        assert!(
+            NODE_BUILTINS.contains(&name),
+            "{name} is missing from NODE_BUILTINS"
+        );
+    }
+    let source = format!(
+        r#"
+export async function main() {{
+  const results = {{}};
+  for (const name of {names}) {{
+    try {{
+      await import("node:" + name);
+      results[name] = "loaded";
+    }} catch (error) {{
+      results[name] = error.message.includes("Make requests with fetch") ? "unavailable"
+        : error.message.includes("do not sleep") ? "refused as a sleep" : error.message;
+    }}
+  }}
+  return results;
+}}
+"#,
+        names = serde_json::json!(NODE_BUILTINS)
+    );
+    let (_, outcome) = run(&service, &source, 10_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let expected: serde_json::Map<String, serde_json::Value> = NODE_BUILTINS
+        .iter()
+        .map(|&name| {
+            let result = match name {
+                _ if NODE_ALLOWED.contains(&name) => "loaded",
+                "timers" | "timers/promises" | "worker_threads" => "refused as a sleep",
+                _ => "unavailable",
+            };
+            (name.to_owned(), result.into())
+        })
+        .collect();
+    assert_eq!(value, serde_json::Value::Object(expected));
+    // A static import fails to link before the module can throw; the error
+    // still says why.
+    let (_, outcome) = run(
+        &service,
+        r#"import { connect } from "node:net"; export async function main() { return connect; }"#,
+        10_000,
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "Error: node:net is unavailable in ExecuteCode. Make requests with fetch or the macro SDK."
+    );
+    service.shutdown().await;
+}
+
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn rejects_sleeping_and_points_at_routines() {

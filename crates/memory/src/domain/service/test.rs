@@ -10,6 +10,7 @@ struct Data {
     snapshot: MemorySnapshot,
     profiles: Vec<(String, String)>,
     writes: usize,
+    claims: usize,
 }
 impl MemoryRepo for Repo {
     async fn save_memory(&self, _: &Memory, _: MacroUserIdStr<'_>) -> Result<Uuid> {
@@ -27,6 +28,7 @@ impl ComposedMemoryRepo for Repo {
         Ok(())
     }
     async fn claim_refresh(&self, _: NaiveDate) -> Result<Option<RefreshClaim>> {
+        self.0.lock().unwrap().claims += 1;
         Ok(None)
     }
     async fn release_refresh(&self, _: &RefreshClaim) -> Result<()> {
@@ -310,4 +312,18 @@ async fn first_failed_generation_catches_up_from_enrollment() {
     let data = repo.0.lock().unwrap();
     assert_eq!(data.writes, 3);
     assert_eq!(data.snapshot.through_date, Some(date));
+}
+
+#[tokio::test]
+async fn a_paused_batch_claims_nobody() {
+    let repo = Repo::default();
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        Arc::new(Generator::default()),
+        Arc::new(Teams(Mutex::new(vec![]))),
+    );
+    service.refresh_pending(|| async { true }).await.unwrap();
+    assert_eq!(repo.0.lock().unwrap().claims, 0);
+    service.refresh_pending(|| async { false }).await.unwrap();
+    assert_eq!(repo.0.lock().unwrap().claims, 1);
 }

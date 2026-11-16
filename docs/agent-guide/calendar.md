@@ -244,8 +244,9 @@ guests on a copy they can change. A solo entry listing the user's inbox as its
 organizer, as Macro writes on a primary calendar, and the mailbox organizer row
 Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
 saves at once and restores itself with a toast when the save fails. Phones reach
-the same rows from the mobile Settings sheet's **Calendar** page; the calendar
-view's own phone settings sheet lists accounts, not calendars.
+the same rows from the mobile Settings sheet's **Calendar** page. The calendar
+view's own phone settings sheet (the header gear) shows and hides single
+calendars like the desktop sidebar (below) and, like it, has no Busy switch.
 
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
@@ -285,7 +286,16 @@ the zone clears the date and times and discards outstanding availability results
 Calendar provider failures show an error; they never report a
 confirmed booking. Current integrations check hosts' connected calendars that
 count as Busy in Settings → Calendar (every calendar unless turned off) and
-write invitations/Google Meet through the existing calendar service.
+write invitations/Google Meet through the existing calendar service. A calendar
+whose sync is failing blocks booking only while it counts as Busy: a transient
+failure still offers slots around its stored events for 45 minutes after its last
+successful sync (a day later for a Google holidays or birthdays calendar, which syncs
+daily), and past that, or on a permanent or reconnect failure, the page
+shows `Availability could not be loaded` while the host sees the calendar's sync
+error in Settings → Calendar and the calendar view. The logs `refusing booking
+availability` and `offering booking availability from a calendar whose sync is
+failing`, under the `scheduling.busy_time` span, carry `calendar_id`,
+`email_link_id` and `reason`.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
@@ -416,8 +426,8 @@ retains its text label until the controls row runs out of room, then becomes an
 icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
-The desktop sidebar's Search icon sits left of collapse and reveals event search
-above New. Its mini calendar browses months independently of the main grid:
+The desktop sidebar has no search of its own; event search is the header's
+`Search events`. Its mini calendar browses months independently of the main grid:
 month arrows, the month picker, and keyboard focus changes do not move the main
 calendar. Selecting a day navigates the main calendar without closing the narrow
 layout's navigation overlay. Main calendar navigation updates the mini calendar's
@@ -524,8 +534,23 @@ group: a caret plus the account address header with a checkbox that shows or hid
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
-warning icon whose tooltip shows the provider error; the account keeps syncing its other
-calendars and the badge clears on its own once that calendar syncs again.
+warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
+wording; touch has no hover, so on phones and tablets that line is written under the
+calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
+account keeps syncing its other calendars and the badge clears on its own once that
+calendar syncs again.
+Phones have no sidebar, so the header gear's settings sheet carries the same list under
+`Calendars`, between Period and Display, laid out like the mobile filter drawer's
+groups (Tasks → Filters): each account is its own card whose header row shows or hides
+all of its calendars (a minus when only some show) with its selection filling the whole
+row, caret included. The trailing caret (`Expand <address>`) opens one
+`MobileFilterDrawer.Option` per calendar with the same swatch, warning and RSS marks, so
+neighbouring shown calendars join into one selection. Period, Week starts on and Time
+format use the same options as single choices, and Show weekends as a checkbox. Accounts
+start collapsed each time the sheet opens. The rows write the same browser-local
+visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
+expanded the sheet scrolls under its pinned handle. The gear's dropdown form (the
+sidebar footer's `Settings`) has no `Calendars` group: the sidebar lists them itself.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
