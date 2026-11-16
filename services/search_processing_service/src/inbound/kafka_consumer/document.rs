@@ -90,12 +90,17 @@ pub(super) fn describe_document_event(event: &DocumentTopicEvent) -> DocumentEve
             document_id: metadata.document_id.clone(),
             event_type: "document.interaction",
         },
-        // Trash leaves the index alone, as document.deleted does; readers see
-        // deletedAt and the purge removes the entry.
-        DocumentTopicEvent::EmailAttachmentsTrashed(metadata) => DocumentEventDescription {
+        // The index has no attachment field yet; trash leaves it alone, as
+        // document.deleted does.
+        DocumentTopicEvent::EmailAttachmentsReleased(metadata) => DocumentEventDescription {
             action: DocumentIndexAction::Ignore,
-            document_id: metadata.document_ids.first().cloned().unwrap_or_default(),
-            event_type: "document.email_attachments_trashed",
+            document_id: metadata
+                .trashed_document_ids
+                .first()
+                .or(metadata.kept_document_ids.first())
+                .cloned()
+                .unwrap_or_default(),
+            event_type: "document.email_attachments_released",
         },
     }
 }

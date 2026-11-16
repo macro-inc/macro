@@ -2,20 +2,22 @@
 //!
 //! An email attachment's Drive document is marked as one only by its
 //! `document_email` link, which is deleted with its message, thread or inbox.
-//! A statement that removes a live document's last link records the document
-//! in `released_email_attachment_documents` (migration `20261116200143`), and
+//! A statement that removes a live document's links records the document in
+//! `released_email_attachment_documents` (migration `20261116200143`), and
 //! [`ReleasedAttachmentService::drain`] works through that queue in batches.
 //!
-//! Each claimed document is checked again when its batch runs: it is trashed
-//! only if it still exists outside the Trash, has no link again, and its owner
-//! has not adopted it. Every claimed row leaves the queue either way.
+//! Each claimed document is checked again when its batch runs. One with a link
+//! left is skipped; one with none is trashed unless it is already in the Trash
+//! or its owner adopted it, in which case it is kept as it is. Every claimed
+//! row leaves the queue either way.
 //!
 //! A batch writes what a document's own trash writes and publishes one
-//! [`EmailAttachmentsTrashed`](super::events::DocumentTopicEvent::EmailAttachmentsTrashed)
-//! event for its trashed documents, as a folder's trash does for the documents
-//! in it: open lists drop them, and nothing else reacts per document.
+//! [`EmailAttachmentsReleased`](super::events::DocumentTopicEvent::EmailAttachmentsReleased)
+//! event naming its trashed and kept documents, none of which is an email
+//! attachment any more. As a folder's trash does for the documents in it, open
+//! lists drop the trashed ones and nothing else reacts per document.
 
-use super::events::{DocumentMacroEvent, EmailAttachmentsTrashedMetadata};
+use super::events::{DocumentMacroEvent, EmailAttachmentsReleasedMetadata};
 use macro_event_broker::MacroEventBroker;
 use std::future::Future;
 
@@ -33,12 +35,16 @@ pub struct ReleasedBatch {
     pub claimed: usize,
     /// Documents moved to the Trash.
     pub trashed: Vec<String>,
-    /// Linked to an email attachment again, as a re-import can do.
-    pub relinked: usize,
-    /// Already gone or already in the Trash.
-    pub missing: usize,
-    /// Moved into a folder, shared, edited or commented on by their owner.
+    /// Documents left without a link as they were: adopted by their owner, or
+    /// already in the Trash.
+    pub kept: Vec<String>,
+    /// How many of `kept` their owner moved into a folder, shared, edited or
+    /// commented on; the rest were already in the Trash.
     pub adopted: usize,
+    /// Still linked to other mail, or linked again by a re-import.
+    pub relinked: usize,
+    /// Already gone.
+    pub missing: usize,
 }
 
 /// How far behind the queue is.
@@ -147,9 +153,11 @@ impl<R: ReleasedAttachmentRepo, B: MacroEventBroker> ReleasedAttachmentService<R
         fields(
             claimed = tracing::field::Empty,
             trashed = tracing::field::Empty,
+            kept = tracing::field::Empty,
             skipped.relinked = tracing::field::Empty,
             skipped.missing = tracing::field::Empty,
             skipped.adopted = tracing::field::Empty,
+            skipped.in_trash = tracing::field::Empty,
             event.published = tracing::field::Empty,
         ),
         err
@@ -165,22 +173,28 @@ impl<R: ReleasedAttachmentRepo, B: MacroEventBroker> ReleasedAttachmentService<R
         span.record("trashed", batch.trashed.len());
         span.record("skipped.relinked", batch.relinked);
         span.record("skipped.missing", batch.missing);
+        span.record("kept", batch.kept.len());
         span.record("skipped.adopted", batch.adopted);
+        span.record(
+            "skipped.in_trash",
+            batch.kept.len().saturating_sub(batch.adopted),
+        );
 
-        let published = match batch.trashed.first() {
+        let published = match batch.trashed.first().or(batch.kept.first()) {
             Some(first) => {
-                let event = DocumentMacroEvent::email_attachments_trashed(
+                let event = DocumentMacroEvent::email_attachments_released(
                     first.clone(),
-                    EmailAttachmentsTrashedMetadata {
-                        document_ids: batch.trashed.clone(),
+                    EmailAttachmentsReleasedMetadata {
+                        trashed_document_ids: batch.trashed.clone(),
+                        kept_document_ids: batch.kept.clone(),
                     },
                 );
-                // The trash is committed; a lost event leaves open lists stale
+                // The batch is committed; a lost event leaves open lists stale
                 // until they refresh, as for any other failed publish.
                 self.broker
                     .send_event(&event)
                     .inspect_err(|error| {
-                        tracing::error!(error = ?error, "failed to publish email attachments trashed event");
+                        tracing::error!(error = ?error, "failed to publish email attachments released event");
                     })
                     .is_ok()
             }

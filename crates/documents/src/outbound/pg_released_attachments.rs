@@ -22,11 +22,34 @@ impl PgReleasedAttachmentRepo {
     }
 }
 
-/// A claimed document that is still live, and what its owner did with it.
-struct LiveRelease {
+/// A claimed document that still exists, and what became of it.
+struct Release {
     id: String,
     relinked: bool,
+    in_trash: bool,
     adopted: bool,
+}
+
+/// What a batch does with one released document.
+enum Outcome {
+    Relinked,
+    Trash,
+    KeepAdopted,
+    KeepInTrash,
+}
+
+impl Release {
+    fn outcome(&self) -> Outcome {
+        if self.relinked {
+            Outcome::Relinked
+        } else if self.in_trash {
+            Outcome::KeepInTrash
+        } else if self.adopted {
+            Outcome::KeepAdopted
+        } else {
+            Outcome::Trash
+        }
+    }
 }
 
 impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
@@ -63,10 +86,11 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
             return Ok(ReleasedBatch::default());
         }
 
-        // Lock the live documents in id order. Linking a document takes a key
-        // lock on its row, so none can be linked again until this commits, and
-        // the checks below see the final state. Each id is its own index probe.
-        let live = sqlx::query_scalar!(
+        // Lock the documents in id order, those already in the Trash included.
+        // Linking a document takes a key lock on its row, so none can be linked
+        // again until this commits, and the checks below see the final state.
+        // Each id is its own index probe.
+        let existing = sqlx::query_scalar!(
             r#"
             SELECT locked.id AS "id!"
             FROM (
@@ -77,7 +101,7 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
             CROSS JOIN LATERAL (
                 SELECT d.id
                 FROM "Document" d
-                WHERE d.id = released.id AND d."deletedAt" IS NULL
+                WHERE d.id = released.id
                 FOR UPDATE
             ) locked
             "#,
@@ -92,13 +116,14 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
         // each check a probe per document; without them stale statistics turn
         // a check into a hash of its whole table.
         let checked = sqlx::query_as!(
-            LiveRelease,
+            Release,
             r#"
             SELECT
                 d.id AS "id!",
                 EXISTS (
                     SELECT 1 FROM document_email de WHERE de.document_id = d.id OFFSET 0
                 ) AS "relinked!",
+                d."deletedAt" IS NOT NULL AS "in_trash!",
                 (
                     d."projectId" IS NOT NULL
                     OR EXISTS (
@@ -137,40 +162,40 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
                 ) AS "adopted!"
             FROM unnest($1::text[]) AS live(id)
             CROSS JOIN LATERAL (
-                SELECT d.id, d.owner, d."projectId"
+                SELECT d.id, d.owner, d."projectId", d."deletedAt"
                 FROM "Document" d
                 WHERE d.id = live.id
                 OFFSET 0
             ) d
             "#,
-            &live,
+            &existing,
         )
         .fetch_all(&mut *transaction)
         .await?;
 
-        let relinked = checked.iter().filter(|release| release.relinked).count();
-        let adopted = checked
-            .iter()
-            .filter(|release| !release.relinked && release.adopted)
-            .count();
-        let trashed: Vec<String> = checked
-            .into_iter()
-            .filter(|release| !release.relinked && !release.adopted)
-            .map(|release| release.id)
-            .collect();
+        let mut batch = ReleasedBatch {
+            claimed: claimed.len(),
+            missing: claimed.len().saturating_sub(existing.len()),
+            ..ReleasedBatch::default()
+        };
+        for release in checked {
+            match release.outcome() {
+                Outcome::Relinked => batch.relinked += 1,
+                Outcome::Trash => batch.trashed.push(release.id),
+                Outcome::KeepAdopted => {
+                    batch.adopted += 1;
+                    batch.kept.push(release.id);
+                }
+                Outcome::KeepInTrash => batch.kept.push(release.id),
+            }
+        }
 
-        if !trashed.is_empty() {
-            trash(&mut transaction, &trashed).await?;
+        if !batch.trashed.is_empty() {
+            trash(&mut transaction, &batch.trashed).await?;
         }
         transaction.commit().await?;
 
-        Ok(ReleasedBatch {
-            claimed: claimed.len(),
-            missing: claimed.len() - live.len(),
-            relinked,
-            adopted,
-            trashed,
-        })
+        Ok(batch)
     }
 
     #[tracing::instrument(skip(self), err)]

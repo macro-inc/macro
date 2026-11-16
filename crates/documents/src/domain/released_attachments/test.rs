@@ -77,11 +77,12 @@ impl RecordingBroker {
 }
 
 #[tokio::test]
-async fn each_batch_that_trashes_publishes_one_event_with_its_documents() {
+async fn each_batch_that_releases_documents_publishes_one_event_naming_them() {
     let queue = ScriptedQueue::new(vec![
         Ok(ReleasedBatch {
             claimed: 3,
             trashed: vec!["a".into(), "b".into()],
+            kept: vec!["k".into()],
             adopted: 1,
             ..Default::default()
         }),
@@ -89,6 +90,12 @@ async fn each_batch_that_trashes_publishes_one_event_with_its_documents() {
             claimed: 2,
             relinked: 1,
             missing: 1,
+            ..Default::default()
+        }),
+        // Kept documents alone still stop being attachments, so they publish.
+        Ok(ReleasedBatch {
+            claimed: 1,
+            kept: vec!["in-trash".into()],
             ..Default::default()
         }),
         Ok(ReleasedBatch {
@@ -103,25 +110,40 @@ async fn each_batch_that_trashes_publishes_one_event_with_its_documents() {
     let trashed = service.drain().await.expect("drain");
 
     assert_eq!(trashed, 3);
+    let released = serde_json::json!("document.email_attachments_released");
     assert_eq!(
         broker.published(),
         vec![
             (
                 "a".to_string(),
-                serde_json::json!("document.email_attachments_trashed"),
-                serde_json::json!({ "document_ids": ["a", "b"] }),
+                released.clone(),
+                serde_json::json!({
+                    "trashed_document_ids": ["a", "b"],
+                    "kept_document_ids": ["k"],
+                }),
+            ),
+            (
+                "in-trash".to_string(),
+                released.clone(),
+                serde_json::json!({
+                    "trashed_document_ids": [],
+                    "kept_document_ids": ["in-trash"],
+                }),
             ),
             (
                 "c".to_string(),
-                serde_json::json!("document.email_attachments_trashed"),
-                serde_json::json!({ "document_ids": ["c"] }),
+                released,
+                serde_json::json!({
+                    "trashed_document_ids": ["c"],
+                    "kept_document_ids": [],
+                }),
             ),
         ]
     );
-    // Three batches with rows, then the empty claim that ends the drain.
+    // Four batches with rows, then the empty claim that ends the drain.
     assert_eq!(
         *service.repo.limits.lock().expect("limits lock"),
-        vec![RELEASE_BATCH_SIZE; 4]
+        vec![RELEASE_BATCH_SIZE; 5]
     );
 }
 

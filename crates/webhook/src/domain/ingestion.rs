@@ -294,12 +294,12 @@ pub(crate) fn normalized_document_event(
         DocumentTopicEvent::Interaction(metadata) => {
             ("document.interaction", &metadata.document_id)
         }
-        // A system trash of mail's attachments is delivered no more than the
+        // A system release of mail's attachments is delivered no more than the
         // documents of a trashed folder are.
         DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
         | DocumentTopicEvent::Purged(_)
-        | DocumentTopicEvent::EmailAttachmentsTrashed(_) => return Ok(None),
+        | DocumentTopicEvent::EmailAttachmentsReleased(_) => return Ok(None),
     };
 
     if Uuid::parse_str(entity_id).is_err() {

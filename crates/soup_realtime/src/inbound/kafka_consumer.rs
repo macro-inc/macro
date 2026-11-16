@@ -153,9 +153,10 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
-        // Removed from open lists like the documents of a trashed folder.
-        DocumentTopicEvent::EmailAttachmentsTrashed(metadata) => {
-            for document_id in &metadata.document_ids {
+        // Trashed ones leave open lists like the documents of a trashed folder;
+        // kept ones stay where they are.
+        DocumentTopicEvent::EmailAttachmentsReleased(metadata) => {
+            for document_id in &metadata.trashed_document_ids {
                 push_unique_delete(&mut updates, EntityType::Document, document_id);
             }
         }

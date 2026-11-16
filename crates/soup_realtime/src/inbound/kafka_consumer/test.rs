@@ -15,7 +15,7 @@ use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, EmailAttachmentsTrashedMetadata, InteractionReason,
+    DocumentUpdatedMetadata, EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -165,10 +165,11 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 }
 
 #[test]
-fn trashed_email_attachments_are_deleted_from_open_lists() {
+fn released_email_attachments_leave_open_lists_only_when_trashed() {
     let second = Uuid::now_v7().to_string();
-    let event = DocumentTopicEvent::EmailAttachmentsTrashed(EmailAttachmentsTrashedMetadata {
-        document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+    let event = DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+        trashed_document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+        kept_document_ids: vec![Uuid::now_v7().to_string()],
     });
 
     let patches = patches_from_document_event(&event);

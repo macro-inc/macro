@@ -105,18 +105,38 @@ async fn a_batch_trashes_only_unlinked_unadopted_live_documents(
     seed(&pool).await?;
     let repo = PgReleasedAttachmentRepo::new(pool.clone());
 
-    let batch = repo.trash_released_batch(100).await?;
+    let mut batch = repo.trash_released_batch(100).await?;
+    batch.kept.sort();
 
+    // The document already in the Trash is kept as it is; only the purged one
+    // is missing.
     assert_eq!(
         batch,
         ReleasedBatch {
             claimed: 10,
             trashed: vec![PLAIN.to_string()],
-            relinked: 1,
-            missing: 2,
+            kept: [
+                IN_FOLDER,
+                SHARED_WITH_TEAM,
+                SHARING_CHANGED,
+                NEW_VERSION,
+                HIGHLIGHTED,
+                COMMENTED,
+                ALREADY_TRASHED,
+            ]
+            .map(String::from)
+            .to_vec(),
             adopted: 6,
+            relinked: 1,
+            missing: 1,
         }
     );
+    let still_trashed_at: bool =
+        sqlx::query_scalar(r#"SELECT "deletedAt" = '2026-03-01' FROM "Document" WHERE id = $1"#)
+            .bind(ALREADY_TRASHED)
+            .fetch_one(&pool)
+            .await?;
+    assert!(still_trashed_at);
     assert_eq!(trashed(&pool).await?, vec![PLAIN.to_string()]);
     assert_eq!(trash_marks(&pool, PLAIN).await?, (true, 0, 0));
     for kept in [
@@ -146,6 +166,7 @@ async fn a_batch_claims_the_oldest_rows_up_to_its_limit(
 
     assert_eq!(batch.claimed, 2);
     assert_eq!(batch.trashed, vec![PLAIN.to_string()]);
+    assert_eq!(batch.kept, vec![IN_FOLDER.to_string()]);
     assert_eq!(batch.adopted, 1);
     assert_eq!(repo.queue().await?.depth, 8);
 
