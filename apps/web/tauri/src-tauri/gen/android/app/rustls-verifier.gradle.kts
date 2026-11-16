@@ -14,11 +14,17 @@ val packages = (JsonSlurper().parseText(metadata) as Map<*, *>)["packages"] as L
 val verifierVersion = packages.map { it as Map<*, *> }
     .single { it["name"] == "rustls-platform-verifier-android" }["version"]
 
+// Only upstream's repository may serve org.rustls; the project's other
+// repositories are never asked for it.
 repositories {
-    maven {
-        url = uri("https://github.com/rustls/rustls-platform-verifier/raw/maven-archive/android-release-support/maven/")
-        metadataSources { artifact() }
-        content { includeGroup("org.rustls") }
+    exclusiveContent {
+        forRepository {
+            maven {
+                url = uri("https://github.com/rustls/rustls-platform-verifier/raw/maven-archive/android-release-support/maven/")
+                metadataSources { artifact() }
+            }
+        }
+        filter { includeGroup("org.rustls") }
     }
 }
 dependencies {

@@ -1,6 +1,6 @@
 //! Initializes Android's system certificate verifier before Tauri starts networking.
 
-use jni::{EnvUnowned, errors::LogErrorAndDefault, objects::JObject, sys::jboolean};
+use jni::{EnvUnowned, errors::ThrowRuntimeExAndDefault, objects::JObject, sys::jboolean};
 
 #[unsafe(no_mangle)]
 extern "system" fn Java_com_macro_workspace_mobile_MainActivity_initializeCertificateVerifier<
@@ -12,10 +12,11 @@ extern "system" fn Java_com_macro_workspace_mobile_MainActivity_initializeCertif
 ) -> jboolean {
     // MainActivity passes the application context, whose lifetime is the process.
     // The verifier retains its own global JNI references and initializes once.
-    // A failure is logged and returns false, which MainActivity refuses to start on.
+    // No Rust logger exists yet, so a failure throws a RuntimeException carrying
+    // the error into MainActivity's crash instead of returning false.
     env.with_env(|env| -> jni::errors::Result<jboolean> {
         rustls_platform_verifier::android::init_with_env(env, context)?;
         Ok(true)
     })
-    .resolve::<LogErrorAndDefault>()
+    .resolve::<ThrowRuntimeExAndDefault>()
 }
