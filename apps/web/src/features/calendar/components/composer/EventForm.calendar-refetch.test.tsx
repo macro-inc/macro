@@ -21,8 +21,10 @@ vi.mock('@service-email/client', () => ({
 vi.mock('@queries/calendar/graphql/flag', () => ({
   useGraphqlCalendarHost: () => () => undefined,
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user-1',
+}));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
@@ -161,7 +163,7 @@ it('chooses the Outlook calendar from the keyboard after the calendar list refet
   await user.click(trigger);
   await screen.findByRole('listbox');
   await client.refetchQueries({
-    queryKey: calendarKeys.visibleCalendars.queryKey,
+    queryKey: calendarKeys.visibleCalendars._def,
   });
   expect(mocks.listCalendars).toHaveBeenCalledTimes(2);
 

@@ -11,6 +11,7 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
+import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
@@ -21,7 +22,6 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
-import { recipientEntityMapper, useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -127,7 +127,6 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const requestedNeedsAccess = () =>
     requestedInbox()?.needs_reauth ||
     requestedInbox()?.needs_calendar_permission;
-  const contacts = useContacts();
   // The tool mints the Macro call when it executes, so the composer offers the
   // choice under the same flag as the calendar's own event composer.
   const quickCalls = useQuickCallsFlag();
@@ -141,7 +140,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     finalized || !props.sink.canAct() || operation() !== undefined;
 
   const guestOptions = createMemo(() =>
-    contacts().map(recipientEntityMapper('user'))
+    eventGuestOptions(props.initialData.attendees ?? [])
   );
   const writableCalendars = createMemo(() =>
     calendars().filter((calendar) => {

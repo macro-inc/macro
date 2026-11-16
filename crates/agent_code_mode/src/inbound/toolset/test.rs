@@ -171,6 +171,21 @@ fn user_toolset_exposes_execute_and_discovery_without_session_fields() {
 }
 
 #[test]
+fn session_execute_code_assigns_an_id_when_the_agent_omits_one() {
+    let schema = serde_json::to_value(&toolset().tools["ExecuteCode"].input_schema).unwrap();
+    assert!(schema["properties"].get("execution_id").is_some());
+    let required = schema["required"].as_array().unwrap();
+    assert!(!required.iter().any(|name| name == "execution_id"));
+    let call: ExecuteCode = serde_json::from_value(serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "export async function main() { return {data: 1}; }",
+    }))
+    .unwrap();
+    assert!(call.execution_id.is_none());
+}
+
+#[test]
 fn both_execute_code_descriptions_share_one_runtime_contract() {
     let session = toolset().tools["ExecuteCode"].description.clone();
     let user = user_toolset().tools["ExecuteCode"].description.clone();

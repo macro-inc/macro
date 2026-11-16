@@ -2,9 +2,13 @@ use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
+use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
-    ContactsOutboxService, ContactsRepository, ContactsService,
+    ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
+    ContactsService, PeopleSearchRepository, PeopleSearchService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,6 +17,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::instrument;
 
+/// Bounded name enrichment of the viewer's contact graph.
+pub mod directory;
+/// Realtime fan-out of a user's picture change to their contacts.
+pub mod picture_fanout;
 #[cfg(test)]
 mod test;
 
@@ -88,6 +96,79 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
+    }
+}
+
+impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(name = "contacts.lookup", skip_all, fields(count = lookup.ids().len() as i64), err)]
+    async fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.lookup_contact_ids(viewer, lookup).await
+    }
+
+    #[tracing::instrument(name = "contacts.page", skip_all, fields(limit = i64::from(limit.get()), has_cursor = after.is_some()), err)]
+    async fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.repository.contact_id_page(viewer, after, limit).await
+    }
+}
+
+impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleSearchService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(
+        name = "contacts.directory.people_search",
+        skip_all,
+        fields(
+            limit = i64::from(limit.get()),
+            query_bytes = query.byte_len() as i64,
+            result_count = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let span = tracing::Span::current();
+        let Some(needle) = query.searchable() else {
+            span.record("result_count", 0_i64);
+            span.record("outcome", "query_too_short");
+            return Ok(Vec::new());
+        };
+        let people = self
+            .repository
+            .search_people(viewer, needle, limit)
+            .await
+            .inspect_err(|_| {
+                span.record("outcome", "error");
+            })?;
+        if people.len() > usize::from(limit.get()) {
+            span.record("outcome", "error");
+            return Err(rootcause::report!("people search exceeded its limit"));
+        }
+        span.record("result_count", people.len() as i64);
+        span.record(
+            "outcome",
+            if people.is_empty() {
+                "no_match"
+            } else {
+                "match"
+            },
+        );
+        Ok(people)
     }
 }
 

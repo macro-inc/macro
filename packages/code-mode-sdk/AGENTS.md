@@ -29,6 +29,8 @@ HTML worker belong to `packages/sdk-docs`.
   fingerprint routines record. `@agent` examples of whole programs are fenced
   `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
   each one.
+- The bundled SDK adds its hand-assigned display verb to each generated call
+  when code mode enables the verb header in the bootstrap.
 
 ## Tool contracts
 

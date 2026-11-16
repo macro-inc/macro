@@ -9,7 +9,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import {
+  encodeClearScope,
+  encodeInboxScope,
+  toInboxClear,
+  toInboxGroup,
+} from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -304,5 +309,121 @@ describe('encodeInboxScope', () => {
     expect(
       encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
     ).toEqual({ rowTypes: [], unreadOnly: true });
+  });
+});
+
+describe('encodeClearScope', () => {
+  it('names every kind it takes, never an empty or missing list', () => {
+    const every = encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(every.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length);
+    expect(
+      encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ rowTypes: every.rowTypes, unreadOnly: true });
+  });
+
+  it('names the chosen kinds', () => {
+    expect(encodeClearScope({ rowTypes: ['email'] })).toEqual({
+      rowTypes: ['EMAIL'],
+    });
+  });
+});
+
+describe('toInboxClear', () => {
+  it('reads a clear as the server stores it', () => {
+    expect(
+      toInboxClear({
+        clearId: 'clear-1',
+        status: 'APPLYING',
+        rowTypes: ['TASK', 'EMAIL'],
+        unreadOnly: true,
+        since: '2026-02-01T00:00:00+00:00',
+        asOf: '2026-02-01T10:00:00+00:00',
+        rowCount: 40,
+        revision: 3,
+      })
+    ).toEqual({
+      id: 'clear-1',
+      status: 'applying',
+      takes: {
+        rowTypes: ['task', 'email'],
+        unreadOnly: true,
+        since: Date.parse('2026-02-01T00:00:00Z'),
+      },
+      asOf: Date.parse('2026-02-01T10:00:00Z'),
+      rows: 40,
+      revision: 3,
+    });
+  });
+});
+
+describe('toInboxGroup for a runtime', () => {
+  it('lists an access request filed under a runtime as a row about it', () => {
+    const group = toInboxGroup({
+      groupId: 'harness:0198a4cc-e138-7670-a308-a6b766602712',
+      sortAt: '2026-02-01T10:09:00Z',
+      entity: {
+        __typename: 'GraphqlSoupHarness',
+        id: '0198a4cc-e138-7670-a308-a6b766602712',
+        entityType: 'HARNESS',
+        harnessName: 'render-box',
+        ownerId: 'macro|viewer@example.com',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      rows: [
+        {
+          id: 'harness:0198a4cc-e138-7670-a308-a6b766602712#access_requested:r-1',
+          rowType: 'ACCESS_REQUESTED',
+          revision: 'rev',
+          latestAt: '2026-02-01T10:09:00Z',
+          unseen: true,
+          count: 1,
+          actor: null,
+          actions: [],
+          notifications: [
+            {
+              id: 'n-1',
+              eventType: 'entity_access_requested',
+              entityType: 'HARNESS',
+              targetEntityType: 'HARNESS',
+              entityId: '0198a4cc-e138-7670-a308-a6b766602712',
+              sent: false,
+              state: 'UNSEEN',
+              createdAt: '2026-02-01T10:09:00Z',
+              viewedAt: null,
+              updatedAt: '2026-02-01T10:09:00Z',
+              senderId: 'macro|colleague@example.com',
+              metadata: {
+                __typename: 'GraphqlEntityAccessRequestedMetadata',
+                entityAccessRequestedRequestId: 'r-1',
+                entityAccessRequestedRevision: 1,
+                entityAccessRequestedEntityName: 'render-box',
+                entityAccessRequestedFileType: null,
+                entityAccessRequestedAccessLevel: 'edit',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+
+    expect(group?.rows).toHaveLength(1);
+    expect(group?.rows[0]).toMatchObject({
+      type: 'access_requested',
+      content: {
+        entity: {
+          type: 'harness',
+          id: '0198a4cc-e138-7670-a308-a6b766602712',
+          name: 'render-box',
+          ownerId: 'macro|viewer@example.com',
+        },
+        notifications: [
+          {
+            entity_type: 'harness',
+            notification_metadata: { tag: 'entity_access_requested' },
+          },
+        ],
+      },
+    });
   });
 });

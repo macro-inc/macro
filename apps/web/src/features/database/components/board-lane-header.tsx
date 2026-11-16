@@ -43,12 +43,14 @@ export function BoardLaneHeader(props: {
     props.canEdit && props.column.writable && props.option && editing
       ? { column: props.column, option: props.option, editing }
       : undefined;
+  const customOption = () =>
+    props.column.fixedOptions ? undefined : editable();
   return (
     <>
       <Show when={editable()} fallback={props.icon}>
         {(option) => <LaneColor option={option()}>{props.icon}</LaneColor>}
       </Show>
-      <Show when={editable()} fallback={props.children}>
+      <Show when={customOption()} fallback={props.children}>
         {(option) => <LaneName option={option()} />}
       </Show>
       <KanbanBoard.ColumnCount
@@ -59,10 +61,10 @@ export function BoardLaneHeader(props: {
         class="ml-auto flex shrink-0 items-center gap-0.5"
         data-kanban-no-drag
       >
-        <Show when={props.onHide || editable()}>
+        <Show when={props.onHide || customOption()}>
           <LaneMenu
             label={props.label}
-            option={editable()}
+            option={customOption()}
             onHide={props.onHide}
           />
         </Show>

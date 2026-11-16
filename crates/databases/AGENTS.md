@@ -14,6 +14,7 @@ service with Axum, agent-tool and Postgres adapters.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope
 
@@ -33,7 +34,9 @@ service with Axum, agent-tool and Postgres adapters.
   `connection_gateway_client` (liveness), `entity_mutation`
   (rename/move/duplicate/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
-  `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
+  `DatabaseStorage`, no `database_entities` row), `database_webhooks` (writes
+  as its creator, re-checked through the `CreatorAccess` port and its
+  `outbound::entity_access_creators` adapter), `ai_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
 
 ## Recipes
@@ -62,7 +65,8 @@ service with Axum, agent-tool and Postgres adapters.
   membership.
 - A duplicate rewrites IDs while walking each column config, view and card
   position as JSON. Cells are rewritten only in their option and row references,
-  never in text.
+  never in text. Copy saved appearance into the duplicate's app entity in the
+  same transaction as storage and grants; keep the copy outside any folder.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").
@@ -70,7 +74,8 @@ service with Axum, agent-tool and Postgres adapters.
   never silently drop data outside an explicit delete.
 - Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
   only; the repository swaps the folder-inherited `entity_access` rows in the
-  same transaction (`entity_access_db_utils::project_grants`). Trashing or
+  same transaction (`entity_access_db_utils::project_grants`), after
+  `refuse_filing` checks the new folder against the rows it holds. Trashing or
   purging the folder returns the database to the root without the folder's
   grants; trashing goes through `PgDatabaseFolders`, which the projects
   domain reaches through its `FiledItemsUnfiler` port.

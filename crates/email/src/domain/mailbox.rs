@@ -14,17 +14,25 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
+pub mod reimport;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]
@@ -149,6 +157,20 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// The stream's pending notification: the newest one that no delta
+    /// checkpoint has read past yet, so a deferred or multi-page read keeps
+    /// carrying it.
+    pub notification: Option<Notification>,
+}
+
+/// A Graph change notification that made sync work due.
+#[derive(Debug, Clone)]
+pub struct Notification {
+    /// When the webhook delivery was accepted.
+    pub received_at: chrono::DateTime<chrono::Utc>,
+    /// The webhook request's W3C trace context, on the first claim only;
+    /// that attempt joins the webhook's trace.
+    pub traceparent: Option<String>,
 }
 
 #[derive(Debug)]
@@ -159,6 +181,8 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// The newest change notification that queued this message.
+    pub notification: Option<Notification>,
 }
 
 #[derive(Debug)]
@@ -249,7 +273,8 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageRetry {
     /// Claim it again after `seconds`. A mailbox-wide refusal (throttling, no
-    /// token) is not `counted`, so it gives the claim back to `attempts`.
+    /// token), or a provider failure once its backoff is at the longest, is not
+    /// `counted`, so it gives the claim back to `attempts`.
     After { seconds: u32, counted: bool },
     /// Stop claiming the leased revision. It stays queued and is counted as
     /// abandoned until a provider change, a resync or a reconnect queues the
@@ -331,6 +356,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
+            outlook.provider_item_count = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -349,6 +375,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let result = match outcome {
             Ok(folders) => {
                 span.record("outlook.folders", span_int(folders.len()));
+                span.record(
+                    "outlook.provider_item_count",
+                    span_int(
+                        folders
+                            .iter()
+                            .filter_map(|folder| folder.total_items)
+                            .map(u64::from)
+                            .sum::<u64>(),
+                    ),
+                );
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
@@ -396,16 +432,22 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.link_id = %lease.mailbox.link_id,
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "mail_folder",
+            outlook.stream_id = %lease.id,
             outlook.page_items = tracing::field::Empty,
             outlook.rows_queued = tracing::field::Empty,
-            outlook.delta_advanced = false,
-            outlook.folder_initial_complete = lease.initial_complete,
-            outlook.cursor_reset = false,
+            outlook.delta_advanced = tracing::field::Empty,
+            outlook.folder_initial_complete = tracing::field::Empty,
+            outlook.cursor_reset = tracing::field::Empty,
+            outlook.notification_wait_ms = lease
+                .notification
+                .as_ref()
+                .map(|notification| telemetry::since_ms(notification.received_at)),
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
+        adopt_notification_trace(&span, lease.notification.as_ref());
         self.enumerate(&lease).instrument(span).await
     }
 
@@ -421,6 +463,9 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             || self.repo.renew(SyncLease::Stream(lease)),
         )
         .await;
+        let mut delta_advanced = false;
+        let mut folder_initial_complete = lease.initial_complete;
+        let mut cursor_reset = false;
         let result = match outcome {
             Ok(page) => {
                 span.record(
@@ -430,21 +475,19 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
                 self.repo.commit_page(lease, &page).await.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
-                    span.record("outlook.delta_advanced", true);
-                    span.record(
-                        "outlook.folder_initial_complete",
-                        lease.initial_complete || checkpoint,
-                    );
+                    delta_advanced = true;
+                    folder_initial_complete |= checkpoint;
                     committed.import_completed
                 })
             }
             Err(MailboxError::Provider(EmailApiError::OutdatedCursor)) => {
-                span.record("outlook.cursor_reset", true);
+                cursor_reset = true;
                 self.repo.reset_stream(lease).await.map(|()| None)
             }
             Err(MailboxError::Provider(error)) => {
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
+                record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
                     .release_stream(lease, delay)
                     .await
@@ -456,6 +499,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             }
             Err(error) => Err(error),
         };
+        record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
         match result {
             Ok(import_completed) => {
                 record_done(&span, "imported");
@@ -490,11 +534,13 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.attachments = tracing::field::Empty,
             outlook.calendar_parts_unavailable = tracing::field::Empty,
             outlook.db_write_ms = tracing::field::Empty,
+            outlook.notification_lag_ms = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
+        adopt_notification_trace(&span, lease.notification.as_ref());
         self.reconcile(&lease).instrument(span).await
     }
 
@@ -543,6 +589,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let error = match result {
             Ok((outcome, import_completed)) => {
                 record_done(&span, outcome);
+                if let Some(notification) = &lease.notification {
+                    span.record(
+                        "outlook.notification_lag_ms",
+                        telemetry::since_ms(notification.received_at),
+                    );
+                }
                 if outcome == "imported" {
                     self.imports
                         .record(lease.mailbox.link_id, chrono::Utc::now());
@@ -579,6 +631,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let graph_calls = self.provider.admitted_requests(completed.mailbox).await;
         progress::log_import_completed(completed, graph_calls);
     }
+}
+
+/// Work a notification made due continues the webhook request's trace.
+fn adopt_notification_trace(span: &Span, notification: Option<&Notification>) {
+    let traceparent = notification.and_then(|notification| notification.traceparent.as_deref());
+    crate::trace_context::adopt(span, traceparent);
 }
 
 /// Keep long catalogue scans and uploads fenced without imposing an arbitrary
@@ -620,6 +678,10 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// How a failed reconciliation is retried. `attempts` counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
+/// A transient provider failure (Graph 5xx or 408, a request Graph never
+/// answered) says nothing about the message either: during an outage every
+/// message gets one. It backs off like any failure but is never abandoned, and
+/// stops counting once the backoff is at its longest.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
         MailboxError::Provider(
@@ -640,17 +702,28 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
+        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+            let seconds = backoff_seconds(attempts);
+            MessageRetry::After {
+                seconds,
+                counted: seconds < MAX_BACKOFF_SECONDS,
+            }
+        }
         MailboxError::Stale => MessageRetry::After {
             seconds: 30,
             counted: true,
         },
         _ if attempts >= MESSAGE_FAILURE_ATTEMPTS => MessageRetry::Abandon,
-        // 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
         _ => MessageRetry::After {
-            seconds: (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS),
+            seconds: backoff_seconds(attempts),
             counted: true,
         },
     }
+}
+
+/// 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
+fn backoff_seconds(attempts: i32) -> u32 {
+    (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS)
 }
 
 fn retry_seconds(error: &EmailApiError) -> u32 {
@@ -663,4 +736,16 @@ fn retry_seconds(error: &EmailApiError) -> u32 {
         EmailApiError::Permanent { .. } => 600,
         _ => 30,
     }
+}
+
+/// What one enumerated page did to its folder's stream, recorded once.
+fn record_stream(
+    span: &Span,
+    delta_advanced: bool,
+    folder_initial_complete: bool,
+    cursor_reset: bool,
+) {
+    span.record("outlook.delta_advanced", delta_advanced);
+    span.record("outlook.folder_initial_complete", folder_initial_complete);
+    span.record("outlook.cursor_reset", cursor_reset);
 }

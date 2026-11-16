@@ -1,7 +1,8 @@
 import { type ChannelEntity, Entity } from '@entity';
 import { cn } from '@ui';
 import type { ParentProps } from 'solid-js';
-import { Show } from 'solid-js';
+import { Match, Switch } from 'solid-js';
+import { ChannelMentionCount } from './rail/ChannelCountPill';
 
 /** How many favorites the mobile Channels list pins above its conversations. */
 export const MAX_PINNED_CHANNELS = 6;
@@ -10,12 +11,17 @@ export const MAX_PINNED_CHANNELS = 6;
  * Pinned conversations three across, like iMessage: a short last row
  * centers rather than hugging the left edge. Each child takes a third.
  */
-export function ChannelPinGrid(props: ParentProps) {
+export function ChannelPinGrid(props: ParentProps<{ horizontal?: boolean }>) {
   return (
     <div
       role="group"
       aria-label="Pinned conversations"
-      class="flex flex-wrap justify-center gap-y-4 px-(--mobile-chrome-gutter) pt-2 pb-5"
+      class={cn(
+        'flex gap-y-4 px-(--mobile-chrome-gutter) pt-2 pb-5',
+        props.horizontal
+          ? 'scrollbar-hidden gap-2 overflow-x-auto overscroll-x-contain'
+          : 'flex-wrap justify-center'
+      )}
     >
       {props.children}
     </div>
@@ -25,6 +31,8 @@ export function ChannelPinGrid(props: ParentProps) {
 export function ChannelPin(props: {
   channel: ChannelEntity;
   unread: boolean;
+  /** Unread messages that mention the viewer; replaces the unread dot. */
+  mentions?: number;
   onActivate: (event: MouseEvent) => void;
 }) {
   return (
@@ -41,17 +49,27 @@ export function ChannelPin(props: {
             showTooltip={false}
           />
         </span>
-        <Show when={props.unread}>
-          <span
-            aria-label="Unread"
-            class="absolute top-1 left-1 size-3.5 rounded-full border-2 border-panel bg-accent"
-          />
-        </Show>
+        <Switch>
+          <Match when={(props.mentions ?? 0) > 0}>
+            <ChannelMentionCount
+              count={props.mentions ?? 0}
+              class="absolute top-1 left-1 box-content border-2 border-panel"
+            />
+          </Match>
+          <Match when={props.unread}>
+            <span
+              aria-label="Unread"
+              class="absolute top-1 left-1 size-3.5 rounded-full border-2 border-panel bg-accent"
+            />
+          </Match>
+        </Switch>
       </span>
       <span
         class={cn(
           'max-w-full truncate px-1 text-xs',
-          props.unread ? 'text-ink' : 'text-ink-muted'
+          props.unread || (props.mentions ?? 0) > 0
+            ? 'text-ink'
+            : 'text-ink-muted'
         )}
       >
         {props.channel.name}

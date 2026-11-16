@@ -3,13 +3,14 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { invalidateContacts } from '@core/user/contactService';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { TraceContext } from '@macro-inc/observability';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -24,6 +25,10 @@ type SendContent = {
   attachments?: NewAttachment[];
   /** An entity owner may need to authorize the resolved DM/channel before sending. */
   beforeSend?: (channelId: string) => Promise<void>;
+  /** Reuse one id across retries of the same message, so the server stores one copy. */
+  messageId?: string;
+  /** The span the channel lookup and the post join. */
+  parentSpan?: TraceContext;
 };
 
 type NavigationOptions = {
@@ -52,27 +57,29 @@ export function useSendMessageToPeople() {
 
   async function sendAndNavigateToChannel(
     channelId: string,
-    content: string,
-    mentions: SimpleMention[],
-    attachments: NewAttachment[],
-    navigate?: NavigationOptions,
-    beforeSend?: (channelId: string) => Promise<void>
+    args: SendContent & { navigate?: NavigationOptions }
   ) {
     const senderId = userId();
     if (!senderId) return;
-    await beforeSend?.(channelId);
+    const { navigate } = args;
+    await args.beforeSend?.(channelId);
     const messageResponse = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
-        message: { content, attachments, mentions },
+        message: {
+          content: args.content,
+          attachments: args.attachments ?? [],
+          mentions: args.mentions,
+        },
         senderId,
-        optimisticId: newMessageId(),
+        optimisticId: args.messageId ?? newMessageId(),
+        parentSpan: args.parentSpan,
       })
       .catch(() => null);
     if (!messageResponse) return;
 
     fireAndForget(invalidateListChannels(), 'messages');
-    fireAndForget(invalidateContacts(), 'messages');
+    requestContactRefresh();
 
     const navigateToChannel = async () => {
       replaceSplit({
@@ -95,46 +102,42 @@ export function useSendMessageToPeople() {
     return { channelId, messageResponse, navigateToChannel };
   }
 
-  async function sendToUsers(args: SendToUsersArgs) {
-    let channelId: string;
+  async function resolvePeopleChannel(
+    users: readonly string[],
+    parentSpan?: TraceContext
+  ): Promise<string | undefined> {
     try {
       const result =
-        args.users.length === 1
+        users.length === 1
           ? await getOrCreateDmMutation.mutateAsync({
-              recipient_id: args.users[0],
+              recipient_id: users[0],
+              parentSpan,
             })
           : await getOrCreatePrivateChannelMutation.mutateAsync({
-              recipients: args.users,
+              recipients: [...users],
+              parentSpan,
             });
-      channelId = result.channel_id;
+      return result.channel_id;
     } catch (err) {
       toast.failure('Failed to send message to people');
       console.error('failed to create new channel to forward', err);
-      return;
+      return undefined;
     }
+  }
 
-    return sendAndNavigateToChannel(
-      channelId,
-      args.content,
-      args.mentions,
-      args.attachments ?? [],
-      args.navigate,
-      args.beforeSend
-    );
+  async function sendToUsers(args: SendToUsersArgs) {
+    const channelId = await resolvePeopleChannel(args.users, args.parentSpan);
+    if (channelId === undefined) return;
+    return sendAndNavigateToChannel(channelId, args);
   }
 
   async function sendToChannel(args: SendToChannelArgs) {
-    return sendAndNavigateToChannel(
-      args.channelId,
-      args.content,
-      args.mentions,
-      args.attachments ?? [],
-      args.navigate,
-      args.beforeSend
-    );
+    return sendAndNavigateToChannel(args.channelId, args);
   }
 
   return {
+    /** Finds or creates the DM for one user or the private channel for several. */
+    resolvePeopleChannel: createCallback(resolvePeopleChannel),
     /** Sends a message to a list of users,
      * if the users already have an existing channel,
      * it will send the message to that channel

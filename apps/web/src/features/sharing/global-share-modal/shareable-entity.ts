@@ -39,3 +39,7 @@ export const isShareableEntityType = (
     type === 'database'
   );
 };
+
+export const isShareableEntity = (
+  entity: EntityData
+): entity is ShareableEntityData => isShareableEntityType(entity.type);

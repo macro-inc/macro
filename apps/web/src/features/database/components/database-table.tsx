@@ -762,7 +762,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (
       !(target instanceof HTMLElement) ||
       target.closest(
-        'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
+        'input:not([type="checkbox"]), textarea, [contenteditable="true"], a[href]'
       )
     )
       return false;
@@ -819,6 +819,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           aria-rowcount={props.hasMoreRows ? -1 : rows().length + 2}
           aria-colcount={columns().length + 1 + Number(hasAddColumn())}
           data-grid
+          data-owns-arrow-keys
           data-grid-saved-rows={summaryRows().length}
           class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}

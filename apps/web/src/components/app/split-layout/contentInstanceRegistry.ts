@@ -12,6 +12,8 @@ export type ContentInstance = {
   owner: ContentOwner;
   content: ContentIdentity;
   activate?: () => void;
+  /** The split showing an instance whose owner is not the split itself. */
+  split?: string;
 };
 
 export function sameContentIdentity(a: ContentIdentity, b: ContentIdentity) {
@@ -22,7 +24,10 @@ export function sameContentIdentity(a: ContentIdentity, b: ContentIdentity) {
 }
 
 /** Owned by a split layout; sources include selections before their UI mounts. */
-export function createContentInstanceRegistry() {
+export function createContentInstanceRegistry(
+  /** Instances this rejects stay mounted without holding their content. */
+  holdsContent: (entry: ContentInstance) => boolean = () => true
+) {
   const [sources, setSources] = createSignal(
     new Set<() => readonly ContentInstance[]>()
   );
@@ -31,7 +36,8 @@ export function createContentInstanceRegistry() {
       const entry = source().find(
         (entry) =>
           entry.owner !== excludeOwner &&
-          sameContentIdentity(entry.content, content)
+          sameContentIdentity(entry.content, content) &&
+          holdsContent(entry)
       );
       if (entry) return entry;
     }

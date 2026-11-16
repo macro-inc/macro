@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)\n                        VALUES ($1, $2, $3, $4, $4)\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b75f7d3b40be28067983afce9e39a0844cd90f9249af758afc9ef4db432a050a"
+}

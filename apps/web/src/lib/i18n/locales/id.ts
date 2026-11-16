@@ -739,7 +739,7 @@ export default {
     tabMobileApp: 'Aplikasi seluler',
     tabTags: 'Tag',
     tabIntegrations: 'Integrasi',
-    tabRuntimes: 'Runtime',
+    tabRuntimes: 'Mesin',
     tabMcpServer: 'Server MCP',
     tabApiKeys: 'Kunci API',
     tabBots: 'Bot',

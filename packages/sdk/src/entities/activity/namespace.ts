@@ -57,6 +57,8 @@ export class ActivityNamespace {
    * const to = new Date();
    * const from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
    * const { activities, truncated } = await macro.activity.mine({ from, to });
+   *
+   * @readonly
    */
   async mine(range: {
     from: Date | string;

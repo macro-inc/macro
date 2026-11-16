@@ -1,5 +1,6 @@
 import type {
   CreateInitiativeRequest,
+  EntityAppearance,
   InitiativeActivityCursor,
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
@@ -65,7 +66,11 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'initiative', this);
 
-  /** The initiative's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The initiative's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/initiative/${this.id}`;
   }
@@ -96,6 +101,24 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Display name. */
   readonly name = this.field('name');
 
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setInitiativeAppearance({
+        path: { initiative_id: this.id },
+        body: appearance,
+      }),
+    );
+  }
+
   /** Owner. */
   readonly owner = this.mappedField('ownerId', (id) =>
     User.byId(this.client, id),
@@ -123,6 +146,8 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /**
    * The description as GitHub-flavored Markdown; empty while no one has opened
    * or written it.
+   *
+   * @readonly
    */
   async description(): Promise<string> {
     return unwrap(
@@ -137,7 +162,11 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     return { type: 'initiative', id: this.id };
   }
 
-  /** The discussion's comment threads, each with its comments, newest thread first. */
+  /**
+   * The discussion's comment threads, each with its comments, newest thread first.
+   *
+   * @readonly
+   */
   async comments(): Promise<DiscussionThread[]> {
     return listDiscussionThreads(this.client, this.commentParent);
   }
@@ -147,17 +176,27 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
    * {@link DiscussionComment.reply} on one of its comments.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
    */
   async comment(body: string | RichMessage): Promise<DiscussionComment> {
     return postDiscussionComment(this.client, this.commentParent, body);
   }
 
-  /** A handle to one of the discussion's comments by id. */
+  /**
+   * A handle to one of the discussion's comments by id.
+   *
+   * @readonly
+   */
   commentById(id: string): DiscussionComment {
     return DiscussionComment.byId(this.client, this.commentParent, id);
   }
 
-  /** A discussion thread, to resolve or delete it. */
+  /**
+   * A discussion thread, to resolve or delete it.
+   *
+   * @readonly
+   */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(
       this.client,
@@ -166,7 +205,11 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     );
   }
 
-  /** A mixed page of discussion comments and activity. */
+  /**
+   * A mixed page of discussion comments and activity.
+   *
+   * @readonly
+   */
   timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
@@ -177,7 +220,12 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     );
   }
 
-  /** Update the name, membership or sharing configuration. */
+  /**
+   * Update the name, membership or sharing configuration.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: {
     name?: string;
     members?: User[];
@@ -209,6 +257,8 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
    * for await (const entry of initiative.activity({ after: since })) {
    *   console.log(entry.occurredAt, entry.action, await entry.actor.name());
    * }
+   *
+   * @readonly
    */
   activity(
     window: { after?: Date | string; before?: Date | string } = {},
@@ -243,7 +293,12 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     );
   }
 
-  /** Delete this initiative. */
+  /**
+   * Delete this initiative.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteInitiative({ path: { initiative_id: this.id } }),

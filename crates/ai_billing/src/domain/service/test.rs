@@ -3626,6 +3626,7 @@ async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanT
         user: payer.clone(),
         entity: None,
         agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1_000_000,

@@ -42,7 +42,7 @@ const MENUS: {
       'entityActions.setChannelPicture',
       'entityActions.removeChannelPicture',
       'entityActions.unfavorite',
-      'entityActions.snoozeNotifications',
+      'entityActions.muteNotifications',
       'entityActions.unmuteNotifications',
       'entityActions.remindMe',
       'entityActions.addTag',

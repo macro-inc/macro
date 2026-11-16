@@ -50,7 +50,7 @@ use crate::domain::admission::admit_turn;
 use crate::domain::engine::{
     AgentIdentity, AwaitingUser, ReplyDelivery, TurnEngine, TurnPurpose, TurnRequest,
 };
-use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers, has_code_mode_tools};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use crate::domain::tool_stream::StreamingCalls;
@@ -77,7 +77,7 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// What a failed turn says to the person it answers, wherever its reply is
 /// read. The failure itself goes to the prompt's error, not to them.
-const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
@@ -90,10 +90,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
-
-/// The one tool in the Macro toolset that delegates to another agent.
-const SUBAGENT_TOOL: &str = "Subagent";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// Slash command that asks the user a question through `elicitation/create`
 /// instead of running the model: `/ask <question>` for free text, or
@@ -159,6 +156,9 @@ pub struct AgentState {
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
     pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// The servers the last `session/new` / `session/resume` handed over,
+    /// redialed by a turn whose tools lack the code-mode ones.
+    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
@@ -193,6 +193,12 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        servers.clone_into(
+            &mut self
+                .mcp_servers
+                .lock()
+                .expect("mcp servers lock should not be poisoned"),
+        );
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
@@ -210,7 +216,10 @@ impl AgentState {
     }
 
     /// The tools the next turn should compose, waiting out an in-flight
-    /// connect so the searchable catalog is not empty on turn one.
+    /// connect so the searchable catalog is not empty on turn one. Every turn
+    /// runs code mode, so a session whose connect left out the code-mode
+    /// tools (a failed or slow handshake) redials its servers first instead
+    /// of failing every turn until it is released.
     async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
         let handle = self
             .mcp_connect
@@ -220,6 +229,24 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
+        let tools = self.cached_mcp_tools();
+        if has_code_mode_tools(tools.as_ref()) {
+            return tools;
+        }
+        let servers = self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned")
+            .clone();
+        if servers.is_empty() {
+            return tools;
+        }
+        tracing::warn!("the session's MCP tools lack code mode; redialing its servers");
+        self.connect_mcp(servers).await;
+        self.cached_mcp_tools()
+    }
+
+    fn cached_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
         self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
@@ -1405,8 +1432,7 @@ fn update_for_part(
 
 /// The `_meta` this agent stamps on a tool call so the fold can read it by
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
-/// `mcp__<server>__<tool>`, the convention Claude Code set) and
-/// `macro.subagent` on a delegation.
+/// `mcp__<server>__<tool>`, the convention Claude Code set).
 fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
@@ -1414,9 +1440,6 @@ fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if mcp.is_none() && name == SUBAGENT_TOOL {
-        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
-    }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta

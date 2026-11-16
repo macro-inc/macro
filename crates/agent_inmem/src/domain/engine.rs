@@ -110,6 +110,11 @@ pub enum ReplyDelivery {
     /// thread of the message that mentioned the agent). An opening line would
     /// arrive with the rest, so none is written.
     Whole,
+    /// Never: the session runs out of sight (a routine draft), and only what
+    /// its tools do counts. Its turns go without an opening line, skills,
+    /// conversational guidance and every tool but code mode's, so each model
+    /// call reads a fraction of a conversation's prompt.
+    Unseen,
 }
 
 /// How many things a turn currently waits on a person for. Shared between

@@ -1,4 +1,4 @@
-import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -10,6 +10,14 @@ import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+  type QueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
@@ -29,36 +37,48 @@ const queryEnabled = () => true;
  * the refreshed `needs_reauth` is read by `useEmailLinksQuery`, which drives the reconnect
  * prompt — nothing renders from this query.
  */
-export function useInboxHealthProbeQuery() {
-  const authenticated = useIsAuthenticated();
-  return useQuery(() => ({
-    queryKey: emailKeys.linksHealthProbe.queryKey,
-    queryFn: probeInboxHealth,
-    enabled: authenticated() === true,
+function inboxHealthQueryOptions(account: QueryAccount | undefined) {
+  return {
+    queryKey: emailKeys.linksHealthProbe(account?.userId).queryKey,
+    queryFn: async () => {
+      assertQueryAccount(account);
+      await emailClient.healthCheckLinks();
+      assertQueryAccount(account);
+      return null;
+    },
+    enabled: !!account,
     staleTime: HEALTH_PROBE_STALE_TIME,
     refetchOnWindowFocus: true,
     retry: false,
-  }));
+  };
+}
+export function useInboxHealthProbeQuery() {
+  const account = useQueryAccount();
+  return useQuery(() => inboxHealthQueryOptions(account()));
 }
 
-async function probeInboxHealth() {
-  await emailClient.healthCheckLinks();
-  return null;
-}
-
-function fetchEmailLinks() {
-  return throwOnErr(() => emailClient.getLinks());
-}
-
-export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
-  const authenticated = useIsAuthenticated();
-  return useQuery(() => ({
-    queryKey: emailKeys.links.queryKey,
-    queryFn: fetchEmailLinks,
-    enabled: authenticated() === true && enabled(),
+export function emailLinksQueryOptions(
+  account: QueryAccount | undefined,
+  enabled: boolean
+) {
+  return {
+    queryKey: emailKeys.links(account?.userId).queryKey,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      assertQueryAccount(account);
+      signal.throwIfAborted();
+      const links = await throwOnErr(() => emailClient.getLinks());
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      return links;
+    },
+    enabled: !!account && enabled,
     staleTime: LINK_STALE_TIME,
-    refetchOnWindowFocus: 'always',
-  }));
+    refetchOnWindowFocus: 'always' as const,
+  };
+}
+export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
+  const account = useQueryAccount();
+  return useQuery(() => emailLinksQueryOptions(account(), enabled()));
 }
 
 /**
@@ -162,13 +182,16 @@ async function refreshSenderCatalog(): Promise<void> {
   }
 }
 
-export function invalidateEmailLinks() {
+export function invalidateEmailLinks(account = currentQueryAccount()) {
+  if (!isCurrentQueryAccount(account)) return;
   // Connection, reauthorization and link-removal events must refresh the
   // GraphQL catalog consumed by both From and the sidebar, not only legacy reads.
   fireAndForget(refreshSenderCatalog(), 'email-links');
-  queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
+  queryClient.cancelQueries({
+    queryKey: emailKeys.links(account.userId).queryKey,
+  });
   queryClient.invalidateQueries({
-    queryKey: emailKeys.links.queryKey,
+    queryKey: emailKeys.links(account.userId).queryKey,
   });
 }
 
@@ -183,20 +206,24 @@ type DisableCalendarCallbacks = MutationCallbacks<void, Error, string>;
 export function useDisableCalendarMutation(
   callbacks?: DisableCalendarCallbacks
 ) {
+  const account = useQueryAccount();
   return useMutation(() => ({
-    mutationFn: async (linkId: string) => {
+    meta: { queryAccount: account() },
+    mutationFn: async (linkId: string, context) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() => emailClient.disableLinkCalendar({ linkId }));
     },
 
     ...withCallbacks<void, Error, string>(
       {
-        onSuccess: async (_data, linkId) => {
-          await queryClient.cancelQueries({
-            queryKey: emailKeys.links.queryKey,
-          });
-
+        onSuccess: async (_data, linkId, _result, context) => {
+          const owner = mutationQueryAccount(context);
+          if (!isCurrentQueryAccount(owner)) return;
+          const key = emailKeys.links(owner.userId).queryKey;
+          await queryClient.cancelQueries({ queryKey: key });
+          if (!isCurrentQueryAccount(owner)) return;
           queryClient.setQueryData<ListLinksResponse>(
-            emailKeys.links.queryKey,
+            key,
             (old) =>
               old && {
                 ...old,
@@ -213,7 +240,7 @@ export function useDisableCalendarMutation(
               }
           );
 
-          invalidateEmailLinks();
+          invalidateEmailLinks(owner);
           invalidateCalendarViews();
         },
       },
@@ -236,37 +263,38 @@ type RemoveInboxCallbacks = MutationCallbacks<
  * and reconciles with the server on success.
  */
 export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
+  const account = useQueryAccount();
   return useMutation(() => ({
-    mutationFn: async (linkId: string) => {
+    meta: { queryAccount: account() },
+    mutationFn: async (linkId: string, context) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() => emailClient.deleteLink({ linkId }));
     },
 
     ...withCallbacks<void, Error, string, RemoveInboxContext>(
       {
-        onMutate: async (linkId) => {
-          await queryClient.cancelQueries({
-            queryKey: emailKeys.links.queryKey,
-          });
-
-          const previousLinks = queryClient.getQueryData<ListLinksResponse>(
-            emailKeys.links.queryKey
-          );
-
-          queryClient.setQueryData<ListLinksResponse>(
-            emailKeys.links.queryKey,
-            (old) =>
-              old
-                ? {
-                    ...old,
-                    links: old.links.filter((link) => link.id !== linkId),
-                  }
-                : undefined
+        onMutate: async (linkId, context) => {
+          const owner = mutationQueryAccount(context);
+          assertQueryAccount(owner);
+          const key = emailKeys.links(owner.userId).queryKey;
+          await queryClient.cancelQueries({ queryKey: key });
+          assertQueryAccount(owner);
+          const previousLinks =
+            queryClient.getQueryData<ListLinksResponse>(key);
+          queryClient.setQueryData<ListLinksResponse>(key, (old) =>
+            old
+              ? {
+                  ...old,
+                  links: old.links.filter((link) => link.id !== linkId),
+                }
+              : undefined
           );
 
           return { previousLinks };
         },
 
-        onSuccess: async () => {
+        onSuccess: async (_data, _linkId, _result, context) => {
+          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
           // Owned inboxes are torn down asynchronously, so the row still appears
           // in GET /email/links for a short window after the 204. Refetching links
           // here would resurrect the optimistically-removed row; instead leave the
@@ -281,11 +309,12 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           await invalidateUserInfo();
         },
 
-        onError: (_error, _linkId, context) => {
-          if (context?.previousLinks) {
+        onError: (_error, _linkId, result, context) => {
+          const owner = mutationQueryAccount(context);
+          if (result?.previousLinks && isCurrentQueryAccount(owner)) {
             queryClient.setQueryData(
-              emailKeys.links.queryKey,
-              context.previousLinks
+              emailKeys.links(owner.userId).queryKey,
+              result.previousLinks
             );
           }
         },

@@ -1,11 +1,13 @@
 /**
  * The engine's browser row source: tables are read as Soup database rows through the
- * normalized cache, newest first; `people` come from the contacts query.
+ * normalized cache, newest first. People joins accept only bounded explicit keys
+ * and read them from local Turso; an unbounded directory request is refused.
  */
 
 import { readRecordsByKeys, selectRecords } from '@app/lib/graphql-cache';
 import type {
   DatabaseSqlFetchFailure,
+  DatabaseSqlSourceFailure,
   RowSource,
 } from '@core/database-sql/driver';
 import type {
@@ -17,9 +19,9 @@ import type {
   Page,
   Propf,
   Row,
-  Table,
 } from '@core/database-sql/generated/types';
 import type { DatabaseSqlStepTrace } from '@core/database-sql/trace';
+import { abortedBy } from '@core/util/abort-signal';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import {
@@ -47,19 +49,23 @@ import {
   createRequest,
   type DocumentInput,
   getOperationName,
+  type OperationResult,
   type RequestPolicy,
   stringifyDocument,
 } from '@urql/core';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import { NIL as NIL_UUID, v5 as uuidV5 } from 'uuid';
-
-/** One person the viewer can see, as the `people` table lists them. */
-export interface Person {
-  id: string;
-  name: string;
-  email: string;
-}
+import { NIL as NIL_UUID } from 'uuid';
+import {
+  concat,
+  filter,
+  fromValue,
+  map,
+  merge,
+  pipe,
+  take,
+  toPromise,
+} from 'wonka';
 
 interface GraphqlRowSourceCapabilities {
   /** The app's GraphQL client; its exchanges decide cache or network. */
@@ -69,8 +75,6 @@ interface GraphqlRowSourceCapabilities {
   requestPolicy: RequestPolicy;
   /** Probe the cache without subscribing to a shared urql operation. */
   cache?: Pick<CacheHost, 'readQuery'>;
-  /** Everyone the viewer can see. */
-  people: () => Promise<Person[]>;
   /**
    * Table membership as the local filter index knows it. A read from the
    * network records each first page as evidence; a later read with
@@ -78,6 +82,10 @@ interface GraphqlRowSourceCapabilities {
    * index instead, so rows the cache learned about since show up.
    */
   membership?: LocalMembership;
+  /** Bounded keys only; this capability must never enumerate the directory. */
+  people?: (ids: string[]) => ResultAsync<Row[], DatabaseSqlSourceFailure>;
+  /** Ends the source's network reads once the run that made it is replaced. */
+  signal?: AbortSignal;
 }
 
 /** Local reconciliation for first pages, shared across runs of a statement. */
@@ -93,12 +101,6 @@ export interface LocalMembership {
 
 /** Past this many join values a narrowed filter costs more than it saves. */
 const MAX_KEY_HINT_VALUES = 100;
-
-/**
- * `people` rows need UUID ids: the RFC 4122 OID namespace names a person's
- * row as the engine's own tests do (`Uuid::NAMESPACE_OID`).
- */
-const PERSON_ROW_NAMESPACE = '6ba7b812-9dad-11d1-80b4-00c04fd430c8';
 
 type DatabaseRowItem = Extract<
   DatabaseRowFieldsFragment,
@@ -118,6 +120,12 @@ function thrownFetchFailure(thrown: unknown): DatabaseSqlFetchFailure {
   );
 }
 
+/** How a query settled: answered, ended without an answer, or aborted. */
+type QuerySettled<Data, Variables extends AnyVariables> =
+  | { kind: 'answered'; result: OperationResult<Data, Variables> }
+  | { kind: 'ended' }
+  | { kind: 'aborted' };
+
 /**
  * One GraphQL read inside the step's trace; a GraphQL error or a missing
  * answer is a fetch failure.
@@ -129,24 +137,44 @@ function graphqlQuery<Data, Variables extends AnyVariables>(
   requestPolicy: RequestPolicy,
   name: string,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Data, DatabaseSqlFetchFailure> {
   step.request(stringifyDocument(document), variables);
   const network = () =>
     ResultAsync.fromPromise(
-      client
-        .query(document, variables, {
-          requestPolicy:
-            cache && requestPolicy === 'cache-first'
-              ? 'network-only'
-              : requestPolicy,
-          fetchOptions: { headers: step.headers() },
-        })
-        .toPromise(),
+      pipe(
+        merge<QuerySettled<Data, Variables>>([
+          concat<QuerySettled<Data, Variables>>([
+            pipe(
+              client.query(document, variables, {
+                requestPolicy:
+                  cache && requestPolicy === 'cache-first'
+                    ? 'network-only'
+                    : requestPolicy,
+                fetchOptions: { headers: step.headers() },
+              }),
+              // The answer, as urql's own toPromise takes it.
+              filter((result) => !result.stale && !result.hasNext),
+              map((result) => ({ kind: 'answered' as const, result }))
+            ),
+            fromValue({ kind: 'ended' as const }),
+          ]),
+          pipe(
+            abortedBy(signal),
+            map(() => ({ kind: 'aborted' as const }))
+          ),
+        ]),
+        take(1),
+        toPromise
+      ),
       thrownFetchFailure
-    ).andThen((result): Result<Data, DatabaseSqlFetchFailure> => {
-      if (!result)
+    ).andThen((settled): Result<Data, DatabaseSqlFetchFailure> => {
+      if (settled.kind === 'aborted')
+        return err(fetchFailure(`the ${name} query was cancelled`));
+      if (settled.kind === 'ended')
         return err(fetchFailure(`the ${name} query ended without data`));
+      const { result } = settled;
       if (result.error) return err(fetchFailure(result.error.message));
       if (!result.data)
         return err(fetchFailure(`the ${name} query returned no data`));
@@ -180,24 +208,78 @@ function graphqlQuery<Data, Variables extends AnyVariables>(
   return network();
 }
 
+function peoplePage(
+  ids: string[] | null,
+  cursor: string | null,
+  limit: number,
+  read: GraphqlRowSourceCapabilities['people']
+): ResultAsync<Page, DatabaseSqlSourceFailure> {
+  if (!ids || ids.length > MAX_KEY_HINT_VALUES)
+    return errAsync({
+      kind: 'rejected',
+      message:
+        'A people join requires bounded identity keys; narrow the preceding relation',
+    });
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+    return errAsync({
+      kind: 'rejected',
+      message: 'Invalid people lookup limit',
+    });
+  const keys = [...new Set(ids)];
+  const offset = cursor === null ? 0 : Number(cursor);
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > keys.length ||
+    (cursor !== null && cursor !== String(offset))
+  )
+    return errAsync({
+      kind: 'rejected',
+      message: 'Invalid people lookup cursor',
+    });
+  if (offset === keys.length) return okAsync({ rows: [], next: null });
+  if (!read)
+    return errAsync({
+      kind: 'rejected',
+      message: 'Local people SQL is unavailable on this client',
+    });
+  const page = keys.slice(offset, offset + limit);
+  return read(page).map((rows) => ({
+    rows,
+    next:
+      offset + page.length < keys.length ? String(offset + page.length) : null,
+  }));
+}
+
 export function createGraphqlRowSource({
   client,
   catalog,
   requestPolicy,
   cache,
-  people,
   membership,
+  people,
+  signal,
 }: GraphqlRowSourceCapabilities): RowSource {
   return {
     page: (query, _needs, cursor, limit, step) =>
       match(query)
-        .returnType<ResultAsync<Page, DatabaseSqlFetchFailure>>()
+        .returnType<ResultAsync<Page, DatabaseSqlSourceFailure>>()
         .with({ type: 'soup' }, (soup) =>
           soupInput(soup, cursor, limit).asyncAndThen((input) =>
-            soupPage(client, requestPolicy, input, membership, step, cache)
+            soupPage(
+              client,
+              requestPolicy,
+              input,
+              membership,
+              step,
+              cache,
+              signal
+            )
           )
         )
-        .with({ type: 'people' }, ({ ids }) => peoplePage(catalog, people, ids))
+        .with({ type: 'people' }, (query) =>
+          peoplePage(query.ids, cursor, limit, people)
+        )
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))
         )
@@ -208,7 +290,15 @@ export function createGraphqlRowSource({
       match(query)
         .returnType<ResultAsync<Bin[], DatabaseSqlFetchFailure>>()
         .with({ type: 'groupSoup' }, (grouped) =>
-          groupBins(client, requestPolicy, catalog, grouped, step, cache)
+          groupBins(
+            client,
+            requestPolicy,
+            catalog,
+            grouped,
+            step,
+            cache,
+            signal
+          )
         )
         .with({ type: P.union('soup', 'people') }, () =>
           errAsync(fetchFailure('only a grouped query has bins'))
@@ -371,7 +461,8 @@ function soupPage(
   input: SoupInput,
   membership: LocalMembership | undefined,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Page, DatabaseSqlFetchFailure> {
   const evidence = input.initial ? JSON.stringify(input) : undefined;
   const local: ResultAsync<Page | undefined, DatabaseSqlFetchFailure> =
@@ -388,7 +479,8 @@ function soupPage(
           requestPolicy,
           'database rows',
           step,
-          cache
+          cache,
+          signal
         ).andThen((data) => {
           const { items, nextCursor } = data.user.soup;
           if (evidence && membership && isNetworkRead(requestPolicy)) {
@@ -542,7 +634,8 @@ function groupBins(
   catalog: Catalog,
   { table, propf, groupBy }: Extract<GqlQuery, { type: 'groupSoup' }>,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Bin[], DatabaseSqlFetchFailure> {
   const kind = catalog.tables
     .find((candidate) => candidate.id === table)
@@ -583,7 +676,8 @@ function groupBins(
         requestPolicy,
         'grouped Soup',
         step,
-        cache
+        cache,
+        signal
       )
     )
     .andThen((data) =>
@@ -593,43 +687,4 @@ function groupBins(
         )
       )
     );
-}
-
-function peoplePage(
-  catalog: Catalog,
-  people: () => Promise<Person[]>,
-  ids: string[] | null
-): ResultAsync<Page, DatabaseSqlFetchFailure> {
-  const table = catalog.tables.find(
-    (candidate): candidate is Table => candidate.source === 'people'
-  );
-  if (!table) return errAsync(fetchFailure('this catalog has no people table'));
-  const column = (name: string): Result<string, DatabaseSqlFetchFailure> => {
-    const found = table.columns.find((candidate) => candidate.name === name);
-    return found
-      ? ok(found.id)
-      : err(fetchFailure(`the people table has no ${name} column`));
-  };
-  const wanted = ids ? new Set(ids) : undefined;
-  return Result.combine([
-    column('id'),
-    column('name'),
-    column('email'),
-  ]).asyncAndThen(([id, name, email]) =>
-    ResultAsync.fromPromise(people(), thrownFetchFailure).map(
-      (everyone): Page => ({
-        rows: everyone
-          .filter((person) => !wanted || wanted.has(person.id))
-          .map((person) => ({
-            id: uuidV5(person.id, PERSON_ROW_NAMESPACE),
-            cells: {
-              [id]: { type: 'entities', value: [person.id] },
-              [name]: { type: 'text', value: person.name },
-              [email]: { type: 'text', value: person.email },
-            },
-          })),
-        next: null,
-      })
-    )
-  );
 }

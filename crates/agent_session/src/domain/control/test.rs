@@ -37,9 +37,15 @@ fn answers() -> [AgentAction; 2] {
 fn editors_and_owners_can_answer_both_interaction_kinds() {
     for level in [AccessLevel::Edit, AccessLevel::Owner] {
         for action in answers() {
-            let event =
-                ControlEvent::authorized(action, None, None, ControlPrincipal::User, access(level))
-                    .unwrap();
+            let event = ControlEvent::authorized(
+                action,
+                None,
+                None,
+                None,
+                ControlPrincipal::User,
+                access(level),
+            )
+            .unwrap();
             assert_eq!(event.actor, Some(user()));
         }
     }
@@ -55,6 +61,7 @@ fn runtimes_cannot_answer_even_when_forwarding_an_owner_or_editor() {
                         action,
                         None,
                         None,
+                        None,
                         ControlPrincipal::Runtime(actor.clone()),
                         access(level)
                     ),
@@ -63,6 +70,7 @@ fn runtimes_cannot_answer_even_when_forwarding_an_owner_or_editor() {
             }
             let event = ControlEvent::authorized(
                 AgentAction::prompt("hello"),
+                None,
                 None,
                 None,
                 ControlPrincipal::Runtime(actor.clone()),
@@ -93,6 +101,7 @@ fn a_runtime_forwards_trigger_context_with_a_prompt() {
         AgentAction::prompt("hello"),
         None,
         Some(trigger()),
+        None,
         ControlPrincipal::Runtime(Some(user())),
         access(AccessLevel::Edit),
     )
@@ -109,6 +118,7 @@ fn a_user_cannot_supply_trigger_context() {
             AgentAction::prompt("hello"),
             None,
             Some(trigger()),
+            None,
             ControlPrincipal::User,
             access(AccessLevel::Owner),
         ),
@@ -127,10 +137,63 @@ fn public_controls_cannot_supply_internal_review_context() {
                 AgentAction::notification(Vec::new()),
                 None,
                 None,
+                None,
                 principal,
                 access(AccessLevel::Owner),
             ),
             Err(AgentSessionError::Forbidden)
         ));
     }
+}
+
+#[test]
+fn a_person_names_the_tab_they_typed_in() {
+    let tab = crate::domain::model::UiClientId::from_uuid(macro_uuid::Uuid::from_u128(0xc1));
+
+    let event = ControlEvent::authorized(
+        AgentAction::prompt("open the plan"),
+        None,
+        None,
+        Some(tab),
+        ControlPrincipal::User,
+        access(AccessLevel::Edit),
+    )
+    .unwrap();
+
+    assert_eq!(event.client, Some(tab));
+}
+
+#[test]
+fn a_runtime_cannot_name_a_tab() {
+    let tab = crate::domain::model::UiClientId::from_uuid(macro_uuid::Uuid::from_u128(0xc1));
+
+    let result = ControlEvent::authorized(
+        AgentAction::prompt("open the plan"),
+        None,
+        None,
+        Some(tab),
+        ControlPrincipal::Runtime(Some(user())),
+        access(AccessLevel::Edit),
+    );
+
+    assert!(matches!(result, Err(AgentSessionError::Forbidden)));
+}
+
+#[test]
+fn a_program_using_a_persons_credential_cannot_name_a_tab() {
+    let tab = crate::domain::model::UiClientId::from_uuid(macro_uuid::Uuid::from_u128(0xc1));
+
+    let event = ControlEvent::authorized(
+        AgentAction::prompt("open the plan"),
+        None,
+        None,
+        Some(tab),
+        ControlPrincipal::Program,
+        access(AccessLevel::Edit),
+    )
+    .unwrap();
+
+    // The prompt still goes through, as the user, but no tab is kept.
+    assert_eq!(event.client, None);
+    assert_eq!(event.actor, Some(user()));
 }

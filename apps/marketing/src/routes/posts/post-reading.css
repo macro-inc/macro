@@ -1,31 +1,23 @@
+/* Article typography must not leak into the shared product UI. */
+@scope (:root) to (.post-product-ui) {
 /* Slab headlines and monochrome artwork follow the public homepage. */
 .posts-article .posts-title {
   color: var(--post-ink);
   font-family: 'Roboto Slab Variable', display, serif;
-  font-size: clamp(36px, 5.4vw, 56px);
-  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
-  letter-spacing: -0.035em;
-  line-height: 1.16;
+  font-size: 40px;
+  font-weight: calc(320 + var(--cream-slab-weight-increase, 0));
+  letter-spacing: -0.04em;
+  line-height: 1.06;
+  margin: 0 auto 24px;
   text-wrap: balance;
-}
-
-.posts-article .posts-eyebrow a {
-  align-items: center;
-  color: var(--post-faint);
-  display: inline-flex;
-  font-size: 12px;
-  gap: 8px;
-}
-
-.posts-article .posts-eyebrow svg {
-  height: 14px;
-  width: 14px;
 }
 
 .posts-article .posts-lede {
   color: var(--post-muted);
-  font: 400 15px/28px 'Inter Variable', Inter, sans-serif;
-  max-width: 440px;
+  font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif;
+  margin: 0 auto;
+  max-width: 640px;
+  text-wrap: balance;
 }
 
 .posts-article .posts-byline {
@@ -41,14 +33,15 @@
   filter: grayscale(1);
 }
 
-/* Match the reading scale and FAQ rhythm of OnboardingTrustDetails. */
+/* Share the feature pages’ reading scale and measure. */
 .posts-article .post-body {
   color: var(--post-muted);
   font-family: 'Inter Variable', Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 28px;
-  max-width: 560px;
+  font-size: 17.5px;
+  font-weight: 370;
+  line-height: 1.8;
+  max-width: 640px;
+  overflow-wrap: anywhere;
 }
 
 .posts-article .post-body > div {
@@ -57,24 +50,24 @@
 }
 
 .posts-article .post-body h2,
-.posts-article .post-body h3 {
+.posts-article .post-body h3,
+.posts-article .post-body h4 {
   color: var(--post-ink);
-  font-family: 'Inter Variable', Inter, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.025em;
+  font-family: 'Roboto Slab Variable', display, serif;
+  font-weight: calc(320 + var(--cream-slab-weight-increase, 0));
+  letter-spacing: -0.035em;
 }
 
 .posts-article .post-body h2 {
-  font-size: 24px;
-  line-height: 32px;
+  font-size: 40px;
+  line-height: 1.2;
   margin: 80px 0 28px;
 }
 
 .posts-article .post-body h3 {
-  font-size: 16px;
-  letter-spacing: normal;
-  line-height: 24px;
-  margin: 48px 0 12px;
+  font-size: 28px;
+  line-height: 1.4;
+  margin: 48px 0 16px;
 }
 
 .posts-article .post-body h2::before,
@@ -128,10 +121,9 @@
 }
 
 .posts-article .post-body .post-faq-title {
-  font-size: 16px;
-  letter-spacing: normal;
-  line-height: 24px;
-  margin: 48px 0 12px;
+  font-size: 28px;
+  line-height: 1.4;
+  margin: 48px 0 16px;
 }
 
 .post-faq {
@@ -192,19 +184,19 @@
   line-height: 24px;
 }
 
-@media (min-width: 640px) {
-  .posts-article .post-body {
-    font-size: 15px;
+@media (max-width: 699px) {
+  .posts-article .posts-title {
+    font-size: clamp(34px, 8vw, 40px);
+    letter-spacing: -0.035em;
+    line-height: 1.1;
   }
 
   .posts-article .post-body h2 {
     font-size: 28px;
-    line-height: 36px;
   }
 
-  .posts-article .post-body .post-faq-title {
-    font-size: 16px;
-    line-height: 24px;
+  .posts-article .post-body h3 {
+    font-size: 24px;
   }
 }
 
@@ -266,7 +258,33 @@
   color: var(--post-faint);
   font-family: 'Inter Variable', Inter, sans-serif;
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 370;
   letter-spacing: normal;
   text-transform: none;
+}
+
+.posts-article .post-body h4 { font-size: 22px; line-height: 1.4; }
+.posts-article .post-body :is(ul, ol) { padding-left: 24px; }
+.posts-article .post-body li + li { margin-top: 8px; }
+.posts-article .post-body code { font-family: ui-monospace, monospace; font-size: .86em; }
+.posts-article .post-body pre { max-width: 100%; overflow-x: auto; font-size: 14px; }
+.posts-article .post-body pre code { font-size: inherit; }
+.posts-article .post-body :is(.mvn-table-wrap, .mfs-table-wrap) { width: 100%; max-width: 100%; left: auto; transform: none; border: 0; border-radius: 0; }
+.posts-article .post-body :is(.mvn-table, .mfs-table) :is(th, td) { color: var(--post-muted); }
+
+.posts-article .post-body :is(h2,h3,h4) :is(strong,b) { font-weight: inherit; }
+
+/* Use the feature pages' visual column; prose and tables keep the reading measure. */
+.posts-article .post-body :is(.mvn-graphic, .mvn-video, .pdg-figure) {
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100cqw;
+  max-width: none;
+}
+@media (max-width: 699px) {
+  .posts-article .post-body,
+  .posts-article-header { width: calc(100% - 16px); }
+}
+
 }

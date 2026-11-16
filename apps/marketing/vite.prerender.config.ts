@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { documentation } from './scripts/documentation';
 import { standaloneBoundary } from './scripts/standaloneBoundary';
 import { solidSvgOptions } from './vite.svgo';
 
@@ -14,9 +15,14 @@ export default defineConfig({
   root: import.meta.dirname,
   plugins: [
     standaloneBoundary(),
+    documentation(),
     tailwind(),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),
-    solidPlugin({ ssr: true, solid: { hydratable: true } }),
+    solidPlugin({
+      ssr: true,
+      extensions: ['.mdx'],
+      solid: { hydratable: true },
+    }),
     solidSvg(solidSvgOptions),
   ],
   resolve: {

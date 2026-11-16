@@ -96,6 +96,16 @@ impl ContainerManager for TaggedManager {
         Ok(())
     }
 
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        self.record("release_idle");
+        Ok(())
+    }
+
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        self.record("idle_release_is_lossless");
+        Ok(true)
+    }
+
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         unimplemented!("these tests never resize")
     }
@@ -131,6 +141,10 @@ impl AgentSessionRepo for FixedBotSessions {
         _ids: &[AgentSessionId],
     ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the router never previews sessions")
+    }
+
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
     }
 
     async fn billing(
@@ -404,7 +418,10 @@ async fn preflight_routes_by_kind_before_any_session_exists() {
             .unwrap(),
         None
     );
-    assert!(router.preflight(AgentKind::External, &owner).await.is_err());
+    assert_eq!(
+        router.preflight(AgentKind::External, &owner).await.unwrap(),
+        None
+    );
     assert_eq!(cursor.calls(), ["cursor:preflight"]);
     assert_eq!(sandbox.calls(), ["sandbox:preflight"]);
     assert_eq!(codex.calls(), ["codex:preflight"]);

@@ -19,6 +19,7 @@ export default defineConfig({
     'query-write-scope.browser.e2e.ts',
     'email-participants.browser.e2e.ts',
     'search-buckets.browser.e2e.ts',
+    'people-references.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

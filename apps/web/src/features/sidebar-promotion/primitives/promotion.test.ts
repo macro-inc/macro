@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hidePromotion, isPromotionHiddenLocally } from './promotion';
+import {
+  hidePromotion,
+  hidePromotionUntilCommitted,
+  isPromotionHiddenLocally,
+} from './promotion';
 
 const host = vi.hoisted(() => ({ dismiss: vi.fn() }));
 vi.mock('@queries/prompt-dismissals', () => ({
@@ -42,5 +46,30 @@ describe('sidebar promotion dismissal', () => {
     hidePromotion(undefined, 'home');
     expect(host.dismiss).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
+  });
+
+  it('hides at once but dismisses everywhere only once committed', () => {
+    const pending = hidePromotionUntilCommitted('alice', 'routines:email');
+    expect(isPromotionHiddenLocally('alice', 'routines:email')).toBe(true);
+    expect(host.dismiss).not.toHaveBeenCalled();
+    pending.commit();
+    pending.undo();
+    expect(host.dismiss).toHaveBeenCalledExactlyOnceWith('routines:email');
+    expect(isPromotionHiddenLocally('alice', 'routines:email')).toBe(true);
+  });
+
+  it('shows it again on undo, and the server never hears of it', () => {
+    const pending = hidePromotionUntilCommitted('alice', 'routines:calls');
+    expect(isPromotionHiddenLocally('alice', 'routines:calls')).toBe(true);
+    pending.undo();
+    pending.commit();
+    expect(isPromotionHiddenLocally('alice', 'routines:calls')).toBe(false);
+    expect(host.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('dismisses everywhere if the page goes away before undo', () => {
+    hidePromotionUntilCommitted('alice', 'routines:tasks');
+    window.dispatchEvent(new Event('pagehide'));
+    expect(host.dismiss).toHaveBeenCalledExactlyOnceWith('routines:tasks');
   });
 });

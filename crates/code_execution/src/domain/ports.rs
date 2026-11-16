@@ -58,8 +58,8 @@ pub trait ProgramChecker: Send + Sync + 'static {
     fn sdk_fingerprint(&self) -> &str;
 
     /// The problems the type checker found; empty when the program checks.
-    /// `declarations` is an ambient declaration module the program can use
-    /// without importing it, such as the type of `main`'s argument.
+    /// `declarations` is a module whose `declare global` types the program
+    /// can use without importing them, such as the type of `main`'s argument.
     async fn check(
         &self,
         source: &str,

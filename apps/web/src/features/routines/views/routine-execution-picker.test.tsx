@@ -351,7 +351,7 @@ describe('routine execution picker', () => {
         screen.getByRole('button', { name: 'Agent' }).textContent
       ).toContain('Retired Model');
       expect(screen.getByRole('status').textContent).toContain(
-        'not available from this runtime'
+        'not available from this machine'
       );
       expect(onChange).not.toHaveBeenCalled();
     }
@@ -363,14 +363,14 @@ describe('routine execution picker', () => {
       { roster: roster(false) }
     );
     expect(screen.getByRole('status').textContent).toContain(
-      'Its runtime is disconnected'
+      'Its machine is disconnected'
     );
     let trigger = openPicker();
     // A disconnected macrod agent stays clickable: selecting it is the
     // reconnect path (opens Settings → Runtimes) rather than a dead row.
     const reconnect = screen.getByRole('menuitem', { name: /Local worker/ });
     expect(reconnect.getAttribute('aria-disabled')).not.toBe('true');
-    expect(reconnect.textContent).toContain('Reconnect runtime');
+    expect(reconnect.textContent).toContain('Reconnect machine');
     fireEvent.keyDown(reconnect, { key: 'Enter' });
     expect(onConnect.mock.calls[0][0].harness).toBe('macrod');
     await expectClosed(trigger);

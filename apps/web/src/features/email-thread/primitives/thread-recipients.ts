@@ -6,9 +6,9 @@ import type {
   EmailMessage,
 } from '../../email-message/core/email-message';
 
-/** Merge address-book, thread and locally added recipients in their existing order. */
+/** Merge explicitly scoped extras, thread addresses and locally added recipients. */
 export function createThreadRecipients(
-  contacts: Accessor<EmailRecipient[]>,
+  extras: Accessor<EmailRecipient[]>,
   messages: Accessor<EmailMessage[] | undefined>
 ) {
   const [augmentedRecipients, setAugmentedRecipients] = createSignal<
@@ -37,7 +37,7 @@ export function createThreadRecipients(
   const getRecipientOptions = () => {
     const optionsMap = new Map<string, EmailRecipient>();
 
-    for (const contact of contacts()) {
+    for (const contact of extras()) {
       optionsMap.set(contact.data.email, contact);
     }
 

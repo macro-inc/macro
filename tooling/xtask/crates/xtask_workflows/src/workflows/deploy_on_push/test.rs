@@ -3,8 +3,9 @@ use super::*;
 #[test]
 fn web_publication_waits_for_sync_protocol_support() -> Result<()> {
     let dev = crate::workflows::render_patched(deploy_on_push, patch)?;
-    let prod = std::fs::read_to_string(
-        xtask_paths::repo_root().join(".github/workflows/release-production.yml"),
+    let prod = crate::workflows::render_patched(
+        crate::workflows::release_production::release_production,
+        crate::workflows::release_production::patch,
     )?;
 
     for (environment, yaml, web_job, build_job) in [

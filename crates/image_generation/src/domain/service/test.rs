@@ -142,6 +142,7 @@ fn request(prompt: &str) -> NewGeneratedImage {
         prompt: prompt.to_string(),
         aspect_ratio: Some(ImageAspectRatio::Widescreen),
         reference_images: Vec::new(),
+        agent_session_id: None,
     }
 }
 
@@ -518,7 +519,8 @@ impl UsageRecorder for RecordingUsage {
 }
 
 #[tokio::test]
-async fn attributes_usage_to_the_user_even_when_upload_fails() {
+async fn attributes_usage_to_the_user_and_session_even_when_upload_fails() {
+    let session = Uuid::from_u128(0xabc);
     for fail in [false, true] {
         let recorder = Arc::new(RecordingUsage::default());
         let service = ImageGenerationServiceImpl::new(
@@ -532,7 +534,13 @@ async fn attributes_usage_to_the_user_even_when_upload_fails() {
         )
         .with_reference_reader(Arc::new(RecordingReader::returning(Vec::new())));
         let result = service
-            .create_generated_image(&principal(), request("draw a cat"))
+            .create_generated_image(
+                &principal(),
+                NewGeneratedImage {
+                    agent_session_id: Some(session),
+                    ..request("draw a cat")
+                },
+            )
             .await;
         assert_eq!(result.is_err(), fail);
         let events = recorder.0.lock().unwrap();
@@ -540,6 +548,7 @@ async fn attributes_usage_to_the_user_even_when_upload_fails() {
         assert_eq!(events[0].feature, AiFeature::ImageGeneration);
         assert_eq!(&events[0].user, principal().user().unwrap());
         assert_eq!(events[0].entity, None);
+        assert_eq!(events[0].agent_session_id, Some(session));
         assert_eq!(
             events[0].amount,
             ai_usage::UsageAmount::Tokens {

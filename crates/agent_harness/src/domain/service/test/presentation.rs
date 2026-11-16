@@ -62,7 +62,10 @@ async fn presentation_forward_ack_waits_for_the_remote_durable_pair() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        TestConnections::new(
+            MirrorBindings::default(),
+            RuntimeRegistry::<ContainerSender>::new(),
+        ),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),

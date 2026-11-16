@@ -77,4 +77,22 @@ describe('createDeleteMessageConfirmation', () => {
     });
     await screen.findByText('Delete message');
   });
+
+  it('keeps the message-only warning for a call chat root', async () => {
+    const { requestDelete, ConfirmationDialog } =
+      createDeleteMessageConfirmation(vi.fn());
+
+    render(() => <ConfirmationDialog />);
+
+    requestDelete({
+      parent: { type: 'call', id: 'call-1' },
+      messageID: 'call-1',
+    });
+    await screen.findByText('Delete message');
+    expect(
+      screen.getByText(
+        'This message will be permanently deleted. This action cannot be undone.'
+      )
+    ).toBeTruthy();
+  });
 });
