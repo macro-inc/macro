@@ -36,7 +36,10 @@ pub fn router() -> Router<ApiContext> {
             get(microsoft_access_token::disconnect_handler),
         )
         .route("/get_names", post(post_get_names::handler_internal))
-        .route("/get_existing_users", get(post_get_existing_users::handler))
+        .route(
+            "/get_existing_users",
+            post(post_get_existing_users::handler),
+        )
         .route("/remove_link", delete(remove_link::handler))
         .route(
             "/revoke_microsoft_grant",
