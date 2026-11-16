@@ -9,6 +9,7 @@ name: OCaml SDK Check
     - packages/sdk-ocaml/**
     - packages/sdk/specs/**
     - packages/sdk/src/config.ts
+    - packages/sdk/generated/*/sdk.gen.ts
     - flake.lock
     - '.github/workflows/sdk-ocaml-check.yml'
   workflow_call: {}
@@ -36,6 +37,11 @@ jobs:
       run: |
         set -euo pipefail
         nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build && dune test"
+      timeout-minutes: 10
+    - name: 'Wasm transport: dune build --profile wasm @fetch/runtest (Deno)'
+      run: |
+        set -euo pipefail
+        nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build --profile wasm --build-dir _build_wasm @fetch/runtest"
       timeout-minutes: 10
     - name: Teardown Nix
       if: always()
