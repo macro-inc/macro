@@ -1,0 +1,29 @@
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_f236b9263c77b4::t_78fe1573c274c1 209-225,448-452,766-767
+apps/web/src/features/channel/Call/tests/create-call-panel.test.ts
+  s_f236b9263c77b4::t_78fe1573c274c1 40-56
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_f236b9263c77b4::t_2b4de87231e77b 111-113,117,893
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  s_f236b9263c77b4::t_2b4de87231e77b 37-38,128-129
+apps/web/src/features/channel/Call/primitives/create-call-panel.ts
+  s_f236b9263c77b4::t_2b4de87231e77b 51-53,55,70-73
+  s_f236b9263c77b4::t_78fe1573c274c1 54
+  s_f236b9263c77b4::t_6f4631ad62efbb 74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f337ff8eb980b7cf99e2be915f6aa5e1b61516da",
+  "prompts": {},
+  "sessions": {
+    "s_f236b9263c77b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d649184c-f9a9-4d40-bfa6-9a8024963554",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
