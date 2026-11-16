@@ -1,8 +1,4 @@
-import {
-  useViewShell,
-  ViewShell,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
@@ -168,9 +164,8 @@ export function Header(props: {
   function TouchHeader(props: ParentProps) {
     return (
       <Show when={shell} fallback={props.children}>
-        <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 items-start justify-between gap-2 px-(--mobile-chrome-gutter) pt-[calc(var(--safe-top,0px)+0.5rem)]">
-          {props.children}
-        </header>
+        {/* Floats over the pane, which reserves its measured height. */}
+        <ViewShell.TopBar class="touch:flex">{props.children}</ViewShell.TopBar>
       </Show>
     );
   }
@@ -190,7 +185,9 @@ export function Header(props: {
         when={shell}
         fallback={<SplitHeaderRight>{props.children}</SplitHeaderRight>}
       >
-        <div class="flex min-w-0 shrink-0 items-center">{props.children}</div>
+        <div class="ml-auto flex min-w-0 shrink-0 items-center">
+          {props.children}
+        </div>
       </Show>
     );
   }
@@ -305,9 +302,6 @@ export function Header(props: {
         <TouchHeader>
           <TouchHeaderLeft>
             <HeaderIsland class="min-w-0 shrink px-1">
-              <Show when={props.presentation === 'workspace'}>
-                <ViewSidebar.Toggle action="expand" />
-              </Show>
               <MonthDrawer month={currentDate()} />
               {todayButton(isTouchDevice())}
               <Show when={props.presentation === 'preview'}>

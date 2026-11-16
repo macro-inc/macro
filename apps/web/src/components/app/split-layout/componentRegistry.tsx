@@ -378,9 +378,7 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
-  // Desktop Calendar draws its own top bar. Touch still needs the split header
-  // for the floating month and action controls.
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => composableLayout(true)
 );
 registerComponent(
   'channels',
