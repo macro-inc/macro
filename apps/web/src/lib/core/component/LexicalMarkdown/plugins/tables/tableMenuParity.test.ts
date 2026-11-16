@@ -537,12 +537,12 @@ for (const scenario of SCENARIOS) {
     expect(nativeOutcome(fixture)).toEqual(expected.after);
   });
 
-  // Gap C-UNDO-SNAPSHOT-01 (owner fx-undo): after one Undo native returns a
-  // range selection where Source restores the pre-action table or range
-  // selection. The undone JSON also differs: native re-imports stored nulls
-  // (detail, format, style, direction, indent, textFormat, textStyle) as the
-  // app's Loro undo does, which this @lexical/history oracle cannot model.
-  // Remove `.fails` once both are resolved; this then fails loudly until it is.
+  // C-UNDO-SNAPSHOT-01: this oracle's undo is @lexical/history (fixture
+  // only). Source's app undo is Loro (registerLoroHistory): it re-imports
+  // stored nulls (detail, format, style, direction, indent, textFormat,
+  // textStyle) and does not restore a TableSelection, so the oracle's
+  // post-undo JSON and selection do not model the app path. Keep `.fails`
+  // until the oracle models it.
   test.fails(`(e) C-UNDO-SNAPSHOT-01: one undo equals Source: ${scenario.name}`, async () => {
     const { expected, fixture } = await nativeAfterAction();
     expect(nativeOutcome(fixture)).toEqual(expected.after);

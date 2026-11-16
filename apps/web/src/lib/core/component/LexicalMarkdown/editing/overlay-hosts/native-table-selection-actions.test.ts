@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import { transfer } from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
 import { tableEditPublished } from './native-table-edit';
 import { createNativeTableSelectionActionsHost } from './native-table-selection-actions';
@@ -185,4 +186,21 @@ test('without edit access merge and split send nothing', async () => {
     ['A', 'B'],
     ['C', 'D'],
   ]);
+});
+
+test('a paste that inserts nothing still drops the selection, as Source', async () => {
+  const fixture = mount([
+    ['A', 'B'],
+    ['C', 'D'],
+  ]);
+  const host = createNativeTableSelectionActionsHost(fixture.view, () => true);
+  const [a, b] = cellKeys(fixture);
+  if (a === undefined || b === undefined) throw new Error('Missing cells');
+  selectCells(fixture, a, b);
+  await host.paste(transfer(''));
+  expect(rowTexts(fixture)).toEqual([
+    ['A', 'B'],
+    ['C', 'D'],
+  ]);
+  expect(fixture.view.selection().selection.kind).toBe('none');
 });

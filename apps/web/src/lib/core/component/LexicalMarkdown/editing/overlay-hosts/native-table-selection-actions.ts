@@ -16,10 +16,12 @@ import type {
 /** Merge and split also report their own input outcome to native callers. */
 export type NativeTableSelectionActionsHost = Omit<
   TableSelectionActionsHost<number>,
-  'merge' | 'split'
+  'merge' | 'split' | 'paste'
 > & {
   merge(): Promise<NativeTableEditOutcome>;
   split(): Promise<NativeTableEditOutcome>;
+  /** Settles once the paste and the selection collapse are done; never rejects. */
+  paste(data: DataTransfer): Promise<void>;
 };
 
 const REFUSED: NativeTableEditOutcome = Object.freeze({ kind: 'refused' });
@@ -128,20 +130,27 @@ export function createNativeTableSelectionActionsHost(
     merge: () => edit('selection-merge'),
     split: () => edit('selection-split'),
     paste(dataTransfer) {
-      if (!editable()) return;
+      if (!editable()) return Promise.resolve();
       const cached = view.selection().selection;
       const selection = cached.kind === 'table' ? cached : readSelection(view);
-      if (selection.kind !== 'table' && selection.kind !== 'range') return;
+      if (selection.kind !== 'table' && selection.kind !== 'range')
+        return Promise.resolve();
       const pasteThenCollapse = async () => {
         try {
-          const pasted = await view.clipboard.paste(dataTransfer, selection);
-          if (pasted && view.isMounted)
+          // Source drops the selection in the same update whatever the insert
+          // did; an admitted paste (even one inserting nothing) returns true.
+          // false means the document or selection changed during the import,
+          // and that newer selection is kept.
+          const admitted = await view.clipboard.paste(dataTransfer, selection);
+          if (admitted && view.isMounted)
             view.port.selectionFromView({ kind: 'none' });
         } catch (error) {
           view.options.onError(error);
         }
       };
-      fireAndForget(pasteThenCollapse(), 'native-table-selection-paste');
+      const pasted = pasteThenCollapse();
+      fireAndForget(pasted, 'native-table-selection-paste');
+      return pasted;
     },
   };
 }
