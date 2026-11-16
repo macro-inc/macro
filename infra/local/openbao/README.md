@@ -133,7 +133,7 @@ require equivalent role provisioning before enabling namespace cleanup.
 
 To include Rust checks, set `PASSWORDS_TEST_OPENBAO_RUST_BIN` to a compiled
 passwords unit-test executable and set `DATABASE_URL` to an explicit disposable
-metadata database when running the lifecycle regression. It runs both ignored Rust provider regressions serially against the
+metadata database when running the lifecycle regression. It runs all ignored Rust provider and import regressions serially against the
 same disposable server, including namespace deletion acknowledgement and delayed
 TOTP retirement with real metadata.
 

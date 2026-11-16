@@ -2,10 +2,10 @@
 use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, DueInviteReminder, InviteUsersToTeamError,
-        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
-        TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, RemovedTeamMember,
+        SeatPlan, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+        TeamInviteLinkToken, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
@@ -669,12 +669,11 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
+    ) -> Result<RemovedTeamMember<'static>, RemoveUserFromTeamError> {
         let owner_id = self.get_team_owner(team_id).await?;
 
         if user_id.as_ref().eq(owner_id.as_ref()) {
@@ -682,16 +681,19 @@ impl TeamRepository for TeamRepositoryImpl {
         }
 
         let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
 
-        let row = sqlx::query(
+        let row = sqlx::query!(
             r#"
             DELETE FROM team_user
             WHERE team_id = $1 AND user_id = $2
-            RETURNING team_role, plan
+            RETURNING team_role AS "team_role: TeamRole", plan AS "plan: SeatPlan", crm_access
             "#,
+            team_id,
+            user_id.as_ref(),
         )
-        .bind(team_id)
-        .bind(user_id.as_ref())
         .fetch_optional(&mut *transaction)
         .await?;
 
@@ -699,11 +701,14 @@ impl TeamRepository for TeamRepositoryImpl {
             return Err(RemoveUserFromTeamError::UserNotInTeam);
         };
 
-        let removed_member = TeamMember {
-            team_id: *team_id,
-            user_id: user_id.clone().into_owned(),
-            role: row.try_get("team_role")?,
-            plan: row.try_get("plan")?,
+        let removed_member = RemovedTeamMember {
+            crm_access: row.crm_access,
+            member: TeamMember {
+                team_id: *team_id,
+                user_id: user_id.clone().into_owned(),
+                role: row.team_role,
+                plan: row.plan,
+            },
         };
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
@@ -1063,29 +1068,37 @@ impl TeamRepository for TeamRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     async fn rollback_remove_user_from_team(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
         seat_included: bool,
     ) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
 
         let inserted = sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included, crm_access)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT DO NOTHING
             "#,
-            removed_member.team_id,
-            removed_member.user_id.as_ref(),
-            removed_member.role as _,
-            removed_member.plan as _,
+            removed_member.member.team_id,
+            removed_member.member.user_id.as_ref(),
+            removed_member.member.role as _,
+            removed_member.member.plan as _,
             seat_included,
+            removed_member.crm_access,
         )
         .execute(&mut *transaction)
         .await?;
 
         if inserted.rows_affected() > 0 {
-            TeamRepositoryImpl::bump_seat_count(&mut transaction, &removed_member.team_id, 1)
-                .await?;
+            TeamRepositoryImpl::bump_seat_count(
+                &mut transaction,
+                &removed_member.member.team_id,
+                1,
+            )
+            .await?;
         }
 
         transaction.commit().await?;
@@ -1232,7 +1245,7 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let members = sqlx::query!(
             r#"
-            SELECT user_id,
+            SELECT user_id, (crm_access OR team_role <> 'member') AS "crm_access!",
                 team_role as "team_role!: TeamRole",
                 plan as "plan!: SeatPlan"
             FROM team_user
@@ -1242,6 +1255,11 @@ impl TeamRepository for TeamRepositoryImpl {
         )
         .fetch_all(&self.pool)
         .await?;
+
+        let crm_member_access = members
+            .iter()
+            .map(|row| (row.user_id.clone(), row.crm_access))
+            .collect();
 
         let members = members
             .into_iter()
@@ -1261,6 +1279,7 @@ impl TeamRepository for TeamRepositoryImpl {
             team,
             members,
             scheduled_seat_plans: None,
+            crm_member_access,
         })
     }
 
@@ -1527,6 +1546,51 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(member)
+    }
+
+    #[tracing::instrument(name = "team.crm_member_access", skip_all, fields(team_id = %team_id, enabled), err)]
+    async fn set_member_crm_access(
+        &self,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        member: &MacroUserIdStr<'_>,
+        enabled: bool,
+    ) -> Result<(), TeamError> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let members = sqlx::query!(
+            r#"SELECT user_id, team_role AS "role!: TeamRole"
+               FROM team_user WHERE team_id = $1 AND user_id = ANY($2)
+               ORDER BY user_id FOR UPDATE"#,
+            team_id,
+            &[actor.as_ref(), member.as_ref()] as &[&str],
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        crate::domain::crm_member_access::validate_change(
+            members
+                .iter()
+                .find(|row| row.user_id == actor.as_ref())
+                .map(|row| row.role),
+            members
+                .iter()
+                .find(|row| row.user_id == member.as_ref())
+                .map(|row| row.role),
+            team_id,
+            enabled,
+        )?;
+        sqlx::query!(
+            "UPDATE team_user SET crm_access = $3 WHERE team_id = $1 AND user_id = $2",
+            team_id,
+            member.as_ref(),
+            enabled,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

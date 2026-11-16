@@ -409,3 +409,23 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
 }
 
 mod code_mode;
+
+#[test]
+fn code_results_send_pixels_as_images_and_keep_the_receipt_structured() {
+    let receipt = serde_json::json!({
+        "executionId": "e",
+        "status": "succeeded",
+        "result": {"data": 1, "reviews": [], "images": [{"id": "render-1"}]},
+        "modelMedia": [{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo="}],
+    });
+    let result = code_result(receipt.clone());
+    assert_eq!(result.structured_content, Some(receipt));
+    let text = result.content[0].as_text().unwrap();
+    assert!(!text.text.contains("iVBORw0KGgo"), "{}", text.text);
+    let image = result.content[1].as_image().unwrap();
+    assert_eq!(
+        (image.data.as_str(), image.mime_type.as_str()),
+        ("iVBORw0KGgo=", "image/png")
+    );
+    assert_eq!(result.content.len(), 2);
+}
