@@ -3522,9 +3522,8 @@ async fn emptied_scheduled_meeting_stays_one_session_until_its_end(
         .await?;
     assert_eq!(repo.get_participant_count(&call.id).await?, 0);
 
-    // Before the slot ends, emptying and a closed room both keep the session.
+    // Before the slot ends, emptying keeps the session.
     assert!(repo.archive_call_if_empty(&call.id).await?.is_none());
-    assert!(repo.archive_finished_room(&call.id).await?.is_none());
     let (rejoined, created) = repo
         .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
         .await?;
@@ -3564,7 +3563,7 @@ async fn emptied_cancelled_scheduled_meeting_ends(pool: Pool<Postgres>) -> anyho
         .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
         .await?;
     assert!(repo.cancel_meeting(&meeting.id, USER_B.as_ref()).await?);
-    assert!(repo.archive_finished_room(&call.id).await?.is_some());
+    assert!(repo.archive_call_if_empty(&call.id).await?.is_some());
     Ok(())
 }
 

@@ -1137,12 +1137,6 @@ impl CallRepository for PgCallRepo {
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
-    async fn archive_finished_room(
-        &self,
-        call_id: &Uuid,
-    ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, false, None, true).await
-    }
     async fn archive_call_if_empty(
         &self,
         call_id: &Uuid,

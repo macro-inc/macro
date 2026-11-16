@@ -370,13 +370,6 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
 
-    /// Archive after the RTC room closed, whatever participants remain
-    /// recorded, unless it is a scheduled meeting before its end.
-    fn archive_finished_room(
-        &self,
-        call_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
-
     /// Archive only if there are still no participants while holding the call
     /// lock. A scheduled meeting before its end stays open instead.
     fn archive_call_if_empty(
