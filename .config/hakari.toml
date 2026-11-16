@@ -127,6 +127,8 @@ workspace-members = [
     # password_import: password-manager export parsing runs in the browser
     # (a wasm32 module in the import dialog's worker), so it must stay wasm-safe.
     "password_import",
+    # password_import_wasm: its wasm-bindgen adapter, built only for the browser.
+    "password_import_wasm",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.
