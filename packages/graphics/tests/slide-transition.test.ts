@@ -310,6 +310,53 @@ describe('deck default transition', () => {
     right.dispose();
   });
 
+  it('a rejected commit leaves no staged library or deck default writes', () => {
+    const seed = createLoroSeed(createScene([artifact('a', 'a0')]));
+    const left = createLoroGraphicsBackend(seed, '1', 'scene-root');
+    const right = createLoroGraphicsBackend(seed, '2', 'scene-root');
+    left.subscribeUpdates((bytes) => right.receive(bytes));
+    const document = left.getDocument();
+    const style = {
+      kind: 'styles' as const,
+      name: 'theme',
+      source: ':root{}',
+    };
+
+    expect(() =>
+      left.commit(
+        { ...document, surface: { id: 'image', width: 10, height: 10 } },
+        [style],
+        { transition: { kind: 'fade' } }
+      )
+    ).toThrow('one unbounded surface');
+    expect(() =>
+      left.commit(document, [style], {
+        transition: { kind: 'fade', durationMs: 1 },
+      })
+    ).toThrow('Invalid slide transition');
+
+    const slide = document.items.a;
+    if (slide?.type !== 'artifact') throw new Error('Missing slide');
+    left.commit({
+      ...document,
+      items: {
+        ...document.items,
+        a: { ...slide, geometry: { ...slide.geometry, title: 'Renamed' } },
+      },
+    });
+    expect(right.getDocument().items.a).toMatchObject({
+      geometry: { title: 'Renamed' },
+    });
+    expect(right.presentation.read()).toEqual({});
+    expect(right.artifactLibrary.read()).toEqual({
+      styles: {},
+      components: {},
+    });
+
+    left.dispose();
+    right.dispose();
+  });
+
   it('reads an invalid stored deck default as absent', () => {
     const doc = new LoroDoc();
     doc.import(createLoroSeed(createScene([artifact('a', 'a0')])));

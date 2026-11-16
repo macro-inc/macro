@@ -153,16 +153,18 @@ function graphicsBackend(
     ) {
       const validated = freezeDocument(next);
       local('local', () => {
-        // Staged first: the mirror commits, and these must share that commit.
-        applyArtifactLibraryEdits(doc, libraryEdits);
+        // Loro cannot roll back staged writes, so everything that can reject
+        // the batch runs before the first one: the scene is computed, and the
+        // presentation edit validates before it stages. The library edits and
+        // the mirror's own commit then share one update.
+        const scene = writeScene(
+          mirror.getState().scene,
+          projection.document,
+          validated
+        );
         if (presentationEdit) applyPresentationEdit(doc, presentationEdit);
-        mirror.setState({
-          scene: writeScene(
-            mirror.getState().scene,
-            projection.document,
-            validated
-          ),
-        });
+        applyArtifactLibraryEdits(doc, libraryEdits);
+        mirror.setState({ scene });
       });
     },
     artifactLibrary: {
