@@ -1,0 +1,23 @@
+crates/code_mode_assets/AGENTS.md
+  s_10c67a472f88f0::t_b2b55fa0d31042 30-41
+packages/sdk-ocaml/AGENTS.md
+  s_10c67a472f88f0::t_13a728b823a4bc 7-11,28-30,35-36,39-40,55-61,72-82
+packages/sdk-ocaml/README.md
+  s_10c67a472f88f0::t_021d3a4a78a318 14-16,182-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a35194fff145cf9d87c27fd499cbe6fa194e4f65",
+  "prompts": {},
+  "sessions": {
+    "s_10c67a472f88f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b8a53bc-f5f2-4b55-951b-9e87a11bb2ea",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
