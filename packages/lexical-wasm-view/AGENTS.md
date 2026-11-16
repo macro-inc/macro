@@ -107,7 +107,7 @@ Assert direct child types when testing rich insertion into code, since nested bl
 
 - Set `NATIVE_SESSION_GUARD_PROFILE=preview` only for matched dev-probes test artifacts; leave it unset or use `production` for no-dev artifacts so the production export guard runs.
 
-- Prepare both test artifacts from a coherent native source/seal before package typechecks/tests; never use an incoherent held facade branch. After project build authorization, `just --justfile apps/web/justfile build-document-session-wasm build-document-session-compat-wasm` produces the canonical outputs; this recipe reference does not grant Cargo permission. The metadata-only compatibility test imports `wasm-compat`. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to the ordinary output for guard fixtures. Verified paired artifacts may be copied into those same owned build outputs without changing tracked compatibility declarations.
+- Build the production document-session artifact before package tests, or copy a matching source-built artifact into this worktree. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to that output for guard fixtures. The standalone compatibility shim and its metadata-only compatibility test are deferred; this package does not require a compatibility runtime artifact. Keep tracked compatibility declarations unchanged.
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
 - Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.
@@ -135,7 +135,7 @@ Assert direct child types when testing rich insertion into code, since nested bl
 
 - Isolate Vite and Playwright in a private user/network namespace with loopback
   enabled when host route churn causes ERR_NETWORK_CHANGED; keep checks strict.
-- Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2; derive served-WASM hash assertions from that generated artifact.
+- Build document_session_wasm before session browser tests, with TMPDIR set to a large local disk and -j2; derive served-WASM hash assertions from that generated artifact.
 - `just check`, `just pr-privacy`
 
 ## Related

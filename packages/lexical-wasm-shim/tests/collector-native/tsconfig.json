@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.json",
-  "include": ["./*.ts", "./*.mts"],
-  "compilerOptions": {
-    "noEmit": true,
-    "noEmitOnError": true,
-    "types": ["node"]
-  }
-}

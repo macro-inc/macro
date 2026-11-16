@@ -12,7 +12,6 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
-- `corpus/dev/README.md`: bounded dev collection, encrypted frozen sample, count-only scans and local source-versus-WASM replay.
 - `bench/docs`: synthetic S/M/L Markdown seeds for the native `document_session` bulk benchmark; its `benches/README.md` defines measurement scope and load guards.
 - `diff/listeners.test.ts`: real JS command priority snapshots, identity, truthiness, live registration and caught opaque exceptions.
 - `diff/host.test.ts`: real indexed EditorHandle lifecycle, native fields, packet decoding and JS transforms with current-hook reentry, identity and rollback.
@@ -38,7 +37,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - The recorder owns index.json and upstream/; preserve independently generated fuzz/ artifacts during regeneration and exclude them from recorder file-set checks.
 - Keep unsupported cases in `fixtures/index.json` with a reason; never silently omit them.
 - Scope HTML oracle DOM constructors to each call; keep other corpus routes headless and restore host globals.
-- Keep real dev corpus content only in `/home/wolf/tmp/lexical-port/corpus`; never log it or include it in fixtures, reports or CI artifacts.
+- Keep hosted development content outside the repository; never log it or include it in fixtures, reports or CI artifacts.
 
 ## Checks
 

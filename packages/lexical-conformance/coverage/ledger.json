@@ -1,63 +1,168 @@
 [
   {
+    "id": "S2:lexical:BaseCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CaretDirection",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CaretRange",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CaretType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ChildCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommonAncestorResult",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommonAncestorResultAncestor",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommonAncestorResultBranch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommonAncestorResultDescendant",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommonAncestorResultSame",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:FlipDirection",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NodeCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:PointCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:RootMode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SiblingCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StepwiseIteratorConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextPointCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextPointCaretSlice",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextPointCaretSliceTuple",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:$caretFromPoint",
     "reason": "view-only",
     "source": "S2:120"
   },
   {
+    "id": "S2:lexical:SplitAtPointCaretNextOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:BEFORE_INPUT_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5226"
+    "source": "S1:5232"
   },
   {
     "id": "S2:lexical:BLUR_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5227"
+    "source": "S1:5233"
   },
   {
     "id": "S2:lexical:CLICK_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5232"
+    "source": "S1:5238"
   },
   {
     "id": "S2:lexical:COPY_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5236"
+    "source": "S1:5242"
   },
   {
     "id": "S2:lexical:CUT_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5238"
+    "source": "S1:5244"
   },
   {
     "id": "S2:lexical:DRAGEND_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5242"
+    "source": "S1:5248"
   },
   {
     "id": "S2:lexical:DRAGOVER_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5243"
+    "source": "S1:5249"
   },
   {
     "id": "S2:lexical:DRAGSTART_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5244"
+    "source": "S1:5250"
   },
   {
     "id": "S2:lexical:DROP_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5245"
+    "source": "S1:5251"
   },
   {
     "id": "S2:lexical:FOCUS_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5246"
+    "source": "S1:5252"
   },
   {
     "id": "S2:lexical:INPUT_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5250"
+    "source": "S1:5256"
+  },
+  {
+    "id": "S2:lexical:PasteCommandType",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:DOMSlot",
@@ -70,6 +175,141 @@
     "source": "S2:198"
   },
   {
+    "id": "S2:lexical:CommandListener",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommandListenerPriority",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommandListenerPriorityBefore",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CommandPayloadType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:CreateEditorArgs",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMSlotForNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditableListener",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorDOMRenderConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorSetOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorThemeClasses",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorThemeClassName",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:EditorUpdateOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:HTMLConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:Klass",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:KlassConstructor",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalCommand",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalNodeConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalNodeReplacement",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:MutationListener",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NodeMutation",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:RootListener",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedEditor",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:Spread",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:Transform",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:UpdateListener",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:UpdateListenerPayload",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:DEFAULT_EDITOR_DOM_CONFIG",
     "reason": "view-only",
     "source": "S2:238"
@@ -77,12 +317,27 @@
   {
     "id": "S2:lexical:getTransformSetFromKlass",
     "reason": "not-ported",
-    "source": "S1:5345"
+    "source": "S1:5351"
+  },
+  {
+    "id": "S2:lexical:EditorStateReadOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedEditorState",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:$isEditorState",
     "reason": "not-ported",
-    "source": "S1:5354"
+    "source": "S1:5360"
+  },
+  {
+    "id": "S2:lexical:EventHandler",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:stopLexicalPropagation",
@@ -90,14 +345,164 @@
     "source": "S2:245"
   },
   {
+    "id": "S2:lexical:BaseStaticNodeConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMChildConversion",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversion",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionMap",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionProp",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionPropByTagName",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMConversionTagNameMap",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMExportOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:DOMExportOutputMap",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExportJSON",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalUpdateJSON",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NodeKey",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NodeMap",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedLexicalNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StaticNodeConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StaticNodeConfigRecord",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StaticNodeConfigValue",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:$isLexicalNode",
     "reason": "not-ported",
-    "source": "S1:5387"
+    "source": "S1:5393"
   },
   {
     "id": "S2:lexical:buildImportMap",
     "reason": "not-ported",
-    "source": "S1:5388"
+    "source": "S1:5394"
+  },
+  {
+    "id": "S2:lexical:AnyStateConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NodeStateJSON",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StateConfigKey",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StateConfigValue",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StateValueConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:StateValueOrUpdater",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ValueOrUpdater",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:BaseSelection",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ElementPoint",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:PointType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextPoint",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:$createRangeSelectionFromDom",
@@ -110,14 +515,19 @@
     "source": "S2:303"
   },
   {
+    "id": "S2:lexical:RawTextVisitor",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:isCurrentlyReadOnlyMode",
     "reason": "js-by-design",
-    "source": "S1:5449"
+    "source": "S1:5455"
   },
   {
     "id": "S2:lexical:$applyNodeReplacement",
     "reason": "js-by-design",
-    "source": "S1:5456"
+    "source": "S1:5462"
   },
   {
     "id": "S2:lexical:$getDOMSlot",
@@ -132,7 +542,7 @@
   {
     "id": "S2:lexical:$getEditor",
     "reason": "js-by-design",
-    "source": "S1:5466"
+    "source": "S1:5472"
   },
   {
     "id": "S2:lexical:$getEditorDOMRenderConfig",
@@ -157,17 +567,17 @@
   {
     "id": "S2:lexical:$onUpdate",
     "reason": "not-ported",
-    "source": "S1:5483"
+    "source": "S1:5489"
   },
   {
     "id": "S2:lexical:$setDirectionFromDOM",
     "reason": "not-ported",
-    "source": "S1:5486"
+    "source": "S1:5492"
   },
   {
     "id": "S2:lexical:$setFormatFromDOM",
     "reason": "not-ported",
-    "source": "S1:5487"
+    "source": "S1:5493"
   },
   {
     "id": "S2:lexical:getDOMOwnerDocument",
@@ -202,7 +612,7 @@
   {
     "id": "S2:lexical:getStaticNodeConfig",
     "reason": "not-ported",
-    "source": "S1:5498"
+    "source": "S1:5504"
   },
   {
     "id": "S2:lexical:isBlockDomNode",
@@ -267,7 +677,7 @@
   {
     "id": "S2:lexical:isLexicalEditor",
     "reason": "not-ported",
-    "source": "S1:5513"
+    "source": "S1:5519"
   },
   {
     "id": "S2:lexical:isModifierMatch",
@@ -292,7 +702,57 @@
   {
     "id": "S2:lexical:setNodeIndentFromDOM",
     "reason": "not-ported",
-    "source": "S1:5520"
+    "source": "S1:5526"
+  },
+  {
+    "id": "S2:lexical:ElementFormatType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedElementNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedLineBreakNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedParagraphNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedRootNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedTabNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:SerializedTextNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextFormatType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:TextModeType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:UpdateTag",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:CAN_USE_BEFORE_INPUT",
@@ -345,29 +805,139 @@
     "source": "S2:425"
   },
   {
+    "id": "S2:lexical:AnyLexicalExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:AnyLexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:AnyNormalizedLexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:lexical:configTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5616"
+    "source": "S1:5622"
   },
   {
     "id": "S2:lexical:declarePeerDependency",
     "reason": "not-ported",
-    "source": "S1:5617"
+    "source": "S1:5623"
+  },
+  {
+    "id": "S2:lexical:ExtensionBuildState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ExtensionConfigBase",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ExtensionInitState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:ExtensionRegisterState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:InitialEditorConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:InitialEditorStateType",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:initTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5625"
+    "source": "S1:5631"
+  },
+  {
+    "id": "S2:lexical:LexicalEditorWithDispose",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionDependency",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionInit",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionInternal",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionName",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:LexicalExtensionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NormalizedLexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:NormalizedPeerDependency",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:OutputComponentExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:lexical:OutputExtension",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:lexical:outputTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5639"
+    "source": "S1:5645"
   },
   {
     "id": "S2:lexical:safeCast",
     "reason": "not-ported",
-    "source": "S1:5640"
+    "source": "S1:5646"
   },
   {
     "id": "S2:lexical:addClassNamesToElement",
@@ -387,7 +957,7 @@
   {
     "id": "S2:lexical:mergeRegister",
     "reason": "js-by-design",
-    "source": "S1:5650"
+    "source": "S1:5656"
   },
   {
     "id": "S2:lexical:setDOMStyleFromCSS",
@@ -410,9 +980,189 @@
     "source": "S3:4530"
   },
   {
+    "id": "S2:@lexical/clipboard:ExportMimeTypeConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ExportMimeTypeFunction",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:GetClipboardDataConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:LexicalClipboardData",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/clipboard:setLexicalClipboardDataTransfer",
     "reason": "view-only",
     "source": "S2:487"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ClipboardImportConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ClipboardImportOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ImportMimeTypeConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ImportMimeTypeFunction",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/clipboard:ImportMimeTypePriority",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:SerializedCodeNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$createCodeHighlightNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$createCodeNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$getCodeLineDirection",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$getEndOfCodeInLine",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$getFirstCodeNodeOfLine",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$getLastCodeNodeOfLine",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$getStartOfCodeInLine",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$isCodeHighlightNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$isCodeNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:$outdentLeadingSpaces",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CodeExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CodeHighlightNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CodeIndentConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CodeIndentExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CodeNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:DEFAULT_CODE_LANGUAGE",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:getDefaultCodeLanguage",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CODE_LANGUAGE_FRIENDLY_NAME_MAP",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:CODE_LANGUAGE_MAP",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:getCodeLanguageOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:getCodeLanguages",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:getCodeThemeOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:getLanguageFriendlyName",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:normalizeCodeLanguage",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:PrismTokenizer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code:registerCodeHighlighting",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/code-core:CodeExtension",
@@ -435,6 +1185,11 @@
     "source": "S3:3625"
   },
   {
+    "id": "S2:@lexical/code-core:CodeIndentConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/code-core:CodeIndentExtension",
     "reason": "not-ported",
     "source": "S3:3624"
@@ -443,6 +1198,16 @@
     "id": "S2:@lexical/code-core:registerCodeIndentation",
     "reason": "not-ported",
     "source": "S3:3624"
+  },
+  {
+    "id": "S2:@lexical/code-core:SerializedCodeNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/code-prism:CodePrismConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/code-prism:CodePrismExtension",
@@ -458,6 +1223,11 @@
     "id": "S2:@lexical/code-prism:registerCodeHighlighting",
     "reason": "js-by-design",
     "source": "S3:3626"
+  },
+  {
+    "id": "S2:@lexical/code-prism:Tokenizer",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/code-prism:getCodeLanguages",
@@ -480,9 +1250,19 @@
     "source": "S3:3628"
   },
   {
+    "id": "S2:@lexical/code-shiki:CodeHighlighterShikiConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/code-shiki:CodeHighlighterShikiExtension",
     "reason": "not-ported",
     "source": "S3:12029"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:CodeShikiConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/code-shiki:CodeShikiExtension",
@@ -498,6 +1278,11 @@
     "id": "S2:@lexical/code-shiki:ShikiTokenizer",
     "reason": "not-ported",
     "source": "S3:12029"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:Tokenizer",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/code-shiki:getCodeThemeOptions",
@@ -520,6 +1305,11 @@
     "source": "S2:592"
   },
   {
+    "id": "S2:@lexical/devtools-core:CustomPrintNodeFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/devtools-core:TreeView",
     "reason": "view-only",
     "source": "S2:601"
@@ -530,9 +1320,24 @@
     "source": "S2:603"
   },
   {
+    "id": "S2:@lexical/devtools-core:LexicalCommandEntry",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/devtools-core:LexicalCommandLog",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/dragon:registerDragonSupport",
     "reason": "view-only",
     "source": "S2:611"
+  },
+  {
+    "id": "S2:@lexical/dragon:DragonConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/dragon:DragonExtension",
@@ -540,44 +1345,74 @@
     "source": "S2:613"
   },
   {
+    "id": "S2:@lexical/extension:AutoFocusConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/extension:AutoFocusExtension",
     "reason": "view-only",
     "source": "S2:620"
   },
   {
+    "id": "S2:@lexical/extension:ClearEditorConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:ClickAfterLastBlockConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:ClickAfterLastBlockOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:KnownTypesAndNodes",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/extension:$isDecoratorTextNode",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:applyFormatFromStyle",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:applyFormatToDom",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:DecoratorTextExtension",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:DecoratorTextNode",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:SerializedDecoratorTextNode",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/extension:EditorStateExtension",
     "reason": "not-ported",
-    "source": "S1:4549"
+    "source": "S1:4555"
   },
   {
     "id": "S2:@lexical/extension:HorizontalRuleExtension",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:INSERT_HORIZONTAL_RULE_COMMAND",
@@ -585,9 +1420,39 @@
     "source": "S3:1628"
   },
   {
+    "id": "S2:@lexical/extension:SerializedHorizontalRuleNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:InitialStateConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:namedSignals",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:NamedSignalsOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:NamedSignalsOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/extension:NestedEditorExtension",
     "reason": "not-ported",
-    "source": "S1:4551"
+    "source": "S1:4557"
+  },
+  {
+    "id": "S2:@lexical/extension:NormalizeInlineElementsConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/extension:NormalizeInlineElementsExtension",
@@ -595,9 +1460,179 @@
     "source": "S3:1628"
   },
   {
+    "id": "S2:@lexical/extension:NormalizeTripleClickSelectionConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:NormalizeTripleClickSelectionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/extension:SelectionAlwaysOnDisplayExtension",
     "reason": "view-only",
     "source": "S2:663"
+  },
+  {
+    "id": "S2:@lexical/extension:batch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:computed",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:effect",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:ReadonlySignal",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:Signal",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:signal",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:SignalOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:untracked",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:CanIndentPredicate",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:TabIndentationConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:watchedSignal",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:AnyLexicalExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:AnyLexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:configExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:declarePeerDependency",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:defineExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:ExtensionConfigBase",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:ExtensionRegisterState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:InitialEditorStateType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalEditorWithDispose",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionDependency",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionInit",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionName",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:LexicalExtensionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:NormalizedLexicalExtensionArgument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:NormalizedPeerDependency",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:OutputComponentExtension",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:safeCast",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/extension:shallowMergeConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/file:exportFile",
@@ -610,14 +1645,49 @@
     "source": "S2:705"
   },
   {
+    "id": "S2:@lexical/file:SerializedDocument",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/hashtag:HashtagConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/headless/dom:withDOM",
     "reason": "view-only",
     "source": "S2:730"
   },
   {
+    "id": "S2:@lexical/history:HistoryStateEntry",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/history:HistoryState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/history:HistoryConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/history:HistoryExtensionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/history:SharedHistoryConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/history:SharedHistoryExtension",
     "reason": "not-ported",
-    "source": "S1:4018"
+    "source": "S1:4024"
   },
   {
     "id": "S2:@lexical/html:$generateNodesFromDOM",
@@ -638,6 +1708,116 @@
     "id": "S2:@lexical/html:DOMRenderExtension",
     "reason": "not-ported",
     "source": "S3:6357"
+  },
+  {
+    "id": "S2:@lexical/html:AnyDOMImportRule",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:AttrMatchOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:CapturesOfSelector",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ChildSchema",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:CompiledOverlayRules",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:CompiledSelector",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportContext",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportExtensionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportRule",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportRuleEntry",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMPreprocessContext",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMPreprocessFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ElementSelectorBuilder",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:GenerateNodesFromDOMOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ImportChildrenOpts",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ImportContextPairOrUpdater",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ImportNodeOpts",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ImportSession",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ImportStateConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:NodeOfSelector",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:StyleMatchOptions",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/html:$distributeInlineWrapper",
@@ -710,6 +1890,11 @@
     "source": "S3:6356"
   },
   {
+    "id": "S2:@lexical/html:DOMImportConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/html:DOMImportExtension",
     "reason": "not-ported",
     "source": "S3:5638"
@@ -740,6 +1925,11 @@
     "source": "S2:800"
   },
   {
+    "id": "S2:@lexical/html:ImportSourceKind",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/html:ImportTextFormat",
     "reason": "not-ported",
     "source": "S2:802"
@@ -765,6 +1955,16 @@
     "source": "S2:806"
   },
   {
+    "id": "S2:@lexical/html:IsInlineForWhitespace",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:IsPreserveWhitespaceDom",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/html:NestedBlockSchema",
     "reason": "not-ported",
     "source": "S2:809"
@@ -778,6 +1978,11 @@
     "id": "S2:@lexical/html:RootSchema",
     "reason": "not-ported",
     "source": "S2:811"
+  },
+  {
+    "id": "S2:@lexical/html:WhitespaceImportConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/html:$getRenderContextValue",
@@ -795,6 +2000,66 @@
     "source": "S3:6361"
   },
   {
+    "id": "S2:@lexical/html:AnyDOMRenderMatch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:AnyRenderStateConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:AnyRenderStateConfigPairOrUpdater",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:ContextPairOrUpdater",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMOverrideOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMRenderConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMRenderExtensionOutput",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMRenderMatch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:DOMRenderMatchConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:NodeMatch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/html:RenderContextReader",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:ClickableLinkConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/link:ClickableLinkExtension",
     "reason": "view-only",
     "source": "S2:839"
@@ -803,6 +2068,41 @@
     "id": "S2:@lexical/link:registerClickableLink",
     "reason": "view-only",
     "source": "S2:840"
+  },
+  {
+    "id": "S2:@lexical/link:AutoLinkConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:ChangeHandler",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:LinkMatcher",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:AutoLinkAttributes",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:LinkAttributes",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:SerializedAutoLinkNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/link:SerializedLinkNode",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/link:LinkImportExtension",
@@ -830,9 +2130,19 @@
     "source": "S3:1615"
   },
   {
+    "id": "S2:@lexical/list:CheckListConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/list:CheckListExtension",
     "reason": "not-ported",
     "source": "S3:1613"
+  },
+  {
+    "id": "S2:@lexical/list:ListConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/list:ListImportExtension",
@@ -850,14 +2160,74 @@
     "source": "S3:1611"
   },
   {
+    "id": "S2:@lexical/list:RegisterListOptions",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/list:ListNodeTagType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/list:ListType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/list:registerCheckList",
     "reason": "not-ported",
     "source": "S3:1612"
   },
   {
+    "id": "S2:@lexical/list:SerializedListItemNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/list:SerializedListNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/mark:MarkExtension",
     "reason": "not-ported",
     "source": "S3:3769"
+  },
+  {
+    "id": "S2:@lexical/mark:SerializedMarkNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/markdown:ElementTransformer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/markdown:MultilineElementTransformer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/markdown:TextFormatTransformer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/markdown:TextMatchTransformer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/markdown:Transformer",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/overflow:SerializedOverflowNode",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/overflow:OverflowExtension",
@@ -875,9 +2245,24 @@
     "source": "S2:983"
   },
   {
+    "id": "S2:@lexical/react/ExtensionComponent:ExtensionComponentProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:LexicalAutoEmbedPlugin",
     "reason": "view-only",
     "source": "S2:990"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:EmbedMatchResult",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:EmbedConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:URL_MATCHER",
@@ -903,6 +2288,21 @@
     "id": "S2:@lexical/react/LexicalAutoLinkPlugin:AutoLinkPlugin",
     "reason": "view-only",
     "source": "S2:1007"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoLinkPlugin:ChangeHandler",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoLinkPlugin:createLinkMatcherWithRegExp",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoLinkPlugin:LinkMatcher",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalBlockWithAlignableContents:BlockWithAlignableContents",
@@ -940,6 +2340,11 @@
     "source": "S2:1047"
   },
   {
+    "id": "S2:@lexical/react/LexicalCollaborationContext:CollaborationContextType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalCollaborationContext:CollaborationContext",
     "reason": "view-only",
     "source": "S2:1049"
@@ -960,6 +2365,16 @@
     "source": "S2:1062"
   },
   {
+    "id": "S2:@lexical/react/LexicalComposer:InitialEditorStateType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposer:InitialConfigType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalComposerContext:createLexicalComposerContext",
     "reason": "view-only",
     "source": "S2:1070"
@@ -968,6 +2383,16 @@
     "id": "S2:@lexical/react/LexicalComposerContext:useLexicalComposerContext",
     "reason": "view-only",
     "source": "S2:1071"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposerContext:LexicalComposerContextType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposerContext:LexicalComposerContextWithEditor",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalComposerContext:LexicalComposerContext",
@@ -980,6 +2405,21 @@
     "source": "S2:1080"
   },
   {
+    "id": "S2:@lexical/react/LexicalContentEditable:ContentEditableElementProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalContentEditable:ContentEditableProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalContentEditable:Props",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalContentEditable:ContentEditable",
     "reason": "view-only",
     "source": "S2:1084"
@@ -988,6 +2428,11 @@
     "id": "S2:@lexical/react/LexicalDecoratorBlockNode:$isDecoratorBlockNode",
     "reason": "view-only",
     "source": "S2:1090"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalDecoratorBlockNode:SerializedDecoratorBlockNode",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalDraggableBlockPlugin:DraggableBlockPlugin_EXPERIMENTAL",
@@ -1005,14 +2450,29 @@
     "source": "S2:1110"
   },
   {
+    "id": "S2:@lexical/react/LexicalErrorBoundary:LexicalErrorBoundaryProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalExtensionComposer:LexicalExtensionComposer",
     "reason": "view-only",
     "source": "S2:1117"
   },
   {
+    "id": "S2:@lexical/react/LexicalExtensionComposer:LexicalExtensionComposerProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalExtensionEditorComposer:LexicalExtensionEditorComposer",
     "reason": "view-only",
     "source": "S2:1124"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalExtensionEditorComposer:LexicalExtensionEditorComposerProps",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalHashtagPlugin:HashtagPlugin",
@@ -1025,9 +2485,39 @@
     "source": "S2:1137"
   },
   {
+    "id": "S2:@lexical/react/LexicalHistoryPlugin:createEmptyHistoryState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHistoryPlugin:HistoryState",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalHorizontalRuleNode:$createHorizontalRuleNode",
     "reason": "view-only",
     "source": "S2:1145"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRuleNode:$isHorizontalRuleNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRuleNode:INSERT_HORIZONTAL_RULE_COMMAND",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRuleNode:SerializedHorizontalRuleNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRuleNode:HorizontalRuleNode",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalHorizontalRulePlugin:HorizontalRulePlugin",
@@ -1045,6 +2535,11 @@
     "source": "S2:1167"
   },
   {
+    "id": "S2:@lexical/react/LexicalListPlugin:ListPluginProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalMarkdownShortcutPlugin:MarkdownShortcutPlugin",
     "reason": "view-only",
     "source": "S2:1174"
@@ -1058,6 +2553,11 @@
     "id": "S2:@lexical/react/LexicalNestedComposer:LexicalNestedComposer",
     "reason": "view-only",
     "source": "S2:1181"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNestedComposer:LexicalNestedComposerProps",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalNodeContextMenuPlugin:NodeContextMenuOption",
@@ -1085,9 +2585,24 @@
     "source": "S2:1202"
   },
   {
+    "id": "S2:@lexical/react/LexicalNodeMenuPlugin:NodeMenuPluginProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalNodeMenuPlugin:MenuOption",
     "reason": "view-only",
     "source": "S2:1204"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeMenuPlugin:MenuRenderFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeMenuPlugin:MenuResolution",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalOnChangePlugin:OnChangePlugin",
@@ -1115,14 +2630,29 @@
     "source": "S2:1236"
   },
   {
+    "id": "S2:@lexical/react/LexicalTabIndentationPlugin:registerTabIndentation",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalTableOfContentsPlugin:TableOfContentsPlugin",
     "reason": "view-only",
     "source": "S2:1243"
   },
   {
+    "id": "S2:@lexical/react/LexicalTableOfContentsPlugin:TableOfContentsEntry",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalTablePlugin:TablePlugin",
     "reason": "view-only",
     "source": "S2:1250"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTablePlugin:TablePluginProps",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/LexicalTreeView:TreeView",
@@ -1160,14 +2690,54 @@
     "source": "S2:1268"
   },
   {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:TypeaheadMenuPluginProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:MenuOption",
     "reason": "view-only",
     "source": "S2:1270"
   },
   {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:MenuRenderFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:MenuResolution",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:MenuTextMatch",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:TriggerFn",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/ReactExtension:DefaultEditorChildrenComponent",
     "reason": "view-only",
     "source": "S2:1280"
+  },
+  {
+    "id": "S2:@lexical/react/ReactExtension:EditorChildrenComponentProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/ReactExtension:ReactConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/ReactExtension:ReactOutputs",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/ReactExtension:ReactExtension",
@@ -1195,6 +2765,21 @@
     "source": "S2:1293"
   },
   {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:DecoratorComponentProps",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:HostMountCommandArg",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:MountPluginCommandArg",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/ReactPluginHostExtension:REACT_PLUGIN_HOST_MOUNT_ROOT_COMMAND",
     "reason": "view-only",
     "source": "S2:1297"
@@ -1218,6 +2803,11 @@
     "id": "S2:@lexical/react/TreeViewExtension:TreeViewExtensionComponent",
     "reason": "view-only",
     "source": "S2:1311"
+  },
+  {
+    "id": "S2:@lexical/react/TreeViewExtension:TreeViewConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/react/TreeViewExtension:TreeViewExtension",
@@ -1255,6 +2845,11 @@
     "source": "S2:1329"
   },
   {
+    "id": "S2:@lexical/react/useExtensionSignalValue:SignalValue",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/useLexicalEditable:useLexicalEditable",
     "reason": "view-only",
     "source": "S2:1336"
@@ -1275,6 +2870,11 @@
     "source": "S2:1354"
   },
   {
+    "id": "S2:@lexical/react/useLexicalSubscription:LexicalSubscription",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/react/useLexicalTextEntity:useLexicalTextEntity",
     "reason": "view-only",
     "source": "S2:1361"
@@ -1288,6 +2888,41 @@
     "id": "S2:@lexical/rich-text:registerRichText",
     "reason": "js-by-design",
     "source": "S3:1600"
+  },
+  {
+    "id": "S2:@lexical/rich-text:SerializedHeadingNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:SerializedQuoteNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:HeadingTagType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:EscapeFormatTrigger",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:TriggerConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:EscapeFormatTriggerConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/rich-text:RichTextConfig",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/rich-text:RichTextImportExtension",
@@ -1345,6 +2980,41 @@
     "source": "S2:1410"
   },
   {
+    "id": "S2:@lexical/selection:$cloneWithProperties",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/selection:$selectAll",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:SerializedTableCellNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:InsertTableCommandPayload",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:InsertTableCommandPayloadHeaders",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:TableConfig",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:SerializedTableNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/table:$isScrollableTablesActive",
     "reason": "view-only",
     "source": "S2:1434"
@@ -1355,6 +3025,11 @@
     "source": "S2:1436"
   },
   {
+    "id": "S2:@lexical/table:TableDOMCell",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/table:$getTableAndElementByKey",
     "reason": "not-ported",
     "source": "S3:3127"
@@ -1363,6 +3038,31 @@
     "id": "S2:@lexical/table:registerTableSelectionObserver",
     "reason": "js-by-design",
     "source": "S3:3130"
+  },
+  {
+    "id": "S2:@lexical/table:SerializedTableRowNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:TableMapType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:TableMapValueType",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:TableSelectionShape",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/table:HTMLTableElementWithWithTableSelectionState",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/table:applyTableHandlers",
@@ -1410,6 +3110,11 @@
     "source": "S2:1497"
   },
   {
+    "id": "S2:@lexical/text:TextNodeWithOffset",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/text:$canShowPlaceholderCurry",
     "reason": "not-ported",
     "source": "S3:4287"
@@ -1418,6 +3123,11 @@
     "id": "S2:@lexical/text:$isRootTextContentEmptyCurry",
     "reason": "not-ported",
     "source": "S3:4286"
+  },
+  {
+    "id": "S2:@lexical/text:EntityMatch",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/utils:isMimeType",
@@ -1470,6 +3180,131 @@
     "source": "S2:1549"
   },
   {
+    "id": "S2:@lexical/utils:$findMatchingParent",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:$getAdjacentSiblingOrParentSiblingCaret",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:$splitNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:addClassNamesToElement",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:isBlockDomNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:isHTMLAnchorElement",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:isHTMLElement",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:isInlineDomNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:mergeRegister",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:removeClassNamesFromElement",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:CAN_USE_BEFORE_INPUT",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:CAN_USE_DOM",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_ANDROID",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_ANDROID_CHROME",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_APPLE",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_APPLE_WEBKIT",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_CHROME",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_FIREFOX",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_IOS",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:IS_SAFARI",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:DFSNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:DOMNodeToLexicalConversion",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:DOMNodeToLexicalConversionMap",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:ObjectKlass",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/utils:StateConfigWrapper",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/yjs:createUndoManager",
     "reason": "not-ported",
     "source": "S2:1580"
@@ -1483,6 +3318,11 @@
     "id": "S2:@lexical/yjs:setLocalStateFocus",
     "reason": "not-ported",
     "source": "S2:1582"
+  },
+  {
+    "id": "S2:@lexical/yjs:UserState",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/yjs:CONNECTED_COMMAND",
@@ -1515,6 +3355,61 @@
     "source": "S2:1589"
   },
   {
+    "id": "S2:@lexical/yjs:ProviderAwareness",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:Operation",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:Delta",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:YjsNode",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:YjsEvent",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:Provider",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:BaseBinding",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:Binding",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:BindingV2",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:ClientID",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S2:@lexical/yjs:ExcludedProperties",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
     "id": "S2:@lexical/yjs:createBinding",
     "reason": "not-ported",
     "source": "S2:1601"
@@ -1533,6 +3428,11 @@
     "id": "S2:@lexical/yjs:syncCursorPositions",
     "reason": "view-only",
     "source": "S2:1604"
+  },
+  {
+    "id": "S2:@lexical/yjs:SyncCursorPositionsFn",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "S2:@lexical/yjs:syncLexicalUpdateToYjs",
@@ -2083,6 +3983,11 @@
     "id": "CLP-57",
     "reason": "view-only",
     "source": "S2:3010"
+  },
+  {
+    "id": "HTML-00",
+    "reason": "removed",
+    "source": "S4:9"
   },
   {
     "id": "HTML-01",
@@ -2998,5 +4903,50 @@
     "id": "S7:102",
     "reason": "removed",
     "source": "S7:2195"
+  },
+  {
+    "id": "S4:priv:editor._config.namespace",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:editor._nodes.values()…klass",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:editor._commands.has(cmd)",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__key",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__parent",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__type",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__text",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__format",
+    "reason": "removed",
+    "source": "S4:9"
+  },
+  {
+    "id": "S4:priv:__mode",
+    "reason": "removed",
+    "source": "S4:9"
   }
 ]

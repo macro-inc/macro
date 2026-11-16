@@ -36,7 +36,7 @@ beforeAll(() => {
     ],
     {
       cwd: root,
-      env: { ...process.env, TMPDIR: '/home/wolf/tmp' },
+      env: { ...process.env },
       encoding: 'utf8',
     }
   );

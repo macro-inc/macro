@@ -1,5 +1,0 @@
-{
-	"extends": "../../tsconfig.json",
-	"compilerOptions": { "types": ["bun", "node"] },
-	"include": ["*.ts", "../run.ts"]
-}

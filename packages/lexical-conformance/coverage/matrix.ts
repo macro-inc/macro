@@ -102,7 +102,6 @@ function sources(): string[] {
       'crates/sync_protocol',
       'tooling/sync-sim',
       'packages/lexical-conformance',
-      'packages/lexical-wasm-shim',
       'packages/collaboration/src/session',
       'apps/web/e2e',
       'apps/web/tests',

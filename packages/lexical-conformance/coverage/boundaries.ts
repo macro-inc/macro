@@ -32,12 +32,7 @@ if (!bundleOnly) {
     files(path.join(root, name))
   )) {
     const name = path.relative(root, file);
-    if (
-      name.startsWith('packages/lexical-conformance/') ||
-      name === 'packages/lexical-wasm-shim/src/backend/conformance.ts' ||
-      /lexical-wasm-shim\/.*(test|setup)/.test(name)
-    )
-      continue;
+    if (name.startsWith('packages/lexical-conformance/')) continue;
     if (!/\.(tsx?|m?js)$/.test(name)) continue;
     if (
       /(?:from\s*|import\s*\(|require\s*\()["'][^"']*(?:lexical-conformance\/pkg|lexical_conformance_wasm)/.test(

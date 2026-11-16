@@ -1,7 +1,7 @@
 # Comment gate differential
 
-Run `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model --test gate -j4`,
-then `TMPDIR=/home/wolf/tmp bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts`.
+Run `cargo test -p macro_document_model --test gate -j4`,
+then `bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts`.
 The native test freshly generates the service oracle; the second command builds
 and replays the actual WASM module with default features disabled.
 
@@ -31,3 +31,5 @@ the exact Rust error, and requires Rust to fail. Changed, stale and unused entri
 fail; there is no generic malformed-input exemption. The JSON failure artifact
 is written under `target/lexical-conformance/` for diagnosis. Never automatically
 refresh the ledger or weaken comparisons to make a new case pass.
+
+Set `TMPDIR` to a large local disk when the default temporary directory is small.

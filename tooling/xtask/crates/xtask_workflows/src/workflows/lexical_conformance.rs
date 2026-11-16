@@ -9,7 +9,6 @@ mod test;
 /// Paths that require the Lexical conformance checks.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/client/lexical/**"),
-    xtask_paths::repo_glob!("packages/lexical-wasm-shim/**"),
     xtask_paths::repo_glob!("packages/lexical-conformance/**"),
     xtask_paths::repo_glob!("packages/lexical-core/**"),
     xtask_paths::repo_glob!("packages/loro-mirror/**"),

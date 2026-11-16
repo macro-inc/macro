@@ -102,23 +102,7 @@ fn typescript() -> Job {
                 .run("bun install --frozen-lockfile")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
-        .add_step(
-            Step::new("Install standalone Lexical facade dependencies")
-                .run("bun install --frozen-lockfile --ignore-scripts")
-                .working_directory(xtask_paths::repo_dir!("packages/lexical-wasm-shim")),
-        )
-        .add_step(
-            Step::new("Clear prior Lexical export evidence")
-                .run("rm -rf target/lexical-export-surface"),
-        )
         .add_step(typecheck_in_parallel())
-        .add_step(
-            steps::upload_artifact(
-                "lexical-export-surface",
-                xtask_paths::runtime_path!("target/lexical-export-surface"),
-            )
-            .if_condition(Expression::new("always()")),
-        )
         .add_step(steps::teardown_nix())
 }
 
@@ -126,19 +110,9 @@ fn typescript() -> Job {
 /// installed tree and write only separate diagnostic outputs, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
-    (
-        "Check Lexical Export Surface",
-        "packages/lexical-wasm-shim",
-        "bunx tsc --noEmit -p tests/export-surface/tsconfig.json && bunx vitest run --config tests/export-surface/vitest.config.mts && LEXICAL_EXPORT_OUTPUT=../../target/lexical-export-surface bun run check:exports",
-    ),
+const TYPECHECKS: [(&str, &str, &str); 9] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
-    (
-        "Check Lexical Assertion Boundary",
-        "apps/web",
-        "bun run check:lexical-exceptions",
-    ),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
     // error and needs type information to run at all.
     (

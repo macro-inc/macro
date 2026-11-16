@@ -1,6 +1,6 @@
 # S2 — Upstream Lexical v0.45.0 feature inventory
 
-The checklist for the Rust port: every exported symbol of every upstream package, plus every behaviour that is not a symbol. Implementers tick `[ ]` → `[x]`. Companion to `../SCOPE.md` (crate layout §1/§2, phases §5) and the notes files.
+The checklist for the Rust port: every exported symbol of every upstream package, plus every behaviour that is not a symbol. Implementers tick `[ ]` → `[x]`. Companion to `../SCOPE.md` (crate layout §1/§2, phases §5) and the notes files. **Deferred standalone shim:** `packages/lexical-wasm-shim` and its test obligations are deferred to `wolf/lexical-wasm-shim-wip@9df9909f`; the historical descriptions below do not claim landed code or executed coverage.
 
 ## How to read this
 

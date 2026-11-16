@@ -479,7 +479,6 @@ jobs:
         filters: |
           lexical:
             - 'crates/client/lexical/**'
-            - 'packages/lexical-wasm-shim/**'
             - 'packages/lexical-conformance/**'
             - 'packages/lexical-core/**'
             - 'packages/loro-mirror/**'

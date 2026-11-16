@@ -18,6 +18,7 @@ import {
   RX_RUST,
   routeTests,
   S3,
+  S4,
   S7,
   s3NotPortedCite,
   s7Tests,
@@ -36,8 +37,28 @@ import {
 // ---------- rows ----------
 type Out = Record<(typeof HEADER)[number], string>;
 const rows: Out[] = [];
+const shimDeferralLine =
+  S4.lines.findIndex((line) => line.includes('**Deferred standalone shim:**')) +
+  1;
+if (shimDeferralLine === 0)
+  throw new Error('Missing standalone shim scope decision');
 const ids = new Map<string, string>();
 const push = (r: Partial<Out>) => {
+  if (r.test_file?.startsWith('packages/lexical-wasm-shim/')) {
+    r = {
+      ...r,
+      gate: `ledger:removed(S4:${shimDeferralLine})`,
+      tier: 'deferred',
+      test_id: '',
+      test_file: '',
+      also: [
+        r.also,
+        'Deferred with standalone shim to wolf/lexical-wasm-shim-wip@9df9909f',
+      ]
+        .filter(Boolean)
+        .join('; '),
+    };
+  }
   // Ids are unique. A transformer list named in two S3 places is one row; any other clash
   // (an entry and a list with the same name) is qualified by kind.
   const prev = ids.get(r.id!);

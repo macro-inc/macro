@@ -80,9 +80,9 @@ jobs:
 #[test]
 fn planned_lexical_filter_requires_its_exact_group_and_committed_specification() {
     let checkout = xtask_paths::repo_root();
-    // The shim exists now and must resolve as a real checkout path in any group.
+    // The production view must resolve as a real checkout path in any group.
     super::validate_glob(
-        "packages/lexical-wasm-shim/**",
+        "packages/lexical-wasm-view/**",
         &checkout,
         "other group".into(),
     )

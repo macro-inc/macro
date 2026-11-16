@@ -6,7 +6,7 @@ test-side findings of `audit-r2-2.md`, the conformance-wasm and wasm32-runner it
 references of `audit-r2-3.md`; see "R1 resolutions" and "R2 resolutions" at the end). The full
 generated traceability matrix is `S4-matrix.tsv`, produced by `S4-matrix-gen.ts` (§0.2).
 
-Target: Lexical v0.45.0 (`target/lexical-upstream`), Macro at `wolf-rust-lexical`.
+Target: Lexical v0.45.0 (`target/lexical-upstream`), Macro at `wolf-rust-lexical`. **Deferred standalone shim:** `packages/lexical-wasm-shim` and its test obligations are deferred to `wolf/lexical-wasm-shim-wip@9df9909f`; the historical descriptions below do not claim landed code or executed coverage.
 Builds on `SCOPE.md` §4 and the notes it cites. Crate names follow SCOPE §2c.
 Every case count below was recounted for this spec from the 140 upstream unit test
 files and the 46 `packages/lexical-core/tests` files: a per-test-body classifier
@@ -2414,7 +2414,7 @@ them in the matrix (§8.3) and runs their browser halves (§6.2 E19–E22).
     document id, route, JSON path of the first difference, and hashes.
 - **Prod corpus** needs explicit permission and is out of this spec.
 
-For each document, the runner (`corpus/run.ts`) calls the **current** lexical-service
+The deferred corpus runner must call the **current** lexical-service
 code in-process (the same handlers, imported from `services/lexical-service/src`, with
 no network) and the Rust implementation (`macro_document_model`, through a small
 napi or wasm test binding). Each side uses the registry its route really uses: the doc-id
