@@ -70,7 +70,7 @@ The independent `diff/collab.config.mts` profile runs four document-session/curr
 TS peers with three fixed 2,000-step seeds and a collaborative undo literal.
 Run it from root with `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`;
 type-check it with `bunx tsc --noEmit -p packages/lexical-conformance/diff/collab/tsconfig.json`.
-It uses current app Loro 1.17.1 and isolated DOM documents per TS peer; it does not
+It uses the workspace's root `loro-crdt` (the catalog's 1.16.3) and isolated DOM documents per TS peer; it does not
 change the recorder pin or normalize comparator fields.
 
 The debug suite validates model-derived host hook aliases against pinned upstream base classes and checks their boundary bytes; full callsite derivation and per-hook hosting remain separate gates.

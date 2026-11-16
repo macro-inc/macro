@@ -42,7 +42,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - A closing socket stays listed until the runtime completes its close callback.
 - D1 claims may replace only the system author; missing-peer insertion never
   replaces an existing owner. D1 writes survive DO output-gate rollback.
-- Record Worker goldens with the pinned 1.16.3 service test driver and vendored server encoder; verify old/new native replay, real legacy interoperability and repeated exact recordings before refreshing encoded snapshots.
+- Record Worker goldens with sync-service's test driver and the vendored server encoder (the committed goldens were recorded with Loro 1.16.3); verify old/new native replay, real legacy interoperability and repeated exact recordings before refreshing encoded snapshots.
 - Re-record comparison is byte-exact except the documented time/UUID and
   awareness normalization. Under the S6 native comparison ruling (2026-11-07),
   native Loro envelopes allow export-derived lengths/chunks to differ while
@@ -82,8 +82,8 @@ socket membership. Read-only Room diagnostics expose no mutable Loro handle.
 - `src/persistence_test.rs` checks failed first writes versus durable pending/failed
   archive writes, same-time log identities and actual cold replay after cache invalidation.
 
-The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
-separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.
+The server encoder uses the vendored Loro 1.16.2 dependency (`loro_server`),
+separate from editor/session Loro 1.17.1. Preserve the unchanged Worker corpus.
 
 Decode every gzip member and reject corrupt tails when loading fixtures or
 following inventory links; never silently accept only the first member.

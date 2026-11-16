@@ -51,7 +51,7 @@ by native clients. No shipped package depends on this directory.
 
 - `bun run --cwd tooling/sync-sim typecheck`
 - `bun run --cwd tooling/sync-sim check` (generated output excluded; Rust drift test checks it exactly).
-- `cargo test -p sync_sim --test mixed_versions` (current TS 1.17.1/native 1.17.1).
+- `cargo test -p sync_sim --test mixed_versions` (TS catalog 1.16.3/native 1.17.1).
 - `SYNC_SIM_TS_LORO=legacy cargo test -p sync_sim --test mixed_versions` (TS 1.16.3/native 1.17.1; the child checks its loaded package version).
 - Compare actual TS content/VV and WAL metadata; replay the complete IPC transcript
   and raw Room ports exactly, not only native final states.

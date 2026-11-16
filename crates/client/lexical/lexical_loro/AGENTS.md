@@ -25,7 +25,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - Apply ComparisonKind only to model-versus-Loro comparisons after dropped/transparent projection; keep writer serialization unchanged, reread changed child fields during incremental checks, and preserve real incoming raw cache updates.
 - Apply source own-undefined storage fields through SyncPolicy before writing; retain strict attach equality and keep PlainPolicy unchanged.
 - Compare and write the model's stored NodeState representation; a read memo must not change attach, verification or persisted fields. Keep public synced JSON export canonical and own-undefined placeholders exclusive to writers. Pass policy-selected nested root state through live reconciliation with its actual stored presence.
-- Verify client Loro 1.17.1 separately from the server's preserved JavaScript 1.16.3 dependency in the pair test.
+- Verify client Loro 1.17.1 separately from the server's JavaScript `loro-crdt` (sync-service's own pin) in the pair test.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
 - Retain recorded timestamps only in server-created snapshot helpers; never regenerate the frozen Markdown ancestor.
@@ -42,8 +42,9 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 Install root Bun dependencies before running tests; the differential oracle must
 run the current mirror source and must never be replaced with expected values.
-The editor pair uses workspace Loro1.17.1; the isolated Worker transcript driver
-remains1.16.3 beside the vendored1.16.2 server encoder to preserve C0 bytes.
+The editor pair uses Rust Loro 1.17.1; the Worker transcript driver uses
+sync-service's own `loro-crdt` beside the vendored 1.16.2 server encoder, and the
+committed transcript bytes were recorded with 1.16.3.
 
 
 - `cargo test -p lexical_loro -j4`

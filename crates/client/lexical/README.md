@@ -51,9 +51,10 @@ add workspace-hack dependencies. The root cargo-shear exceptions cover the
 reserved dependencies only; remove each as its first consumer lands. Give every new crate its own `AGENTS.md` and
 `CLAUDE.md` symlink, and check its wasm dependency tree.
 
-Loro is pinned to **1.17.1** in Rust, the Bun catalog and the sync-service npm
-package. Version 1.16.3 included a core cross-document container fix, so aligning
-on 1.16.2 would discard that fix. Update all three lockfiles together. The
+Rust pins Loro **1.17.1**. The Bun catalog stays on 1.16.3 and the sync-service
+npm package on main's ^1.13.7; the native editor interoperates with both, which
+sync_sim checks. Version 1.16.3 included a core cross-document container fix, so
+the Rust pin does not go below it. The
 1.17.1 source retains the clock/randomness controls required by sessions:
 `set_record_timestamp(false)`, explicit `CommitOptions::timestamp`,
 `set_peer_id` immediately after new/fork, no detached editing or update timeout,

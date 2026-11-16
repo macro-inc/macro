@@ -10,7 +10,7 @@ bunx tsc --noEmit -p packages/lexical-conformance/diff/collab/tsconfig.json
 Two native document sessions and two current TypeScript editors exchange real
 Loro updates through a FIFO server relay with scheduled delivery and offline
 windows. The TypeScript peers use the actual mirror, reconcile and collaborative
-history modules, each with its own DOM document. Loro is the app's 1.17.1 pin.
+history modules, each with its own DOM document. Loro is the workspace catalog's 1.16.3.
 
 Three fixed seeds each execute 2,000 operations, comparing all four editor JSON
 states and native deep values after complete delivery. A literal additionally

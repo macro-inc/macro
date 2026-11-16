@@ -1,8 +1,8 @@
 # Lexical Loro projection
 
 `lexical_loro` maps portable editor commits to the persisted loro-mirror node
-schema and native Loro events back to raw model changes. Loro is pinned jointly
-with the TypeScript catalog to 1.17.1. Native text positions use Unicode scalar
+schema and native Loro events back to raw model changes. Rust Loro is pinned to
+1.17.1; the TypeScript catalog stays on 1.16.3. Native text positions use Unicode scalar
 indices; editor offsets and awareness points use UTF-16.
 
 Call `new_doc(peer)` or `fork_doc(doc, peer)` before any operations. Both set the

@@ -541,8 +541,8 @@ unchanged. Failed mutations are not retained in a DLQ.
 
 [`lexical/`](lexical/README.md) contains the Rust Lexical model packages and their
 workspace compatibility tests. These are independent of the GraphQL cache and
-inherit the client hakari exclusion. Loro stays pinned to the same release in
-Cargo, the Bun catalog and the sync-service npm package.
+inherit the client hakari exclusion. Rust pins Loro 1.17.1; the
+JavaScript pins it interoperates with are listed in [lexical/README.md](lexical/README.md).
 
 [`document_session/`](document_session/README.md) composes the portable editor or
 generic Loro containers with the sans-I/O sync core, collaborative history,
