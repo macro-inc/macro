@@ -514,10 +514,12 @@ export default function RustMarkdownEditor(props: {
                     checklist: () => (
                       <NativeChecklistOverlay view={view} host={checklist} />
                     ),
+                    emoji: true,
                     mentions: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,
                     },
+                    snippets: { sourceDocumentId: documentId() },
                     comments: true,
                     actions: {
                       actionContext: {

@@ -1,3 +1,4 @@
+import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -24,6 +25,11 @@ import {
   NativeActionsOverlay,
 } from './NativeActionsOverlay';
 import { NativeDraggableBlockOverlay } from './NativeDraggableBlockOverlay';
+import { NativeEmojiOverlay } from './NativeEmojiOverlay';
+import {
+  type NativeSnippetsOptions,
+  NativeSnippetsOverlay,
+} from './NativeSnippetsOverlay';
 import { NativeTableHoverOverlay } from './NativeTableHoverOverlay';
 import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
 import {
@@ -38,6 +44,7 @@ import {
 import { registerNativeInlineSearch } from './overlay-hosts/native-inline-search';
 import { createNativeListenerScope } from './overlay-hosts/native-listeners';
 import { registerNativeMentionSearch } from './overlay-hosts/native-mention-search';
+import { createNativeSnippetMenuHost } from './overlay-hosts/native-snippets-menu';
 import { registerNativeTagsSearch } from './overlay-hosts/native-tags-search';
 
 /** Install only native body capabilities with an actual model action. */
@@ -45,7 +52,9 @@ export function installNativeMarkdownOverlays(
   view: EditorView,
   options: {
     readonly canEdit: Accessor<boolean>;
+    readonly emoji?: boolean;
     readonly mentions?: NativeUserMentionsOptions;
+    readonly snippets?: NativeSnippetsOptions;
     readonly actions?: NativeActionsOptions;
     readonly tags?: NativeTagsOptions;
     readonly formatting?: Component;
@@ -59,6 +68,11 @@ export function installNativeMarkdownOverlays(
   const alive = () => renderActive() && mentionsAvailable() && view.isMounted;
   let Overlays: Component | undefined;
   const overlays: Component[] = [];
+  const [emojiAvailable, setEmojiAvailable] = createSignal(true);
+  const emojiAlive = () => renderActive() && emojiAvailable() && view.isMounted;
+  const [snippetsAvailable, setSnippetsAvailable] = createSignal(true);
+  const snippetsAlive = () =>
+    renderActive() && snippetsAvailable() && view.isMounted;
   const [tagsAvailable, setTagsAvailable] = createSignal(true);
   const tagsAlive = () => renderActive() && tagsAvailable() && view.isMounted;
   const [actionsAvailable, setActionsAvailable] = createSignal(true);
@@ -194,6 +208,34 @@ export function installNativeMarkdownOverlays(
         },
       })
     );
+    if (options.emoji) {
+      const menu = createMenuOperations();
+      openMenus.push(menu.isOpen);
+      const unavailable = (error: unknown) => {
+        setEmojiAvailable(false);
+        try {
+          Telemetry.error(error, { surface: 'native-emoji-menu' });
+        } catch {
+          // Optional menu failure must not tear down the document or its overlays.
+        }
+      };
+      try {
+        listeners.add(
+          registerNativeInlineSearch(view, menu, 'emojis', ':', unavailable)
+        );
+        if (emojiAvailable()) {
+          overlays.push(() =>
+            createComponent(NativeEmojiOverlay, {
+              view,
+              menu,
+              alive: emojiAlive,
+            })
+          );
+        }
+      } catch (error) {
+        unavailable(error);
+      }
+    }
     if (options.mentions) {
       const menu = createMenuOperations();
       openMenus.push(menu.isOpen);
@@ -244,6 +286,49 @@ export function installNativeMarkdownOverlays(
               menu,
               source,
               alive: tagsAlive,
+            })
+          );
+        }
+      } catch (error) {
+        unavailable(error);
+      }
+    }
+    if (options.snippets) {
+      const menu = createMenuOperations();
+      openMenus.push(menu.isOpen);
+      const source = options.snippets;
+      const unavailable = (error: unknown) => {
+        setSnippetsAvailable(false);
+        try {
+          Telemetry.error(error, { surface: 'native-snippets-menu' });
+        } catch {
+          // Optional menu failure must not tear down the document or its overlays.
+        }
+      };
+      try {
+        const snippets = createNativeSnippetMenuHost(view, menu, {
+          sourceDocumentId: source.sourceDocumentId,
+          alive: snippetsAlive,
+        });
+        listeners.add(snippets.dispose);
+        listeners.add(
+          registerNativeInlineSearch(
+            view,
+            menu,
+            'snippets',
+            ';',
+            unavailable,
+            // Source reads the snippets flag per keystroke; off, `;` is text.
+            () => !isFeatureEnabled(enableSnippets)
+          )
+        );
+        if (snippetsAvailable()) {
+          overlays.push(() =>
+            createComponent(NativeSnippetsOverlay, {
+              host: snippets.host,
+              menu,
+              source,
+              alive: snippetsAlive,
             })
           );
         }

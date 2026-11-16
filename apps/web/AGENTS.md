@@ -364,9 +364,14 @@ Assemble mention hosts at the shared controller's original initialization point;
 capture Source selection handlers once while root/close reads stay dynamic.
 Keep the tags menu on `TagsMenuHost` (Lexical and native adapters); native insertion settles search removal before `group-a.insert-tag-mention`, and a second `#` while open closes the search as Source does.
 Keep emoji insertion as Source REMOVE then INSERT_TEXT after usage recording;
-preserve the existing enclosed-shortcode transform's editor lifetime.
+preserve the existing enclosed-shortcode transform's editor lifetime. The native
+emoji host settles `group-a.search-remove` before `group-b.insert-text`.
 Keep snippet fetching lazy in the real Source command payload; shared analytics
 runs before host dispatch and the snippet plugin retains async insertion policy.
+The native snippet host sends `group-a.snippet-insert`, fetches on the model's
+`group-a.snippet-request` and answers `group-a.snippet-resolve-source` (null clears).
+Route every mention kind through `MentionInserts` in `mentionHandlers.ts`, so
+the Source and native `@` hosts share tracking, routine sharing and payloads.
 Run the behavior-inventory link browser checks and compare raw DOM/JSON before
 and after a host extraction; Source preservation alone does not establish native acceptance.
 Register attached Source roots through `createLexicalWrapper`'s actual root
