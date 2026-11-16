@@ -373,3 +373,95 @@ test('native trailing row deletion retains spanning virtual rows and updates pre
     fixture.close();
   }
 });
+
+/** jsdom has no PointerEvent; the fields the observer reads are enough. */
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  readonly pointerType: string;
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? 'mouse';
+  }
+}
+
+test('a drag move over an overlay above a cell still selects the cell under the pointer', () => {
+  const fixture = nativeSurface(Access.Edit, {
+    tableCellSelected: 'selected-cell',
+  });
+  const overlay = document.createElement('div');
+  const original = Object.getOwnPropertyDescriptor(
+    Document.prototype,
+    'elementsFromPoint'
+  );
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'table',
+              version: 1,
+              children: [
+                {
+                  type: 'tablerow',
+                  version: 1,
+                  children: ['A', 'B'].map((text) => ({
+                    type: 'tablecell',
+                    version: 1,
+                    children: [
+                      {
+                        type: 'paragraph',
+                        version: 1,
+                        children: [{ type: 'text', version: 1, text }],
+                      },
+                    ],
+                  })),
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    fixture.root.contentEditable = 'true';
+    const [a, b] = fixture.root.querySelectorAll('td');
+    if (!a || !b) throw new Error('Missing cells');
+    // A control above the cell border, outside the table (the resize strip).
+    document.body.append(overlay);
+    Object.defineProperty(Document.prototype, 'elementsFromPoint', {
+      configurable: true,
+      value: () => [overlay, b, b.closest('table'), fixture.root],
+    });
+    a.dispatchEvent(
+      new TestPointerEvent('pointerdown', {
+        pointerId: 5,
+        pointerType: 'mouse',
+        button: 0,
+        bubbles: true,
+      })
+    );
+    overlay.dispatchEvent(
+      new TestPointerEvent('pointermove', {
+        pointerId: 5,
+        pointerType: 'mouse',
+        buttons: 1,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    const selection = fixture.view.selection().selection;
+    expect(selection.kind).toBe('table');
+    expect(fixture.root.querySelectorAll('.selected-cell')).toHaveLength(2);
+  } finally {
+    if (original)
+      Object.defineProperty(Document.prototype, 'elementsFromPoint', original);
+    else Reflect.deleteProperty(Document.prototype, 'elementsFromPoint');
+    overlay.remove();
+    fixture.close();
+  }
+});

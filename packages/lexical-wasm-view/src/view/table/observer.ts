@@ -456,14 +456,11 @@ export class TableObserver {
       return;
     }
     const document = this.table.ownerDocument;
-    const target = event.target;
-    let key = this.keyFromTarget(target);
-    // Firefox can keep reporting the original cell after the pointer crosses it.
-    if (
-      typeof document.elementsFromPoint === 'function' &&
-      (document.defaultView?.navigator.userAgent.includes('Firefox') ||
-        (target instanceof Node && this.table.contains(target)))
-    ) {
+    let key = this.keyFromTarget(event.target);
+    // Read the cell under the pointer, not the target: Firefox can keep
+    // reporting the original cell after the pointer crosses it, and a control
+    // above the table (the column resize strip on a border) hides the cell.
+    if (typeof document.elementsFromPoint === 'function') {
       key = null;
       for (const element of document.elementsFromPoint(
         event.clientX,

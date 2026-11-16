@@ -549,6 +549,46 @@ test('a mouse drag across cells keeps a native TableSelection over both cells', 
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+test('a mouse drag across an overlay above the cell border keeps a native TableSelection', async ({
+  page,
+}) => {
+  await page.evaluate((state) => window.groupB.first.set(state), tableState);
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(1).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  // Like the column resize strip: a fixed control above the A|B border.
+  await page.evaluate((x) => {
+    const strip = document.createElement('div');
+    strip.id = 'border-strip';
+    strip.style.cssText = `position:fixed;top:0;bottom:0;left:${x - 12}px;width:24px;z-index:20`;
+    document.body.append(strip);
+  }, to.x);
+  const y = from.y + from.height / 2;
+  await page.mouse.move(from.x + 10, y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, y);
+  // The pointer crosses the border on the strip, outside the table.
+  await page.mouse.move(to.x, y);
+  // Chromium's own text drag now spans both cells; let its selectionchange
+  // land before the pointer moves on, as it does between real moves.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  );
+  await page.mouse.move(to.x + to.width / 2, y);
+  await page.mouse.move(to.x + to.width - 10, y);
+  await page.mouse.up();
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
+    'table'
+  );
+  await page.evaluate(() => document.getElementById('border-strip')?.remove());
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
 test('mid-drag, a caret on a sibling block outside the table still replaces the table selection', async ({
   page,
 }) => {
