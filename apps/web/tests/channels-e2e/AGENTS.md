@@ -76,5 +76,11 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   held makes it and loses the connection with no wait between (OFF-02).
 - Typing in a window that is not in front goes nowhere: with two windows of
   one profile, `bringToFront()` the one about to be typed in.
+- `bun run build` does not rebuild the cache engine
+  (`src/lib/graphql-cache/wasm`), and `just ensure-cache-wasm` rebuilds it
+  only when the crate's version changed: before building a bundle to test,
+  check the engine is newer than the last commit under `crates/client`, or
+  run `just build-cache-wasm`. A stale engine made a reloaded page's writes
+  wait five minutes (WRT-04, MSG-13, CMP-13) on code that had fixed it.
 - `blockWrites` and `loseWriteAnswers` match the four message mutations by
   name; a broader match also stops the read-marker writes a page makes.

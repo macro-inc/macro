@@ -1,6 +1,6 @@
 import type { Api, SentMessage } from './harness/api';
 import { expectShown, type Named } from './harness/device';
-import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, SOUP_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
   blockWrites,
@@ -140,16 +140,13 @@ test('WRT-04 messages that could not be sent are still there after a reload and 
   const after = ['one', 'two', 'three', 'kept one', 'kept two'];
   await expectShown(bens, after);
   await bens.reload();
-  // Defect, in some runs: the messages stay on screen through the reload but
-  // are not at the services forty seconds after they can be reached again;
-  // timed once, they arrived five minutes after.
-  await failsSometimes(async () => {
-    await expectShown(bens, after);
-    await expectServer(channel, ['one', 'two', 'three']);
-    await unblock();
-    await expectServer(channel, after, 40_000);
-    await expectShown(bens, after);
-  });
+  await expectShown(bens, after);
+  await expectServer(channel, ['one', 'two', 'three']);
+  await unblock();
+  // Well under the five minutes a write left by the page before waits when
+  // nothing frees it for the new page.
+  await expectServer(channel, after, 40_000);
+  await expectShown(bens, after);
 });
 
 // If this fails, a message whose answer was lost on the way back is sent

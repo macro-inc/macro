@@ -9,7 +9,7 @@ import {
   shown,
   startAfresh,
 } from './harness/device';
-import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, SOUP_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
   codeFetched,
@@ -137,15 +137,11 @@ test('OFF-04 messages read far back in a long channel can be scrolled through ag
   await startAfresh(page, elsewhere);
 
   await loseConnectionAt(page, history);
-  // Defect, in some runs: the channel does not open, or scrolling back
-  // jumps from the latest messages to the middle of the history.
-  await failsSometimes(async () => {
-    const offline = await openFromList(page, history);
-    await offline.expectEndsWith(['history 229', 'history 230']);
-    await offline.readTo('history 001', 'back');
-    await expect(offline.message('history 001')).toBeVisible();
-    await expect(offline.message('history 002')).toBeVisible();
-  });
+  const offline = await openFromList(page, history);
+  await offline.expectEndsWith(['history 229', 'history 230']);
+  await offline.readTo('history 001', 'back');
+  await expect(offline.message('history 001')).toBeVisible();
+  await expect(offline.message('history 002')).toBeVisible();
 });
 
 // If this fails, a person offline at the oldest message their device holds
