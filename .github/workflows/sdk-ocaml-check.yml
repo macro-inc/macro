@@ -11,6 +11,7 @@ name: OCaml SDK Check
     - packages/sdk/src/config.ts
     - packages/sdk/generated/*/sdk.gen.ts
     - flake.lock
+    - nix/cloud-storage.nix
     - '.github/workflows/sdk-ocaml-check.yml'
   workflow_call: {}
 permissions:
@@ -38,10 +39,15 @@ jobs:
         set -euo pipefail
         nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build && dune test"
       timeout-minutes: 10
-    - name: 'Wasm transport: dune build --profile wasm @fetch/runtest (Deno)'
+    - name: 'Wasm libraries: dune build --profile wasm @fetch/runtest @code_mode/runtest (Deno)'
       run: |
         set -euo pipefail
-        nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build --profile wasm --build-dir _build_wasm @fetch/runtest"
+        nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build --profile wasm --build-dir _build_wasm @fetch/runtest @code_mode/runtest"
+      timeout-minutes: 10
+    - name: 'Code-mode OCaml bundle: nix build the sample check'
+      run: |
+        set -euo pipefail
+        nix build --no-link --print-build-logs .#checks.x86_64-linux.code-mode-ocaml-sample
       timeout-minutes: 10
     - name: Teardown Nix
       if: always()
