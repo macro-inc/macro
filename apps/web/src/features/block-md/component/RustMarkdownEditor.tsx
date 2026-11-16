@@ -21,6 +21,10 @@ import { createNativeFastSelectionDecoratorViews } from '@core/component/Lexical
 import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-static-views';
 import { createNativeAgentSessionMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-host';
 import { createNativeAgentSessionMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-views';
+import {
+  createNativeBookingLinkMentionContext,
+  createNativeBookingLinkMentionViews,
+} from '@core/component/LexicalMarkdown/decorator-host/native-booking-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeDatabaseQueryContext } from '@core/component/LexicalMarkdown/decorator-host/native-database-query-host';
 import { createNativeDatabaseQueryViews } from '@core/component/LexicalMarkdown/decorator-host/native-database-query-views';
@@ -102,6 +106,7 @@ import { isPlatform } from '@core/util/platform';
 import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import {
   createBuiltinRegistry,
+  type MacroDecorators,
   registerMacroDecoratorViews,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
@@ -171,6 +176,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
+  const bookingLinkMentionContext = createNativeBookingLinkMentionContext(theme);
+  overlayLifecycle.add(() => bookingLinkMentionContext.dispose());
   const tagMentionContext = createNativeTagMentionContext(theme);
   overlayLifecycle.add(() => tagMentionContext.dispose());
   const dateMentionContext = createNativeDateMentionContext(theme);
@@ -407,6 +414,9 @@ export default function RustMarkdownEditor(props: {
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
+                  ...createNativeBookingLinkMentionViews(
+                    bookingLinkMentionContext
+                  ),
                   ...createNativeTagMentionViews(tagMentionContext),
                   ...createNativeDateMentionViews(dateMentionContext),
                   ...createNativePasteNodeViews(pasteNodeContext),
@@ -438,7 +448,7 @@ export default function RustMarkdownEditor(props: {
                         );
                     },
                   }),
-                }
+                } satisfies MacroDecorators
               ),
               installOverlays(view) {
                 try {

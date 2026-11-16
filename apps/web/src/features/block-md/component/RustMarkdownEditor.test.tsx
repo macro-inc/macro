@@ -25,6 +25,9 @@ const control = vi.hoisted(() => ({
   gifDispose: vi.fn(),
   gifHost: { gif: 'host' },
   gifMenu: vi.fn(),
+  decorators: vi.fn(),
+  bookingDispose: vi.fn(),
+  bookingView: () => null,
 }));
 vi.mock('@app/observability/flow', () => ({
   useFlow: () => ({
@@ -62,6 +65,19 @@ vi.mock(
 vi.mock(
   '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-views',
   () => ({ createNativeTagMentionViews: () => ({}) })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-booking-views',
+  () => ({
+    createNativeBookingLinkMentionContext: () => ({
+      dispose: control.bookingDispose,
+      bindView() {},
+      host: {},
+    }),
+    createNativeBookingLinkMentionViews: () => ({
+      'booking-link-mention': control.bookingView,
+    }),
+  })
 );
 vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
@@ -660,7 +676,10 @@ vi.mock('@macro-inc/lexical-wasm-view', () => ({
       return this;
     },
   }),
-  registerMacroDecoratorViews: () => ({}),
+  registerMacroDecoratorViews: (_registry: unknown, decorators: unknown) => {
+    control.decorators(decorators);
+    return {};
+  },
   registerMacroElementViews: (registry: unknown) => registry,
 }));
 vi.mock('@solid-primitives/platform', () => ({
@@ -770,6 +789,21 @@ it('keeps a pending view private and noneditable until Initialize, then follows 
   expect(mounted.view.setEditable).toHaveBeenLastCalledWith(true);
   rendered.unmount();
   expect(mounted.close).toHaveBeenCalledOnce();
+});
+
+it('registers the booking-link mention view so documents containing one open', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.decorators).toHaveBeenCalledOnce());
+  expect(control.decorators.mock.calls[0][0]).toHaveProperty(
+    'booking-link-mention',
+    control.bookingView
+  );
+  rendered.unmount();
+  expect(control.bookingDispose).toHaveBeenCalledOnce();
 });
 
 it('reports an attach error that arrives before the async mount returns without publishing or waiting forever', async () => {
