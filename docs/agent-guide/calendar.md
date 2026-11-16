@@ -324,6 +324,8 @@ they open beside the row instead. With the overlay hidden they open beside the r
 A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
+On a tablet the footer adds `--mobile-content-inset-bottom` to its padding, so
+`Settings` sits above the floating dock instead of under it.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
