@@ -569,15 +569,13 @@ fn build_mailbox_facts_check(resolved: &ResolvedFilters, view_fact: Option<&str>
         predicate.push_str(" AND ");
         predicate.push_str(fact);
     }
-    // A pending sequence step (a draft whose schedule has a source and is
-    // neither sent nor failed) stays out of every mail list until it is sent or
-    // fails. Every candidate-stage probe and the preview lateral come through
-    // here, so a thread is a candidate only when the lateral can show one of
-    // its messages. The static preview views and `recompute_thread_metadata`
-    // restate this predicate.
+    // A pending sequence step (the `email_pending_sequence_steps` view) stays
+    // out of every mail list until it is sent or fails. Every candidate-stage
+    // probe and the preview lateral come through here, so a thread is a
+    // candidate only when the lateral can show one of its messages.
     SqlFragment::raw(format!(
         "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND {predicate}) \
-         AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages sm_seq WHERE sm_seq.message_id = m.id AND sm_seq.source IS NOT NULL AND NOT sm_seq.sent AND sm_seq.delivery_status <> 'failed')"
+         AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = m.id)"
     ))
 }
 

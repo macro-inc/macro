@@ -75,7 +75,7 @@ pub(crate) async fn drafts_preview_cursor(
                 WHERE m.link_id = ANY($1) AND m.is_draft = TRUE AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
                   AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
                   -- A pending sequence step is not the user's draft (see build_mailbox_facts_check).
-                  AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+                  AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = m.id)
                 GROUP BY m.thread_id
             ) ldpt
             JOIN email_threads t ON ldpt.thread_id = t.id
@@ -105,7 +105,7 @@ pub(crate) async fn drafts_preview_cursor(
               -- Include Macro drafts and imported drafts supported by the provider adapter.
               AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
               AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
-              AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+              AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = m.id)
             ORDER BY m.updated_at DESC
             LIMIT 1
         ) AS lmp

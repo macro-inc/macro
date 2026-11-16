@@ -625,11 +625,12 @@ again before every step,
 including bounces from `mailer-daemon@` or `postmaster@` that arrive in a
 thread of their own.
 
-A pending step (source set, neither sent nor failed) is not the user's mail:
-every mail list (the static views and the dynamic builder, which checks it when
-choosing candidate threads so pages stay full), the thread projection and its
+A pending step (source set, neither sent nor failed) is not the user's mail.
+The `email_pending_sequence_steps` view defines it once, and every mail list
+(the static views and the dynamic builder, which checks it when choosing
+candidate threads so pages stay full), the thread projection and its
 importance, the GraphQL mail cache, search, and `GET /email/drafts/scheduled`
-leave it out. Threads still return it, with GraphQL `scheduledSendSource`, so
+exclude that view's rows. Threads still return it, with GraphQL `scheduledSendSource`, so
 the web thread view can skip it. A failed step shows again like any failed
 send. Rescheduling or unscheduling one from Mail clears its source, so it
 becomes the user's own send. Writers that make a message a pending step or stop

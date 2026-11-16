@@ -288,9 +288,10 @@ tools — hexagonal, heavily feature-gated.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
 - A pending sequence step (schedule `source` set, neither sent nor failed) is
-  not the user's mail. The SQL predicate is restated in several queries; find
-  them with `rg "source IS NOT NULL"` and change them together. See "Sequence
-  sends" in `docs/architecture/email.md`.
+  not the user's mail. The `email_pending_sequence_steps` view defines it; a
+  query that lists or reads a user's messages excludes that view's rows (find
+  them with `rg email_pending_sequence_steps`). See "Sequence sends" in
+  `docs/architecture/email.md`.
 - `domain/sequence_steps.rs` is the only way `email_sequences` touches email
   tables. Its methods run on the caller's connection inside a transaction that
   already holds an enrollment lock, so they take provider-thread, message,

@@ -358,8 +358,9 @@ pub(crate) async fn get_simple_message(
 }
 
 /// Find an existing draft that replies to the given message, identified by
-/// the "Macro-In-Reply-To" header value. An unsent sequence step is never
-/// taken for the user's own reply draft.
+/// the "Macro-In-Reply-To" header value. An unsent sequence step, pending or
+/// failed, is never taken for the user's own reply draft: resuming its
+/// sequence withdraws it.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn get_draft_replying_to(
     pool: &PgPool,
