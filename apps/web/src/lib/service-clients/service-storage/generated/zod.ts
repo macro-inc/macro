@@ -40115,6 +40115,7 @@ export const eventCatalogResponse = zod
                     'contacts_of',
                     'workspace',
                     'snapshot',
+                    'person',
                     'github_installation',
                   ])
                   .describe(
@@ -84630,7 +84631,7 @@ export const listWebhooksResponse = zod
                   events: zod
                     .array(zod.string())
                     .describe(
-                      'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Wildcards require the\n`public-event-stream` feature.'
+                      'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
                     ),
                   ids: zod
                     .array(zod.string())
@@ -84694,7 +84695,7 @@ export const createWebhookBody = zod
           events: zod
             .array(zod.string())
             .describe(
-              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Wildcards require the\n`public-event-stream` feature.'
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
             ),
           ids: zod
             .array(zod.string())
@@ -84756,7 +84757,7 @@ export const getWebhookResponse = zod
           events: zod
             .array(zod.string())
             .describe(
-              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Wildcards require the\n`public-event-stream` feature.'
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
             ),
           ids: zod
             .array(zod.string())
@@ -84827,7 +84828,7 @@ export const patchWebhookBody = zod
               events: zod
                 .array(zod.string())
                 .describe(
-                  'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Wildcards require the\n`public-event-stream` feature.'
+                  'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
                 ),
               ids: zod
                 .array(zod.string())
@@ -84882,7 +84883,7 @@ export const patchWebhookResponse = zod
           events: zod
             .array(zod.string())
             .describe(
-              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Wildcards require the\n`public-event-stream` feature.'
+              'Event names matched by this filter: exact names, a family wildcard\nsuch as `document.\*`, or `\*` for every event. Live streams honour `\*`\nfor every caller; family wildcards, and any wildcard on a webhook,\nrequire the `public-event-stream` feature.'
             ),
           ids: zod
             .array(zod.string())

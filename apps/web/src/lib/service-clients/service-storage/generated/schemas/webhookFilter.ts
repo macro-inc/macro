@@ -16,8 +16,9 @@ export interface WebhookFilter {
 When absent, the filter matches every entity type. */
   entity_types?: WebhookFilterEntityTypes;
   /** Event names matched by this filter: exact names, a family wildcard
-such as `document.*`, or `*` for every event. Wildcards require the
-`public-event-stream` feature. */
+such as `document.*`, or `*` for every event. Live streams honour `*`
+for every caller; family wildcards, and any wildcard on a webhook,
+require the `public-event-stream` feature. */
   events: string[];
   /** Entity ids matched by this filter. When absent, the filter matches all
 entity ids. */
