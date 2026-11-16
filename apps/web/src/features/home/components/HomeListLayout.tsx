@@ -30,7 +30,9 @@ export function HomeListLayout(
   const { state, setState, focusList } = useHomeView();
   // A query on the list keeps its field on screen, also when the header
   // remounts, and closing the field clears the query, as in the list headers.
-  const [searchOpened, setSearchOpened] = createSignal(false);
+  const [searchOpened, setSearchOpened] = createSignal(
+    state.search.trim().length > 0
+  );
   const searchOpen = () => searchOpened() || state.search.trim().length > 0;
   return (
     <div

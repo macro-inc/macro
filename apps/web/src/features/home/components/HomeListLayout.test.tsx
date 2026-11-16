@@ -44,6 +44,16 @@ it('shows the field whenever a query filters the list', () => {
   expect(button().getAttribute('aria-expanded')).toBe('true');
 });
 
+it('keeps the field open while a remounted query is edited down to nothing', () => {
+  const { field } = mount('deals');
+  const input = field();
+  if (!input) throw new Error('The field should be open');
+
+  fireEvent.input(input, { target: { value: '' } });
+
+  expect(field()).not.toBeNull();
+});
+
 it('clears the query when the Search icon closes the field', () => {
   const { state, field, button } = mount('deals');
 

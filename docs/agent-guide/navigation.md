@@ -707,7 +707,8 @@ Check it in Email, Tasks, Drive, and Projects, which land on the first row and
 scroll it into view; a list without the shared list keys keeps the row it was
 on. Where the view has no keyboard list on screen (Passwords, the booking
 lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
-`Enter` stay in the field, so typing goes on. `Enter` on one of Email's recent
+`Enter` stay in the field, so typing goes on. A list that empties while its
+search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
 searches still moves to the list, which lands on the first row once that
 search's rows arrive.
 Home's and Chat's sidebar search fields follow the same rules, landing on the

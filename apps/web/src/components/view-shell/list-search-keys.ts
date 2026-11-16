@@ -35,6 +35,12 @@ export type ListSearchKeysOptions = {
   trigger: () => HTMLElement | undefined;
   suggestions?: () => ListSearchSuggestions | undefined;
   /**
+   * Whether the results hold a row to land on. Without it the list's own "go
+   * to first item" answers, which is any list in the split that registered
+   * one last, so a view sharing its split with another list passes this.
+   */
+  hasResults?: () => boolean;
+  /**
    * Whether an Escape pressed away from the field is this search's to clear;
    * without it, any Escape in the split that nothing else takes is.
    */
@@ -71,14 +77,18 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       return;
     }
 
+    // With no rows to land on, ArrowDown and Enter stay with the field, as in
+    // a view without a list, so typing goes on.
+    const checksRows = row === 'first' && !rowsPending;
+    if (checksRows && options.hasResults?.() === false) return;
+
     // The list's own "go to first item" also scrolls that row into view. It
-    // answers false when the list has no rows, and then ArrowDown and Enter
-    // stay with the field, as in a view without a list, so typing goes on.
+    // answers false when the list has no rows.
     const goToFirst =
       row === 'first' ? getActiveCommandByToken(TOKENS.entity.jump.home) : null;
     const canGoToFirst = goToFirst && (goToFirst.condition?.() ?? true);
     const landed = canGoToFirst ? goToFirst.keyDownHandler?.() : undefined;
-    if (landed === false && !rowsPending) return;
+    if (checksRows && !options.hasResults && landed === false) return;
 
     focusResults();
     // A view whose results are not on screen (a tab without a list) has

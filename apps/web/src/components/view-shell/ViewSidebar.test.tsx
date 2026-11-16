@@ -42,6 +42,8 @@ function setup(
     withoutList?: boolean;
     /** The search found nothing, so the list has no first row. */
     empty?: boolean;
+    /** What the sidebar says of its own rows, apart from the split's list. */
+    hasResults?: boolean;
   } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
@@ -76,6 +78,11 @@ function setup(
               label="Search Home"
               value={search()}
               onValueChange={setSearch}
+              hasResults={
+                options.hasResults === undefined
+                  ? undefined
+                  : () => options.hasResults ?? true
+              }
               focusResults={
                 options.withoutList
                   ? undefined
@@ -197,6 +204,23 @@ it('keeps ArrowDown and Enter in the field when the search found nothing', async
   expect(document.activeElement).toBe(field);
   expect(focusResults).not.toHaveBeenCalled();
   expect(search()).toBe('zzz');
+});
+
+it('trusts its own rows over another list in the split', async () => {
+  // Another list in the split answers "go to first item" with its own rows.
+  const withoutRows = setup({ search: 'zzz', hasResults: false });
+  const field = await withoutRows.openField();
+  field.focus();
+  type(field, 'Enter');
+  expect(document.activeElement).toBe(field);
+  withoutRows.view.unmount();
+
+  // That other list is empty, but the sidebar's own results are not.
+  const withRows = setup({ search: 'gab', empty: true, hasResults: true });
+  const other = await withRows.openField();
+  other.focus();
+  type(other, 'Enter');
+  expect(document.activeElement).toBe(withRows.list());
 });
 
 it('turns off the browser history popup that would take the arrow keys', async () => {
