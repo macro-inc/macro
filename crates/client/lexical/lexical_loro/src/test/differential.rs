@@ -16,7 +16,7 @@ fn bun(input: Value) -> Value {
 /// panics inside the Source mirror on some collab key streams; 1.17.1 does not.
 const JS_LORO_HINT_PANIC: &str = "Op/hint length mismatch";
 
-fn try_bun(input: Value) -> Result<Value, String> {
+fn try_bun(input: Value) -> std::result::Result<Value, String> {
     let mut child = Command::new("bun")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
