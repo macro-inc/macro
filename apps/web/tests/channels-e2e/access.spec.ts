@@ -1,5 +1,11 @@
 import { ChannelView, conversations } from './harness/channel';
-import { expect, failsSometimesWithSoup, test } from './harness/fixtures';
+import {
+  closeRecorded,
+  expect,
+  failsSometimesWithSoup,
+  recorded,
+  test,
+} from './harness/fixtures';
 import {
   deleteChannel,
   expectTimelineEndsWith,
@@ -274,6 +280,7 @@ test('ACC-09 a signed-out person who opens a channel’s address is asked to log
     baseURL,
     ignoreHTTPSErrors: true,
     storageState: { cookies: [], origins: [] },
+    ...recorded(),
   });
   try {
     const visitor = await context.newPage();
@@ -286,6 +293,6 @@ test('ACC-09 a signed-out person who opens a channel’s address is asked to log
       visitor.locator('[data-input-id^="channel-input-"]')
     ).toHaveCount(0);
   } finally {
-    await context.close();
+    await closeRecorded(context);
   }
 });
