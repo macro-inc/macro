@@ -247,6 +247,32 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The backend rollout for OCaml programs in `ExecuteCode`. Off everywhere
+/// until the flag is created in PostHog (at 0%) and targeted.
+pub const OCAML_FLAG: &str = "enable-ocaml-code-mode";
+
+/// [`OCAML_FLAG`] for a session owner. Without a flag client (local stacks
+/// without PostHog) or when the flags can't be read, it is off.
+pub struct OcamlFlag<Flags>(pub Option<Flags>);
+
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+    for OcamlFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        let Some(flags) = &self.0 else {
+            return false;
+        };
+        flags
+            .load(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the OCaml code mode flag");
+            })
+            .is_ok_and(|snapshot| snapshot.is_enabled(OCAML_FLAG))
+    }
+}
+
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
 /// A host code mode's SDK reaches, named as the SDK names it. The test
