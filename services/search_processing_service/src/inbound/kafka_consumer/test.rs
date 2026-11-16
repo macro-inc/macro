@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
-    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
-    CallStartedMetadata, CallTopicEvent,
+    CallRecordImportedMetadata, CallRecordSummarizedMetadata, CallRecordUpdatedMetadata,
+    CallRecordingReadyMetadata, CallStartedMetadata, CallTopicEvent,
 };
 use ::chat::domain::events::{
     ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
@@ -198,6 +198,13 @@ fn summarized_event() -> CallTopicEvent {
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         ai_name_generated: true,
+    })
+}
+
+fn imported_event() -> CallTopicEvent {
+    CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+        call_id: CALL_ID,
+        owner: user_id(),
     })
 }
 
@@ -1387,6 +1394,14 @@ fn maps_all_call_lifecycle_events_to_index_actions() {
             action: CallIndexAction::Ignore,
             call_id: CALL_ID,
             event_type: "call.recording_ready",
+        }
+    );
+    assert_eq!(
+        describe_call_event(&imported_event()),
+        CallEventDescription {
+            action: CallIndexAction::Upsert { call_id: CALL_ID },
+            call_id: CALL_ID,
+            event_type: "call.record_imported",
         }
     );
 }

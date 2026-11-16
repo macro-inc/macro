@@ -70,7 +70,9 @@ pub(super) fn describe_call_event(event: &CallTopicEvent) -> CallEventDescriptio
             event_type: "call.recording_ready",
         },
         CallTopicEvent::RecordImported(metadata) => CallEventDescription {
-            action: CallIndexAction::Ignore,
+            action: CallIndexAction::Upsert {
+                call_id: metadata.call_id,
+            },
             call_id: metadata.call_id,
             event_type: "call.record_imported",
         },
