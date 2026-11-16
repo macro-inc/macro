@@ -90,6 +90,10 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
+- Nothing here creates namespaces. A missing one at team login (and only there) is
+  `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned`, import item code
+  `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,
+  `just passwords_provision` creates them (see `infra/local/openbao/README.md`).
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private
