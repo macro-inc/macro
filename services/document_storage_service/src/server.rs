@@ -1950,7 +1950,14 @@ async fn run_server() -> anyhow::Result<()> {
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
             )),
-            crm_service.clone(),
+            // The Sales views' activity edges probe every record of the scope;
+            // read them from the replica, like the rest of the list. Record
+            // and access reads stay on the primary.
+            crm::domain::service::CrmServiceImpl::new(
+                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
+                    .with_activity_edges_replica(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+                crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+            ),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
                 PgGithubPullRequestRepo::new(readonly_db.clone()),
@@ -2457,10 +2464,20 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
                 KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
             ),
+            // Clears are stored on the primary, with the notification state
+            // they change.
+            notification::outbound::bulk_action::PgBulkActions::new(db.clone()),
+            notification_inbox::outbound::gateway_clear_updates::GatewayClearUpdates::new(
+                conn_gateway_client.clone(),
+            ),
         ),
         feed_triggers,
         feed_viewers,
+        consumer_tracker.clone(),
+        consumer_cancellation_token.clone(),
     );
+    // Resumes clears a crashed or redeployed instance left partway.
+    consumer_tracker.spawn(graphql_notification_inbox_context.clone().recover_clears());
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;

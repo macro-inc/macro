@@ -33,6 +33,8 @@ import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
+  CompanyContactsFilter,
+  CompanyContactsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -183,6 +185,10 @@ export type CrmContext = {
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
+  /** A company's Team list; disabled while `filter` is undefined. */
+  createCompanyContactsSource(
+    filter: Accessor<CompanyContactsFilter | undefined>
+  ): CompanyContactsSource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;

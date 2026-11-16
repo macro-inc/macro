@@ -73,9 +73,21 @@ implemented: future target-specific exclusion tables can keep their own foreign
 keys and add predicates alongside this one, without changing thread exceptions.
 `crm_email_domain_blocked` also honors
 legacy company `email_sync = false` exclusions. The ingestion interaction scan
-(`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) applies
-the same rules set-based, once per call instead of once per thread and participant;
-change both together, and keep its parity tests against the functions passing. Writers and privacy changes use
+(`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) and the
+Team view's read of one record's emails (`ALLOWED` in
+`crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
+contributing inboxes in `dynamic/resolve.rs`) apply the same rules set-based, once
+per call instead of once per thread and participant; change them together, and
+keep their parity tests against the functions passing.
+The Team reader calls `crm_email_thread_excluded` for each candidate and each
+competing copy before choosing the conversation's representative.
+The Team view's read takes the inboxes that contributed when its filters resolved
+and rechecks each thread against current consent, so a withdrawal hides an inbox
+at once and a new grant shows it from the next request. Its address superset
+relies on a message listing only its own inbox's contacts
+(`parse_and_upsert_message_contacts`): a message naming another inbox's contact
+can drop its thread from the Team view and let that thread hide the other copies
+of its conversation. In both cases a lapse only hides email, never shows it. Writers and privacy changes use
 shared/exclusive transaction advisory locks keyed by `crm-email:{team}`. Population
 takes the shared privacy lock before the per-domain lock, parent-team `KEY SHARE`,
 then mailbox `SHARE` and membership `KEY SHARE` before entity writes. Privacy changes take the exclusive lock first. Consent admission
@@ -113,12 +125,14 @@ and existing exclusion enforcement remain active when the flag is off.
 
 DSS and email-service binaries can briefly run different versions. An older
 population binary ignores an existing exception row and may populate from the
-excluded thread until that worker restarts with the new query. CRM email listing
-and direct-access checks still enforce the replaced SQL veto. Keep the flag off
-until the ingestion binaries are confirmed to run the new code; creating or
-enabling the remote flag is a separate rollout action. Rolling back an
-application binary leaves the SQL veto active while the migration remains
-applied.
+excluded thread until that worker restarts with the new query. Older Team email
+readers with an inlined eligibility rule also ignore thread exceptions; readers
+that call the replaced SQL function and direct-access checks enforce its veto.
+Keep the flag off until every ingestion and Team email reader binary is confirmed
+to run the new code; creating or enabling the remote flag is a separate rollout
+action. Rolling back an application binary preserves the SQL veto while the
+migration remains applied, but restores these limitations in inlined readers and
+population.
 
 The first privacy migration starts with no individual consents. In one transaction,
 it takes a write barrier on `team_crm_settings`, turns off the retired

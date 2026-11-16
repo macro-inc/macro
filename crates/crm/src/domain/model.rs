@@ -200,6 +200,112 @@ pub struct CrmContact {
     pub company_domain_emails: Vec<String>,
 }
 
+/// Which of a company's contacts one page of its Team list holds.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsQuery {
+    /// The archived contacts instead of the visible ones. Under an archived
+    /// company every contact is archived.
+    pub archived: bool,
+    /// Text the contact's name or primary email must contain,
+    /// case-insensitively. Empty matches every contact.
+    pub search: String,
+    /// Where the previous page stopped; `None` for the first page.
+    pub cursor: Option<CrmCompanyContactsCursor>,
+    /// The most contacts the page holds.
+    pub limit: i64,
+}
+
+/// The last contact of a Team list page, in the list's order: by
+/// lowercased name (the email when unnamed), then by id descending. It is
+/// bound to the list it came from: a cursor replayed on another company,
+/// archive state or search is refused instead of starting mid-list.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CrmCompanyContactsCursor {
+    /// The contact's lowercased name, or email when it has no name.
+    pub sort_name: Option<String>,
+    /// The contact's id.
+    pub id: uuid::Uuid,
+    /// The company whose list the cursor continues.
+    pub company_id: uuid::Uuid,
+    /// The archive state of that list.
+    pub archived: bool,
+    /// [`CrmCompanyContactsCursor::search_fingerprint`] of that list's
+    /// trimmed search.
+    pub search: String,
+}
+
+impl CrmCompanyContactsCursor {
+    /// A cursor after the contact `(sort_name, id)` of `company_id`'s list
+    /// for `query`, whose search is already trimmed.
+    pub fn after(
+        company_id: uuid::Uuid,
+        query: &CrmCompanyContactsQuery,
+        sort_name: Option<String>,
+        id: uuid::Uuid,
+    ) -> Self {
+        Self {
+            sort_name,
+            id,
+            company_id,
+            archived: query.archived,
+            search: Self::search_fingerprint(&query.search),
+        }
+    }
+
+    /// Whether the cursor continues `company_id`'s list for `query`, whose
+    /// search is already trimmed.
+    pub fn continues(&self, company_id: uuid::Uuid, query: &CrmCompanyContactsQuery) -> bool {
+        self.company_id == company_id
+            && self.archived == query.archived
+            && self.search == Self::search_fingerprint(&query.search)
+    }
+
+    /// A stable digest of the search text (the first 16 bytes of its
+    /// SHA-256, in hex), so the cursor doesn't carry the search itself.
+    fn search_fingerprint(search: &str) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(search.as_bytes())
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+}
+
+/// One page of a company's Team list.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsPage {
+    /// The page's contacts, in the list's order.
+    pub contacts: Vec<CrmContact>,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<CrmCompanyContactsCursor>,
+}
+
+/// The name and visibility of a contact's company, which the contact's page
+/// shows without reading the whole company.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CrmCompanySummary {
+    /// The id of the company
+    pub id: uuid::Uuid,
+    /// The team's name for the company, else its primary domain's
+    /// directory name, as the company read resolves it
+    pub name: Option<String>,
+    /// The company's oldest domain, which stands in for a missing name
+    pub domain: Option<String>,
+    /// Whether the company is hidden for the owning team
+    pub hidden: bool,
+}
+
+/// A contact with a summary of its company.
+#[derive(Debug, Clone)]
+pub struct CrmContactDetail {
+    /// The contact
+    pub contact: CrmContact,
+    /// Its company; `None` for a contact without one, or one the caller
+    /// may not see
+    pub company: Option<CrmCompanySummary>,
+}
+
 /// What a depopulate teardown actually removed. Every field is `false` on
 /// the no-op paths (unknown contact, malformed email), so
 /// [`Self::removed_anything`] distinguishes a real teardown from a call
