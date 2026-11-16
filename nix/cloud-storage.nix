@@ -339,7 +339,7 @@
       # The bundle's path, the way CODE_MODE_ASSETS_DIR is: a build of
       # crates/code_mode_assets with it set compiles and runs OCaml programs
       # against this bundle (crates/code_execution); without it they fail
-      # with a message saying so.
+      # with a message saying so. No service build merges it yet.
       codeModeOcamlEnv = {
         CODE_MODE_OCAML_DIR = "${codeModeOcaml}";
       };

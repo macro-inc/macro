@@ -60,7 +60,10 @@ directory against the prebuilt bundle (`CODE_MODE_OCAML_DIR` when
 Each step is a child process with the same cleared environment, scratch
 directory, CPU and priority limits and kill-on-drop as Deno, inside the run's
 deadline and cancellation, with fixed command lines (no dune, ocamlfind,
-`-pp` or `-ppx`, nothing from the program):
+`-pp` or `-ppx`, nothing from the program). Each step runs in its own
+process group, so stopping it also stops the binaryen tools wasm_of_ocaml
+starts. `Limits::max_cpu` applies to each step, and, like Deno's native
+memory, a step's memory is not capped:
 
 1. `ocamlc -nostdlib -I <stdlib> -I <cmi> -bin-annot -c main.ml`: only the
    SDK, its runtime, yojson, uri, `Macro_sdk_fetch` and `Code_mode` are
@@ -87,7 +90,12 @@ go through the bootstrap's `fetch` with their `{service, operation}`
 and result limits apply. They carry no `x-macro-sdk-verb` yet (a display
 hint). An unattended OCaml program's client holds a stand-in token that
 `fetch` replaces with the real one, so the program never sees the
-credential; it takes no arguments yet.
+credential; it takes no arguments yet. That secrecy rests on the program
+running no JavaScript (the policy check, and no `Js_of_ocaml` interfaces in
+the bundle), not on Deno's permissions: JavaScript could patch `Headers`
+and read the token as `fetch` sets it. A dry run answers a skipped OCaml
+write with `{}`, which the SDK may fail to decode as the operation's reply,
+so the program sees an error where a real run would have succeeded.
 
 Measured on big-pickle, 2026-11-16, median of 11 (one program, warm bundle,
 cold processes): compile 62 ms; a whole OCaml run (compile, Deno start,
