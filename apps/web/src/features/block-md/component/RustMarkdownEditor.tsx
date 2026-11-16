@@ -80,6 +80,7 @@ import {
   type NativeCodeAccessories,
 } from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
 import { installNativeCodeChrome } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
+import { createNativeEditorStats } from '@core/component/LexicalMarkdown/plugins/editor-stats/native';
 import { FloatingSearchHighlight } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
 import { createNativeDocumentFind } from '@core/component/LexicalMarkdown/plugins/find-and-replace/native';
 import { NativeSearchHighlight } from '@core/component/LexicalMarkdown/plugins/find-and-replace/nativeSearchHighlight';
@@ -92,7 +93,9 @@ import {
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
+import { createProgressStatsStore } from '@core/component/LexicalMarkdown/plugins/progress';
 import { registerNativeTextPaste } from '@core/component/LexicalMarkdown/plugins/text-paste/native';
+import { createWordcountStatsStore } from '@core/component/LexicalMarkdown/plugins/wordcount';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
@@ -297,6 +300,15 @@ export default function RustMarkdownEditor(props: {
         : undefined,
   });
   const [highlightLayer, setHighlightLayer] = createSignal<HTMLElement>();
+  const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
+  const [progressStats, setProgressStats] = createProgressStatsStore();
+  const editorStats = createNativeEditorStats({
+    setWordcount: setWordcountStats,
+    setProgress: setProgressStats,
+    debounceTime: 200,
+  });
+  state.editor.setMd('wordcountStats', wordcountStats);
+  state.editor.setMd('progressStats', progressStats);
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -337,6 +349,10 @@ export default function RustMarkdownEditor(props: {
       state.session.setStatus(undefined);
       if (state.editor.md.documentFind === documentFind.engine)
         state.editor.setMd('documentFind', undefined);
+      if (state.editor.md.wordcountStats === wordcountStats)
+        state.editor.setMd('wordcountStats', undefined);
+      if (state.editor.md.progressStats === progressStats)
+        state.editor.setMd('progressStats', undefined);
       rejectReady?.(new Error('Editor open cancelled'));
       releaseCommit?.();
       releaseEmpty?.();
@@ -441,6 +457,7 @@ export default function RustMarkdownEditor(props: {
                 formatting.observer,
                 checklist.observer,
                 documentFind.observer,
+                editorStats,
               ],
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry(), {

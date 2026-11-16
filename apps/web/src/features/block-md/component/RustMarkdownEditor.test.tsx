@@ -874,6 +874,21 @@ it('publishes the native find engine to the find bar until unmount', async () =>
   expect(control.md.documentFind).toBeUndefined();
 });
 
+it('publishes native word count and progress stores until unmount', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  expect(control.md.wordcountStats).toMatchObject({ totalWords: 0 });
+  expect(control.md.progressStats).toMatchObject({ completed: 0, total: 0 });
+  expect(control.create.mock.calls[0][0].latestPublished).toHaveLength(4);
+  rendered.unmount();
+  expect(control.md.wordcountStats).toBeUndefined();
+  expect(control.md.progressStats).toBeUndefined();
+});
+
 it('reports an attach error that arrives before the async mount returns without publishing or waiting forever', async () => {
   const mounted = session();
   const failure = new Error('projection diverged: attach synced JSON differs');

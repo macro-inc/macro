@@ -27,6 +27,31 @@ export function createWordcountStatsStore() {
   });
 }
 
+function countWordLike(text: string) {
+  let wordCount = 0;
+  for (const seg of segmenter.segment(text)) {
+    if (seg.isWordLike) wordCount++;
+  }
+  return wordCount;
+}
+
+/** Store totals for root text and the selection's text; empty selections clear. */
+export function setWordcountStats(
+  setStore: SetStoreFunction<WordcountStats>,
+  all: string,
+  selected: string | null
+) {
+  setStore('totalWords', countWordLike(all));
+  setStore('totalCharacters', all.length);
+  if (selected) {
+    setStore('selectedWords', countWordLike(selected));
+    setStore('selectedCharacters', selected.length);
+  } else {
+    setStore('selectedWords', null);
+    setStore('selectedCharacters', null);
+  }
+}
+
 type WordcountPluginProps = {
   setStore: SetStoreFunction<WordcountStats>;
   debounceTime: number;
@@ -42,30 +67,7 @@ function registerWordcountPlugin(
       let childText = root.getChildren().map((child) => child.getTextContent());
       return [childText.join('\n'), $getSelection()?.getTextContent() ?? null];
     });
-
-    const segments = segmenter.segment(all);
-    let wordCount = 0;
-    for (const seg of segments) {
-      if (seg.isWordLike) {
-        wordCount++;
-      }
-    }
-
-    props.setStore('totalWords', wordCount);
-    props.setStore('totalCharacters', all.length);
-
-    if (selected) {
-      const segments = segmenter.segment(selected);
-      let wordCount = 0;
-      for (const seg of segments) {
-        if (seg.isWordLike) wordCount++;
-      }
-      props.setStore('selectedWords', wordCount);
-      props.setStore('selectedCharacters', selected.length);
-    } else {
-      props.setStore('selectedWords', null);
-      props.setStore('selectedCharacters', null);
-    }
+    setWordcountStats(props.setStore, all, selected);
   };
 
   const deboundecCountWords = debounce(countWords, props.debounceTime);
