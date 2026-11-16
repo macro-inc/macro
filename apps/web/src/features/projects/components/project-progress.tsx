@@ -3,7 +3,7 @@ import { ProgressRing, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import type { Project } from '../core/project';
 
-/** The same completion count in project rows and the phone Tasks shortcut. */
+/** The same completion count in project rows and the phone Tasks heading. */
 export function ProjectProgress(props: {
   project: Pick<Project, 'taskCount' | 'completedTaskCount'>;
   tabIndex?: number;

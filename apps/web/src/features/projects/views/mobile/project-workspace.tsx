@@ -1,9 +1,7 @@
 import { TasksFilterDrawer } from '@app/features/tasks-view/components/TasksFilterDrawer';
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import { t } from '@app/lib/i18n';
-import { useSidePanel } from '@components/app/side-panel';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { AddProjectTasks } from '../../add-project-tasks';
 import { ProjectProgress } from '../../components/project-progress';
@@ -15,9 +13,9 @@ import { ProjectSummary } from '../shared/project-summary';
 import { ProjectTasksEmptyState } from '../shared/project-tasks-empty-state';
 import { ProjectWorkspaceLayout } from '../shared/project-workspace-layout';
 import { MobileProjectDescription } from './project-description';
+import { ProjectDetailsAction } from './project-details-action';
 
 export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
-  const details = useSidePanel();
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [summary, setSummary] = createSignal<HTMLDivElement>();
   const [heading, setHeading] = createSignal<HTMLDivElement>();
@@ -43,15 +41,7 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
           <div ref={setSummary} class="px-5 pt-4 pb-6">
             <ProjectSummary
               {...props}
-              propertyAction={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => details?.setIsOpen(true)}
-                >
-                  {t('common.more')}
-                </Button>
-              }
+              propertyAction={<ProjectDetailsAction />}
             >
               <MobileProjectDescription>
                 {props.description}
@@ -75,23 +65,25 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               <TasksFilterDrawer />
             </div>
           </div>
-          <TasksContent
-            scrollContainer={scroller()}
-            scrollStart={(summarySize.height ?? 0) + (headingSize.height ?? 0)}
-            stickyInset={headingSize.height ?? 0}
-            emptyContent={
-              props.project.taskIds.length === 0 ? (
-                <ProjectTasksEmptyState
-                  project={props.project}
-                  onCreateTask={
-                    canEditProject(props.project)
-                      ? props.onCreateTask
-                      : undefined
-                  }
-                />
-              ) : undefined
+          <Show
+            when={props.project.taskIds.length > 0}
+            fallback={
+              <ProjectTasksEmptyState
+                project={props.project}
+                onCreateTask={
+                  canEditProject(props.project) ? props.onCreateTask : undefined
+                }
+              />
             }
-          />
+          >
+            <TasksContent
+              scrollContainer={scroller()}
+              scrollStart={
+                (summarySize.height ?? 0) + (headingSize.height ?? 0) + 4
+              }
+              stickyInset={headingSize.height ?? 0}
+            />
+          </Show>
         </div>
         <Show when={canEditProject(props.project)}>
           <AddProjectTasks

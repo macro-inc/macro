@@ -1,6 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createEffect, createSignal, type ParentProps, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { createDescriptionClamp } from '../../primitives/create-description-clamp';
 
 /** The editor stays mounted so disclosure never drops a collaborative edit. */
@@ -11,11 +17,26 @@ export function MobileProjectDescription(props: ParentProps) {
     const current = content();
     if (!current) return;
     const lineHeight = Number.parseFloat(getComputedStyle(current).lineHeight);
-    clamp.measure(current.scrollHeight, lineHeight * 3);
+    const editor = current.querySelector<HTMLElement>('[role="textbox"]');
+    clamp.measure(
+      Math.max(current.scrollHeight, editor?.scrollHeight ?? 0),
+      lineHeight * 3
+    );
   };
-  // Observe natural content, not the clamped viewport: collaboration can load
-  // more text without changing that viewport's three-line height.
+  // Collaboration can change text without resizing a clamped viewport.
+  // Measure both child mutations and available width.
   createResizeObserver(content, measure);
+  createEffect(() => {
+    const element = content();
+    if (!element) return;
+    const observer = new MutationObserver(measure);
+    observer.observe(element, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    onCleanup(() => observer.disconnect());
+  });
   createEffect(() => {
     if (!clamp.expanded()) measure();
   });
@@ -23,7 +44,10 @@ export function MobileProjectDescription(props: ParentProps) {
     <div class="mb-6">
       <div
         onFocusIn={clamp.expand}
-        classList={{ 'max-h-[3lh] overflow-hidden': !clamp.expanded() }}
+        classList={{
+          'max-h-[3lh] overflow-hidden [&_[role=textbox]]:line-clamp-3':
+            !clamp.expanded(),
+        }}
         class="text-base leading-relaxed"
       >
         <div
