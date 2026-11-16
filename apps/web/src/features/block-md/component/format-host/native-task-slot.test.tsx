@@ -31,6 +31,19 @@ const API = vi.hoisted(() => ({
 vi.mock('@core/util/taskCreation', () => ({ createTaskFromData: API.create }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: toasts }));
+const composer = vi.hoisted(() => ({
+  createPopoverSplit: vi.fn(),
+  trackMention: vi.fn(),
+}));
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => ({
+    createPopoverSplit: composer.createPopoverSplit,
+  }),
+}));
+vi.mock('@core/signal/mention', () => ({
+  trackMention: composer.trackMention,
+  untrackMention: vi.fn(async () => {}),
+}));
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 beforeAll(() => {
@@ -55,6 +68,9 @@ beforeEach(() => {
   API.create.mockReset();
   toasts.success.mockReset();
   toasts.failure.mockReset();
+  composer.createPopoverSplit.mockReset();
+  composer.trackMention.mockReset();
+  composer.trackMention.mockResolvedValue('uuid-1');
 });
 
 function mount(titles: string[]) {
@@ -143,6 +159,8 @@ function slot(runtime: ReturnType<typeof mount>, canEdit = true) {
     canEdit: () => canEdit,
     currentUserId: () => 'user-1',
     parentTaskId: 'parent-1',
+    documentId: () => 'doc-1',
+    documentName: () => 'Plan',
     selection,
     selectionText: () => 'selected text',
   });
@@ -197,17 +215,103 @@ test('a failed creation reports the Source failure toast', async () => {
   }
 });
 
-test('one checklist item, or no edit access, does not offer "N tasks"', async () => {
+test('one checklist item offers Source\'s single "Task", and no edit access no "N tasks"', async () => {
   const single = mount(['only']);
   try {
-    expect(slot(single).task.available()).toBe(false);
+    const { task } = slot(single);
+    expect(task.available()).toBe(true);
+    expect(task.touchLabel?.()).toBe('Task');
   } finally {
     await single.close();
   }
   const readOnly = mount(['first', 'second']);
   try {
-    expect(slot(readOnly, false).task.available()).toBe(false);
+    expect(slot(readOnly, false).task.touchLabel?.()).toBe('Task');
   } finally {
     await readOnly.close();
+  }
+});
+
+function mountParagraph(text: string, from: number, to: number) {
+  const runtime = mount(['placeholder']);
+  runtime.port.setState(
+    JSON.stringify({
+      root: {
+        type: 'root',
+        version: 1,
+        children: [
+          {
+            type: 'paragraph',
+            version: 1,
+            children: [{ type: 'text', version: 1, text }],
+          },
+        ],
+      },
+    })
+  );
+  const leaf = runtime.nodes('text')[0];
+  runtime.port.selectionFromView({
+    kind: 'range',
+    anchor: { key: leaf.key, offset: from, type: 'text' },
+    focus: { key: leaf.key, offset: to, type: 'text' },
+  });
+  return runtime;
+}
+
+const paragraphText = (runtime: ReturnType<typeof mount>) => {
+  const paragraph = runtime.view.mirror.node(
+    runtime.view.mirror.node(0)?.children[0] ?? -1
+  );
+  return (paragraph?.children ?? [])
+    .map((key) => {
+      const node = runtime.view.mirror.node(key);
+      return node?.type === 'document-mention'
+        ? `[${String(node.props().documentName)}]`
+        : (node?.text ?? '');
+    })
+    .join('');
+};
+
+// Source handleCreateTask's snippet branch: open the composer, then link
+// each created task after the snippet.
+test('"Task" opens the composer on the snippet and links created tasks after it', async () => {
+  const runtime = mountParagraph('buy milk today.', 4, 8);
+  try {
+    const { task } = slot(runtime);
+    expect(task.touchLabel?.()).toBe('Task');
+    const hide = vi.fn();
+    task.select?.(hide);
+    expect(hide).toHaveBeenCalledOnce();
+    const params = composer.createPopoverSplit.mock.calls[0][0].content.params;
+    expect(params.initialTitle).toBe('milk');
+    expect(params.initialContent).toContain('doc-1');
+    params.linkInSource.insert({ documentId: 'task-1', title: 'One' });
+    await vi.waitFor(() =>
+      expect(paragraphText(runtime)).toBe('buy milk [One] today.')
+    );
+    expect(composer.trackMention).toHaveBeenCalledWith(
+      'doc-1',
+      'document',
+      'task-1'
+    );
+    const mention = runtime.nodes('document-mention')[0];
+    expect(mention.props()).toMatchObject({
+      blockName: 'task',
+      mentionUuid: 'uuid-1',
+    });
+    expect(runtime.errors).toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('a read-only document opens the composer without linking back', async () => {
+  const runtime = mountParagraph('buy milk today.', 4, 8);
+  try {
+    slot(runtime, false).task.select?.(() => {});
+    const params = composer.createPopoverSplit.mock.calls[0][0].content.params;
+    expect(params.linkInSource).toBeUndefined();
+  } finally {
+    await runtime.close();
   }
 });

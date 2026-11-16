@@ -1,7 +1,5 @@
-import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useFlow } from '@app/observability/flow';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
@@ -36,7 +34,6 @@ import {
   $getLocationUrl,
   $getSelectionLocation,
   type PersistentLocation,
-  serializePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
 import {
   popupPlugin,
@@ -54,7 +51,6 @@ import {
   readNativePasteboardText,
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
-import { trackMention, untrackMention } from '@core/signal/mention';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';
@@ -65,7 +61,6 @@ import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-sol
 import GridIcon from '@icon/system/regular/grid-four.svg';
 import {
   $createDocumentMentionNode,
-  buildMentionMarkdownString,
   type NodeIdMappings,
 } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
@@ -92,8 +87,6 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type { ComposeTaskSuccess } from '../../task-composer/core/types';
-import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   cancelAiEdit,
@@ -104,6 +97,10 @@ import {
   $insertAtSavedPoint,
   type SavedPoint,
 } from '../util/insertAtSavedPoint';
+import {
+  insertTaskMention as insertTaskMentionAt,
+  openSnippetTaskComposer,
+} from '../util/snippet-task-composer';
 import { CommentButton } from './CommentButton';
 import { FormatTools } from './FormatTools';
 import { SnippetLinkButton } from './SnippetLinkButton';
@@ -440,43 +437,29 @@ export function MarkdownPopup(props: {
     inlineAiEditing().enabled && canEdit();
 
   /** Resolves to the point after the inserted mention, or null if it failed. */
-  const insertTaskMention = async (
+  const insertTaskMention = (
     point: SavedPoint,
     task: { documentId: string; title: string }
-  ): Promise<SavedPoint | null> => {
-    // Tracking only records the backlink; the mention still links without it.
-    let mentionUuid: string | undefined;
-    try {
-      mentionUuid = await trackMention(blockId, 'document', task.documentId);
-    } catch (error) {
-      Telemetry.error(error, { surface: 'markdown-create-task' });
-    }
-    let next: SavedPoint | null = null;
-    editor.update(
-      () => {
-        next = $insertAtSavedPoint(point, [
-          $createTextNode(' '),
-          $createDocumentMentionNode({
-            documentId: task.documentId,
-            documentName: task.title,
-            blockName: 'task',
-            createdAt: Date.now(),
-            mentionUuid,
-          }),
-        ]);
-      },
-      { discrete: true }
-    );
-    if (next) return next;
-    toast.failure('Could not link the task in this document');
-    if (mentionUuid) {
-      fireAndForget(
-        untrackMention(blockId, mentionUuid, 'document'),
-        'markdown-create-task'
+  ): Promise<SavedPoint | null> =>
+    insertTaskMentionAt(blockId, point, task, (at, mention) => {
+      let next: SavedPoint | null = null;
+      editor.update(
+        () => {
+          next = $insertAtSavedPoint(at, [
+            $createTextNode(' '),
+            $createDocumentMentionNode({
+              documentId: mention.documentId,
+              documentName: mention.documentName,
+              blockName: 'task',
+              createdAt: Date.now(),
+              mentionUuid: mention.mentionUuid,
+            }),
+          ]);
+        },
+        { discrete: true }
       );
-    }
-    return null;
-  };
+      return next;
+    });
 
   // Opens the task composer on the highlighted snippet, as a channel
   // message's "Create task" does, and can link the task after the snippet.
@@ -498,51 +481,15 @@ export function MarkdownPopup(props: {
         end: { key, offset, type },
       };
     });
-    const splitManager = globalSplitManager();
-    if (!snippet || !splitManager) return;
-
-    const text = snippet.text.replace(/\s+/g, ' ').trim();
-    // Create More links each task after the previous one, in creation order.
-    let linking = Promise.resolve<SavedPoint>(snippet.end);
-    const linkTask = (task: ComposeTaskSuccess) => {
-      const previous = linking;
-      linking = (async () => {
-        const point = await previous;
-        return (await insertTaskMention(point, task)) ?? point;
-      })();
-      fireAndForget(linking, 'markdown-create-task');
-    };
-    splitManager.createPopoverSplit({
-      content: {
-        type: 'component',
-        id: 'task-compose',
-        params: {
-          composerContext: taskSourceComposerContext({
-            entity_type: 'DOCUMENT',
-            entity_id: blockId,
-          }),
-          initialTitle: text.length > 70 ? `${text.slice(0, 70)}...` : text,
-          initialContent: buildMentionMarkdownString({
-            type: 'document',
-            documentId: blockId,
-            documentName: persistedName() ?? fallbackName() ?? '',
-            blockName: 'md',
-            blockParams: {
-              [URL_PARAMS.location]: serializePersistentLocation(
-                snippet.location
-              ),
-            },
-          }),
-          linkInSource: canEdit()
-            ? {
-                label: 'Link in document',
-                insert: linkTask,
-              }
-            : undefined,
-        },
-      },
+    if (!snippet) return;
+    const opened = openSnippetTaskComposer<SavedPoint>({
+      blockId,
+      documentName: persistedName() ?? fallbackName() ?? '',
+      snippet,
+      canEdit: canEdit(),
+      linkTask: insertTaskMention,
     });
-    setPopupVisible(false);
+    if (opened) setPopupVisible(false);
   };
 
   const handleConvertListToTable = () => {

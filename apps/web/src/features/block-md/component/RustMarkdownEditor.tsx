@@ -167,8 +167,15 @@ export default function RustMarkdownEditor(props: {
   const authenticated = useIsAuthenticated();
   const { commentId } = useUrlParams(URL_PARAMS);
   const owner = getOwner() ?? undefined;
-  const { documentId, kind, permissions, state, bodyFormatPopup } =
-    useMarkdownDocument();
+  const {
+    documentId,
+    kind,
+    permissions,
+    state,
+    bodyFormatPopup,
+    persistedName,
+    fallbackName,
+  } = useMarkdownDocument();
   const documentKind = kind();
   const documentTags = useDocTags(
     documentId(),
@@ -236,6 +243,8 @@ export default function RustMarkdownEditor(props: {
       currentUserId: userId,
       // Source MarkdownEditor: a task's checklist items become its subtasks.
       parentTaskId: documentKind === 'task' ? documentId() : undefined,
+      documentId,
+      documentName: () => persistedName() ?? fallbackName() ?? '',
     },
     aiEdit: {
       documentId,

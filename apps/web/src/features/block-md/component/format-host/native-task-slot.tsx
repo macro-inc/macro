@@ -1,5 +1,8 @@
 import { convertNativeCheckboxesToTasks } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/native';
-import { queryApplication } from '@core/component/LexicalMarkdown/plugins/group-b/command';
+import {
+  dispatchApplicationCommandSettledIfSessionEdit,
+  queryApplication,
+} from '@core/component/LexicalMarkdown/plugins/group-b/command';
 import { toast } from '@core/component/Toast/Toast';
 import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
@@ -7,11 +10,75 @@ import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Toolbar } from '@ui';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import {
+  insertTaskMention,
+  openSnippetTaskComposer,
+  type TaskMentionInsert,
+} from '../../util/snippet-task-composer';
 import { type BodyPopupSlot, buttonSlot } from './body-popup-slots';
+import {
+  type NativeSelectionSnippet,
+  readNativeSelectionSnippet,
+} from './native-snippet';
+
+type NativePoint = NativeSelectionSnippet['end'];
+
+function isPoint(value: unknown): value is NativePoint {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'key' in value &&
+    typeof value.key === 'number' &&
+    'offset' in value &&
+    typeof value.offset === 'number' &&
+    'type' in value &&
+    (value.type === 'text' || value.type === 'element')
+  );
+}
 
 /**
- * Source MarkdownPopup's Task action over the native model, for a selection
- * spanning several checklist items: "N tasks" makes one task per item.
+ * Source `$insertAtSavedPoint` of a space and the task mention, as one native
+ * write at the generation the snippet was read in. Resolves to the point after
+ * the mention, or null when the point is gone or the write was not admitted.
+ */
+async function insertNativeTaskMention(
+  view: EditorView,
+  generation: number,
+  point: NativePoint,
+  mention: TaskMentionInsert
+): Promise<NativePoint | null> {
+  if (!view.isMounted || view.mirror.keyGeneration !== generation) return null;
+  let next: NativePoint | null = null;
+  const release = view.onPluginEvent(
+    'group-b.task-mention-inserted',
+    (payload) => {
+      if (isPoint(payload)) next = payload;
+    }
+  );
+  try {
+    const settled = await dispatchApplicationCommandSettledIfSessionEdit(
+      view,
+      'group-b.insert-task-mention-at-point',
+      () => ({
+        point,
+        documentId: mention.documentId,
+        documentName: mention.documentName,
+        ...(mention.mentionUuid === undefined
+          ? {}
+          : { mentionUuid: mention.mentionUuid }),
+      })
+    );
+    if (settled.status === 'error') throw settled.error;
+    return settled.status === 'success' && settled.handled ? next : null;
+  } finally {
+    release();
+  }
+}
+
+/**
+ * Source MarkdownPopup's Task action over the native model: "N tasks" makes
+ * one task per selected checklist item; otherwise "Task" opens the task
+ * composer on the snippet and can link each created task after it.
  */
 export function createNativeTaskSlot(options: {
   /** The mounted native view, if any. */
@@ -19,6 +86,10 @@ export function createNativeTaskSlot(options: {
   canEdit: Accessor<boolean>;
   currentUserId: Accessor<string | undefined>;
   parentTaskId?: string;
+  /** The document the snippet comes from (Source blockId). */
+  documentId: Accessor<string>;
+  /** Source persistedName() ?? fallbackName() ?? ''. */
+  documentName: Accessor<string>;
   /** The published selection, re-read on every selection change. */
   selection: Accessor<unknown>;
   /** The published selection's text (Source selection()?.text). */
@@ -75,17 +146,41 @@ export function createNativeTaskSlot(options: {
     // Without a range selection nothing converts and no completion follows.
     if (!started && !completed) setIsConverting(false);
   };
-  // Source handleCreateTask; its snippet-composer branch is not native yet.
+  // Source handleCreateTask.
   const handleCreateTask = (hide: () => void) => {
-    if (convertsCheckboxes()) convert(hide);
+    if (convertsCheckboxes()) {
+      convert(hide);
+      return;
+    }
+    const view = options.view();
+    const generation = view?.mirror.keyGeneration;
+    if (!view || generation === null || generation === undefined) return;
+    const snippet = readNativeSelectionSnippet(view);
+    if (!snippet) return;
+    const blockId = options.documentId();
+    const opened = openSnippetTaskComposer<NativePoint>({
+      blockId,
+      documentName: options.documentName(),
+      snippet,
+      canEdit: options.canEdit(),
+      linkTask: (point, task) =>
+        insertTaskMention(blockId, point, task, (at, mention) =>
+          insertNativeTaskMention(view, generation, at, mention)
+        ),
+    });
+    if (opened) hide();
   };
   return buttonSlot({
     id: 'task',
-    available: () => shouldShowCreateTaskButton() && convertsCheckboxes(),
+    available: shouldShowCreateTaskButton,
     button: (control) => (
       <Toolbar.Button
         size="sm"
-        tooltip="Create a task for each checklist item"
+        tooltip={
+          convertsCheckboxes()
+            ? 'Create a task for each checklist item'
+            : 'Create task from snippet'
+        }
         onClick={() => handleCreateTask(control.close)}
         disabled={isConverting()}
       >

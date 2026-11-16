@@ -57,6 +57,9 @@ export function createNativeBodyFormattingOverlay(options: {
     readonly view: Accessor<EditorView | undefined>;
     readonly currentUserId: Accessor<string | undefined>;
     readonly parentTaskId?: string;
+    readonly documentId: Accessor<string>;
+    /** Source persistedName() ?? fallbackName() ?? ''. */
+    readonly documentName: Accessor<string>;
   };
   /** Source AI edit selection action. */
   aiEdit?: {
