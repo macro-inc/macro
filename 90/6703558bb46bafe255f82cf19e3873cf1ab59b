@@ -1,0 +1,24 @@
+apps/web/src/lib/i18n/locales/en/create.ts
+  s_0c1d35911219cb::t_ece5c4d4fa3002 83-86
+apps/web/src/features/command/Launcher.test.tsx
+  s_0c1d35911219cb::t_48ca4bf1401f83 3,18-22,83-91,297-311
+  s_0c1d35911219cb::t_a047e132d988a7 312-314
+apps/web/src/features/command/Launcher.tsx
+  s_0c1d35911219cb::t_ece5c4d4fa3002 286-287,292-295,367-370,397-398,403-406,491-494
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "906703558bb46bafe255f82cf19e3873cf1ab59b",
+  "prompts": {},
+  "sessions": {
+    "s_0c1d35911219cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8117e737-ac2a-49ae-b8f5-2cf6a0558b0b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
