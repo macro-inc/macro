@@ -20,6 +20,7 @@ import {
   $createTextNode,
   $getRoot,
   $isElementNode,
+  $isTextNode,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
@@ -28,9 +29,15 @@ import {
   $createDateMentionNode,
   $isDateMentionNode,
 } from '../nodes/DateMentionNode';
+import { $isEquationNode } from '../nodes/EquationNode';
 import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
+import { $isUserMentionNode } from '../nodes/UserMentionNode';
 import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
-import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
+import {
+  ALL_TRANSFORMERS,
+  EXTERNAL_TRANSFORMERS,
+  INTERNAL_TRANSFORMERS,
+} from '../transformers';
 
 function createTestEditor() {
   return createEditor({
@@ -665,6 +672,168 @@ describe('pipe table external transformer', () => {
     const lines = markdown.split('\n');
     expect(lines[0]).toBe('| wide |  | c |');
     expect(lines[1]).toBe('| x | y | z |');
+  });
+});
+
+describe('pipe characters inside pipe-table cells', () => {
+  const GAB_MENTION =
+    '<m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com"}</m-user-mention>';
+
+  async function importWith(
+    editor: ReturnType<typeof createEditor>,
+    markdown: string,
+    transformers = EXTERNAL_TRANSFORMERS
+  ) {
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, transformers);
+    });
+  }
+
+  function $cellGrid(): TableCellNode[][] {
+    return $getFirstTable()
+      .getChildren()
+      .filter($isTableRowNode)
+      .map((row) => row.getChildren().filter($isTableCellNode));
+  }
+
+  function $cellTexts(): string[][] {
+    return $cellGrid().map((row) =>
+      row.map((cell) => cell.getTextContent().trim())
+    );
+  }
+
+  function $inlineNodes(cell: TableCellNode) {
+    return cell
+      .getChildren()
+      .flatMap((child) => ($isElementNode(child) ? child.getChildren() : []));
+  }
+
+  for (const [name, transformers] of [
+    ['external', EXTERNAL_TRANSFORMERS],
+    ['all (static renderers)', ALL_TRANSFORMERS],
+  ] as const) {
+    it(`keeps a macro| user mention in one cell as a mention node (${name})`, async () => {
+      const editor = createTestEditor();
+      await importWith(
+        editor,
+        [
+          '| Person | Bug Reports | Share |',
+          '| :--- | :---: | :---: |',
+          `| ${GAB_MENTION} | 206 | $ 26.8\\% $ |`,
+        ].join('\n'),
+        transformers
+      );
+
+      editor.getEditorState().read(() => {
+        const grid = $cellGrid();
+        expect(grid.map((row) => row.length)).toEqual([3, 3]);
+        expect($cellTexts()[0]).toEqual(['Person', 'Bug Reports', 'Share']);
+
+        const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
+        expect(mention).toBeDefined();
+        expect(mention.getUserId()).toBe('macro|gab@macro.com');
+        expect(mention.getEmail()).toBe('gab@macro.com');
+        expect(grid[1][1].getTextContent().trim()).toBe('206');
+      });
+    });
+  }
+
+  it('imports a header row with alignment markers and an empty first cell', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Rank | Person |',
+        '| ---: | :--- |',
+        '| 1 | a |',
+        '| | **Total** |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([
+        ['Rank', 'Person'],
+        ['1', 'a'],
+        ['', 'Total'],
+      ]);
+    });
+  });
+
+  it('keeps inline formatting, code with a pipe, escaped pipes and inline math in their cells', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Bold | Code | Escaped | Math |',
+        '| --- | --- | --- | --- |',
+        '| **strong** | `a|b` | x \\| y | $$27.4\\%$$ |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([4, 4]);
+      const [bold, code, escaped, math] = grid[1];
+
+      const [strong] = $inlineNodes(bold);
+      expect(strong.getTextContent()).toBe('strong');
+      expect($isTextNode(strong) && strong.hasFormat('bold')).toBe(true);
+
+      const [codeText] = $inlineNodes(code);
+      expect(codeText.getTextContent()).toBe('a|b');
+      expect($isTextNode(codeText) && codeText.hasFormat('code')).toBe(true);
+
+      expect(escaped.getTextContent().trim()).toBe('x | y');
+
+      const [equation] = $inlineNodes(math).filter($isEquationNode);
+      expect(equation).toBeDefined();
+      expect(equation.getEquation()).toBe('27.4\\%');
+    });
+  });
+
+  it('escapes literal pipes in cell text on export', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('a|b'), $createCell('c'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toBe('| a\\|b | c |');
+
+    await importWith(editor, markdown);
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([['a|b', 'c']]);
+    });
+  });
+
+  it('round-trips markdown -> lexical -> markdown stably', async () => {
+    const source = [
+      '| Person | Code | Note |',
+      '| --- | --- | --- |',
+      `| ${GAB_MENTION} | \`a|b\` | x \\| y |`,
+    ].join('\n');
+
+    const editor = createTestEditor();
+    await importWith(editor, source);
+    const first = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    await importWith(editor, first);
+    const second = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(second).toBe(first);
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([3, 3]);
+      const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
+      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+      expect(grid[1][1].getTextContent()).toBe('a|b');
+      expect(grid[1][2].getTextContent().trim()).toBe('x | y');
+    });
   });
 });
 
