@@ -63,6 +63,7 @@ pub(crate) mod caret;
 
 pub(crate) mod rich;
 
+mod html;
 pub(crate) mod markdown;
 
 pub(crate) mod macro_model;

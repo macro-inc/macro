@@ -206,4 +206,4 @@ lexical-replay:
 # Execute the same complete corpus in wasm-bindgen-test's Node runner.
 lexical-replay-wasm:
   bun packages/lexical-conformance/coverage/wasm-fixtures.ts
-  LEXICAL_WASM_FIXTURES="$(pwd)/target/lexical-conformance/wasm-fixtures.rs" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p lexical_conformance --target wasm32-unknown-unknown --test replay_wasm -j4
+  LEXICAL_WASM_FIXTURES="$(pwd)/target/lexical-conformance/wasm-fixtures.rs" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p lexical_conformance --features node-dom --target wasm32-unknown-unknown --test replay_wasm -j4

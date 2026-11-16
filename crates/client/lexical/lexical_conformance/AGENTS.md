@@ -28,6 +28,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 - Read fixtures from `packages/lexical-conformance`; merge recorder updates rather than editing its files here.
 - Replay code and mark factories, mark wrapping and tree traversal through their package APIs; direct `exportJSON` returns retain undefined fields while document snapshots omit them.
+- Export HTML through the shared product registry/walker and the production clipboard-dom builder in jsdom; keep headless linkedom exports unchanged. Node wasm fixture replay opts into the development-only node-dom feature; product crates must not enable it. The crate is publish=false; its existing document_session_ffi/conformance and lexical_conformance_wasm/js-nodes dependents are development-only features. Production feature closures must exclude lexical_conformance, and no product may enable node-dom (`cargo tree -i lexical_conformance` checks the default workspace closure). This certifies jsdom fixture parity, not Chromium clipboard parity.
 - Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
 - Fix divergences in the owning model crate; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.

@@ -891,7 +891,6 @@ S2:@lexical/history:HistoryExtension
 S2:@lexical/history:createEmptyHistoryState
 S2:@lexical/history:registerHistory
 S2:@lexical/html:$generateDOMFromNodes
-S2:@lexical/html:$generateHtmlFromNodes
 S2:@lexical/html:$getSessionDOMRenderConfig
 S2:@lexical/html:$setRenderContextValue
 S2:@lexical/html:$updateRenderContextValue

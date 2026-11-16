@@ -26,7 +26,7 @@ Recorded JavaScript fixtures alone certify no Rust coverage. `just lexical-repla
 executes every admitted fixture, writes per-case pass/fail/ledger evidence to
 `results/replay.json`, and preserves Cargo's failing exit code. The fingerprint
 covers the exact corpus, Rust sources, vendored sources, manifests/lockfile and
-Rust configuration. Ledgered cases never count as passing replay. Set `CONFORMANCE_JOBS` and `CONFORMANCE_TEST_THREADS` only for a locally throttled run; CI retains four build jobs and its original test-thread defaults.
+Rust configuration. Ledgered cases never count as passing replay. HTML replay runs the shared Rust export walker and the real product `clipboard-dom.ts` builder inside jsdom. Its host script, product source, lockfile, installed jsdom metadata and Bun version are fingerprinted. The Node wasm replay enables the development-only `node-dom` feature; no product enables it. This proves jsdom-captured fixture equality, not real Chromium copy equality. Existing headless string exports retain their linkedom DOM contract. Set `CONFORMANCE_JOBS` and `CONFORMANCE_TEST_THREADS` only for a locally throttled run; CI retains four build jobs and its original test-thread defaults.
 
 `run-tests.ts` runs the four Rust library suites separately and writes matching
 literal test results. New property-test regression seeds are preserved under

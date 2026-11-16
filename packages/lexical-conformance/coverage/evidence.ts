@@ -45,6 +45,10 @@ export function inputs(): string {
   if (compiler.status !== 0)
     throw new Error('Cannot fingerprint the Rust compiler');
   digest.update(compiler.stdout);
+  const runtime = spawnSync('bun', ['--version'], { encoding: 'utf8' });
+  if (runtime.status !== 0)
+    throw new Error('Cannot fingerprint the DOM host runtime');
+  digest.update(runtime.stdout);
   for (const key of [
     'RUSTFLAGS',
     'CARGO_ENCODED_RUSTFLAGS',
@@ -62,6 +66,10 @@ export function inputs(): string {
     'Cargo.toml',
     'rust-toolchain.toml',
     '.cargo/config.toml',
+    'packages/lexical-wasm-view/src/view/clipboard-dom.ts',
+    'packages/lexical-conformance/package.json',
+    'packages/lexical-conformance/bun.lock',
+    'packages/lexical-conformance/node_modules/jsdom/package.json',
     ...files(path.join(root, 'vendor')).map((file) =>
       path.relative(root, file)
     ),
@@ -70,7 +78,7 @@ export function inputs(): string {
       row.file ? ['packages/lexical-conformance/fixtures/' + row.file] : []
     ),
     ...files(path.join(root, 'crates/client/lexical'))
-      .filter((file) => /\.(rs|toml|json|txt)$/.test(file))
+      .filter((file) => /\.(rs|toml|json|txt|mjs)$/.test(file))
       .map((file) => path.relative(root, file)),
   ].sort();
   for (const name of names)

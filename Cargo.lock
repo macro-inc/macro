@@ -12390,6 +12390,7 @@ dependencies = [
 name = "lexical_conformance"
 version = "0.1.0"
 dependencies = [
+ "lexical_html",
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
@@ -12400,6 +12401,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.117",
  "thiserror 2.0.18",
+ "wasm-bindgen",
  "wasm-bindgen-test",
 ]
 

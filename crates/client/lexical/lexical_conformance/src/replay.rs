@@ -33,6 +33,9 @@ pub enum ReplayError {
     /// A markdown operation failed.
     #[error(transparent)]
     Markdown(#[from] lexical_markdown::Error),
+    /// The shared HTML exporter failed.
+    #[error(transparent)]
+    Html(#[from] lexical_html::Error),
     /// A Macro document operation failed.
     #[error(transparent)]
     Macro(#[from] macro_document_model::Error),
@@ -241,7 +244,10 @@ impl Replayer {
                         .iter()
                         .map(|node| string(node).map(str::to_owned))
                         .collect::<Result<Vec<_>>>()?;
-                    let mut builder = test_nodes::configured_builder(&nodes, self.attached)?;
+                    let mut builder = test_nodes::configured_builder(&nodes, self.attached)?
+                        .extension_state(serde_json::from_value::<lexical_html::EditorTheme>(
+                            op["config"]["theme"].clone(),
+                        )?);
                     for replacement in op["config"]["replacements"]
                         .as_array()
                         .ok_or_else(|| fail("replacement array"))?

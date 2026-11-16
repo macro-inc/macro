@@ -79,6 +79,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         })));
     }
     match name {
+        "@lexical/html.$generateHtmlFromNodes" => super::html::generate(r, tx, a),
         "lexical.$parseSerializedNode" => {
             let json = a
                 .first()

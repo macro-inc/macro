@@ -6,46 +6,6 @@
   ],
   "entries": [
     {
-      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
-      "test": "HTML > [Lexical -> HTML]: Default selection (undefined) should serialize entire editor state",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-html/src/index.ts:241",
-      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
-      "failure": "op 5: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
-    },
-    {
-      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
-      "test": "HTML > [Lexical -> HTML]: Empty editor state",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-html/src/index.ts:241",
-      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
-      "failure": "op 6 read: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
-    },
-    {
-      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
-      "test": "HTML > [Lexical -> HTML]: Nested ordered list numbering (Regression #7207)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-html/src/index.ts:241",
-      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
-      "failure": "op 6 read: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
-    },
-    {
-      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
-      "test": "HTML > [Lexical -> HTML]: Use provided selection",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-html/src/index.ts:241",
-      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
-      "failure": "op 5: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
-    },
-    {
       "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
       "test": "Markdown > Enter key triggers > should create a code block with language when ```javascript is typed and Enter is pressed",
       "status": "xfail",
