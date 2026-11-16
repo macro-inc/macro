@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use event_access::{Exposure, ExposureError};
+use event_access::EventAccess;
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -14,27 +14,17 @@ use crate::domain::ports::{MacroEventCollection, MessageParts};
 /// Implement this trait for each topic-specific event enum. The enum should use
 /// `#[serde(tag = "event_type", content = "metadata")]` so the wire payload is
 /// self-describing while each variant still carries strongly typed metadata.
-pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
+///
+/// Every topic event must also implement [`EventAccess`]: who may receive
+/// each event outside Macro, and in what shape. It is a supertrait, so a
+/// topic event that does not declare its access does not compile. See
+/// `crates/event_access/ACCESS_MODEL.md`.
+pub trait TopicEvent: EventAccess + Serialize + DeserializeOwned + Send + Sync {
     /// The concrete topic type that all variants of this event enum belong to.
     type Topic: Topic;
 
     /// Version of this concrete event variant's payload schema.
     const SCHEMA_VERSION: u8;
-
-    /// The public projection of this topic's events, serialized as the
-    /// delivered payload. It carries the `event_type` tag and `metadata`, and
-    /// derives `utoipa::ToSchema` (behind the producer's schema feature) so it
-    /// can join the public event union. Topics with nothing public use
-    /// [`Unexposed`](event_access::Unexposed).
-    type PublicPayload: Serialize + Clone;
-
-    /// Who may see this event outside Macro, and in what shape.
-    ///
-    /// Required, with no default: every variant must be classified, with an
-    /// exhaustive `match` and no wildcard arm (ast-grep
-    /// `rust-exposure-no-wildcard-arm`). Pure: it reads only the payload.
-    /// See `docs/guides/add-kafka-event.md`.
-    fn exposure(&self) -> Result<Exposure<'_, Self::PublicPayload>, ExposureError>;
 }
 
 /// Serializable event envelope published through the broker.

@@ -11,6 +11,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroMentionsTopic;
 use serde::{Deserialize, Serialize};
@@ -69,18 +70,20 @@ impl TopicEvent for MentionTopicEvent {
     type Topic = MacroMentionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for MentionTopicEvent {
     type PublicPayload = MentionPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef as PublicEntityRef, EntityType, Exposure, ExposureError,
-            PublicEvent, Stage,
+            Access, AccessError, Audience, EntityRef as PublicEntityRef, EntityType, PublicEvent,
+            Stage,
         };
         use std::borrow::Cow;
         use std::str::FromStr as _;
@@ -89,7 +92,7 @@ impl TopicEvent for MentionTopicEvent {
             Self::Created(metadata) => ("mention.created", metadata, MentionPublicEvent::Created),
             Self::Deleted(metadata) => ("mention.deleted", metadata, MentionPublicEvent::Deleted),
             Self::MessageSent(_) => {
-                return Ok(Exposure::internal_by_design(
+                return Ok(Access::internal_by_design(
                     "message.mentioned already delivers each message mention to the message's audience",
                 ));
             }
@@ -98,13 +101,13 @@ impl TopicEvent for MentionTopicEvent {
         // travels as a string; any kind that is not an entity type is a
         // contract violation.
         let source_type = EntityType::from_str(&metadata.source.kind).map_err(|_| {
-            ExposureError::InvalidEntityId {
+            AccessError::InvalidEntityId {
                 entity_type: "mention source",
                 entity_id: metadata.source.kind.clone(),
             }
         })?;
         let source_id = metadata.source.id.clone();
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: PublicEntityRef::new(source_type, source_id.clone()),
             audience: Audience::Entity {

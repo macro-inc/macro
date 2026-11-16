@@ -12,6 +12,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroWebhooksTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -131,17 +132,19 @@ impl TopicEvent for WebhookTopicEvent {
     type Topic = MacroWebhooksTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for WebhookTopicEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, ExposureError, PublicEntityType, PublicEvent, Stage,
+            Access, AccessError, Audience, EntityRef, PublicEntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -168,12 +171,12 @@ impl TopicEvent for WebhookTopicEvent {
             ),
         };
         if !webhook_id.starts_with(WEBHOOK_ID_PREFIX) {
-            return Err(ExposureError::InvalidEntityId {
+            return Err(AccessError::InvalidEntityId {
                 entity_type: PublicEntityType::Webhook.as_str(),
                 entity_id: webhook_id.clone(),
             });
         }
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(PublicEntityType::Webhook, webhook_id.clone()),
             // Only the owning workspace, never entity accessors.

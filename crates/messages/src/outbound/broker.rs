@@ -4,6 +4,7 @@ use crate::domain::events::{
     MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata, MessageDeletedMetadata,
     MessageMentionedMetadata, MessagePatchedMetadata, MessagePostedMetadata,
 };
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroMessagesTopic;
 use serde::{Deserialize, Serialize};
@@ -41,16 +42,18 @@ pub enum MessageTopicEvent {
 impl TopicEvent for MessageTopicEvent {
     type Topic = MacroMessagesTopic;
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for MessageTopicEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
-        use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEvent, Stage};
+        use macro_event_broker::access::{Access, Audience, EntityRef, PublicEvent, Stage};
         use std::borrow::Cow;
 
         // The entity is the message's parent: access and `ids` filters are by
@@ -64,7 +67,7 @@ impl TopicEvent for MessageTopicEvent {
             Self::AttachmentRemoved(metadata) => ("message.attachment_removed", &metadata.parent),
         };
         let entity_id = parent.entity_id();
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(parent.access_entity_type(), entity_id.clone()),
             audience: Audience::Entity {

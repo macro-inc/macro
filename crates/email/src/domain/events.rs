@@ -34,6 +34,7 @@ mod test;
 pub use public::*;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroEmailTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -533,17 +534,19 @@ impl TopicEvent for EmailTopicEvent {
     type Topic = MacroEmailTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for EmailTopicEvent {
     type PublicPayload = EmailPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEntityType, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -645,13 +648,13 @@ impl TopicEvent for EmailTopicEvent {
             Self::MessageDraftSynced(_)
             | Self::ThreadBackfilled(_)
             | Self::ThreadsReindexRequested(_) => {
-                return Ok(Exposure::internal_by_design(
+                return Ok(Access::internal_by_design(
                     "email sync and indexing commands, not facts",
                 ));
             }
         };
         // Mail is personal data: only the mailbox owner, never their teams.
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity,
             audience: Audience::Recipient {

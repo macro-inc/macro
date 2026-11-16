@@ -16,7 +16,7 @@ pub const WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;
 
 /// Event data normalized from a broker envelope for webhook matching and delivery.
 ///
-/// Shared with live streams, which normalize through the same exposure code.
+/// Shared with live streams, which normalize through the same access code.
 /// `broker_envelope` is the only value sent as the webhook HTTP request body.
 #[cfg(feature = "ports")]
 pub use event_stream::domain::models::NormalizedEvent as NormalizedWebhookEvent;

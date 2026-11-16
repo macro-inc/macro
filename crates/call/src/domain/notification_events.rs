@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroCallNotificationsTopic;
 use serde::{Deserialize, Serialize};
@@ -130,17 +131,19 @@ impl TopicEvent for CallNotificationEvent {
     type Topic = MacroCallNotificationsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for CallNotificationEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, ExposureError, PublicEvent, Stage,
+            Access, AccessError, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use macro_user_id::user_id::MacroUserIdStr;
         use std::borrow::Cow;
@@ -153,9 +156,9 @@ impl TopicEvent for CallNotificationEvent {
                     .recipient_user_id
                     .clone()
                     .filter(|id| !id.is_empty())
-                    .ok_or(ExposureError::MissingRecipient)?;
+                    .ok_or(AccessError::MissingRecipient)?;
                 let user_id = MacroUserIdStr::try_from(recipient.clone()).map_err(|_| {
-                    ExposureError::InvalidEntityId {
+                    AccessError::InvalidEntityId {
                         entity_type: "user",
                         entity_id: recipient,
                     }
@@ -186,7 +189,7 @@ impl TopicEvent for CallNotificationEvent {
             | Self::Declined(metadata)
             | Self::Invited(metadata) => metadata.recipient_user_id = None,
         }
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name: self.name(),
             entity: EntityRef::new(EntityType::Call, call_id),
             audience,

@@ -1,3 +1,4 @@
+use macro_event_broker::access::EventAccess as _;
 use macro_event_broker::{Event, MacroEvent as _, TopicEvent};
 use model::document::FileType;
 use model_owner::Owner;
@@ -325,13 +326,13 @@ fn sync_extract_drops_invalid_attribution_strings() {
     assert_eq!(metadata.on_behalf_of, None);
 }
 
-mod exposure {
+mod access {
     use super::*;
     use crate::domain::events::{
         DocumentChangePublicEvent, DocumentPublicEvent, DocumentSyncEditor,
     };
     use activity::Actor;
-    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
     use macro_user_id::user_id::MacroUserIdStr;
 
     fn user(id: &str) -> MacroUserIdStr<'static> {
@@ -339,9 +340,9 @@ mod exposure {
     }
 
     fn public(event: &DocumentTopicEvent) -> PublicEvent<'_, DocumentPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -407,7 +408,7 @@ mod exposure {
                 on_behalf_of: None,
             }],
         });
-        let public = super::exposure::public(&snapshot);
+        let public = super::access::public(&snapshot);
         assert_eq!(public.name, "document.content_changed");
         assert_eq!(public.audience, document_audience());
         assert_eq!(
@@ -489,7 +490,7 @@ mod exposure {
         let event = DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_owned(),
         });
-        assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
     }
 
     /// A delivered lifecycle event's public body is the broker body, byte

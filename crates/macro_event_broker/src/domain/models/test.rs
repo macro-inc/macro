@@ -1,3 +1,4 @@
+use crate::access::EventAccess;
 use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -23,14 +24,15 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for ExampleTopicEvent {
     type PublicPayload = crate::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
-    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
-    {
-        Ok(crate::access::Exposure::internal_by_design(
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::internal_by_design(
             "broker test fixture",
         ))
     }
@@ -140,14 +142,15 @@ impl TopicEvent for DocumentsTopicEvent {
     type Topic = MacroDocumentsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for DocumentsTopicEvent {
     type PublicPayload = crate::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
-    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
-    {
-        Ok(crate::access::Exposure::internal_by_design(
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::internal_by_design(
             "broker test fixture",
         ))
     }

@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChatsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -287,17 +288,19 @@ impl TopicEvent for ChatTopicEvent {
     type Topic = MacroChatsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for ChatTopicEvent {
     type PublicPayload = ChatPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -369,12 +372,12 @@ impl TopicEvent for ChatTopicEvent {
                 }),
             ),
             Self::PermanentlyDeleted(_) => {
-                return Ok(Exposure::internal_by_design(
+                return Ok(Access::internal_by_design(
                     "carries no owner and its grants are gone when consumed, so it has no audience; chat.deleted is the public signal",
                 ));
             }
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Chat, chat_id.clone()),
             audience: Audience::Entity {

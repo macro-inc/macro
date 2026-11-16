@@ -18,8 +18,9 @@
 pub mod domain;
 
 pub use agent_correlation::AgentVerb;
-/// Exposure vocabulary for [`TopicEvent::exposure`], re-exported so producers
-/// need no extra dependency.
+/// The access contract every [`TopicEvent`] implements
+/// ([`EventAccess`](event_access::EventAccess)) and its vocabulary,
+/// re-exported so producers need no extra dependency.
 pub use event_access as access;
 #[doc(hidden)]
 pub use uuid::Uuid as EventUuid;

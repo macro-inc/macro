@@ -1,4 +1,4 @@
-use macro_event_broker::access::{Audience, EntityType, Exposure};
+use macro_event_broker::access::{Access, Audience, EntityType};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -14,7 +14,7 @@ fn updated(foreign_entity_ids: Vec<Uuid>) -> GithubPullRequestTopicEvent {
 #[test]
 fn an_update_reaches_everyone_who_can_see_a_linked_record() {
     let event = updated(vec![Uuid::from_u128(1), Uuid::from_u128(2)]);
-    let Exposure::Public(public) = event.exposure().unwrap() else {
+    let Access::Public(public) = event.access().unwrap() else {
         panic!("a linked update is public");
     };
 
@@ -45,8 +45,8 @@ fn an_update_reaches_everyone_who_can_see_a_linked_record() {
 #[test]
 fn an_update_with_no_linked_record_stays_internal() {
     assert!(matches!(
-        updated(Vec::new()).exposure().unwrap(),
-        Exposure::Internal(_)
+        updated(Vec::new()).access().unwrap(),
+        Access::Internal(_)
     ));
 }
 

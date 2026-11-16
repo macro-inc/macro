@@ -1,4 +1,4 @@
-//! A broker event's public form, from its declared exposure.
+//! A broker event's public form, from its declared access.
 //!
 //! Shared by both deliveries: the public event log and persisted webhook
 //! ingestion normalize through here, so they agree on which events are
@@ -7,15 +7,15 @@
 use crate::domain::catalog;
 use crate::domain::models::{NormalizedEvent, PublicLogEvent};
 use chrono::Utc;
-use event_access::{Exposure, ExposureError};
+use event_access::{Access, AccessError};
 use macro_event_broker::{Event, TopicEvent};
 
 /// Why an event could not be normalized. Permanent: retrying cannot fix it.
 #[derive(Debug, thiserror::Error)]
 pub enum NormalizeError {
-    /// The event violates the contract its exposure relies on.
+    /// The event violates the contract its access relies on.
     #[error(transparent)]
-    Exposure(#[from] ExposureError),
+    Access(#[from] AccessError),
     /// The event is declared public under a name the catalog does not list.
     #[error("public event `{0}` is not registered in the event catalog")]
     Unregistered(&'static str),
@@ -32,9 +32,9 @@ pub enum NormalizeError {
 pub fn normalize<E: TopicEvent>(
     event: &Event<E>,
 ) -> Result<Option<PublicLogEvent>, NormalizeError> {
-    let public = match event.event.exposure()? {
-        Exposure::Internal(_) => return Ok(None),
-        Exposure::Public(public) => public,
+    let public = match event.event.access()? {
+        Access::Internal(_) => return Ok(None),
+        Access::Public(public) => public,
     };
     if !catalog::is_public_event(public.name) {
         return Err(NormalizeError::Unregistered(public.name));

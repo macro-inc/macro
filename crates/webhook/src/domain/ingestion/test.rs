@@ -2060,9 +2060,9 @@ async fn user_event_workspace_resolution_failure_is_transient() {
     assert!(error.is_transient());
 }
 
-/// The envelope the webhook system delivered before exposure existed: the
+/// The envelope the webhook system delivered before declared access existed: the
 /// complete broker envelope, minus a call's private routing field. Kept here
-/// as the reference the exposure-driven normalization must reproduce.
+/// as the reference the access-driven normalization must reproduce.
 fn legacy_envelope<E: serde::Serialize>(event: &Event<E>) -> String {
     let mut envelope = serde_json::to_value(event).unwrap();
     if let Some(metadata) = envelope

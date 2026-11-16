@@ -101,7 +101,7 @@ fn document_mention() -> MentionMetadata {
 
 #[test]
 fn document_mentions_reach_the_document_audience() {
-    use macro_event_broker::access::{Audience, EntityType, Exposure, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, Stage};
 
     for (event, name) in [
         (
@@ -113,7 +113,7 @@ fn document_mentions_reach_the_document_audience() {
             "mention.deleted",
         ),
     ] {
-        let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+        let Access::Public(public) = event.access().expect("valid access") else {
             panic!("{name} must be public");
         };
         assert_eq!(public.name, name);
@@ -144,15 +144,15 @@ fn document_mentions_reach_the_document_audience() {
 
 #[test]
 fn message_mentions_stay_internal() {
-    use macro_event_broker::access::Exposure;
+    use macro_event_broker::access::Access;
 
     assert!(matches!(
-        MentionTopicEvent::MessageSent(document_mention()).exposure(),
-        Ok(Exposure::Internal(_))
+        MentionTopicEvent::MessageSent(document_mention()).access(),
+        Ok(Access::Internal(_))
     ));
 }
 
 #[test]
 fn an_unknown_source_kind_is_rejected() {
-    assert!(MentionTopicEvent::Created(metadata()).exposure().is_err());
+    assert!(MentionTopicEvent::Created(metadata()).access().is_err());
 }

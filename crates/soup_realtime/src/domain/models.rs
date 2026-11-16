@@ -1,5 +1,6 @@
 //! Realtime Soup patch and broker event models.
 
+use macro_event_broker::access::EventAccess;
 use std::collections::HashSet;
 
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -107,19 +108,21 @@ impl TopicEvent for SoupTopicEvent {
     type Topic = MacroSoupRealtimeTopic;
 
     const SCHEMA_VERSION: u8 = 2;
+}
 
+impl EventAccess for SoupTopicEvent {
     type PublicPayload = macro_event_broker::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
-        use macro_event_broker::access::Exposure;
+        use macro_event_broker::access::Access;
 
         Ok(match self {
-            Self::Updated(_) | Self::Deleted(_) => Exposure::internal_by_design(
+            Self::Updated(_) | Self::Deleted(_) => Access::internal_by_design(
                 "per-user Soup cache patch protocol derived from public events",
             ),
         })

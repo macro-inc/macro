@@ -10,6 +10,7 @@ mod test;
 pub use public::*;
 
 use bot_id::BotId;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroTeamsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -255,17 +256,19 @@ impl TopicEvent for TeamTopicEvent {
     type Topic = MacroTeamsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for TeamTopicEvent {
     type PublicPayload = TeamPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, MinTeamRole, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, MinTeamRole, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -343,7 +346,7 @@ impl TopicEvent for TeamTopicEvent {
                 TeamPublicEvent::AutoJoinDomainToggled(m.into()),
             ),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Team, team_id.to_string()),
             audience,

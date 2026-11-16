@@ -5,7 +5,7 @@
 //! partition, one writer). Starts at `Latest`: the log is a one-hour window,
 //! so replaying a topic's retention would only be trimmed again. Commits
 //! after the append; a record that cannot be decoded or violates its
-//! exposure is logged and committed, so one bad record never stalls a
+//! access is logged and committed, so one bad record never stalls a
 //! partition. An append that keeps failing exits without committing, and the
 //! supervisor's restart redelivers it.
 

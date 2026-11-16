@@ -68,9 +68,9 @@ fn lifecycle_events_round_trip_all_owner_kinds_with_v1_strings() {
     }
 }
 
-mod exposure {
+mod access {
     use super::*;
-    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
 
     const OWNER: &str = "macro|owner@example.com";
 
@@ -79,9 +79,9 @@ mod exposure {
     }
 
     fn public(event: &ProjectTopicEvent) -> PublicEvent<'_, ProjectPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -242,8 +242,8 @@ mod exposure {
             Owner::Bot(bot_id::BotId::new_from_uuid(uuid::Uuid::nil())),
         ] {
             assert!(matches!(
-                permanently_deleted(owner).exposure().unwrap(),
-                Exposure::Internal(_)
+                permanently_deleted(owner).access().unwrap(),
+                Access::Internal(_)
             ));
         }
     }

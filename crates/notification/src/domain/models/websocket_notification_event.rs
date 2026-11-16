@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use std::borrow::Cow;
 
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -129,18 +130,20 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
     type Topic = MacroNotificationsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> EventAccess
+    for NotificationTopicEvent<'a, T>
+{
     type PublicPayload = NotificationPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
-        use macro_event_broker::access::{
-            EntityRef, Exposure, PublicEntityType, PublicEvent, Stage,
-        };
+        use macro_event_broker::access::{Access, EntityRef, PublicEntityType, PublicEvent, Stage};
 
         let (name, notification_id, recipients, payload) = match self {
             Self::WebSocketDeliveryRequested(WebSocketNotificationMetadata { notifications }) => {
@@ -148,7 +151,7 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
                 // only the owner differs between rows. Rows for any other
                 // notification are not this event's subject and get nothing.
                 let Some(first) = notifications.first() else {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a delivery request with no recipients",
                     ));
                 };
@@ -165,7 +168,7 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
             }
             Self::NotificationStatusUpdatedForUsers { users, update } => {
                 if users.is_empty() {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a status update with no recipients",
                     ));
                 }
@@ -185,7 +188,7 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
                 let changes: Vec<NotificationChange> =
                     updates.iter().map(NotificationChange::from).collect();
                 let Some(first) = changes.first() else {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a status update with no changes",
                     ));
                 };
@@ -197,7 +200,7 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
                 )
             }
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(PublicEntityType::Notification, notification_id.to_string()),
             audience: recipients_audience(recipients),

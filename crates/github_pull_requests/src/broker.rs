@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 use crate::domain::events::GithubPullRequestUpdated;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubPullRequestsTopic;
 use serde::{Deserialize, Serialize};
@@ -39,17 +40,19 @@ pub enum GithubPullRequestPublicEvent {
 impl TopicEvent for GithubPullRequestTopicEvent {
     type Topic = MacroGithubPullRequestsTopic;
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for GithubPullRequestTopicEvent {
     type PublicPayload = GithubPullRequestPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEntityType, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -57,12 +60,12 @@ impl TopicEvent for GithubPullRequestTopicEvent {
             // Whoever can see any Macro record of the pull request.
             Self::Updated(update) => {
                 if update.foreign_entity_ids.is_empty() {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a pull request update that touched no Macro record has no audience",
                     ));
                 }
                 let github_key = update.github_key.to_lowercase();
-                Ok(Exposure::Public(PublicEvent {
+                Ok(Access::Public(PublicEvent {
                     name: "github_pull_request.updated",
                     entity: EntityRef::new(PublicEntityType::GithubPullRequest, github_key.clone()),
                     audience: Audience::Any(

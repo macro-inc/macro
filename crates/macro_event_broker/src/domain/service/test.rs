@@ -1,3 +1,4 @@
+use crate::access::EventAccess;
 use std::future::pending;
 use std::sync::{
     Arc, Mutex,
@@ -135,14 +136,15 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for ExampleTopicEvent {
     type PublicPayload = crate::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
-    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
-    {
-        Ok(crate::access::Exposure::internal_by_design(
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::internal_by_design(
             "broker test fixture",
         ))
     }
@@ -269,14 +271,15 @@ impl TopicEvent for UnserializableTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for UnserializableTopicEvent {
     type PublicPayload = crate::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
-    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
-    {
-        Ok(crate::access::Exposure::internal_by_design(
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::internal_by_design(
             "broker test fixture",
         ))
     }

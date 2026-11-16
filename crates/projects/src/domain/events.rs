@@ -4,6 +4,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroProjectsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -219,17 +220,19 @@ impl TopicEvent for ProjectTopicEvent {
     type Topic = MacroProjectsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for ProjectTopicEvent {
     type PublicPayload = ProjectPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -299,7 +302,7 @@ impl TopicEvent for ProjectTopicEvent {
                     }),
                 ),
                 Owner::Team(_) | Owner::Bot(_) => {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a purged team- or bot-owned project has no audience left: its grants are gone and team membership is not access",
                     ));
                 }
@@ -315,7 +318,7 @@ impl TopicEvent for ProjectTopicEvent {
                 }),
             ),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Project, project_id.clone()),
             audience: audience.unwrap_or_else(|| Audience::Entity {

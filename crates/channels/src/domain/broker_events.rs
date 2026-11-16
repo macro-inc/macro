@@ -9,6 +9,7 @@ mod test;
 
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChannelsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -203,17 +204,19 @@ impl TopicEvent for ChannelTopicEvent {
     type Topic = MacroChannelsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for ChannelTopicEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -258,7 +261,7 @@ impl TopicEvent for ChannelTopicEvent {
             | Self::ParticipantRemoved(_)
             | Self::AccessRequested(_) => (channel, Cow::Borrowed(self)),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Channel, channel_id),
             audience,

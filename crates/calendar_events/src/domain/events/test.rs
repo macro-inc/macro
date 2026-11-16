@@ -1,7 +1,5 @@
-use macro_event_broker::TopicEvent;
-use macro_event_broker::access::{
-    Audience, EntityRef, EntityType, Exposure, ExposureError, Stage,
-};
+use macro_event_broker::access::EventAccess;
+use macro_event_broker::access::{Access, AccessError, Audience, EntityRef, EntityType, Stage};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use uuid::Uuid;
@@ -33,7 +31,7 @@ fn calendar_events_reach_only_the_owner() {
             "calendar_event.deleted",
         ),
     ] {
-        let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+        let Access::Public(public) = event.access().expect("valid access") else {
             panic!("{name} must be public");
         };
         assert_eq!(public.name, name);
@@ -61,8 +59,8 @@ fn calendar_events_reach_only_the_owner() {
 #[test]
 fn a_malformed_owner_is_rejected() {
     assert_eq!(
-        CalendarTopicEvent::Created(metadata("not-a-user")).exposure(),
-        Err(ExposureError::InvalidEntityId {
+        CalendarTopicEvent::Created(metadata("not-a-user")).access(),
+        Err(AccessError::InvalidEntityId {
             entity_type: "user",
             entity_id: "not-a-user".to_owned(),
         })

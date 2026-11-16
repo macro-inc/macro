@@ -291,9 +291,9 @@ fn contains_field(value: &Value, field: &str) -> bool {
     }
 }
 
-mod exposure {
+mod access {
     use super::*;
-    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
 
     fn call_id() -> Uuid {
         Uuid::parse_str(CALL_ID).unwrap()
@@ -308,9 +308,9 @@ mod exposure {
     }
 
     fn public(event: &CallTopicEvent) -> PublicEvent<'_, CallRecordPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -403,8 +403,8 @@ mod exposure {
         );
 
         assert!(matches!(
-            deleted(None).exposure().unwrap(),
-            Exposure::Internal(_)
+            deleted(None).access().unwrap(),
+            Access::Internal(_)
         ));
     }
 

@@ -12,6 +12,7 @@ use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use channels::domain::broker_events::{ChannelEventAttachment, ChannelMessagePostedMetadata};
 use channels::domain::models::ChannelType;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionsTopic;
 use macro_uuid::Uuid;
@@ -381,17 +382,19 @@ impl TopicEvent for AgentTriggerTopicEvent {
     type Topic = MacroAgentSessionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for AgentTriggerTopicEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, ExposureError, PublicEntityType, PublicEvent, Stage,
+            Access, AccessError, Audience, EntityRef, PublicEntityType, PublicEvent, Stage,
         };
         use macro_user_id::user_id::MacroUserIdStr;
         use messages::domain::models::MessageParent;
@@ -425,7 +428,7 @@ impl TopicEvent for AgentTriggerTopicEvent {
             // team's, serves it.
             Self::New(NewAgentSessionEvent::Requested(requested)) => {
                 let owner = MacroUserIdStr::try_from(requested.owner.clone()).map_err(|_| {
-                    ExposureError::InvalidEntityId {
+                    AccessError::InvalidEntityId {
                         entity_type: "user",
                         entity_id: requested.owner.clone(),
                     }
@@ -451,7 +454,7 @@ impl TopicEvent for AgentTriggerTopicEvent {
                 (requested.bot_id, Audience::Any(audiences))
             }
             Self::New(NewAgentSessionEvent::ConversationMessage(_)) => {
-                return Ok(Exposure::internal_by_design(
+                return Ok(Access::internal_by_design(
                     "agent conversation messages reach the agent runtime without webhook or SSE delivery",
                 ));
             }
@@ -463,7 +466,7 @@ impl TopicEvent for AgentTriggerTopicEvent {
                 (metadata.bot_id, parent(&metadata.message.parent))
             }
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name: AgentTriggerEventName::from(self).into(),
             entity: EntityRef::new(PublicEntityType::Bot, bot_id.to_string()),
             audience,

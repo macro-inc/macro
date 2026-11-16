@@ -73,7 +73,7 @@ pub(super) trait TopicVisitor {
     fn visit<T: macro_event_broker::TopicEvent>(self) -> Self::Output;
 }
 
-/// What a sample event's `exposure()` declares, in registry terms.
+/// What a sample event's `access()` declares, in registry terms.
 #[derive(Debug)]
 struct Declared {
     name: &'static str,
@@ -83,7 +83,7 @@ struct Declared {
     payload_event_type: Option<String>,
 }
 
-/// Decodes one sample (`{event_type, metadata}`) and reads its exposure:
+/// Decodes one sample (`{event_type, metadata}`) and reads its access:
 /// `None` when it is internal.
 struct Expose(serde_json::Value);
 
@@ -92,9 +92,9 @@ impl TopicVisitor for Expose {
 
     fn visit<T: macro_event_broker::TopicEvent>(self) -> Self::Output {
         let event: T = serde_json::from_value(self.0).map_err(|error| error.to_string())?;
-        let public = match event.exposure().map_err(|error| error.to_string())? {
-            event_access::Exposure::Internal(_) => return Ok(None),
-            event_access::Exposure::Public(public) => public,
+        let public = match event.access().map_err(|error| error.to_string())? {
+            event_access::Access::Internal(_) => return Ok(None),
+            event_access::Access::Public(public) => public,
         };
 
         let mut classes = Vec::new();
@@ -172,7 +172,7 @@ fn audience_classes(audience: &event_access::Audience, classes: &mut Vec<Audienc
 /// Sample broker events per union family, one or more per event type, each
 /// in its topic's wire shape: `{event_type, metadata}`, or `{name: metadata}`
 /// for an externally tagged topic (calendar).
-const SAMPLES: &str = include_str!("exposure_samples.json");
+const SAMPLES: &str = include_str!("access_samples.json");
 
 /// Event types of each union family that are internal on every input, so
 /// they need no sample. Each must stay unregistered under its family.
@@ -203,14 +203,14 @@ fn sample_event_type(sample: &serde_json::Value) -> &str {
     object.keys().next().expect("one key")
 }
 
-/// The registry agrees with every producer's `exposure()`: each public name
+/// The registry agrees with every producer's `access()`: each public name
 /// a sample declares is registered under its family with the same stage,
 /// entity type and audience classes, and its payload carries that name;
 /// every registered name is declared by some sample with exactly its
 /// classes; and every event type of the family's topic has a sample or is
 /// listed as always internal.
 #[test]
-fn the_registry_matches_every_producers_exposure() {
+fn the_registry_matches_every_producers_access() {
     let samples: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
         serde_json::from_str(SAMPLES).expect("samples parse");
     let families: Vec<&str> = UNION_FAMILIES.iter().map(|(family, _)| *family).collect();

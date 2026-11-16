@@ -85,7 +85,7 @@ partition it has never committed, so a topic added to it does not replay its
 retention.
 
 What is delivered, to whom, and in what shape is declared by each event's
-`TopicEvent::exposure()` in its producing crate (vocabulary in
+`EventAccess::access()` in its producing crate (vocabulary in
 `crates/event_access`) and normalized by `event_stream::domain::normalize`,
 shared with live streams; `src/domain/ingestion.rs` only maps the declared
 `Audience` to webhook workspaces. Internal events are skipped. `Preview`

@@ -913,8 +913,8 @@ mod requested_sessions {
     use agent_trigger::domain::broker_events::{
         AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
-    use macro_event_broker::access::Exposure;
-    use macro_event_broker::{Event, TopicEvent as _};
+    use macro_event_broker::access::Access;
+    use macro_event_broker::{Event, access::EventAccess as _};
 
     const REQUESTER: &str = "requester@example.com";
     const TEAMMATE: &str = "teammate@example.com";
@@ -935,9 +935,9 @@ mod requested_sessions {
                 runtime_user: runtime_user.map(|runtime| user(runtime).as_ref().to_owned()),
             }),
         ));
-        match event.event.exposure().unwrap() {
-            Exposure::Public(public) => public.audience,
-            Exposure::Internal(reason) => panic!("requested sessions are public: {reason}"),
+        match event.event.access().unwrap() {
+            Access::Public(public) => public.audience,
+            Access::Internal(reason) => panic!("requested sessions are public: {reason}"),
         }
     }
 
@@ -1013,7 +1013,7 @@ mod requested_sessions {
     }
 }
 
-/// `agent_session.deleted` keeps its pre-exposure stream audience: the
+/// `agent_session.deleted` keeps the stream audience it had before declared access: the
 /// owner's personal stream, whichever credential acts for them, including a
 /// bot the owner does not own.
 #[tokio::test(start_paused = true)]

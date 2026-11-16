@@ -53,9 +53,9 @@ fn purged_published_before_audience_routing_decodes_empty() {
     );
 }
 
-mod exposure {
+mod access {
     use super::*;
-    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
 
     fn initiative_id() -> InitiativeId {
         InitiativeId::from_uuid(Uuid::nil())
@@ -73,9 +73,9 @@ mod exposure {
     }
 
     fn public(event: &InitiativeTopicEvent) -> PublicEvent<'_, InitiativePublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -167,7 +167,7 @@ mod exposure {
             initiative_id: initiative_id(),
             audience_user_ids: Vec::new(),
         };
-        assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
     }
 
     #[cfg(feature = "inbound")]

@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use std::{future::Future, pin::Pin};
 
 use activity::{Actor, Attribution};
@@ -141,17 +142,19 @@ pub enum InitiativePublicEvent {
 impl TopicEvent for InitiativeTopicEvent {
     type Topic = MacroInitiativesTopic;
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for InitiativeTopicEvent {
     type PublicPayload = InitiativePublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -185,7 +188,7 @@ impl TopicEvent for InitiativeTopicEvent {
                 audience_user_ids,
             } => {
                 if audience_user_ids.is_empty() {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a purge published before audience capture has nobody left to reach",
                     ));
                 }
@@ -201,7 +204,7 @@ impl TopicEvent for InitiativeTopicEvent {
                 )
             }
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Initiative, initiative_id.to_string()),
             audience,

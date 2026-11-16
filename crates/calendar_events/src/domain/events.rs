@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroCalendarTopic;
 use serde::{Deserialize, Serialize};
@@ -65,17 +66,19 @@ impl TopicEvent for CalendarTopicEvent {
     type Topic = MacroCalendarTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for CalendarTopicEvent {
     type PublicPayload = CalendarPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage, parse_user_id,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage, parse_user_id,
         };
         use std::borrow::Cow;
 
@@ -98,7 +101,7 @@ impl TopicEvent for CalendarTopicEvent {
             ),
         };
         // A calendar is personal data: only its owner, never their teams.
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::CalendarEvent, metadata.event_id.to_string()),
             audience: Audience::Recipient {

@@ -56,7 +56,7 @@ impl<L: EventLog, S: WriterSwitches> LogWriter<L, S> {
             event.name = tracing::field::Empty,
             entity.type = tracing::field::Empty,
             entity.id = tracing::field::Empty,
-            exposure = tracing::field::Empty,
+            access = tracing::field::Empty,
             invalidation_count = tracing::field::Empty,
             outcome = tracing::field::Empty,
         )
@@ -90,25 +90,25 @@ impl<L: EventLog, S: WriterSwitches> LogWriter<L, S> {
         let record = match log_record(event) {
             Ok(Some(record)) => record,
             Ok(None) => {
-                span.record("exposure", "internal");
+                span.record("access", "internal");
                 return Ok(WriteOutcome::Skipped("internal"));
             }
             Err(error) => {
-                tracing::error!(error = ?error, "skipping a broker event that violates its exposure contract");
+                tracing::error!(error = ?error, "skipping a broker event that violates its access contract");
                 return Ok(WriteOutcome::Skipped("invalid"));
             }
         };
         span.record("invalidation_count", record.invalidations.len());
         match &record.event {
             Some(public) => {
-                span.record("exposure", "public");
+                span.record("access", "public");
                 span.record("event.id", public.event.event_id.as_str());
                 span.record("event.name", public.event.event_name.as_str());
                 span.record("entity.type", public.event.entity_type.as_str());
                 span.record("entity.id", public.event.entity_id.as_str());
             }
             None => {
-                span.record("exposure", "internal");
+                span.record("access", "internal");
             }
         }
 

@@ -8,7 +8,7 @@ and in what shape: `Exposure`, `Audience`, `EntityRef`, `Stage`.
 
 ## How it works
 
-`macro_event_broker::TopicEvent::exposure()` (required, no default) returns an
+`macro_event_broker::access::EventAccess::access()` (required, no default) returns an
 `Exposure` per variant: `Internal(reason)` or `Public { name, entity, audience,
 stage, payload }`. Delivery crates (`crates/webhook` today) resolve the
 `Audience` against current access and serialize the payload inside the broker
@@ -25,7 +25,7 @@ envelope. Producers reach these types through `macro_event_broker::access`.
 - Depends on: `model-entity`, `macro_user_id`, `serde`, `thiserror`, `uuid`.
   Keep it a leaf: never `entity_access`, Kafka, or a domain crate.
 - Used by: `macro_event_broker` (the `TopicEvent` trait), every producer's
-  `exposure()` impl, `crates/webhook`.
+  `access()` impl, `crates/webhook`.
 
 ## Recipes
 
@@ -41,8 +41,8 @@ envelope. Producers reach these types through `macro_event_broker::access`.
 
 ## Gotchas
 
-- `exposure()` matches are exhaustive with no `_ =>` arm (ast-grep
-  `rust-exposure-no-wildcard-arm`), so a new variant must be classified.
+- `access()` matches are exhaustive with no `_ =>` arm (ast-grep
+  `rust-access-no-wildcard-arm`), so a new variant must be classified.
 - A public payload is an explicit projection that derives `utoipa::ToSchema`;
   routing fields (recipients, snapshots) go on the `Audience`, never in the
   payload.

@@ -10,6 +10,7 @@ mod test;
 use activity::Actor;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroDocumentsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -350,18 +351,19 @@ impl TopicEvent for DocumentTopicEvent {
     type Topic = MacroDocumentsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for DocumentTopicEvent {
     type PublicPayload = DocumentPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, ExposureError, PendingPhase, PublicEvent,
-            Stage,
+            Access, AccessError, Audience, EntityRef, EntityType, PendingPhase, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -460,14 +462,14 @@ impl TopicEvent for DocumentTopicEvent {
                 )
             }
             Self::Purged(_) => {
-                return Ok(Exposure::pending(
+                return Ok(Access::pending(
                     PendingPhase::ProducerChange,
                     "carries only the document id and its grants are gone when consumed; needs Owner plus an audience snapshot",
                 ));
             }
         };
         if uuid::Uuid::parse_str(document_id).is_err() {
-            return Err(ExposureError::InvalidEntityId {
+            return Err(AccessError::InvalidEntityId {
                 entity_type: "document",
                 entity_id: document_id.clone(),
             });
@@ -476,7 +478,7 @@ impl TopicEvent for DocumentTopicEvent {
             Some(change) => DocumentPublicEvent::Change(change),
             None => DocumentPublicEvent::Lifecycle(Box::new(self.clone())),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Document, document_id.clone()),
             audience: Audience::Entity {

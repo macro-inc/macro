@@ -4,6 +4,7 @@
 mod test;
 
 use crate::domain::models::GithubWebhookReceived;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubWebhooksTopic;
 use serde::{Deserialize, Serialize};
@@ -20,17 +21,19 @@ pub enum GithubWebhookTopicEvent {
 impl TopicEvent for GithubWebhookTopicEvent {
     type Topic = MacroGithubWebhooksTopic;
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for GithubWebhookTopicEvent {
     type PublicPayload = GithubWebhookPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, PublicEntityType, PublicEvent, Stage,
+            Access, Audience, EntityRef, PublicEntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -39,7 +42,7 @@ impl TopicEvent for GithubWebhookTopicEvent {
                 let installation_id = delivery.installation_id.to_string();
                 // Delivery resolves the installation to the owners who may
                 // see it (the routines claim rule), at fan-out time.
-                Ok(Exposure::Public(PublicEvent {
+                Ok(Access::Public(PublicEvent {
                     name: "github_webhook.received",
                     entity: EntityRef::new(
                         PublicEntityType::GithubInstallation,

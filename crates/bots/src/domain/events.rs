@@ -7,6 +7,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroBotsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -91,17 +92,19 @@ impl TopicEvent for BotTopicEvent {
     type Topic = MacroBotsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for BotTopicEvent {
     type PublicPayload = BotPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, MinTeamRole, PublicEntityType, PublicEvent, Stage,
+            Access, Audience, EntityRef, MinTeamRole, PublicEntityType, PublicEvent, Stage,
             parse_user_id,
         };
         use std::borrow::Cow;
@@ -136,7 +139,7 @@ impl TopicEvent for BotTopicEvent {
                 min_role: MinTeamRole::Member,
             },
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(PublicEntityType::Bot, bot_id.to_string()),
             audience,

@@ -1,4 +1,4 @@
-use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -15,9 +15,9 @@ fn owner() -> MacroUserIdStr<'static> {
 }
 
 fn public(event: &DatabaseTopicEvent) -> PublicEvent<'_, DatabasePublicEvent> {
-    match event.exposure().unwrap() {
-        Exposure::Public(public) => public,
-        Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+    match event.access().unwrap() {
+        Access::Public(public) => public,
+        Access::Internal(reason) => panic!("expected public, got {reason}"),
     }
 }
 
@@ -137,7 +137,7 @@ fn purge_stays_internal() {
     let event = DatabaseTopicEvent::Purged(DatabasePurgedMetadata {
         database_id: database_id(),
     });
-    assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+    assert!(matches!(event.access().unwrap(), Access::Internal(_)));
 }
 
 #[test]

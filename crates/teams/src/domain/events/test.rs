@@ -557,14 +557,14 @@ fn public_expectations() -> Vec<(macro_event_broker::access::Audience, Value)> {
 
 #[test]
 fn every_variant_declares_its_audience_and_thin_public_body() {
-    use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::access::{EntityRef, EntityType, Exposure, Stage};
+    use macro_event_broker::access::EventAccess as _;
+    use macro_event_broker::access::{Access, EntityRef, EntityType, Stage};
 
     let events = topic_events();
     let expectations = public_expectations();
     assert_eq!(events.len(), expectations.len());
     for ((event, wire), (audience, body)) in events.into_iter().zip(expectations) {
-        let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+        let Access::Public(public) = event.access().expect("valid access") else {
             panic!("{} must be public", wire["event_type"]);
         };
         assert_eq!(public.name, wire["event_type"]);
@@ -582,11 +582,11 @@ fn every_variant_declares_its_audience_and_thin_public_body() {
 
 #[test]
 fn only_admin_events_carry_an_email_address() {
-    use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::access::{Audience, Exposure, MinTeamRole};
+    use macro_event_broker::access::EventAccess as _;
+    use macro_event_broker::access::{Access, Audience, MinTeamRole};
 
     for (event, _) in topic_events() {
-        let Ok(Exposure::Public(public)) = event.exposure() else {
+        let Ok(Access::Public(public)) = event.access() else {
             panic!("public");
         };
         let body = serde_json::to_value(public.payload.as_ref()).unwrap();

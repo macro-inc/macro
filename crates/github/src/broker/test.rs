@@ -1,5 +1,5 @@
-use macro_event_broker::TopicEvent;
-use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
+use macro_event_broker::access::EventAccess;
+use macro_event_broker::access::{Access, Audience, EntityRef, PublicEntityType, Stage};
 use serde_json::json;
 
 use super::GithubWebhookTopicEvent;
@@ -26,7 +26,7 @@ fn delivery() -> GithubWebhookReceived {
 #[test]
 fn deliveries_reach_the_installation_with_event_action_and_repository_only() {
     let event = GithubWebhookTopicEvent::Received(delivery());
-    let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+    let Access::Public(public) = event.access().expect("valid access") else {
         panic!("github_webhook.received must be public");
     };
 
@@ -62,7 +62,7 @@ fn deliveries_without_action_or_repository_keep_nulls() {
     push.action = None;
     push.repository = None;
     let event = GithubWebhookTopicEvent::Received(push);
-    let Exposure::Public(public) = event.exposure().unwrap() else {
+    let Access::Public(public) = event.access().unwrap() else {
         panic!("public");
     };
     assert_eq!(

@@ -15,6 +15,7 @@ mod test;
 
 use agent_runtime_protocol::domain::action::AgentActionId;
 use bots::domain::models::BotId;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -432,17 +433,19 @@ impl TopicEvent for AgentSessionLifecycleEvent {
     type Topic = MacroAgentSessionLifecycleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for AgentSessionLifecycleEvent {
     type PublicPayload = Self;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -453,7 +456,7 @@ impl TopicEvent for AgentSessionLifecycleEvent {
             // ownership, and the channel or document it was opened from still
             // knows its audience: deliver to the union of the two.
             Self::Deleted(deleted) => {
-                // As before exposure: webhooks resolve the owner like an
+                // As before declared access: webhooks resolve the owner like an
                 // accessor (Owner: personal and team workspaces), streams
                 // match the owner's personal stream for any credential acting
                 // for them (Workspace, not a personal class).
@@ -490,7 +493,7 @@ impl TopicEvent for AgentSessionLifecycleEvent {
                 entity_id: session_id.clone(),
             },
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::AgentSession, session_id),
             audience,

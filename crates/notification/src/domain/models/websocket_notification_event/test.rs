@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
-use macro_event_broker::TopicEvent;
-use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
+use macro_event_broker::access::EventAccess;
+use macro_event_broker::access::{Access, Audience, EntityRef, PublicEntityType, Stage};
 use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -44,9 +44,9 @@ fn row(owner: &str, notification_id: Uuid) -> UserNotificationRow<serde_json::Va
 fn public<'e>(
     event: &'e NotificationTopicEvent<'_, serde_json::Value>,
 ) -> macro_event_broker::access::PublicEvent<'e, super::NotificationPublicEvent> {
-    match event.exposure().expect("valid exposure") {
-        Exposure::Public(public) => public,
-        Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+    match event.access().expect("valid access") {
+        Access::Public(public) => public,
+        Access::Internal(reason) => panic!("expected public, got {reason}"),
     }
 }
 
@@ -131,7 +131,7 @@ fn an_empty_delivery_is_internal() {
             notifications: vec![],
         },
     );
-    assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal(_))));
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn an_empty_status_update_is_internal() {
             user: user("macro|a@example.com"),
             updates: vec![],
         };
-    assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal(_))));
 }
 
 #[test]
@@ -247,5 +247,5 @@ fn a_shared_deletion_with_no_users_is_internal() {
                 id: Uuid::from_u128(3),
             }),
         };
-    assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal(_))));
 }

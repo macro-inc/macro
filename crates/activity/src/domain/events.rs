@@ -12,6 +12,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroActivityTopic;
 use model_entity::EntityType;
@@ -134,17 +135,19 @@ impl TopicEvent for ActivityTopicEvent {
 
     // Older consumers skip the new session event during rolling deployment.
     const SCHEMA_VERSION: u8 = 2;
+}
 
+impl EventAccess for ActivityTopicEvent {
     type PublicPayload = ActivityPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, PublicEvent, Stage, parse_user_id,
+            Access, Audience, EntityRef, PublicEvent, Stage, parse_user_id,
         };
         use std::borrow::Cow;
 
@@ -155,7 +158,7 @@ impl TopicEvent for ActivityTopicEvent {
             } => {
                 let user_id = parse_user_id(recipient_id)?;
                 // The recipient's feed is personal: only them, never their teams.
-                Ok(Exposure::Public(PublicEvent {
+                Ok(Access::Public(PublicEvent {
                     name: ACTIVITY_RECORDED,
                     entity: EntityRef::new(EntityType::User, recipient_id.clone()),
                     audience: Audience::Recipient { user_id },
@@ -165,7 +168,7 @@ impl TopicEvent for ActivityTopicEvent {
                     })),
                 }))
             }
-            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Exposure::internal_by_design(
+            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Access::internal_by_design(
                 "session-viewer rows and global invalidations are app cache signals",
             )),
         }

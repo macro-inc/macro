@@ -1,9 +1,9 @@
-//! Exposure of property definition and option events: who owns the
+//! Who receives property definition and option events: who owns the
 //! definition decides who hears about it.
 
 use chrono::{DateTime, Utc};
 use macro_event_broker::access::{
-    Audience, EntityRef, EntityType, Exposure, ExposureError, MinTeamRole, PublicEntityType,
+    Access, AccessError, Audience, EntityRef, EntityType, MinTeamRole, PublicEntityType,
     PublicEvent, Stage, parse_user_id,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -90,11 +90,11 @@ const SYSTEM_OWNED: &str = "system property definitions belong to no user, team 
 const OWNER_NOT_RECORDED: &str =
     "option events published before options carried their definition's owner";
 
-/// The exposure of a definition or option event. Entity property events are
+/// Who may receive a definition or option event. Entity property events are
 /// not handled here and are rejected as internal.
-pub(super) fn exposure(
+pub(super) fn access(
     event: &PropertyTopicEvent,
-) -> Result<Exposure<'_, PropertyPublicEvent>, ExposureError> {
+) -> Result<Access<'_, PropertyPublicEvent>, AccessError> {
     let (name, definition_id, owner, payload) = match event {
         PropertyTopicEvent::Created(m) => (
             "property.created",
@@ -161,13 +161,13 @@ pub(super) fn exposure(
         PropertyTopicEvent::EntityPropertyUpdated(_)
         | PropertyTopicEvent::EntityPropertyDeleted(_)
         | PropertyTopicEvent::EntityPropertiesCleared(_) => {
-            return Ok(Exposure::internal_by_design(
+            return Ok(Access::internal_by_design(
                 "entity property events are declared by the entity property family",
             ));
         }
     };
     let Some(owner) = owner else {
-        return Ok(Exposure::internal_by_design(OWNER_NOT_RECORDED));
+        return Ok(Access::internal_by_design(OWNER_NOT_RECORDED));
     };
     let audience = match owner {
         // A user's own definitions (such as their personal labels) are
@@ -184,9 +184,9 @@ pub(super) fn exposure(
             entity_type: EntityType::Database,
             entity_id: database_id.to_string(),
         },
-        PropertyOwner::System => return Ok(Exposure::internal_by_design(SYSTEM_OWNED)),
+        PropertyOwner::System => return Ok(Access::internal_by_design(SYSTEM_OWNED)),
     };
-    Ok(Exposure::Public(PublicEvent {
+    Ok(Access::Public(PublicEvent {
         name,
         entity: EntityRef::new(PublicEntityType::Property, definition_id.to_string()),
         audience,

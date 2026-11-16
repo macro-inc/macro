@@ -8,6 +8,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroCallsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -220,17 +221,19 @@ impl TopicEvent for CallTopicEvent {
     type Topic = MacroCallsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for CallTopicEvent {
     type PublicPayload = CallRecordPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -243,7 +246,7 @@ impl TopicEvent for CallTopicEvent {
             | Self::RecordArchived(_)
             | Self::RecordSummarized(_)
             | Self::RecordingReady(_) => {
-                return Ok(Exposure::internal_by_design(
+                return Ok(Access::internal_by_design(
                     "call lifecycle facts are projected to macro.call_notifications, the public call family",
                 ));
             }
@@ -271,7 +274,7 @@ impl TopicEvent for CallTopicEvent {
             // still knows its audience. A record outside a channel has none.
             Self::RecordDeleted(metadata) => {
                 let Some(channel_id) = metadata.channel_id else {
-                    return Ok(Exposure::internal_by_design(
+                    return Ok(Access::internal_by_design(
                         "a deleted call record outside a channel has no grants left to reach anyone",
                     ));
                 };
@@ -298,7 +301,7 @@ impl TopicEvent for CallTopicEvent {
                 }),
             ),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Call, call_id.to_string()),
             audience,

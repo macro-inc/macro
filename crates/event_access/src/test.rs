@@ -34,7 +34,7 @@ fn parse_user_id_accepts_macro_ids_and_rejects_others() {
     );
     assert_eq!(
         parse_user_id("bot|1234"),
-        Err(ExposureError::InvalidEntityId {
+        Err(AccessError::InvalidEntityId {
             entity_type: "user",
             entity_id: "bot|1234".to_owned(),
         })

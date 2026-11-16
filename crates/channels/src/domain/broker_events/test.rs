@@ -227,10 +227,10 @@ fn deleted_with_participants() -> ChannelTopicEvent {
 /// captured participants join the channel's (now empty) accessor set.
 #[test]
 fn deleted_channel_reaches_its_captured_participants() {
-    use macro_event_broker::access::{Audience, EntityType, Exposure, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, Stage};
 
     let event = deleted_with_participants();
-    let Exposure::Public(public) = event.exposure().unwrap() else {
+    let Access::Public(public) = event.access().unwrap() else {
         panic!("channel.deleted is public");
     };
 
@@ -256,10 +256,10 @@ fn deleted_channel_reaches_its_captured_participants() {
 /// existed: the snapshot never leaves Macro.
 #[test]
 fn deleted_channel_public_body_omits_the_participant_snapshot() {
-    use macro_event_broker::access::Exposure;
+    use macro_event_broker::access::Access;
 
     let event = Event::with_event_id(Uuid::nil(), deleted_with_participants());
-    let Exposure::Public(public) = event.event.exposure().unwrap() else {
+    let Access::Public(public) = event.event.access().unwrap() else {
         panic!("channel.deleted is public");
     };
     let body = Event {
@@ -280,14 +280,14 @@ fn deleted_channel_public_body_omits_the_participant_snapshot() {
 /// A delete published before the snapshot existed keeps today's audience.
 #[test]
 fn deleted_channel_without_a_snapshot_keeps_the_channel_audience() {
-    use macro_event_broker::access::{Audience, EntityType, Exposure};
+    use macro_event_broker::access::{Access, Audience, EntityType};
 
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: Uuid::nil(),
         actor: user("macro|owner@example.com"),
         participant_user_ids: Vec::new(),
     });
-    let Exposure::Public(public) = event.exposure().unwrap() else {
+    let Access::Public(public) = event.access().unwrap() else {
         panic!("channel.deleted is public");
     };
 

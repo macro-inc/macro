@@ -4,7 +4,7 @@
 
 Part of event streams (public events through webhooks, SSE and the SDK). The
 core both deliveries share: normalization from each event's declared
-exposure, filters, the event catalog and OpenAPI union, and the live stream
+access, filters, the event catalog and OpenAPI union, and the live stream
 (`GET /events/stream`, alias `GET /webhook/events/stream`, `GET
 /events/catalog`) with cursors over a Redis log.
 
@@ -23,8 +23,8 @@ event (`lagged`, `revoked`, `reset`).
 
 - `src/domain/catalog.rs`: `public_event_registry!` — the one registration
   that makes a family public (catalog, wildcards, OpenAPI `WebhookEvent`).
-  `catalog/test.rs` checks it against every producer's `exposure()` using
-  `catalog/exposure_samples.json`.
+  `catalog/test.rs` checks it against every producer's `access()` using
+  `catalog/access_samples.json`.
 - `src/domain/access.rs`: audience rules per class and the caches.
 - `src/domain/stream.rs`: open, replay, live, close.
 - `src/topics.rs`: public topics (`DeclaredMacroEvent`), the log's topics
@@ -35,7 +35,7 @@ event (`lagged`, `revoked`, `reset`).
 - Owns: normalization, filters, catalog/union, webhook lifecycle event types,
   the public event log, fan-out, SSE.
 - Not here: webhook CRUD, matching and delivery → `crates/webhook`; the
-  exposure vocabulary → `crates/event_access`.
+  access contract and vocabulary → `crates/event_access`.
 
 ## Boundaries
 
@@ -46,13 +46,13 @@ event (`lagged`, `revoked`, `reset`).
 
 ## Recipes
 
-- Make a family public: its producer's `exposure()` returns `Public` →
+- Make a family public: its producer's `access()` returns `Public` →
   add its block to `public_event_registry!` → move its topic from
   `INTERNAL_TOPICS` into both `declare_topics!` lists → add its arm in
   `crates/webhook/src/inbound/kafka_consumer.rs` (`ingest_public_event`) →
   enable the producer's schema feature in this crate's `schema` feature →
   add samples of every event type to
-  `src/domain/catalog/exposure_samples.json` (or list an always-internal
+  `src/domain/catalog/access_samples.json` (or list an always-internal
   type in `ALWAYS_INTERNAL` in `catalog/test.rs`). New families ship
   `Preview` (flag `public-event-stream`) first.
 - New access-changing event: return its `Invalidation` in

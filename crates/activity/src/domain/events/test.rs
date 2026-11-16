@@ -134,13 +134,13 @@ fn wire_row() -> ActivityWireRow {
 
 #[test]
 fn recorded_activity_reaches_only_its_recipient_without_action_payloads() {
-    use macro_event_broker::access::{Audience, EntityRef, Exposure, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityRef, Stage};
 
     let event = ActivityTopicEvent::Recorded {
         recipient_id: "macro|reader@example.com".to_owned(),
         activities: vec![wire_row()],
     };
-    let Exposure::Public(public) = event.exposure().expect("valid exposure") else {
+    let Access::Public(public) = event.access().expect("valid access") else {
         panic!("activity.recorded must be public");
     };
     assert_eq!(public.name, "activity.recorded");
@@ -180,12 +180,12 @@ fn a_malformed_recipient_is_rejected() {
         recipient_id: "bot|1".to_owned(),
         activities: vec![],
     };
-    assert!(event.exposure().is_err());
+    assert!(event.access().is_err());
 }
 
 #[test]
 fn session_rows_and_invalidations_stay_internal() {
-    use macro_event_broker::access::Exposure;
+    use macro_event_broker::access::Access;
 
     for event in [
         ActivityTopicEvent::SessionRecorded {
@@ -193,6 +193,6 @@ fn session_rows_and_invalidations_stay_internal() {
         },
         ActivityTopicEvent::Invalidated,
     ] {
-        assert!(matches!(event.exposure(), Ok(Exposure::Internal(_))));
+        assert!(matches!(event.access(), Ok(Access::Internal(_))));
     }
 }

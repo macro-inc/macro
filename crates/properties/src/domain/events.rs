@@ -12,6 +12,7 @@ pub use public::PropertyPublicEvent;
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroPropertiesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -235,17 +236,19 @@ impl TopicEvent for PropertyTopicEvent {
     type Topic = MacroPropertiesTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for PropertyTopicEvent {
     type PublicPayload = PropertyPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, Exposure, PendingPhase, PublicEvent, Stage,
+            Access, Audience, EntityRef, PendingPhase, PublicEvent, Stage,
         };
         use public::{
             PublicEntityPropertiesCleared, PublicEntityPropertyUpdated, acting, public_entity_type,
@@ -268,13 +271,13 @@ impl TopicEvent for PropertyTopicEvent {
                     || is_select(&metadata.previous_value)
                     || (metadata.value.is_none() && metadata.previous_value.is_none())
                 {
-                    return Ok(Exposure::pending(
+                    return Ok(Access::pending(
                         PendingPhase::ProducerChange,
                         MAYBE_PERSONAL_TAG,
                     ));
                 }
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {
-                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                    return Ok(Access::internal_by_design(NO_ENTITY_AUDIENCE));
                 };
                 (
                     "entity_property.updated",
@@ -296,14 +299,14 @@ impl TopicEvent for PropertyTopicEvent {
             // Says which property left the entity, which for a personal tag
             // reveals it to every viewer.
             Self::EntityPropertyDeleted(_) => {
-                return Ok(Exposure::pending(
+                return Ok(Access::pending(
                     PendingPhase::ProducerChange,
                     MAYBE_PERSONAL_TAG,
                 ));
             }
             Self::EntityPropertiesCleared(metadata) => {
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {
-                    return Ok(Exposure::internal_by_design(NO_ENTITY_AUDIENCE));
+                    return Ok(Access::internal_by_design(NO_ENTITY_AUDIENCE));
                 };
                 (
                     "entity_properties.cleared",
@@ -321,9 +324,9 @@ impl TopicEvent for PropertyTopicEvent {
             | Self::Deleted(_)
             | Self::OptionCreated(_)
             | Self::OptionUpdated(_)
-            | Self::OptionDeleted(_) => return definitions::exposure(self),
+            | Self::OptionDeleted(_) => return definitions::access(self),
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(entity_type, entity_id.clone()),
             audience: Audience::Entity {

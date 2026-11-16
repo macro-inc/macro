@@ -403,16 +403,16 @@ fn shared_owner_and_value_types_keep_exact_wire_representations() {
     );
 }
 
-mod exposure {
+mod access {
     use super::*;
     use macro_event_broker::access::{
-        Audience, EntityType as MacroEntityType, Exposure, PublicEvent, Stage,
+        Access, Audience, EntityType as MacroEntityType, PublicEvent, Stage,
     };
 
     fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -498,8 +498,8 @@ mod exposure {
     fn properties_without_an_entity_audience_stay_internal() {
         for entity_type in [EntityType::CalendarEvent, EntityType::User] {
             assert!(matches!(
-                updated(entity_type).exposure().unwrap(),
-                Exposure::Internal(_)
+                updated(entity_type).access().unwrap(),
+                Access::Internal(_)
             ));
         }
     }
@@ -532,22 +532,22 @@ mod exposure {
             on_behalf_of: None,
         });
         for event in [PropertyTopicEvent::EntityPropertyUpdated(select), removed] {
-            assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+            assert!(matches!(event.access().unwrap(), Access::Internal(_)));
         }
     }
 }
 
-mod definition_exposure {
+mod definition_access {
     use super::*;
     use macro_event_broker::access::{
-        Audience, EntityRef, EntityType as MacroEntityType, Exposure, MinTeamRole,
-        PublicEntityType, PublicEvent, Stage,
+        Access, Audience, EntityRef, EntityType as MacroEntityType, MinTeamRole, PublicEntityType,
+        PublicEvent, Stage,
     };
 
     fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -623,7 +623,7 @@ mod definition_exposure {
             option_deleted(Some(PropertyOwner::System)),
             option_deleted(None),
         ] {
-            assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+            assert!(matches!(event.access().unwrap(), Access::Internal(_)));
         }
     }
 
@@ -632,7 +632,7 @@ mod definition_exposure {
         let event = created(PropertyOwner::User {
             user_id: "not-a-user".to_string(),
         });
-        assert!(event.exposure().is_err());
+        assert!(event.access().is_err());
     }
 
     #[test]
@@ -643,8 +643,8 @@ mod definition_exposure {
                 continue;
             }
             let expected_public = name != "property_option.deleted";
-            match event.exposure().unwrap() {
-                Exposure::Public(public) => {
+            match event.access().unwrap() {
+                Access::Public(public) => {
                     assert!(expected_public, "{name}");
                     assert_eq!(public.name, name);
                     assert_eq!(
@@ -653,7 +653,7 @@ mod definition_exposure {
                     );
                 }
                 // The deleted-option fixture predates owners on options.
-                Exposure::Internal(_) => assert!(!expected_public, "{name}"),
+                Access::Internal(_) => assert!(!expected_public, "{name}"),
             }
         }
     }

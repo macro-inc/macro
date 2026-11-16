@@ -1,16 +1,31 @@
 #![deny(missing_docs)]
-//! Who may see a Macro broker event outside Macro, and in what shape.
+//! Who may receive a Macro broker event outside Macro, and in what shape.
 //!
-//! Every `TopicEvent` declares an [`Exposure`] per variant: either
-//! [`Exposure::Internal`] with a reason, or [`Exposure::Public`] with the
-//! public event name, the entity it is about, the [`Audience`] whose current
-//! access decides who receives it, its rollout [`Stage`], and the explicit
-//! public payload. Nothing leaves Macro unless a variant says `Public`.
+//! # The contract
 //!
-//! This crate is a leaf: it holds vocabulary only. Resolving an audience
-//! (entity accessors, team membership, contacts) belongs to the delivery
-//! crates, so producers can declare exposure without pulling in access
-//! control or Kafka.
+//! Every broker event implements [`EventAccess`]. `macro_event_broker`'s
+//! `TopicEvent` requires it as a supertrait, so a topic event that does not
+//! declare its access does not compile. For each event,
+//! [`EventAccess::access`] answers one of two things:
+//!
+//! - [`Access::Internal`]: the event never leaves Macro, with the reason.
+//! - [`Access::Public`]: the public event name, the entity it is about, the
+//!   [`Audience`] whose current access decides who receives it, its rollout
+//!   [`Stage`], and the explicit public payload.
+//!
+//! Nothing leaves Macro unless an event says `Public`. Delivery (live
+//! streams and webhooks, `crates/event_stream` and `crates/webhook`) calls
+//! [`EventAccess::access`] on every consumed event and resolves the audience
+//! against current access at delivery time.
+//!
+//! The access model (who receives what and why, what happens when access is
+//! lost, and how to expose a new family) is described in `ACCESS_MODEL.md`
+//! next to this crate's `Cargo.toml`.
+//!
+//! This crate is a leaf: it holds the contract and its vocabulary only.
+//! Resolving an audience (entity accessors, team membership, contacts)
+//! belongs to the delivery crates, so producers can declare access without
+//! pulling in access control or Kafka.
 
 #[cfg(test)]
 mod test;
@@ -22,19 +37,50 @@ use std::borrow::Cow;
 use std::fmt;
 use uuid::Uuid;
 
-/// The exposure of one broker event variant.
+/// Who may receive an event outside Macro, and in what shape.
+///
+/// Implemented by every broker topic event (`macro_event_broker::TopicEvent`
+/// requires it). The contract:
+///
+/// - [`Self::access`] classifies every event: it `match`es the event
+///   exhaustively, with no wildcard arm (ast-grep
+///   `rust-access-no-wildcard-arm`), so adding a variant forces a decision.
+/// - It is pure: it reads only the event itself, never a database or the
+///   clock. Audiences name *whose* access counts; delivery resolves them
+///   against current access when the event is fanned out.
+/// - A public event's payload is [`Self::PublicPayload`], an explicit
+///   projection of the event (never the internal metadata as is). Routing
+///   fields (recipients, captured audiences) go on the [`Audience`], not in
+///   the payload.
+/// - It fails with [`AccessError`] only when the event breaks a contract its
+///   access relies on (a malformed id); delivery then skips the event.
+///
+/// There is no default implementation: every topic decides.
+pub trait EventAccess {
+    /// The public projection of this topic's events, serialized as the
+    /// delivered payload. It carries the `event_type` tag and `metadata`, and
+    /// derives `utoipa::ToSchema` (behind the producer's schema feature) so
+    /// it can join the public event union. Topics with nothing public use
+    /// [`Unexposed`].
+    type PublicPayload: Serialize + Clone;
+
+    /// Who may receive this event outside Macro, and in what shape.
+    fn access(&self) -> Result<Access<'_, Self::PublicPayload>, AccessError>;
+}
+
+/// The access of one broker event.
 ///
 /// `P` is the topic's public payload type. Topics with nothing public use
 /// [`Unexposed`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum Exposure<'a, P: Clone> {
+pub enum Access<'a, P: Clone> {
     /// The event never leaves Macro.
     Internal(InternalReason),
     /// The event is delivered to its audience.
     Public(PublicEvent<'a, P>),
 }
 
-impl<P: Clone> Exposure<'_, P> {
+impl<P: Clone> Access<'_, P> {
     /// Declare an event internal by design: it is plumbing, a projection of
     /// other events, or a protocol that must not become public API.
     pub fn internal_by_design(note: &'static str) -> Self {
@@ -338,14 +384,14 @@ pub enum MinAccessLevel {
 }
 
 /// A topic payload for topics that expose nothing. It has no values, so a
-/// topic using it cannot construct [`Exposure::Public`].
+/// topic using it cannot construct [`Access::Public`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Unexposed {}
 
 /// Parse a user id an event carries as a plain string, failing as
-/// [`ExposureError::InvalidEntityId`] when it is not a Macro user id.
-pub fn parse_user_id(raw: &str) -> Result<MacroUserIdStr<'static>, ExposureError> {
-    MacroUserIdStr::try_from(raw.to_owned()).map_err(|_| ExposureError::InvalidEntityId {
+/// [`AccessError::InvalidEntityId`] when it is not a Macro user id.
+pub fn parse_user_id(raw: &str) -> Result<MacroUserIdStr<'static>, AccessError> {
+    MacroUserIdStr::try_from(raw.to_owned()).map_err(|_| AccessError::InvalidEntityId {
         entity_type: USER_ENTITY_TYPE,
         entity_id: raw.to_owned(),
     })
@@ -353,10 +399,10 @@ pub fn parse_user_id(raw: &str) -> Result<MacroUserIdStr<'static>, ExposureError
 
 const USER_ENTITY_TYPE: &str = "user";
 
-/// The event violates the contract its exposure relies on. Retrying cannot
+/// The event violates the contract its access relies on. Retrying cannot
 /// fix it, so delivery skips the event.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ExposureError {
+pub enum AccessError {
     /// The entity or audience identifier is malformed.
     #[error("invalid {entity_type} entity id: {entity_id}")]
     InvalidEntityId {

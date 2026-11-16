@@ -18,6 +18,7 @@ use crate::domain::{
 };
 use anyhow::Context as _;
 use kafka_util::{GroupName, KafkaEventConsumer};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{
     Event, KafkaConsumerAdapter, MacroEvent, MacroEventCollection as _, MacroEventConsumerService,
     TopicEvent,
@@ -95,20 +96,22 @@ impl TopicEvent for TeamsTopicForDms {
     type Topic = MacroTeamsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for TeamsTopicForDms {
     type PublicPayload = macro_event_broker::access::Unexposed;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
-        use macro_event_broker::access::Exposure;
+        use macro_event_broker::access::Access;
 
         Ok(match self {
-            Self::MemberJoined(_) | Self::Other(_) => Exposure::internal_by_design(
-                "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic exposure",
+            Self::MemberJoined(_) | Self::Other(_) => Access::internal_by_design(
+                "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic access",
             ),
         })
     }

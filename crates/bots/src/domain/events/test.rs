@@ -255,12 +255,12 @@ fn contains_field(value: &Value, field: &str) -> bool {
 }
 
 fn public(event: &BotTopicEvent) -> macro_event_broker::access::PublicEvent<'_, BotPublicEvent> {
-    use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::access::Exposure;
+    use macro_event_broker::access::Access;
+    use macro_event_broker::access::EventAccess as _;
 
-    match event.exposure().expect("valid exposure") {
-        Exposure::Public(public) => public,
-        Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+    match event.access().expect("valid access") {
+        Access::Public(public) => public,
+        Access::Internal(reason) => panic!("expected public, got {reason}"),
     }
 }
 
@@ -302,13 +302,13 @@ fn team_bots_reach_their_team_and_user_bots_their_owner() {
 
 #[test]
 fn a_malformed_user_owner_is_rejected() {
-    use macro_event_broker::TopicEvent as _;
+    use macro_event_broker::access::EventAccess as _;
 
     let mut metadata = deleted_metadata();
     metadata.owner = BotOwner::User {
         user_id: "not-a-user".to_string(),
     };
-    assert!(BotTopicEvent::Deleted(metadata).exposure().is_err());
+    assert!(BotTopicEvent::Deleted(metadata).access().is_err());
 }
 
 #[test]

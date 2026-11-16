@@ -296,18 +296,18 @@ fn message_roles_convert_from_agent_roles() {
     );
 }
 
-mod exposure {
+mod access {
     use super::*;
-    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Access, Audience, EntityType, PublicEvent, Stage};
 
     fn actor() -> MacroUserIdStr<'static> {
         MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()
     }
 
     fn public(event: &ChatTopicEvent) -> PublicEvent<'_, ChatPublicEvent> {
-        match event.exposure().unwrap() {
-            Exposure::Public(public) => public,
-            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        match event.access().unwrap() {
+            Access::Public(public) => public,
+            Access::Internal(reason) => panic!("expected public, got {reason}"),
         }
     }
 
@@ -428,7 +428,7 @@ mod exposure {
             actor_user_id: None,
             project_id: None,
         });
-        assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
     }
 
     #[test]

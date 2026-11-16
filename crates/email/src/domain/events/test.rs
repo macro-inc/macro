@@ -559,13 +559,13 @@ const INTERNAL_EVENTS: [&str; 3] = [
 
 #[test]
 fn public_events_reach_only_the_mailbox_owner() {
-    use macro_event_broker::access::{Audience, Exposure, Stage};
+    use macro_event_broker::access::{Access, Audience, Stage};
 
     let owner = user_id("macro|owner@example.com");
     for (event, name) in every_event() {
-        let exposure = event.event().event.exposure().expect("valid exposure");
-        match exposure {
-            Exposure::Public(public) => {
+        let access = event.event().event.access().expect("valid access");
+        match access {
+            Access::Public(public) => {
                 assert!(
                     !INTERNAL_EVENTS.contains(&name),
                     "{name} must stay internal"
@@ -599,7 +599,7 @@ fn public_events_reach_only_the_mailbox_owner() {
                     );
                 }
             }
-            Exposure::Internal(_) => {
+            Access::Internal(_) => {
                 assert!(INTERNAL_EVENTS.contains(&name), "{name} must be public");
             }
         }
@@ -608,10 +608,10 @@ fn public_events_reach_only_the_mailbox_owner() {
 
 #[test]
 fn email_entities_are_the_thread_or_the_link() {
-    use macro_event_broker::access::{EntityRef, EntityType, Exposure, PublicEntityType};
+    use macro_event_broker::access::{Access, EntityRef, EntityType, PublicEntityType};
 
     for (event, name) in every_event() {
-        let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
+        let Access::Public(public) = event.event().event.access().unwrap() else {
             continue;
         };
         let expected = if name.starts_with("email.link_") {
@@ -624,9 +624,9 @@ fn email_entities_are_the_thread_or_the_link() {
 }
 
 fn public_payload(event: &EmailMacroEvent) -> serde_json::Value {
-    use macro_event_broker::access::Exposure;
+    use macro_event_broker::access::Access;
 
-    let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
+    let Access::Public(public) = event.event().event.access().unwrap() else {
         panic!("expected a public event");
     };
     serde_json::to_value(public.payload.as_ref()).unwrap()

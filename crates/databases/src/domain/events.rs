@@ -4,6 +4,7 @@
 use activity::Actor;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroDatabasesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -257,17 +258,19 @@ impl TopicEvent for DatabaseTopicEvent {
     type Topic = MacroDatabasesTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for DatabaseTopicEvent {
     type PublicPayload = DatabasePublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, PendingPhase, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PendingPhase, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -346,14 +349,14 @@ impl TopicEvent for DatabaseTopicEvent {
                 )),
             ),
             Self::Purged(_) => {
-                return Ok(Exposure::pending(
+                return Ok(Access::pending(
                     PendingPhase::ProducerChange,
                     "carries only the database id and its grants are gone when consumed; needs Owner plus an audience snapshot",
                 ));
             }
         };
         let database_id = database_id.to_string();
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Database, database_id.clone()),
             audience: Audience::Entity {

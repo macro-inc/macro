@@ -3,6 +3,7 @@
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroFormsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -237,17 +238,19 @@ impl TopicEvent for FormTopicEvent {
     type Topic = MacroFormsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
 
+impl EventAccess for FormTopicEvent {
     type PublicPayload = FormPublicEvent;
 
-    fn exposure(
+    fn access(
         &self,
     ) -> Result<
-        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::access::ExposureError,
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Audience, EntityRef, EntityType, Exposure, MinAccessLevel, PendingPhase, PublicEvent,
+            Access, Audience, EntityRef, EntityType, MinAccessLevel, PendingPhase, PublicEvent,
             Stage,
         };
         use std::borrow::Cow;
@@ -326,7 +329,7 @@ impl TopicEvent for FormTopicEvent {
                 )),
             ),
             Self::Purged(_) => {
-                return Ok(Exposure::pending(
+                return Ok(Access::pending(
                     PendingPhase::ProducerChange,
                     "carries only the form id and its grants are gone when consumed; needs Owner plus an audience snapshot",
                 ));
@@ -344,7 +347,7 @@ impl TopicEvent for FormTopicEvent {
                 entity_id: form_id.clone(),
             },
         };
-        Ok(Exposure::Public(PublicEvent {
+        Ok(Access::Public(PublicEvent {
             name,
             entity: EntityRef::new(EntityType::Form, form_id),
             audience,

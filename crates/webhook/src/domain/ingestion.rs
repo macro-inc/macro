@@ -26,7 +26,9 @@ use event_stream::domain::ports::{
     GithubClaims, InstallationOwners, PreviewFlag, TeamDirectory, TeamRole,
 };
 use futures::future::join_all;
-use macro_event_broker::access::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
+use macro_event_broker::access::{
+    AccessError as EventAccessError, Audience, MinAccessLevel, MinTeamRole, Stage,
+};
 use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::outbound::broker::MessageTopicEvent;
@@ -74,17 +76,17 @@ pub enum WebhookEventIngestionError {
     Enqueue(#[source] anyhow::Error),
 }
 
-impl From<ExposureError> for WebhookEventIngestionError {
-    fn from(error: ExposureError) -> Self {
+impl From<EventAccessError> for WebhookEventIngestionError {
+    fn from(error: EventAccessError) -> Self {
         match error {
-            ExposureError::InvalidEntityId {
+            EventAccessError::InvalidEntityId {
                 entity_type,
                 entity_id,
             } => Self::InvalidEntityId {
                 entity_type,
                 entity_id,
             },
-            ExposureError::MissingRecipient => Self::MissingCallRecipient,
+            EventAccessError::MissingRecipient => Self::MissingCallRecipient,
         }
     }
 }
@@ -598,7 +600,7 @@ where
 }
 
 /// Normalize one broker event for webhook delivery from its declared
-/// exposure, through the normalization live streams share.
+/// access, through the normalization live streams share.
 ///
 /// `None` when the event is internal. Preview events are returned with their
 /// stage; matching admits them only for flagged webhook owners.
@@ -616,7 +618,7 @@ fn normalize_staged<E: TopicEvent>(
     let public = match event_stream::domain::normalize::normalize(event) {
         Ok(Some(public)) => public,
         Ok(None) => return Ok(None),
-        Err(NormalizeError::Exposure(error)) => return Err(error.into()),
+        Err(NormalizeError::Access(error)) => return Err(error.into()),
         Err(NormalizeError::Serialization(error)) => return Err(error.into()),
         Err(NormalizeError::Unregistered(name)) => {
             return Err(WebhookEventIngestionError::Unregistered(name));

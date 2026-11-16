@@ -111,7 +111,7 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 
 | Consumer | What to add | Silent-drop behavior if you don't |
 | --- | --- | --- |
-| Public events (webhooks and live streams): exposure in the producer, registry in `crates/event_stream/src/domain/catalog.rs`, topic lists in `crates/event_stream/src/topics.rs` | Its `exposure()` arm (section 8); for a public event, its catalog entry | A public event whose name is not in the catalog is logged as unregistered and dropped by both deliveries; an agent-trigger shape with no arm is rejected as `InvalidEntityId` and committed, logged in DSS, not by the producer |
+| Public events (webhooks and live streams): exposure in the producer, registry in `crates/event_stream/src/domain/catalog.rs`, topic lists in `crates/event_stream/src/topics.rs` | Its `access()` arm (section 8); for a public event, its catalog entry | A public event whose name is not in the catalog is logged as unregistered and dropped by both deliveries; an agent-trigger shape with no arm is rejected as `InvalidEntityId` and committed, logged in DSS, not by the producer |
 | Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
@@ -188,12 +188,12 @@ payload change must be readable by both the deployed code and the new code.
 
 ## 8. Declare exposure
 
-`TopicEvent::exposure()` is required and has no default: every variant says
+`EventAccess::access()` is required and has no default: every variant says
 whether it leaves Macro, to whom, and in what shape. The vocabulary is in
 `crates/event_access` (re-exported as `macro_event_broker::access`).
 
 - Match every variant; never `_ =>` or a bare binding as a catch-all (ast-grep
-  `rust-exposure-no-wildcard-arm`). Group variants that share a declaration
+  `rust-access-no-wildcard-arm`). Group variants that share a declaration
   with `|`.
 - **Internal** is a legal answer: `Exposure::internal_by_design("<why>")` for
   plumbing, projections and commands, or `Exposure::pending(PendingPhase::..,
