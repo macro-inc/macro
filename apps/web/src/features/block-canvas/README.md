@@ -116,7 +116,10 @@ finger still belongs to the tool. A second finger landing drops whatever the fir
 started (marquee, move, resize, shape, stroke, connector, erase, text box) with no
 history entry and restores the selection from before it; a finger left behind does
 nothing until every finger has lifted. Touches inside an embed being interacted
-with, or inside text being edited, stay with that editor.
+with, or inside text being edited, stay with that editor. A pen or mouse that is
+already pressed keeps its gesture, and fingers landing meanwhile (a resting palm)
+are ignored. A flick glides only when the fingers were travelling together as
+they lifted: a pinch, whose midpoint also drifts, does not.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.

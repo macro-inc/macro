@@ -52,29 +52,45 @@ function setup(options: GraphicsInputOptions) {
     viewport.remove();
   });
   let now = 0;
-  /** One finger's event; the first finger down is the primary pointer. */
-  const finger = (
+  type PointerEventType =
+    | 'pointerdown'
+    | 'pointermove'
+    | 'pointerup'
+    | 'pointercancel';
+  const pointer = (
+    pointerType: 'touch' | 'pen',
     id: number,
-    type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+    type: PointerEventType,
     x: number,
     y: number,
-    elapsed = 10
+    elapsed: number
   ) => {
     now += elapsed;
     const event = new PointerEvent(type, {
       bubbles: true,
       cancelable: true,
       pointerId: id,
-      pointerType: 'touch',
+      pointerType,
       isPrimary: id === 1,
       button: 0,
+      buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
       clientX: x,
       clientY: y,
     });
     Object.defineProperty(event, 'timeStamp', { value: now });
     viewport.dispatchEvent(event);
   };
-  return { editor, viewport, finger };
+  /** One finger's event; the first finger down is the primary pointer. */
+  const finger = (
+    id: number,
+    type: PointerEventType,
+    x: number,
+    y: number,
+    elapsed = 10
+  ) => pointer('touch', id, type, x, y, elapsed);
+  const pen = (type: PointerEventType, x: number, y: number) =>
+    pointer('pen', 9, type, x, y, 10);
+  return { editor, viewport, finger, pen };
 }
 
 it('zooms around the midpoint of two fingers and leaves the selection alone', () => {
@@ -243,7 +259,48 @@ it('does not zoom twice when WebKit also reports the pinch as a gesture', () => 
   expect(editor.getCamera().scale).toBe(2);
 });
 
-it('leaves a mouse and a single finger to the tool', () => {
+it('does not fling when the fingers were pinching as they lifted', () => {
+  vi.useFakeTimers({
+    toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+  });
+  const { editor, finger } = setup({ tool: () => 'select' });
+
+  // One finger stays put while the other spreads away from it, fast.
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 260, 200);
+  for (let step = 1; step <= 5; step++)
+    finger(2, 'pointermove', 260 + step * 20, 200, 8);
+  finger(2, 'pointerup', 360, 200);
+  finger(1, 'pointerup', 200, 200);
+  const released = editor.getCamera();
+  expect(released.scale).toBeGreaterThan(2);
+
+  vi.advanceTimersByTime(500);
+  expect(editor.getCamera()).toEqual(released);
+});
+
+it('leaves a pen stroke alone when fingers land beside it', () => {
+  const { editor, finger, pen } = setup({ tool: () => 'pencil' });
+  const before = editor.document;
+  const camera = editor.getCamera();
+
+  pen('pointerdown', 150, 150);
+  pen('pointermove', 180, 170);
+  // A resting palm reads as two touches.
+  finger(1, 'pointerdown', 300, 400);
+  finger(2, 'pointerdown', 340, 420);
+  finger(1, 'pointermove', 320, 430);
+  finger(2, 'pointermove', 380, 470);
+  expect(editor.getPreview()).toBeDefined();
+  expect(editor.getCamera()).toEqual(camera);
+
+  pen('pointermove', 220, 200);
+  pen('pointerup', 220, 200);
+  expect(editor.document).not.toBe(before);
+  expect(Object.keys(editor.document.items)).toHaveLength(3);
+});
+
+it('leaves a single finger to the tool', () => {
   const { editor, finger } = setup({ tool: () => 'pan' });
 
   finger(1, 'pointerdown', 100, 100);

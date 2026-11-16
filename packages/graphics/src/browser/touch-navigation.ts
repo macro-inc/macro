@@ -2,8 +2,10 @@ import type { GraphicsEditor } from '../core/editor';
 import type { Point } from '../core/model';
 import { createGlide, type FingerPair, pinchStep } from '../pan-zoom';
 
-/** A glide only follows a release this soon after the fingers stopped panning. */
+/** A glide only follows when the last finger lifts this soon after the pair broke up. */
 const GLIDE_RELEASE_MS = 150;
+/** How far back the pair's last moments are read to tell a pinch from a pan. */
+const PINCH_WINDOW_MS = 160;
 
 const insideEditableText = (target: Element) =>
   target.closest('[contenteditable]')?.getAttribute('contenteditable') ===
@@ -18,6 +20,9 @@ const insideEditableText = (target: Element) =>
  * void, and the selection goes back to what it was before that finger landed.
  * Navigation then runs until every finger has lifted; a finger left behind
  * does nothing.
+ *
+ * A pen or a mouse pressed on the surface keeps its gesture: fingers landing
+ * meanwhile (a resting palm) are ignored, as they were before fingers navigated.
  *
  * The listeners sit on the window's capture phase so they see every touch on
  * the surface, including the ones a tool handler stops from propagating.
@@ -35,9 +40,14 @@ export function attachTouchNavigation(
   let navigating = false;
   // The two fingers driving the camera, and where they were at the last step.
   let pair: { ids: readonly [number, number]; points: FingerPair } | undefined;
-  let pairEndedAt = 0;
+  let pairEndedAt = Number.NEGATIVE_INFINITY;
+  // Where the pair's midpoint has been lately and how far apart its fingers
+  // were, to tell a pinch from a pan.
+  let recent: { time: number; center: Point; spread: number }[] = [];
   let selectionBefore: readonly string[] = [];
   let voiding = false;
+  // Pens and mice pressed on the surface.
+  const otherPointers = new Set<number>();
 
   const glide = createGlide((delta) => {
     editor.panBy(delta);
@@ -62,7 +72,11 @@ export function attachTouchNavigation(
     if (first === undefined || second === undefined) return;
     const ids = [first, second] as const;
     const points = pairPoints(ids);
-    if (points) pair = { ids, points };
+    if (!points) return;
+    pair = { ids, points };
+    // A new pair starts its own record; a pair that just broke up keeps its
+    // record until the last finger lifts and the glide is decided.
+    recent = [];
   };
 
   const swallow = (event: PointerEvent) => {
@@ -105,6 +119,13 @@ export function attachTouchNavigation(
     const step = pinchStep(pair.points, next);
     pair = { ids: pair.ids, points: next };
     glide.track(step.center, time);
+    recent.push({
+      time,
+      center: step.center,
+      spread: Math.hypot(next[1].x - next[0].x, next[1].y - next[0].y),
+    });
+    while (recent.length > 1 && time - recent[0]!.time > PINCH_WINDOW_MS)
+      recent.shift();
 
     if (options.navigation === 'centered-image') {
       editor.centerImage(
@@ -116,14 +137,35 @@ export function attachTouchNavigation(
     editor.panZoomBy(step.pan, step.center, step.zoom);
   };
 
+  /**
+   * A pinch does not fling. With one finger still and the other spreading, the
+   * midpoint travels too, at half the speed the spread changes; two fingers
+   * panning together move the midpoint and barely change their spread. So the
+   * pair was pinching as it broke up if its spread changed more than its
+   * midpoint travelled.
+   */
+  const wasPinching = () => {
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    if (!first || !last) return false;
+    const travel = Math.hypot(
+      last.center.x - first.center.x,
+      last.center.y - first.center.y
+    );
+    return Math.abs(last.spread - first.spread) > travel;
+  };
+
   const pointerDown = (event: PointerEvent) => {
     // Any press catches a glide in flight.
     glide.cancel();
     const target = event.target;
+    if (!(target instanceof Element) || !element.contains(target)) return;
+    if (event.pointerType !== 'touch') {
+      otherPointers.add(event.pointerId);
+      return;
+    }
     if (
-      event.pointerType !== 'touch' ||
-      !(target instanceof Element) ||
-      !element.contains(target) ||
+      otherPointers.size ||
       insideEditableText(target) ||
       options.ignoreTarget?.(target)
     )
@@ -153,6 +195,9 @@ export function attachTouchNavigation(
   };
 
   const pointerMove = (event: PointerEvent) => {
+    // A pen or mouse whose release never arrived shows up with no button held.
+    if (otherPointers.has(event.pointerId) && !event.buttons)
+      otherPointers.delete(event.pointerId);
     if (!touches.has(event.pointerId)) return;
     touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (!navigating) return;
@@ -162,6 +207,7 @@ export function attachTouchNavigation(
   };
 
   const pointerEnd = (event: PointerEvent) => {
+    otherPointers.delete(event.pointerId);
     if (voiding || !touches.has(event.pointerId)) return;
     if (!navigating) {
       touches.delete(event.pointerId);
@@ -185,7 +231,8 @@ export function attachTouchNavigation(
     if (touches.size) return;
 
     navigating = false;
-    const flicked = event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS;
+    const flicked =
+      event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS && !wasPinching();
     if (flicked && options.navigation !== 'centered-image') glide.release();
     else glide.reset();
   };

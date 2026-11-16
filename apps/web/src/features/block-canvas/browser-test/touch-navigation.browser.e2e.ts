@@ -101,18 +101,25 @@ test('two fingers moving together pan the canvas', async ({ page }) => {
 
   await touch(cdp, 'touchStart', from);
   await move(cdp, from, to);
-  // Rest before lifting, so no glide carries the camera further.
-  await page.waitForTimeout(300);
-  await touch(cdp, 'touchEnd', []);
 
-  const after = await alice(page);
-  expect(after.camera.scale).toBe(before.camera.scale);
-  expect(after.camera.x).toBeCloseTo(before.camera.x + 30, 0);
-  expect(after.camera.y).toBeCloseTo(before.camera.y - 60, 0);
+  // Read with the fingers still down: lifting them may glide further. The
+  // browser delivers the last move with its next frame.
+  await expect
+    .poll(async () => {
+      const { camera } = await alice(page);
+      return {
+        x: Math.round(camera.x - before.camera.x),
+        y: Math.round(camera.y - before.camera.y),
+        scale: Math.round((camera.scale / before.camera.scale) * 1000) / 1000,
+      };
+    })
+    .toEqual({ x: 30, y: -60, scale: 1 });
+  await touch(cdp, 'touchEnd', []);
 });
 
 test('a two-finger flick keeps gliding after release', async ({ page }) => {
   const center = await emptyCanvasPoint(page);
+  const before = (await alice(page)).camera;
   const cdp = await page.context().newCDPSession(page);
   const from = [
     { x: center.x - 20, y: center.y },
@@ -123,9 +130,9 @@ test('a two-finger flick keeps gliding after release', async ({ page }) => {
   await touch(cdp, 'touchStart', from);
   await move(cdp, from, to);
   await touch(cdp, 'touchEnd', []);
-  const released = (await alice(page)).camera;
 
+  // The fingers travelled 120px; the glide carries the camera past that.
   await expect
     .poll(async () => (await alice(page)).camera.y)
-    .toBeLessThan(released.y - 10);
+    .toBeLessThan(before.y - 130);
 });
