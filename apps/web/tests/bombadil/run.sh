@@ -11,10 +11,15 @@ shift
 : "${BACKEND_ORIGIN:?set BACKEND_ORIGIN to the stack proxy, e.g. https://localhost:20909}"
 : "${PEER_TOKEN:?set PEER_TOKEN to the access token of a second seeded user}"
 
-printf '{"backendOrigin":"%s","frontendOrigin":"%s","peerToken":"%s"}\n' \
-  "$BACKEND_ORIGIN" "$FRONTEND_URL" "$PEER_TOKEN" > "$HERE/local.json"
+# local.json holds a token: readable by its owner only, and gitignored.
+(
+  umask 077
+  bun -e 'console.log(JSON.stringify({ backendOrigin: process.env.BACKEND_ORIGIN, frontendOrigin: process.argv[1], peerToken: process.env.PEER_TOKEN }))' \
+    "$FRONTEND_URL" > "$HERE/local.json"
+)
 
-GENERAL_CHANNEL=00000000-0000-0000-0000-000000000001
+GENERAL_CHANNEL=$(bun -e 'console.log(require(process.argv[1]).channels.general.id)' \
+  "$HERE/../../../../tooling/seed_cli/seed/local_e2e/manifest.json")
 OUTPUT="${BOMBADIL_OUTPUT:-$HERE/../../test-results/bombadil/channel-stability}"
 mkdir -p "$OUTPUT"
 

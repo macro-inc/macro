@@ -106,12 +106,11 @@ test('moving navigation to an overlay keeps the scroll position of the panel bes
 }) => {
   await page.goto('/?overlay-aside');
   const scroller = page.getByTestId('scroller');
-  await scroller.hover();
-  await page.mouse.wheel(0, 1200);
-  await expect
-    .poll(() => scroller.evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
-  const before = await scroller.evaluate((element) => element.scrollTop);
+  const before = await scroller.evaluate((element) => {
+    element.scrollTop = 1200;
+    return element.scrollTop;
+  });
+  expect(before).toBe(1200);
 
   // Sample after every paint: a reset that is corrected a frame later is
   // still a visible jump.
