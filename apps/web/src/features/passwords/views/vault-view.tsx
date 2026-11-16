@@ -34,6 +34,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { FolderActionsMenu } from '../components/folder-actions-menu';
 import { FavoriteToggle, ItemDetailBody } from '../components/item-detail';
 import { ItemForm } from '../components/item-form';
 import { ItemList } from '../components/item-list';
@@ -46,7 +47,6 @@ import {
   VaultEmptyState,
 } from '../components/vault-empty-state';
 import {
-  FolderActionItems,
   type FolderCommands,
   type FolderEditing,
   VaultSidebar,
@@ -703,61 +703,33 @@ export function VaultView(props: {
               >
                 <Show when={currentFolder()}>
                   {(folder) => (
-                    <Dropdown placement="bottom-end">
-                      <Dropdown.Trigger
-                        variant="secondary"
-                        size="icon-md"
-                        aria-label={t('passwords.folderActions', {
-                          name: folder().name,
-                        })}
-                        tooltip={t('passwords.folderActions', {
-                          name: folder().name,
-                        })}
-                      >
-                        <DotsThreeIcon class="size-4" />
-                      </Dropdown.Trigger>
-                      <Dropdown.Content
-                        class="min-w-48 max-w-[calc(100vw-2rem)]"
-                        onCloseAutoFocus={(event) => {
-                          // A name field opens only once the menu's focus trap
-                          // has gone, so it keeps the focus it takes on mount.
-                          const editor = headerEditor;
-                          headerEditor = undefined;
-                          if (!editor) return;
-                          event.preventDefault();
-                          setEditing(editor);
-                        }}
-                      >
-                        <FolderActionItems
-                          onSubfolder={() => {
-                            headerEditor = {
-                              kind: 'create',
-                              parentId: folder().id,
-                            };
-                          }}
-                          onRename={() => {
-                            headerEditor = { kind: 'rename', id: folder().id };
-                          }}
-                          onMove={() =>
-                            setEditing({ kind: 'move', id: folder().id })
-                          }
-                          onDelete={() =>
-                            setEditing({ kind: 'delete', id: folder().id })
-                          }
-                          item={(item) => (
-                            <Dropdown.Item onSelect={item.onSelect}>
-                              <span
-                                class={
-                                  item.danger ? 'text-failure-ink' : undefined
-                                }
-                              >
-                                {item.text}
-                              </span>
-                            </Dropdown.Item>
-                          )}
-                        />
-                      </Dropdown.Content>
-                    </Dropdown>
+                    <FolderActionsMenu
+                      name={folder().name}
+                      onCloseAutoFocus={(event) => {
+                        // A name field opens only once the menu's focus trap
+                        // has gone, so it keeps the focus it takes on mount.
+                        const editor = headerEditor;
+                        headerEditor = undefined;
+                        if (!editor) return;
+                        event.preventDefault();
+                        setEditing(editor);
+                      }}
+                      onSubfolder={() => {
+                        headerEditor = {
+                          kind: 'create',
+                          parentId: folder().id,
+                        };
+                      }}
+                      onRename={() => {
+                        headerEditor = { kind: 'rename', id: folder().id };
+                      }}
+                      onMove={() =>
+                        setEditing({ kind: 'move', id: folder().id })
+                      }
+                      onDelete={() =>
+                        setEditing({ kind: 'delete', id: folder().id })
+                      }
+                    />
                   )}
                 </Show>
                 <NewItemMenu
