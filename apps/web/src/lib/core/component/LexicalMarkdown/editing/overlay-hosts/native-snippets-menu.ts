@@ -57,7 +57,12 @@ export function createNativeSnippetMenuHost(
     dispatchApplicationCommandIfSessionEdit(
       view,
       'group-a.snippet-resolve-source',
-      { key: request.key, awaitId: request.awaitId, source }
+      {
+        key: request.key,
+        awaitId: request.awaitId,
+        // The fetched state is plain JSON; the round trip gives it the JSON type.
+        source: source === null ? null : JSON.parse(JSON.stringify(source)),
+      }
     );
   };
   const dispose = view.onPluginEvent('group-a.snippet-request', (payload) => {
