@@ -130,10 +130,11 @@ or VACUUM; freed pages can be reused without rewriting the whole database file.
 
 ## Query-write invalidation
 
-Ordinary query responses carry optional `searchChangedBuckets`, using the same
-composed-view comparison as hydration. An empty list proves that Quick Access
-needs no refresh; missing metadata, mutations, subscriptions and identity resets
-remain conservative. Both browser-worker and native hosts preserve this distinction.
+Query responses and subscription events carry optional `searchChangedBuckets`,
+using the same composed-view comparison as hydration. An empty list proves that
+Quick Access needs no refresh; missing metadata, mutations, deletions and
+identity resets remain conservative. Both browser-worker and native hosts
+preserve this distinction.
 
 Active queries track the canonical top-level fields they select on `GraphqlUser`,
 including argument-qualified Soup pages. Query writes only wake readers of changed

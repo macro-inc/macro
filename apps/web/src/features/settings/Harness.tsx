@@ -18,6 +18,7 @@ import {
   useHarnessesQuery,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
+import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
@@ -33,7 +34,13 @@ import { LocalRuntimeCard } from './components/local-runtime-card';
 import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
 import { useTeamComputers } from './computers/primitives/team-computers';
+import { GetComputerEntry } from './computers/views/get-computer-entry';
 import { MacroComputers } from './computers/views/MacroComputers';
 import {
   CURSOR_KEY_FORMAT_ERROR,
@@ -92,6 +99,7 @@ export function Harness(
   // The runtime the page points out, and the one whose Share menu is open.
   const [highlight, setHighlight] = createSignal<{ target: string }>();
   const [sharing, setSharing] = createSignal<string>();
+  const [buyingComputer, setBuyingComputer] = createSignal(false);
   // Opened from an access-request notification: point out that runtime and,
   // for a request, open its Share menu, where the request waits.
   createEffect(
@@ -108,6 +116,14 @@ export function Harness(
     if (typeof pair === 'string' && pair.length > 0) {
       setPairingDialog({ initialCode: pair });
       setSearchParams({ pair: undefined }, { replace: true });
+    }
+    // A computer setup notification's link, opened cold.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) {
+      requestComputerSetup(computerId);
+      setSearchParams({ [COMPUTER_SETUP_PARAM]: undefined }, { replace: true });
     }
   });
 
@@ -194,6 +210,7 @@ export function Harness(
               </Button>
             }
           >
+            <GetComputerEntry onGet={() => setBuyingComputer(true)} />
             <PendingRequestsSection />
             <ConnectedRuntimesSection
               harnesses={
@@ -201,8 +218,11 @@ export function Harness(
                   ? harnessesQuery.data.filter(
                       // A Macro computer is listed once, under Macro computers;
                       // with that section off it stays an ordinary machine.
+                      // An agent teammate's computer is never one: people
+                      // message the agent instead.
                       (harness) =>
                         harness.access === 'owner' &&
+                        !isTeamAgentComputer(harness) &&
                         !(
                           teamComputers.enabled() &&
                           (harness.computer_id ||
@@ -221,7 +241,11 @@ export function Harness(
               canRemoveShared={isTeamOwner()}
               onRemove={setRemovingHarness}
             />
-            <MacroComputers harnesses={harnesses()} />
+            <MacroComputers
+              harnesses={harnesses()}
+              buying={buyingComputer()}
+              onBuyingChange={setBuyingComputer}
+            />
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">

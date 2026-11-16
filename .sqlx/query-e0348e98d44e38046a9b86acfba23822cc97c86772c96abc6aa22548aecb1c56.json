@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT static_file_id FROM whatsapp_profile_picture WHERE account_id = $1 AND jid = $2 AND state <> 'staged' AND retry_at = $3 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "static_file_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "e0348e98d44e38046a9b86acfba23822cc97c86772c96abc6aa22548aecb1c56"
+}

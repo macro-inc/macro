@@ -12,7 +12,7 @@ import { ComputerBuyFlow } from './computer-buy-flow';
 import {
   fromPriceText,
   GetComputerRow,
-  offersBlockedByTrial,
+  offersBlockedByPlan,
 } from './MacroComputers';
 
 /**
@@ -33,8 +33,9 @@ export function useComputerOffer() {
     return price && `${price} · ${t('computers.readyInMinutes')}`;
   };
   return {
-    // A trialing team can't buy; Settings → Machines says why.
-    canBuy: () => canBuy() && !offersBlockedByTrial(offers),
+    // A trialing team, or one with no paid plan, can't buy; Settings →
+    // Machines says why.
+    canBuy: () => canBuy() && !offersBlockedByPlan(offers),
     fromLine,
     hasComputers: () => computers().length > 0,
   };
@@ -148,14 +149,18 @@ export function ComputerWhereItRuns(props: {
               type="button"
               variant="ghost"
               size="sm"
-              class="mt-2 -ml-2"
+              class="mt-2 -ml-2 max-w-full"
               disabled={props.busy}
               onClick={() => setBuying(true)}
             >
               <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-              {[t('computers.newComputer'), offer.fromLine()]
-                .filter(Boolean)
-                .join(' · ')}
+              {/* The price line is long on a phone: it truncates rather than
+                  widening the form. */}
+              <span class="min-w-0 truncate">
+                {[t('computers.newComputer'), offer.fromLine()]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
             </Button>
           </Show>
         </WhereItRunsOption>
@@ -164,6 +169,7 @@ export function ComputerWhereItRuns(props: {
         open={buying()}
         onClose={() => setBuying(false)}
         onFinished={(computer) => setBought(computer.harnessId ?? undefined)}
+        selectsForAgent
       />
     </>
   );

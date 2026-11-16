@@ -1,5 +1,7 @@
 //! What a run records as local telemetry (on unless the developer opted out):
-//! the run, every step, each service build and each container's health wait.
+//! the run, every step, each service build and its slowest crates, and each
+//! container's health wait. Steps are spans placed in their lane and under the
+//! step they ran inside, so a run's trace reads as its waterfall.
 //! Sending, the settings file, its provisioning and the buffer are
 //! `xtask_local_telemetry`'s.
 //!
@@ -13,10 +15,11 @@
 //! timings: never paths, env values, error text or anything from the settings
 //! file. Instance and branch names are hashed unless they are the defaults.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, ThreadId};
 use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
@@ -45,6 +48,30 @@ const BUILD_STEP: &str = "Building service binaries";
 const INFRA_STEP: &str = "Starting infra";
 /// How many probes `docker inspect` keeps in a container's health log.
 const DOCKER_HEALTH_LOG_ENTRIES: usize = 5;
+/// The lane of steps on the bring-up's own thread. Its top-level steps run one
+/// after another, so they add up to the time to ready: they are its critical path.
+pub(super) const MAIN_LANE: &str = "main";
+/// Background lanes that run beside the main one.
+pub(super) const FRONTEND_LANE: &str = "frontend";
+pub(super) const FUSIONAUTH_LANE: &str = "fusionauth";
+pub(super) const LOCALSTACK_LANE: &str = "localstack";
+/// The lane of each container's wait to turn healthy.
+const CONTAINERS_LANE: &str = "containers";
+/// The lane of a build's compilation units, which cargo runs in parallel.
+const CARGO_LANE: &str = "cargo";
+/// The run event's `<start>/<run_id>/<machine>`, see [`bring_up_key`].
+const BRING_UP_FIELD: &str = "bring_up";
+/// Seconds from the run's start to a step's or container's start. Not `offset`: that is a
+/// LogQL keyword, so no query could filter or unwrap it.
+const OFFSET_FIELD: &str = "offset_in_run";
+/// Cargo's timing report of the last build, relative to the workspace root.
+const CARGO_TIMINGS: &str = "target/cargo-timings/cargo-timing.html";
+/// The start of the per-build copies cargo keeps beside [`CARGO_TIMINGS`].
+const CARGO_TIMING_REPORT_PREFIX: &str = "cargo-timing-";
+/// Compilation units shorter than this get no `crate` event.
+const CRATE_MIN_SECONDS: f64 = 1.0;
+/// At most this many of a build's slowest units get a `crate` event.
+const CRATE_EVENTS_MAX: usize = 150;
 /// Labels that carry names, ids or lists after a fixed prefix, sent as the prefix's
 /// stable step name so a step stays one series.
 const STEP_NAMES: &[(&str, &str)] = &[
@@ -53,6 +80,7 @@ const STEP_NAMES: &[(&str, &str)] = &[
     ("Building sandbox image ", "Building sandbox image"),
     ("Restoring init snapshot ", "Restoring init snapshot"),
     ("Saving init snapshot ", "Saving init snapshot"),
+    ("Building runtime image ", "Building runtime image"),
 ];
 
 /// What a run is, for the `kind` field.
@@ -115,6 +143,11 @@ struct State {
     /// Fields every step gets once the bring-up's shape is known.
     shape: BTreeMap<String, Value>,
     steps: u32,
+    /// Steps started so far, which numbers each step's span key.
+    started: u32,
+    /// Each thread's steps that started and haven't finished, innermost last: a
+    /// step started inside another on the same thread is its child.
+    open: HashMap<ThreadId, Vec<OpenStep>>,
     /// sccache's counters when the build began, taken off the critical path.
     sccache_before: Option<JoinHandle<Option<SccacheStats>>>,
     /// Cargo output of the last build step, until its step event is recorded.
@@ -124,6 +157,23 @@ struct State {
     /// The first step that failed, for runs without a job to remember it.
     failed_step: Option<String>,
     lanes: Vec<JoinHandle<()>>,
+}
+
+/// A step that started and hasn't finished.
+struct OpenStep {
+    step: String,
+    /// Its span key, which the steps started inside it name as their parent.
+    key: String,
+    lane: &'static str,
+    at: SystemTime,
+}
+
+/// Where a finished step sat: when it began and what encloses it.
+struct Placement {
+    key: String,
+    lane: &'static str,
+    at: SystemTime,
+    parent: Option<(String, String)>,
 }
 
 impl RunTelemetry {
@@ -238,13 +288,31 @@ impl RunTelemetry {
         ]);
     }
 
-    pub(super) fn step_started(&self, label: &str) {
+    /// A step began on this thread, in `lane` ([`MAIN_LANE`] or a background
+    /// lane's name). A step that begins while another is open on the same thread
+    /// is its child.
+    pub(super) fn step_started(&self, label: &str, lane: &'static str) {
         let step = step_name(label);
-        self.shared
-            .with_recorder(|recorder| recorder.step_started(step));
-        if step.starts_with(BUILD_STEP) {
-            self.shared.state().sccache_before = Some(std::thread::spawn(sccache_stats));
-        }
+        let (key, parent) = {
+            let mut state = self.shared.state();
+            state.started += 1;
+            let key = format!("step/{}", state.started);
+            let stack = state.open.entry(std::thread::current().id()).or_default();
+            let parent = stack.last().map(|open| open.key.clone());
+            stack.push(OpenStep {
+                step: step.to_owned(),
+                key: key.clone(),
+                lane,
+                at: SystemTime::now(),
+            });
+            if step.starts_with(BUILD_STEP) {
+                state.sccache_before = Some(std::thread::spawn(sccache_stats));
+            }
+            (key, parent)
+        };
+        self.shared.with_recorder(|recorder| {
+            recorder.step_started(step, Some(&key), parent.as_deref());
+        });
     }
 
     /// A step's captured output; only a build's is read, for its unit counts.
@@ -257,26 +325,38 @@ impl RunTelemetry {
     pub(super) fn step_finished(&self, label: &str, elapsed: Duration, succeeded: bool) {
         let step = step_name(label);
         let outcome = outcome(succeeded);
-        let shape = {
+        let (shape, placement) = {
             let mut state = self.shared.state();
             state.steps += 1;
             if !succeeded && state.failed_step.is_none() {
                 state.failed_step = Some(step.to_owned());
             }
-            state.shape.clone()
+            (state.shape.clone(), state.close_step(step, elapsed))
         };
+        let offset = placement
+            .at
+            .duration_since(self.shared.started_at)
+            .unwrap_or_default();
         let mut event = Event::new("step")
             .with("step", step)
             .with("seconds", seconds(elapsed))
             .with("outcome", outcome)
-            .lasting(step, elapsed);
+            .with(OFFSET_FIELD, seconds(offset))
+            .with("lane", placement.lane)
+            .lasting(step, elapsed)
+            .span(&placement.key);
+        if let Some((parent_step, parent_key)) = &placement.parent {
+            event = event
+                .with("parent_step", parent_step.as_str())
+                .under(parent_key);
+        }
         for (key, value) in shape {
             event = event.with(&key, value);
         }
         self.shared.record(event);
 
         if step.starts_with(BUILD_STEP) {
-            self.record_build(step, elapsed, outcome);
+            self.record_build(step, &placement, elapsed, outcome);
         }
         if step.starts_with(INFRA_STEP) && succeeded {
             self.inspect_services_later("infra");
@@ -333,10 +413,20 @@ impl RunTelemetry {
         let _ = finished.recv_timeout(wait);
     }
 
-    /// A `build` event once sccache's counters after the build are read.
-    fn record_build(&self, step: &str, elapsed: Duration, outcome: &'static str) {
+    /// A `build` event once sccache's counters after the build are read, and a
+    /// `crate` event, as a span under the build step, for each of its slowest
+    /// compilation units in cargo's timing report.
+    fn record_build(
+        &self,
+        step: &str,
+        placement: &Placement,
+        elapsed: Duration,
+        outcome: &'static str,
+    ) {
         let shared = Arc::clone(&self.shared);
         let step = step.to_owned();
+        let build_key = placement.key.clone();
+        let build_started = placement.at;
         let lane = std::thread::spawn(move || {
             let (before, output) = {
                 let mut state = shared.state();
@@ -348,7 +438,7 @@ impl RunTelemetry {
                 .with("step", step.as_str())
                 .with("seconds", seconds(elapsed))
                 .with("outcome", outcome);
-            if let Some(output) = output {
+            if let Some(output) = &output {
                 event = event
                     .with("units_compiled", output.units_compiled)
                     .with("workspace_units_compiled", output.workspace_units_compiled);
@@ -361,6 +451,39 @@ impl RunTelemetry {
                     .with("sccache_misses", delta.misses);
             }
             shared.record(event);
+
+            let report = workspace_root().join(CARGO_TIMINGS);
+            let workspace = output
+                .map(|output| output.workspace_crates)
+                .unwrap_or_default();
+            for unit in fresh_cargo_timings(&report, build_started) {
+                // Read from a file on disk: skip a unit whose times don't fit.
+                let (Ok(offset), Ok(duration)) = (
+                    Duration::try_from_secs_f64(unit.start),
+                    Duration::try_from_secs_f64(unit.duration),
+                ) else {
+                    continue;
+                };
+                let Some(ended) = build_started
+                    .checked_add(offset)
+                    .and_then(|started| started.checked_add(duration))
+                else {
+                    continue;
+                };
+                shared.record(
+                    Event::new("crate")
+                        .with("crate", unit.name.as_str())
+                        .with("target", unit.target_kind())
+                        .with("workspace", workspace.contains(&unit.name))
+                        .with("seconds", seconds(duration))
+                        .with("offset_in_build", seconds(offset))
+                        .with("step", step.as_str())
+                        .with("lane", CARGO_LANE)
+                        .lasting(&unit.span_name(), duration)
+                        .at(ended)
+                        .under(&build_key),
+                );
+            }
         });
         self.shared.state().lanes.push(lane);
     }
@@ -369,6 +492,43 @@ impl RunTelemetry {
         let shared = Arc::clone(&self.shared);
         let lane = std::thread::spawn(move || inspect_services(&shared, phase));
         self.shared.state().lanes.push(lane);
+    }
+}
+
+impl State {
+    /// Close the innermost open step named `step` on this thread, and say where
+    /// it sat. A step finishing without having started (no hook saw it begin)
+    /// is placed on the main lane, ending now.
+    fn close_step(&mut self, step: &str, elapsed: Duration) -> Placement {
+        let stack = self.open.entry(std::thread::current().id()).or_default();
+        let found = stack.iter().rposition(|open| open.step == step);
+        let closed = found.map(|index| stack.remove(index));
+        let parent = found
+            .and_then(|index| index.checked_sub(1))
+            .and_then(|index| stack.get(index))
+            .map(|open| (open.step.clone(), open.key.clone()));
+        if stack.is_empty() {
+            self.open.remove(&std::thread::current().id());
+        }
+        match closed {
+            Some(open) => Placement {
+                key: open.key,
+                lane: open.lane,
+                at: open.at,
+                parent,
+            },
+            None => {
+                self.started += 1;
+                Placement {
+                    key: format!("step/{}", self.started),
+                    lane: MAIN_LANE,
+                    at: SystemTime::now()
+                        .checked_sub(elapsed)
+                        .unwrap_or(SystemTime::UNIX_EPOCH),
+                    parent: None,
+                }
+            }
+        }
     }
 }
 
@@ -385,6 +545,9 @@ impl Shared {
     fn close_run(&self, mut fields: BTreeMap<String, Value>, ended: SystemTime, wait: Duration) {
         fields.insert("steps".to_owned(), Value::from(self.state().steps));
         if let Some(recorder) = self.take_recorder() {
+            if let Some(key) = bring_up_key(self.kind, &fields, &recorder) {
+                fields.insert(BRING_UP_FIELD.to_owned(), Value::from(key));
+            }
             recorder.finish(fields, ended, wait);
         }
     }
@@ -410,6 +573,27 @@ impl Shared {
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// `<start>/<run_id>/<machine>` for a bring-up that got ready: one span
+/// attribute whose values a dashboard variable can filter by start and machine
+/// and sort newest first (run ids sort by time), since Tempo's variables list an
+/// attribute's values without a query to narrow them.
+fn bring_up_key(
+    kind: RunKind,
+    fields: &BTreeMap<String, Value>,
+    recorder: &Recorder,
+) -> Option<String> {
+    let ready = fields.get("outcome").and_then(Value::as_str) == Some(outcome(true));
+    if kind != RunKind::Up || !ready {
+        return None;
+    }
+    let start = fields.get("start").and_then(Value::as_str)?;
+    Some(format!(
+        "{start}/{}/{}",
+        recorder.run_id(),
+        recorder.machine()?
+    ))
 }
 
 fn outcome(succeeded: bool) -> &'static str {
@@ -469,7 +653,13 @@ fn common_fields(
     if let Ok(cpus) = std::thread::available_parallelism() {
         fields.insert("cpus".to_owned(), Value::from(cpus.get()));
     }
-    if let Some(host) = host_name() {
+    if let Some(memory) = memory_gb() {
+        fields.insert("memory_gb".to_owned(), Value::from(memory));
+    }
+    if let Some(model) = cpu_model() {
+        fields.insert("cpu_model".to_owned(), Value::from(model));
+    }
+    if let Some(host) = xtask_local_telemetry::host_name() {
         fields.insert("host".to_owned(), Value::from(opaque_id(&host)));
     }
     if let Some(sha) = git(&["rev-parse", "--short=12", "HEAD"]) {
@@ -486,6 +676,60 @@ fn common_fields(
     fields
 }
 
+/// The machine's memory in whole gibibytes.
+fn memory_gb() -> Option<u64> {
+    let bytes = if cfg!(target_os = "macos") {
+        command_line("sysctl", &["-n", "hw.memsize"])?
+            .parse::<u64>()
+            .ok()?
+    } else {
+        let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
+        parse_meminfo_kib(&meminfo)? * KIB
+    };
+    Some((bytes + GIB / 2) / GIB)
+}
+
+const KIB: u64 = 1024;
+const GIB: u64 = KIB * KIB * KIB;
+
+/// `MemTotal` in KiB from `/proc/meminfo`.
+pub(super) fn parse_meminfo_kib(meminfo: &str) -> Option<u64> {
+    meminfo
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// The CPU's model name, as the OS reports it.
+fn cpu_model() -> Option<String> {
+    if cfg!(target_os = "macos") {
+        return command_line("sysctl", &["-n", "machdep.cpu.brand_string"]);
+    }
+    parse_cpuinfo_model(&std::fs::read_to_string("/proc/cpuinfo").ok()?)
+}
+
+/// The first `model name` in `/proc/cpuinfo`.
+pub(super) fn parse_cpuinfo_model(cpuinfo: &str) -> Option<String> {
+    cpuinfo
+        .lines()
+        .find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key.trim() == "model name").then(|| value.trim().to_owned())
+        })
+        .filter(|model| !model.is_empty())
+}
+
+/// A command's trimmed stdout, when it succeeds and prints something.
+fn command_line(program: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(args).output().ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    let text = text.trim();
+    (output.status.success() && !text.is_empty()).then(|| text.to_owned())
+}
+
 fn git(args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .current_dir(repo_root())
@@ -497,23 +741,14 @@ fn git(args: &[&str]) -> Option<String> {
     (output.status.success() && !text.is_empty()).then(|| text.to_owned())
 }
 
-fn host_name() -> Option<String> {
-    let mut buffer = [0u8; 256];
-    // SAFETY: gethostname writes at most `len` bytes into the buffer we own.
-    let status = unsafe { libc::gethostname(buffer.as_mut_ptr().cast(), buffer.len()) };
-    if status != 0 {
-        return None;
-    }
-    let end = buffer.iter().position(|byte| *byte == 0)?;
-    String::from_utf8(buffer[..end].to_vec()).ok()
-}
-
 /// Unit counts from cargo's own progress lines.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct BuildOutput {
     pub units_compiled: u32,
     /// Of those, the ones in this repository: cargo prints their path.
     pub workspace_units_compiled: u32,
+    /// The names of the crates in this repository that were compiled.
+    pub workspace_crates: HashSet<String>,
 }
 
 impl BuildOutput {
@@ -524,12 +759,124 @@ impl BuildOutput {
             .map(str::trim_start)
             .filter(|line| line.starts_with("Compiling "))
             .collect();
+        let workspace: Vec<&str> = compiled
+            .iter()
+            .copied()
+            .filter(|line| line.ends_with(')'))
+            .collect();
         Self {
             units_compiled: u32::try_from(compiled.len()).unwrap_or(u32::MAX),
-            workspace_units_compiled: u32::try_from(
-                compiled.iter().filter(|line| line.ends_with(')')).count(),
-            )
-            .unwrap_or(u32::MAX),
+            workspace_units_compiled: u32::try_from(workspace.len()).unwrap_or(u32::MAX),
+            workspace_crates: workspace
+                .iter()
+                .filter_map(|line| line.split_whitespace().nth(1))
+                .map(str::to_owned)
+                .collect(),
+        }
+    }
+}
+
+/// One compilation unit in cargo's `--timings` report.
+#[derive(Debug, PartialEq, serde::Deserialize)]
+pub(super) struct CargoUnit {
+    pub name: String,
+    /// What was built: empty for a library, ` build script`, ` build script
+    /// (run)`, or the kind and name, such as ` bin "email_service"`.
+    pub target: String,
+    /// Seconds from the build's start.
+    pub start: f64,
+    pub duration: f64,
+}
+
+impl CargoUnit {
+    /// The target's kind without its name, which may be one of ours.
+    pub(super) fn target_kind(&self) -> &str {
+        // Cargo writes `bin "name"`, `build script`, `build script (run)`;
+        // older versions hyphenate `build-script`.
+        let target = self.target.trim().replace('-', " ");
+        if target.is_empty() {
+            return "lib";
+        }
+        if target.starts_with("build script") {
+            return if target.ends_with("(run)") {
+                "build-script-run"
+            } else {
+                "build-script"
+            };
+        }
+        match target.split_whitespace().next() {
+            Some("bin") => "bin",
+            Some("test") => "test",
+            Some("bench") => "bench",
+            Some("example") => "example",
+            Some("lib") => "lib",
+            _ => "other",
+        }
+    }
+
+    fn span_name(&self) -> String {
+        match self.target_kind() {
+            "lib" => self.name.clone(),
+            kind => format!("{} ({kind})", self.name),
+        }
+    }
+}
+
+/// The units listed in a cargo timing report's `UNIT_DATA`, slowest first,
+/// only those of at least [`CRATE_MIN_SECONDS`] and at most [`CRATE_EVENTS_MAX`].
+pub(super) fn parse_cargo_timings(html: &str) -> Vec<CargoUnit> {
+    const MARKER: &str = "const UNIT_DATA = ";
+    let Some(position) = html.find(MARKER) else {
+        return Vec::new();
+    };
+    let json = html.get(position + MARKER.len()..).unwrap_or_default();
+    let Some(Ok(mut units)) = serde_json::Deserializer::from_str(json)
+        .into_iter::<Vec<CargoUnit>>()
+        .next()
+    else {
+        return Vec::new();
+    };
+    units.retain(|unit| unit.duration >= CRATE_MIN_SECONDS);
+    units.sort_by(|a, b| b.duration.total_cmp(&a.duration));
+    units.truncate(CRATE_EVENTS_MAX);
+    units
+}
+
+/// The units of the build that began at `since`: none when the report is
+/// older, as when cargo failed before writing it.
+fn fresh_cargo_timings(report: &Path, since: SystemTime) -> Vec<CargoUnit> {
+    let fresh = std::fs::metadata(report)
+        .and_then(|metadata| metadata.modified())
+        .is_ok_and(|modified| modified >= since);
+    if !fresh {
+        return Vec::new();
+    }
+    let units = std::fs::read_to_string(report)
+        .map(|html| parse_cargo_timings(&html))
+        .unwrap_or_default();
+    if let Some(dir) = report.parent() {
+        remove_timestamped_reports(dir, since);
+    }
+    units
+}
+
+/// Cargo also keeps each build's report as `cargo-timing-<time>.html`, so every
+/// bring-up would add one. Remove the ones this build wrote; `cargo-timing.html`
+/// stays, and so do reports of builds run by hand before it.
+fn remove_timestamped_reports(dir: &Path, since: SystemTime) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let ours = name.to_str().is_some_and(|name| {
+            name.starts_with(CARGO_TIMING_REPORT_PREFIX) && name.ends_with(".html")
+        }) && entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .is_ok_and(|modified| modified >= since);
+        if ours {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
 }
@@ -585,6 +932,8 @@ fn sccache_stats() -> Option<SccacheStats> {
 pub(super) struct ServiceHealth {
     pub service: String,
     pub health: String,
+    /// When the container last started.
+    pub started: Option<SystemTime>,
     /// From the container starting to its first passing probe.
     pub seconds_to_healthy: Option<f64>,
     pub restarts: u64,
@@ -636,6 +985,7 @@ impl ServiceHealth {
         Some(Self {
             service,
             health: status,
+            started: started.map(SystemTime::from),
             seconds_to_healthy,
             restarts: container
                 .get("RestartCount")
@@ -660,10 +1010,20 @@ fn inspect_services(shared: &Shared, phase: &str) {
             .with("phase", phase)
             .with("health", health.health.as_str())
             .with("restarts", health.restarts);
-        if let Some(seconds) = health.seconds_to_healthy {
+        if let Some(to_healthy) = health.seconds_to_healthy {
+            let wait = Duration::from_secs_f64(to_healthy);
             event = event
-                .with("seconds_to_healthy", seconds)
-                .lasting(&health.service, Duration::from_secs_f64(seconds));
+                .with("seconds_to_healthy", to_healthy)
+                .with("lane", CONTAINERS_LANE)
+                .lasting(&health.service, wait);
+            // A container that started during this run is drawn where it
+            // waited; one left from before keeps the inspection's time.
+            if let Some(started) = health.started.filter(|at| *at >= shared.started_at) {
+                let offset = started
+                    .duration_since(shared.started_at)
+                    .unwrap_or_default();
+                event = event.with(OFFSET_FIELD, seconds(offset)).at(started + wait);
+            }
         }
         shared.record(event);
     }

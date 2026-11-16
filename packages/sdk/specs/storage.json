@@ -8577,6 +8577,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "includeContacts",
+            "in": "query",
+            "description": "Whether to embed every contact of the company (default `true`).\nA caller that pages contacts through\n`GET /crm/companies/{company_id}/contacts/page` sets it to `false`.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -8764,6 +8773,116 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/contacts/page": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::list_company_contacts_page"],
+        "summary": "List a CRM company's contacts a page at a time, filtered by archive\nstate and an optional name or email search. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`] as for\n`GET /crm/companies/{company_id}/contacts`; hidden contacts are\ninvisible to plain members.",
+        "operationId": "list_company_contacts_page",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company whose contacts to list",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "description": "`true` for the archived contacts (admins only: plain members get an\nempty list), `false` (default) for the active ones. Every contact of\nan archived company counts as archived.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Keep contacts whose name or primary email contains this text,\nignoring case. Blank matches every contact.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor from the previous page's `nextCursor`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Contacts per page, from 1 through 200 (default 50). Values outside\nthe range are clamped.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyContactsPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -9199,7 +9318,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
+        "summary": "Fetch a single CRM contact by id, with its company's name and\nvisibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:\nthe user must be on the team that owns the contact, and hidden\ncontacts are invisible to plain members. Admin/owner callers see\nhidden contacts so they can render the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
@@ -9219,7 +9338,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmContactResponse"
+                  "$ref": "#/components/schemas/CrmContactDetailResponse"
                 }
               }
             }
@@ -10986,6 +11105,71 @@
         }
       }
     },
+    "/crm/previews": {
+      "post": {
+        "tags": ["crm::inbound::axum_router::previews"],
+        "summary": "Title many CRM company and contact chips at once. Each record answers as\nits own read (`GET /crm/companies/{company_id}`,\n`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,\nor that does not exist, is left out of the response.",
+        "operationId": "preview_crm_records",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrmPreviewsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmPreviews"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "More than 100 ids of a kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A bot or harness credential"
+          },
+          "422": {
+            "description": "An id that is not a UUID"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],
@@ -11244,7 +11428,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -22740,7 +22924,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -33916,6 +34100,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -35710,6 +35898,24 @@
           }
         }
       },
+      "CommercialFields": {
+        "type": "object",
+        "description": "CRM-owned roles for columns in the reusable table.",
+        "properties": {
+          "money": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyColumn"
+            },
+            "description": "Monetary fields, each with an independent per-row currency."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Outcome column, absent only for a pipeline from a pre-migration writer."
+          }
+        }
+      },
       "CommittedChange": {
         "type": "object",
         "description": "One change a committed batch journaled: a table, the version the batch\nproduced, and the journal's id for it.",
@@ -35728,6 +35934,24 @@
           "version": {
             "$ref": "#/components/schemas/TableVersion",
             "description": "The version the batch produced."
+          }
+        }
+      },
+      "CompanyContactsPageResponse": {
+        "type": "object",
+        "description": "One page of a company's contacts.",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactResponse"
+            },
+            "description": "The page's contacts, alphabetically by name (the email when\nunnamed), in the same order as `GET /crm/companies/{company_id}/contacts`."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page; absent on the last page."
           }
         }
       },
@@ -36525,6 +36749,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -37536,9 +37764,34 @@
           }
         }
       },
+      "CrmCompanyPreview": {
+        "type": "object",
+        "description": "What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The team's name override, else the primary domain's directory name."
+          },
+          "primaryDomain": {
+            "type": ["string", "null"],
+            "description": "The company's first domain, which titles a company with no name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The company's last interaction, as the company read's `updatedAt`."
+          }
+        }
+      },
       "CrmCompanyResponse": {
         "type": "object",
-        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest.",
+        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`).",
         "required": [
           "id",
           "teamId",
@@ -37555,7 +37808,7 @@
             "items": {
               "$ref": "#/components/schemas/CrmContactResponse"
             },
-            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers."
+            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`."
           },
           "createdAt": {
             "type": "string",
@@ -37599,6 +37852,80 @@
             "type": "string",
             "format": "date-time",
             "description": "Most recent known interaction with this company."
+          }
+        }
+      },
+      "CrmContactCompanyResponse": {
+        "type": "object",
+        "description": "The name and visibility of a contact's company.",
+        "required": ["id", "hidden"],
+        "properties": {
+          "domain": {
+            "type": ["string", "null"],
+            "description": "The company's oldest domain, which clients show when it has no\nname."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden. Only admin/owner callers can see a\nhidden company."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company; equal to the contact's `companyId`."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The company's display name, if it has one."
+          }
+        }
+      },
+      "CrmContactDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CrmContactResponse",
+            "description": "The contact."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "company": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrmContactCompanyResponse",
+                    "description": "The contact's company, when it has one the caller may see. Older\nservers omit it; clients then read the company itself."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the\ncontact, with what its page shows of its company."
+      },
+      "CrmContactPreview": {
+        "type": "object",
+        "description": "What a contact chip shows.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's primary email, which titles a contact with no name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The contact."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The contact's display name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record last changed."
           }
         }
       },
@@ -37710,6 +38037,49 @@
         "type": "string",
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
+      },
+      "CrmPreviews": {
+        "type": "object",
+        "description": "The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.",
+        "required": ["companies", "contacts"],
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmCompanyPreview"
+            },
+            "description": "Company previews, in no particular order."
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactPreview"
+            },
+            "description": "Contact previews, in no particular order."
+          }
+        }
+      },
+      "CrmPreviewsRequest": {
+        "type": "object",
+        "description": "The CRM records whose chips to title.",
+        "properties": {
+          "companyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Companies to preview, at most 100."
+          },
+          "contactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Contacts to preview, at most 100."
+          }
+        }
       },
       "CrmStageInput": {
         "type": "object",
@@ -43413,6 +43783,10 @@
               }
             ]
           },
+          "afterCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount now."
+          },
           "before": {
             "oneOf": [
               {
@@ -43423,6 +43797,10 @@
                 "description": "Its value before; missing when it was empty."
               }
             ]
+          },
+          "beforeCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount before."
           },
           "field": {
             "type": "string",
@@ -44376,6 +44754,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -44387,6 +44770,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44753,6 +45141,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44815,6 +45208,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
@@ -45135,6 +45533,10 @@
         "description": "The sum of a number field over the matched entries.",
         "required": ["field", "sum"],
         "properties": {
+          "currency": {
+            "type": ["string", "null"],
+            "description": "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+          },
           "field": {
             "type": "string",
             "description": "The field."
@@ -48199,7 +48601,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "property"
+          "property",
+          "name"
         ]
       },
       "GuestChatMessage": {
@@ -48445,6 +48848,17 @@
               "format": "uuid"
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
+          },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -51478,6 +51892,23 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MoneyColumn": {
+        "type": "object",
+        "description": "Stable association between a numeric amount and its per-row denomination.",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The numeric column; renaming it preserves this association."
+          },
+          "currency": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The select column containing the currency code."
+          }
+        }
+      },
       "MyResponse": {
         "oneOf": [
           {
@@ -52524,7 +52955,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
           },
@@ -53865,11 +54296,16 @@
           "databaseId",
           "tableId",
           "primaryColumnId",
+          "commercialFields",
           "sharing",
           "createdAt",
           "trashedAt"
         ],
         "properties": {
+          "commercialFields": {
+            "$ref": "#/components/schemas/CommercialFields",
+            "description": "Stable identities for Outcome and amount/currency fields."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -54042,6 +54478,10 @@
           "readOnly"
         ],
         "properties": {
+          "currencyField": {
+            "type": ["string", "null"],
+            "description": "For a monetary amount, the field holding each entry's currency code."
+          },
           "multiple": {
             "type": "boolean",
             "description": "Whether it holds several values."
@@ -57866,7 +58306,8 @@
           "frecency",
           "touched_by_me",
           "notified_at",
-          "property"
+          "property",
+          "name"
         ]
       },
       "SoupApiSortDirection": {

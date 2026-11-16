@@ -11,18 +11,23 @@ use bot_id::BotId;
 use bots::domain::models::{AgentChannelScope, BotKind, BotOwner};
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use harnesses::domain::ports::HarnessTeamAgents;
 use macro_user_id::user_id::MacroUserIdStr;
 
-/// [`BotDirectory`] over the bots table.
+use crate::computers::PgHarnessService;
+
+/// [`BotDirectory`] over the bots table, and the harness service for which
+/// harnesses are agent teammates' computers.
 #[derive(Clone)]
 pub struct PgBotDirectory {
     repo: PgBotsRepo,
+    harnesses: PgHarnessService,
 }
 
 impl PgBotDirectory {
-    /// Wrap a bots repo.
-    pub fn new(repo: PgBotsRepo) -> Self {
-        Self { repo }
+    /// Wrap a bots repo and the harness service.
+    pub fn new(repo: PgBotsRepo, harnesses: PgHarnessService) -> Self {
+        Self { repo, harnesses }
     }
 }
 
@@ -75,6 +80,15 @@ impl BotDirectory for PgBotDirectory {
         } else {
             (false, None, None, false)
         };
+        let on_team_agent_computer = match harness_id {
+            Some(harness_id) => self
+                .harnesses
+                .harness_team_agent(harness_id)
+                .await
+                .map_err(|error| AgentSessionError::Unknown(error.into()))?
+                .is_some(),
+            None => false,
+        };
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
             is_managed,
@@ -82,6 +96,7 @@ impl BotDirectory for PgBotDirectory {
             owner_user_id,
             owner_team_id,
             harness_id,
+            on_team_agent_computer,
             managed_profile,
             selected_channels,
         }))

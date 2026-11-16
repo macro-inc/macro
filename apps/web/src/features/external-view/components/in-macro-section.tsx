@@ -4,6 +4,7 @@ import UserIcon from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button, Tooltip } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { ProviderPicture } from '../../external-chat/components/provider-picture';
 import type { ChatSummary } from '../../external-chat/core/chat';
 import { providerIdentity } from '../../external-chat/providers/identity';
 import { ConversationSectionList } from '../../whatsapp-linked/components/conversation-sections';
@@ -38,6 +39,14 @@ function ChatRow(props: {
 }) {
   const name = () =>
     props.chat.community ? nameInCommunity(props.chat) : props.chat.name;
+  const kindIcon = () => (
+    <Show
+      when={props.chat.kind === 'direct'}
+      fallback={<UsersThreeIcon class="size-(--sidebar-icon-size)" />}
+    >
+      <UserIcon class="size-(--sidebar-icon-size)" />
+    </Show>
+  );
   return (
     <ViewSidebar.Item
       active={props.active}
@@ -45,8 +54,12 @@ function ChatRow(props: {
       onClick={props.onOpen}
     >
       <ViewSidebar.Icon>
-        <Show when={props.chat.kind === 'direct'} fallback={<UsersThreeIcon />}>
-          <UserIcon />
+        <Show when={props.chat.pictureUrl} fallback={kindIcon()}>
+          {(url) => (
+            <ProviderPicture url={url()} size="fill">
+              {kindIcon()}
+            </ProviderPicture>
+          )}
         </Show>
       </ViewSidebar.Icon>
       <span

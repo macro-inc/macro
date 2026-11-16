@@ -18,7 +18,7 @@ lookups use it so overlapping searches by one user run one database query.
 - Owns: sharing work that is running right now, per process.
 - Not here: keeping results after the work finishes. That is a cache with a
   lifetime, which the caller owns (the permission lookups keep theirs in the
-  `cached` macro around the function).
+  `cached` macro around a private function).
 
 ## Boundaries
 

@@ -7,7 +7,9 @@ use async_graphql::{EmptyMutation, Object, Schema};
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{NotifEvent, TaskAssignedMetadata};
+use model_notifications::{
+    NotifEvent, RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
+};
 use notification::domain::{
     models::{NotificationSubscriptionUpdate, UserNotificationRow},
     ports::{
@@ -137,6 +139,68 @@ async fn notification_updates_streams_new_notifications() {
     assert_eq!(
         notification["metadata"]["assignedBy"],
         "macro|assigner@example.com"
+    );
+}
+
+#[tokio::test]
+async fn routine_run_notifications_stream_as_outside_soup() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
+    let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
+    let service = TestSubscriptionService {
+        subscriptions: Mutex::new(VecDeque::from([subscription])),
+    };
+    let schema = Schema::new(
+        Query,
+        EmptyMutation,
+        NotificationSubscriptionRoot::new(service),
+    );
+    let mut responses = Box::pin(schema.execute_stream(
+        async_graphql::Request::new(
+            "subscription { notificationUpdates { ... on GraphqlNewNotification { notification { entityType targetEntityType entityId } } } }",
+        )
+        .data(user_id.clone()),
+    ));
+
+    let routine_id = uuid::Uuid::from_u128(7);
+    sender
+        .send(NotificationSubscriptionUpdate::New(Arc::new(
+            UserNotificationRow {
+                owner_id: user_id,
+                notification_id: uuid::Uuid::from_u128(44),
+                notification_event_type: "routine_run_finished".to_string(),
+                entity: EntityType::ScheduledAction.with_entity_string(routine_id.to_string()),
+                sent: true,
+                state: notification::domain::models::NotificationState::Unseen,
+                created_at: Utc::now(),
+                viewed_at: None,
+                updated_at: Utc::now(),
+                deleted_at: None,
+                notification_metadata: NotifEvent::RoutineRunFinished(RoutineRunFinishedMetadata {
+                    routine_id,
+                    routine_name: "Daily digest".to_string(),
+                    outcome: RoutineRunOutcome::Succeeded,
+                }),
+                sender_id: None,
+            },
+        )))
+        .await
+        .expect("subscription remains open");
+
+    let response = futures::StreamExt::next(&mut responses)
+        .await
+        .expect("subscription response");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().expect("response data is JSON"),
+        serde_json::json!({
+            "notificationUpdates": {
+                "notification": {
+                    "entityType": "OUTSIDE_SOUP",
+                    "targetEntityType": "SCHEDULED_ACTION",
+                    "entityId": routine_id.to_string(),
+                }
+            }
+        })
     );
 }
 
