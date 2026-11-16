@@ -45,9 +45,6 @@ export type ChannelCatchUp =
 const MAX_CHANGE_PAGES = 6;
 /** Pushes that closely follow one being stored share one request. */
 const PUSH_SETTLE_MS = 250;
-/** How long until the log is asked again for a push it did not have yet. */
-const PUSH_RETRY_MS = 1_000;
-const MAX_PUSH_RETRIES = 5;
 const MAX_PUSH_RERUNS = 3;
 /** How many times one device read is made again for pushes that keep arriving. */
 export const MAX_PUSH_REREADS = 3;
@@ -63,8 +60,6 @@ interface ChannelSyncState {
   storing?: { promise: Promise<void>; done: () => void };
   /** The sequence the device was last caught up through. */
   stored?: bigint;
-  /** Times in a row the log was asked and did not have every push. */
-  retries: number;
 }
 
 const channels = new Map<string, ChannelSyncState>();
@@ -72,7 +67,7 @@ const channels = new Map<string, ChannelSyncState>();
 function stateOf(channelId: string): ChannelSyncState {
   let state = channels.get(channelId);
   if (!state) {
-    state = { pushed: new Set(), retries: 0 };
+    state = { pushed: new Set() };
     channels.set(channelId, state);
   }
   return state;
@@ -277,22 +272,12 @@ async function storePushes(
   state: ChannelSyncState,
   storing: NonNullable<ChannelSyncState['storing']>
 ): Promise<void> {
-  let asked = false;
   try {
     await catchUpAndRefresh(host, channelId);
-    asked = true;
   } finally {
     // A push noted during the run has its own wait.
     if (state.storing === storing) state.storing = undefined;
     storing.done();
-    if (state.pushed.size === 0) {
-      state.retries = 0;
-    } else if (asked && state.retries < MAX_PUSH_RETRIES) {
-      // The log did not have a push yet: ask again, or the device stays
-      // behind the views until the channel is next opened.
-      state.retries += 1;
-      armStore(host, channelId, state, PUSH_RETRY_MS);
-    }
   }
 }
 

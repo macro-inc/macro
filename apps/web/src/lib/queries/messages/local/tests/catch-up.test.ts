@@ -16,12 +16,10 @@ import {
 } from '../unstored-pushes';
 import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
 
-const { invalidateQueries, channelCacheHost, fetchCached } = vi.hoisted(() => ({
+const { invalidateQueries, channelCacheHost } = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   channelCacheHost: vi.fn(),
-  fetchCached: vi.fn(),
 }));
-vi.mock('../../../calendar/graphql/network', () => ({ fetchCached }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
@@ -265,22 +263,6 @@ describe('pushes a page that is gone left unstored', () => {
 
     fetchChanges.mockResolvedValue(changes({ seq: '9' }));
     await catchUpAndRefresh(host, CHANNEL_ID, fetchChanges);
-    expect(unstoredPushChannels()).toEqual([]);
-  });
-
-  it('asks the log again for a push it did not have yet', async () => {
-    vi.useFakeTimers();
-    channelCacheHost.mockReturnValue(sequencedHost('7'));
-    fetchCached.mockResolvedValue({ user: { channelChanges: changes() } });
-
-    noteChannelPush(CHANNEL_ID, 8);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(unstoredPushChannels()).toEqual([CHANNEL_ID]);
-
-    fetchCached.mockResolvedValue({
-      user: { channelChanges: changes({ seq: '8' }) },
-    });
-    await vi.advanceTimersByTimeAsync(1_000);
     expect(unstoredPushChannels()).toEqual([]);
   });
 
