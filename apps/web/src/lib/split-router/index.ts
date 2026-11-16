@@ -55,6 +55,7 @@ export type {
   SplitRouterOptions,
 } from './router/types';
 export {
+  decodePanes,
   formatLocation,
   formatPanePath,
   parseLocation,

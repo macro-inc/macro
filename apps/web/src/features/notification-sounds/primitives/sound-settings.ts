@@ -41,6 +41,8 @@ export function createNotificationSoundSettings(userId: string) {
     settings,
     setEnabled: (enabled: boolean) =>
       setSettings((current) => ({ ...current, enabled })),
+    setCallSoundsEnabled: (callSoundsEnabled: boolean) =>
+      setSettings((current) => ({ ...current, callSoundsEnabled })),
     setVolume: (volume: number) =>
       setSettings((current) => ({ ...current, volume })),
     setCategory: (

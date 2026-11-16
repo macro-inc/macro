@@ -1,8 +1,8 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Currency from '@phosphor/currency-dollar.svg';
-import Table from '@phosphor/table.svg';
-import Users from '@phosphor/users.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Currency from '@icon/system/regular/currency-dollar.svg';
+import Table from '@icon/system/regular/table.svg';
+import Users from '@icon/system/regular/users.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

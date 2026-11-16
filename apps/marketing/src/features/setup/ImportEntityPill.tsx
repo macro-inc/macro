@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { type JSX, Match, Switch } from 'solid-js';
 import { entityLabel, type ImportEntity } from './core/importPreview';
 import { ItemPill } from './primitives';

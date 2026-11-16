@@ -1,0 +1,18 @@
+# ExecStopPost of macro-agent.service: counts a failed boot. A clean stop
+# (0) and a restart after a land (75) are not failures, nor is any exit after
+# the runtime wrote last-good for this boot. A configuration error (78)
+# counts like any other: on last-good it is reset below (the enrollment, not
+# the code, is wrong), and on a new head a self-edit that broke agent.json
+# must roll back.
+# `_agent.nix` prepends `last_good`, `failures` and `boot_head`.
+[[ ${SERVICE_RESULT:-} == success ]] && exit 0
+if [[ ${EXIT_CODE:-} == exited ]]; then
+  case ${EXIT_STATUS:-} in 0 | 75) exit 0 ;; esac
+fi
+head=$(cat "$boot_head" 2>/dev/null || true)
+if [[ -n $head && "$(cat "$last_good" 2>/dev/null || true)" == "$head" ]]; then
+  echo 0 > "$failures"
+  exit 0
+fi
+count=$(cat "$failures" 2>/dev/null || echo 0)
+echo $((count + 1)) > "$failures"

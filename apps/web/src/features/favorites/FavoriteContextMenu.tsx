@@ -3,6 +3,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
+import {
   ContextMenuContent,
   MenuGroup,
   MenuItem,
@@ -55,6 +59,12 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
                 if (canOpenInNewSplit()) openFavorite(true);
               }}
             />
+            <Show when={canOpenInNewTab()}>
+              <MenuItem
+                text={t('entityActions.openInNewTab')}
+                onClick={() => openInNewTab(() => openFavorite(false))}
+              />
+            </Show>
             <Show when={canOpenFullscreen()}>
               <MenuItem
                 text={t('entityActions.openFullscreen')}

@@ -40,6 +40,8 @@ pub struct SearchHandlerState {
     /// Says whose calendar each event hit is on and what the caller is there,
     /// by the rule every calendar reader shares.
     pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
+    /// Which callers get dynamic multi-term matching on document content.
+    pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
 }
 
 impl SearchHandlerState {

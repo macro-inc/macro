@@ -4,6 +4,7 @@ import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
+import { documentation } from './scripts/documentation';
 import { solidSvgOptions } from './vite.svgo';
 
 export default defineConfig({
@@ -17,10 +18,11 @@ export default defineConfig({
     },
   },
   plugins: [
+    documentation(),
     tsconfigPaths({
       projects: [path.resolve(import.meta.dirname, 'tsconfig.json')],
     }),
-    solid(),
+    solid({ extensions: ['.mdx'] }),
     solidSvg({ ...solidSvgOptions, defaultAsComponent: true }),
   ],
   resolve: { dedupe: ['solid-js'] },

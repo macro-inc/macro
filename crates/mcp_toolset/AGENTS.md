@@ -38,6 +38,12 @@ names, and routes calls back to the right server.
 
 - `cargo test -p mcp_toolset` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- `dispatch_tool_call` races the call against `request_context.cancel`: the
+  agent loop waits for running tools on cancel, and a server may hold a call
+  (owner approval). Dropping the rmcp call sends `notifications/cancelled`.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

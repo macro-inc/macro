@@ -173,8 +173,16 @@ SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
 binding (`domain/access_token_clients.rs`). The bearer middleware reads the
 binding and the client's registered `client_name` and attaches the request's
 caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
-writes "via <client_name>". The name is self-reported at `/register`: a display
-label, never an identity or permission. A token issued before its binding was
+writes as "<client_name> · Agent". The name is self-reported at `/register`: a
+display label, never an identity or permission. `domain/client_name.rs` bounds
+it: only ASCII letters, digits, spaces and plain punctuation survive (no
+control, bidi, zero-width, lookalike or mention characters), at most 64 of them,
+and a name that is Macro's own ("Macro", "Macro Agent", a first-party Macro
+bot's name or handle; compared ignoring case, spaces and punctuation) is
+refused with a 400. A name that only mentions Macro ("Claude Code (macro)") is
+fine. A name with nothing left registers as "MCP
+client". Reads apply the same rules, so a name stored before they existed is
+shown normalized, or unnamed if reserved. A token issued before its binding was
 recorded carries no name; the client's next refresh records one. Reading the
 records only through the existing ports keeps them working on any store
 backend.
@@ -262,3 +270,16 @@ Access tokens, FusionAuth JWTs or Macro API tokens, are not revocable: presentin
 token issued before the revocation stays valid until it expires. Every token
 response carries `expires_in`, which is that remaining window; FusionAuth signs
 them for one hour (`ttlSeconds` in `infra/stacks/fusionauth-instance`).
+
+## User API keys
+
+The harness also wires the existing revocable `UserApiKeyAuthorizer` into the
+mounted MCP router. Clients can send `x-macro-user-api-key` instead of a JWT
+bearer. Valid keys resolve only their account owner using the same validity and
+scope checks as other user-key routes; revoked or expired keys cannot authenticate.
+A valid bearer still works when no valid key is present. Account/agent claims
+in request headers or tool arguments never select the authenticated identity.
+The API-key secret is not included in request extensions or tool context.
+
+MCP accepts only a user's own API key. Delegated account-manager keys are
+rejected because execution tokens do not preserve their grant restrictions.

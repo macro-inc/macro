@@ -1,6 +1,7 @@
 //! Driven adapters: Postgres persistence, cells through the properties
-//! adapter, and the table-event publisher.
+//! adapter, entity access for grants, and the table-event publisher.
 
+pub mod entity_access_creators;
 pub mod entity_access_directory;
 
 #[cfg(feature = "postgres")]

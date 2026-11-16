@@ -1,5 +1,7 @@
 //! Realtime Soup patch and broker event models.
 
+use std::collections::HashSet;
+
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -58,6 +60,25 @@ impl SoupRealtimePatch {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
     }
+}
+
+/// Entities whose current accessors are the same users.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedAccess {
+    /// Entities each of these users can currently access.
+    pub entities: Vec<Entity<'static>>,
+    /// Current accessors of every one of the entities.
+    pub users: Vec<MacroUserIdStr<'static>>,
+}
+
+/// What publishing one batch of patches reached.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Delivery {
+    /// Each distinct, non-empty set of recipients among the batch's patches,
+    /// with its users sorted.
+    pub recipient_sets: HashSet<Vec<MacroUserIdStr<'static>>>,
+    /// Number of recipient-targeted patches published.
+    pub publish_count: usize,
 }
 
 /// One recipient-targeted patch after decoding the Soup topic event.

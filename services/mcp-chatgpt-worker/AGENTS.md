@@ -25,7 +25,7 @@ own permission checks and agent attribution apply.
 
 - `src/app.ts`: routes, auth challenge and the MCP handlers.
 - `src/config.ts`: bindings, parsed with Zod; a missing value fails loudly.
-- `wrangler.jsonc`: per-environment vars and custom domains.
+- `wrangler.jsonc`: per-environment vars and hosts (dev and prod on workers.dev).
 
 ## Checks
 

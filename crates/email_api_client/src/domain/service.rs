@@ -94,7 +94,7 @@ where
     /// token if the provider rejects it, and logs a failure in the calling
     /// operation's span.
     ///
-    /// Callers declare `retry_count = 0` on their span; a retry sets it to 1.
+    /// Callers declare `retry_count = tracing::field::Empty` on their span; a retry sets it to 1.
     /// Like every provider call, they also declare the empty fields that
     /// [`Self::admit`] records.
     async fn read_with_token<O, F, Fut>(

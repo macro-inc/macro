@@ -1,8 +1,8 @@
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretRight from '@phosphor/caret-right.svg';
-import FileText from '@phosphor/file-text.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Terminal from '@phosphor/terminal.svg';
 import { UserMessageBubble } from '@ui/components/UserMessageBubble';
 import {
   createSignal,

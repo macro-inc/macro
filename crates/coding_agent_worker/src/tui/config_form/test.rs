@@ -118,6 +118,7 @@ fn persists_and_clears_embedded_credentials_without_losing_comments() {
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_abc_secret".to_owned(),
+        pairing_id: None,
     };
 
     let mut form = ConfigForm::load(&path).expect("load form");

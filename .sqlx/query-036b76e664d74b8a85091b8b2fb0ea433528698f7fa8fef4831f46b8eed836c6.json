@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture SET attempts = attempts + 1,\n                    state = CASE WHEN attempts + 1 >= $3 THEN 'failed' ELSE state END,\n                    retry_at = CASE WHEN attempts + 1 >= $3\n                        THEN now() + make_interval(days => $4) + random() * make_interval(days => $5)\n                        ELSE now() + least(interval '1 minute' * power(2, attempts), interval '1 day') END\n                WHERE account_id = $1 AND jid = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "036b76e664d74b8a85091b8b2fb0ea433528698f7fa8fef4831f46b8eed836c6"
+}

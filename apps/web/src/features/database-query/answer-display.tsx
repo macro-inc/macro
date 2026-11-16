@@ -1,13 +1,16 @@
 import {
+  DatabaseLinkValue,
   DatabaseMentionValue,
   DatabaseTextValue,
 } from '@app/features/block-database/database-mentions';
+import { createDatabaseDocumentNavigation } from '@app/features/block-database/navigation-adapter';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { type JSX, Show } from 'solid-js';
+import type { DatabaseEntityType } from '../database/core/column-inference';
 import {
   type AnswerDisplay,
   AnswerDisplayProvider,
@@ -59,12 +62,34 @@ function AnswerRowLink(props: AnswerRow) {
   );
 }
 
-/** Answers drawn with the database grid's names, mentions and text. */
+/** A mention; a document opens on click, as it does in the database grid. */
+function AnswerMention(props: { id: string; entityType: DatabaseEntityType }) {
+  const openDocument = createDatabaseDocumentNavigation();
+  return (
+    <Show
+      when={props.entityType === 'DOCUMENT'}
+      fallback={
+        <DatabaseMentionValue id={props.id} entityType={props.entityType} />
+      }
+    >
+      <button
+        type="button"
+        class="inline-flex min-w-0 max-w-full items-center text-left align-middle hover:underline"
+        onClick={() => openDocument(props.id)}
+      >
+        <DatabaseMentionValue id={props.id} entityType={props.entityType} />
+      </button>
+    </Show>
+  );
+}
+
+/** Answers drawn with the database grid's names, mentions, links and text. */
 const appAnswerDisplay: AnswerDisplay = {
   names: answerNames,
   mention: (id, entityType) => (
-    <DatabaseMentionValue id={id} entityType={entityType} />
+    <AnswerMention id={id} entityType={entityType} />
   ),
+  link: (url) => <DatabaseLinkValue url={url} />,
   row: (row) => <AnswerRowLink {...row} />,
   text: (markdown) => <DatabaseTextValue value={markdown} />,
 };

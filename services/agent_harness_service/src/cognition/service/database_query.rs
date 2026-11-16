@@ -108,12 +108,12 @@ fn parse_answer(text: &str) -> anyhow::Result<DatabaseQueryAnswer> {
 #[tracing::instrument(skip_all, fields(database_query.model = %request.model,
     database_query.source_mode = if request.has_schema() { "selected" } else { "automatic" },
     database_query.repair = request.error.is_some(),
-    database_query.tool_count = 0_u64,
+    database_query.tool_count = tracing::field::Empty,
     database_query.database_id = tracing::field::Empty,
     database_query.discovery_ms = tracing::field::Empty,
     database_query.agent_ms = tracing::field::Empty,
     database_query.format_ms = tracing::field::Empty,
-    database_query.format_fallback = false), err)]
+    database_query.format_fallback = tracing::field::Empty), err)]
 pub async fn generate(
     request: DatabaseQueryRequest,
     reference: String,
@@ -133,6 +133,10 @@ pub async fn generate(
     }
     context.usage_context = usage.clone();
     let available = if selected {
+        // No discovery agent runs, and formatting is the only answer path.
+        let span = tracing::Span::current();
+        span.record("database_query.tool_count", 0_u64);
+        span.record("database_query.format_fallback", false);
         None
     } else {
         let started = Instant::now();
@@ -206,6 +210,7 @@ pub async fn generate(
             if let Some(id) = &answer.database_id {
                 span.record("database_query.database_id", id);
             }
+            span.record("database_query.format_fallback", false);
             return Ok(answer);
         }
         span.record("database_query.format_fallback", true);

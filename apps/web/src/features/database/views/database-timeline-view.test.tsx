@@ -392,3 +392,31 @@ it('tells a viewer when the view has no records, and offers the way back when th
     layout: { kind: 'table', columns: [] },
   });
 });
+
+it('keeps the view menu on an empty timeline the viewer cannot schedule on', () => {
+  render(() => (
+    <DatabaseTimelineView
+      view={{
+        query: { filter: null, sort: [] },
+        layout: {
+          kind: 'timeline',
+          range: 'dates',
+          title: 'name',
+          groupBy: null,
+          colorBy: null,
+        },
+      }}
+      rows={[]}
+      columns={[name, { ...dates, writable: false }]}
+      canEdit
+      filtered={false}
+      onViewChange={() => {}}
+      rowPending={() => false}
+      onOpen={() => {}}
+      onCreate={async () => true}
+      onWrite={async () => true}
+    />
+  ));
+  expect(screen.getByText('No records')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Timeline menu' })).toBeTruthy();
+});
