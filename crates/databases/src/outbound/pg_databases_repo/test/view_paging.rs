@@ -894,7 +894,10 @@ async fn select_and_entity_membership_filters_use_their_cell_indexes(pool: PgPoo
         },
     )
     .await;
-    assert!(plan.contains("idx_ep_database_row_references_gin"), "{plan}");
+    assert!(
+        plan.contains("idx_ep_database_row_references_gin"),
+        "{plan}"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
