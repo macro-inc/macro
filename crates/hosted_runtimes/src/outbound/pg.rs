@@ -24,6 +24,8 @@ use crate::domain::size::{ComputerResources, ComputerSize};
 mod agents;
 pub use agents::PgComputerAgents;
 mod apply;
+mod effect_signals;
+pub use effect_signals::PgEffectSignals;
 mod records;
 mod reservations;
 mod row;

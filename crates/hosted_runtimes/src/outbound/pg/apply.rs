@@ -40,15 +40,22 @@ impl PgComputerRepo {
                 }
                 effect => {
                     let worker = OutboxWorker::try_from(effect.worker())?;
+                    // The worker hears of it on commit; Postgres sends one
+                    // notification per worker however many effects it queued.
                     sqlx::query!(
                         r#"
-                        INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
-                        VALUES ($1, $2, $3, $4, $4)
+                        WITH queued AS (
+                            INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
+                            VALUES ($1, $2, $3, $4, $4)
+                            RETURNING worker
+                        )
+                        SELECT pg_notify($5, queued.worker::text) FROM queued
                         "#,
                         computer_id.as_uuid(),
                         worker as OutboxWorker,
                         serde_json::to_value(&effect)?,
                         now,
+                        super::effect_signals::EFFECT_QUEUED_CHANNEL,
                     )
                     .execute(&mut **tx)
                     .await?;

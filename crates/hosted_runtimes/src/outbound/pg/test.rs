@@ -5,6 +5,7 @@ mod redeploy;
 mod agents;
 mod billing_races;
 mod boot;
+mod effect_signals;
 
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;

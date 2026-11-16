@@ -26,7 +26,7 @@ use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo, PgEffectSignals};
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -269,10 +269,13 @@ pub struct ClaudeSignInWatch<Ingress> {
 /// [`harnessd::Harnessd`] over the harness table.
 pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
-/// Run the operator's passes until `shutdown`.
+/// Run the operator's passes until `shutdown`. The effect pass also runs as
+/// soon as `effect_signals` hears of a queued fleet effect, so a purchase
+/// does not wait out [`EFFECT_TICK`].
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
+    effect_signals: PgEffectSignals,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
@@ -288,6 +291,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
             pass,
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
+            effect_signals.clone(),
             shutdown.clone(),
         ));
     }
@@ -297,6 +301,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     pass: Pass,
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
+    effect_signals: PgEffectSignals,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -304,10 +309,21 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     // Consecutive passes skipped because the database had no connection to give.
     let mut skipped: u32 = 0;
     loop {
+        // The tick stays as the backstop for retries that come due and for
+        // notifications lost while the listener reconnected.
+        let queued = async {
+            match pass {
+                Pass::Effects => effect_signals.fleet_effect_queued().await,
+                Pass::Timers | Pass::Reconcile | Pass::ClaudeSignIns | Pass::ClaudeStatus => {
+                    std::future::pending().await
+                }
+            }
+        };
         tokio::select! {
             biased;
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
+            () = queued => {}
         }
         let outcome: anyhow::Result<()> =
             match pass {
