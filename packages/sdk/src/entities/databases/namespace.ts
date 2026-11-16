@@ -136,7 +136,8 @@ export class DatabaseNamespace {
   }
 
   /**
-   * What the caller can sync from: Granola, and readable Notion data sources.
+   * Sources the caller can sync from. They are Granola, and the Notion data
+   * sources the caller's connection can read.
    *
    * Granola counts only when connected. Pass one to
    * {@link createSynced} or {@link Database.addSync}.
@@ -160,7 +161,8 @@ export class DatabaseNamespace {
   }
 
   /**
-   * Create a database whose one table syncs with `source`; the first sync runs at once.
+   * Create a database with one table synced with `source`. The first sync
+   * runs at once.
    *
    * The database is named after the source, and rows are upserted from it on
    * a schedule, acting as the caller. The sync's `database` is the new
