@@ -16,7 +16,7 @@ Initialization drains editor hook output, projects it before accepting edits,
 and rebuilds bindings and undo after a reset. Empty read/comment-only documents
 render without creating native operations. The default editor factory includes
 core/rich nodes; an application can supply its own rebuildable factory and sync
-policy. The Macro registry integration is deferred to WP-28.
+policy. The `application` feature builds Macro's registry through `application_editor_config`.
 
 Send `Focus(bool)` when the host gains or loses focus; this preserves logical
 selection while suppressing host caret effects on remote updates during blur.

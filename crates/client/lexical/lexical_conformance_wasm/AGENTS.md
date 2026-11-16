@@ -10,7 +10,7 @@ Never import them from production crates or bundles.
 - `src/corpus.rs`: owned HTML and portable composer-wire dispatch; I/O-free route adapters with deterministic host inputs and content-free errors; real dev data stays in the external corpus cache.
 - `src/gate.rs`: actual Macro gate comparison with explicit deterministic constructor inputs.
 - `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners and mutable node hooks use scoped current-hook reborrows; exportJSON and isInline use owned guarded read peers. The complete class facade and remaining pure hooks are unfinished.
-- `src/host_commands.rs`: opaque JS application-command envelope over the model extension pipeline, filtering identities before JS; the future shim supplies identity strings and handles parent-editor propagation.
+- `src/host_commands.rs`: opaque JS application-command envelope over the model extension pipeline, filtering identities before JS; no in-tree host supplies identity strings or parent-editor propagation (the standalone shim was removed).
 - `src/host_callbacks.rs`: single-threaded JS transform ownership, exact-owner scoped reborrows, callback identity dedup and opaque exception transport. Never recover an ancestor transaction pointer or hold a metadata lock over JS.
 - `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
 - `examples/export_host_types.rs`: generate/check the Specta packet declaration with the web formatter.
@@ -86,15 +86,15 @@ snapshots remain owned by the model. Exception values stay opaque and are return
 unchanged after normal Rust rollback, including undefined. Do not inspect error
 properties or use JS throw intrinsics that bypass Rust destructors. Registration
 dirties attached types in the current transaction, or queues that
-work for the next explicit begin_update when idle. Scheduling that update, nested
-editor.update queues and commit listeners still belong to the future shim.
+work for the next explicit begin_update when idle. No in-tree host schedules that
+update, nested editor.update queues or commit listeners; the standalone shim was removed.
 
 `register_listener` and `dispatch_command` host opaque JS application commands
-through the model's extension-command pipeline. The shim assigns unique identity
+through the model's extension-command pipeline. A host must assign unique identity
 strings to JS command objects; diagnostic command names are not identities.
 Payloads retain JS identity and never pass through JSON or property inspection.
-Only the explicit pending-update, single-editor route is implemented here; the
-shim still owns automatic updates and parent-editor command propagation.
+Only the explicit pending-update, single-editor route is implemented here; no
+in-tree host schedules automatic updates or propagates commands between parent editors.
 Builtin native commands and Tier A indexed fixture dispatch keep their existing
 codecs. No production codec carries opaque JS values. Opaque reference transfers
 count four logical bytes; listener results cross as a truthiness boolean.

@@ -23,7 +23,7 @@ postcard. Remote definitions mirror native types and are checked by Rust.
 - `cargo x deps --check`, `just check`, `just pr-privacy`
 
 On Linux, iOS validation stops before linking. Android linking requires an NDK.
-Generated bindings live under this crate; Android host integration lives in apps/web/tauri/.
+Generated bindings live under this crate; no host integration is in this tree.
 Regenerate Swift and Kotlin together with `bun crates/client/document_session_ffi/scripts/generate-bindings.ts`, run it again with `--check`, and preserve the pinned `--no-format` bytes including generated whitespace.
 
 Preserve current commit tags, resolved peer cursors, forced composition end and WAL adoption expected rows at the boundary. Reattach views through ViewDiff without resetting history or synchronization.

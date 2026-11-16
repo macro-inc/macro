@@ -8,8 +8,8 @@ Share canonical nonzero-u64 correlation numbering across the installed receiver 
 
 ## What it is
 
-Production browser rendering and input over document_session_wasm. The dev shim
-shares this view through EditorPort; it does not supply production model code.
+Production browser rendering and input over document_session_wasm. The `./compat`
+adapter and the production session share this view through EditorPort.
 
 The `./compat` export provides the lazy exact-root DOM adapter; read
 [src/compat/AGENTS.md](src/compat/AGENTS.md) before changing it. Its upstream-model
@@ -110,7 +110,7 @@ Assert direct child types when testing rich insertion into code, since nested bl
 
 - Set `NATIVE_SESSION_GUARD_PROFILE=preview` only for matched dev-probes test artifacts; leave it unset or use `production` for no-dev artifacts so the production export guard runs.
 
-- Build the production document-session artifact before package tests, or copy a matching source-built artifact into this worktree. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to that output for guard fixtures. The standalone compatibility shim and its metadata-only compatibility test are deferred; this package does not require a compatibility runtime artifact. Keep tracked compatibility declarations unchanged.
+- Build the production document-session artifact before package tests, or copy a matching source-built artifact into this worktree. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to that output for guard fixtures. The standalone compatibility shim and its metadata-only compatibility test were removed; this package does not require a compatibility runtime artifact. Keep tracked compatibility declarations unchanged.
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
 - Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.

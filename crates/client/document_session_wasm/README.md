@@ -17,8 +17,8 @@ per-document snapshot lock through cover validation and the WAL transaction.
 Legacy snapshot writers share that lock so cover validation cannot race a save
 or delete. A changed nonempty selection or cover is refused without mutation.
 
-The default registry includes core and portable rich nodes. The application
-registry remains a later integration through the native registry builder.
+Sessions use the Macro application registry (`document_session`'s `application`
+feature); the core and portable rich registry remains for standalone sessions.
 Markdown queries reuse lexical_markdown; HTML and clipboard use portable native
 exporters. No browser or storage APIs live in this crate.
 

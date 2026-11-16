@@ -23,7 +23,7 @@ TypeScript job logic in the owning package.
 - Keep deployment and production access out of conformance workflows.
 - Run the resolved native editor feature-graph guard before lexical/session compilation; production closures exclude compatibility/foreign-node features while explicit compatibility web remains a positive control.
 
-- Keep unfinished standalone facade tooling out of the production web Typecheck job.
+- The web Typecheck job must not reference the removed standalone facade (`typecheck_excludes_the_deferred_lexical_facade`).
 - Build agent-fold and the production document-session WASM before web unit-test shards; package tests must not depend on external artifact manifests.
 
 ## Checks
@@ -36,6 +36,7 @@ TypeScript job logic in the owning package.
 ## Gotchas
 
 - Step conditions use `if_condition` after `run` or `uses`; job conditions use `cond`.
-- Lexical nightly and PR checks share builders. Session artifacts are pending
-  until their crate lands; missing bundles fail the actual web-build bundle gate.
+- Lexical nightly and PR checks share builders; the session coverage job runs
+  `packages/lexical-conformance/coverage/document-session.ts`, and missing bundles
+  fail the actual web-build bundle gate.
 

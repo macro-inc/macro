@@ -79,9 +79,9 @@ read-only host import, repeated close and absence of sync/storage effects.
 
 `view.clipboard.paste` reads every MIME entry before loading HTML converters;
 it rejects a stale asynchronous result after selection or document changes.
-Drag lifecycle commands expose browser facts and internal keys. Application
-`INTERNAL_DROP_COMMAND` listeners dispatch atomic Rust move commands; those
-application plugins are wired in WP-58. Unhandled internal moves keep the source.
+Drag lifecycle commands expose browser facts and internal keys. An application
+`INTERNAL_DROP_COMMAND` listener may dispatch an atomic Rust move command; none
+is registered in the app today, and unhandled internal moves keep the source.
 Provide `parentSpan` to connect open/paste/reconcile phases to the host flow;
 WASM module loading/preloading remains the host's existing responsibility.
 
