@@ -45,7 +45,8 @@ export function tagEntityType(
         'foreign',
         'database',
         'form',
-        'harness'
+        'harness',
+        'team'
       ),
       () => undefined
     )

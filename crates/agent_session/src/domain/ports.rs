@@ -46,6 +46,9 @@ pub struct BotFacts {
     pub owner_team_id: Option<Uuid>,
     /// The registered harness this bot's agent is bound to, when it is one.
     pub harness_id: Option<harness_id::HarnessId>,
+    /// Whether that harness is an agent teammate's computer. People message
+    /// the agent; no session is started there.
+    pub on_team_agent_computer: bool,
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
@@ -175,6 +178,8 @@ pub enum ManagedPersonaError {
     UnmanagedSystemBot,
     /// The owner does not own or belong to the persona's owner.
     Forbidden,
+    /// The persona's harness is an agent teammate's computer.
+    TeamAgentComputer,
     /// The owner is not a user, so no persona rule applies.
     OwnerNotUser(OwnerType),
     /// Looking up the persona or its owner failed.
@@ -243,6 +248,11 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
     };
     if !authorized {
         return Err(ManagedPersonaError::Forbidden);
+    }
+    // An agent teammate is a member people message: its computer runs no
+    // session but its own, whoever owns the persona bound there.
+    if facts.on_team_agent_computer {
+        return Err(ManagedPersonaError::TeamAgentComputer);
     }
     if !facts.is_managed {
         return Ok(SelectedPersona::External { bot_id });
@@ -1504,12 +1514,15 @@ impl SessionViewAccess for NoInheritedSessionAccess {
 
 /// Trusted runtime reconciliation reads, separate from user-authorized session reads.
 pub trait RuntimeSessionLookup: Send + Sync {
-    /// Resolve reported ACP sessions restricted to the supplied agents.
+    /// Resolve reported ACP sessions restricted to the supplied agents,
+    /// skipping archived ones and marking those with no activity since
+    /// `dormant_before` and nothing waiting on them as dormant.
     fn sessions_for_bots(
         &self,
         bots: &[BotId],
         sessions: &[SessionId],
-    ) -> impl Future<Output = std::result::Result<Vec<AgentSessionId>, Self::Err>> + Send;
+        dormant_before: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = std::result::Result<Vec<RuntimeSession>, Self::Err>> + Send;
     /// Persistence failure.
     type Err: std::error::Error + Send + Sync + 'static;
 }

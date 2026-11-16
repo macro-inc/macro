@@ -120,7 +120,8 @@ approves the review itself (a `DecideReview` submit, the card's own approve with
 card's choices), and the card's run state adds **Started by the agent at your
 request** ("at the owner's request" for other viewers). A message from anyone
 but the owner never approves, and a plan still being made cannot be approved
-yet. Filter
+yet. On desktop the run also shows in the corner's
+[import tray](setup-cards.md#import-tray) from planning to done. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.
@@ -192,7 +193,11 @@ the submenu cancels the pending close. While the mouse heads toward an open
 submenu, including one that opens to the left, the categories it crosses on the
 way do not take over. A category the mouse moves to directly, or rests on for
 300 ms, opens in its place. Escape and outside clicks still dismiss immediately.
-`Sort files` offers modified, created, and viewed dates.
+`Sort files` offers modified, created, and viewed dates, plus **Name**, which
+reads A to Z case-insensitively, punctuation before digits before letters and accented letters beside their base letter, with unnamed rows last. A name-sorted page
+comes from one Soup query over its own entities, so a folder sorted by Name
+lists files, chats, and subfolders without filed email threads; the date sorts
+still show them.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
 and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,

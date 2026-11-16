@@ -6,10 +6,19 @@ import UploadIcon from '@icon/system/regular/upload.svg';
 import type { ComputerSize, SizeOffer } from '@service-auth/computers';
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { Avatar, Button, Panel, TextField } from '@ui';
-import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import { match } from 'ts-pattern';
 import { ComputerSizePicker } from '../computers/components/computer-size-picker';
 import { formatQuote } from '../computers/core/computer-display';
+import { DisabledReason } from '../computers/views/computer-setup-dialog';
 import {
+  inviteBlocker,
   MAX_AGENT_NAME_CHARS,
   MAX_AGENT_PROFILE_CHARS,
   teamAgentDraftProblems,
@@ -86,6 +95,31 @@ export function InviteAgentForm(props: {
   });
   const problems = () => teamAgentDraftProblems(draft());
   const busy = () => props.pending || uploading();
+  // Why Invite agent can't be pressed, beside it, as the computer flow does.
+  const disabledReason = () => {
+    if (props.pending) return undefined;
+    if (uploading()) return t('teamAgents.waitForPicture');
+    const blocker = inviteBlocker(problems());
+    if (!blocker) return undefined;
+    return match(blocker)
+      .with('fields', () => t('teamAgents.fillRequired'))
+      .with('too_long', () => t('teamAgents.shortenFields'))
+      .with('size', () =>
+        props.offers
+          ? t('teamAgents.noSizeForSale')
+          : t('teamAgents.loadingSizes')
+      )
+      .exhaustive();
+  };
+
+  // The error sits at the end of a long form; bring it into view and
+  // announce it, so pressing Invite agent never looks like nothing happened.
+  let errorLine: HTMLParagraphElement | undefined;
+  createEffect(() => {
+    if (!props.error || !errorLine) return;
+    errorLine.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    errorLine.focus({ preventScroll: true });
+  });
 
   const inviteLabel = () => {
     const chosen = offer();
@@ -300,14 +334,20 @@ export function InviteAgentForm(props: {
 
           <Show when={props.error}>
             {(error) => (
-              <p role="alert" class="text-sm text-failure">
+              <p
+                ref={errorLine}
+                role="alert"
+                tabIndex={-1}
+                data-invite-error
+                class="text-sm text-failure outline-none"
+              >
                 {error()}
               </p>
             )}
           </Show>
         </div>
       </Panel.Body>
-      <Panel.Footer class="justify-end gap-2 px-4 py-3">
+      <Panel.Footer class="flex-wrap justify-end gap-2 px-4 py-3">
         <Button
           type="button"
           variant="ghost"
@@ -327,6 +367,9 @@ export function InviteAgentForm(props: {
             <span class="sr-only">{t('teamAgents.inviting')}</span>
           </Show>
         </Button>
+        <Show when={disabledReason()}>
+          {(reason) => <DisabledReason>{reason()}</DisabledReason>}
+        </Show>
       </Panel.Footer>
     </>
   );

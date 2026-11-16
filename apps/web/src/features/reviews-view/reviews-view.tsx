@@ -374,7 +374,7 @@ function ReviewsRoot() {
               label="Search reviews"
               value={search()}
               onValueChange={setSearch}
-              onEscape={() => panel.panelRef()?.focus()}
+              focusResults={() => panel.panelRef()?.focus()}
               registerFocus={(focus) => (focusSearch = focus)}
             />
           </ListHeader>

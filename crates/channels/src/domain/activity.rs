@@ -43,6 +43,8 @@ pub enum ChannelAction {
     AccessRequested {
         /// The attempt, whose current outcome the channel domain serves.
         request_id: Uuid,
+        /// The requester's profile name when they asked, if they had one.
+        requester_name: Option<String>,
     },
 }
 
@@ -74,9 +76,13 @@ impl DomainActivity for ChannelActivity {
             ChannelAction::ParticipantRemoved { participant } => {
                 Action::ParticipantRemoved(ParticipantChange { participant })
             }
-            ChannelAction::AccessRequested { request_id } => {
-                Action::AccessRequested(AccessRequest { request_id })
-            }
+            ChannelAction::AccessRequested {
+                request_id,
+                requester_name,
+            } => Action::AccessRequested(AccessRequest {
+                request_id,
+                requester_name,
+            }),
         }
     }
 }
@@ -291,6 +297,7 @@ impl ActivitySource for ChannelTopicEvent {
                 m.channel_id,
                 ChannelAction::AccessRequested {
                     request_id: m.request_id,
+                    requester_name: m.requester_name.clone(),
                 },
                 now(),
             )]),

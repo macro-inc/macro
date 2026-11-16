@@ -4,16 +4,33 @@
 //! Activity excludes hidden records, including for admins. Email consent
 //! and exclusions do not hide CRM records.
 
+use models_properties::EntityType;
 use uuid::Uuid;
 
 use super::CompaniesRepositoryImpl;
 use crate::domain::{
-    association::{CrmAssociation, CrmRecordAssociation},
+    association::{CrmActivityEdge, CrmAssociation, CrmRecordAssociation},
     contact_listing::CrmContactListScope,
     model::CrmError,
 };
 
 impl CompaniesRepositoryImpl {
+    /// A transaction on `pool` whose statements stop after 15 seconds, for
+    /// the activity scope's reads.
+    async fn bounded_read(
+        pool: &sqlx::PgPool,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CrmError> {
+        let mut transaction = pool
+            .begin()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        Ok(transaction)
+    }
+
     pub(super) async fn query_association(
         &self,
         scope: CrmContactListScope<'_>,
@@ -51,15 +68,7 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
         // The read's cost follows the team's record count, so bound it.
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *transaction)
-            .await
-            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        let mut transaction = Self::bounded_read(&self.pool).await?;
         // Every step is a probe by key, so the cost stays with the team's own
         // records whatever the planner knows about the tables. The teams are
         // collected into an array first, so every arm starts from its team
@@ -73,7 +82,7 @@ impl CompaniesRepositoryImpl {
         let rows = sqlx::query!(
             r#"
             WITH scope AS (
-                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
+                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                 UNION ALL
                 SELECT $2::uuid
             )
@@ -89,13 +98,19 @@ impl CompaniesRepositoryImpl {
             -- Contacts under a visible company.
             SELECT NULL, ct.id, NULL, address.email
             FROM crm_companies co
-            JOIN crm_contacts ct
-                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden
+            -- Fence contacts by company before applying team and visibility filters.
+            CROSS JOIN LATERAL (
+                SELECT ct.id, ct.team_id, ct.hidden
+                FROM crm_contacts ct
+                WHERE ct.company_id = co.id
+                OFFSET 0
+            ) ct
             LEFT JOIN LATERAL (
                 SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
             ) address ON TRUE
             WHERE NOT co.hidden
               AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+              AND ct.team_id = co.team_id AND NOT ct.hidden
             UNION ALL
             -- Contacts without a company.
             SELECT NULL, ct.id, NULL, address.email
@@ -139,6 +154,65 @@ impl CompaniesRepositoryImpl {
         })
     }
 
+    /// The items of `entity_types` whose Companies or Contacts property names a
+    /// record of the activity scope [`Self::query_activity`] reads.
+    #[tracing::instrument(
+        name = "crm.activity_property_edges",
+        skip_all,
+        fields(entity_types = entity_types.len(), edges = tracing::field::Empty),
+        err
+    )]
+    pub(super) async fn query_activity_property_edges(
+        &self,
+        scope: CrmContactListScope<'_>,
+        entity_types: &[EntityType],
+    ) -> Result<Vec<CrmActivityEdge>, CrmError> {
+        if entity_types.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Authority comes from the primary even when the edge data is read
+        // from a replica. Passing only current permitted team ids also fences
+        // a stale replica membership after the viewer changes teams.
+        let team_ids = match scope {
+            CrmContactListScope::Viewer(user_id) => sqlx::query_scalar!(
+                r#"SELECT team_id FROM team_user
+                   WHERE user_id = $1 AND (crm_access OR team_role <> 'member')"#,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?,
+            CrmContactListScope::Team { team_id, .. } => vec![team_id],
+        };
+        if team_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Bounded like the scope read it stands beside: both grow with the
+        // scope's records. On the replica when one is set
+        // ([`Self::with_activity_edges_replica`]).
+        let mut transaction = Self::bounded_read(&self.activity_edges_pool).await?;
+        let rows = sqlx::query_file!(
+            "src/outbound/companies_repo/activity_property_edges.sql",
+            &team_ids,
+            entity_types as &[EntityType],
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        tracing::Span::current().record("edges", rows.len());
+        Ok(rows
+            .into_iter()
+            .map(|row| CrmActivityEdge {
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+            })
+            .collect())
+    }
+
     async fn company_contacts(
         &self,
         scope: CrmContactListScope<'_>,
@@ -150,7 +224,7 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
+                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
                        AND (NOT ct.hidden OR tu.team_role <> 'member')
@@ -203,7 +277,7 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                         WHERE ct.id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
                     ) AS "visible!"

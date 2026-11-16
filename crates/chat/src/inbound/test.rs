@@ -564,6 +564,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id: MacroUserIdStr::try_from(user_id.clone())
                         .expect("test user id should be valid"),
                     user_context: UserContext {
@@ -610,7 +611,7 @@ impl roles_and_permissions::domain::port::UserRolesAndPermissionsService
 
     async fn update_user_roles_and_permissions_for_subscription(
         &self,
-        _email: macro_user_id::email::Email<macro_user_id::lowercased::Lowercase<'_>>,
+        _user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _subscription_status: roles_and_permissions::domain::model::SubscriptionStatus,
         _product_tier: roles_and_permissions::domain::model::ProductTier,
     ) -> std::result::Result<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>

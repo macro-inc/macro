@@ -107,6 +107,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -138,6 +139,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -187,6 +189,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -320,6 +323,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -337,6 +341,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "macrod".to_owned(),
@@ -358,6 +363,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -379,6 +385,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -400,6 +407,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -418,6 +426,7 @@ impl OneBotDirectory {
                 owner_user_id: None,
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -892,6 +901,26 @@ async fn a_harness_may_not_open_sessions_for_an_unbound_agent() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn no_session_opens_on_an_agent_teammates_computer() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.on_team_agent_computer = true;
+    let request = as_harness(body(
+        Some(BotId::TEST_A.as_uuid()),
+        "/srv/agent",
+        Some(OWNER),
+    ));
+
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(opener.opened.lock().unwrap().is_empty());
 }
 
@@ -1916,6 +1945,7 @@ fn an_agents_program_is_not_a_user_principal() {
             origin,
             agent_id: agent.then_some(BotId::TEST_A),
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
             user_context: model_user::UserContext {
                 user_id: "macro|owner@example.com".to_owned(),
@@ -1945,4 +1975,18 @@ fn an_agents_program_is_not_a_user_principal() {
             ControlPrincipal::Program
         ));
     }
+    // A routine code step running as its owner signs `routine_id` and no
+    // `agent_id`; the token alone makes it a program.
+    let UserBotOrHarnessAuthorization::User(owner) = user(CredentialOrigin::MacroApiJwt, false)
+    else {
+        unreachable!()
+    };
+    let routine_step = UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+        routine_id: Some(macro_uuid::Uuid::from_u128(0x7001)),
+        ..owner
+    });
+    assert!(matches!(
+        control_principal(&routine_step, &plain),
+        ControlPrincipal::Program
+    ));
 }

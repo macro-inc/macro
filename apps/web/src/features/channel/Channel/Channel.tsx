@@ -5,6 +5,7 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { TeamAgentDmBanner } from '@app/features/settings/views/team-agent-dm-status';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
@@ -1246,6 +1247,9 @@ export function Channel(props: ChannelProps) {
                       <Show when={!callPanel}>
                         <DebugSuspense name="Channel.active-call">
                           <ActiveCallMessage channelId={props.channelId} />
+                        </DebugSuspense>
+                        <DebugSuspense name="Channel.agent-status">
+                          <TeamAgentDmBanner channelId={props.channelId} />
                         </DebugSuspense>
                       </Show>
                       <ChannelInputContainer

@@ -1,8 +1,12 @@
+import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
 const launchOptions = {
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  // A local stack serves file contents from the machine's own hostname, which
+  // `isolated-network.sh`'s namespace can't resolve.
+  args: [`--host-resolver-rules=MAP ${hostname()} 127.0.0.1`],
 };
 
 /**

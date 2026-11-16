@@ -65,7 +65,7 @@ function sortButtons(header: HTMLElement) {
 
 it('offers no column sort while a search keeps its own order, and restores the stored sort after', () => {
   const header = renderHeader();
-  expect(sortButtons(header)).toEqual(['Due date', 'Updated']);
+  expect(sortButtons(header)).toEqual(['Task', 'Due date', 'Updated']);
 
   view.setState('search', 'brief');
   expect(sortButtons(header)).toEqual([]);
@@ -74,7 +74,7 @@ it('offers no column sort while a search keeps its own order, and restores the s
   expect(view.setPrimarySort).not.toHaveBeenCalled();
 
   view.setState('search', '');
-  expect(sortButtons(header)).toEqual(['Due date', 'Updated']);
+  expect(sortButtons(header)).toEqual(['Task', 'Due date', 'Updated']);
   fireEvent.click(within(header).getByRole('button', { name: 'Due date' }));
   expect(view.setPrimarySort).toHaveBeenCalledExactlyOnceWith(
     'due_date_latest'
@@ -86,7 +86,7 @@ it('keeps column sort while a search follows the list sort', () => {
   view.setState('search', 'brief');
   const header = renderHeader();
 
-  expect(sortButtons(header)).toEqual(['Due date', 'Updated']);
+  expect(sortButtons(header)).toEqual(['Task', 'Due date', 'Updated']);
   fireEvent.click(within(header).getByRole('button', { name: 'Updated' }));
   expect(view.setPrimarySort).toHaveBeenCalledExactlyOnceWith('updated_at');
 });

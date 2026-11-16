@@ -29,6 +29,7 @@ import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { MemoryNamespace } from './entities/memory/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
+import { PasswordNamespace } from './entities/passwords/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
@@ -90,6 +91,7 @@ export {
   type ChangeColumnTypeOptions,
   type ColumnType,
   type ConvertIntoNewColumnOptions,
+  type CreateDatabaseOptions,
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
@@ -245,6 +247,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Saved views: named filter definitions shown in a surface's sidebar, such as Email. */
   readonly savedViews: SavedViewsNamespace;
 
+  /** The authenticated agent's view of its team vaults; agent API keys only. */
+  readonly passwords: PasswordNamespace;
+
   readonly tasks: TaskNamespace;
 
   /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
@@ -315,6 +320,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.referrals = new ReferralNamespace(client);
     this.savedViews = new SavedViewsNamespace(client);
     this.search = new SearchNamespace(client);
+    this.passwords = new PasswordNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -546,6 +552,15 @@ export type {
 } from './entities/memory/namespace';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
+export type {
+  AgentAccessRequest,
+  AgentWake,
+  DisclosedSecret,
+  SecretSelector,
+  VerificationCode,
+} from './entities/passwords/item';
+export { PasswordItem } from './entities/passwords/item';
+export { AgentVault, PasswordNamespace } from './entities/passwords/namespace';
 export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {

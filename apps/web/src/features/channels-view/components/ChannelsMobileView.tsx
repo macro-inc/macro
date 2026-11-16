@@ -59,7 +59,7 @@ const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
-  /** Favorited conversations pinned above the list, already capped. */
+  /** Favorited conversations pinned above the list in display order. */
   pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
@@ -199,7 +199,13 @@ export function ChannelsMobileView(props: {
   };
   const content = (
     <Switch>
-      <Match when={!forceEmptyState() && props.source.isLoading()}>
+      <Match
+        when={
+          !forceEmptyState() &&
+          props.source.isLoading() &&
+          visibleChannels().length === 0
+        }
+      >
         <div class="grid min-h-32 place-items-center text-ink-muted">
           <SpinnerIcon
             aria-hidden={false}

@@ -27,6 +27,7 @@ impl JwtValidator for UserCredentials {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: USER.into(),
                 fusion_user_id: "fusion-owner".into(),
                 organization_id: None,
