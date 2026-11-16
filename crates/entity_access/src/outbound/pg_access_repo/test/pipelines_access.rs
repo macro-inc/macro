@@ -224,3 +224,121 @@ async fn pipelines_access_matches_one_pipeline_at_a_time(pool: PgPool) -> anyhow
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_team"))
+)]
+async fn pipelines_access_follows_crm_revocation_and_regrant(pool: PgPool) -> anyhow::Result<()> {
+    let team_only = pipeline(1);
+    let directly_shared = pipeline(2);
+    let channel_shared = pipeline(3);
+    let channel = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES ($1, 'Shared channel', 'private', $2)",
+        channel,
+        TEAM_OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, role, user_id) VALUES ($1, 'member', $2)",
+        channel,
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    grant(
+        &pool,
+        channel_shared,
+        "crm_pipeline",
+        &channel.to_string(),
+        "channel",
+        "view",
+    )
+    .await?;
+    for id in [team_only, directly_shared] {
+        grant(&pool, id, "crm_pipeline", TEAM_ALPHA, "team", "edit").await?;
+    }
+    grant(
+        &pool,
+        directly_shared,
+        "crm_pipeline",
+        TEAM_MEMBER,
+        "user",
+        "view",
+    )
+    .await?;
+    let repo = PgAccessRepository::new(pool.clone());
+    let requested = [team_only, directly_shared, channel_shared];
+    for enabled in [true, false, true] {
+        sqlx::query!(
+            "UPDATE team_user SET crm_access = $1 WHERE user_id = $2",
+            enabled,
+            TEAM_MEMBER,
+        )
+        .execute(&pool)
+        .await?;
+        let batch: BTreeMap<_, _> = repo
+            .get_pipelines_access(&requested, &user_id(TEAM_MEMBER))
+            .await?
+            .into_iter()
+            .collect();
+        let expected = if enabled {
+            BTreeMap::from([
+                (team_only, AccessLevel::Edit),
+                (directly_shared, AccessLevel::Edit),
+                (channel_shared, AccessLevel::View),
+            ])
+        } else {
+            BTreeMap::from([
+                (directly_shared, AccessLevel::View),
+                (channel_shared, AccessLevel::View),
+            ])
+        };
+        assert_eq!(batch, expected);
+        assert_eq!(batch, one_at_a_time(&repo, &requested, TEAM_MEMBER).await?);
+    }
+
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", TEAM_MEMBER)
+        .execute(&pool)
+        .await?;
+    let after_removal = repo
+        .get_pipelines_access(&requested, &user_id(TEAM_MEMBER))
+        .await?;
+    assert_eq!(
+        after_removal.into_iter().collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([
+            (directly_shared, AccessLevel::View),
+            (channel_shared, AccessLevel::View),
+        ]),
+    );
+    sqlx::query!(
+        "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2::text::uuid, 'member')",
+        TEAM_MEMBER,
+        TEAM_ALPHA,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        repo.get_pipelines_access(&requested, &user_id(TEAM_MEMBER))
+            .await?
+            .get(&team_only),
+        Some(&AccessLevel::Edit),
+    );
+
+    for reader in [TEAM_ADMIN, TEAM_OWNER] {
+        sqlx::query!(
+            "UPDATE team_user SET crm_access = false WHERE user_id = $1",
+            reader,
+        )
+        .execute(&pool)
+        .await?;
+        let batch = repo
+            .get_pipelines_access(&requested, &user_id(reader))
+            .await?;
+        assert_eq!(batch.get(&team_only), Some(&AccessLevel::Edit));
+        assert_eq!(batch.get(&directly_shared), Some(&AccessLevel::Edit));
+    }
+    Ok(())
+}
