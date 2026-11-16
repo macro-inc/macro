@@ -5142,6 +5142,7 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
         doc_ids.contains(&Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()),
         "Doc B should match Priority = Low"
     );
+    assert_eq!(doc_ids.len(), 2, "no other document has either priority");
 
     Ok(())
 }

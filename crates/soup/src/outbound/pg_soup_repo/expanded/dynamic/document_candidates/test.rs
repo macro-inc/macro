@@ -1,5 +1,5 @@
 use super::super::{
-    DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query, build_query,
+    DocumentArmAccess, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query, build_query,
     document_candidate_arm, fetch_user_source_ids, first_document_id_slot, push_not_inward,
 };
 use super::{CandidateArm, DocumentCandidates};
@@ -125,6 +125,50 @@ fn a_conjunction_starts_from_the_side_naming_fewer_participants() {
         DocumentCandidates::of(&expr),
         Some(candidates(&[], &[], &["pat@acme.test"]))
     );
+}
+
+/// A filter has candidates only when the bound it keeps names a participant,
+/// and checks access after its filters only when it names by id every
+/// document it admits. No filter does both: a conjunction with ids keeps the
+/// ids, which name no participant.
+#[test]
+fn candidates_never_meet_access_after_filters() {
+    let files_tab = Expr::and(
+        Expr::is_not(task()),
+        Expr::or(
+            Expr::or(id(DOC_A), id(DOC_B)),
+            Expr::or(domain("acme.test"), address("pat@acme.test")),
+        ),
+    );
+    let ids = || Expr::or(id(DOC_A), id(DOC_B));
+    let cases = [
+        (files_tab, true, false),
+        (Expr::or(id(DOC_A), domain("acme.test")), true, false),
+        (ids(), false, true),
+        (Expr::and(ids(), domain("acme.test")), false, true),
+        (Expr::and(domain("acme.test"), ids()), false, true),
+        (
+            Expr::and(Expr::or(id(DOC_A), domain("acme.test")), id(DOC_B)),
+            false,
+            true,
+        ),
+    ];
+
+    for (expr, has_candidates, after_filters) in cases {
+        assert_eq!(
+            DocumentCandidates::of(&push_not_inward(&expr, false)).is_some(),
+            has_candidates,
+            "{expr:?}"
+        );
+        assert_eq!(
+            matches!(
+                DocumentArmAccess::new(Some(&expr)),
+                DocumentArmAccess::AfterFilters
+            ),
+            after_filters,
+            "{expr:?}"
+        );
+    }
 }
 
 /// Every row of the first page of `filter`, as the flat query returns it to

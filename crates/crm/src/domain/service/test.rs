@@ -26,6 +26,7 @@ struct StubRepo {
     association_calls: Arc<Mutex<Vec<Option<(uuid::Uuid, bool)>>>>,
     association: Option<crate::domain::association::CrmRecordAssociation>,
     created_contact_emails: Arc<Mutex<Vec<String>>>,
+    contact_detail_calls: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, bool)>>>,
 }
 
 impl EmailPrivacyRepository for StubRepo {
@@ -114,6 +115,22 @@ impl CompaniesRepository for StubRepo {
         self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
             .await
             .map(Option::unwrap_or_default)
+    }
+
+    async fn preview_companies(
+        &self,
+        _viewer_id: &str,
+        _company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn preview_contacts(
+        &self,
+        _viewer_id: &str,
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        unimplemented!()
     }
 
     async fn activity_property_edges(
@@ -373,6 +390,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _include_hidden: bool,
+        _query: &CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_contact_for_team(
         &self,
         _team_id: &uuid::Uuid,
@@ -380,6 +407,19 @@ impl CompaniesRepository for StubRepo {
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         unimplemented!()
+    }
+
+    async fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<crate::domain::model::CrmContactDetail>, CrmError> {
+        self.contact_detail_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, *contact_id, include_hidden));
+        Ok(None)
     }
 
     async fn search_contacts_for_team(
@@ -406,6 +446,7 @@ impl CompaniesRepository for StubRepo {
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
         _include_hidden: bool,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
@@ -1198,4 +1239,43 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
     }
+}
+
+#[tokio::test]
+async fn contact_detail_reads_with_the_receipts_team_and_hidden_scope() {
+    let service = service();
+    let team_id = uuid::Uuid::from_u128(42);
+    let contact_id = uuid::Uuid::from_u128(7);
+    for role in [TeamRole::Member, TeamRole::Admin] {
+        let user = MacroUserIdStr::parse_from_str("macro|user@example.com")
+            .unwrap()
+            .into_owned();
+        let receipt = EntityAccessReceipt::<ViewAccessLevel>::try_new_authenticated_user(
+            user,
+            Entity {
+                entity_id: contact_id.to_string(),
+                entity_type: EntityType::CrmContact,
+            },
+            EntityPermission::AccessLevel {
+                access_level: entity_access::domain::models::AccessLevel::View,
+            },
+        )
+        .unwrap();
+        let access = CrmContactReceipt::new(receipt, team_id, role);
+        assert!(
+            service
+                .get_contact_for_team(&access)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert_eq!(
+        *service
+            .companies_repository
+            .contact_detail_calls
+            .lock()
+            .unwrap(),
+        vec![(team_id, contact_id, false), (team_id, contact_id, true)]
+    );
 }

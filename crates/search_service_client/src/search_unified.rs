@@ -16,8 +16,7 @@ impl SearchServiceClient {
         }
 
         let res = self
-            .client
-            .post(url)
+            .with_trace_headers(self.client.post(url))
             .query(&query_params)
             .header(INTERNAL_MACRO_USER_ID_HEADER, user_id)
             .json(&body)
