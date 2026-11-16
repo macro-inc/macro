@@ -480,7 +480,10 @@ impl LoroProjection {
         if self.policy.is_dropped_json(&own) || self.policy.is_transparent_json(&own) {
             return Ok(false);
         }
-        for (id, _) in doc.get_path_to_container(&map.id()).unwrap_or_default() {
+        let path = doc
+            .get_path_to_container(&map.id())
+            .ok_or_else(|| diverged("projected node map has no path"))?;
+        for (id, _) in path {
             if let Some(Container::Map(ancestor)) = doc.get_container(id)
                 && ancestor.get("type").is_some()
                 && self
