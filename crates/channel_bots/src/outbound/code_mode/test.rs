@@ -52,8 +52,10 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
             .system_prompt()
             .contains("present them with `execution.views.present`")
     );
-    // A routine's token carries no channel mention, so replies never schedule one.
-    assert!(!tools.system_prompt().contains("macro.routines.create"));
+    // A routine's token carries no channel mention, so replies are never told
+    // to schedule one to check back later; creating a routine the user asked
+    // for (the routines guide's skill) stays, as the bot's direct tools could.
+    assert!(!tools.system_prompt().contains("To check back later"));
 }
 
 #[test]
