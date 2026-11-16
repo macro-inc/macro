@@ -1327,7 +1327,7 @@ describe('CoordinatorRouter', () => {
         message: expect.objectContaining({
           id: 5,
           ok: false,
-          errorCode: 'owner-lock-unavailable',
+          errorCode: 'cache-superseded',
         }),
       }),
     ]);
