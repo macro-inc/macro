@@ -15,19 +15,19 @@ empties `/tmp/convert_service`. Below 2 GiB or 50,000 inodes free
 - returns 503 from `/internal/convert`.
 
 The monitor in `infra/stacks/monitoring/monitors/convert-service.ts` warns at
-70% and alerts at 85% of a task's disk.
+60% and alerts at 80% of a task's disk.
 
 | Signal | Where |
 | --- | --- |
 | Disk per task | Metrics: `ecs.fargate.ephemeral_storage.utilized` / `.reserved`, `ecs_cluster:cloud-storage-cluster-prod`, `ecs_service:convert-service*`, by `task_arn` |
 | Low disk | Logs: `service:convert-service` `health check failed`, `pausing the convert queue: low disk space`, `refusing conversion: low disk space` |
 | Leaked files | Logs: `service:convert-service` `unable to remove job folder` |
-| Killed conversions | Logs: `service:convert-service` `error processing message`, with an error of `conversion timed out` or `conversion crashed` |
+| Failed conversions | Logs: `service:convert-service` `error processing message`. The error is `conversion failed: <cause>`, or `conversion timed out` or `conversion crashed` for a LibreOffice that was killed |
 | Waiting jobs | Metrics: `aws.sqs.approximate_age_of_oldest_message`, `queuename:convert-service-queue-prod` |
 
 ## Disk filling
 
-A task's disk passed 85%. A healthy task stays near its image size: nothing a
+A task's disk passed 80%. A healthy task stays near its image size: nothing a
 conversion writes outlives it.
 
 1. Check whether the task is being replaced. ECS service events show a task

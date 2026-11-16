@@ -6,9 +6,10 @@
 // `task_arn`) for convert-service in the prod cloud-storage cluster. Pulumi
 // suffixes the ECS service's name, hence the wildcard.
 //
-// The service fails its health check below 2 GiB free, about 90% of the
-// 20 GiB disk (`MIN_FREE_BYTES` in services/convert_service/src/disk.rs), and
-// ECS replaces the task. The thresholds sit below that, so this notifies while
+// The service fails its health check with less than 2 GiB free
+// (`MIN_FREE_BYTES` in services/convert_service/src/disk.rs), at 90% of the
+// 20 GiB disk or sooner if the filesystem keeps blocks in reserve, and ECS
+// replaces the task. The thresholds sit below that, so this notifies while
 // conversions still succeed.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
@@ -31,8 +32,8 @@ const dashboard = new datadog.Dashboard('convert-service-alerts', {
       thresholdGraph({
         title: DISK_TITLE,
         query: DISK_SHARE,
-        critical: '85',
-        warning: '70',
+        critical: '80',
+        warning: '60',
       }),
       {
         timeseriesDefinition: {
@@ -47,11 +48,11 @@ const dashboard = new datadog.Dashboard('convert-service-alerts', {
 prodMonitor('convert-service-disk', {
   title: DISK_TITLE,
   service: 'convert-service',
-  query: `avg(last_15m):${DISK_SHARE} >= 85`,
-  monitorThresholds: { critical: '85', warning: '70' },
+  query: `avg(last_15m):${DISK_SHARE} >= 80`,
+  monitorThresholds: { critical: '80', warning: '60' },
   pages: false,
   description:
-    'A convert-service task has used {{value}}% of its disk ({{task_arn.name}}). Conversions leave nothing behind once they end, so something is leaking. Near 90% the task fails its health check and ECS replaces it; a task that stays above that is not being replaced and fails every conversion.',
+    'A convert-service task has used {{value}}% of its disk ({{task_arn.name}}). Conversions leave nothing behind once they end, so something is leaking. With less than 2 GiB free the task fails its health check and ECS replaces it; a task that stays above 90% is not being replaced and fails every conversion.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/convert-service.md#disk-filling',
 });
