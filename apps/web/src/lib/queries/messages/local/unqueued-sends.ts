@@ -225,7 +225,8 @@ export async function resendUnqueuedSends(
       )
     );
     for (const { key, entry } of readEntries(storage, senderId)) {
-      if (!entry || now - Date.parse(entry.createdAt) > MAX_AGE_MS) {
+      // A time that does not parse is neither young nor sortable.
+      if (!entry || !(now - Date.parse(entry.createdAt) <= MAX_AGE_MS)) {
         storage.removeItem(key);
         continue;
       }

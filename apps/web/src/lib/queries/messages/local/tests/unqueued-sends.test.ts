@@ -130,10 +130,11 @@ it('forgets a send the queue already holds instead of sending it twice', async (
   expect(storage.length).toBe(0);
 });
 
-it('drops a send a day old, an unreadable one, and leaves another person’s', async () => {
+it('drops a send a day old, an unreadable or undated one, and leaves another person’s', async () => {
   const { storage, deps, host, resend } = world(['new-page']);
   noteUnqueuedSend(send('old'), '2025-12-30T00:00:00.000Z', deps('old-page'));
   storage.setItem(`channel-send-awaiting-queue:v1:${SENDER}:broken`, '{');
+  noteUnqueuedSend(send('undated'), 'not a time', deps('old-page'));
   noteUnqueuedSend(send('theirs', 'person-2'), CREATED_AT, deps('old-page'));
 
   expect(
