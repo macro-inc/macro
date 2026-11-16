@@ -221,12 +221,7 @@ export function TeamOooUpcomingList() {
         <Match when={upcoming.isPending()}>
           <TeamOooSkeleton />
         </Match>
-        <Match when={upcoming.isError()}>
-          <span class="px-2 py-1 text-xs text-ink-muted">
-            Couldn't load time off
-          </span>
-        </Match>
-        <Match when={windows().length === 0}>
+        <Match when={windows().length === 0 && !upcoming.isError()}>
           <span class="px-2 py-1 text-xs text-ink-muted">
             No shared time off in the next 90 days
           </span>
@@ -288,6 +283,11 @@ export function TeamOooUpcomingList() {
           </Show>
         </Match>
       </Switch>
+      <Show when={upcoming.isError()}>
+        <span role="alert" class="px-2 py-1 text-xs text-ink-muted">
+          Couldn't load time off
+        </span>
+      </Show>
     </div>
   );
 }

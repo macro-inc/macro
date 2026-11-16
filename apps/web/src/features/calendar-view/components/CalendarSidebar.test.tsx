@@ -269,6 +269,12 @@ describe('TeamOooUpcomingList', () => {
     expect(requests.teamOoo).toHaveBeenCalledTimes(initialRequests * 2);
     expect(screen.getByRole('button', { name: /Jackson/ })).toBe(anchor);
     expect(anchor.isConnected).toBe(true);
+
+    requests.teamOoo.mockRejectedValue(new Error('Refresh unavailable'));
+    await refetch();
+    expect(anchor.isConnected).toBe(true);
+    expect(anchor.getAttribute('aria-current')).toBe('true');
+    expect(screen.getByRole('alert')).toBeTruthy();
   });
 
   it('shows ten rows and the rest behind a "+N more" toggle', async () => {

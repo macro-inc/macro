@@ -376,6 +376,9 @@ or sends `Yes` / `No` through the shared RSVP mutation. Recurring invitations as
 settles so its selection, pending state, and failure remain visible. Failed writes
 restore the invitation. Switching accounts or hiding its source removes the row
 immediately. Loading, empty, and error/retry states are distinct.
+A failed background refresh keeps the last loaded invitations visible alongside
+an error and Retry, including invitations from later search windows. An initial
+failure or an uncached account/date range shows no retained invitations.
 The mobile split header places a month selector and Today in its left island;
 selecting the month opens the date-selection drawer. The right island keeps
 full-sized Availability, Search, and Settings actions. The New menu
@@ -867,6 +870,11 @@ notifications that explicitly exclude OOO changes refresh this list
 in the background without returning to its skeleton. OOO changes, sharing changes,
 and notifications without that guarantee still clear cached rows and close open
 OOO details immediately before refetching.
+A failed ordinary refresh keeps each window's last loaded absences and selected
+details visible until the existing 60-second privacy lease expires, while reporting
+the error. Uncached windows and placeholder data never borrow absences from another
+account or range; identity failures and explicit permission-change invalidation
+still clear affected selections.
 
 To mention an event, press `Copy event` in its details and paste, or type `@` and at least
 three characters of its title in a composer that offers event mentions (message, comment and

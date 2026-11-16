@@ -13,7 +13,14 @@ import {
   QueryClientProvider,
   useQueries,
 } from '@tanstack/solid-query';
-import { type Accessor, createSignal, For, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createRoot,
+  createSignal,
+  For,
+  Suspense,
+} from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TEAM_OOO_SOURCE_ID } from '../types';
 import {
@@ -28,6 +35,22 @@ const requests = vi.hoisted(() => ({
       (range: CalendarOccurrenceQueryRange) => Promise<TeamOutOfOfficeItem[]>
     >(),
 }));
+const waiters: (() => void)[] = [];
+
+function when(predicate: () => boolean) {
+  return new Promise<void>((resolve) => {
+    waiters.push(
+      createRoot((dispose) => {
+        createEffect(() => {
+          if (!predicate()) return;
+          dispose();
+          resolve();
+        });
+        return dispose;
+      })
+    );
+  });
+}
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user',
@@ -58,6 +81,7 @@ vi.mock('@queries/calendar/team-ooo', () => ({
 
 afterEach(() => {
   cleanup();
+  for (const dispose of waiters.splice(0)) dispose();
   requests.teamOoo.mockReset();
   vi.useRealTimers();
 });
@@ -125,6 +149,43 @@ describe('useTeamOooEvents', () => {
     setVisible(false);
     expect(data?.isError()).toBe(false);
     expect(data?.isPending()).toBe(false);
+  });
+
+  it('retains settled windows after a failed refresh but not for an uncached range', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 23, 12));
+    const [range, setRange] = createSignal(
+      localRange(new Date(2026, 11, 27), 3)
+    );
+    requests.teamOoo.mockImplementation(async (window) => [vacation(window)]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let data: ReturnType<typeof useTeamOooEvents> | undefined;
+    function Harness() {
+      data = useTeamOooEvents({ range });
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+    await when(() => data?.events().length === 2);
+    const ids = data?.events().map((event) => event.id);
+
+    requests.teamOoo.mockRejectedValueOnce(new Error('Refresh unavailable'));
+    await client.refetchQueries({ queryKey: ['team-ooo'] });
+    await when(() => data?.isError() === true);
+    expect(data?.events().map((event) => event.id)).toEqual(ids);
+    expect(data?.eventsById().size).toBe(2);
+    expect(data?.isPending()).toBe(false);
+
+    requests.teamOoo.mockRejectedValue(new Error('Range unavailable'));
+    setRange(localRange(new Date(2027, 4, 3), 3));
+    expect(data?.events()).toEqual([]);
+    await when(() => data?.isError() === true);
+    expect(data?.events()).toEqual([]);
   });
 
   it('drops the overlay and skips the request while team out of office is hidden', async () => {

@@ -3,6 +3,7 @@ import {
   createCalendarOccurrenceQueryRange,
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
+import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
 import {
   type CalendarEvent,
@@ -54,7 +55,9 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
     const previous = windows.slice();
     const enabled = () =>
       Boolean(options.userId()) &&
-      previous.every(({ query }) => query.isSuccess) &&
+      previous.every(
+        ({ query }) => !query.isPlaceholderData && queryReadyGate(query)
+      ) &&
       selectUpcomingCalendarEvents(
         previous.flatMap((window) => window.events()),
         options.now()
@@ -71,7 +74,8 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       () => ({ enabled: enabled() })
     );
     const calendarEvents = createMemo(() => {
-      if (!query.isSuccess) return [];
+      // A failed refresh retains this account/window's last complete response.
+      if (query.isPlaceholderData || !queryReadyGate(query)) return [];
       const sources = options.sourceById();
       return query.data.items.flatMap((item): CalendarEvent[] => {
         const event = mapCalendarOccurrence(item, {

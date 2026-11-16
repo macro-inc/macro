@@ -8,6 +8,7 @@ import {
   type TeamOutOfOfficeQueryOptions,
   useTeamOutOfOfficeQueries,
 } from '@queries/calendar/team-ooo';
+import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { EventType } from '@service-storage/generated/schemas/eventType';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
@@ -197,21 +198,21 @@ function useTeamOooItems(
   );
   const items = createMemo<TeamOutOfOfficeItem[]>(() => {
     const current = range();
-    // Pending reads suspend, and placeholder data belongs to the previous
-    // range. Neither can supply events for the current viewport.
+    // Keep settled same-window data on refresh failures, but never read a
+    // pending resource or a previous range's placeholder.
     if (
       !current ||
       queries.length === 0 ||
       !queries.every(
         (query) =>
-          query.isSuccess && !query.isPaused && !query.isPlaceholderData
+          !query.isPaused && !query.isPlaceholderData && queryReadyGate(query)
       )
     ) {
       return [];
     }
     const byOccurrence = new Map<string, TeamOutOfOfficeItem>();
     for (const query of queries) {
-      if (!query.isSuccess) continue;
+      if (!queryReadyGate(query)) continue;
       for (const item of query.data) {
         if (overlapsRange(item, current)) {
           byOccurrence.set(
@@ -315,8 +316,8 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const teamOoo = useTeamOooItems(() => range);
 
   const windows = createMemo<TeamOooWindow[]>(() => {
-    // Items arrive only once every window settled, so an errored refetch
-    // never surfaces stale rows.
+    // Refresh errors retain same-window rows; isError remains available to
+    // show the failure alongside the last known absences.
     return teamOoo.items().map((item) => {
       const time = item.time;
       const [start, end, allDay] =
