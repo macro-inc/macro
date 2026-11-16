@@ -17938,6 +17938,10 @@
     "natural_time": [
       "crates/natural_time"
     ],
+    "password_import_wasm": [
+      "crates/password_import",
+      "crates/password_import_wasm"
+    ],
     "pptx_engine": [
       "crates/pptx_engine"
     ],
