@@ -24,6 +24,7 @@ export * from './agentSessionWaitingForInputMetadataAllOf';
 export * from './agentSignInExpiryMetadata';
 export * from './agentSignInExpiryMetadataExpiresAt';
 export * from './agentSignInExpiryStage';
+export * from './agentTurnStopReason';
 export * from './aiResponseMetadata';
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';
