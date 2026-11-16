@@ -66,6 +66,7 @@ fn create(
     if content.is_empty() {
         return Ok(None);
     }
+    let _nesting = super::nesting::NestingGuard::enter()?;
     let quote = tx.create(QuoteNode {})?;
     convert_from_markdown_string(
         tx,

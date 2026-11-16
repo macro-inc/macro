@@ -11,6 +11,7 @@ mod details;
 mod envelope;
 mod inline;
 mod media;
+mod nesting;
 mod quote;
 mod table;
 /// Host facts required by external link exports; no browser globals are read.

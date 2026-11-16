@@ -14,7 +14,7 @@ const FENCE: &str = r"^ {0,3}(`{3,}|~{3,})";
 const DEFAULT_SUMMARY: &str = "Details";
 
 /// Which transformer set a details transformer was built over.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum DetailsSet {
     /// One of the `internal`, `external` or `all` source lists.
     List(&'static str),
@@ -30,7 +30,17 @@ impl DetailsSet {
             _ => return None,
         }))
     }
+    /// Each nested section filters the same set; build it once per thread and host option.
     fn transformers(self, options: &MacroMarkdownOptions) -> Result<Vec<Transformer>> {
+        let key = (self, options.app_hostname.clone());
+        if let Some(cached) = SETS.with(|sets| sets.borrow().get(&key).cloned()) {
+            return Ok(cached);
+        }
+        let built = self.build(options)?;
+        SETS.with(|sets| sets.borrow_mut().insert(key, built.clone()));
+        Ok(built)
+    }
+    fn build(self, options: &MacroMarkdownOptions) -> Result<Vec<Transformer>> {
         match self {
             Self::List(list) => list_names(list)
                 .ok_or(Error::InvalidArgument("unknown Macro transformer list"))?
@@ -69,9 +79,13 @@ fn slice(text: &str, start: usize, end: usize) -> Result<String> {
         .ok_or(Error::InvalidArgument("invalid details match offset"))
 }
 /// A line's text up to the `</details>` that closes the outermost section.
-fn consume_line(line: &str, starting_depth: i32) -> Result<(bool, i32, String)> {
+fn consume_line(
+    tags: &RegexMatcher,
+    line: &str,
+    starting_depth: i32,
+) -> Result<(bool, i32, String)> {
     let mut depth = starting_depth;
-    for m in RegexMatcher::new(DETAILS_TAG, "i")?.find_all(line) {
+    for m in tags.find_all(line) {
         depth += if m.get(1) == Some("/") { -1 } else { 1 };
         if depth == 0 {
             return Ok((true, depth, slice(line, 0, m.index.get() as usize)?));
@@ -98,6 +112,7 @@ pub(super) fn after_start(
         return Ok(AfterStartMatch::Skip);
     }
     let fence_pattern = RegexMatcher::new(FENCE, "")?;
+    let tags = RegexMatcher::new(DETAILS_TAG, "i")?;
     let mut depth = 1;
     let mut fence: Option<String> = None;
     let mut content = Vec::new();
@@ -126,7 +141,7 @@ pub(super) fn after_start(
             content.push(line.to_owned());
             continue;
         }
-        let (closed, next, text) = consume_line(line, depth)?;
+        let (closed, next, text) = consume_line(&tags, line, depth)?;
         depth = next;
         content.push(text);
         if closed {
@@ -148,6 +163,11 @@ pub(super) fn after_start(
     // Unclosed: leave the lines to the other transformers.
     Ok(AfterStartMatch::Skip)
 }
+type SetKey = (DetailsSet, Option<Arc<str>>);
+std::thread_local! {
+    static SETS: std::cell::RefCell<std::collections::HashMap<SetKey, Vec<Transformer>>> =
+        std::cell::RefCell::default();
+}
 fn create(
     tx: &mut Transaction<'_>,
     opts: &MarkdownOptions,
@@ -155,6 +175,7 @@ fn create(
     content: &str,
     transformers: &Transformers,
 ) -> Result<NodeKey> {
+    let _nesting = super::nesting::NestingGuard::enter()?;
     let details = tx.create(DetailsNode {
         open: RegexMatcher::new(OPEN_ATTRIBUTE, "i")?
             .exec(attributes)

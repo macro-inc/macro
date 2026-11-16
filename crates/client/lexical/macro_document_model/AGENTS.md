@@ -101,6 +101,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep source object order and regex metadata in transformers/catalog.json generated from TS.
+- Enter transformers/nesting.rs before every nested Markdown import (details sections, HTML blockquotes), so input nested past MAX_NODE_DEPTH fails with NestingTooDeep before it can overflow the 1 MiB wasm stack.
 - Register DetailsNode and DetailsSummaryNode only through register_static_render_node (Source StaticRenderNodeTypes), never in a preset; the DETAILS_* and quoted details transformers skip import where the editor lacks them and never replace (tests/details.rs).
 - Match transformer constructor arguments independently of static JSON import policy.
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.

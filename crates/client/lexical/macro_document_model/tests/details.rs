@@ -175,3 +175,96 @@ fn fenced_details_tags_and_nested_sections_import_whole() -> Result<()> {
     assert_eq!(kinds, ["details-summary", "code", "details"], "{json}");
     Ok(())
 }
+
+/// Each nested section recurses through a nested Markdown import, more deeply in a debug
+/// build. These check the functional boundary on a generous stack; the release wasm32
+/// probe checks the same inputs on the real 1 MiB stack.
+fn on_large_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(work)
+        .expect("spawn")
+        .join()
+        .expect("join")
+}
+
+fn nested_details(levels: usize) -> String {
+    format!(
+        "{}innermost\n{}",
+        "<details>\n".repeat(levels),
+        "</details>\n".repeat(levels)
+    )
+}
+
+#[test]
+fn nesting_deeper_than_any_committable_tree_fails_before_descending() {
+    let outcome = on_large_stack(|| import(&nested_details(2000)).map(|_| ()));
+    assert!(
+        matches!(
+            outcome,
+            Err(Error::Markdown(lexical_markdown::Error::Model(
+                lexical_model::Error::NestingTooDeep {
+                    limit: lexical_model::MAX_NODE_DEPTH
+                }
+            )))
+        ),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn the_deepest_committable_nesting_imports() -> Result<()> {
+    // Each section adds one level; its summary and the summary text add two more.
+    let levels = lexical_model::MAX_NODE_DEPTH - 2;
+    let json = on_large_stack(move || -> Result<serde_json::Value> {
+        let (editor, _) = import(&nested_details(levels))?;
+        Ok(serde_json::to_value(editor.state().to_json()?)?)
+    })?;
+    let mut node = &json["root"];
+    let mut depth = 0;
+    while let Some(child) = node["children"]
+        .as_array()
+        .and_then(|children| children.iter().find(|child| child["type"] == "details"))
+    {
+        node = child;
+        depth += 1;
+    }
+    assert_eq!(depth, levels);
+    Ok(())
+}
+
+fn is_nesting_too_deep<T>(outcome: &Result<T>) -> bool {
+    matches!(
+        outcome,
+        Err(Error::Markdown(lexical_markdown::Error::Model(
+            lexical_model::Error::NestingTooDeep {
+                limit: lexical_model::MAX_NODE_DEPTH
+            }
+        )))
+    )
+}
+
+#[test]
+fn sections_alternating_with_html_blockquotes_share_the_nesting_bound() {
+    let markdown = format!(
+        "{}innermost\n{}",
+        "<blockquote>\n<details>\n".repeat(2000),
+        "</details>\n</blockquote>\n".repeat(2000)
+    );
+    let outcome = on_large_stack(move || import(&markdown).map(|_| ()));
+    assert!(is_nesting_too_deep(&outcome), "{outcome:?}");
+}
+
+#[test]
+fn nested_html_blockquotes_in_an_editor_fail_before_descending_past_the_bound() {
+    // Every editor list has HTML_BLOCKQUOTE, which imports each quote's content again.
+    let markdown = format!(
+        "{}innermost\n{}",
+        "<blockquote>\n".repeat(2000),
+        "</blockquote>\n".repeat(2000)
+    );
+    let outcome = on_large_stack(move || {
+        markdown::markdown_to_serialized_editor_state_with_ids(&markdown, &context()).map(|_| ())
+    });
+    assert!(is_nesting_too_deep(&outcome), "{outcome:?}");
+}
