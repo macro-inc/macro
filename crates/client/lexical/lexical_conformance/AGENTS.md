@@ -49,6 +49,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
 
 - Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.
+- Keep sliced clone text in its owning replay frame with a shared ephemeral identity marker; only getKey/getTextContent/getTextContentSize/setTextContent are hosted. Reject raw fields, cross-frame receivers and every ephemeral argument before by-key dispatch; changed-text self mode remains unsupported.
+- Route table selection maps, style patches and row deletion through lexical_rich_nodes; style patch values are strings or null, and callback-valued patches fail loudly.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail. Live Prism tokenization uses the S4 `d6-highlight` reason; all 452 Macro cases pass without ledger entries. Keep interpreter coverage gaps distinct from native incompatibilities.
 - Preserve caret range/point/slice object identities, slice distances, lazy iterator consumption and post-commit snapshot identities. Never synthesize a private cache from computed content.
 - Keep nondiscrete updates batched across intervening clock/log observations; only recorded boundaries publish transitions.

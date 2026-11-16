@@ -1,0 +1,51 @@
+{
+  "scope": "Historical replay output; CI still requires fresh runtime evidence",
+  "base": "82cec214914",
+  "inputs": "49d544b51dbfe1325523bbd86d489fa690db999f459b82aae1f00449b82de329",
+  "logSHA256": "a25243662ad18d754dbc1ec46ad58c75239fd30c7b01aa81222c248c7cc661bd",
+  "counts": {
+    "pass": 1384,
+    "fail": 0,
+    "ledger": 37
+  },
+  "before": 1699,
+  "pending": 1693,
+  "removed": [
+    {
+      "id": "S2:@lexical/selection:$patchStyleText",
+      "fixture": "upstream/lexical-table/1e8a1273a3b55c4a.json",
+      "test": "upstream::lexical-table::table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/selection:$sliceSelectedTextNodeContent",
+      "fixture": "upstream/lexical-selection/557f6016f1ee8772.json",
+      "test": "upstream::lexical-selection::$sliceSelectedTextNodeContent > clone > can slice a node from both sides",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$computeTableMapSkipCellCheck",
+      "fixture": "upstream/lexical-table/1e8a1273a3b55c4a.json",
+      "test": "upstream::lexical-table::table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$createTableSelectionFrom",
+      "fixture": "upstream/lexical-table/1e8a1273a3b55c4a.json",
+      "test": "upstream::lexical-table::table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$deleteTableRowAtSelection",
+      "fixture": "upstream/lexical-table/7ce8c85898fe66a9.json",
+      "test": "upstream::lexical-table::table selection > regression #7140 > selection points to missing nodes after deleting table rows",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$isTableSelection",
+      "fixture": "upstream/lexical-table/1e8a1273a3b55c4a.json",
+      "test": "upstream::lexical-table::table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
+      "status": "pass"
+    }
+  ]
+}

@@ -36,46 +36,6 @@
       "failure": "op 10: call 3: unmapped API: @lexical/react/shared/useCharacterLimit.$mergePrevious"
     },
     {
-      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
-      "test": "$sliceSelectedTextNodeContent > clone > can slice a node from both sides",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-selection/src/lexical-node.ts:44",
-      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
-      "failure": "op 5 read: call 15: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
-    },
-    {
-      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
-      "test": "$sliceSelectedTextNodeContent > clone > clones only with partial selection (first node)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-selection/src/lexical-node.ts:44",
-      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
-      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
-    },
-    {
-      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
-      "test": "$sliceSelectedTextNodeContent > clone > clones only with partial selection (last node)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-selection/src/lexical-node.ts:44",
-      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
-      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
-    },
-    {
-      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
-      "test": "$sliceSelectedTextNodeContent > clone > does not clone with full selection (both nodes)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-selection/src/lexical-node.ts:44",
-      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
-      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
-    },
-    {
       "file": "packages/lexical-table/src/__tests__/unit/LexicalTableNode.test.tsx",
       "test": "LexicalTableNode tests > hasHorizontalScroll={false} > TableNode.exportDOM() with range selection",
       "status": "xfail",
@@ -84,36 +44,6 @@
       "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-table/src/LexicalTableUtils.ts:40",
       "note": "The replay facade lacks the table-dimensions factory bridge used by this range-selection DOM-export fixture. The Rust table factory exists; this exact unsupported facade call remains visible. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:40.",
       "failure": "op 11: call 0: unmapped API: @lexical/table.$createTableNodeWithDimensions"
-    },
-    {
-      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
-      "test": "table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
-      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
-      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
-    },
-    {
-      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
-      "test": "table selection > regression #7076 > $patchStyleText works on a TableSelection",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
-      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
-      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
-    },
-    {
-      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
-      "test": "table selection > regression #7140 > selection points to missing nodes after deleting table rows",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
-      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
-      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
