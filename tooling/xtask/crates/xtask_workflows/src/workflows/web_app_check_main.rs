@@ -777,8 +777,9 @@ fn run_calendar_details_browser_tests() -> Step<Run> {
 /// what it tests; a narrower list would miss real inputs.
 fn run_lexical_wasm_view_browser_tests() -> Step<Run> {
     Step::new("Native Editor View Browser Tests")
-        // Same LD_LIBRARY_PATH caveat as the sign-up browser tests.
-        .run("bunx playwright install-deps chromium\nenv -u LD_LIBRARY_PATH bun run test:browser")
+        // Same LD_LIBRARY_PATH caveat as the sign-up browser tests. The script chains
+        // shells, and BASH_ENV would re-source the dev shell's libraries in each one.
+        .run("bunx playwright install-deps chromium\nenv -u LD_LIBRARY_PATH -u BASH_ENV bun run test:browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.web_artifact_changed == 'true'",
         ))

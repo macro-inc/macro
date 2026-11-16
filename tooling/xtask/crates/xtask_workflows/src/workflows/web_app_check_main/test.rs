@@ -657,7 +657,7 @@ fn native_editor_view_browser_tests_run_for_every_web_artifact_input() {
         .expect("native editor view browser step");
     assert!(
         step.contains("needs.path-check.outputs.web_artifact_changed == 'true'")
-            && step.contains("env -u LD_LIBRARY_PATH bun run test:browser")
+            && step.contains("env -u LD_LIBRARY_PATH -u BASH_ENV bun run test:browser")
             && step.contains("working-directory: packages/lexical-wasm-view"),
         "the step runs both configs from the package: {step}"
     );
