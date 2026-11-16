@@ -1,0 +1,23 @@
+rules/ast-grep-tests/__snapshots__/rust-event-access-in-events-rs-snapshot.yml
+  s_8b139b3d2541ba::t_ec65e641884543 1-68
+rules/ast-grep-tests/rust-event-access-in-events-rs-test.yml
+  s_8b139b3d2541ba::t_f9c175cbf8c990 1-33
+rules/ast-grep/rust-event-access-in-events-rs.yml
+  s_8b139b3d2541ba::t_fdb61b5e825811 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e5fd05395b42f9b2340640b2a249c60f19c8f87c",
+  "prompts": {},
+  "sessions": {
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
