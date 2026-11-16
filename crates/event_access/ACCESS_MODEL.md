@@ -123,10 +123,26 @@ the audience, never because one of its members is:
     floor, only grants at or above it count;
   - a channel event, when it is the team's own channel; a call, when it
     belongs to such a channel;
-  - a CRM company or contact the team owns, while every member may see it
-    (not hidden);
+  - a CRM company or contact the team owns, or a CRM pipeline granted to
+    it, while some member may see it;
 - a `Team { member }` event for that team, a `Workspace` event naming it, or
   a GitHub installation it owns (gated on the webhook creator's claim).
+
+A team workspace's webhook delivers to whatever endpoint its creator set, so
+two more checks apply to the creator, per event, after matching
+(`crates/webhook/src/domain/ingestion.rs`):
+
+- **Membership.** It is admitted only while its creator is a current member
+  of the team (`creator_member_gated`, through `TeamDirectory::members`).
+  Without a team directory, team webhooks receive nothing.
+- **CRM access.** A team workspace reached through a CRM company, contact or
+  pipeline admits the webhook only when its creator may see that record as
+  a member of the team (`crm_gated`, through
+  `EntityTeamAccess::get_team_crm_viewers`): CRM access (`crm_access`, or a
+  role above member) and, for a hidden company or contact (or a contact of a
+  hidden company), an admin or owner role, the rule `crm_entity_users` and
+  `crm_company_access` apply. Not every member of a team may see its CRM
+  records.
 
 So a member's private DM, a document shared with the member alone, or the
 member's own agent sessions reach the member's personal workspace and no team
@@ -163,8 +179,12 @@ change.
   `crates/event_stream/src/domain/stream.rs`). A bot deletion closes the bot's
   streams as `revoked` (`crates/event_stream/src/domain/fan_out.rs`), and every stream re-validates its credential every 60 s.
 - **Webhooks** resolve the audience uncached for every event
-  (`users_with_access` in `crates/webhook/src/domain/ingestion.rs`): a grant
-  or revocation committed before the event is consumed counts.
+  (`users_with_access` and `teams_with_access` in
+  `crates/webhook/src/domain/ingestion.rs`): a grant or revocation committed
+  before the event is consumed counts. For a team workspace's webhook, the
+  creator's membership and, for CRM records, CRM access are read per event
+  too: a creator removed from the team, or whose CRM access is turned off,
+  stops receiving from the next event, on every topic.
 - An event about an entity whose grants are deleted with it cannot reach
   anyone through `Entity`; the producer captures the audience first
   (`Snapshot`) or the event stays internal with a reason saying so
