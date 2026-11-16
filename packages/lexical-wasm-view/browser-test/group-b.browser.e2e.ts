@@ -663,6 +663,82 @@ test('a mouse drag from mid-cell to the diagonal cell selects the whole rectangl
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+// Source control (real Source editor, Chromium): after a drag to the diagonal
+// cell, carrying on out of its bottom into the paragraph below and releasing
+// leaves a range from the start of the first cell to after@5, with the DOM
+// anchor at the first cell (TD@0). In the app Chromium extends its drag from a
+// caret left inside the table; pinned $fixRangeSelectionForSelectedTable then
+// re-anchors that range at the table's start. Coverage, not a regression
+// proof: this fixture's layout does not make Chromium extend its drag, so the
+// test places that range itself.
+test('mid-drag, a range leaving the table for the paragraph below becomes a range from the table start', async ({
+  page,
+}) => {
+  await page.evaluate(
+    (state) => window.groupB.first.set(state),
+    JSON.stringify({
+      root: {
+        ...tableDocument.root,
+        children: [
+          ...tableDocument.root.children,
+          {
+            type: 'paragraph',
+            version: 1,
+            children: [{ type: 'text', version: 1, text: 'after' }],
+          },
+        ],
+      },
+    })
+  );
+  const afterKey = await page.evaluate(
+    () => window.groupB.first.nodes().find((node) => node.text === 'after')?.key
+  );
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(3).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 12,
+  });
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(4);
+  await page.evaluate(() => {
+    const leaf = (text: string) => {
+      const element = [...document.querySelectorAll('#first p')].find(
+        (paragraph) => paragraph.textContent === text
+      );
+      const node = element
+        ? document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()
+        : null;
+      if (!node) throw new Error(`Missing ${text} text`);
+      return node;
+    };
+    document
+      .getSelection()
+      ?.setBaseAndExtent(leaf('A'), 1, leaf('after'), 'after'.length);
+  });
+  await page.mouse.up();
+  const outcome = () =>
+    page.evaluate(() => {
+      const model = window.groupB.first.selection();
+      const dom = document.getSelection();
+      return {
+        kind: model.kind,
+        focus: model.kind === 'range' ? model.focus : null,
+        domAnchorIsFirstCell:
+          dom?.anchorNode === document.querySelector('#first td') &&
+          dom?.anchorOffset === 0,
+      };
+    });
+  await expect.poll(outcome).toEqual({
+    kind: 'range',
+    focus: { key: afterKey, offset: 5, type: 'text' },
+    domAnchorIsFirstCell: true,
+  });
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
 // Coverage, not a regression proof: in this fixture Chromium does not extend
 // its text drag from a strip outside the editor, so this passes without the
 // elementsFromPoint fix. observer.test.ts pins that fix deterministically.
@@ -708,8 +784,9 @@ test('a mouse drag across an overlay above the cell border keeps a native TableS
 
 // Source control (real Source editor, Chromium): with the button held after a
 // drag across four cells, setBaseAndExtent onto the paragraph below kept
-// table(A1->B2) and its four cells through release; pinned
-// $internalCreateSelection clones a TableSelection on selectionchange.
+// table(A1->B2) and its four cells through release, and left the DOM caret
+// at that paragraph; pinned $internalCreateSelection clones a TableSelection
+// on selectionchange.
 test('mid-drag, a caret on a sibling block outside the table keeps the table selection', async ({
   page,
 }) => {
@@ -750,14 +827,22 @@ test('mid-drag, a caret on a sibling block outside the table keeps the table sel
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     );
   });
-  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
-    'table'
-  );
+  const caretOnSibling = () =>
+    page.evaluate(() => {
+      const selection = document.getSelection();
+      return {
+        model: window.groupB.first.selection().kind,
+        dom:
+          selection?.anchorNode instanceof Element &&
+          selection.anchorNode.textContent === 'after'
+            ? `${selection.anchorNode.nodeName}@${selection.anchorOffset}`
+            : null,
+      };
+    });
+  expect(await caretOnSibling()).toEqual({ model: 'table', dom: 'P@0' });
   await page.mouse.up();
   await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
-  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
-    'table'
-  );
+  expect(await caretOnSibling()).toEqual({ model: 'table', dom: 'P@0' });
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 

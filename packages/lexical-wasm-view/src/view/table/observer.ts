@@ -405,17 +405,17 @@ export class TableObserver {
     // Chromium can re-anchor a cleared native text drag on the editable root
     // or on the table's scrollable wrapper between them.
     if (this.isRootCaret(dom)) return true;
-    // Pinned $internalCreateSelection clones the TableSelection for any caret
-    // this editor owns: Chromium's re-seed at the root's first caret position,
-    // or a caret placed on another block mid-drag. A range leaving the table
-    // is the drag extending past it and is read as a range.
     // A selection in a nested editor or decorator input is never this drag's.
     if (!isSelectionWithinEditor(this.view, dom.anchorNode, dom.focusNode))
       return false;
-    if (
-      !dom.isCollapsed &&
-      (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
-    )
+    // Pinned $internalCreateSelection clones the TableSelection for any caret
+    // this editor owns, and Source leaves the caret in the DOM: Chromium's
+    // re-seed at the root's first caret position, or a caret placed on another
+    // block mid-drag. Chromium extends its drag from it, so dragging out of
+    // the table yields a range leaving it, which the model re-anchors at the
+    // table's edge as pinned $fixRangeSelectionForSelectedTable does.
+    if (dom.isCollapsed) return true;
+    if (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
       return false;
     dom.removeAllRanges();
     return true;
