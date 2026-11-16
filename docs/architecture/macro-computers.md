@@ -168,7 +168,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   owner) only while the host has awake room (`add_pool_computer` counts under
   the host lock). A pool computer's first connection records neither
   enrollment nor a default agent.
-  A Stripe or comped purchase first tries `ComputerRepo::claim_pool_computer`:
+  A Stripe or comped purchase first tries `ComputerRepo::claim_pool_computer`
+  (never one for an agent teammate: a pool computer enrolled without the
+  agent's environment, so those always take the cold path):
   in one transaction under the host locks it takes the oldest up, connected
   pool computer of the purchase's exact resources on the host's current image
   with sold units left (`FOR UPDATE SKIP LOCKED`), unless the key was used or
@@ -182,14 +184,16 @@ attempt, so a busy database never fails a computer or abandons a removal.
   with billing `purchasing` while the charge settles. `Charge` runs in the
   billing worker with key `computer-add:{id}`: success →
   `ChargeSucceeded` (`Active`), a definite refusal → `ChargeFailed` (released,
-  nothing to remove); unknown outcomes retry, and the attempt at
+  nothing to remove, `Failure::Payment` and a `Failed` setup notice to the
+  buyer, who was already told it was ready); unknown outcomes retry, and the attempt at
   `MAX_BILLING_ATTEMPTS` settles the add instead (fenced): an item bills it,
   none releases it. A `Charging` computer refuses cancel, undo, restore and
   release (`Rejected::PaymentPending`), and subscription snapshots leave its
   items alone. `JoinTeam` (fleet worker) records enrollment and the default
   agent, drops macrod's connection through the runtime command bus
   (`Harnesses::reconnect`, `RuntimeRegistry::disconnect` on the replica that
-  holds it) so macrod reloads as the team's, then refills. A taken computer
+  holds it; a failed publish retries the effect) so macrod reloads as the
+  team's, then refills. It does nothing for a computer released before it ran. A taken computer
   never returns to the pool.
 - **Capacity**: free sold units are sold capacity minus the units of live
   bought computers (phase not `destroying`) and every reservation, expired or not
@@ -416,7 +420,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Setup notices**: `transition` emits `Effect::NotifySetup` when first setup
   ends: `Ready` on the first macrod connection (before `setup.connected_at`
   latches), `Failed` when a not-yet-connected computer gives up, once per
-  attempt. The fleet worker sends it to the buyer (`created_by`) through the
+  attempt; also `Failed` (`Failure::Payment`) when a taken pool computer's
+  charge is refused, since it has no setup timeline. The fleet worker sends it to the buyer (`created_by`) through the
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
   failing is dropped after its retries and never fails the computer. For an
   agent teammate's computer the notice carries the agent (`agent_of`) and goes

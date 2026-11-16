@@ -828,6 +828,11 @@ where
                 "a computer still in the pool cannot join a team"
             )));
         }
+        // Released before the handover ran: its destroy is queued behind
+        // this effect, so nothing here may hold it up.
+        if !computer.state.is_live() {
+            return Ok(());
+        }
         if let Some(harness_id) = computer.harness_id {
             if computer.enrolled_at.is_none() {
                 self.repo
@@ -837,11 +842,12 @@ where
                 // A convenience: the span records a failure, and setup carries on.
                 self.create_default_agent(&computer, harness_id).await.ok();
             }
+            // Required: until macrod redials it runs the pool owner's
+            // configuration, so a failure retries this effect.
             self.harnesses
                 .reconnect(harness_id)
                 .await
-                .inspect_err(|error| tracing::warn!(computer_id = %computer.id, error = ?error, "could not make macrod reconnect"))
-                .ok();
+                .map_err(internal)?;
         }
         self.fill_pool()
             .await

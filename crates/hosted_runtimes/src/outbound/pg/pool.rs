@@ -91,7 +91,12 @@ impl PgComputerRepo {
             return Ok(Claim::Unavailable);
         };
 
-        let mut computer = Computer::try_from(row)?;
+        // An undecodable candidate is quarantined (and logged) and left in
+        // place; this purchase takes the cold path instead of failing.
+        let mut computer = match Self::decode_row(row) {
+            ComputerRecord::Healthy(computer) => *computer,
+            ComputerRecord::NeedsAttention { .. } => return Ok(Claim::Unavailable),
+        };
         computer.owner = Some(Ownership {
             team_id: purchase.team_id,
             created_by: purchase.created_by.clone(),
