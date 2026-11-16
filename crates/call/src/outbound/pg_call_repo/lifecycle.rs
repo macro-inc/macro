@@ -9,6 +9,7 @@ impl PgCallRepo {
         call_id: &Uuid,
         require_empty: bool,
         program_only_before: Option<DateTime<Utc>>,
+        hold_scheduled: bool,
     ) -> Result<Option<ArchivedCall>, CallError> {
         let mut tx = self.pool.begin().await?;
         // The live share-with-team intent is translated into canonical team
@@ -19,7 +20,9 @@ impl PgCallRepo {
         let call = sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,
-                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title
+                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title,
+                   (SELECT scheduled_end FROM call_meetings
+                    WHERE id = calls.meeting_id AND cancelled_at IS NULL AND channel_id IS NULL) AS meeting_scheduled_end
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -62,6 +65,15 @@ impl PgCallRepo {
             if !eligible {
                 return Ok(None);
             }
+        }
+
+        // Checked under the call lock, so a rejoin can't race a scheduled
+        // meeting's session into archival before its slot ends.
+        if hold_scheduled
+            && crate::domain::meetings::holds_empty_session(call.meeting_scheduled_end, Utc::now())
+        {
+            tracing::info!(%call_id, "keeping emptied scheduled meeting open until its end");
+            return Ok(None);
         }
 
         let ended_at = Utc::now().trunc_subsecs(6);

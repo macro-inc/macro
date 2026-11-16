@@ -1,6 +1,6 @@
 //! Persistent meeting links and guest identity validation.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -76,6 +76,30 @@ pub struct Meeting {
     /// Channel call this invitation is pinned to; prevents reuse for later calls.
     #[serde(skip)]
     pub channel_call_id: Option<Uuid>,
+}
+
+/// Longest time an empty scheduled meeting's RTC room is kept open.
+const MAX_HELD_ROOM: TimeDelta = TimeDelta::hours(24);
+
+/// Whether a session that just emptied stays open. Instant and channel calls
+/// end when their last person leaves; a scheduled meeting is one call for its
+/// whole slot, so people who leave and rejoin before its end return to it.
+/// The stale-call sweeper ends it once the slot is over.
+pub fn holds_empty_session(scheduled_end: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+    scheduled_end.is_some_and(|end| now < end)
+}
+
+impl Meeting {
+    /// How long an empty room for a new session should stay open: until the
+    /// scheduled end, so recording and transcription survive a gap. None
+    /// keeps the RTC default for sessions that end when they empty.
+    pub fn held_room_departure_timeout(&self, now: DateTime<Utc>) -> Option<std::time::Duration> {
+        if self.channel_id.is_some() || !holds_empty_session(self.scheduled_end, now) {
+            return None;
+        }
+        let end = self.scheduled_end?;
+        (end - now).min(MAX_HELD_ROOM).to_std().ok()
+    }
 }
 
 /// Longest accepted meeting title, in characters.

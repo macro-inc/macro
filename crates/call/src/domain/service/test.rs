@@ -104,7 +104,7 @@ impl MockRtcClient {
 
 impl CallRtcClient for MockRtcClient {
     async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
-        self.create_room(room_name).await
+        self.create_room(room_name, None).await
     }
     async fn generate_guest_token(
         &self,
@@ -122,7 +122,11 @@ impl CallRtcClient for MockRtcClient {
         Ok(())
     }
 
-    async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
+    async fn create_room(
+        &self,
+        _room_name: &str,
+        _departure_timeout: Option<std::time::Duration>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -1409,11 +1413,11 @@ async fn room_finished_publishes_room_finished_archived_event() {
             assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
             Box::pin(async move { Ok(Some(active_call)) })
         });
-    repo.expect_archive_call()
+    repo.expect_archive_finished_room()
         .times(1)
         .return_once(move |call_id| {
             assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
-            Box::pin(async move { Ok(archived_call) })
+            Box::pin(async move { Ok(Some(archived_call)) })
         });
 
     let rtc_client = webhook_rtc_client("room_finished", None);
@@ -1442,7 +1446,7 @@ async fn failed_archive_does_not_publish_archived_event() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
-    repo.expect_archive_call().times(1).returning(|_| {
+    repo.expect_archive_finished_room().times(1).returning(|_| {
         Box::pin(async { Err(CallError::Internal(anyhow::anyhow!("archive failed"))) })
     });
 
@@ -1468,9 +1472,9 @@ async fn malformed_archived_creator_skips_event_without_undoing_archival() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
-    repo.expect_archive_call()
+    repo.expect_archive_finished_room()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(archived_call) }));
+        .return_once(move |_| Box::pin(async move { Ok(Some(archived_call)) }));
 
     let rtc_client = webhook_rtc_client("room_finished", None);
     let event_broker = RecordingEventBroker::default();

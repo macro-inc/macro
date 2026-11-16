@@ -958,7 +958,7 @@ impl<
 
                 // Create RTC room (idempotent in LiveKit).
                 self.rtc_client
-                    .create_room(&room_name)
+                    .create_room(&room_name, None)
                     .await
                     .map_err(CallError::Internal)?;
 
@@ -1686,7 +1686,11 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let archived = self.repo.archive_call(&call.id).await?;
+                    // A scheduled meeting before its end stays open for a
+                    // rejoin, which recreates its room.
+                    let Some(archived) = self.repo.archive_finished_room(&call.id).await? else {
+                        return Ok(());
+                    };
                     self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the

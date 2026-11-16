@@ -72,7 +72,7 @@ async fn channel_token_does_not_wait_for_media_or_recipient_notifications() {
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_create_room()
         .times(1)
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
     rtc.expect_generate_token()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok("token".into()) }));
@@ -190,7 +190,7 @@ async fn existing_and_race_losing_joins_do_not_start_background_services() {
         if matches!(scenario, GetOrCreateScenario::RaceLoses) {
             rtc.expect_create_room()
                 .times(1)
-                .returning(|_| Box::pin(async { Ok(()) }));
+                .returning(|_, _| Box::pin(async { Ok(()) }));
             rtc.expect_delete_room()
                 .times(1)
                 .returning(|_| Box::pin(async { Ok(()) }));

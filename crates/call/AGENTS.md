@@ -30,6 +30,8 @@ in-call chat.
   Calls tabs, read from the viewer's grants outward.
 - `src/outbound/pg_call_repo/lifecycle.rs`: atomic empty and program-only
   archival checks; the latter uses the last human departure and a 60-second grace.
+  Both, and `room_finished`, keep a scheduled meeting's session open until its
+  scheduled end (`domain::meetings::holds_empty_session`).
 - `src/outbound/ai_call_summarizer.rs`, `src/outbound/s3_recording_storage.rs`:
   call recording/summarization.
 - Recording downloads use the call record's view-access receipt and stream S3 chunks through `RecordingStorage`.
@@ -80,6 +82,11 @@ in-call chat.
   when one connects. Only a room named after an archived `call_records` row is
   orphaned (call ids are never reused); meeting preparations and get-or-create
   candidate rooms have no `calls` row yet and must be left alone.
+- Channel, DM, and instant calls end when their last person leaves; a
+  scheduled meeting stays one session until its scheduled end, so a rejoin
+  returns to it. Its room is created with a departure timeout up to that end
+  so recording and transcription survive the gap, and the stale-call sweeper
+  archives it after the end. Use `archive_call` only to force archival.
 - Bot RTC identities use `bot|<uuid>`. Webhooks never write bot attendance or
   participant events; an archived call's recreated room evicts the bot.
 - `enable-programmatic-calls` fails closed for explicit start and leave. For

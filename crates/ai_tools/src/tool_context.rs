@@ -949,7 +949,7 @@ pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
     async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
-        self.create_room(room_name).await
+        self.create_room(room_name, None).await
     }
     async fn generate_guest_token(
         &self,
@@ -968,7 +968,11 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
-    async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
+    async fn create_room(
+        &self,
+        _room_name: &str,
+        _departure_timeout: Option<std::time::Duration>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 

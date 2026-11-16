@@ -141,12 +141,20 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(())
     }
     #[tracing::instrument(err, skip(self))]
-    async fn create_room(&self, room_name: &str) -> anyhow::Result<()> {
+    async fn create_room(
+        &self,
+        room_name: &str,
+        departure_timeout: Option<std::time::Duration>,
+    ) -> anyhow::Result<()> {
         self.room_client
             .create_room(
                 room_name,
                 CreateRoomOptions {
                     empty_timeout: 60,
+                    // Zero keeps LiveKit's default.
+                    departure_timeout: departure_timeout.map_or(0, |timeout| {
+                        u32::try_from(timeout.as_secs()).unwrap_or(u32::MAX)
+                    }),
                     ..Default::default()
                 },
             )

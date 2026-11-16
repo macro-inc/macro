@@ -318,7 +318,10 @@ impl<
         let candidate_room = candidate_id.to_string();
         if preparation.is_none() {
             self.rtc_client
-                .create_room(&candidate_room)
+                .create_room(
+                    &candidate_room,
+                    meeting.held_room_departure_timeout(chrono::Utc::now()),
+                )
                 .await
                 .map_err(CallError::Internal)?;
         }

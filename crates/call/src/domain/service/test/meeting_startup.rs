@@ -221,7 +221,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_create_room()
         .times(1)
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
     rtc.expect_dispatch_transcription_agent()
         .times(1)
         .return_once(move |_| {
