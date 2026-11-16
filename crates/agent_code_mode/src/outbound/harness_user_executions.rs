@@ -1,7 +1,9 @@
 //! Client for the harness's internal user-execution route, for hosts with no
 //! Deno runtime of their own.
 
-use crate::domain::{CodeModeError, MentionCodeMode, MentionContext, UserExecutionReceipt};
+use crate::domain::{
+    CodeModeError, MAX_RESULT_IMAGES, MentionCodeMode, MentionContext, UserExecutionReceipt,
+};
 use crate::user_executions::{USER_EXECUTIONS_PATH, UserExecutionCommand, UserExecutionFailure};
 use async_trait::async_trait;
 use code_execution::domain::ExecuteRequest;
@@ -17,8 +19,14 @@ mod test;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 /// The longest program deadline plus room for queueing and transport.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
-/// A receipt carries one bounded program result.
-const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+/// Base64 bytes of one image a result shows the model: the harness's own
+/// cap on each returned image (`code_mode::images::MAX_BASE64_BYTES`).
+const MAX_IMAGE_BASE64_BYTES: usize = 4_000_000;
+/// A receipt carries one bounded program result (64 KiB) plus up to
+/// [`MAX_RESULT_IMAGES`] base64 images, with room for the envelope. A smaller
+/// cap would read a canvas render as a lost outcome.
+const MAX_RESPONSE_BYTES: usize =
+    MAX_RESULT_IMAGES * MAX_IMAGE_BASE64_BYTES + 64 * 1024 + 1024 * 1024;
 
 /// Runs programs on the harness as a named user, with the internal key.
 #[derive(Clone)]

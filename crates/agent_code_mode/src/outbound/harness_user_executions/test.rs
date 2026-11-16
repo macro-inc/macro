@@ -91,3 +91,43 @@ async fn keeps_safe_failures_and_hides_the_rest() {
         assert!(error.to_string().contains(expected), "{status}: {error}");
     }
 }
+
+#[tokio::test]
+async fn a_receipt_with_two_full_images_fits_and_a_larger_one_is_unconfirmed() {
+    // About the size of two canvas renders at the harness's per-image cap.
+    let fits = "a".repeat(MAX_RESULT_IMAGES * MAX_IMAGE_BASE64_BYTES);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(USER_EXECUTIONS_PATH))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "status": "succeeded",
+            "activity": [],
+            "activityTruncated": false,
+            "result": {"data": fits},
+            "error": null,
+        })))
+        .mount(&server)
+        .await;
+    assert_eq!(
+        run(&server).await.unwrap().status,
+        ExecutionStatus::Succeeded
+    );
+
+    let too_large = "a".repeat(MAX_RESPONSE_BYTES + 1);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(USER_EXECUTIONS_PATH))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "status": "succeeded",
+            "activity": [],
+            "activityTruncated": false,
+            "result": {"data": too_large},
+            "error": null,
+        })))
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        run(&server).await,
+        Err(CodeModeError::Unconfirmed)
+    ));
+}
