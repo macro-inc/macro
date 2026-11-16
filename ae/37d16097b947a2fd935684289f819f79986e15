@@ -1,0 +1,33 @@
+crates/code_mode_assets/AGENTS.md
+  s_e7fba64acbc356::t_b2cc3b29b87497 38-43
+packages/sdk-ocaml/README.md
+  s_e7fba64acbc356::t_b2cc3b29b87497 220-223
+nix/cloud-storage.nix
+  s_e7fba64acbc356::t_b2cc3b29b87497 342
+crates/code_execution/README.md
+  s_bec78062e28411::t_032a5984a11447 63-66,93-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ae37d16097b947a2fd935684289f819f79986e15",
+  "prompts": {},
+  "sessions": {
+    "s_bec78062e28411": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c0ff1a-3e55-44b7-a4a3-5becc353bd90",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e7fba64acbc356": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc72e5c9-e8a1-4e3f-8b52-3eec63bb16f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
