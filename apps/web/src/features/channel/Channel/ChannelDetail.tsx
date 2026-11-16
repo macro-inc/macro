@@ -147,6 +147,10 @@ const ChannelTitleMenu = lazyNamed(
   () => import('./ChannelTitleMenu'),
   'ChannelTitleMenu'
 );
+const ChannelTitleSheet = lazyNamed(
+  () => import('./ChannelTitleMenu'),
+  'ChannelTitleSheet'
+);
 
 /**
  * The channel's tab strip. Given the top bar's `collapser`, the strip
@@ -317,7 +321,7 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
     >
       <HeaderIsland class="min-w-0 shrink px-1">
         <DebugSuspense name="ChannelDetail.touch-title-menu">
-          <ChannelTitleMenu
+          <ChannelTitleSheet
             channelId={props.channelId}
             triggerProps={{
               class: 'min-w-0 max-w-full gap-2',
@@ -334,7 +338,7 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
               fallbackName={props.fallbackName}
             />
             <CaretDownIcon class="size-3 shrink-0" />
-          </ChannelTitleMenu>
+          </ChannelTitleSheet>
         </DebugSuspense>
       </HeaderIsland>
       <div class="ml-auto flex shrink-0 items-center gap-2">

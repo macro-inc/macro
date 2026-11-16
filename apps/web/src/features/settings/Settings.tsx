@@ -256,6 +256,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   selectRoutedTab(result.tab);
                   setSearchSelection({ ...result });
                 }}
+                searchable={!isTouchDevice()}
                 searchQuery={searchQuery()}
                 onSearchQueryChange={setSearchQuery}
                 isItemActive={isItemActive}

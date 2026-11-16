@@ -2,7 +2,6 @@ import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { pressHandlers } from '@ui';
 import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -12,7 +11,7 @@ import { SettingsSearchResults } from './settings-search-results';
 
 /**
  * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field (desktop only), an optional action (inviting your team) above
+ * title bar, a search field, an optional action (inviting your team) above
  * the grouped section pills, and the pills themselves.
  */
 export function SettingsSidebar(props: {
@@ -20,6 +19,8 @@ export function SettingsSidebar(props: {
   results: SettingsSearchResult[];
   selectedResultId?: string;
   onSelectResult: (result: SettingsSearchResult) => void;
+  /** Off on touch, which searches from the dock as other sidebars do. */
+  searchable: boolean;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   isItemActive: (tab: SettingsTab) => boolean;
@@ -40,8 +41,7 @@ export function SettingsSidebar(props: {
         </div>
       </ViewSidebar.Header>
 
-      {/* Touch searches from the dock, as other views' sidebars do. */}
-      <Show when={!isTouchDevice()}>
+      <Show when={props.searchable}>
         <ViewSidebar.Primary>
           <SearchBar
             label={t('settingsNav.searchSettings')}
