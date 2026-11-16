@@ -170,6 +170,7 @@ impl ImportRepo for Repo {
                 updated_at: chrono::Utc::now(),
                 scanned: None,
                 review_id: None,
+                review_session_id: None,
             });
         }
         Ok(true)
