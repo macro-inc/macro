@@ -5,8 +5,8 @@ import {
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { MarkdownDetail } from '@app/features/drive-view/MarkdownDetail';
 import { FileDetailBreadcrumbItem } from '@app/features/drive-view/views/FileDetailBreadcrumbItem';
-import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

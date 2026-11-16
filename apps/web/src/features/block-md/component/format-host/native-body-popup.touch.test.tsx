@@ -32,6 +32,18 @@ vi.mock('@core/mobile/nativeEditMenu', async (importOriginal) => ({
 }));
 
 const { NativeBodyFormatPopup } = await import('./native-body-popup');
+const { MarkdownDocumentProvider } = await import(
+  '../../context/markdown-document-context'
+);
+const { createMarkdownDocumentState } = await import(
+  '../../context/markdown-document-state'
+);
+const { mobileBodyFormatPopup } = await import(
+  '../../views/mobile/body-format-popup'
+);
+const { desktopBodyFormatPopup } = await import(
+  '../../views/body-format-popup'
+);
 
 const offsetWidth = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -98,6 +110,8 @@ function mount(
      *  zero-text range (Source MarkdownPopup :849). */
     text?: string;
     canEdit?: boolean;
+    /** The entry's composition; this file's touch toolbar by default. */
+    composition?: 'desktop' | 'touch';
   } = {}
 ) {
   const scope = document.createElement('div');
@@ -186,22 +200,49 @@ function mount(
     converting: () => options.converting ?? false,
   });
   const [closed, setClosed] = createSignal(0);
-  render(() => (
-    <FloatingMenuGroup>
-      <NativeBodyFormatPopup
-        host={host}
-        popup={bodyPopup}
-        slots={[ai, task]}
-        touch={touch}
-        onToolbarClosed={() => setClosed(closed() + 1)}
-      />
-    </FloatingMenuGroup>
+  const documentState = createMarkdownDocumentState();
+  const rendered = render(() => (
+    <MarkdownDocumentProvider
+      context={{
+        documentId: () => 'doc-1',
+        kind: () => 'document',
+        documentSource: () => ({ type: 'loading' }),
+        permissions: {
+          canEdit: () => options.canEdit ?? true,
+          canComment: () => options.canComment ?? false,
+          isOwner: () => true,
+        },
+        persistedName: () => undefined,
+        fallbackName: () => undefined,
+        bodyFormatPopup:
+          options.composition === 'desktop'
+            ? desktopBodyFormatPopup
+            : mobileBodyFormatPopup,
+        state: documentState,
+        element: () => root,
+      }}
+    >
+      <FloatingMenuGroup>
+        <NativeBodyFormatPopup
+          composition={
+            options.composition === 'desktop'
+              ? desktopBodyFormatPopup
+              : mobileBodyFormatPopup
+          }
+          host={host}
+          popup={bodyPopup}
+          slots={[ai, task]}
+          touch={touch}
+          onToolbarClosed={() => setClosed(closed() + 1)}
+        />
+      </FloatingMenuGroup>
+    </MarkdownDocumentProvider>
   ));
   const show = (value: boolean) => {
     if (!popup) throw new Error('Popup did not register');
     popup.visible(value);
   };
-  return { show, calls, closed };
+  return { show, calls, closed, unmount: rendered.unmount };
 }
 
 /** The touch toolbar's visible page, not its hidden measuring row. */
@@ -404,3 +445,37 @@ test('Paste in caret mode reaches the native paste action', async () => {
   await vi.advanceTimersByTimeAsync(100);
   expect(calls).toEqual(['paste']);
 });
+
+// FE-70: the view entry picks one composition; the popup never shows both.
+test('the desktop composition renders only the desktop toolbar, even with touch actions', () => {
+  const { show } = mount({ composition: 'desktop' });
+  show(true);
+  vi.advanceTimersByTime(100);
+  const shown = options();
+  expect(shown).toContain('AI edit');
+  expect(shown).not.toContain('Copy');
+  expect(shown).not.toContain('Share');
+});
+
+test('the touch composition renders only TouchSelectionToolbar', () => {
+  const { show } = mount();
+  show(true);
+  vi.advanceTimersByTime(100);
+  const shown = options();
+  expect(shown).toContain('Copy');
+  expect(shown).not.toContain('AI edit');
+});
+
+test.each(['desktop', 'touch'] as const)(
+  'unmounting the %s popup closes its toolbar and releases the iOS edit menu',
+  (composition) => {
+    const { show, closed, unmount } = mount({ composition });
+    show(true);
+    vi.advanceTimersByTime(100);
+    expect(closed()).toBe(0);
+    unmount();
+    expect(closed()).toBe(1);
+    expect(edit.suppressed.at(-1)).toBe(false);
+    expect(document.querySelector('[data-popup], .z-action-menu')).toBeNull();
+  }
+);

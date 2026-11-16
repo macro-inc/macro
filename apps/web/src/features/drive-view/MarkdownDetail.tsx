@@ -1,5 +1,6 @@
 import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
+import type { NativeBodyPopupComposition } from '@block-md/component/format-host/native-body-popup';
 import {
   MarkdownDocument,
   MarkdownDocumentContent,
@@ -14,7 +15,9 @@ import {
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { desktopBodyFormatPopup } from '@block-md/views/body-format-popup';
 import { MarkdownHeaderActions } from '@block-md/views/markdown-header-parts';
+import { mobileBodyFormatPopup } from '@block-md/views/mobile/body-format-popup';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -23,6 +26,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import type { DocumentEntity } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -30,8 +34,8 @@ import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
 import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
-import { FileDetailLoadGate } from '../components/FileDetail';
-import type { FileDetailContext } from '../util/file-detail-context';
+import { FileDetailLoadGate } from './components/FileDetail';
+import type { FileDetailContext } from './util/file-detail-context';
 
 export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
 
@@ -82,6 +86,7 @@ function MarkdownDetailContent(props: {
   kind: MarkdownDocumentKind;
   fallbackName: string;
   data: MarkdownDocumentData;
+  bodyFormatPopup: NativeBodyPopupComposition;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -126,6 +131,7 @@ function MarkdownDetailContent(props: {
       permissions={props.data.permissions}
       persistedName={persistedName()}
       fallbackName={props.fallbackName}
+      bodyFormatPopup={props.bodyFormatPopup}
     >
       <ModalsProvider>
         {props.children?.({
@@ -164,7 +170,11 @@ function MarkdownDetailContent(props: {
   );
 }
 
-/** Renders a markdown document without a block container or split header. */
+/**
+ * Renders a markdown document without a block container or split header.
+ * The embedded markdown view's entry: every Drive, task and CRM detail mounts
+ * the document here, so it picks the desktop or touch composition once.
+ */
 export function MarkdownDetail(props: MarkdownDetailProps) {
   return (
     <FileDetailLoadGate
@@ -187,6 +197,9 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
             )
           }
           data={data}
+          bodyFormatPopup={
+            isTouchDevice() ? mobileBodyFormatPopup : desktopBodyFormatPopup
+          }
           children={props.children}
         />
       )}

@@ -37,6 +37,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import * as native from '../../../../lib/core/document-session/wasm/document_session_wasm.js';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 import { FormatTools } from '../FormatTools';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import { select, state } from './native-test-fixture';
@@ -163,6 +164,7 @@ for (const engine of ['source', 'native'] as const) {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state: documentState,
             element: () => body,
           };

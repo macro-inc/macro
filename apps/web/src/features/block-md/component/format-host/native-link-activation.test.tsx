@@ -17,6 +17,7 @@ import { dispatchApplicationCommandSettled } from '../../../../lib/core/componen
 import * as url from '../../../../lib/core/util/url';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 import { createNativeBodyFormattingOverlay } from './native-overlay';
 import { mount, select, state } from './native-test-fixture';
 
@@ -56,6 +57,7 @@ function setup() {
   const [canEdit, setCanEdit] = createSignal(true);
   const optionalErrors = vi.spyOn(Telemetry, 'error');
   const formatting = createNativeBodyFormattingOverlay({
+    composition: desktopBodyFormatPopup,
     canEdit,
     alive: () => true,
   });
@@ -86,6 +88,7 @@ function setup() {
           },
           persistedName: () => undefined,
           fallbackName: () => undefined,
+          bodyFormatPopup: desktopBodyFormatPopup,
           state: documentState,
           element: () => runtime.root,
         }}

@@ -1,4 +1,8 @@
 import {
+  MarkdownDetail,
+  type MarkdownDetailContext,
+} from '@app/features/drive-view/MarkdownDetail';
+import {
   CanvasDetail,
   type CanvasDetailContext,
 } from '@app/features/drive-view/views/CanvasDetail';
@@ -10,10 +14,6 @@ import {
   ImageDetail,
   type ImageDetailContext,
 } from '@app/features/drive-view/views/ImageDetail';
-import {
-  MarkdownDetail,
-  type MarkdownDetailContext,
-} from '@app/features/drive-view/views/MarkdownDetail';
 import type { PdfDetailContext } from '@app/features/drive-view/views/PdfDetail';
 import {
   UnknownDetail,

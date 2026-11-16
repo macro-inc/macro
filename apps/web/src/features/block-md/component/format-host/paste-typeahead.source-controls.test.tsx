@@ -20,6 +20,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 
 // Source control for the touch Paste with typeahead triggers: the real
 // MarkdownPopup touch toolbar's Paste (iOS native edit menu present, the
@@ -160,6 +161,7 @@ function mount() {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

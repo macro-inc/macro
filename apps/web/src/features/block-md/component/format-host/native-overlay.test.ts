@@ -1,10 +1,12 @@
 /** @vitest-environment jsdom */
 import { expect, test } from 'vitest';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 import { createNativeBodyFormattingOverlay } from './native-overlay';
 import { mount, select, state } from './native-test-fixture';
 
 test('optional body formatting releases its own listeners without closing the real document', async () => {
   const formatting = createNativeBodyFormattingOverlay({
+    composition: desktopBodyFormatPopup,
     canEdit: () => true,
     alive: () => true,
   });
@@ -29,6 +31,7 @@ test('optional body formatting releases its own listeners without closing the re
 
 test('missing actual ordered command ports retire optional formatting while the document stays live', async () => {
   const formatting = createNativeBodyFormattingOverlay({
+    composition: desktopBodyFormatPopup,
     canEdit: () => true,
     alive: () => true,
   });

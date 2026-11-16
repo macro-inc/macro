@@ -18,6 +18,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 import { promptSlot } from './body-popup-slots';
 import { NativeBodyToolbar } from './native-body-toolbar';
 
@@ -121,6 +122,7 @@ test('Source control: the MarkdownPopup selection toolbar has no accessible name
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

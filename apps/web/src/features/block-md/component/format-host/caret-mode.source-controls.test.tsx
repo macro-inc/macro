@@ -19,6 +19,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 
 // Source control for C-TOUCH-CARET-MODE-01: the real MarkdownPopup on a touch
 // device over a paragraph with a comment mark. Its popupPlugin admits an
@@ -284,6 +285,7 @@ function mount(options: {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

@@ -33,7 +33,9 @@ import {
 } from '../component/MarkdownDocument';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { desktopBodyFormatPopup } from '../views/body-format-popup';
 import { markdownHeaderMenu } from '../views/markdown-header';
+import { mobileBodyFormatPopup } from '../views/mobile/body-format-popup';
 import { mobileMarkdownHeaderMenu } from '../views/mobile/markdown-header';
 
 const PARAMS = new URLSearchParams(location.search);
@@ -140,6 +142,9 @@ function Fixture() {
       permissions={{ canComment: true, canEdit: true, isOwner: true }}
       persistedName="Quarterly planning notes"
       fallbackName={undefined}
+      bodyFormatPopup={
+        isTouchDevice() ? mobileBodyFormatPopup : desktopBodyFormatPopup
+      }
     >
       <SeedComment />
       <Menu />

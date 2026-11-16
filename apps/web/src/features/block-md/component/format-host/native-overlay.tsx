@@ -14,13 +14,18 @@ import {
 } from 'solid-js';
 import { CommentButton } from '../CommentButton';
 import { createNativeAiEditSlot } from './native-ai-edit-slot';
-import { NativeBodyFormatPopup } from './native-body-popup';
+import {
+  NativeBodyFormatPopup,
+  type NativeBodyPopupComposition,
+} from './native-body-popup';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import { NativeSnippetLinkControl } from './native-snippet';
 import { createNativeBodyTouchActions } from './native-touch-actions';
 
 /** Own only the optional body menu; the document owns its actual native view. */
 export function createNativeBodyFormattingOverlay(options: {
+  /** The view entry's desktop or touch popup composition. */
+  composition: NativeBodyPopupComposition;
   canEdit: Accessor<boolean>;
   alive: Accessor<boolean>;
   /** Copy link to snippet for every viewer of this document. */
@@ -139,6 +144,7 @@ export function createNativeBodyFormattingOverlay(options: {
           <Show when={formatting.controller()}>
             {(controller) => (
               <NativeBodyFormatPopup
+                composition={options.composition}
                 host={controller().host}
                 popup={controller().bodyPopup}
                 commentAction={commentAction}

@@ -167,7 +167,8 @@ export default function RustMarkdownEditor(props: {
   const authenticated = useIsAuthenticated();
   const { commentId } = useUrlParams(URL_PARAMS);
   const owner = getOwner() ?? undefined;
-  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const { documentId, kind, permissions, state, bodyFormatPopup } =
+    useMarkdownDocument();
   const documentKind = kind();
   const documentTags = useDocTags(
     documentId(),
@@ -215,6 +216,7 @@ export default function RustMarkdownEditor(props: {
     !state.generation.generatedAndWaiting() &&
     !state.editor.error();
   const formatting = createNativeBodyFormattingOverlay({
+    composition: bodyFormatPopup,
     canEdit: canInteractWithMedia,
     alive: () => !abort.signal.aborted,
     snippetLink: { documentId },

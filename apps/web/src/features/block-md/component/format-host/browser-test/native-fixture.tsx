@@ -28,6 +28,13 @@ import { createNativeDocumentFormattingObserver } from '../native-observer';
 import { readNativeSelectionSnippet } from '../native-snippet';
 import { createNativeBodyTouchActions } from '../native-touch-actions';
 import '@app/index.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { desktopBodyFormatPopup } from '../../../views/body-format-popup';
+import { mobileBodyFormatPopup } from '../../../views/mobile/body-format-popup';
+
+const composition = isTouchDevice()
+  ? mobileBodyFormatPopup
+  : desktopBodyFormatPopup;
 
 await native.default();
 
@@ -248,6 +255,7 @@ function NativeFormattingFixture() {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: composition,
             state,
             element: () => body,
           }}
@@ -350,6 +358,7 @@ function NativeFormattingFixture() {
               <Show when={bodyPopup && formatting.controller()}>
                 {(controller) => (
                   <NativeBodyFormatPopup
+                    composition={composition}
                     host={controller().host}
                     popup={controller().bodyPopup}
                     slots={aiSlots}

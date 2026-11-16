@@ -40,6 +40,7 @@ import {
 } from './caret-seed';
 import { CaretUserProvider } from './caret-user';
 import '@app/index.css';
+import { desktopBodyFormatPopup } from '../../../views/body-format-popup';
 
 if (import.meta.env.VITE_ENABLE_RUST_EDITOR_MODEL !== 'false')
   throw new Error('The Source caret page requires the explicit OFF profile');
@@ -156,6 +157,7 @@ function SourceCaretPage() {
               },
               persistedName: () => undefined,
               fallbackName: () => undefined,
+              bodyFormatPopup: desktopBodyFormatPopup,
               state,
               element: () => body,
             }}

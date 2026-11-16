@@ -31,7 +31,9 @@ import type { MarkdownData } from '../definition';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import { desktopBodyFormatPopup } from '../views/body-format-popup';
 import { MarkdownHeader } from '../views/markdown-header';
+import { mobileBodyFormatPopup } from '../views/mobile/body-format-popup';
 import { MobileMarkdownHeader } from '../views/mobile/markdown-header';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
@@ -134,6 +136,10 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
         entity={documentEntity()}
         state={markdownState}
         documentSource={documentSource()}
+        // This view's entry picks the body popup composition once.
+        bodyFormatPopup={
+          isTouchDevice() ? mobileBodyFormatPopup : desktopBodyFormatPopup
+        }
         permissions={{
           canComment: canComment(),
           canEdit: canEdit(),

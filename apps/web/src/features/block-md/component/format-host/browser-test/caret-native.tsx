@@ -41,6 +41,12 @@ import {
 } from './caret-seed';
 import { CaretUserProvider } from './caret-user';
 import '@app/index.css';
+import { desktopBodyFormatPopup } from '../../../views/body-format-popup';
+import { mobileBodyFormatPopup } from '../../../views/mobile/body-format-popup';
+
+const composition = isTouchDevice()
+  ? mobileBodyFormatPopup
+  : desktopBodyFormatPopup;
 
 await native.default();
 
@@ -86,6 +92,7 @@ function NativeCaretPage() {
   // comment). Values follow the Source page: no comment capability (canComment false) and the
   // inline AI edit flag off (no PostHog flags in the fixture).
   const formatting = createNativeBodyFormattingOverlay({
+    composition,
     canEdit: () => !caretReadOnly,
     alive: () => !closed,
     aiEdit: {
@@ -219,6 +226,7 @@ function NativeCaretPage() {
               },
               persistedName: () => undefined,
               fallbackName: () => undefined,
+              bodyFormatPopup: composition,
               state,
               element: () => body,
             }}

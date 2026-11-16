@@ -33,6 +33,7 @@ import { MarkdownDocumentProvider } from '../../../context/markdown-document-con
 import { createMarkdownDocumentState } from '../../../context/markdown-document-state';
 import { FormatTools } from '../../FormatTools';
 import '@app/index.css';
+import { desktopBodyFormatPopup } from '../../../views/body-format-popup';
 
 if (import.meta.env.VITE_ENABLE_RUST_EDITOR_MODEL !== 'false')
   throw new Error(
@@ -160,6 +161,7 @@ function FormattingFixture() {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

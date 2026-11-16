@@ -19,6 +19,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../../views/body-format-popup';
 
 // Source control for the touch AI drawer's target: the real MarkdownPopup on a
 // touch device. Select the first paragraph, tap "Edit with AI", then either
@@ -153,6 +154,7 @@ function mount() {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
+            bodyFormatPopup: desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

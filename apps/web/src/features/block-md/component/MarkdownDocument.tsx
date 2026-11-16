@@ -46,6 +46,7 @@ import { HistoryProvider } from '../history/HistoryContext';
 import { HistoryWorkspace } from '../history/HistoryWorkspace';
 import { stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import type { NativeBodyPopupComposition } from './format-host/native-body-popup';
 import { MarkdownEditor } from './MarkdownEditor';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { Notebook } from './Notebook';
@@ -198,6 +199,8 @@ type MarkdownDocumentProps = {
   };
   persistedName: string | undefined;
   fallbackName: string | undefined;
+  /** The view entry's desktop or touch body popup composition. */
+  bodyFormatPopup: NativeBodyPopupComposition;
 };
 
 export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
@@ -217,6 +220,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
     },
     persistedName: () => props.persistedName,
     fallbackName: () => props.fallbackName,
+    bodyFormatPopup: props.bodyFormatPopup,
     state,
     element: surfaceElement,
   };

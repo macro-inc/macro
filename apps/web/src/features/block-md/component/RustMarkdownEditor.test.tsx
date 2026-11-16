@@ -131,6 +131,7 @@ vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'fixture-document',
     kind: () => 'document',
+    bodyFormatPopup: { available: () => false, Popup: () => null },
     permissions: { canEdit: () => control.canEdit() },
     state: {
       session: { setStatus: control.status },
