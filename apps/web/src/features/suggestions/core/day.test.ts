@@ -71,6 +71,15 @@ it('keeps late events at their start times, on different rows when they would me
   ]);
 });
 
+it('draws an event in the strip’s last half hour no narrower than half an hour', () => {
+  const strip = layoutDay(
+    [event('wrap-up', '19:50', '20:30')],
+    new Date('2026-11-09T07:00:00')
+  );
+
+  expect(strip.chips.map((chip) => [chip.left, chip.width])).toEqual([[96, 4]]);
+});
+
 it('gives a chip the full width wherever it fits', () => {
   const strip = layoutDay(
     [event('review', '14:00', '15:00')],

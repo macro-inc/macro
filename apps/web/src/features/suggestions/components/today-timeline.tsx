@@ -3,12 +3,14 @@ import { Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import type { DayEvent, DayStrip } from '../core/day';
 
-/** The event's title and times, for a chip too narrow to show its title. */
+/** The event's title and times, which a narrowed chip may cut off. */
 function eventTime(event: DayEvent) {
+  const start = Date.parse(event.start);
+  // Older WebKit throws on a range that ends before it starts.
   const time = new Intl.DateTimeFormat(formatLocale(), {
     hour: 'numeric',
     minute: '2-digit',
-  }).formatRange(new Date(event.start), new Date(event.end));
+  }).formatRange(start, Math.max(start, Date.parse(event.end)));
 
   return t('suggestions.eventTime', { title: event.title, time });
 }

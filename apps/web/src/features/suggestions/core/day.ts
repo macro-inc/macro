@@ -32,14 +32,20 @@ export const WORKING_HOURS = { start: 8, end: 20 };
 
 /** The widest a chip is drawn, as a share of the strip. */
 const CHIP_MAX_WIDTH = 28;
+/**
+ * The narrowest a chip is drawn, so it never shrinks to an empty box: about
+ * half an hour of the strip.
+ */
+const CHIP_MIN_WIDTH = 4;
 const LANES = 3;
 
 /**
  * Today's timed events across working hours. Each chip starts at its event's
  * start time: one that started before the strip sits at its left edge, and one
- * near the right edge is drawn narrower, never earlier than it starts. Events
- * wholly outside the strip are left out. Each chip takes the first row where
- * it clears the chip before it.
+ * near the right edge is drawn narrower rather than earlier. Only an event in
+ * the strip's last half hour, with no room even for the narrowest chip, is
+ * drawn ending at the strip's edge. Events wholly outside the strip are left
+ * out. Each chip takes the first row where it clears the chip before it.
  */
 export function layoutDay(events: DayEvent[], now: Date): DayStrip {
   const dayStart = new Date(now);
@@ -62,7 +68,10 @@ export function layoutDay(events: DayEvent[], now: Date): DayStrip {
   for (const event of sorted) {
     // Lanes are given by where chips are drawn and how wide they can be, so
     // two never cover each other.
-    const left = Math.max(0, across(Date.parse(event.start)));
+    const left = Math.min(
+      100 - CHIP_MIN_WIDTH,
+      Math.max(0, across(Date.parse(event.start)))
+    );
     const width = Math.min(CHIP_MAX_WIDTH, 100 - left);
     const free = laneEnds.findIndex((end) => end <= left);
     // Every row taken: share the row that frees up first.

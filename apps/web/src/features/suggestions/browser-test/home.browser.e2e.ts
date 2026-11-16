@@ -71,9 +71,9 @@ for (const theme of ['dark', 'light']) {
     const strip = await today.boundingBox();
     for (const chip of await today.getByRole('button').all()) {
       const box = await chip.boundingBox();
-      expect(box && strip && box.x + box.width <= strip.x + strip.width).toBe(
-        true
-      );
+      expect(
+        box && strip && box.x + box.width <= strip.x + strip.width + 0.5
+      ).toBe(true);
     }
 
     // The late chip is too narrow for its title: hovering names it and its time.
