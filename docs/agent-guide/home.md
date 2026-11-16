@@ -7,7 +7,9 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
-Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail, a `TutorialRow` on touch. It sits outside the virtualized rows, so list keyboard focus skips it.
+Access requests, grants and removals on a paired machine appear as rows about
+that machine; opening one goes to Settings → Machines with the machine pointed out.
+Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail; touch devices show none. It sits outside the virtualized rows, so list keyboard focus skips it.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -48,6 +50,9 @@ the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise, search, and touch devices keep
 the merged feed. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
+What an agent session does for you is the session's work, not yours: a task or
+document it creates stays out of Home unless a notification brings it in, and
+its edits never move an item you worked on.
 **Mark Done** clears a row's notifications (and archives an inbox email): a row
 that is only notifications leaves and stays gone after a reload, while a row you
 also worked on stays, read, at the time of your own work. **Undo** brings a done
@@ -62,8 +67,8 @@ The menu shares the legacy compact submenus: **Status** offers **Unread**, **Rea
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkboxes toggle without closing, rows add and close, and Shift/Only selects just
-one type without closing. Press **f** to open the menu.
+clicking a row or its checkbox toggles it without closing, Enter adds and closes,
+and Shift/Only selects just one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
@@ -99,6 +104,8 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+A click or Enter gives the conversation's composer focus, and Esc returns to the
+row; see [composer focus and Esc](channels.md#composer-focus-and-esc).
 If the channel is already open in another split or preview, clicking a message
 or reply notification focuses that view and jumps to the specific message,
 without a **Content already open** warning. Verify with two splits and a reply
@@ -121,6 +128,12 @@ working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata
 is omitted.
+A session a person starts is their own work from the moment its row commits,
+before its sandbox boots: Home lists it on every signed-in device within a
+couple of seconds of sending, without waiting for the first reply. Sessions
+another agent or a routine starts join only when they notify. Verify by sending
+a prompt from Home and checking the row appears while the session is still
+starting, is highlighted while it is open, and shows on a second device too.
 Once `HIDE_AGENT_DM_SESSIONS` is enabled after the warm-marker rollout, agent
 DM contexts stay out of broad Agents/Home lists, including work-feed and
 notification-driven candidates. Prior notifications or activity must not bring
@@ -290,3 +303,29 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Suggestions on Home
+
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
+and in place of the recommended actions:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: the five most important open suggestions, as the
+  server ranks them. A row opens For you with that suggestion first; **All in
+  For you** opens the page.
+
+On For you, each card has one main action for its kind: **Open in chat** opens
+the composer with the prompt, unsent; **Run in background** starts the run at
+once (the card says what it will post or send first), then shows Running and,
+when done, a row with **Open result**; **Open** or **Open draft** opens the
+item or the drafted reply; **Turn on** saves a routine suggestion and
+**Review** opens it in the routine editor. The `x` (shown on hover or focus)
+dismisses at once and leaves an Undo row for the visit; Undo restores the
+suggestion, which the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
+**Refresh suggestions** in the header asks for a fresh run, at most once an
+hour; while one runs it reads "Looking for suggestions", and during the
+cooldown "Available at" a time.
+

@@ -141,6 +141,7 @@ async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(poo
                                 value: CellValue::Options(vec![OptionRef::Id(crew)]),
                             }],
                         ],
+                        ids: None,
                     },
                 },
             ]
@@ -346,6 +347,7 @@ async fn a_table_id_another_database_already_has_is_refused_as_taken(pool: PgPoo
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -410,6 +412,7 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -510,6 +513,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -656,6 +660,7 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                                 value: CellValue::Text("7".into()),
                             }],
                         ],
+                        ids: None,
                     },
                 },
                 DatabaseOp::View {

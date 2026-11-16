@@ -13,7 +13,9 @@ inbound adapter exposing initiative queries, mutations, and loaders.
   `InitiativeMutationRoot`.
 - `src/loaders.rs`: `InitiativeLoader` — one batched initiative read per
   request for Soup and detail views. Detail and progress fields share its
-  task-access walk; progress is summarized lazily from that read.
+  task-access walk; progress is summarized lazily from that read. Each batch
+  runs in a `graphql_initiative.load` span spawned in the requesting field's
+  span, so the reads stay in the request's trace.
 - `src/lib.rs` `graphql_error`: maps `InitiativeError` to GraphQL error codes
   (`NOT_FOUND`, `FORBIDDEN`, `BAD_USER_INPUT`, `CONFLICT`) — follow this
   pattern rather than returning a bare `async_graphql::Error`.

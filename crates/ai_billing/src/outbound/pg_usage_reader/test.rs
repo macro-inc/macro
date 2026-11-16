@@ -16,6 +16,7 @@ fn completion(
         user,
         entity: None,
         agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1_000_000,
@@ -311,6 +312,7 @@ async fn priced_cache_tokens_count_through_the_stored_total(pool: PgPool) {
                 user: user.clone(),
                 entity: None,
                 agent_api_key_id: None,
+                agent_session_id: None,
                 cost: Usage {
                     amount,
                     model: "claude-opus-5".to_string(),
@@ -357,6 +359,7 @@ async fn unpriced_cache_tokens_fall_back_to_the_opus_5_cache_rates(pool: PgPool)
                 user: user.clone(),
                 entity: None,
                 agent_api_key_id: None,
+                agent_session_id: None,
                 cost: Usage {
                     amount: UsageAmount::Tokens {
                         input: 1_000_000,

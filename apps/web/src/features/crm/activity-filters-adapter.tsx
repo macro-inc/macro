@@ -1,8 +1,6 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
-import { useUserId } from '@core/context/user';
-import { idToDisplayName } from '@core/user/util';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
-import { useContacts } from '@queries/contacts/contacts';
 import { createMemo } from 'solid-js';
 import { reconcile, type SetStoreFunction, type Store } from 'solid-js/store';
 import { CALL_AUDIENCES } from '../calls-view/core/call-filters';
@@ -24,19 +22,6 @@ export function createCrmActivityFilters(
     );
   }
   const tags = useTagFilterGroup();
-  const contacts = tab === 'notes' ? useContacts() : () => [];
-  const userId = useUserId();
-  const peopleOptions = createMemo(() => {
-    const people = contacts().map((person) => ({
-      id: person.id,
-      label: person.name || person.id,
-    }));
-    const me = userId();
-    if (me && !people.some((person) => person.id === me)) {
-      people.unshift({ id: me, label: `${idToDisplayName(me)} (me)` });
-    }
-    return people;
-  });
   const groups = createMemo((): ListFilterGroup<string, string>[] => [
     ...(tab === 'notes'
       ? [
@@ -44,7 +29,8 @@ export function createCrmActivityFilters(
             id: 'created-by',
             label: 'Created by',
             searchPlaceholder: 'Search creators...',
-            options: peopleOptions(),
+            options: [],
+            createSource: useContactFilterOptions,
           },
         ]
       : []),

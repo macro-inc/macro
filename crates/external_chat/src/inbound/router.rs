@@ -115,6 +115,7 @@ impl IntoResponse for ApiError {
 pub fn authority(user: &MacroUserAuthentication) -> SendAuthority {
     match user.origin {
         CredentialOrigin::MacroApiJwt
+        | CredentialOrigin::ScopedMacroApiJwt
         | CredentialOrigin::UserApiKey
         | CredentialOrigin::AccountManager(_) => SendAuthority::UserApiToken,
         CredentialOrigin::Session if user.agent_id.is_none() => SendAuthority::Human,

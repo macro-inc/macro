@@ -79,7 +79,6 @@ pub fn map_service_thread_to_db(
     }
 }
 
-#[tracing::instrument]
 pub fn map_service_message_to_db(
     service_msg: &mut message::Message,
     thread_id: Uuid,

@@ -1,4 +1,4 @@
-import Search from '@phosphor/magnifying-glass.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
 import { Dialog } from '@ui/components/Dialog';
 import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

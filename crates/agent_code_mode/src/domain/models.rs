@@ -165,6 +165,10 @@ pub enum CodeModeError {
     /// No record belongs to this session and execution pair.
     #[error("code execution not found")]
     NotFound,
+    /// A connected app's server could not be reached or broke the exchange.
+    /// Upstream details stay in server diagnostics.
+    #[error("the connected app could not be reached; try again later")]
+    ConnectedAppUnreachable,
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,

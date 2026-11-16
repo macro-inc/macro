@@ -69,6 +69,13 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+Switch between earlier uploads with `macro.me.update({ profilePicture: macro.images.byId(savedId) })`,
+and read pictures with `macro.me.profilePicture()`, `user.profilePicture()` or
+`macro.users.profilePictures(users)`. Pictures set through Macro are a
+`StaticImage`; legacy URL pictures are an `ExternalProfilePicture` (`{ url }`).
+Setting a picture is throttled to once a second per user and uploads to 20 an
+hour; both fail with 429 beyond that.
+
 #### Account managers
 
 An agent account can manage a person's account: either side asks in their DM, and
@@ -176,15 +183,38 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+### Entity appearance
+
+Markdown documents, snippets, initiatives (task projects), forms, databases,
+and routines expose `appearance()` and `setAppearance()`. Appearance is shared
+with other viewers and requires edit access to change.
+
+```ts
+await doc.setAppearance({
+  icon: { kind: 'emoji', value: '🌱' },
+  color: 'green',
+});
+const appearance = await doc.appearance();
+await doc.setAppearance({}); // restore the default icon and color
+```
+
+Writes replace both overrides without changing content timestamps. Omit an
+override to restore its default. Colors use the same twelve-color palette as
+tags and only tint Macro icons; native emoji keep their own colors.
+
+### Sharing permissions
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 
@@ -252,6 +282,7 @@ server refuses anything but one `SELECT` that compiles, and chart columns the
 `SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
 `<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
 views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
 
 ```ts
 const question = await database.saveQuery({
@@ -437,24 +468,33 @@ await macro.channels
 
 ### Routines
 
-Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+Create scheduled or event-triggered routines through `macro.routines`. A
+routine runs `steps` in order: an `agent` ("Ask AI") step hands the run to a
+model or agent, and `code` steps run TypeScript against this SDK as the owner,
+type-checked when saved. Routine configuration takes typed agent and event
+resource handles:
 
 ```ts
 const routine = await macro.routines.create({
   name: 'Daily summary',
-  prompt: 'Summarize my open tasks.',
-  userPrompt: 'A daily task summary',
-  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+  trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'America/New_York' },
+  steps: [
+    {
+      type: 'agent',
+      instructions: 'Summarize my open tasks.',
+      model: 'anthropic/claude-sonnet-5-5',
+    },
+  ],
 });
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
-A routine can instead run `steps` in order: `code` steps run TypeScript against
-this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
-hands the run to a model or agent. Code steps' writes are attributed to Macro's
+A cron `schedule` has 6 fields (second minute hour day-of-month month
+day-of-week) or 7 with a year. The older single agent task (`prompt` and
+`userPrompt`, with `model`, `agent` or both, instead of `steps`) still saves
+and runs as one Ask AI step. Code steps' writes are attributed to Macro's
 agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
 user explicitly asks for the routine to act, send or post as them:
 
@@ -564,12 +604,50 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### Saved views
+
+```ts
+const view = await macro.savedViews.create({
+  name: 'Invoices',
+  config: {
+    kind: 'email',
+    version: 1,
+    filters: {
+      inboxIds: [], participants: [{ type: 'domain', domain: 'example.com' }],
+      participantFields: ['from'], subject: ['invoice'], starred: false,
+      attachments: [], calendarInvite: false, tags: [],
+    },
+  },
+});
+await view.edit({ name: 'Bills', team: macro.teams.byId(teamId) });
+for await (const each of macro.savedViews.list({ kind: 'email' })) {
+  console.log(await each.name());
+}
+await macro.savedViews.reorder('email', [view]);
+await view.remove();
+```
+
+A saved view is a named filter definition the app shows in a surface's sidebar
+(`kind` picks the surface, such as Email). `edit` and `remove` are checked
+against the revision the handle last saw: a write made elsewhere since then
+fails with a 409 conflict instead of being overwritten, and `view.refresh()`
+picks up the current revision. Order is personal; `reorder` sets yours for one
+kind.
+
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
-an identical retry is safe. Existing addresses cannot be replaced or cleared.
-`setCompany(company)` links or switches a known personal-provider contact to a
-Company handle in the same team. Unlinking is not supported. Both preserve
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
 identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
@@ -585,6 +663,14 @@ order through pipeline permissions.
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won` or `Lost`, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
 
 `macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and
@@ -783,13 +869,17 @@ replay if you disconnect.
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Four families are delivered: `document.*`, `channel.*`, `message.*`, and
-`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
+and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
 `attachment_created`, `attachment_removed`) cover channel messages and document
 comments alike: `metadata.parent` names the channel or document, and the
 hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
 reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
 `message.mentioned` deliveries that name the caller.
+`user.picture_changed` tells you a user's own profile picture changed (set or
+removed) and is delivered only to the changed user's own workspaces; it hydrates
+to the `User` and, when the picture is a static file, its `StaticImage` (`image`
+is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
@@ -910,9 +1000,10 @@ the build.
 
 You can add exceptions for stuff OpenAPI covers that we don't want the sdk to
 support by adding them to the `src/coverage/skipped.ts`. You can implement
-support by adding a wrapper to the appropriate model. There is CI to ensure that
-we don't forget to add coverage or explicitly skip coverage for new generated
-functions (endpoints).
+support by adding a wrapper to the appropriate model. Every wrapped generated
+method also needs a hand-assigned display verb in `src/utils/verbs.ts`; choose a
+read verb for a POST that only reads. Coverage fails for missing or stale verb
+entries as well as uncovered endpoints.
 
 ## Events
 

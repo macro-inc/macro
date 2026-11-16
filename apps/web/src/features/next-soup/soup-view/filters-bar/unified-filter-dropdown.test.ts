@@ -100,7 +100,7 @@ describe('Assignee filter ordering', () => {
     });
   });
 
-  it('retains selected outsiders without offering unrelated contacts', () => {
+  it('allows re-adding a selected outsider only during the same opening', () => {
     createRoot((dispose) => {
       const [ids, setIds] = createSignal(['macro|outside@example.com']);
       const picker = useAssigneePicker(ids, () => true);
@@ -110,6 +110,13 @@ describe('Assignee filter ordering', () => {
       ]);
       expect(picker.options().at(-1)?.id).toBe('macro|outside@example.com');
       setIds([]);
+      expect(
+        picker
+          .options()
+          .some((option) => option.id === 'macro|outside@example.com')
+      ).toBe(true);
+      picker.onOpenChange(false);
+      picker.onOpenChange(true);
       expect(
         picker
           .options()

@@ -449,6 +449,7 @@ describe('createWorkerCacheHost', () => {
         document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
+        priority: 'typed-search',
       }),
       host.search({
         profile: 'quick-access-v1',
@@ -507,6 +508,9 @@ describe('createWorkerCacheHost', () => {
     expect(
       requests.find((request) => request.kind === 'rollback-optimistic-write')
     ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
+    expect(
+      requests.find((request) => request.kind === 'read-records-by-keys')
+    ).toMatchObject({ priority: 'typed-search' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],
@@ -792,6 +796,125 @@ describe('createWorkerCacheHost', () => {
       host.dispose();
     }
   );
+
+  it('keeps a search queued through a blocked handoff and answers it from the replacement engine', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const read = host.readQuery({ opKey: 7, query: 'query Parked { user }' });
+    const refused = expect(read).rejects.toThrow('owner handoff timeout');
+    const page = { documents: [], nextCursor: null };
+    const search = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: 'todo',
+      limit: 20,
+    });
+    // A browse has callers with a network result to return instead.
+    const browse = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: '',
+      limit: 20,
+    });
+    const browseRefused = expect(browse).rejects.toThrow(
+      'owner handoff timeout'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await refused;
+    await browseRefused;
+    await vi.advanceTimersByTimeAsync(9);
+
+    const queued = adapter.requests.find(
+      (request) => request.kind === 'search' && request.request.query === 'todo'
+    );
+    if (!queued) throw new Error('missing search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    adapter.respond(queued.id, page);
+    await expect(search).resolves.toEqual(page);
+    host.dispose();
+  });
+
+  it('ends a kept search when the owner change never completes, and releases one its caller superseded', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const typed = (query: string, signal?: AbortSignal) =>
+      host.search(
+        { profile: 'quick-access-v1', buckets: ['document'], query, limit: 20 },
+        { signal }
+      );
+    const superseded = new AbortController();
+    const earlier = typed('to', superseded.signal);
+    const dropped = expect(earlier).rejects.toThrow('superseded');
+    const latest = typed('todo');
+    const expired = expect(latest).rejects.toThrow('owner handoff timeout');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await vi.advanceTimersByTimeAsync(9);
+    await vi.advanceTimersByTimeAsync(1);
+    await expired;
+
+    // The coordinator may still answer either copy once an engine arrives.
+    for (const request of adapter.requests) {
+      if (request.kind === 'search') {
+        adapter.respond(request.id, { documents: [], nextCursor: null });
+      }
+    }
+    await expect(typed('', AbortSignal.abort())).rejects.toThrow('superseded');
+
+    // A settled search no longer listens to the signal its replays share.
+    adapter.ignoredKinds.delete('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    const shared = new AbortController();
+    const removeListener = vi.spyOn(shared.signal, 'removeEventListener');
+    await typed('todo', shared.signal);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+    host.dispose();
+  });
+
+  it('releases a superseded search that is still waiting for the host to initialize', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const superseded = new AbortController();
+    const search = host.search(
+      {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'to',
+        limit: 20,
+      },
+      { signal: superseded.signal }
+    );
+    const dropped = expect(search).rejects.toThrow('superseded');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    expect(requireAdapter().requests.map((request) => request.kind)).toEqual([
+      'init',
+    ]);
+    host.dispose();
+  });
 
   it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
     vi.useFakeTimers();
@@ -1225,6 +1348,27 @@ describe('createWorkerCacheHost', () => {
     unsubscribe();
 
     expect(affected).toEqual([[7, 9], [9], [9, 7]]);
+    host.dispose();
+  });
+
+  it('notifies a resubscribing observer only once per engine replacement', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    let notifications = 0;
+    let unsubscribe = () => {};
+    const subscribe = () => {
+      unsubscribe = host.onCacheGenerationChanged(() => {
+        notifications += 1;
+        unsubscribe();
+        // Bound the regression so a live-Set loop fails instead of hanging.
+        if (notifications < 3) subscribe();
+      });
+    };
+    subscribe();
+
+    requireAdapter().replace(2);
+    expect(notifications).toBe(1);
+    unsubscribe();
     host.dispose();
   });
 

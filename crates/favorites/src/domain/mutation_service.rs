@@ -110,6 +110,7 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::Reminder
         | EntityType::Skill
         | EntityType::ScheduledAction
+        | EntityType::Harness
         | EntityType::Initiative
         | EntityType::CrmPipeline
         // Database rows are never favoritable.

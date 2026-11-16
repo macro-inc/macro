@@ -4,7 +4,8 @@
 //! This crate owns the application GraphQL schema and Soup projection policy.
 //! Cache crates receive only the generic query and projection IR produced here.
 
-use cache_core::document::{Document, FieldNode, OperationKind, Selection};
+use crate::parsed_document::parsed_document;
+use cache_core::document::{FieldNode, OperationKind, Selection};
 use cache_core::meta::FieldKind;
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
@@ -29,6 +30,7 @@ mod direct_patch;
 pub mod live_query;
 pub mod mail;
 mod notifications;
+mod parsed_document;
 pub mod properties;
 pub use notifications::{
     notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
@@ -151,7 +153,7 @@ pub fn authoritative_projection_mutations(
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
     let document =
-        Document::parse(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+        parsed_document(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let operation = document
         .operation(operation_name)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;

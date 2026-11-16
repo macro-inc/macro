@@ -28,7 +28,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Google sign-up leaves the page; the account exists when it returns.
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(heading(page, /Connect your work/)).toBeVisible();
   expect((await fakeWorld(page)).accent).toBe('#f77d67');
 
@@ -371,7 +371,7 @@ test.describe('with motion', () => {
     const steps: [string, string | RegExp][] = [
       ['Get started', 'Which features do you want to try first?'],
       ['Continue', 'A workspace built to earn your trust.'],
-      ['Continue', /Connect your work/],
+      ['Continue', /Continue with your work/],
     ];
     await expect(heading(page, 'Create your workspace')).toBeVisible();
     for (const [button, next] of steps) {
@@ -839,4 +839,40 @@ test.describe('subscription recovery', () => {
       ).toBe(true);
     });
   }
+});
+
+test('connecting an inbox starts the first suggestions generation once, without routine suggestions', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=tools', {
+    suggestionsEnabled: true,
+  });
+  await expect(heading(page, 'Connect your tools.')).toBeVisible();
+  const starts = () =>
+    page.evaluate(
+      () =>
+        window.onboardingFixture
+          .calls()
+          .filter((call) => call === 'startSuggestionGeneration').length
+    );
+  expect(await starts()).toBe(0);
+
+  const connect = (addresses: string[]) =>
+    page.evaluate((addresses) => {
+      const ownerId = window.onboardingFixture.world().viewer?.id ?? '';
+      window.onboardingFixture.update({
+        emailAccounts: addresses.map((address) => ({
+          address,
+          isPrimary: true,
+          ownerId,
+        })),
+      });
+    }, addresses);
+  await connect(['work@example.com']);
+  await expect.poll(starts).toBe(1);
+
+  // A second inbox starts nothing more.
+  await connect(['work@example.com', 'home@example.com']);
+  await page.waitForTimeout(300);
+  expect(await starts()).toBe(1);
 });

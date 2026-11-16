@@ -24,6 +24,12 @@ fn new_event(entity_id: Uuid) -> EventReference {
 }
 
 async fn action(pool: &PgPool, filters: Value) -> Uuid {
+    let id = generate_uuid_v7();
+    action_with_id(pool, id, filters).await;
+    id
+}
+
+async fn action_with_id(pool: &PgPool, id: Uuid, filters: Value) {
     let user_id = generate_uuid_v7();
     sqlx::query!(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2) ON CONFLICT DO NOTHING",
@@ -41,7 +47,6 @@ async fn action(pool: &PgPool, filters: Value) -> Uuid {
     .execute(pool)
     .await
     .unwrap();
-    let id = generate_uuid_v7();
     sqlx::query!(
         r#"
         INSERT INTO scheduled_action
@@ -57,7 +62,6 @@ async fn action(pool: &PgPool, filters: Value) -> Uuid {
     .execute(pool)
     .await
     .unwrap();
-    id
 }
 
 async fn setup(pool: &PgPool) -> (PgEventRunRepo, Uuid, EventReference) {
@@ -289,8 +293,22 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     use crate::domain::event_trigger::{EventPayload, IncomingEvent};
     use std::sync::Arc;
 
+    // Candidate pages follow action id order, and v7 ids minted in the same
+    // millisecond need not sort in creation order, so mint them first and
+    // hand them out sorted to fix the page layout below.
+    let mut ids: [Uuid; 7] = std::array::from_fn(|_| generate_uuid_v7());
+    ids.sort();
+    let [
+        malformed_owner,
+        too_many_events,
+        first_valid,
+        second_valid,
+        too_many_ids,
+        unknown_event,
+        last_valid,
+    ] = ids;
     let valid = json!([{"events": ["document.updated"]}]);
-    let malformed_owner = action(&pool, valid.clone()).await;
+    action_with_id(&pool, malformed_owner, valid.clone()).await;
     sqlx::query!(
         r#"INSERT INTO "User" (id, email, macro_user_id)
            SELECT $1, $1, id FROM macro_user WHERE email = $2"#,
@@ -308,17 +326,18 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     .execute(&pool)
     .await
     .unwrap();
-    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; crate::domain::event_trigger::MAX_EVENTS_PER_FILTER + 1]}])).await;
-    let first_valid = action(&pool, valid.clone()).await;
-    let second_valid = action(&pool, valid.clone()).await;
+    action_with_id(&pool, too_many_events, json!([{"events": vec!["document.updated"; crate::domain::event_trigger::MAX_EVENTS_PER_FILTER + 1]}])).await;
+    action_with_id(&pool, first_valid, valid.clone()).await;
+    action_with_id(&pool, second_valid, valid.clone()).await;
     // Another entirely invalid page after valid candidates have been admitted.
-    action(&pool, json!([{"events": ["document.updated"], "ids": vec![generate_uuid_v7().to_string(); 101]}, {"events": ["document.updated"]}])).await;
-    action(
+    action_with_id(&pool, too_many_ids, json!([{"events": ["document.updated"], "ids": vec![generate_uuid_v7().to_string(); 101]}, {"events": ["document.updated"]}])).await;
+    action_with_id(
         &pool,
+        unknown_event,
         json!([{"events": ["document.updated", "unknown.event"]}]),
     )
     .await;
-    let last_valid = action(&pool, valid).await;
+    action_with_id(&pool, last_valid, valid).await;
     let incoming = IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,

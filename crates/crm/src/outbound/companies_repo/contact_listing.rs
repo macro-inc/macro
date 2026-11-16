@@ -30,6 +30,8 @@ struct ContactRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
+    emails: Vec<String>,
+    company_domain_emails: Vec<String>,
 }
 
 impl CompaniesRepositoryImpl {
@@ -66,7 +68,7 @@ impl CompaniesRepositoryImpl {
         }
         sql.push(" AND ");
         push_filter(&mut sql, &query.filter);
-        sql.push(") SELECT id, company_id, team_id, company_name, email, name, hidden, first_interaction, last_interaction, created_at, updated_at, viewed_at FROM candidates WHERE ");
+        sql.push(include_str!("contact_listing/page.sql"));
         sql.push(if contact_ids_only(&query.filter) {
             "TRUE"
         } else {
@@ -115,6 +117,8 @@ impl CompaniesRepositoryImpl {
                     last_interaction: row.last_interaction,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
+                    emails: row.emails,
+                    company_domain_emails: row.company_domain_emails,
                 },
                 team_id: row.team_id,
                 company_name: row.company_name,

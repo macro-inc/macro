@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::domain::model::PermissionPolicyConfig;
+use crate::domain::model::{PermissionPolicyConfig, RuntimeAccessFacts};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
@@ -104,6 +104,14 @@ pub trait HarnessBindings: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+
+    /// What decides whether a turn may run on the bot's harness, or `None` for
+    /// an unbound bot.
+    fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
 
     /// The sessions holding one of `acp_sessions` whose bot is bound to
     /// `harness` now. Scoping by binding is the authorization: a runtime
@@ -444,6 +452,14 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 
+    /// What decides whether a turn may run on the bot's harness, or `None` for
+    /// an unbound bot. Same resolution as [`HarnessBindings::access_facts`].
+    fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
+
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
 
@@ -584,4 +600,33 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// this is the end of the session: nothing will reattach. A session with
     /// no container is already in the state this asks for, so it succeeds.
     fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Free what this process holds in memory for a session nothing has used
+    /// lately, after the harness released its actor. A later
+    /// [`Self::resume`] rebuilds it from the durable log, the way it does
+    /// after a restart.
+    ///
+    /// Only local memory: nothing durable, no container, and nothing another
+    /// replica holds. The default does nothing, which is right for a provider
+    /// whose sessions keep nothing in this process (sandboxes stop through
+    /// their own idle reapers). The two defaults are a pair: a provider that
+    /// overrides this to drop state must also override
+    /// [`Self::idle_release_is_lossless`].
+    fn release_idle(&self, _session: AgentSessionId) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Whether [`Self::release_idle`] followed by [`Self::resume`] would give
+    /// the session's agent exactly the state it runs on now. Asked before the
+    /// harness closes anything: a session that would come back different is
+    /// not released.
+    ///
+    /// The default answers yes, which is only true because the default
+    /// [`Self::release_idle`] drops nothing. Override both or neither.
+    fn idle_release_is_lossless(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<bool>> + Send {
+        async { Ok(true) }
+    }
 }

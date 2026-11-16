@@ -6,6 +6,6 @@
  */
 
 /**
- * Owning team. Omit for a private, user-owned harness.
+ * Team to open the harness to. Omit to keep it to the approving user.
  */
 export type ApprovePairingRequestTeamId = string | null;

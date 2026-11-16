@@ -815,3 +815,55 @@ async fn returned_sent_only_metadata_preserves_visibility_without_rewriting(
     );
     Ok(())
 }
+
+/// Under a scope that may not share, moving a thread into a folder shared
+/// with a team is refused and leaves the thread where it was.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn a_scoped_session_cant_move_a_thread_into_a_shared_folder(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use agent_correlation::context::{Attribution, SharingRefused, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let thread_id = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let shared_project = Uuid::from_u128(0x5c0);
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Shared', 'macro|owner@example.com')"#,
+        shared_project.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'project', 'macro|owner@example.com', 'user', 'owner'),
+               ($1, 'project', $2, 'team', 'view')"#,
+        shared_project,
+        Uuid::from_u128(0x7ea).to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    let repo = EmailPgRepo::new(pool);
+    let project_before = repo.thread_by_id(thread_id).await?.unwrap().project_id;
+
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let moved = scope_attribution(
+        no_send,
+        repo.update_thread_project(thread_id, Some(&shared_project.to_string())),
+    )
+    .await;
+    match moved {
+        Err(sqlx::Error::InvalidArgument(message)) => assert_eq!(message, SharingRefused::MESSAGE),
+        other => panic!("expected a sharing refusal, got {other:?}"),
+    }
+    assert_eq!(
+        repo.thread_by_id(thread_id).await?.unwrap().project_id,
+        project_before
+    );
+    Ok(())
+}

@@ -153,7 +153,8 @@ impl<N: AgentSessionNameGenerator, C: YesNoClassifier> AgentSessionNameGenerator
         let question = YesNoQuestion::try_from(TITLE_NO_LONGER_FITS)
             .expect("the retitle question is nonblank and under the length limit");
         let usage = UsageContext::new(AiFeature::ChatRename, owner.clone())
-            .with_entity(Some(session.id.as_uuid()));
+            .with_entity(Some(session.id.as_uuid()))
+            .with_agent_session(Some(session.id.as_uuid()));
         let probability = classifier
             .classify(usage, &input, &[question])
             .await

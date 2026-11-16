@@ -104,13 +104,27 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
   }
   readonly title = this.field('title');
   readonly kind = this.field('kind');
+  /**
+   * The session this review belongs to.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return this.parent;
   }
-  /** Compact reference for main()'s returned reviews array. */
+  /**
+   * Compact reference for main()'s returned reviews array.
+   *
+   * @readonly
+   */
   async reference(): Promise<{ kind: ReviewRecord['kind']; id: string }> {
     return { kind: await this.kind(), id: this.id };
   }
+  /**
+   * The review's items, each with its draft, status and result.
+   *
+   * @readonly
+   */
   async items(): Promise<ReviewItem[]> {
     const record = await this.detail.get();
     const items: ReviewRecord['items'] = record.items;
@@ -124,15 +138,31 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
         }),
     );
   }
+  /**
+   * Reload the saved review, for example after a decision or a conflict.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();
     return this;
   }
-  /** Submit the saved pending drafts. Never retries a conflict or ambiguous send. */
+  /**
+   * Submit the saved pending drafts. Never retries a conflict or ambiguous send.
+   *
+   * @destructive
+   * @openworld
+   */
   async submitAll(): Promise<void> {
     await this.decide({ action: 'submit', items: [] });
   }
+  /**
+   * Dismiss every pending draft without sending it.
+   *
+   * @destructive
+   * @idempotent
+   */
   async dismissAll(): Promise<void> {
     await this.decide({ action: 'dismiss', items: [] });
   }
@@ -155,7 +185,11 @@ export class SessionReview extends MacroEntity<ReviewRecord> {
   }
 }
 
-/** An item handle scopes edits and decisions to its persisted review. */
+/**
+ * An item handle scopes edits and decisions to its persisted review.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class ReviewItem {
   constructor(
     private readonly snapshot: ReviewRecord['items'][number],
@@ -178,13 +212,30 @@ export class ReviewItem {
   get result(): ReviewRecord['items'][number]['result'] {
     return this.snapshot.result;
   }
-  /** Replace this pending draft; `kind` must match the review's. */
+  /**
+   * Replace this pending draft; `kind` must match the review's.
+   *
+   * @write
+   * @idempotent
+   */
   async edit(draft: ReviewDraft): Promise<void> {
     await this.actions.edit(draft);
   }
+  /**
+   * Submit this pending draft, sending the email or creating the event it holds.
+   *
+   * @destructive
+   * @openworld
+   */
   async submit(): Promise<void> {
     await this.actions.submit();
   }
+  /**
+   * Dismiss this pending draft without sending it.
+   *
+   * @destructive
+   * @idempotent
+   */
   async dismiss(): Promise<void> {
     await this.actions.dismiss();
   }

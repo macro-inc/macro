@@ -1,5 +1,7 @@
 pub mod action_history;
 pub mod activity;
+#[cfg(feature = "admission")]
+pub mod activity_summary;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
@@ -12,6 +14,8 @@ pub mod control;
 pub mod error;
 pub mod events;
 pub mod lifecycle;
+/// Lifecycle events as their owner's activity.
+pub mod lifecycle_activity;
 pub mod model;
 #[cfg(feature = "admission")]
 pub mod name_generation;

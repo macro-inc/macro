@@ -1,5 +1,9 @@
 //! Explicit scheduled-delivery transitions and their persistence boundary.
 
+/// Bounded reads of drafts with a delivery schedule.
+#[cfg(feature = "mailbox")]
+pub mod drafts;
+
 pub use super::service::signature::SignaturePreparation;
 use chrono::{DateTime, Utc};
 use macro_event_broker::MacroEventBroker;

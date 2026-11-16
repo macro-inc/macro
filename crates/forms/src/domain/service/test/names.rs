@@ -116,6 +116,7 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
         stored(&world, standalone),
         StoredForm {
             form: Form {
+                appearance: None,
                 id: standalone,
                 name: "Offsite RSVP".into(),
                 description: "".into(),

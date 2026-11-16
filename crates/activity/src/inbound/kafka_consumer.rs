@@ -75,7 +75,12 @@ where
     /// insert, and the announcement is published again; duplicates are
     /// idempotent for subscribers (records keyed by id).
     async fn apply(&self, event: C) -> Result<(), R::Err> {
-        self.materializer.apply((self.ingest)(event).await).await
+        let correlation = event.agent_correlation_id();
+        let verb = event.agent_verb();
+        agent_correlation::context::scope_with_verb(correlation, verb, async {
+            self.materializer.apply((self.ingest)(event).await).await
+        })
+        .await
     }
 
     /// Runs the consumer until `shutdown` resolves.

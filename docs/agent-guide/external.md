@@ -15,8 +15,10 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   the command menu.
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
-  External sidebar is hidden on touch, so the WhatsApp page fills the pane with its **In Macro** chats first. Opening a
-  chat drills in full-screen; its **Back to WhatsApp** button returns.
+  External sidebar is hidden on touch. Like Channels, the account list omits the floating split
+  header; the WhatsApp title uses the shared collection header directly below
+  the safe area on phones and tablets, above the scrollable **In Macro** chats.
+  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
 
 ## Sidebar
 
@@ -102,7 +104,12 @@ states show loading, unavailable or unsupported. Senders, reactors (the
 reaction chip's tooltip), poll voters, members and mentioned people who are
 not Macro users go by the chat owner's contact name for them, else their
 WhatsApp name, else their phone number; "WhatsApp participant" only when
-WhatsApp gave neither (a LID with no number). `@<number>` in a body shows the
+WhatsApp gave neither (a LID with no number). They show the WhatsApp
+profile picture the chat owner's account can see (`img[data-provider-picture]`)
+over their initials, which stay when the picture is hidden, unset or not
+fetched yet; the chat header and External's sidebar show the group's or
+person's picture the same way, over the provider badge or the group/person
+icon. `@<number>` in a body shows the
 person: a verified Macro user as Chat's mention chip, anyone else that name in
 bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
@@ -116,8 +123,10 @@ media; unknown types keep DSS's placeholder text. The header has the provider's 
 for a community's group), a timer icon when WhatsApp's disappearing messages
 are on (the timeline's start also says "Disappearing messages are on in
 WhatsApp (7 days). Macro keeps them."), **Share**, and the standard side panel
-toggle (**Show Side Panel**, `]`; **Show details** on touch). Like an in-view
-email thread, the details float over the timeline (`aside[aria-label="Block
+toggle (**Show Side Panel**, `]`; **Show details** on touch). On phones and
+tablets, Back, the provider badge/name, Share and details occupy the shared
+floating split-header islands, positioned at the safe area like an open channel.
+Like an in-view email thread, the details float over the timeline (`aside[aria-label="Block
 details"]`, outside click or the toggle closes them, starts closed; on a
 pane 900px or wider the timeline and composer move left to make room) and are a
 bottom sheet on touch. Sections: **Members (n)** (groups only; list

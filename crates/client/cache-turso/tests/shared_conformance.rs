@@ -232,8 +232,12 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .put_batch(vec![(searchable_key.clone(), searchable)])
         .await
         .unwrap();
-    let loaded = storage
-        .load_search_documents(SearchProfile::QuickAccessV1, "document")
+    let mut loaded = Vec::new();
+    let query = cache_core::search::SearchQuery::new("qtrly plan");
+    storage
+        .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
+            loaded.push(row.into_owned())
+        })
         .await
         .unwrap();
     assert!(
@@ -252,11 +256,15 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
         .delete_batch(std::slice::from_ref(&searchable_key))
         .await
         .unwrap();
+    loaded.clear();
+    storage
+        .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
+            loaded.push(row.into_owned())
+        })
+        .await
+        .unwrap();
     assert!(
-        storage
-            .load_search_documents(SearchProfile::QuickAccessV1, "document")
-            .await
-            .unwrap()
+        loaded
             .iter()
             .all(|document| document.record_key != searchable_key)
     );

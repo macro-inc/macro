@@ -1050,6 +1050,33 @@ async fn denies_when_a_contact_is_hidden(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn denies_when_a_hidden_contact_is_on_the_thread_under_a_second_address(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(
+        &pool,
+        OWNER,
+        "alice@client.test",
+        &[("bob@personal.test", "TO")],
+    )
+    .await;
+
+    let company = insert_crm_company(&pool, team_id, true, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+    insert_crm_contact(&pool, company, "bob@client.test", true).await;
+    sqlx::query!(
+        r#"INSERT INTO crm_contact_emails (contact_id, email)
+           SELECT id, 'bob@personal.test' FROM crm_contacts WHERE email = 'bob@client.test'"#,
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn denies_when_a_companyless_contact_is_hidden(pool: PgPool) -> anyhow::Result<()> {
     let team_id = setup_shared_team(&pool, true).await;
     let thread_id = create_thread(

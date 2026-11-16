@@ -7,6 +7,7 @@
 
 import type { AccessLevel } from './accessLevel';
 import type { AccessRequestGrantedLevel } from './accessRequestGrantedLevel';
+import type { AccessRequestRequestedByAgent } from './accessRequestRequestedByAgent';
 import type { AccessRequestResolvedAt } from './accessRequestResolvedAt';
 import type { AccessRequestRetryAfter } from './accessRequestRetryAfter';
 import type { RequestStatus } from './requestStatus';
@@ -20,6 +21,8 @@ export interface AccessRequest {
   grantedLevel?: AccessRequestGrantedLevel;
   /** Stable request identity across revisions. */
   id: string;
+  /** The agent that asked on the requester's behalf, when one did. */
+  requestedByAgent?: AccessRequestRequestedByAgent;
   /** Requested upgrade. */
   requestedLevel: AccessLevel;
   /** Person requesting access. */

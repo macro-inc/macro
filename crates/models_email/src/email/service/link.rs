@@ -4,7 +4,13 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[cfg(test)]
+mod test;
+
+/// `Debug` leaves out the account's address and the owner's user id (which
+/// embeds an address), so a link logged or recorded on a span carries only
+/// opaque ids.
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct Link {
     pub id: Uuid,
     #[schema(value_type = String)]
@@ -22,6 +28,17 @@ pub struct Link {
     pub last_sync_error_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for Link {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Link")
+            .field("id", &self.id)
+            .field("provider", &self.provider)
+            .field("is_sync_active", &self.is_sync_active)
+            .field("needs_reauth", &self.needs_reauth)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Link {

@@ -7,6 +7,8 @@ import type { DatabaseTable } from './table';
  * can POST JSON to, each object becoming a row, written with the access of
  * the user who created it. Its token is shown only when it is created; see
  * {@link Database.createWebhook}.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class DatabaseWebhook {
   private constructor(
@@ -38,7 +40,12 @@ export class DatabaseWebhook {
     return this.record.createdAt;
   }
 
-  /** Delete the webhook; its URL stops working. */
+  /**
+   * Delete the webhook; its URL stops working.
+   *
+   * @destructive
+   * @idempotent
+   */
   delete(): Promise<void> {
     return this.table.database.deleteWebhook(this);
   }

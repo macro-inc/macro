@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_totp_enrollments SET state='active' WHERE team_id=$1 AND item_id=$2 AND key_id=$3 AND state='pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5125cdd76b89e5121d859e1d628244aabd993236a601251a613ad81150ec3f94"
+}

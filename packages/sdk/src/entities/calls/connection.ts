@@ -44,7 +44,13 @@ export class CallConnection {
     this.started = response.started;
   }
 
-  /** Leave this exact call; safe to invoke after another call has started. */
+  /**
+   * Leave this exact call; safe to invoke after another call has started.
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Acts on a live call connection, which only a join returns.
+   */
   async leave(): Promise<{ callEnded: boolean }> {
     return unwrap(
       await this.client.storage.leaveCall({ path: { call_id: this.call.id } }),

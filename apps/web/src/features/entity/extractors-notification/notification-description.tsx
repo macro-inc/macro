@@ -5,13 +5,15 @@ import {
   entityDiscussionVerb,
   isEntityDiscussionEvent,
 } from '@notifications/entity-discussion';
-import { agentTurnEnding } from '@notifications/notification-metadata';
+import {
+  agentTurnEnding,
+  getNotificationAction,
+} from '@notifications/notification-metadata';
 import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
 } from '@notifications/notification-sender';
 import { createMemo } from 'solid-js';
-import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
 import {
   getActionVerb,
@@ -28,6 +30,25 @@ import {
 interface NotificationDescriptionProps {
   notification?: Notification;
   stack?: NotificationStack;
+}
+
+/** The verb for one notification. A Claude sign-in names its stage, with the
+ *  same words its push and toast use. */
+function actionFor(
+  notification: Notification | undefined,
+  type: NotificationType
+): string {
+  const metadata = notification?.notification_metadata;
+  if (isEntityDiscussionEvent(metadata)) return entityDiscussionVerb(metadata);
+  if (metadata?.tag === 'agent_session_settled')
+    return agentTurnEnding(metadata.content.stopReason);
+  if (
+    notification &&
+    (metadata?.tag === 'agent_sign_in_expiry' ||
+      metadata?.tag === 'computer_setup')
+  )
+    return getNotificationAction(notification);
+  return getActionVerb(type);
 }
 
 /**
@@ -138,14 +159,8 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
-      const metadata = (props.notification ?? props.stack?.notifications[0])
-        ?.notification_metadata;
-      const action = match(metadata)
-        .when(isEntityDiscussionEvent, entityDiscussionVerb)
-        .with({ tag: 'agent_session_settled' }, ({ content }) =>
-          agentTurnEnding(content.stopReason)
-        )
-        .otherwise(() => getActionVerb(type));
+      const single = props.notification ?? props.stack?.notifications[0];
+      const action = actionFor(single, type);
       if (sender && type !== 'ai_response') {
         return `${sender} ${action}`;
       }

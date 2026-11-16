@@ -55,9 +55,12 @@ belong to `features/external-view`. Architecture:
   `disconnected`, `not_added`, `not_allowed`, `unavailable`).
 - Members, sharing and Stop syncing live in the generic `SidePanel`
   (`components/chat-details.tsx`), floating and closed by default like an
-  in-view email thread. The header is `ViewShell.TopBar` (kept visible on
-  touch, under the safe area) with Share in a `HeaderActionGroup` and
-  `SidePanel.Toggle`. The host
+  in-view email thread. `components/chat-header.tsx` keeps `ViewShell.TopBar`
+  on desktop; touch uses `SplitHeaderLeft` / `SplitHeaderRight`,
+  `StaticSplitLabel`, and `HeaderIsland`, like an open channel. Preserve the
+  shared split header on the nested chat route and reserve its content inset
+  once, including while loading. Share and `SidePanel.Toggle` stay tappable
+  in their own islands. The host
   (`external-chat.tsx`, the functional fixture, tests) supplies
   `SidePanel.Root`; the view renders the `SidePanel.Layout`. While it is
   open on a pane at least 900px wide, the timeline and composer pad
@@ -123,7 +126,11 @@ belong to `features/external-view`. Architecture:
   show their Macro name and avatar; everyone else shows the name DSS gives
   (`imported_author`; reactors through the reaction's `names`, which
   `ReactionChip` reads for ids outside Macro). DSS supplies sender and member
-  names; render them as sent without client-side fallbacks.
+  names; render them as sent without client-side fallbacks. Their pictures
+  (and a chat's, in the header and External's sidebar) are the static files
+  DSS gives (`pictureFileId` → `pictureUrl`), drawn by
+  `components/provider-picture.tsx` over the initials or icon shown without
+  one.
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

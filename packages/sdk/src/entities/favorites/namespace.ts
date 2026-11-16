@@ -29,7 +29,11 @@ export type FavoritesFilter = {
 export class FavoritesNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** The user's favorites, in manual order. */
+  /**
+   * The user's favorites, in manual order.
+   *
+   * @readonly
+   */
   async list(filter: FavoritesFilter = {}): Promise<Favorite[]> {
     const { favorites } = unwrap(
       await this.client.storage.listFavorites({
@@ -44,6 +48,9 @@ export class FavoritesNamespace {
 
   /**
    * Favorite an entity. Returns the favorite record.
+   *
+   * @write
+   * @idempotent
    */
   async add(entity: FavoritableEntity<unknown>): Promise<Favorite> {
     return unwrap(
@@ -53,7 +60,12 @@ export class FavoritesNamespace {
     );
   }
 
-  /** Remove an entity from the user's favorites. */
+  /**
+   * Remove an entity from the user's favorites.
+   *
+   * @write
+   * @idempotent
+   */
   async remove(entity: FavoritableEntity<unknown>): Promise<void> {
     unwrap(
       await this.client.storage.removeFavoriteByEntity({
@@ -62,7 +74,12 @@ export class FavoritesNamespace {
     );
   }
 
-  /** Reorder the favorites: pass every favorited entity in the desired order. */
+  /**
+   * Reorder the favorites: pass every favorited entity in the desired order.
+   *
+   * @write
+   * @idempotent
+   */
   async reorder(favorites: FavoriteEntityRef[]): Promise<void> {
     unwrap(
       await this.client.storage.reorderFavorites({
