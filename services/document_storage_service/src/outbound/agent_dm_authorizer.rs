@@ -84,6 +84,9 @@ impl<B: AgentDmEligibility> AgentDmAuthorizer for BotServiceDmAuthorizer<B> {
                 BotError::BadRequest(message) | BotError::Conflict(message) => {
                     ChannelMutationErr::BadRequest(message)
                 }
+                error @ BotError::AgentTeammateComputer => {
+                    ChannelMutationErr::BadRequest(error.to_string())
+                }
                 BotError::Unavailable(message) => {
                     ChannelMutationErr::Repo(anyhow::anyhow!(message))
                 }

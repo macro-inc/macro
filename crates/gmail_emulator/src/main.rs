@@ -17,7 +17,7 @@ struct Args {
     /// The address to listen on.
     #[arg(long, default_value = "127.0.0.1:8480")]
     listen: SocketAddr,
-    /// A YAML or JSON seed file: mailboxes and their mail.
+    /// A YAML or JSON seed file: mailboxes with their mail and calendars.
     #[arg(long)]
     seed: Option<PathBuf>,
     /// The webhook Gmail watch notifications are posted to, such as
@@ -59,6 +59,7 @@ async fn main() -> Result<(), RunError> {
     tracing::info!(
         gmail_url = %emulator.gmail_url(),
         people_url = %emulator.people_url(),
+        calendar_url = %emulator.calendar_url(),
         certs_url = %emulator.certs_url(),
         token_url = %emulator.token_url(),
         control_url = %format!("{}/_emulator", emulator.base_url()),

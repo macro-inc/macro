@@ -13,9 +13,9 @@ import {
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import type { BlockTool } from '@components/app/block-tool';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   type BlockAlias,
   type BlockName,

@@ -404,6 +404,13 @@ impl Config {
         self.account_link_state_key().map(drop)
     }
 
+    /// The PostHog project key, when one is configured. A blank value counts
+    /// as none, so a deployment can switch PostHog off where its environment
+    /// file is shared with services that require a key.
+    pub(crate) fn posthog_api_key(&self) -> Option<&str> {
+        nonblank_value(self.posthog_api_key.value())
+    }
+
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
     pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
         resolve_microsoft_credentials(

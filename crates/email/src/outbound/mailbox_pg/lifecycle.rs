@@ -124,6 +124,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
             InboxRemoval::Disconnect => {
                 sqlx::query!("UPDATE email_links SET is_sync_active = false,disconnect_requested_at = now(),sync_generation = sync_generation + 1,updated_at = now() WHERE id = $1",link)
                     .execute(&mut *tx).await.map_err(failed)?;
+                drop_superseded_work(&mut tx, link, current.sync_generation + 1).await?;
                 if current.provider == UserProvider::Outlook && current.grant_id.is_some() {
                     let watches = sqlx::query!(
                         "SELECT id,provider_id FROM email_provider_subscriptions WHERE link_id=$1",
@@ -399,6 +400,7 @@ async fn rebind_work(
         ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
+    drop_superseded_work(tx, link, new).await?;
     sqlx::query!(r#"UPDATE email_mailbox_drafts SET generation = $3,lease_id = NULL,lease_until = NULL,
         state = CASE WHEN state = 'running' THEN 'pending' ELSE state END,available_at = now(),updated_at = now() WHERE link_id = $1 AND generation = $2"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(
@@ -408,6 +410,33 @@ async fn rebind_work(
         link,
         old,
         new
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed)?;
+    Ok(())
+}
+
+/// Claims only take work of the link's current `sync_generation`, which never
+/// goes back, so older work is dead. Left in place it stays due forever, at the
+/// front of the claim indexes, and every claim reads past all of it.
+async fn drop_superseded_work(
+    tx: &mut Transaction<'_, Postgres>,
+    link: Uuid,
+    current: i64,
+) -> Result<(), InboxLifecycleError> {
+    sqlx::query!(
+        "DELETE FROM email_sync_streams WHERE link_id = $1 AND generation < $2",
+        link,
+        current
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed)?;
+    sqlx::query!(
+        "DELETE FROM email_message_reconciliation WHERE link_id = $1 AND generation < $2",
+        link,
+        current
     )
     .execute(&mut **tx)
     .await

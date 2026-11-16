@@ -1,4 +1,6 @@
-# Two Macro users' Gmail mailboxes, and one outside correspondent's.
+# Two Macro users' Gmail mailboxes and Google calendars, and one outside
+# correspondent's. The calendars hold repeating events, so they have something
+# on them whenever the emulator runs.
 mailboxes:
   - email: ada@example.com
     name: Ada Example
@@ -45,6 +47,56 @@ mailboxes:
         html: "<h1>Weekly</h1><p>Five stories you missed.</p>"
         labels: [INBOX, CATEGORY_PROMOTIONS]
         date: "2026-11-09T07:00:00Z"
+    calendars:
+      # No id: Ada's primary calendar.
+      - summary: Ada Example
+        time_zone: America/New_York
+        events:
+          - id: standup
+            summary: Standup
+            location: Room 2
+            start: { dateTime: "2026-11-02T09:30:00-05:00", timeZone: America/New_York }
+            end: { dateTime: "2026-11-02T09:45:00-05:00", timeZone: America/New_York }
+            recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]
+            attendees:
+              - { email: ada@example.com, responseStatus: accepted }
+              - { email: bob@example.com }
+              - { email: carol@example.com, responseStatus: accepted }
+          - id: numbers
+            summary: Quarterly numbers with Grace
+            description: Page 4 needs a correction.
+            start: { dateTime: "2026-11-05T14:00:00-05:00", timeZone: America/New_York }
+            end: { dateTime: "2026-11-05T15:00:00-05:00", timeZone: America/New_York }
+            recurrence: ["RRULE:FREQ=MONTHLY;BYDAY=1TH"]
+            attendees:
+              - { email: ada@example.com, responseStatus: accepted }
+              - { email: grace@example.com, displayName: Grace Hopper, responseStatus: tentative }
+          - id: founding
+            summary: Company anniversary
+            start: { date: "2026-03-12" }
+            end: { date: "2026-03-13" }
+            recurrence: ["RRULE:FREQ=YEARLY"]
+            transparency: transparent
+      - id: team@group.calendar.example.com
+        summary: Team
+        background_color: "#7986cb"
+        events:
+          - id: release
+            summary: Release train
+            start: { dateTime: "2026-11-05T16:00:00Z" }
+            end: { dateTime: "2026-11-05T16:30:00Z" }
+            recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"]
+      # A calendar Ada can only read, and that Google will not push for.
+      - id: holidays@group.calendar.example.com
+        summary: Holidays
+        access_role: reader
+        push_supported: false
+        events:
+          - id: neu1jan
+            summary: New Year's Day
+            start: { date: "2026-01-01" }
+            end: { date: "2026-01-02" }
+            recurrence: ["RRULE:FREQ=YEARLY"]
   - email: bob@example.com
     name: Bob Example
     messages:
@@ -58,5 +110,15 @@ mailboxes:
         text: It ships on Monday.
         labels: [INBOX, CATEGORY_PERSONAL]
         date: "2026-11-04T11:00:00Z"
+    calendars:
+      - summary: Bob Example
+        time_zone: Europe/London
+        events:
+          - id: focus
+            summary: Focus time
+            start: { dateTime: "2026-11-03T13:00:00Z", timeZone: Europe/London }
+            end: { dateTime: "2026-11-03T15:00:00Z", timeZone: Europe/London }
+            recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TU,TH"]
+            eventType: focusTime
   - email: carol@example.com
     name: Carol Example

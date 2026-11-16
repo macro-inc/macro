@@ -2,6 +2,7 @@
 //! the mailbox's request limit), and the table of routes.
 
 mod batch;
+mod calendar;
 mod compose;
 mod folders;
 mod messages;
@@ -403,6 +404,73 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
         ["outlook", "masterCategories", category] if method == Method::DELETE => {
             ctx.enter(R::CategoriesDelete)?;
             folders::delete_category(ctx, category)
+        }
+
+        ["mailboxSettings"] if method == Method::GET => {
+            ctx.enter(R::MailboxSettingsGet)?;
+            calendar::mailbox_settings(ctx)
+        }
+        ["calendars"] if method == Method::GET => {
+            ctx.enter(R::CalendarsList)?;
+            calendar::list_calendars(ctx)
+        }
+        ["calendars", id] if method == Method::GET => {
+            ctx.enter(R::CalendarsGet)?;
+            calendar::get_calendar(ctx, id)
+        }
+        ["calendarView", "delta"] if method == Method::GET => {
+            ctx.enter(R::CalendarViewDelta)?;
+            calendar::view_delta(ctx)
+        }
+        ["calendars", id, "calendarView"] if method == Method::GET => {
+            ctx.enter(R::CalendarViewList)?;
+            calendar::calendar_view(ctx, id)
+        }
+        ["calendars", id, "events"] if method == Method::GET => {
+            ctx.enter(R::EventsList)?;
+            calendar::list_events(ctx, id)
+        }
+        ["calendars", id, "events"] if method == Method::POST => {
+            ctx.enter(R::EventsCreate)?;
+            calendar::create_event(ctx, id)
+        }
+        ["calendars", calendar, "events", id] if method == Method::GET => {
+            ctx.enter(R::EventsGet)?;
+            calendar::get_event(ctx, Some(calendar), id)
+        }
+        [
+            "calendars",
+            calendar,
+            "events",
+            id,
+            action @ ("accept" | "tentativelyAccept" | "decline"),
+        ] if method == Method::POST => {
+            ctx.enter(R::EventsRespond)?;
+            calendar::respond(ctx, Some(calendar), id, action)
+        }
+        ["events", id] if method == Method::GET => {
+            ctx.enter(R::EventsGet)?;
+            calendar::get_event(ctx, None, id)
+        }
+        ["events", id] if method == Method::PATCH => {
+            ctx.enter(R::EventsUpdate)?;
+            calendar::update_event(ctx, id)
+        }
+        ["events", id] if method == Method::DELETE => {
+            ctx.enter(R::EventsDelete)?;
+            calendar::delete_event(ctx, id)
+        }
+        ["events", id, "instances"] if method == Method::GET => {
+            ctx.enter(R::EventsInstances)?;
+            calendar::instances(ctx, id)
+        }
+        [
+            "events",
+            id,
+            action @ ("accept" | "tentativelyAccept" | "decline"),
+        ] if method == Method::POST => {
+            ctx.enter(R::EventsRespond)?;
+            calendar::respond(ctx, None, id, action)
         }
 
         ["contactFolders"] | ["contactFolders", _, "childFolders"] if method == Method::GET => {

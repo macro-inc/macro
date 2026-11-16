@@ -32,6 +32,7 @@ import {
   type ParentProps,
   type Setter,
   Show,
+  untrack,
   useContext,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -298,6 +299,7 @@ function SoupNavigationButtons() {
   return (
     <Show when={shouldShow()}>
       <ListNavigationButtons
+        size={context.headerMdControls?.[0]() ? 'md' : 'sm'}
         navigation={{
           canPrevious: canNavigateUp,
           canNext: canNavigateDown,
@@ -521,7 +523,7 @@ export function SplitHeaderLeft(props: ParentProps) {
     throw new Error('<SplitHeaderLeft> must be used within a <SplitLayout>');
 
   return (
-    <Show when={ctx.layoutRefs.headerLeft}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerLeft}>
       <Portal
         mount={ctx.layoutRefs.headerLeft}
         ref={(div) => (div.style.display = 'contents')}
@@ -532,13 +534,25 @@ export function SplitHeaderLeft(props: ParentProps) {
   );
 }
 
-export function SplitHeaderRight(props: ParentProps) {
+/**
+ * `size="md"` declares that this contribution's controls are 32px (a list
+ * header with New, or Mail), so the header's own controls match them.
+ */
+export function SplitHeaderRight(props: ParentProps<{ size?: 'sm' | 'md' }>) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitHeaderRight> must be used within a <SplitLayout>');
 
+  // A contribution's size is fixed for its lifetime, so it is read once.
+  const declaresMd = untrack(() => props.size === 'md');
+  if (declaresMd && ctx.headerMdControls) {
+    const [, setCount] = ctx.headerMdControls;
+    setCount((count) => count + 1);
+    onCleanup(() => setCount((count) => count - 1));
+  }
+
   return (
-    <Show when={ctx.layoutRefs.headerRight}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
         ref={(div) => (div.style.display = 'contents')}

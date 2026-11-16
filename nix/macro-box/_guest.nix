@@ -92,6 +92,8 @@ let
   };
 in
 {
+  imports = [ ./_agent.nix ];
+
   options.macro.box = {
     macrod = lib.mkOption {
       type = lib.types.package;
@@ -366,11 +368,7 @@ in
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
-      unitConfig = {
-        # A retry that succeeds still starts macrod.
-        OnSuccess = "macrod.service";
-        StartLimitIntervalSec = 0;
-      };
+      unitConfig.StartLimitIntervalSec = 0;
       path = systemPath;
       # Agent discovery records adapter paths usable by the daemon user.
       environment = {
@@ -387,11 +385,17 @@ in
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";
-            runtimeInputs = [ pkgs.curl ];
+            runtimeInputs = [
+              pkgs.coreutils
+              pkgs.curl
+            ];
             text = builtins.readFile ./files/check-enrollment-source;
           }
         );
         ExecStart = "${lib.getExe' cfg.macrod "macrod"} enroll --from \${MACRO_ENROLL_FROM} --config ${macrodConfig}";
+        # A retry that succeeds after boot gave up on macrod still starts it.
+        # (OnSuccess= never fires: with RemainAfterExit the unit stays active.)
+        ExecStartPost = "${lib.getExe' config.systemd.package "systemctl"} --no-block start macrod.service";
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
@@ -400,8 +404,12 @@ in
     systemd.services.macrod = {
       description = "Macro agent daemon";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      requires = [ "macrod-enroll.service" ];
+      # Wants, not Requires: a first enroll attempt that fails must not fail
+      # macrod's start for good; the enroll retry starts it once enrolled.
+      wants = [
+        "network-online.target"
+        "macrod-enroll.service"
+      ];
       after = [
         "network-online.target"
         "macrod-enroll.service"
@@ -448,7 +456,7 @@ in
     systemd.user.services.macro-display =
       userService "Macro computer display (Xvnc :0 on 127.0.0.1:5900)"
         {
-          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp";
+          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp -nolisten local";
         };
     systemd.user.services.macro-openbox =
       userService "Openbox window manager on the Macro display" {

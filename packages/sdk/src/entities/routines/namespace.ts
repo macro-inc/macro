@@ -1,5 +1,6 @@
 import type {
   RoutineCheck,
+  RoutineSuggestionCard,
   SuggestOutcome,
   Surface,
 } from '../../../generated/scheduled-action/types.gen';
@@ -7,6 +8,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
+import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
 export interface CreatedEntity {
@@ -60,11 +62,13 @@ export class RoutineNamespace {
   }
 
   /**
-   * Create a routine: one agent task (`prompt`, with `model`, `agent`, or
-   * both), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only
-   * when the user explicitly asked for it to act, send or post as them. To
-   * check on something later, such as a spawned session or a long job, create
-   * a routine instead of waiting in a program. A cron `schedule` has 6 fields
+   * Create a routine from `steps`: code steps and at most one Ask AI
+   * (`agent`) step. The older single agent task (`prompt`, with `model`,
+   * `agent`, or both) still saves and runs as one Ask AI step; write new
+   * routines as steps. Set `dangerouslyOperateAsUser` only when the user
+   * explicitly asked for it to act, send or post as them. To check on
+   * something later, such as a spawned session or a long job, create a
+   * routine instead of waiting in a program. A cron `schedule` has 6 fields
    * (second minute hour day-of-month month day-of-week) or 7 with a year; a
    * 7-field schedule that names one date runs once. A code step's `source`
    * exports `async function main({ macro, run, trigger, steps, knobs })` and
@@ -83,22 +87,30 @@ export class RoutineNamespace {
    * // Every ten minutes, in New York time.
    * const routine = await macro.routines.create({
    *   name: 'Check the import',
-   *   prompt: 'Read the import task and post its status in the channel.',
-   *   userPrompt: 'Check on the import every ten minutes.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: {
    *     type: 'cron',
    *     schedule: '0 0/10 * * * *',
    *     timezone: 'America/New_York',
    *   },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the import task and post its status in the channel.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // Once, at 14:30 on 3 November 2027.
    * await macro.routines.create({
    *   name: 'Follow up on the review',
-   *   prompt: 'Read the review session and summarize its outcome.',
-   *   userPrompt: 'Follow up on the review on 3 November 2027.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the review session and summarize its outcome.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // A code step that posts in a channel, disabled until turned on. The
    * // user asked for the post to come from them.
@@ -121,10 +133,14 @@ export class RoutineNamespace {
    * await macro.routines.create(
    *   {
    *     name: `Check on ${taskName}`,
-   *     prompt: `Read task ${taskId} and post its status in the channel.`,
-   *     userPrompt: 'Check on each open task tomorrow.',
-   *     model: 'anthropic/claude-sonnet-5-5',
    *     trigger: { type: 'once', at: tomorrow },
+   *     steps: [
+   *       {
+   *         type: 'agent',
+   *         instructions: `Read task ${taskId} and post its status in the channel.`,
+   *         model: 'anthropic/claude-sonnet-5-5',
+   *       },
+   *     ],
    *   },
    *   { key: `check-${taskId}` },
    * );
@@ -193,15 +209,16 @@ export class RoutineNamespace {
   }
 
   /**
-   * Suggest a routine to the user. Only a routine suggestion session may
+   * Suggest a routine to the user. Only a routines generation session may
    * call this; any other session gets a 403. Suggest a catalog routine by
    * `key` with `knobs`, or a `routine` the catalog lacks, written as `check`
    * takes it and checked the same way. `surfaces` are the parts of the app
    * whose sidebar shows it, best fit first; `reason` is one line, shown to
    * the user, naming no one's email address; `keepProbability` is the
-   * chance, from 0 to 1, that the user keeps it on. Returns whether it was
-   * kept (`ok`) and, when not, the `problems` to fix before suggesting it
-   * again.
+   * chance, from 0 to 1, that the user keeps it on. A drafted `routine`
+   * also shows in the user's Suggestions feed, as its `card` says; a catalog
+   * routine takes no `card`. Returns whether it was kept (`ok`) and, when
+   * not, the `problems` to fix before suggesting it again.
    *
    * @example
    * const outcome = await macro.routines.suggest({
@@ -233,6 +250,8 @@ export class RoutineNamespace {
           reason: string;
           surfaces: Surface[];
           keepProbability: number;
+          /** How it shows in the user's Suggestions feed: a short title, an importance from 0 to 100, and fitting categories. */
+          card: RoutineSuggestionCard;
         },
   ): Promise<SuggestOutcome> {
     const body =
@@ -251,8 +270,32 @@ export class RoutineNamespace {
             reason: suggestion.reason,
             surfaces: suggestion.surfaces,
             keepProbability: suggestion.keepProbability,
+            card: suggestion.card,
           };
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
+  }
+
+  /**
+   * Every routine suggestion AI made for the user, open or not, and how
+   * many more this session may hand back. Only a routines generation
+   * session may call this. Retire with `suggestion.retire(reason)` what no
+   * longer fits; suggestions are never rewritten.
+   *
+   * @mcp-exclude only a routines generation session may call it
+   */
+  async review(): Promise<{
+    suggestions: RoutineSuggestion[];
+    keptLeft: number;
+  }> {
+    const review = unwrap(
+      await this.client.scheduledAction.reviewRoutineSuggestions(),
+    );
+    return {
+      suggestions: review.suggestions.map((record) =>
+        RoutineSuggestion.from(this.client, record),
+      ),
+      keptLeft: review.keptLeft,
+    };
   }
 
   /**

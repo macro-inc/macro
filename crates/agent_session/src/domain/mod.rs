@@ -14,6 +14,8 @@ pub mod control;
 pub mod error;
 pub mod events;
 pub mod lifecycle;
+/// Lifecycle events as their owner's activity.
+pub mod lifecycle_activity;
 pub mod model;
 #[cfg(feature = "admission")]
 pub mod name_generation;

@@ -2,6 +2,8 @@
 //! the emulator up and to look inside it. Each route calls the
 //! [`GmailEmulator`] method of the same purpose.
 
+mod calendar;
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -13,6 +15,8 @@ use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+pub use calendar::AttendeeResponse;
 
 use crate::fault::{Fault, Route};
 use crate::gate::open_request;
@@ -132,7 +136,8 @@ pub(crate) fn router() -> Router<GmailEmulator> {
         .route(
             "/authentication-service/internal/google_access_token",
             get(authentication_service_token),
-        );
+        )
+        .merge(calendar::router());
 
     Router::new().nest("/_emulator", control)
 }
@@ -160,6 +165,7 @@ async fn state(AxumState(emulator): Emulator) -> Json<Value> {
         "faults": fault_list(&emulator),
         "requests": emulator.requests().len(),
         "push_deliveries": emulator.push_deliveries().len(),
+        "channel_deliveries": emulator.channel_deliveries().len(),
     }))
 }
 

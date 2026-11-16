@@ -50,6 +50,9 @@ the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise, search, and touch devices keep
 the merged feed. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
+What an agent session does for you is the session's work, not yours: a task or
+document it creates stays out of Home unless a notification brings it in, and
+its edits never move an item you worked on.
 **Mark Done** clears a row's notifications (and archives an inbox email): a row
 that is only notifications leaves and stays gone after a reload, while a row you
 also worked on stays, read, at the time of your own work. **Undo** brings a done
@@ -125,6 +128,12 @@ working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata
 is omitted.
+A session a person starts is their own work from the moment its row commits,
+before its sandbox boots: Home lists it on every signed-in device within a
+couple of seconds of sending, without waiting for the first reply. Sessions
+another agent or a routine starts join only when they notify. Verify by sending
+a prompt from Home and checking the row appears while the session is still
+starting, is highlighted while it is open, and shows on a second device too.
 Once `HIDE_AGENT_DM_SESSIONS` is enabled after the warm-marker rollout, agent
 DM contexts stay out of broad Agents/Home lists, including work-feed and
 notification-driven candidates. Prior notifications or activity must not bring
@@ -290,3 +299,29 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Suggestions on Home
+
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
+and in place of the recommended actions:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: the five most important open suggestions, as the
+  server ranks them. A row opens For you with that suggestion first; **All in
+  For you** opens the page.
+
+On For you, each card has one main action for its kind: **Open in chat** opens
+the composer with the prompt, unsent; **Run in background** starts the run at
+once (the card says what it will post or send first), then shows Running and,
+when done, a row with **Open result**; **Open** or **Open draft** opens the
+item or the drafted reply; **Turn on** saves a routine suggestion and
+**Review** opens it in the routine editor. The `x` (shown on hover or focus)
+dismisses at once and leaves an Undo row for the visit; Undo restores the
+suggestion, which the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
+**Refresh suggestions** in the header asks for a fresh run, at most once an
+hour; while one runs it reads "Looking for suggestions", and during the
+cooldown "Available at" a time.
+

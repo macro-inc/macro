@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use async_graphql::{Enum, ID, Object, SimpleObject};
 use model_entity::{Entity, EntityType};
 
@@ -34,6 +37,13 @@ pub enum GraphqlSoupEntityType {
     DatabaseRow,
     /// A paired runtime, listed only by attention feeds.
     Harness,
+    /// An entity outside Soup, such as a routine. Only the deprecated
+    /// notification `entityType` returns it; read `targetEntityType` instead.
+    /// Rejected as input.
+    #[graphql(
+        deprecation = "Only returned by the deprecated notification entityType. Remove after 2026-12-15."
+    )]
+    OutsideSoup,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -99,14 +109,6 @@ pub enum GraphqlEntityType {
 }
 
 impl GraphqlSoupEntityType {
-    /// Construct a GraphQL Soup entity type from the canonical model type.
-    pub fn new(entity_type: EntityType) -> Self {
-        Self::try_new(entity_type).unwrap_or_else(|| {
-            tracing::error!("{entity_type:?}");
-            Self::Document
-        })
-    }
-
     /// Try to construct a GraphQL Soup entity type from the canonical model type.
     pub fn try_new(entity_type: EntityType) -> Option<Self> {
         Some(match entity_type {
@@ -139,8 +141,9 @@ impl GraphqlSoupEntityType {
     }
 
     /// Convert this GraphQL Soup entity type into the canonical model type.
-    pub fn into_model(self) -> EntityType {
-        match self {
+    /// Errors for `OUTSIDE_SOUP`, which names no entity type.
+    pub fn into_model(self) -> async_graphql::Result<EntityType> {
+        Ok(match self {
             Self::Document => EntityType::Document,
             Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,
@@ -156,7 +159,12 @@ impl GraphqlSoupEntityType {
             Self::Initiative => EntityType::Initiative,
             Self::DatabaseRow => EntityType::DatabaseRow,
             Self::Harness => EntityType::Harness,
-        }
+            Self::OutsideSoup => {
+                return Err(async_graphql::Error::new(
+                    "OUTSIDE_SOUP is not a Soup entity type",
+                ));
+            }
+        })
     }
 }
 
@@ -190,11 +198,6 @@ impl GraphqlEntityType {
             EntityType::ExternalChat => Self::ExternalChat,
             EntityType::Harness => Self::Harness,
         }
-    }
-
-    /// Construct a canonical GraphQL entity type from a Soup entity type.
-    pub fn new_from_soup_entity_type(entity_type: GraphqlSoupEntityType) -> Self {
-        Self::new(entity_type.into_model())
     }
 
     /// Convert this GraphQL entity type into the canonical model type.
@@ -268,76 +271,5 @@ impl GraphqlCacheDeletion {
             graphql_type_name: graphql_type_name.into(),
             entity_id: entity_id.into(),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn scheduled_action_round_trips_through_graphql_entity_type() {
-        let graphql = GraphqlEntityType::new(EntityType::ScheduledAction);
-        assert!(matches!(graphql, GraphqlEntityType::ScheduledAction));
-        assert!(matches!(
-            graphql.into_model().ok(),
-            Some(EntityType::ScheduledAction)
-        ));
-    }
-
-    #[test]
-    fn scheduled_action_is_not_a_soup_entity_type() {
-        assert!(GraphqlSoupEntityType::try_new(EntityType::ScheduledAction).is_none());
-    }
-
-    #[test]
-    fn initiative_round_trips_through_graphql_entity_type() {
-        let graphql = GraphqlEntityType::new(EntityType::Initiative);
-        assert!(matches!(graphql, GraphqlEntityType::Initiative));
-        assert!(matches!(
-            graphql.into_model().ok(),
-            Some(EntityType::Initiative)
-        ));
-    }
-
-    #[test]
-    fn initiative_round_trips_through_soup_entity_type() {
-        let graphql = GraphqlSoupEntityType::try_new(EntityType::Initiative).unwrap();
-        assert!(matches!(graphql, GraphqlSoupEntityType::Initiative));
-        assert_eq!(graphql.into_model(), EntityType::Initiative);
-    }
-
-    #[test]
-    fn database_row_round_trips_through_graphql_entity_type() {
-        let graphql = GraphqlEntityType::new(EntityType::DatabaseRow);
-        assert!(matches!(graphql, GraphqlEntityType::DatabaseRow));
-        assert!(matches!(
-            graphql.into_model().ok(),
-            Some(EntityType::DatabaseRow)
-        ));
-    }
-
-    #[test]
-    fn database_row_round_trips_through_soup_entity_type() {
-        let graphql = GraphqlSoupEntityType::try_new(EntityType::DatabaseRow).unwrap();
-        assert!(matches!(graphql, GraphqlSoupEntityType::DatabaseRow));
-        assert_eq!(graphql.into_model(), EntityType::DatabaseRow);
-    }
-
-    #[test]
-    fn form_round_trips_through_graphql_entity_type() {
-        let graphql = GraphqlEntityType::new(EntityType::Form);
-        assert!(matches!(graphql, GraphqlEntityType::Form));
-        assert!(matches!(graphql.into_model().ok(), Some(EntityType::Form)));
-    }
-
-    #[test]
-    fn whatsapp_group_stub_is_rejected_as_input() {
-        assert!(GraphqlEntityType::WhatsappGroup.into_model().is_err());
-    }
-
-    #[test]
-    fn form_is_not_a_soup_entity_type() {
-        assert!(GraphqlSoupEntityType::try_new(EntityType::Form).is_none());
     }
 }

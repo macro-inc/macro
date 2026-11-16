@@ -1,6 +1,8 @@
 .homepage-feature-more-group { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; column-gap: 28px; row-gap: 0; margin-top: 16px; }
 .homepage-feature-more { display: flex; justify-content: center; }
-.homepage-feature-more > a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 0; border: 0; background: none; color: var(--color-ink-muted); font: 370 15px/1.5 'Inter Variable', Inter, sans-serif; cursor: pointer; text-decoration: none; }
+.homepage-feature-more > a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 0; border: 0; background: none; color: var(--color-ink-placeholder); font: 370 14px/1.65 'Inter Variable', Inter, sans-serif; cursor: pointer; text-decoration: none; }
 .homepage-feature-more > a:hover { color: var(--color-ink); }
-.homepage-feature-more > a > svg { width: 17px; height: 17px; }
+.homepage-feature-more > a > svg { width: 1em; height: 1em; }
 .homepage-feature-more > a:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 3px; border-radius: 3px; }
+
+@media (max-width: 699px) { .homepage-feature-more > a { font-size: 13px; } }

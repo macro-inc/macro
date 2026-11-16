@@ -45,11 +45,13 @@ import type {
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   CreateReview,
+  CredentialRejectedResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   DiscoverConnectorsResponse,
   DiscoveryRequest,
   EditQueuedActionRequest,
+  ErrorResponse,
   ExecutionRecord,
   ExtractInputRequest,
   ExtractInputResponse,
@@ -81,6 +83,7 @@ import type {
   UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -226,8 +229,13 @@ export type discoverAgentCapabilitiesHandlerResponse403 = {
   status: 403;
 };
 
-export type discoverAgentCapabilitiesHandlerResponse409 = {
-  data: void;
+export type discoverAgentCapabilitiesHandlerResponse409ApplicationJson = {
+  data: CredentialRejectedResponse;
+  status: 409;
+};
+
+export type discoverAgentCapabilitiesHandlerResponse409TextPlain = {
+  data: string;
   status: 409;
 };
 
@@ -249,7 +257,8 @@ export type discoverAgentCapabilitiesHandlerResponseError = (
   | discoverAgentCapabilitiesHandlerResponse400
   | discoverAgentCapabilitiesHandlerResponse401
   | discoverAgentCapabilitiesHandlerResponse403
-  | discoverAgentCapabilitiesHandlerResponse409
+  | discoverAgentCapabilitiesHandlerResponse409ApplicationJson
+  | discoverAgentCapabilitiesHandlerResponse409TextPlain
   | discoverAgentCapabilitiesHandlerResponse502
   | discoverAgentCapabilitiesHandlerResponse504
 ) & {
@@ -701,8 +710,13 @@ export type loadAgentModelsHandlerResponse403 = {
   status: 403;
 };
 
-export type loadAgentModelsHandlerResponse409 = {
-  data: void;
+export type loadAgentModelsHandlerResponse409ApplicationJson = {
+  data: CredentialRejectedResponse;
+  status: 409;
+};
+
+export type loadAgentModelsHandlerResponse409TextPlain = {
+  data: string;
   status: 409;
 };
 
@@ -724,7 +738,8 @@ export type loadAgentModelsHandlerResponseError = (
   | loadAgentModelsHandlerResponse400
   | loadAgentModelsHandlerResponse401
   | loadAgentModelsHandlerResponse403
-  | loadAgentModelsHandlerResponse409
+  | loadAgentModelsHandlerResponse409ApplicationJson
+  | loadAgentModelsHandlerResponse409TextPlain
   | loadAgentModelsHandlerResponse502
   | loadAgentModelsHandlerResponse504
 ) & {
@@ -4853,4 +4868,135 @@ export const extract = async (
 
   const data: extractResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as extractResponse;
+};
+
+/**
+ * @summary The voices an agent teammate can speak with on calls. Team admins only.
+ */
+export type getAgentVoicesResponse200 = {
+  data: Voice[];
+  status: 200;
+};
+
+export type getAgentVoicesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getAgentVoicesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentVoicesResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getAgentVoicesResponseSuccess = getAgentVoicesResponse200 & {
+  headers: Headers;
+};
+export type getAgentVoicesResponseError = (
+  | getAgentVoicesResponse401
+  | getAgentVoicesResponse403
+  | getAgentVoicesResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoicesResponse =
+  | getAgentVoicesResponseSuccess
+  | getAgentVoicesResponseError;
+
+export const getGetAgentVoicesUrl = () => {
+  return `/voices`;
+};
+
+export const getAgentVoices = async (
+  options?: RequestInit
+): Promise<getAgentVoicesResponse> => {
+  const res = await fetch(getGetAgentVoicesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoicesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoicesResponse;
+};
+
+/**
+ * @summary A catalog voice saying a fixed line, as WAV. Team admins only; the first
+play of each voice is billed to the admin's team.
+ */
+export type getAgentVoiceSampleResponse200 = {
+  data: number[];
+  status: 200;
+};
+
+export type getAgentVoiceSampleResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getAgentVoiceSampleResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getAgentVoiceSampleResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentVoiceSampleResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getAgentVoiceSampleResponseSuccess =
+  getAgentVoiceSampleResponse200 & {
+    headers: Headers;
+  };
+export type getAgentVoiceSampleResponseError = (
+  | getAgentVoiceSampleResponse400
+  | getAgentVoiceSampleResponse401
+  | getAgentVoiceSampleResponse403
+  | getAgentVoiceSampleResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoiceSampleResponse =
+  | getAgentVoiceSampleResponseSuccess
+  | getAgentVoiceSampleResponseError;
+
+export const getGetAgentVoiceSampleUrl = (model: string) => {
+  return `/voices/${model}/sample`;
+};
+
+export const getAgentVoiceSample = async (
+  model: string,
+  options?: RequestInit
+): Promise<getAgentVoiceSampleResponse> => {
+  const res = await fetch(getGetAgentVoiceSampleUrl(model), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoiceSampleResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoiceSampleResponse;
 };

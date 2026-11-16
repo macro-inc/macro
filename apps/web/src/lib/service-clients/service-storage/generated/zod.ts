@@ -7614,7 +7614,7 @@ export const createCrmCompanyResponse = zod
           )
       )
       .describe(
-        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
       ),
     createdAt: zod.iso
       .datetime({})
@@ -7666,7 +7666,7 @@ export const createCrmCompanyResponse = zod
       .describe('Most recent known interaction with this company.'),
   })
   .describe(
-    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest."
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
   );
 
 /**
@@ -7833,6 +7833,15 @@ export const getCompanyParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to fetch'),
 });
 
+export const getCompanyQueryParams = zod.object({
+  includeContacts: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to embed every contact of the company (default `true`).\nA caller that pages contacts through\n`GET \/crm\/companies\/{company_id}\/contacts\/page` sets it to `false`.'
+    ),
+});
+
 export const getCompanyResponse = zod
   .object({
     contacts: zod
@@ -7903,7 +7912,7 @@ export const getCompanyResponse = zod
           )
       )
       .describe(
-        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
       ),
     createdAt: zod.iso
       .datetime({})
@@ -7955,7 +7964,7 @@ export const getCompanyResponse = zod
       .describe('Most recent known interaction with this company.'),
   })
   .describe(
-    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest."
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
   );
 
 /**
@@ -8127,6 +8136,125 @@ export const createCrmContactResponse = zod
   .describe(
     'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
   );
+
+/**
+ * @summary List a CRM company's contacts a page at a time, filtered by archive
+state and an optional name or email search. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`] as for
+`GET /crm/companies/{company_id}/contacts`; hidden contacts are
+invisible to plain members.
+ */
+export const listCompanyContactsPageParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company whose contacts to list'),
+});
+
+export const listCompanyContactsPageQueryLimitMax = 200;
+
+export const listCompanyContactsPageQueryParams = zod.object({
+  archived: zod
+    .boolean()
+    .optional()
+    .describe(
+      '`true` for the archived contacts (admins only: plain members get an\nempty list), `false` (default) for the active ones. Every contact of\nan archived company counts as archived.'
+    ),
+  query: zod
+    .string()
+    .optional()
+    .describe(
+      'Keep contacts whose name or primary email contains this text,\nignoring case. Blank matches every contact.'
+    ),
+  cursor: zod
+    .string()
+    .optional()
+    .describe("Opaque cursor from the previous page's `nextCursor`."),
+  limit: zod
+    .number()
+    .min(1)
+    .max(listCompanyContactsPageQueryLimitMax)
+    .optional()
+    .describe(
+      'Contacts per page, from 1 through 200 (default 50). Values outside\nthe range are clamped.'
+    ),
+});
+
+export const listCompanyContactsPageResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
+            companyId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+              ),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        "The page's contacts, alphabetically by name (the email when\nunnamed), in the same order as `GET \/crm\/companies\/{company_id}\/contacts`."
+      ),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page; absent on the last page.'),
+  })
+  .describe("One page of a company's contacts.");
 
 /**
  * @summary Toggle email contribution for a CRM company without archiving its records.
@@ -8455,11 +8583,11 @@ export const getContactByEmailResponse = zod
   .describe('Response from looking up a CRM contact by email.');
 
 /**
- * @summary Fetch a single CRM contact by id. Access is enforced by
-[`CrmContactAccessLevelExtractor`]: the user must be on the team that
-owns the contact's parent company, and hidden contacts are invisible
-to plain members. Admin/owner callers see hidden contacts so they can
-render the right unhide UI.
+ * @summary Fetch a single CRM contact by id, with its company's name and
+visibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:
+the user must be on the team that owns the contact, and hidden
+contacts are invisible to plain members. Admin/owner callers see
+hidden contacts so they can render the right unhide UI.
  */
 export const getContactParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact to fetch'),
@@ -8528,6 +8656,42 @@ export const getContactResponse = zod
   })
   .describe(
     'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  )
+  .and(
+    zod.object({
+      company: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              domain: zod
+                .string()
+                .nullish()
+                .describe(
+                  "The company's oldest domain, which clients show when it has no\nname."
+                ),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden. Only admin\/owner callers can see a\nhidden company.'
+                ),
+              id: zod
+                .uuid()
+                .describe(
+                  "The id of the company; equal to the contact's `companyId`."
+                ),
+              name: zod
+                .string()
+                .nullish()
+                .describe("The company's display name, if it has one."),
+            })
+            .describe("The name and visibility of a contact's company."),
+        ])
+        .optional(),
+    })
+  )
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/contacts\/{contact_id}`: the\ncontact, with what its page shows of its company.'
   );
 
 /**
@@ -9094,6 +9258,37 @@ export const updateCrmEmailPrivacyResponse = zod
  */
 export const listCrmPipelinesResponseItem = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9174,6 +9369,37 @@ export const createCrmPipelineBody = zod
 
 export const createCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9289,6 +9515,37 @@ export const createCrmPipelineWithFieldsBody = zod
 
 export const createCrmPipelineWithFieldsResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9344,6 +9601,12 @@ export const createCrmPipelineWithFieldsResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -9395,6 +9658,37 @@ version: what `ListPipelines` gives the agent, in one call.
  */
 export const listCrmPipelineDetailsResponseItem = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9450,6 +9744,12 @@ export const listCrmPipelineDetailsResponseItem = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -9620,6 +9920,39 @@ export const searchCrmPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -9793,6 +10126,39 @@ export const listCrmRecordPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -9859,6 +10225,37 @@ export const getCrmPipelineParams = zod.object({
 
 export const getCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -10045,6 +10442,37 @@ export const editCrmPipelineBody = zod
 
 export const editCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -10100,6 +10528,12 @@ export const editCrmPipelineResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -10572,6 +11006,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    afterCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount now.'
+                      ),
                     before: zod
                       .union([
                         zod.null(),
@@ -10649,6 +11089,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    beforeCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount before.'
+                      ),
                     field: zod.string().describe('The field.'),
                   })
                   .describe("One field's value before and after an update.")
@@ -10900,6 +11346,39 @@ export const findCrmPipelineEntriesResponse = zod
       .describe('How many entries matched in all.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -10957,6 +11436,12 @@ export const findCrmPipelineEntriesResponse = zod
             .array(
               zod
                 .object({
+                  currencyField: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "For a monetary amount, the field holding each entry's currency code."
+                    ),
                   multiple: zod
                     .boolean()
                     .describe('Whether it holds several values.'),
@@ -11006,6 +11491,12 @@ export const findCrmPipelineEntriesResponse = zod
       .array(
         zod
           .object({
+            currency: zod
+              .string()
+              .nullish()
+              .describe(
+                "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+              ),
             field: zod.string().describe('The field.'),
             sum: zod.number().describe('The sum.'),
           })
@@ -16277,6 +16768,82 @@ export const getCrmPipelineViewPositionsResponse = zod.array(
 );
 
 /**
+ * @summary Title many CRM company and contact chips at once. Each record answers as
+its own read (`GET /crm/companies/{company_id}`,
+`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,
+or that does not exist, is left out of the response.
+ */
+export const previewCrmRecordsBody = zod
+  .object({
+    companyIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Companies to preview, at most 100.'),
+    contactIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Contacts to preview, at most 100.'),
+  })
+  .describe('The CRM records whose chips to title.');
+
+export const previewCrmRecordsResponse = zod
+  .object({
+    companies: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('The company.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                "The team's name override, else the primary domain's directory name."
+              ),
+            primaryDomain: zod
+              .string()
+              .nullish()
+              .describe(
+                "The company's first domain, which titles a company with no name."
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe(
+                "The company's last interaction, as the company read's `updatedAt`."
+              ),
+          })
+          .describe(
+            'What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.'
+          )
+      )
+      .describe('Company previews, in no particular order.'),
+    contacts: zod
+      .array(
+        zod
+          .object({
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email, which titles a contact with no name."
+              ),
+            id: zod.uuid().describe('The contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe("The contact's display name."),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record last changed.'),
+          })
+          .describe('What a contact chip shows.')
+      )
+      .describe('Contact previews, in no particular order.'),
+  })
+  .describe(
+    'The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.'
+  );
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */
@@ -16615,11 +17182,17 @@ export const listDatabasesResponseItem = zod
 export const listDatabasesResponse = zod.array(listDatabasesResponseItem);
 
 /**
- * @summary Create a database owned by the caller; its first table, "Table 1", holds a
-"Name" text column.
+ * @summary Create a database owned by the caller; its first table, "Table 1" unless
+`firstTable` names it, holds a "Name" text column.
  */
 export const createDatabaseBody = zod
   .object({
+    firstTable: zod
+      .string()
+      .nullish()
+      .describe(
+        'The first table\'s display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\".'
+      ),
     name: zod.string().describe('Display name.'),
   })
   .describe('Request body for creating a database.');
@@ -39646,6 +40219,12 @@ export const externalChatsResponseItem = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -39774,6 +40353,12 @@ export const externalChatResponse = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -39877,6 +40462,12 @@ export const externalChatResponse = zod
                         .string()
                         .describe(
                           'What to call them: their provider name, else their phone number,\nelse a generic name.'
+                        ),
+                      pictureFileId: zod
+                        .uuid()
+                        .nullish()
+                        .describe(
+                          "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                         ),
                     })
                     .describe(
@@ -40198,6 +40789,12 @@ export const externalChatMessagesResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -40232,6 +40829,12 @@ export const externalChatMessagesResponse = zod
                               .string()
                               .describe(
                                 'Display name, never authentication evidence.'
+                              ),
+                            pictureFileId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                               ),
                             userId: zod
                               .string()
@@ -40279,6 +40882,12 @@ export const externalChatMessagesResponse = zod
                                           .string()
                                           .describe(
                                             'Display name, never authentication evidence.'
+                                          ),
+                                        pictureFileId: zod
+                                          .uuid()
+                                          .nullish()
+                                          .describe(
+                                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                           ),
                                         userId: zod
                                           .string()
@@ -40438,6 +41047,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -40484,6 +41099,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -40522,6 +41143,12 @@ export const externalChatMessagesResponse = zod
                   .string()
                   .describe('Display name, never authentication evidence.'),
                 personId: zod.uuid().describe('External person identity.'),
+                pictureFileId: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                  ),
                 userId: zod
                   .string()
                   .nullish()
@@ -40728,6 +41355,12 @@ export const externalChatMessageResponse = zod
             name: zod
               .string()
               .describe('Display name, never authentication evidence.'),
+            pictureFileId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+              ),
             userId: zod
               .string()
               .nullish()
@@ -40761,6 +41394,12 @@ export const externalChatMessageResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -40800,6 +41439,12 @@ export const externalChatMessageResponse = zod
                                   .string()
                                   .describe(
                                     'Display name, never authentication evidence.'
+                                  ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                   ),
                                 userId: zod
                                   .string()
@@ -40937,6 +41582,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -40978,6 +41629,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -41014,6 +41671,12 @@ export const externalChatMessageResponse = zod
           .string()
           .describe('Display name, never authentication evidence.'),
         personId: zod.uuid().describe('External person identity.'),
+        pictureFileId: zod
+          .uuid()
+          .nullish()
+          .describe(
+            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          ),
         userId: zod
           .string()
           .nullish()
@@ -47350,6 +48013,7 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47424,6 +48088,7 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Teams it is a team machine for: their every member is a user of it.'
           ),
+        team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
       .describe(
@@ -47486,6 +48151,7 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47542,6 +48208,7 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47600,6 +48267,7 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47719,6 +48387,7 @@ export const patchHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -49180,10 +49849,11 @@ export const getItemsSoupQueryParams = zod.object({
       'touched_by_me',
       'notified_at',
       'property',
+      'name',
     ])
     .optional()
     .describe(
-      'Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.'
+      "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
     ),
   sort_property_definition_id: zod
     .uuid()
@@ -54334,6 +55004,7 @@ export const postItemsSoupBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -58934,6 +59605,7 @@ export const postItemsSoupAstBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -63646,6 +64318,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
@@ -63942,6 +64615,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'

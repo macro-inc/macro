@@ -30,6 +30,20 @@ impl ApiError {
         }
     }
 
+    /// An error of the Calendar API, which names its own reasons.
+    pub(crate) fn calendar(status: u16, reason: &'static str, message: &str) -> Self {
+        let status_name = match status {
+            400 => "INVALID_ARGUMENT",
+            403 => "PERMISSION_DENIED",
+            404 => "NOT_FOUND",
+            409 => "ALREADY_EXISTS",
+            410 => "FAILED_PRECONDITION",
+            412 => "FAILED_PRECONDITION",
+            _ => "UNKNOWN",
+        };
+        Self::new(status, reason, status_name, message)
+    }
+
     pub(crate) fn not_found() -> Self {
         Self::new(
             404,

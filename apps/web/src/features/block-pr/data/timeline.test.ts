@@ -158,20 +158,22 @@ describe('buildTimeline', () => {
     expect(entries).toEqual([]);
   });
 
-  it('cleans markdown in replies as well as roots', () => {
+  it('normalizes GitHub markdown in replies as well as roots', () => {
     const entries = buildTimeline(
       [
         reviewComment(1, 0),
         reviewComment(2, 1, {
           inReplyToId: 1,
-          body: '<details><summary>Say more</summary>hidden</details>',
+          body: '<!-- marker --><details><summary>Say more</summary>hidden</details>',
         }),
       ],
       []
     );
 
     const [thread] = githubEntries(entries);
-    expect(thread?.replies[0]?.body).toBe('**Say more**\n\nhidden');
+    expect(thread?.replies[0]?.body).toBe(
+      '<details>\n<summary>Say more</summary>\n\nhidden\n\n</details>'
+    );
   });
 
   it('merges macro threads by their first comment timestamp', () => {
