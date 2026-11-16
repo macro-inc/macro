@@ -57,8 +57,8 @@ pub(crate) async fn run<R, B>(
 }
 
 /// Listen on [`RELEASED_CHANNEL`], retrying every 5 seconds until it works or
-/// the service stops (`None`). `PgListener::recv` re-establishes a dropped
-/// connection by itself.
+/// the service stops (`None`), which also abandons a connection attempt in
+/// progress. `PgListener::recv` re-establishes a dropped connection by itself.
 async fn listen(
     pool: &PgPool,
     cancellation: &CancellationToken,
@@ -69,7 +69,11 @@ async fn listen(
             listener.listen(RELEASED_CHANNEL).await?;
             Ok::<_, sqlx::Error>(listener)
         };
-        match listening.await {
+        let listened = tokio::select! {
+            _ = cancellation.cancelled() => return None,
+            listened = listening => listened,
+        };
+        match listened {
             Ok(listener) => return Some(listener),
             Err(error) => {
                 tracing::warn!(error = %error, "released attachment listener will retry");
