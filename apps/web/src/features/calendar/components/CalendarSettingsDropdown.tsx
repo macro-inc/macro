@@ -5,12 +5,14 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import MinusIcon from '@icon/system/regular/minus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -24,6 +26,7 @@ import {
 } from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
 import { MobilePeriodControls } from './PeriodSelector';
+import { CalendarAccountLabel, CalendarSourceLabel } from './SourceControls';
 import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
@@ -86,6 +89,11 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   const isAccountPartiallyVisible = (group: CalendarAccountGroup) =>
     !isAccountVisible(group) &&
     group.calendars.some((source) => calendarView.isSourceVisible(source.id));
+
+  const changeCalendarVisibility = (sourceId: string, visible: boolean) => {
+    calendarView.closeEventDetails();
+    calendarView.setSourceVisibility(sourceId, visible);
+  };
 
   const changeShowWeekends = (showWeekends: boolean) => {
     calendarView.closeEventDetails();
@@ -160,6 +168,7 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     changeAccountVisibility,
     isAccountVisible,
     isAccountPartiallyVisible,
+    changeCalendarVisibility,
     changeShowWeekends,
     changeWeekStartsOn,
     changeTimeFormat,
@@ -357,6 +366,117 @@ function DesktopCalendarSettings(props: {
   );
 }
 
+/**
+ * The phone sheet's calendar list, folded per account like the desktop
+ * sidebar's: the account row shows or hides all of its calendars, and its
+ * trailing caret reveals them to show or hide one at a time. Accounts start
+ * folded.
+ */
+function MobileCalendarVisibility(props: {
+  controls: CalendarSettingsControls;
+}) {
+  const controls = props.controls;
+  const [expandedKeys, setExpandedKeys] = createSignal<readonly string[]>([]);
+  const isExpanded = (key: string) => expandedKeys().includes(key);
+  const toggleExpanded = (key: string) =>
+    setExpandedKeys((current) =>
+      current.includes(key)
+        ? current.filter((expandedKey) => expandedKey !== key)
+        : [...current, key]
+    );
+
+  return (
+    <MobileDrawer.Section class="flex shrink-0 flex-col">
+      <For
+        each={groupCalendarSourcesByAccount(controls.calendarView.sources())}
+      >
+        {(group) => (
+          <>
+            <div class="flex min-w-0 items-center gap-1">
+              <MobileDrawer.Item
+                role="checkbox"
+                class="min-w-0 flex-1"
+                aria-checked={
+                  controls.isAccountPartiallyVisible(group)
+                    ? 'mixed'
+                    : controls.isAccountVisible(group)
+                }
+                onClick={() =>
+                  controls.changeAccountVisibility(
+                    group,
+                    !controls.isAccountVisible(group)
+                  )
+                }
+              >
+                <span class="flex min-w-0 flex-1 items-center gap-2">
+                  <CalendarAccountLabel group={group} />
+                </span>
+                <Show
+                  when={controls.isAccountPartiallyVisible(group)}
+                  fallback={
+                    <CheckIcon
+                      class="size-4 shrink-0 text-accent"
+                      classList={{
+                        invisible: !controls.isAccountVisible(group),
+                      }}
+                    />
+                  }
+                >
+                  <MinusIcon class="size-4 shrink-0 text-accent" />
+                </Show>
+              </MobileDrawer.Item>
+              <MobileDrawer.Item
+                class="w-11 shrink-0 justify-center px-0 text-ink-muted"
+                aria-label={`${isExpanded(group.key) ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
+                aria-expanded={isExpanded(group.key)}
+                onClick={() => toggleExpanded(group.key)}
+              >
+                <CaretDownIcon
+                  class="size-4 -rotate-90 transition-transform"
+                  classList={{ 'rotate-0': isExpanded(group.key) }}
+                />
+              </MobileDrawer.Item>
+            </div>
+            <CollapseTransition open={isExpanded(group.key)}>
+              <div class="mr-12 flex min-w-0 flex-col">
+                <For each={group.calendars}>
+                  {(source) => (
+                    <MobileDrawer.Item
+                      role="checkbox"
+                      class="pl-8"
+                      aria-checked={controls.calendarView.isSourceVisible(
+                        source.id
+                      )}
+                      onClick={() =>
+                        controls.changeCalendarVisibility(
+                          source.id,
+                          !controls.calendarView.isSourceVisible(source.id)
+                        )
+                      }
+                    >
+                      <span class="flex min-w-0 flex-1 items-center gap-2">
+                        <CalendarSourceLabel source={source} />
+                      </span>
+                      <CheckIcon
+                        class="size-4 shrink-0 text-accent"
+                        classList={{
+                          invisible: !controls.calendarView.isSourceVisible(
+                            source.id
+                          ),
+                        }}
+                      />
+                    </MobileDrawer.Item>
+                  )}
+                </For>
+              </div>
+            </CollapseTransition>
+          </>
+        )}
+      </For>
+    </MobileDrawer.Section>
+  );
+}
+
 function MobileCalendarSettings(props: {
   controls: CalendarSettingsControls;
   sidebar?: boolean;
@@ -394,176 +514,139 @@ function MobileCalendarSettings(props: {
 
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content
-          aria-label="Calendar settings"
-          class="overflow-y-auto"
-        >
+        <MobileDrawer.Content aria-label="Calendar settings">
           <MobileDrawer.Handle />
-          <MobilePeriodControls onSelect={() => setOpen(false)} />
+          <MobileDrawer.ScrollBody>
+            <MobilePeriodControls onSelect={() => setOpen(false)} />
 
-          <Show when={controls.showCalendarVisibility()}>
-            <MobileDrawer.Label>Calendars</MobileDrawer.Label>
+            <Show when={controls.showCalendarVisibility()}>
+              <MobileDrawer.Label>Calendars</MobileDrawer.Label>
+              <MobileCalendarVisibility controls={controls} />
+              <div class="mt-4" />
+            </Show>
+
+            <MobileDrawer.Label>Display</MobileDrawer.Label>
             <MobileDrawer.Section class="flex shrink-0 flex-col">
-              <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
-                {(group) => (
+              <MobileDrawer.Item
+                role="checkbox"
+                aria-checked={calendarView.displaySettings.showWeekends}
+                onClick={() =>
+                  controls.changeShowWeekends(
+                    !calendarView.displaySettings.showWeekends
+                  )
+                }
+              >
+                <span class="min-w-0 flex-1 truncate">Show weekends</span>
+                <CheckIcon
+                  class="size-4 shrink-0 text-accent"
+                  classList={{
+                    invisible: !calendarView.displaySettings.showWeekends,
+                  }}
+                />
+              </MobileDrawer.Item>
+            </MobileDrawer.Section>
+
+            <MobileDrawer.Label class="pt-4">Week starts on</MobileDrawer.Label>
+            <MobileDrawer.Section class="flex shrink-0 flex-col">
+              <For each={WEEK_START_OPTIONS}>
+                {(option) => (
                   <MobileDrawer.Item
-                    role="checkbox"
-                    aria-checked={
-                      controls.isAccountPartiallyVisible(group)
-                        ? 'mixed'
-                        : controls.isAccountVisible(group)
+                    aria-pressed={
+                      calendarView.displaySettings.weekStartsOn === option.value
                     }
-                    onClick={() =>
-                      controls.changeAccountVisibility(
-                        group,
-                        !controls.isAccountVisible(group)
-                      )
-                    }
+                    onClick={() => controls.changeWeekStartsOn(option.value)}
                   >
-                    <span class="min-w-0 flex-1 truncate">
-                      {group.emailAddress}
-                    </span>
-                    <Show
-                      when={controls.isAccountPartiallyVisible(group)}
-                      fallback={
-                        <CheckIcon
-                          class="size-4 shrink-0 text-accent"
-                          classList={{
-                            invisible: !controls.isAccountVisible(group),
-                          }}
-                        />
-                      }
-                    >
-                      <MinusIcon class="size-4 shrink-0 text-accent" />
-                    </Show>
+                    <span class="flex-1">{option.label}</span>
+                    <CheckIcon
+                      class="size-4 shrink-0 text-accent"
+                      classList={{
+                        invisible:
+                          calendarView.displaySettings.weekStartsOn !==
+                          option.value,
+                      }}
+                    />
                   </MobileDrawer.Item>
                 )}
               </For>
             </MobileDrawer.Section>
-            <div class="mt-4" />
-          </Show>
 
-          <MobileDrawer.Label>Display</MobileDrawer.Label>
-          <MobileDrawer.Section class="flex shrink-0 flex-col">
-            <MobileDrawer.Item
-              role="checkbox"
-              aria-checked={calendarView.displaySettings.showWeekends}
-              onClick={() =>
-                controls.changeShowWeekends(
-                  !calendarView.displaySettings.showWeekends
-                )
+            <MobileDrawer.Label class="pt-4">Time format</MobileDrawer.Label>
+            <MobileDrawer.Section class="flex shrink-0 flex-col">
+              <For each={TIME_FORMAT_OPTIONS}>
+                {(option) => (
+                  <MobileDrawer.Item
+                    aria-pressed={
+                      calendarView.displaySettings.timeFormat === option.value
+                    }
+                    onClick={() => controls.changeTimeFormat(option.value)}
+                  >
+                    <span class="flex-1">{option.label}</span>
+                    <CheckIcon
+                      class="size-4 shrink-0 text-accent"
+                      classList={{
+                        invisible:
+                          calendarView.displaySettings.timeFormat !==
+                          option.value,
+                      }}
+                    />
+                  </MobileDrawer.Item>
+                )}
+              </For>
+            </MobileDrawer.Section>
+
+            <Show
+              when={
+                controls.accounts().length > 0 || controls.showConnectAccount()
               }
             >
-              <span class="min-w-0 flex-1 truncate">Show weekends</span>
-              <CheckIcon
-                class="size-4 shrink-0 text-accent"
-                classList={{
-                  invisible: !calendarView.displaySettings.showWeekends,
-                }}
-              />
-            </MobileDrawer.Item>
-          </MobileDrawer.Section>
-
-          <MobileDrawer.Label class="pt-4">Week starts on</MobileDrawer.Label>
-          <MobileDrawer.Section class="flex shrink-0 flex-col">
-            <For each={WEEK_START_OPTIONS}>
-              {(option) => (
-                <MobileDrawer.Item
-                  aria-pressed={
-                    calendarView.displaySettings.weekStartsOn === option.value
-                  }
-                  onClick={() => controls.changeWeekStartsOn(option.value)}
-                >
-                  <span class="flex-1">{option.label}</span>
-                  <CheckIcon
-                    class="size-4 shrink-0 text-accent"
-                    classList={{
-                      invisible:
-                        calendarView.displaySettings.weekStartsOn !==
-                        option.value,
-                    }}
-                  />
-                </MobileDrawer.Item>
-              )}
-            </For>
-          </MobileDrawer.Section>
-
-          <MobileDrawer.Label class="pt-4">Time format</MobileDrawer.Label>
-          <MobileDrawer.Section class="flex shrink-0 flex-col">
-            <For each={TIME_FORMAT_OPTIONS}>
-              {(option) => (
-                <MobileDrawer.Item
-                  aria-pressed={
-                    calendarView.displaySettings.timeFormat === option.value
-                  }
-                  onClick={() => controls.changeTimeFormat(option.value)}
-                >
-                  <span class="flex-1">{option.label}</span>
-                  <CheckIcon
-                    class="size-4 shrink-0 text-accent"
-                    classList={{
-                      invisible:
-                        calendarView.displaySettings.timeFormat !==
-                        option.value,
-                    }}
-                  />
-                </MobileDrawer.Item>
-              )}
-            </For>
-          </MobileDrawer.Section>
-
-          <Show
-            when={
-              controls.accounts().length > 0 || controls.showConnectAccount()
-            }
-          >
-            <MobileDrawer.Label class="pt-4">Accounts</MobileDrawer.Label>
-            <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
-              <For each={controls.accounts()}>
-                {(account) => (
+              <MobileDrawer.Label class="pt-4">Accounts</MobileDrawer.Label>
+              <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
+                <For each={controls.accounts()}>
+                  {(account) => (
+                    <MobileDrawer.Item
+                      onClick={() => {
+                        setOpen(false);
+                        controls.runAccountAction(account);
+                      }}
+                    >
+                      <span class="min-w-0 flex-1 truncate">
+                        {account.emailAddress}
+                      </span>
+                      <span
+                        class="shrink-0 text-xs font-medium"
+                        classList={{
+                          'text-accent': account.action !== 'turnOff',
+                          'text-failure': account.action === 'turnOff',
+                        }}
+                      >
+                        {match(account.action)
+                          .with('enable', () => 'Enable')
+                          .with('reconnect', () => 'Reconnect')
+                          .with('turnOff', () => 'Turn off')
+                          .exhaustive()}
+                      </span>
+                    </MobileDrawer.Item>
+                  )}
+                </For>
+                <Show when={controls.showConnectAccount()}>
                   <MobileDrawer.Item
                     onClick={() => {
                       setOpen(false);
-                      controls.runAccountAction(account);
+                      controls.connectAnotherAccount();
                     }}
                   >
-                    <span class="min-w-0 flex-1 truncate">
-                      {account.emailAddress}
-                    </span>
-                    <span
-                      class="shrink-0 text-xs font-medium"
-                      classList={{
-                        'text-accent': account.action !== 'turnOff',
-                        'text-failure': account.action === 'turnOff',
-                      }}
-                    >
-                      {match(account.action)
-                        .with('enable', () => 'Enable')
-                        .with('reconnect', () => 'Reconnect')
-                        .with('turnOff', () => 'Turn off')
-                        .exhaustive()}
+                    <PlusIcon class="size-4 shrink-0 text-ink-muted" />
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate">Connect another account</span>
+                      <span class="truncate text-xs text-ink-muted">
+                        Email and calendar together
+                      </span>
                     </span>
                   </MobileDrawer.Item>
-                )}
-              </For>
-              <Show when={controls.showConnectAccount()}>
-                <MobileDrawer.Item
-                  onClick={() => {
-                    setOpen(false);
-                    controls.connectAnotherAccount();
-                  }}
-                >
-                  <PlusIcon class="size-4 shrink-0 text-ink-muted" />
-                  <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate">Connect another account</span>
-                    <span class="truncate text-xs text-ink-muted">
-                      Email and calendar together
-                    </span>
-                  </span>
-                </MobileDrawer.Item>
-              </Show>
-            </MobileDrawer.Section>
-          </Show>
+                </Show>
+              </MobileDrawer.Section>
+            </Show>
+          </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
