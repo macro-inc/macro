@@ -1,0 +1,37 @@
+services/mcp-chatgpt-worker/src/person-tokens.ts
+  s_4de99c3be44255::t_be4817aec014c4 1-205
+  s_4de99c3be44255::t_b60ff64296c525 206-231
+services/mcp-chatgpt-worker/src/config.ts
+  s_4de99c3be44255::t_de3269cd54761a 16
+  s_4de99c3be44255::t_d432f78d1bed5e 30,34,36-37,48-49,53,57,59-78
+  s_4de99c3be44255::t_1180f9db7c60d3 2
+  s_4de99c3be44255::t_0b3f161200a96f 19-29,31-33,35,38-47,50-52,54-56,58,79
+packages/sdk-mcp/src/call.test.ts
+  s_4de99c3be44255::t_2f2b9a32ee8312 4
+packages/sdk-mcp/src/call.ts
+  s_4de99c3be44255::t_435d8f5bb119bc 220,276
+services/mcp-chatgpt-worker/AGENTS.md
+  s_4de99c3be44255::t_a7a166deb877d2 44-55
+services/mcp-chatgpt-worker/src/app.test.ts
+  s_4de99c3be44255::t_755a2eed17642c 12-16,211,236-281,284-302,304-317,319,321-420
+services/mcp-chatgpt-worker/src/app.ts
+  s_4de99c3be44255::t_5f99d0695fd101 28-33,43-87,183-264,285-299,301-302,307-319,332-334,336-340
+services/mcp-chatgpt-worker/wrangler.jsonc
+  s_4de99c3be44255::t_9225162fd8210d 13-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b1746f7454e2dbaad0ee1aa0f9899af94fe4904a",
+  "prompts": {},
+  "sessions": {
+    "s_4de99c3be44255": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb80936-77b8-47b6-8e64-a86407cfc90b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
