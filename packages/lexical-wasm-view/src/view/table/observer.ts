@@ -5,6 +5,7 @@
  */
 import type { EditorView } from '../editor-view';
 import { themeClass } from '../registry';
+import { isSelectionWithinEditor } from '../selection';
 
 export interface DOMCell {
   readonly element: HTMLTableCellElement;
@@ -404,31 +405,20 @@ export class TableObserver {
     // Chromium can re-anchor a cleared native text drag on the editable root
     // or on the table's scrollable wrapper between them.
     if (this.isRootCaret(dom)) return true;
-    // Or at the editable root's first caret position, in a block above the
-    // table, and extend from there.
+    // Pinned $internalCreateSelection clones the TableSelection for any caret
+    // this editor owns: Chromium's re-seed at the root's first caret position,
+    // or a caret placed on another block mid-drag. A range leaving the table
+    // is the drag extending past it and is read as a range.
+    // A selection in a nested editor or decorator input is never this drag's.
+    if (!isSelectionWithinEditor(this.view, dom.anchorNode, dom.focusNode))
+      return false;
     if (
-      !this.isDocumentStartCaret(dom) &&
+      !dom.isCollapsed &&
       (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
     )
       return false;
     dom.removeAllRanges();
     return true;
-  }
-  /** A collapsed caret with no text before it in the editor. */
-  private isDocumentStartCaret(dom: Selection): boolean {
-    const root = this.view.root;
-    const node = dom.anchorNode;
-    if (!dom.isCollapsed || !node || !root.contains(node)) return false;
-    const doc = root.ownerDocument;
-    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let first = walker.nextNode();
-    while (first && first.textContent === '') first = walker.nextNode();
-    if (!first) return true;
-    const caret = doc.createRange();
-    caret.setStart(node, dom.anchorOffset);
-    const start = doc.createRange();
-    start.setStart(first, 0);
-    return caret.compareBoundaryPoints(Range.START_TO_START, start) <= 0;
   }
   /** A collapsed caret on the root or an element that holds this table inside it. */
   private isRootCaret(dom: Selection): boolean {

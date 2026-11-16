@@ -706,7 +706,11 @@ test('a mouse drag across an overlay above the cell border keeps a native TableS
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
-test('mid-drag, a caret on a sibling block outside the table still replaces the table selection', async ({
+// Source control (real Source editor, Chromium): with the button held after a
+// drag across four cells, setBaseAndExtent onto the paragraph below kept
+// table(A1->B2) and its four cells through release; pinned
+// $internalCreateSelection clones a TableSelection on selectionchange.
+test('mid-drag, a caret on a sibling block outside the table keeps the table selection', async ({
   page,
 }) => {
   const withParagraph = {
@@ -736,19 +740,92 @@ test('mid-drag, a caret on a sibling block outside the table still replaces the 
     steps: 8,
   });
   await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
-  // Only a caret on the root or on an element holding the table is the
-  // cleared native drag; a caret on another block is a real selection.
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const paragraph = [...document.querySelectorAll('#first p')].find(
       (element) => element.textContent === 'after'
     );
     if (!paragraph) throw new Error('Missing sibling paragraph');
     document.getSelection()?.setBaseAndExtent(paragraph, 0, paragraph, 0);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    );
   });
-  await expect
-    .poll(() => page.evaluate(() => window.groupB.first.selection().kind))
-    .toBe('range');
+  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
+    'table'
+  );
   await page.mouse.up();
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
+    'table'
+  );
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('releasing an owned table drag leaves a nested editor caret alone', async ({
+  page,
+}) => {
+  const state = JSON.stringify({
+    root: {
+      type: 'root',
+      version: 1,
+      children: [
+        { type: 'paste', version: 1, content: 'nested host', origin: 'pasted' },
+        ...tableDocument.root.children,
+      ],
+    },
+  });
+  await page.evaluate((state) => {
+    window.groupB.first.set(state);
+    window.groupB.second.set(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'nested' }],
+            },
+          ],
+        },
+      })
+    );
+    const host = document.querySelector('[data-nested-host="first"]');
+    const child = document.getElementById('second');
+    if (!host || !child) throw new Error('Missing nested editor');
+    host.append(child);
+  }, state);
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(1).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  // The nested editor's text is the first text under the outer root, so its
+  // offset-0 caret sits where Chromium re-seeds a cleared drag.
+  await page.evaluate(() => {
+    const text = document.querySelector('#second p')?.firstChild;
+    const leaf = text?.firstChild ?? text;
+    if (!leaf) throw new Error('Missing nested text');
+    document.getSelection()?.setBaseAndExtent(leaf, 0, leaf, 0);
+  });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(() => {
+      const selection = document.getSelection();
+      return {
+        inNested: !!document
+          .getElementById('second')
+          ?.contains(selection?.anchorNode ?? null),
+        offset: selection?.anchorOffset,
+      };
+    })
+  ).toEqual({ inNested: true, offset: 0 });
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
