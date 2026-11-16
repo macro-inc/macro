@@ -473,7 +473,8 @@ fn typed_snippet_resolution_reuses_application_services_and_real_history() {
     expected["children"][0]["children"][0]["style"] = serde_json::Value::Null;
     // The SetState root has no id; as Source's CollabProvider re-ids it after the
     // Loro reconcile, the redo mints one from the session's id stream
-    // (C-ROOT-ID-RECONCILE-01).
+    // (C-ROOT-ID-RECONCILE-01). Source loses the first undo here
+    // (C-ROOT-ID-FIRST-UNDO-01); the history assertions pin native behaviour.
     expected["$"]["id"] = serde_json::json!("ZsfiuPd1");
     assert_eq!(root, expected);
     let FfiQueryReply::ViewDiff {
