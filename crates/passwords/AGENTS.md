@@ -48,6 +48,9 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   `canEdit` uses current edit grants or administrator access; management remains
   creator/administrator-only, and view grants still permit reveal and copy.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
+- Missing provider username slots resolve as empty strings; malformed values still
+  fail. Username spans record `empty`, `present` or `failed`; HTTP failures warn
+  with fixed error codes and status, never values.
 - Username GET and audited username-copy POST resolve only the current committed
   identifier with normal human view authorization. Recheck access and revision after
   the provider read; never reconcile or return passwords, notes or custom fields.

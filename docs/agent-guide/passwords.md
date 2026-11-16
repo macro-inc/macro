@@ -58,7 +58,9 @@ it when it expires; a failed load offers Retry.
 
 The detail header shows the logo tile, name, folder path and kind, then
 Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
-Copy action and never reveal the password. Any signed-in team member with
+Copy action and never reveal the password. An empty account identifier or API Key
+shows a dash; lookup failures stay visible. Missing provider username slots read as
+empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
 Passwords (a client-side conceal only), after a minute, when the window loses
@@ -73,8 +75,8 @@ The New menu (desktop sidebar and list header) and the phone's floating New end
 with Import…, which opens the import dialog (a full-screen sheet on phones).
 An empty vault (All, no search) shows "No passwords yet" with New login and
 Import buttons; Import opens the same dialog.
-Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON or
-CSV export. The file is parsed on the device: `crates/password_import`
+Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON,
+CSV or `.zip` export (its attachments are counted, not imported). The file is parsed on the device: `crates/password_import`
 compiled to wasm (`crates/password_import_wasm`, built by
 `just ensure-password-import-wasm`) runs in a worker started for that file and
 terminated after it answers; the raw file is never uploaded or stored. An

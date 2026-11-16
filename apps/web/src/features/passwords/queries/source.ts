@@ -285,11 +285,17 @@ export function createPasswordSource(
       );
     },
     username(id) {
-      return action<PasswordUsername>(
-        'passwords.username',
-        `/items/${id}/username`,
-        'GET'
-      );
+      return Telemetry.span('passwords.username', async (span) => {
+        const result = await requestCodes<PasswordUsername>(
+          `/items/${id}/username`,
+          'GET'
+        );
+        if (result.isErr()) {
+          span.setAttr('passwords.error_code', result.error.join(','));
+          span.error('passwords.username failed');
+        }
+        return result.mapErr(failure);
+      });
     },
     copyUsername(id) {
       return action<PasswordUsername>(

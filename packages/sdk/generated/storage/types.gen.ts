@@ -15748,7 +15748,7 @@ export type PasswordImportFolderResult = {
 /**
  * Recognized client-side source parser; contains no export contents.
  */
-export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv';
+export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv' | 'bitwarden_zip';
 
 /**
  * One normalized credential; intentionally has no Debug implementation.

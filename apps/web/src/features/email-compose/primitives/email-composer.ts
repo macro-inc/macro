@@ -368,7 +368,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
     if (
       !hasDraftContent(
-        prepared.bodyText,
+        prepared.hasWrittenContent,
         form.subject(),
         form.attachments.list().length,
         form.recipients().to.length +
