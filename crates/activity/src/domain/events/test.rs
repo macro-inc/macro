@@ -134,7 +134,7 @@ fn wire_row() -> ActivityWireRow {
 
 #[test]
 fn recorded_activity_reaches_only_its_recipient_without_action_payloads() {
-    use macro_event_broker::exposure::{Audience, EntityRef, Exposure, Stage};
+    use macro_event_broker::access::{Audience, EntityRef, Exposure, Stage};
 
     let event = ActivityTopicEvent::Recorded {
         recipient_id: "macro|reader@example.com".to_owned(),
@@ -185,7 +185,7 @@ fn a_malformed_recipient_is_rejected() {
 
 #[test]
 fn session_rows_and_invalidations_stay_internal() {
-    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::access::Exposure;
 
     for event in [
         ActivityTopicEvent::SessionRecorded {

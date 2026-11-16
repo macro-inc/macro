@@ -405,7 +405,7 @@ fn shared_owner_and_value_types_keep_exact_wire_representations() {
 
 mod exposure {
     use super::*;
-    use macro_event_broker::exposure::{
+    use macro_event_broker::access::{
         Audience, EntityType as MacroEntityType, Exposure, PublicEvent, Stage,
     };
 
@@ -539,7 +539,7 @@ mod exposure {
 
 mod definition_exposure {
     use super::*;
-    use macro_event_broker::exposure::{
+    use macro_event_broker::access::{
         Audience, EntityRef, EntityType as MacroEntityType, Exposure, MinTeamRole,
         PublicEntityType, PublicEvent, Stage,
     };

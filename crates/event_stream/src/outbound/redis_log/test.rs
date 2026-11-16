@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::domain::models::Invalidation;
-use event_exposure::EntityType;
+use event_access::EntityType;
 use redis::AsyncCommands as _;
 
 fn client() -> redis::Client {

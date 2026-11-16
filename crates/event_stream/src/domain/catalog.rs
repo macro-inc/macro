@@ -21,7 +21,7 @@ use chat::domain::events::{ChatPublicEvent, ChatTopicEvent};
 use databases::domain::events::{DatabasePublicEvent, DatabaseTopicEvent};
 use documents::domain::events::{DocumentPublicEvent, DocumentTopicEvent};
 use email::domain::events::{EmailPublicEvent, EmailTopicEvent};
-use event_exposure::Stage;
+use event_access::Stage;
 use forms::domain::events::{FormPublicEvent, FormTopicEvent};
 use github::broker::{GithubWebhookPublicEvent, GithubWebhookTopicEvent};
 use github_pull_requests::broker::{GithubPullRequestPublicEvent, GithubPullRequestTopicEvent};

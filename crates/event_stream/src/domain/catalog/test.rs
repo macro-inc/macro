@@ -93,8 +93,8 @@ impl TopicVisitor for Expose {
     fn visit<T: macro_event_broker::TopicEvent>(self) -> Self::Output {
         let event: T = serde_json::from_value(self.0).map_err(|error| error.to_string())?;
         let public = match event.exposure().map_err(|error| error.to_string())? {
-            event_exposure::Exposure::Internal(_) => return Ok(None),
-            event_exposure::Exposure::Public(public) => public,
+            event_access::Exposure::Internal(_) => return Ok(None),
+            event_access::Exposure::Public(public) => public,
         };
 
         let mut classes = Vec::new();
@@ -139,8 +139,8 @@ impl TopicVisitor for Variants {
 }
 
 /// The registry classes an audience rule can admit through.
-fn audience_classes(audience: &event_exposure::Audience, classes: &mut Vec<AudienceClass>) {
-    use event_exposure::Audience;
+fn audience_classes(audience: &event_access::Audience, classes: &mut Vec<AudienceClass>) {
+    use event_access::Audience;
 
     let class = match audience {
         Audience::Any(audiences) => {
@@ -154,8 +154,8 @@ fn audience_classes(audience: &event_exposure::Audience, classes: &mut Vec<Audie
         Audience::Recipient { .. } => AudienceClass::Recipient,
         Audience::Owner { .. } => AudienceClass::Owner,
         Audience::Team { min_role, .. } => match min_role {
-            event_exposure::MinTeamRole::Member => AudienceClass::Team,
-            event_exposure::MinTeamRole::Admin => AudienceClass::TeamAdmins,
+            event_access::MinTeamRole::Member => AudienceClass::Team,
+            event_access::MinTeamRole::Admin => AudienceClass::TeamAdmins,
         },
         Audience::TeamsOf { .. } => AudienceClass::TeamsOf,
         Audience::ContactsOf { .. } => AudienceClass::ContactsOf,
@@ -343,7 +343,7 @@ fn message_events_register_every_parent_entity_type() {
             | MessageParent::CrmContact(_)
             | MessageParent::Call(_) => {}
         }
-        let wire = event_exposure::PublicEntityType::from(parent.access_entity_type()).as_str();
+        let wire = event_access::PublicEntityType::from(parent.access_entity_type()).as_str();
         for entry in CATALOG
             .iter()
             .filter(|entry| entry.name.starts_with("message."))

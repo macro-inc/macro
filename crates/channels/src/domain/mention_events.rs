@@ -75,10 +75,10 @@ impl TopicEvent for MentionTopicEvent {
     fn exposure(
         &self,
     ) -> Result<
-        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::exposure::ExposureError,
+        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::access::ExposureError,
     > {
-        use macro_event_broker::exposure::{
+        use macro_event_broker::access::{
             Audience, EntityRef as PublicEntityRef, EntityType, Exposure, ExposureError,
             PublicEvent, Stage,
         };
@@ -141,7 +141,7 @@ pub enum MentionPublicEvent {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct PublicMention {
     /// Type of the entity the mention appears in.
-    pub source_type: macro_event_broker::exposure::EntityType,
+    pub source_type: macro_event_broker::access::EntityType,
     /// The entity the mention appears in.
     pub source_id: String,
     /// Kind of the mentioned entity, such as `user` or `document`.

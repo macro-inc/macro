@@ -8,7 +8,7 @@
 use crate::domain::catalog::{self, ACCOUNT_HOLDER_FAMILIES};
 use crate::domain::filters::{self, ALL_EVENTS, FilterSubject, WebhookFilters, WildcardSupport};
 use crate::domain::models::{CloseReason, Cursor, NormalizedEvent, StreamPrincipal, WebhookScope};
-use event_exposure::Stage;
+use event_access::Stage;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};

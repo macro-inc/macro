@@ -53,15 +53,15 @@ impl TopicEvent for ExampleTopicEvent {
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = macro_event_broker::access::Unexposed;
 
     fn exposure(
         &self,
     ) -> Result<
-        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::exposure::ExposureError,
+        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::access::ExposureError,
     > {
-        Ok(macro_event_broker::exposure::Exposure::internal_by_design(
+        Ok(macro_event_broker::access::Exposure::internal_by_design(
             "broker example topic",
         ))
     }

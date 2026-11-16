@@ -101,7 +101,7 @@ pub const ACCESS_CHANGE_TOPICS: &[&str] = &[];
 /// Topics neither delivery reads. Each topic in `macro_event_topics` is
 /// either subscribed above or listed here, so a new topic fails the coverage
 /// test until someone decides. A topic stays here only while no event on it
-/// declares [`Exposure::Public`](macro_event_broker::exposure::Exposure::Public)
+/// declares [`Exposure::Public`](macro_event_broker::access::Exposure::Public)
 /// (it carries projections, app cache signals or nothing at all); when one
 /// does, move the topic to both declarations above and register its names in
 /// the catalog.

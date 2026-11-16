@@ -7,7 +7,7 @@
 use crate::domain::catalog;
 use crate::domain::models::{NormalizedEvent, PublicLogEvent};
 use chrono::Utc;
-use event_exposure::{Exposure, ExposureError};
+use event_access::{Exposure, ExposureError};
 use macro_event_broker::{Event, TopicEvent};
 
 /// Why an event could not be normalized. Permanent: retrying cannot fix it.

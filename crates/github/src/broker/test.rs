@@ -1,5 +1,5 @@
 use macro_event_broker::TopicEvent;
-use macro_event_broker::exposure::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
+use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
 use serde_json::json;
 
 use super::GithubWebhookTopicEvent;

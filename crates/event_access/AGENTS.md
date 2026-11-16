@@ -1,4 +1,4 @@
-# event_exposure
+# event_access
 
 ## What it is
 
@@ -12,7 +12,7 @@ and in what shape: `Exposure`, `Audience`, `EntityRef`, `Stage`.
 `Exposure` per variant: `Internal(reason)` or `Public { name, entity, audience,
 stage, payload }`. Delivery crates (`crates/webhook` today) resolve the
 `Audience` against current access and serialize the payload inside the broker
-envelope. Producers reach these types through `macro_event_broker::exposure`.
+envelope. Producers reach these types through `macro_event_broker::access`.
 
 ## Scope
 
@@ -35,7 +35,7 @@ envelope. Producers reach these types through `macro_event_broker::exposure`.
 
 ## Checks
 
-- `cargo test -p event_exposure`
+- `cargo test -p event_access`
 - Changing a delivered event's exposure: `cargo test -p webhook` (the
   wire-shape tests pin today's JSON).
 

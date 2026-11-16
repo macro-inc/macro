@@ -1,5 +1,5 @@
 use macro_event_broker::TopicEvent;
-use macro_event_broker::exposure::{
+use macro_event_broker::access::{
     Audience, EntityRef, EntityType, Exposure, ExposureError, Stage,
 };
 use macro_user_id::user_id::MacroUserIdStr;

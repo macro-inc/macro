@@ -73,7 +73,7 @@ email = { path = "../email", default-features = false }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }
-event_exposure = { path = "../event_exposure" }
+event_access = { path = "../event_access" }
 feature_flags = { path = "../feature_flags", optional = true }
 futures = { workspace = true }
 hex = { workspace = true, optional = true }

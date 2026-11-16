@@ -30,8 +30,8 @@ before changing ingestion or delivery behavior.
 
 ## Boundaries
 
-- Depends on: `event_stream`, `event_exposure` (via
-  `macro_event_broker::exposure`),
+- Depends on: `event_stream`, `event_access` (via
+  `macro_event_broker::access`),
   `channels`, `documents`, `messages`, `agent_session`,
   `agent_trigger`, `user_events`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.

@@ -2265,7 +2265,7 @@ mod preview_and_wildcards {
     use super::*;
     use crate::domain::models::WebhookFilter;
     use event_stream::domain::ports::PreviewFlag;
-    use macro_event_broker::exposure::Stage;
+    use macro_event_broker::access::Stage;
 
     const FLAGGED: &str = "macro|flagged@example.com";
 
@@ -2437,11 +2437,11 @@ async fn an_access_floor_audience_reaches_only_accessors_at_that_level() {
     service
         .resolve_audience_and_enqueue(
             event,
-            macro_event_broker::exposure::Stage::Stable,
+            macro_event_broker::access::Stage::Stable,
             &Audience::EntityAtLeast {
                 entity_type: EntityType::Form,
                 entity_id: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
-                min_level: macro_event_broker::exposure::MinAccessLevel::Edit,
+                min_level: macro_event_broker::access::MinAccessLevel::Edit,
             },
         )
         .await
@@ -2456,7 +2456,7 @@ async fn an_access_floor_audience_reaches_only_accessors_at_that_level() {
 mod team_and_installation_audiences {
     use super::*;
     use event_stream::domain::ports::{GithubClaims, InstallationOwners, TeamDirectory, TeamRole};
-    use macro_event_broker::exposure::{MinTeamRole, Stage};
+    use macro_event_broker::access::{MinTeamRole, Stage};
 
     const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x7ea);
     const ADMIN: &str = "macro|admin@example.com";

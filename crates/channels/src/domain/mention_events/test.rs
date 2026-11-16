@@ -101,7 +101,7 @@ fn document_mention() -> MentionMetadata {
 
 #[test]
 fn document_mentions_reach_the_document_audience() {
-    use macro_event_broker::exposure::{Audience, EntityType, Exposure, Stage};
+    use macro_event_broker::access::{Audience, EntityType, Exposure, Stage};
 
     for (event, name) in [
         (
@@ -144,7 +144,7 @@ fn document_mentions_reach_the_document_audience() {
 
 #[test]
 fn message_mentions_stay_internal() {
-    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::access::Exposure;
 
     assert!(matches!(
         MentionTopicEvent::MessageSent(document_mention()).exposure(),

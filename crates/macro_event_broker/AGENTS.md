@@ -27,7 +27,7 @@ Macro's event topics.
 
 ## Boundaries
 
-- Depends on: `macro_event_topics`, `event_exposure` (re-exported as
+- Depends on: `macro_event_topics`, `event_access` (re-exported as
   `exposure`), `agent_correlation`, `kafka_util` (optional, feature
   `outbound`).
 - Used by: crates and services that publish or consume Macro events

@@ -47,10 +47,10 @@ impl TopicEvent for MessageTopicEvent {
     fn exposure(
         &self,
     ) -> Result<
-        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::exposure::ExposureError,
+        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::access::ExposureError,
     > {
-        use macro_event_broker::exposure::{Audience, EntityRef, Exposure, PublicEvent, Stage};
+        use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEvent, Stage};
         use std::borrow::Cow;
 
         // The entity is the message's parent: access and `ids` filters are by

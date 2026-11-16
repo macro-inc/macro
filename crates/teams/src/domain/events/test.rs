@@ -418,8 +418,8 @@ fn assert_no_forbidden_fields(value: &Value, forbidden_terms: &[&str]) {
 
 /// The audience and public body each variant in [`topic_events`] declares,
 /// in the same order.
-fn public_expectations() -> Vec<(macro_event_broker::exposure::Audience, Value)> {
-    use macro_event_broker::exposure::{Audience, MinTeamRole};
+fn public_expectations() -> Vec<(macro_event_broker::access::Audience, Value)> {
+    use macro_event_broker::access::{Audience, MinTeamRole};
 
     let members = Audience::Team {
         team_id: team_id(),
@@ -558,7 +558,7 @@ fn public_expectations() -> Vec<(macro_event_broker::exposure::Audience, Value)>
 #[test]
 fn every_variant_declares_its_audience_and_thin_public_body() {
     use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::exposure::{EntityRef, EntityType, Exposure, Stage};
+    use macro_event_broker::access::{EntityRef, EntityType, Exposure, Stage};
 
     let events = topic_events();
     let expectations = public_expectations();
@@ -583,7 +583,7 @@ fn every_variant_declares_its_audience_and_thin_public_body() {
 #[test]
 fn only_admin_events_carry_an_email_address() {
     use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::exposure::{Audience, Exposure, MinTeamRole};
+    use macro_event_broker::access::{Audience, Exposure, MinTeamRole};
 
     for (event, _) in topic_events() {
         let Ok(Exposure::Public(public)) = event.exposure() else {

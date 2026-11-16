@@ -24,13 +24,13 @@ impl TopicEvent for ExampleTopicEvent {
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = crate::exposure::Unexposed;
+    type PublicPayload = crate::access::Unexposed;
 
     fn exposure(
         &self,
-    ) -> Result<crate::exposure::Exposure<'_, Self::PublicPayload>, crate::exposure::ExposureError>
+    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
     {
-        Ok(crate::exposure::Exposure::internal_by_design(
+        Ok(crate::access::Exposure::internal_by_design(
             "broker test fixture",
         ))
     }
@@ -141,13 +141,13 @@ impl TopicEvent for DocumentsTopicEvent {
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = crate::exposure::Unexposed;
+    type PublicPayload = crate::access::Unexposed;
 
     fn exposure(
         &self,
-    ) -> Result<crate::exposure::Exposure<'_, Self::PublicPayload>, crate::exposure::ExposureError>
+    ) -> Result<crate::access::Exposure<'_, Self::PublicPayload>, crate::access::ExposureError>
     {
-        Ok(crate::exposure::Exposure::internal_by_design(
+        Ok(crate::access::Exposure::internal_by_design(
             "broker test fixture",
         ))
     }

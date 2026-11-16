@@ -4,7 +4,7 @@
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
-use macro_event_broker::exposure::EntityType as MacroEntityType;
+use macro_event_broker::access::EntityType as MacroEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;

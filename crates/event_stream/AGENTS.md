@@ -35,11 +35,11 @@ event (`lagged`, `revoked`, `reset`).
 - Owns: normalization, filters, catalog/union, webhook lifecycle event types,
   the public event log, fan-out, SSE.
 - Not here: webhook CRUD, matching and delivery → `crates/webhook`; the
-  exposure vocabulary → `crates/event_exposure`.
+  exposure vocabulary → `crates/event_access`.
 
 ## Boundaries
 
-- Depends on: `event_exposure`, `macro_event_broker`, the public producers'
+- Depends on: `event_access`, `macro_event_broker`, the public producers'
   event crates, `entity_access` (ports), `rate_limit`, `feature_flags`.
 - Used by: `crates/webhook`, `services/document_storage_service` (hosts the
   router, writer and fan-out).
@@ -58,7 +58,7 @@ event (`lagged`, `revoked`, `reset`).
 - New access-changing event: return its `Invalidation` in
   `domain/invalidations.rs`; if its topic is internal, add it to
   `ACCESS_CHANGE_TOPICS` and `LogMacroEvent`.
-- New audience class: `event_exposure::Audience` → `domain/access.rs` →
+- New audience class: `event_access::Audience` → `domain/access.rs` →
   webhook mapping in `crates/webhook/src/domain/ingestion.rs`.
 
 ## Checks

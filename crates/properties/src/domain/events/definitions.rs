@@ -2,7 +2,7 @@
 //! definition decides who hears about it.
 
 use chrono::{DateTime, Utc};
-use macro_event_broker::exposure::{
+use macro_event_broker::access::{
     Audience, EntityRef, EntityType, Exposure, ExposureError, MinTeamRole, PublicEntityType,
     PublicEvent, Stage, parse_user_id,
 };

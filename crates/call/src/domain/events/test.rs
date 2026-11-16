@@ -293,7 +293,7 @@ fn contains_field(value: &Value, field: &str) -> bool {
 
 mod exposure {
     use super::*;
-    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
 
     fn call_id() -> Uuid {
         Uuid::parse_str(CALL_ID).unwrap()

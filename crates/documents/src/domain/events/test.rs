@@ -331,7 +331,7 @@ mod exposure {
         DocumentChangePublicEvent, DocumentPublicEvent, DocumentSyncEditor,
     };
     use activity::Actor;
-    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
     use macro_user_id::user_id::MacroUserIdStr;
 
     fn user(id: &str) -> MacroUserIdStr<'static> {

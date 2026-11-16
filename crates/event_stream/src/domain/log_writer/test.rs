@@ -4,7 +4,7 @@ use crate::domain::test_support::{FakeLog, user};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelParticipantRemovedMetadata};
 use channels::domain::models::ChannelType;
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadSpamChangedMetadata};
-use event_exposure::{Audience, EntityType};
+use event_access::{Audience, EntityType};
 use std::sync::atomic::{AtomicBool, Ordering};
 use teams::domain::events::{TeamMacroEvent, TeamMemberRemovedMetadata};
 use teams::domain::model::TeamRole;

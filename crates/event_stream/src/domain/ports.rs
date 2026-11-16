@@ -1,7 +1,7 @@
 //! Ports the event stream domain needs from the outside.
 
 use crate::domain::models::{Cursor, LogEntry, LogRecord};
-use event_exposure::{EntityType, MinAccessLevel};
+use event_access::{EntityType, MinAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::future::Future;

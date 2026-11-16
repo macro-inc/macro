@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use event_exposure::{Exposure, ExposureError};
+use event_access::{Exposure, ExposureError};
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -25,7 +25,7 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
     /// delivered payload. It carries the `event_type` tag and `metadata`, and
     /// derives `utoipa::ToSchema` (behind the producer's schema feature) so it
     /// can join the public event union. Topics with nothing public use
-    /// [`Unexposed`](event_exposure::Unexposed).
+    /// [`Unexposed`](event_access::Unexposed).
     type PublicPayload: Serialize + Clone;
 
     /// Who may see this event outside Macro, and in what shape.

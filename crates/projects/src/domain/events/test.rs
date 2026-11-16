@@ -70,7 +70,7 @@ fn lifecycle_events_round_trip_all_owner_kinds_with_v1_strings() {
 
 mod exposure {
     use super::*;
-    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
 
     const OWNER: &str = "macro|owner@example.com";
 

@@ -14,7 +14,7 @@ use crate::domain::ports::{
 };
 use crate::domain::registry::Registry;
 use crate::domain::stream::{EventStreamService, OpenStream, StreamService};
-use event_exposure::{Audience, EntityType, MinAccessLevel, Stage};
+use event_access::{Audience, EntityType, MinAccessLevel, Stage};
 use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use macro_user_id::cowlike::CowLike as _;

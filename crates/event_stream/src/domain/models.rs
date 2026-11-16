@@ -4,7 +4,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
-use event_exposure::{Audience, EntityType, Stage};
+use event_access::{Audience, EntityType, Stage};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::fmt;

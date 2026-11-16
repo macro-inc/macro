@@ -1,4 +1,4 @@
-use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
 use serde_json::json;
 use uuid::Uuid;
 

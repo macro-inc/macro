@@ -559,7 +559,7 @@ const INTERNAL_EVENTS: [&str; 3] = [
 
 #[test]
 fn public_events_reach_only_the_mailbox_owner() {
-    use macro_event_broker::exposure::{Audience, Exposure, Stage};
+    use macro_event_broker::access::{Audience, Exposure, Stage};
 
     let owner = user_id("macro|owner@example.com");
     for (event, name) in every_event() {
@@ -608,7 +608,7 @@ fn public_events_reach_only_the_mailbox_owner() {
 
 #[test]
 fn email_entities_are_the_thread_or_the_link() {
-    use macro_event_broker::exposure::{EntityRef, EntityType, Exposure, PublicEntityType};
+    use macro_event_broker::access::{EntityRef, EntityType, Exposure, PublicEntityType};
 
     for (event, name) in every_event() {
         let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
@@ -624,7 +624,7 @@ fn email_entities_are_the_thread_or_the_link() {
 }
 
 fn public_payload(event: &EmailMacroEvent) -> serde_json::Value {
-    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::access::Exposure;
 
     let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
         panic!("expected a public event");

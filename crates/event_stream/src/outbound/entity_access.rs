@@ -5,7 +5,7 @@ use crate::domain::ports::{AccessDirectory, AccessLookupError};
 use entity_access::domain::models::AccessError;
 use entity_access::domain::models::AccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use event_exposure::{EntityType, MinAccessLevel};
+use event_access::{EntityType, MinAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 

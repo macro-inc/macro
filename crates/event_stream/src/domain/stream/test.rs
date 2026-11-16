@@ -9,7 +9,7 @@ use crate::domain::ports::TailItem;
 use crate::domain::registry::STREAM_BUFFER;
 use crate::domain::stream::{COALESCE_WINDOW, REVALIDATE_INTERVAL, StreamError};
 use crate::domain::test_support::*;
-use event_exposure::{EntityType, Stage};
+use event_access::{EntityType, Stage};
 use std::sync::atomic::Ordering;
 
 fn doc_event(name: &str) -> LogRecord {

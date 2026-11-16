@@ -135,10 +135,10 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
     fn exposure(
         &self,
     ) -> Result<
-        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::exposure::ExposureError,
+        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::access::ExposureError,
     > {
-        use macro_event_broker::exposure::{
+        use macro_event_broker::access::{
             EntityRef, Exposure, PublicEntityType, PublicEvent, Stage,
         };
 
@@ -214,8 +214,8 @@ const NOTIFICATION_UPDATED: &str = "notification.updated";
 /// never reach a recipient's team webhooks.
 fn recipients_audience(
     addressed: Vec<MacroUserIdStr<'static>>,
-) -> macro_event_broker::exposure::Audience {
-    use macro_event_broker::exposure::Audience;
+) -> macro_event_broker::access::Audience {
+    use macro_event_broker::access::Audience;
 
     let mut recipients: Vec<MacroUserIdStr<'static>> = Vec::with_capacity(addressed.len());
     for user_id in addressed {
@@ -260,7 +260,7 @@ pub struct NotificationCreated {
     /// The notification kind, such as `channel_mention`.
     pub kind: String,
     /// Type of the entity the notification is about.
-    pub entity_type: macro_event_broker::exposure::EntityType,
+    pub entity_type: macro_event_broker::access::EntityType,
     /// The entity the notification is about.
     pub entity_id: String,
     /// Who triggered it, when a user did.

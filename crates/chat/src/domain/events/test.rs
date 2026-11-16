@@ -298,7 +298,7 @@ fn message_roles_convert_from_agent_roles() {
 
 mod exposure {
     use super::*;
-    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+    use macro_event_broker::access::{Audience, EntityType, Exposure, PublicEvent, Stage};
 
     fn actor() -> MacroUserIdStr<'static> {
         MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()

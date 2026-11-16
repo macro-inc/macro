@@ -8,7 +8,7 @@ use entity_access::domain::models::{
     EntityPermission, RequiredPermission, TeamRole, UserTeamInfo,
 };
 use entity_access::domain::ports::EntityAccessService;
-use event_exposure::{EntityType, MinAccessLevel};
+use event_access::{EntityType, MinAccessLevel};
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use std::collections::HashMap;

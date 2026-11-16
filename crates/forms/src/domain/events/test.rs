@@ -1,4 +1,4 @@
-use macro_event_broker::exposure::{
+use macro_event_broker::access::{
     Audience, EntityType, Exposure, MinAccessLevel, PublicEvent, Stage,
 };
 use serde_json::json;

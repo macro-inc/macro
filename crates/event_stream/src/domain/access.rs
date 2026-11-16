@@ -17,7 +17,7 @@ use crate::domain::models::{Invalidation, PrincipalKind, StreamPrincipal, Webhoo
 use crate::domain::ports::{
     AccessDirectory, AccessLookupError, ContactDirectory, GithubClaims, TeamDirectory, TeamRole,
 };
-use event_exposure::{Audience, EntityType, MinAccessLevel, MinTeamRole};
+use event_access::{Audience, EntityType, MinAccessLevel, MinTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::{HashMap, HashSet};

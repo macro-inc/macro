@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
 use macro_event_broker::TopicEvent;
-use macro_event_broker::exposure::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
+use macro_event_broker::access::{Audience, EntityRef, Exposure, PublicEntityType, Stage};
 use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -43,7 +43,7 @@ fn row(owner: &str, notification_id: Uuid) -> UserNotificationRow<serde_json::Va
 
 fn public<'e>(
     event: &'e NotificationTopicEvent<'_, serde_json::Value>,
-) -> macro_event_broker::exposure::PublicEvent<'e, super::NotificationPublicEvent> {
+) -> macro_event_broker::access::PublicEvent<'e, super::NotificationPublicEvent> {
     match event.exposure().expect("valid exposure") {
         Exposure::Public(public) => public,
         Exposure::Internal(reason) => panic!("expected public, got {reason}"),

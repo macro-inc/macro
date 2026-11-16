@@ -6,7 +6,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::TeamRole;
 use crate::domain::test_support::*;
-use event_exposure::{Audience, EntityType, MinTeamRole};
+use event_access::{Audience, EntityType, MinTeamRole};
 use std::sync::atomic::Ordering;
 use uuid::Uuid;
 
@@ -812,7 +812,7 @@ async fn a_github_installation_event_reaches_only_claimants() {
 
 #[tokio::test(start_paused = true)]
 async fn an_entity_at_least_event_reaches_only_accessors_at_that_level() {
-    use event_exposure::MinAccessLevel;
+    use event_access::MinAccessLevel;
     let harness = Harness::default();
     let editor = user("editor@example.com");
     let viewer = user("viewer@example.com");
@@ -913,7 +913,7 @@ mod requested_sessions {
     use agent_trigger::domain::broker_events::{
         AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
-    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::access::Exposure;
     use macro_event_broker::{Event, TopicEvent as _};
 
     const REQUESTER: &str = "requester@example.com";
@@ -1155,7 +1155,7 @@ mod wildcard_streams {
     use super::*;
     use crate::domain::filters::WebhookFilter;
     use crate::domain::models::NormalizedEvent;
-    use event_exposure::Stage;
+    use event_access::Stage;
 
     const OTHER_DOC: &str = "0193b3a0-0000-7000-8000-00000000d0c2";
 

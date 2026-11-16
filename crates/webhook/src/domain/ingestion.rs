@@ -26,7 +26,7 @@ use event_stream::domain::ports::{
     GithubClaims, InstallationOwners, PreviewFlag, TeamDirectory, TeamRole,
 };
 use futures::future::join_all;
-use macro_event_broker::exposure::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
+use macro_event_broker::access::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
 use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::outbound::broker::MessageTopicEvent;

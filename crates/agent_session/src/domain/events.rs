@@ -438,10 +438,10 @@ impl TopicEvent for AgentSessionLifecycleEvent {
     fn exposure(
         &self,
     ) -> Result<
-        macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
-        macro_event_broker::exposure::ExposureError,
+        macro_event_broker::access::Exposure<'_, Self::PublicPayload>,
+        macro_event_broker::access::ExposureError,
     > {
-        use macro_event_broker::exposure::{
+        use macro_event_broker::access::{
             Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
         };
         use std::borrow::Cow;

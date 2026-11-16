@@ -190,7 +190,7 @@ payload change must be readable by both the deployed code and the new code.
 
 `TopicEvent::exposure()` is required and has no default: every variant says
 whether it leaves Macro, to whom, and in what shape. The vocabulary is in
-`crates/event_exposure` (re-exported as `macro_event_broker::exposure`).
+`crates/event_access` (re-exported as `macro_event_broker::access`).
 
 - Match every variant; never `_ =>` or a bare binding as a catch-all (ast-grep
   `rust-exposure-no-wildcard-arm`). Group variants that share a declaration
@@ -198,7 +198,7 @@ whether it leaves Macro, to whom, and in what shape. The vocabulary is in
 - **Internal** is a legal answer: `Exposure::internal_by_design("<why>")` for
   plumbing, projections and commands, or `Exposure::pending(PendingPhase::..,
   "<rule and what the payload still lacks>")` for a family a later phase will
-  make public. Set `type PublicPayload = macro_event_broker::exposure::Unexposed`
+  make public. Set `type PublicPayload = macro_event_broker::access::Unexposed`
   when nothing on the topic is public.
 - **Public** returns `PublicEvent { name, entity, audience, stage, payload }`.
   `name` equals the variant's serde tag. `audience` is whose current access

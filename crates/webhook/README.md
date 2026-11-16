@@ -86,7 +86,7 @@ retention.
 
 What is delivered, to whom, and in what shape is declared by each event's
 `TopicEvent::exposure()` in its producing crate (vocabulary in
-`crates/event_exposure`) and normalized by `event_stream::domain::normalize`,
+`crates/event_access`) and normalized by `event_stream::domain::normalize`,
 shared with live streams; `src/domain/ingestion.rs` only maps the declared
 `Audience` to webhook workspaces. Internal events are skipped. `Preview`
 events reach a webhook only when its creator has the `public-event-stream`

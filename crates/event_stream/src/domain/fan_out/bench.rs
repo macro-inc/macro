@@ -12,7 +12,7 @@
 use crate::domain::models::{PrincipalKind, StreamPrincipal, WebhookScope};
 use crate::domain::ports::AccessDirectory as _;
 use crate::domain::test_support::*;
-use event_exposure::{Audience, EntityType};
+use event_access::{Audience, EntityType};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 

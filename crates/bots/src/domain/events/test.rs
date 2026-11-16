@@ -254,9 +254,9 @@ fn contains_field(value: &Value, field: &str) -> bool {
     }
 }
 
-fn public(event: &BotTopicEvent) -> macro_event_broker::exposure::PublicEvent<'_, BotPublicEvent> {
+fn public(event: &BotTopicEvent) -> macro_event_broker::access::PublicEvent<'_, BotPublicEvent> {
     use macro_event_broker::TopicEvent as _;
-    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::access::Exposure;
 
     match event.exposure().expect("valid exposure") {
         Exposure::Public(public) => public,
@@ -266,7 +266,7 @@ fn public(event: &BotTopicEvent) -> macro_event_broker::exposure::PublicEvent<'_
 
 #[test]
 fn team_bots_reach_their_team_and_user_bots_their_owner() {
-    use macro_event_broker::exposure::{Audience, EntityRef, MinTeamRole, PublicEntityType, Stage};
+    use macro_event_broker::access::{Audience, EntityRef, MinTeamRole, PublicEntityType, Stage};
 
     let team = Audience::Team {
         team_id: Uuid::parse_str(TEAM_ID).unwrap(),

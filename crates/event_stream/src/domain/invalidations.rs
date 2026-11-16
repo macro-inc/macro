@@ -14,7 +14,7 @@ use channels::domain::broker_events::ChannelTopicEvent;
 use chat::domain::events::ChatTopicEvent;
 use databases::domain::events::DatabaseTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
-use event_exposure::EntityType;
+use event_access::EntityType;
 use forms::domain::events::FormTopicEvent;
 use initiative::domain::events::InitiativeTopicEvent;
 use macro_event_broker::MacroEvent as _;
