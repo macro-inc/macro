@@ -479,15 +479,19 @@ vi.mock('@macro-inc/observability', () => ({
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
     captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
-      work({
+    span: (_name: string, work?: (span: unknown) => Promise<unknown>) => {
+      const span = {
         run: <T>(work: () => T) => work(),
         event: vi.fn(),
         setAttr: vi.fn(),
+        error: vi.fn(),
+        end: vi.fn(),
         injectTraceHeaders: (headers: Record<string, string>) => {
           headers.traceparent = mocks.traceparent;
         },
-      }),
+      };
+      return work ? work(span) : span;
+    },
   },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
@@ -1414,6 +1418,48 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
     for (const [options] of mocks.createWorkerCacheHost.mock.calls) {
       expect(options).toMatchObject({ scope: 'anonymous-scope' });
+    }
+  });
+
+  it('stops restarting the cache once a newer build took it over', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(
+          new Error('a newer version of the app took over the local cache'),
+          { errorCode: 'cache-superseded' }
+        )
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying while another context holds the owner lock', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(new Error('owner lock is held by another context'), {
+          errorCode: 'owner-lock-unavailable',
+        })
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

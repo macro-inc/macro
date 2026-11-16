@@ -10051,6 +10051,25 @@
         }
       }
     },
+    "/crm/member-access": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::member_access"],
+        "summary": "Read fresh authority without requiring CRM access.",
+        "operationId": "get_crm_member_access",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmMemberAccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -38306,6 +38325,22 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the domain record."
+          }
+        }
+      },
+      "CrmMemberAccessResponse": {
+        "type": "object",
+        "description": "Current authority for the authenticated viewer; contribution consent is separate.",
+        "required": ["allowed"],
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "Whether the viewer may access that team's CRM."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The viewer's current team, if any."
           }
         }
       },

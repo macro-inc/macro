@@ -2062,9 +2062,11 @@ pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<Too
 
 /// The acting user's own activity, as `GET /activity` serves it.
 pub type ToolActivityReadService = activity::ActivityReadService<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        ToolEntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            ToolEntityAccessService,
+        >,
     >,
 >;
 
@@ -2075,9 +2077,11 @@ pub fn build_activity_read_service(
 ) -> Arc<ToolActivityReadService> {
     Arc::new(
         activity::ActivityReadService::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-                entity_access_service.clone(),
+                activity::outbound::entity_access_audience::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
             ),
         )
         .with_metadata_resolver(ToolActivityMetadataResolver::new(

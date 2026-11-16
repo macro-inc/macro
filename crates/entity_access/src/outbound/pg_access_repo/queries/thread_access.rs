@@ -206,6 +206,7 @@ pub async fn get_thread_access(
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
             WHERE requester.user_id = $2
+              AND (requester.crm_access OR requester.team_role <> 'member')
               AND crm_email_thread_allowed(requester.team_id, $1::uuid)
         ),
         participants AS (
@@ -478,6 +479,7 @@ async fn explain_thread_crm(
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
             WHERE requester.user_id = $2
+              AND (requester.crm_access OR requester.team_role <> 'member')
               AND crm_email_thread_allowed(requester.team_id, $1::uuid)
         ),
         participants AS (

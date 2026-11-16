@@ -116,7 +116,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendReferralCode',
     invited: 'inviteToTeam',
     deleted: 'deleteTeamInviteHandler',
-    edited: 'putUserName putProfilePictureFile',
+    edited: 'putUserName putProfilePictureFile patchTeam',
     uploaded: 'createProfilePictureUpload',
   },
   calendar: {
@@ -226,7 +226,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
-      getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
+      getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
       getDocumentShortId getSkillDescription getDocumentTeamShare getDocumentTextContent
