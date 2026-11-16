@@ -5,6 +5,7 @@ import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { createBulkRenameDssEntityMutation } from '../queries/rename';
 import type { EntityData } from '../types/entity';
+import { RENAME_FIELD_ATTRIBUTE } from '../utils/rename-field-focus';
 import { EntityActionSelection } from './components/EntityActionSelection';
 import { type RenameMode, renamedEntityName } from './core/rename';
 
@@ -98,6 +99,7 @@ export const BulkRenameEntitiesView = (props: {
             <TextField value={value()} onChange={setValue}>
               <TextField.Label>{label()}</TextField.Label>
               <TextField.Input
+                {...{ [RENAME_FIELD_ATTRIBUTE]: '' }}
                 placeholder="Enter text…"
                 onFocus={(event) => event.currentTarget.select()}
               />

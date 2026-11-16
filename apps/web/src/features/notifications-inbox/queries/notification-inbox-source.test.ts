@@ -13,7 +13,10 @@ import {
   removedPatch,
   upsertedPatch,
 } from '../tests/wire';
-import { createNotificationInboxSource } from './notification-inbox-source';
+import {
+  createNotificationInboxSource,
+  type NotificationInboxSourceOptions,
+} from './notification-inbox-source';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -77,7 +80,8 @@ const docC = inboxEntry({
 
 function setup(
   mutationData: Record<string, unknown> = {},
-  scope: () => InboxScope = () => ({ rowTypes: ALL_INBOX_ROW_TYPES })
+  scope: () => InboxScope = () => ({ rowTypes: ALL_INBOX_ROW_TYPES }),
+  includeRow?: NotificationInboxSourceOptions['includeRow']
 ) {
   const fake = createFakeAttentionFeedClient(mutationData);
   const revalidateNotifications = vi.fn(async () => {});
@@ -92,6 +96,7 @@ function setup(
       cacheHost: () => fake.host,
       scope,
       enabled: () => true,
+      includeRow,
       onClearUpdated: (listener) => {
         hintClear = listener;
       },
@@ -822,7 +827,10 @@ describe('createNotificationInboxSource', () => {
     const input = fake.mutations[0].variables.input as {
       scope: { rowTypes: string[]; unreadOnly: boolean };
     };
-    expect(input.scope.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length);
+    expect(input.scope.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length + 1);
+    expect(input.scope.rowTypes).toEqual(
+      expect.arrayContaining(['ACCESS_REQUESTED', 'PASSWORD_ACCESS_REQUESTED'])
+    );
     expect(input.scope.unreadOnly).toBe(true);
   });
 
@@ -836,4 +844,27 @@ describe('createNotificationInboxSource', () => {
 
     expect(row('document:doc-a#top_level').unseen).toBe(true);
   });
+});
+
+it('reactively removes gated cached rows without refetching or changing the ordinary rows', async () => {
+  vi.useFakeTimers();
+  const [visible, setVisible] = createSignal(false);
+  const context = setup(
+    {},
+    undefined,
+    (row) => row.content.entity.id !== 'doc-a' || visible()
+  );
+  await flush();
+  context.fake.queries[0].resolve(inboxPage([docA, docB]));
+  await flush();
+  expect(context.rowIds()).toEqual(['document:doc-b#top_level']);
+  setVisible(true);
+  expect(context.rowIds()).toEqual([
+    'document:doc-a#top_level',
+    'document:doc-a#task',
+    'document:doc-b#top_level',
+  ]);
+  setVisible(false);
+  expect(context.rowIds()).toEqual(['document:doc-b#top_level']);
+  expect(context.fake.queries).toHaveLength(1);
 });

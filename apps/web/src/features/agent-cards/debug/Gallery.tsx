@@ -5,6 +5,7 @@
  */
 
 import { EntityIcon } from '@core/component/EntityIcon';
+import { Item, Card as UiCard } from '@ui';
 import { createSignal, For, type JSX, type ParentProps } from 'solid-js';
 import { AgendaView } from '../components/agenda';
 import { CollectionCard, CollectionGroup } from '../components/collection';
@@ -13,10 +14,9 @@ import {
   Card,
   CardBody,
   CardFooter,
-  CardHeader,
   CardHiddenCount,
 } from '../components/kit/card';
-import { CardRow, SkeletonSingle, Tile } from '../components/kit/parts';
+import { CardRow, SkeletonSingle } from '../components/kit/parts';
 import { ReferenceCardView } from '../components/reference-card';
 import { RoutineCardView } from '../components/routine-card';
 import { TagsCardView } from '../components/tags-card';
@@ -52,9 +52,9 @@ function Example(props: ParentProps<{ label: string }>) {
 
 function icon(type: string): JSX.Element {
   return (
-    <Tile>
+    <Item.Media class="self-center">
       <EntityIcon targetType={type as 'md'} size="sm" />
-    </Tile>
+    </Item.Media>
   );
 }
 
@@ -108,16 +108,19 @@ function FixedHeightDemo() {
       <For each={[height()]}>
         {(fixed) => (
           <Card width="standard" height={fixed}>
-            <CardHeader
-              center
-              tile={
-                <Tile size={32}>
+            <UiCard.Header>
+              <Item class="gap-3 border-0 p-0">
+                <Item.Media class="self-center">
                   <EntityIcon targetType="files" size="sm" />
-                </Tile>
-              }
-              title="Files touched this week"
-              subtitle={`${FILES.length} files · last 7 days`}
-            />
+                </Item.Media>
+                <Item.Content class="gap-0">
+                  <UiCard.Title>Files touched this week</UiCard.Title>
+                  <UiCard.Description>
+                    {FILES.length} files · last 7 days
+                  </UiCard.Description>
+                </Item.Content>
+              </Item>
+            </UiCard.Header>
             <CardBody tight>
               <For each={FILES}>
                 {([name, type, when]) => (
@@ -184,19 +187,19 @@ export default function AgentCardsGallery() {
               <SkeletonSingle />
             </Card>
             <ReferenceCardView
-              tile={icon('md')}
+              media={icon('md')}
               title="Q4 launch plan"
               meta="Document · Updated 2m ago"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('md')}
+              media={icon('md')}
               title="Document"
               meta="Document · You don't have access"
               muted
             />
             <ReferenceCardView
-              tile={icon('md')}
+              media={icon('md')}
               title="Document"
               meta="Document · Deleted"
               muted
@@ -208,19 +211,19 @@ export default function AgentCardsGallery() {
         <Section title="Items" note="One item each, fixed 72">
           <Example label="Every kind of item">
             <ReferenceCardView
-              tile={icon('md')}
+              media={icon('md')}
               title="Q4 pricing proposal"
               meta="Document · Updated 2h ago"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('spreadsheet')}
+              media={icon('spreadsheet')}
               title="Revenue by region FY26"
               meta="Spreadsheet · Updated yesterday"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('email')}
+              media={icon('email')}
               title="Re: Q4 pricing"
               meta="Email · Ana Ruiz · Oct 8"
               onOpen={noop}
@@ -234,25 +237,25 @@ export default function AgentCardsGallery() {
           </Example>
           <Example label="More kinds">
             <ReferenceCardView
-              tile={icon('project')}
+              media={icon('project')}
               title="Q4 launch"
               meta="Folder · Updated yesterday"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('channel')}
+              media={icon('channel')}
               title="#pricing"
               meta="Channel · 38 members"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('form')}
+              media={icon('form')}
               title="Customer intake"
               meta="Form · Updated Sep 30"
               onOpen={noop}
             />
             <ReferenceCardView
-              tile={icon('initiative')}
+              media={icon('initiative')}
               title="Renewals Q4"
               meta="Project · Updated 2m ago"
               onOpen={noop}
@@ -277,19 +280,19 @@ export default function AgentCardsGallery() {
             <div class="@container w-full max-w-2xl">
               <div class="grid grid-cols-1 gap-2 @lg:grid-cols-2">
                 <ReferenceCardView
-                  tile={icon('md')}
+                  media={icon('md')}
                   title="Q4 pricing proposal"
                   meta="Document · Updated 2h ago"
                   onOpen={noop}
                 />
                 <ReferenceCardView
-                  tile={icon('email')}
+                  media={icon('email')}
                   title="Re: Q4 pricing"
                   meta="Email · Ana Ruiz · Oct 8"
                   onOpen={noop}
                 />
                 <ReferenceCardView
-                  tile={icon('pdf')}
+                  media={icon('pdf')}
                   title="Globex MSA 2025.pdf"
                   meta="PDF · Updated Sep 30"
                   onOpen={noop}

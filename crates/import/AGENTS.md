@@ -82,6 +82,11 @@ from this import's other databases into it are not linked.
   `macro.imports`: `GET|POST /import/entities` (list, stage or record),
   `DELETE /import/entities/{id}` (decline) and `POST /import/notion/pages`
   (one page), with typed outcomes in place of the tools' prose.
+  Recording an entity as imported (`record_imported`, shared by
+  `CreateImportEntity` and this route) needs the caller to view it
+  (`EntityCreator::can_view`, the entity-access view receipt; else
+  `EntityNotAccessible`, 403), and never overwrites a row a running import
+  holds (`importing`; `ImportRunning`, 409).
 
 ## Scope
 

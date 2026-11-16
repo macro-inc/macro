@@ -504,3 +504,80 @@ async fn scope_fixture_pages_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn thread_exclusions_apply_to_every_team_stream_and_competing_copy(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TEAM: &str = "e0000002-0000-0000-0000-000000000002";
+    let team = Uuid::parse_str(TEAM)?;
+    let inbox = Uuid::parse_str("d0000001-0000-0000-0000-000000000001")?;
+    let caller = owner_of(&pool, inbox).await?;
+    let preferred = Uuid::parse_str("55550001-0000-0000-0000-000000000001")?;
+    let other = Uuid::parse_str("55550002-0000-0000-0000-000000000001")?;
+    sqlx::query!("UPDATE email_threads SET is_signal = TRUE")
+        .execute(&pool)
+        .await?;
+    let filters = [
+        company(&["acme.example.com"]),
+        contact(&["vendor@acme.example.com"]),
+        signal(company(&["acme.example.com"])),
+        signal(contact(&["vendor@acme.example.com"])),
+    ];
+
+    for (exclude_preferred, exclude_other) in [
+        (false, false),
+        (true, false),
+        (true, true),
+        (false, true),
+        (false, false),
+    ] {
+        for (thread, excluded) in [(preferred, exclude_preferred), (other, exclude_other)] {
+            if excluded {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO crm_email_thread_exclusions (team_id, user_id, link_id, thread_id)
+                    SELECT $1, l.macro_id, l.id, t.id
+                    FROM email_threads t JOIN email_links l ON l.id = t.link_id
+                    WHERE t.id = $2
+                    ON CONFLICT DO NOTHING
+                    "#,
+                    team,
+                    thread,
+                )
+                .execute(&pool)
+                .await?;
+            } else {
+                sqlx::query!(
+                    "DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND thread_id = $2",
+                    team,
+                    thread,
+                )
+                .execute(&pool)
+                .await?;
+            }
+        }
+
+        for filter in &filters {
+            let expected = pages(&pool, TEAM, &[inbox], &caller, filter, 1, None).await?;
+            for (name, tuning) in READS {
+                let actual = pages(&pool, TEAM, &[inbox], &caller, filter, 1, Some(tuning)).await?;
+                assert_eq!(printed(&actual), printed(&expected), "{name}: {filter:?}");
+                let ids: Vec<Uuid> = actual.into_iter().flatten().map(|row| row.id).collect();
+                assert_eq!(ids.contains(&preferred), !exclude_preferred, "{name}");
+                assert_eq!(
+                    ids.contains(&other),
+                    exclude_preferred && !exclude_other,
+                    "{name}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
