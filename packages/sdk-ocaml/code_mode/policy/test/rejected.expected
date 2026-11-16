@@ -1,0 +1,14 @@
+rejected.ml:2:1: An external declaration is not allowed in code-mode programs
+rejected.ml:4:12: Binding Stdlib to a module is not allowed in code-mode programs
+rejected.ml:6:9: Obj is not allowed in code-mode programs
+rejected.ml:8:12: Obj is not allowed in code-mode programs
+rejected.ml:10:15: Obj is not allowed in code-mode programs
+rejected.ml:11:9: Sys.command is not allowed in code-mode programs
+rejected.ml:12:9: Marshal is not allowed in code-mode programs
+rejected.ml:13:9: Obj is not allowed in code-mode programs
+rejected.ml:16:3: An external declaration is not allowed in code-mode programs
+rejected.ml:19:12: Obj is not allowed in code-mode programs
+rejected.ml:22:11: Binding Stdlib to a module is not allowed in code-mode programs
+rejected.ml:26:12: Obj is not allowed in code-mode programs
+rejected.ml:27:3: Obj is not allowed in code-mode programs
+rejected.ml:29:17: Obj is not allowed in code-mode programs

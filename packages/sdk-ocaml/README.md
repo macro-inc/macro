@@ -225,7 +225,7 @@ agent harness as `CODE_MODE_OCAML_DIR` (`codeModeOcamlEnv`, not wired yet):
 | `cmi/` | the interfaces a program may use: the SDK, its runtime, yojson, uri, `Macro_sdk_fetch`, `Code_mode` (not js_of_ocaml) |
 | `stdlib/` | the standard library's `.cmi` files (`ocamlc -nostdlib -I stdlib`) |
 | `assets/` | the library modules as `wasm_of_ocaml link` names them (`<library>-<content hash>.wasm`, the same for every program), served to every program's loader |
-| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce` |
+| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce`, and `code_mode_policy` (below) |
 | `findlib/` | the one findlib package (`stdlib`) wasm_of_ocaml looks up at start (`OCAMLFIND_CONF`) |
 | `compile.sh` | the reference per-program compile |
 | `fingerprint` | `<SDK version>+<12 hex of sha256 over cmi/>`, e.g. `0.1.0+65d27fd120f3` |
@@ -249,6 +249,16 @@ then deletes the copies of `assets/` from `main.assets/`, leaving `main.js`,
 `main.assets/main-*.wasm`, `start-*.wasm` and `_link_info.wasm`. The loader
 reads the rest from `assets/` (see `code_mode/test/run.mjs`, which loads it
 without CommonJS or env access).
+
+Code mode (`crates/code_execution`) runs the same commands, with
+`-bin-annot` added to `ocamlc`, and between the first two runs
+`bin/code_mode_policy main.cmt`: a policy check on the typed tree
+(`code_mode/policy/`) that refuses `external` declarations and uses of
+`Obj`, `Marshal`, `Sys.command`, `Unix` and the JavaScript interop, also
+through aliases, and binding `Stdlib` itself to a module (opening it is
+fine). It prints `<file>:<line>:<column>: <message>` per finding and exits
+1 when there is any. It is defense in depth; Deno's permissions are the
+boundary. `dune test` runs its tests (`code_mode/policy/test/`).
 
 `nix build .#checks.x86_64-linux.code-mode-ocaml-sample` (CI: `OCaml SDK
 Check`) compiles `code_mode/test/sample.ml` that way and runs it under Deno
