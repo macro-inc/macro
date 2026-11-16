@@ -1857,6 +1857,10 @@ const MAX_NAMED_CANDIDATES: usize = 4_000;
 /// At most how many documents the filter admits when it admits only
 /// documents it names by id (a resolved CRM association, or ids passed in),
 /// or `None` when it can admit any document.
+/// A filter bounded here has no `DocumentCandidates`: its `superset` exists
+/// and names no participant, since an id names none, an `Or` bounded here
+/// unites two bounded sides, and an `And` keeps the side with fewer
+/// participants (test `candidates_never_meet_access_after_filters`).
 fn named_document_bound(ast: Option<&Expr<DocumentLiteral>>) -> Option<usize> {
     ast.and_then(|expr| {
         expr.collapse_frames(
@@ -2136,11 +2140,13 @@ fn build_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        // A candidate arm checks access in its own `FROM` and `WHERE`
-        // (`CandidateArm::render`), unfenced and with planned property probes,
-        // as a joined arm does. It never meets `AfterFilters`, which needs
-        // every document the filter admits named by id, while candidates
-        // need a participant in the bound they keep.
+        // A candidate arm checks access in the conjunct its `WHERE` opens with
+        // (`CandidateArm::render`), outside the `AfterFilters` fence and with
+        // planned property probes, as a joined arm does. `EachCandidate`
+        // still reads its candidates, and each candidate's grants, behind
+        // `OFFSET 0` fences of its own. It never meets `AfterFilters`, which
+        // needs every document the filter admits named by id, while
+        // candidates need a participant in the bound they keep.
         let (access, source, access_conjunct) = match document_candidates {
             Some(arm) => {
                 let (source, conjunct) = arm.render(document_ids, source_ids);

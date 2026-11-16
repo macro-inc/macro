@@ -105,6 +105,11 @@ impl DocumentCandidates {
         !self.domains.is_empty() || !self.addresses.is_empty()
     }
 
+    /// A superset of what `expr` matches, or `None` when it has none here.
+    /// An id names no participant, an `Or` unites its sides and an `And` keeps
+    /// the side with fewer, so every filter `super::named_document_bound`
+    /// bounds has a superset naming no participant, and no candidates (test
+    /// `candidates_never_meet_access_after_filters`).
     fn superset(expr: &Expr<DocumentLiteral>) -> Option<Self> {
         match expr {
             Expr::Literal(literal) => Self::of_literal(literal),
