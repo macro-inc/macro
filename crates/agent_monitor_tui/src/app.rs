@@ -78,9 +78,23 @@ pub enum ChangeTab {
 /// Time buckets one column of the CHANGES map can stand for, in seconds.
 pub const SCALES: [i64; 6] = [60, 5 * 60, 15 * 60, 3_600, 4 * 3_600, 86_400];
 
+/// The two presentations of Changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChangesView {
+    /// Branch list with details beside it.
+    #[default]
+    Branches,
+    /// Git history on a time axis.
+    Timeline,
+}
+
 /// Where the CHANGES page is: kept by identity so it survives new lanes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ChangesCursor {
+    /// Branch list or timeline.
+    pub view: ChangesView,
+    /// Show the selected change as a full-page detail.
+    pub detail: bool,
     /// The tab shown; `None` is the first tab.
     pub tab: Option<ChangeTab>,
     /// The row under the cursor; `None` is the first lane.
@@ -141,7 +155,14 @@ impl App {
             pages: vec![Page::Monitor],
             filter: Filter::default(),
             saved_filters: HashMap::new(),
-            cursors: Cursors::default(),
+            cursors: Cursors {
+                changes: ChangesCursor {
+                    hide_landed: true,
+                    sort: LaneSort::Attention,
+                    ..ChangesCursor::default()
+                },
+                ..Cursors::default()
+            },
             message: None,
             label,
             theme: ThemeName::default(),
@@ -182,7 +203,15 @@ impl App {
     pub fn key(&mut self, key: Key) {
         let mode = std::mem::take(&mut self.mode);
         let page = self.page().clone();
-        let (mode, action) = keys::step(mode, key, &page);
+        let (mode, action) = if key == Key::Esc
+            && matches!(mode, Mode::Base(_))
+            && page == Page::Zoom(Pane::Changes)
+            && self.cursors.changes.detail
+        {
+            (mode, Action::Back)
+        } else {
+            keys::step(mode, key, &page)
+        };
         self.mode = mode;
         self.message = None;
         self.theme_notice = false;
@@ -196,7 +225,9 @@ impl App {
             Action::Quit => self.quit = true,
             Action::Open(page) => self.open(page),
             Action::Back => {
-                if self.pages.len() > 1 {
+                if *self.page() == Page::Zoom(Pane::Changes) && self.cursors.changes.detail {
+                    self.cursors.changes.detail = false;
+                } else if self.pages.len() > 1 {
                     let previous = self.pages[self.pages.len() - 2].clone();
                     self.switch_filters(&previous);
                     self.pages.pop();
@@ -270,14 +301,26 @@ impl App {
     /// repository.
     pub fn change_rows(&self) -> Vec<ChangeRow> {
         let Some(graph) = self.change_repo() else {
-            return self
+            let mut rows = self
                 .view
                 .unmapped_prs(&self.filter)
                 .into_iter()
+                .filter(|pr| {
+                    *self.page() != Page::Zoom(Pane::Changes)
+                        || !self.cursors.changes.hide_landed
+                        || !pr.state.is_final()
+                })
                 .map(|pr| ChangeRow::Pr(pr.id.clone()))
-                .collect();
+                .collect::<Vec<_>>();
+            if *self.page() == Page::Zoom(Pane::Changes) {
+                self.sort_branch_rows(&mut rows, None);
+            }
+            return rows;
         };
         let cursor = &self.cursors.changes;
+        if cursor.view == ChangesView::Branches && *self.page() == Page::Zoom(Pane::Changes) {
+            return self.branch_rows(graph);
+        }
         let mut rows = vec![ChangeRow::Trunk];
         rows.extend(
             self.view
@@ -292,6 +335,80 @@ impl App {
                 .map(|pr| ChangeRow::Pr(pr.id.clone())),
         );
         rows
+    }
+
+    fn branch_rows(&self, graph: &RepoGraph) -> Vec<ChangeRow> {
+        let cursor = &self.cursors.changes;
+        let mut rows: Vec<ChangeRow> = graph
+            .lanes
+            .iter()
+            .filter(|lane| {
+                !cursor.hide_landed
+                    || (lane.landed.is_none()
+                        && self
+                            .view
+                            .lane_pr(lane)
+                            .is_none_or(|pr| !pr.state.is_final()))
+            })
+            .filter(|lane| {
+                self.filter
+                    .matches_lane(lane, self.view.lane_pr(lane), |id| self.view.name_of(id))
+            })
+            .map(|lane| ChangeRow::Lane(lane.branch.clone()))
+            .chain(
+                self.view
+                    .orphan_prs(graph, &self.filter)
+                    .into_iter()
+                    .filter(|pr| !cursor.hide_landed || !pr.state.is_final())
+                    .map(|pr| ChangeRow::Pr(pr.id.clone())),
+            )
+            .collect();
+        self.sort_branch_rows(&mut rows, Some(graph));
+        rows
+    }
+
+    fn sort_branch_rows(&self, rows: &mut [ChangeRow], graph: Option<&RepoGraph>) {
+        rows.sort_by_key(|row| {
+            let (pr, label) = match row {
+                ChangeRow::Lane(branch) => (
+                    graph
+                        .and_then(|graph| graph.lanes.iter().find(|lane| lane.branch == *branch))
+                        .and_then(|lane| self.view.lane_pr(lane)),
+                    branch.clone(),
+                ),
+                ChangeRow::Pr(id) => {
+                    let pr = self.view.prs.get(id);
+                    let label = pr.map_or_else(
+                        || id.to_string(),
+                        |pr| {
+                            pr.branch
+                                .clone()
+                                .or_else(|| pr.title.clone())
+                                .unwrap_or_else(|| id.to_string())
+                        },
+                    );
+                    (pr, label)
+                }
+                ChangeRow::Trunk => (None, String::new()),
+            };
+            let attention = if self.cursors.changes.sort == LaneSort::Attention {
+                match pr {
+                    Some(pr) if pr.ci == CiState::Failed && !pr.state.is_final() => 0,
+                    Some(pr) if pr.mergeable == Mergeable::Conflicting && !pr.state.is_final() => 1,
+                    Some(pr)
+                        if pr.review
+                            == agent_monitor::domain::model::ReviewState::ChangesRequested
+                            && !pr.state.is_final() =>
+                    {
+                        2
+                    }
+                    _ => 3,
+                }
+            } else {
+                0
+            };
+            (attention, label)
+        });
     }
 
     /// The row under the CHANGES cursor: the chosen one while it exists,
@@ -315,15 +432,39 @@ impl App {
     fn change(&mut self, change: ChangeKey) {
         let cursor = &mut self.cursors.changes;
         match change {
-            ChangeKey::ZoomIn => {
+            ChangeKey::Branches => {
+                cursor.view = ChangesView::Branches;
+                cursor.detail = false;
+            }
+            ChangeKey::Timeline => {
+                cursor.view = ChangesView::Timeline;
+                cursor.detail = false;
+            }
+            ChangeKey::Inspect => cursor.detail = true,
+            ChangeKey::OpenAgent => {
+                if let Some(id) = self.change_agent().cloned() {
+                    self.open(Page::Agent(id));
+                }
+            }
+            ChangeKey::ZoomIn if cursor.view == ChangesView::Timeline => {
                 cursor.zoom = Some(cursor.drawn_zoom.saturating_sub(1));
             }
-            ChangeKey::ZoomOut => {
+            ChangeKey::ZoomOut if cursor.view == ChangesView::Timeline => {
                 cursor.zoom = Some((cursor.drawn_zoom + 1).min(SCALES.len() - 1));
             }
-            ChangeKey::Earlier => cursor.pan = cursor.pan.saturating_add(PAN_COLUMNS),
-            ChangeKey::Later => cursor.pan = cursor.pan.saturating_sub(PAN_COLUMNS),
-            ChangeKey::Now => cursor.pan = 0,
+            ChangeKey::Earlier if cursor.view == ChangesView::Timeline => {
+                cursor.pan = cursor.pan.saturating_add(PAN_COLUMNS)
+            }
+            ChangeKey::Later if cursor.view == ChangesView::Timeline => {
+                cursor.pan = cursor.pan.saturating_sub(PAN_COLUMNS)
+            }
+            ChangeKey::Now => {
+                if cursor.view == ChangesView::Branches {
+                    self.move_change(Motion::Top);
+                } else {
+                    cursor.pan = 0;
+                }
+            }
             ChangeKey::ToggleLanded => cursor.hide_landed = !cursor.hide_landed,
             ChangeKey::Sort => {
                 cursor.sort = match cursor.sort {
@@ -343,6 +484,7 @@ impl App {
                     (current + ids.len().max(1) - 1) % ids.len().max(1)
                 };
                 let cursor = &mut self.cursors.changes;
+                cursor.detail = false;
                 cursor.tab = ids.get(next).cloned();
                 cursor.row = None;
                 cursor.commit = None;
@@ -350,6 +492,7 @@ impl App {
             ChangeKey::NextAttention | ChangeKey::PrevAttention => {
                 self.jump_to_attention(change == ChangeKey::NextAttention);
             }
+            ChangeKey::ZoomIn | ChangeKey::ZoomOut | ChangeKey::Earlier | ChangeKey::Later => {}
             ChangeKey::OpenLane => {
                 if let (Some(graph), Some(ChangeRow::Lane(branch))) =
                     (self.change_repo(), self.change_row())
@@ -374,7 +517,10 @@ impl App {
                     .is_some_and(|lane| self.view.attention(lane).is_some()),
                 ChangeRow::Pr(id) => self.view.prs.get(id).is_some_and(|pr| {
                     !pr.state.is_final()
-                        && (pr.ci == CiState::Failed || pr.mergeable == Mergeable::Conflicting)
+                        && (pr.ci == CiState::Failed
+                            || pr.mergeable == Mergeable::Conflicting
+                            || pr.review
+                                == agent_monitor::domain::model::ReviewState::ChangesRequested)
                 }),
                 ChangeRow::Trunk => false,
             })
@@ -463,6 +609,21 @@ impl App {
         } else {
             commits.get(next).cloned()
         };
+    }
+
+    /// The agent attached to the selected change, if one is known.
+    pub fn change_agent(&self) -> Option<&AgentId> {
+        match self.change_row()? {
+            ChangeRow::Pr(id) => self.view.prs.get(&id).and_then(ViewState::pr_agent),
+            ChangeRow::Lane(branch) => self
+                .change_repo()
+                .and_then(|graph| graph.lanes.iter().find(|lane| lane.branch == branch))
+                .and_then(|lane| self.view.lane_agent(lane))
+                .map(|agent| &agent.id),
+            ChangeRow::Trunk => self
+                .change_repo()
+                .and_then(|graph| graph.trunk_agents.first()),
+        }
     }
 
     /// The agent the CHANGES row under the cursor opens, or its lane page.
@@ -661,6 +822,11 @@ impl App {
     }
 
     fn activate(&mut self, pane: Option<Pane>) {
+        if *self.page() == Page::Zoom(Pane::Changes) {
+            self.cursors.changes.detail = true;
+            return;
+        }
+
         let target = match (pane, self.page()) {
             (Some(Pane::Agents), _) => self.selected_agent(),
             (Some(Pane::Tape), _) => self

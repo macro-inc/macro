@@ -124,6 +124,9 @@ fn changes_app() -> App {
 #[test]
 fn changes_keys_move_lanes_commits_zoom_pan_and_toggles() {
     let mut app = changes_app();
+    app.key(Key::Char('t'));
+    app.cursors.changes.hide_landed = false;
+    app.cursors.changes.sort = LaneSort::Fork;
     assert_eq!(*app.page(), Page::Zoom(Pane::Changes));
     let first = app.change_row();
     assert!(
@@ -164,11 +167,10 @@ fn changes_keys_move_lanes_commits_zoom_pan_and_toggles() {
 }
 
 #[test]
-fn n_finds_the_failing_lane_and_enter_opens_its_author_or_p_its_page() {
+fn changes_inspection_and_agent_navigation_return_to_selection() {
     let mut app = changes_app();
-    app.key(Key::Char('n'));
     let Some(ChangeRow::Lane(branch)) = app.change_row() else {
-        panic!("n lands on a lane");
+        panic!("attention sort selects a lane");
     };
     assert_eq!(branch, "feat/ui-pages");
 
@@ -176,8 +178,10 @@ fn n_finds_the_failing_lane_and_enter_opens_its_author_or_p_its_page() {
     assert!(matches!(app.page(), Page::Lane(_, lane) if *lane == branch));
     app.key(Key::Esc);
     app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    app.key(Key::Char('a'));
     let Page::Agent(agent) = app.page().clone() else {
-        panic!("Enter opens the lane's agent");
+        panic!("a opens the lane's agent");
     };
     assert_eq!(app.view.name_of(&agent), "ui-pages");
 }
@@ -221,4 +225,90 @@ fn spend_page_can_reach_every_agent_cost() {
     app.key(Key::Home);
     assert_eq!(app.cursors.spend_agent, 0);
     assert_eq!(app.cursors.spend, 0);
+}
+
+#[test]
+fn branch_and_timeline_tabs_share_selection_and_filter_finished_work() {
+    let mut app = changes_app();
+    assert_eq!(app.cursors.changes.view, ChangesView::Branches);
+    assert!(!app.change_rows().contains(&ChangeRow::Trunk));
+    let active = app.change_rows();
+    app.key(Key::Char('m'));
+    assert!(app.change_rows().len() > active.len());
+    app.key(Key::End);
+    let selected = app.change_row();
+    assert_eq!(selected, app.change_rows().last().cloned());
+    app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    app.key(Key::Esc);
+    assert!(!app.cursors.changes.detail);
+    assert_eq!(selected, app.change_row());
+    app.key(Key::Char('t'));
+    assert_eq!(app.cursors.changes.view, ChangesView::Timeline);
+    assert!(app.change_rows().contains(&ChangeRow::Trunk));
+    app.key(Key::Char('b'));
+    assert_eq!(app.cursors.changes.view, ChangesView::Branches);
+    app.key(Key::Home);
+    assert_eq!(app.change_row(), app.change_rows().first().cloned());
+    let before = app.cursors.changes.pan;
+    app.key(Key::Char('<'));
+    assert_eq!(
+        app.cursors.changes.pan, before,
+        "the branch list has no time axis"
+    );
+    type_line(&mut app, "/nothing-matches-this-query");
+    assert!(app.change_rows().is_empty());
+}
+
+#[test]
+fn focused_changes_inspection_returns_with_one_escape() {
+    let mut app = changes_app();
+    app.key(Key::Tab);
+    app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    type_line(&mut app, "/ui");
+    app.key(Key::Char('/'));
+    app.key(Key::Char('x'));
+    app.key(Key::Esc);
+    assert!(app.cursors.changes.detail);
+    assert_eq!(app.filter.find, "ui");
+    app.key(Key::Esc);
+    assert!(!app.cursors.changes.detail);
+    assert_eq!(*app.page(), Page::Zoom(Pane::Changes));
+}
+
+#[test]
+fn monitor_keeps_finished_unmapped_prs_selectable() {
+    let mut app = changes_app();
+    app.view.repos.clear();
+    let pr = app.view.prs.values_mut().next().expect("demo PR");
+    pr.state = agent_monitor::domain::model::PrState::Merged;
+    let row = ChangeRow::Pr(pr.id.clone());
+    assert!(!app.change_rows().contains(&row));
+    app.key(Key::Char('0'));
+    assert!(app.change_rows().contains(&row));
+}
+
+#[test]
+fn unmapped_prs_sort_by_branch_and_include_review_attention() {
+    use agent_monitor::domain::model::{CiState, Mergeable, PrState, ReviewState};
+    let mut app = changes_app();
+    app.view.repos.clear();
+    for pr in app.view.prs.values_mut() {
+        pr.ci = CiState::Passed;
+        pr.mergeable = Mergeable::Mergeable;
+        pr.review = ReviewState::None;
+        pr.state = PrState::Open;
+        pr.branch = Some(format!("z-{}", pr.id));
+    }
+    let pr = app.view.prs.values_mut().next().expect("demo PR");
+    pr.review = ReviewState::ChangesRequested;
+    pr.branch = Some(String::from("a-first"));
+    let attention = ChangeRow::Pr(pr.id.clone());
+    app.key(Key::Char('s'));
+    assert_eq!(app.change_rows().first(), Some(&attention));
+    app.key(Key::End);
+    assert_ne!(app.change_row(), Some(attention.clone()));
+    app.key(Key::Char('n'));
+    assert_eq!(app.change_row(), Some(attention));
 }

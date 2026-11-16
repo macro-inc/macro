@@ -14,14 +14,13 @@ use ratatui::widgets::{Paragraph, Widget};
 use agent_monitor::domain::model::{Commit, Lane, LaneBase, Pr, PrState, RepoGraph, Status};
 
 use super::layout::{self, LaneRow, Scene, Viewport};
-use super::{ci_mark, distance, lane_tag, lane_token, review_mark, tab_spans, title_spans};
+use super::{ci_mark, distance, lane_tag, lane_token, review_mark, tab_spans};
 use crate::app::{App, ChangeRow, SCALES};
 use crate::format;
 use crate::theme;
 use crate::theme::Token;
 use crate::ui::Clock;
 use crate::ui::panes::pr_line;
-use crate::view::LaneSort;
 
 /// Board width at or above this many inner columns: every column.
 const WIDE_BOARD_FROM: u16 = 180;
@@ -52,7 +51,7 @@ impl Board {
 
 /// Draws the page into `area`.
 pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
-    let block = theme::pane(area, "8 CHANGES", title_spans(app), focused);
+    let block = theme::pane(area, "TIMELINE", Vec::new(), focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.width < 40 || inner.height < 8 {
@@ -188,7 +187,7 @@ pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clo
         now,
     };
     let buffer = frame.buffer_mut();
-    painter.header(buffer, header_y, zoom, cursor.sort, cursor.hide_landed);
+    painter.header(buffer, header_y, zoom);
     painter.axis(buffer, axis_y);
     painter.arcs(buffer, trunk_y);
     painter.trunk(buffer, trunk_y, selected == Some(ChangeRow::Trunk));
@@ -372,9 +371,9 @@ impl Painter<'_> {
         (0..theme::GLITCH_MS).contains(&age).then_some(age)
     }
 
-    fn header(&self, buffer: &mut Buffer, y: u16, zoom: usize, sort: LaneSort, hide_landed: bool) {
+    fn header(&self, buffer: &mut Buffer, y: u16, zoom: usize) {
         let right = self.inner.right();
-        let mut spans = tab_spans(self.app);
+        let mut spans = Vec::new();
         spans.push(Span::styled("   ", theme::base()));
         let trunk = &self.graph.trunk;
         spans.push(Span::styled(trunk.name.clone(), theme::bold(Token::Accent)));
@@ -411,19 +410,6 @@ impl Painter<'_> {
             Span::styled(scale_word(secs), theme::bold(Token::Highlight)),
             Span::styled("  ◂ ", theme::ink(Token::Rule)),
             Span::styled(scale_word(window), theme::ink(Token::Text)),
-            Span::styled(" ▸  SORT ", theme::ink(Token::Rule)),
-            Span::styled(
-                match sort {
-                    LaneSort::Fork => "fork",
-                    LaneSort::Attention => "attention",
-                },
-                theme::ink(Token::Text),
-            ),
-            Span::styled("  LANDED ", theme::ink(Token::Rule)),
-            Span::styled(
-                if hide_landed { "hidden" } else { "shown" },
-                theme::ink(Token::Text),
-            ),
             Span::styled(" ", theme::base()),
         ];
         let width: u16 = tail
@@ -1067,17 +1053,9 @@ impl Painter<'_> {
         write(buffer, self.inner.x, y + 1, right, &first);
         write(buffer, self.inner.x, y + 2, right, &second);
         Paragraph::new(theme::hotkeys(&[
-            ("↑↓", "LANE"),
             ("←→", "COMMIT"),
-            ("Enter", "AGENT"),
-            ("p", "LANE PAGE"),
-            ("n N", "NEXT ✕"),
-            ("+ −", "ZOOM"),
-            ("< >", "PAN"),
-            ("Home", "NOW"),
-            ("[ ]", "REPO"),
-            ("m", "LANDED"),
-            ("s", "SORT"),
+            ("a", "OPEN AGENT"),
+            ("Enter", "INSPECT"),
         ]))
         .render(Rect::new(self.inner.x, y + 3, self.inner.width, 1), buffer);
     }

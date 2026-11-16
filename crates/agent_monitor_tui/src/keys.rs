@@ -324,6 +324,14 @@ pub enum Action {
 /// What a key does on the CHANGES page, beyond moving and opening.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChangeKey {
+    /// Show the branch list.
+    Branches,
+    /// Show the timeline.
+    Timeline,
+    /// Inspect the selected change full-screen.
+    Inspect,
+    /// Open the selected change's agent.
+    OpenAgent,
     /// `+`: finer time buckets.
     ZoomIn,
     /// `-`: coarser time buckets.
@@ -354,6 +362,10 @@ impl ChangeKey {
     /// The CHANGES key `key` is, if any.
     fn of(key: Key) -> Option<ChangeKey> {
         let change = match key {
+            Key::Char('b') => ChangeKey::Branches,
+            Key::Char('t') => ChangeKey::Timeline,
+            Key::Char('a') => ChangeKey::OpenAgent,
+            Key::Char('d') => ChangeKey::Inspect,
             Key::Char('+' | '=') => ChangeKey::ZoomIn,
             Key::Char('-' | '_') => ChangeKey::ZoomOut,
             Key::Char('<' | ',') => ChangeKey::Earlier,

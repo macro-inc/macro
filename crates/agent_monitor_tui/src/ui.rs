@@ -65,7 +65,11 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
     let [body, footer] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
 
     let body = tabs::draw(frame, body, app.page());
-    let body = filters::draw(frame, body, app);
+    let body = if *app.page() == Page::Zoom(Pane::Changes) {
+        body
+    } else {
+        filters::draw(frame, body, app)
+    };
 
     match app.page().clone() {
         Page::Monitor => draw_monitor(frame, body, app, clock),
@@ -200,7 +204,7 @@ fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-const HELP: [(&str, &str); 19] = [
+const HELP: [(&str, &str); 20] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = changes)",
@@ -212,7 +216,7 @@ const HELP: [(&str, &str); 19] = [
     ("PGUP PGDN HOME END", "page, first, last"),
     (
         "ENTER",
-        "open the agent under the cursor (a PR's author); expand a tool call",
+        "open the selected row; inspect a change; expand a tool call",
     ),
     ("ESC", "back one step"),
     ("t", "agent pages: cycle kind filter"),
@@ -222,14 +226,12 @@ const HELP: [(&str, &str); 19] = [
     ("a", "list ended agents too, or only current ones"),
     ("b  B", "next / previous BODY figure (monitor and BODY)"),
     ("CTRL-T  `", "cycle themes: classic, ember, phosphor, dusk"),
+    ("8: b t", "changes: branch list / timeline"),
     (
         "8: + − < > HOME",
         "changes: zoom, pan, back to now; [ ] repository",
     ),
-    (
-        "8: n N m s p",
-        "next/previous failing lane, landed, sort, lane page",
-    ),
+    ("8: n N m s a", "attention, show finished, sort, open agent"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
 ];

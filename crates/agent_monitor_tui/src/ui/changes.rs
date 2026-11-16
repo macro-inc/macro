@@ -1,16 +1,13 @@
-//! 8 CHANGES: a live map of the git graph agents commit to, with pull
-//! requests drawn on it (TRANSIT). Time runs left to right to a NOW edge;
-//! the trunk is the heavy line, work in flight hangs below it in lanes, and
-//! landed work arcs above it. Each lane's row continues to the right as a
-//! board row (agent, PR, CI, review, distance from the trunk, unpushed,
-//! age), and an inspector under the map shows the row under the cursor.
-//! Under 100 columns, and in the monitor grid, a compact list with a short
-//! track per lane stands in. `p` opens a lane's own page ([`lane`]).
+//! Changes: a branch list with selected details, plus a separate timeline tab.
+//! The monitor keeps the compact summary. Both full-page presentations share
+//! repository, search and selection state; the timeline owns time controls.
 
+mod branches;
 mod compact;
 mod draw;
 mod lane;
 mod layout;
+mod page;
 #[cfg(test)]
 mod test;
 
@@ -29,11 +26,7 @@ use crate::theme::Token;
 use crate::ui::Clock;
 use crate::view::{Attention, Filter};
 
-/// Width under which the zoomed page draws the compact list.
-pub const TRANSIT_MIN_WIDTH: u16 = 100;
-
-/// Draws 8 CHANGES into `area`: the map when zoomed and wide enough, else
-/// the compact list.
+/// Draws the Changes page when zoomed, otherwise the monitor summary.
 pub fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -42,8 +35,8 @@ pub fn draw(
     focused: bool,
     zoomed: bool,
 ) {
-    if zoomed && area.width >= TRANSIT_MIN_WIDTH {
-        draw_transit(frame, area, app, clock, focused);
+    if zoomed {
+        page::draw(frame, area, app, clock);
     } else {
         compact::draw(frame, area, app, clock, focused, zoomed);
     }

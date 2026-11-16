@@ -31,15 +31,16 @@ times a second, and ticks at `fps` only while something animates.
   page also lists lifetime cost by agent), and error counts live in FAILURES.
   8 CHANGES (`ui/changes.rs`) shares the lower right with FAILURES; agent
   rows carry a PR badge and the drill-in lists the agent's PRs (`pr_line`).
-- `src/ui/changes/`: the CHANGES page. `layout.rs` is pure (time buckets to
-  columns, lanes to rows in fork order, fork lines, arcs packed above the
-  trunk) and returns a `Scene` the unit tests check; `draw.rs` paints it
-  with tokens (map, board, inspector); `compact.rs` is the list for the
-  monitor grid and widths under 100; `lane.rs` is a lane's page (`p`). Lane
-  order, attention and orphan PRs are `view.rs` (`sorted_lanes`,
-  `fork_order`, `attention`, `orphan_prs`); its cursor (`ChangesCursor`,
-  kept by branch and commit id) and keys (`Action::Changes`) are in
-  `app.rs`.
+- `src/ui/changes/`: the CHANGES page. `page.rs` puts Branches (`b`) and
+  Timeline (`t`) tabs above repository, show/sort and search controls.
+  `branches.rs` lists branches and PRs with details alongside at 110+ columns;
+  Enter inspects the selection full-screen, Escape returns, `a` opens its agent.
+  PR URLs are shown in the details. `layout.rs` and `draw.rs` retain the timeline;
+  its zoom/pan controls sit immediately above it. `compact.rs` is the monitor
+  summary; `lane.rs` is the legacy lane page (`p`). Selection and repository
+  state live in `app.rs` (`ChangesCursor`); active work and attention sort are
+  the defaults. Branch rows include PRs without local checkouts, and all-work
+  mode includes finished branches and PRs. Counts describe the selected repo.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
 - `src/theme.rs`: the design tokens (`Token`, a colour role such as `Alert`
   or `Rule`), the `Theme` that colours them, and the HUD dressing: thin
@@ -88,9 +89,11 @@ times a second, and ticks at `fps` only while something animates.
   board's tag. The map's now is quantised to its bucket, so it moves one
   column when a bucket ends, and commits glitch only when a delta brings
   them (`ViewState::fresh`), never after a snapshot.
-- On the CHANGES page `+ - < > [ ] n N m s p` and Home are page keys
-  (`keys::ChangeKey`). Its tabs are the mapped repositories, then `other PRs`
-  (`app::ChangeTab::OtherPrs`) for pull requests in no mapped repository.
+- On CHANGES, `b` / `t` select Branches / Timeline; `[` / `]` select a
+  repository (including Other PRs), `m` shows finished work, `s` changes sort,
+  `n` / `N` jump to attention, Enter inspects and `a` opens the selected agent.
+  `+ - < >` and Home control time only on Timeline; Home selects the first
+  branch on Branches. Place controls alongside their affected content.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
 - `b` / `B` cycle the BODY figure forward / back on the monitor and BODY pages.
@@ -106,7 +109,7 @@ times a second, and ticks at `fps` only while something animates.
   Changes keeps its repository and landed controls. Reset (`x`) affects only
   the current page. Enter keeps search edits; Escape restores the prior query.
   Final status selection includes ended agents; Tree always includes them.
-  Spend, Sources, BODY and detail pages have no filter row.
+  Spend, Sources, BODY and agent/legacy lane detail pages have no filter row.
 - Give every Ctrl shortcut a plain-key twin: browsers hosting ttyd keep
   Ctrl-T, Ctrl-W and Ctrl-N for themselves.
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never

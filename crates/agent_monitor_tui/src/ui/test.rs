@@ -128,12 +128,13 @@ fn changes_compact_80x24() {
 fn changes_failing_lane_selected_and_enter_drills_into_the_author() {
     let mut app = app();
     app.key(Key::Char('8'));
-    // `n` jumps to the lane whose CI fails: the demo's ui-pages at this step.
-    app.key(Key::Char('n'));
+    // Attention sort starts on the demo's failing ui-pages lane.
     insta::assert_snapshot!(render(&mut app, 240, 45));
     app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    app.key(Key::Char('a'));
     let Page::Agent(author) = app.page().clone() else {
-        panic!("Enter opens the lane's agent");
+        panic!("a opens the lane's agent");
     };
     assert_eq!(app.view.name_of(&author), "ui-pages");
 }
@@ -150,6 +151,8 @@ fn changes_without_repositories_lists_the_prs_and_enter_opens_the_author() {
     // The cursor starts on the first pull request, not the second.
     assert_eq!(app.change_row(), Some(ChangeRow::Pr(first.id.clone())));
     app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    app.key(Key::Char('a'));
     assert_eq!(
         app.page(),
         &Page::Agent(
@@ -177,7 +180,7 @@ fn changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab() {
     app.view.prs.insert(other.id.clone(), other.clone());
     app.key(Key::Char('8'));
     let mapped = render(&mut app, 240, 45);
-    assert!(mapped.contains(" other PRs 1 "), "{mapped}");
+    assert!(app.change_tabs().contains(&ChangeTab::OtherPrs), "{mapped}");
     assert!(app.change_repo().is_some());
 
     while app.change_tab() != Some(ChangeTab::OtherPrs) {
@@ -187,6 +190,8 @@ fn changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab() {
     insta::assert_snapshot!(screen);
     assert_eq!(app.change_rows(), vec![ChangeRow::Pr(other.id.clone())]);
     app.key(Key::Enter);
+    assert!(app.cursors.changes.detail);
+    app.key(Key::Char('a'));
     assert!(matches!(app.page(), Page::Agent(_)));
 }
 
@@ -317,4 +322,20 @@ fn help_overlay() {
     let screen = render(&mut app, 200, 56);
     assert!(screen.contains("agent pages: cycle kind filter"));
     assert!(screen.contains("clear only this page's filters"));
+}
+
+#[test]
+fn changes_timeline_200x56() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    app.key(Key::Char('t'));
+    insta::assert_snapshot!(render(&mut app, 200, 56));
+}
+
+#[test]
+fn changes_inspect_narrow_80x24() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    app.key(Key::Enter);
+    insta::assert_snapshot!(render(&mut app, 80, 24));
 }

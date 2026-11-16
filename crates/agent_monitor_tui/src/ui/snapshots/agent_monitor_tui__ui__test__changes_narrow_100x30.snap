@@ -4,31 +4,31 @@ expression: "render(&mut app, 100, 30)"
 ---
  MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]
  CHANGES [8]  WALL [w]
+ BRANCHES [b]  TIMELINE [t]
+ REPO: demo-org/app   PREV/NEXT [[ ]]
+ SHOW: active [m]  SORT: attention [s]  ATTENTION [n N]
  CLEAR [x]  BRANCH / PR [/] any
-┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────────────────────────  [8] ┐
-│REPO  app 13 ✕    origin/main 4be30b8 · fetched 5m ago · local main −37                           │
-│┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼-10h┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼-4h┄┄┄┄┄┄┄┄┄┄┄NOW LANE            PR      CI AGE  │
-│╭─ #4188 chore/4188 ─────────────────────────────────────────╮                                    │
-│«main −37 ━●━━●━●━━┳━●━●━━●━●━━┳━┳━━●━┳━━●━┳━━●━●━━┳━┳━━●━┳━●┻━●▶ origin/main     1 agent · 1 ▶   │
-▌                   │           │ │    │    │       │ │    ╰─●●─●◎   feat/trace-g… —       ·   10s │
-│                   │           │ │    │    │       │ ╰●●┄┄┄┄┄┄┄┄┄   chore/deps-b… —       ·    2h │
-│   ·   ·   ·   ·   │   ·   ·   │ │    │    │       ╰─●●─●─●─●─●●▶ ▶ rpc-server    #4211   ✓    0s │
-│                   │           │ │    │    ╰───●──●──●──●──●──●┄┄   feat/search-… —       ·   26m │
-│   ·   ·   ·   ·   │   ·   ·   │ │    ╰─────●───●───●───●───●┄┄┄┄   store-reducer #4207   ✓   51m │
-│                   │           │ │                          ╰●◉●✕   ui-pages      #4215   ✕   20s │
-│   ·   ·   ·   ·   │   ·   ·   │ ╰────●──●─●┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   sync/backoff… —       ·    5h │
-│                   │           │           ╰───●─●─●┄┄┄┄┄┄┄┄┄┄┄┄┄   sync/backoff… —       ·    3h │
-│   ·   ·   ·   ·   │   ·   ·   │                   ╰───●──○┄┄┄┄┄┄   sync/backoff… —       ·    1h │
-│                   │           ╰▶┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄› ▶ mesh-plan     —       ·     — │
-│                   ╰─○─○┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   eric/scratch… —       ·   10h │
-│●────────●───────●───────●────────●───────●───────●────────●┄┄┄┄┄   feat/invoice… #4190   ✓    1h │
-│«204 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   flaky-tests   —       ·    1d │
-│                                                                                                  │
+┌ BRANCHES  13 SHOWN ──────────────────────────────────────────────── SELECT [↑↓]  INSPECT [Enter] ┐
+│  BRANCH / PR                                                           CI       REVIEW           │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│ · 3 quieter branches not mapped                                                                  │
-│┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
-│ ▌feat/trace-gaps  no pull request  from origin/main da58fbb                                      │
-│  … ⟦○ a4cc2d2 10s feat(channels): pin a message to the header ↑⟧                                 │
-│ LANE [↑↓]  COMMIT [←→]  AGENT [Enter]  LANE PAGE [p]  NEXT ✕ [n N]  ZOOM [+ −]  PAN [< >]  NOW [H│
+│> feat/ui-pages                                                         failed   none             │
+│  #4215 feat(monitor): pages and drill-in                                                         │
+│                                                                                                  │
+│  feat/invoice-export                                                   passed   changes requested│
+│  #4190 feat(billing): CSV export for invoices                                                    │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│  chore/deps-bump                                                       --       --               │
+│  No PR                                                                                           │
+│                                                                                                  │
+│  eric/scratch-perf                                                     --       --               │
+│  No PR                                                                                           │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│  feat/flaky-tests                                                      --       --               │
+│  No PR                                                                                           │
+│                                                                                                  │
+│  feat/mesh-plan                                                        --       --               │
+│  No PR                                                                                           │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
