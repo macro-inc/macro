@@ -14,7 +14,7 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
 - `src/outbound/pg_composed_memory.rs`: component storage and generation leases.
 - `src/outbound/generator.rs`: generic agent research and summaries on Sonnet 5.5 at
   medium effort, and the tool-free privacy judge (its decision is read from anywhere
-  in the reply; no decision rejects).
+  in the reply; no decision, or a malformed one, rejects).
 - `src/inbound/toolset.rs`: ReadMemory, UpdateMemory, GetUserActivity.
 - `src/inbound/axum_router.rs`: `GET /memory` (composed), `GET`/`PATCH
   /memory/explicit` and `GET /memory/activity`, the SDK's equivalents of the tools.

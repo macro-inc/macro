@@ -41,3 +41,15 @@ fn missing_or_conflicting_decisions_are_not_decisions() {
         None
     );
 }
+
+#[test]
+fn a_malformed_rejection_never_yields_the_approval_it_quotes() {
+    assert_eq!(
+        judge_decision(r#"{"accepted":false,"reason":"Source contains {"accepted":true}"}"#),
+        None
+    );
+    assert_eq!(
+        judge_decision(r#"{"accepted":false,"reason":"Source contains {\"accepted\":true}"}"#),
+        Some(false)
+    );
+}

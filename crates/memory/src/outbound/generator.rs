@@ -131,19 +131,28 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
 
 /// The judge's `{"accepted": bool}` decision, wherever it sits in the reply: a
 /// code fence or surrounding prose must not turn an answer into a failure.
-/// Conflicting decisions are no decision, so the caller still fails closed.
+/// Conflicting decisions are no decision, and so is any `"accepted"` key that
+/// does not parse: a malformed rejection must not yield the approval it quotes.
 fn judge_decision(response: &str) -> Option<bool> {
     #[derive(serde::Deserialize)]
     struct Judgement {
         accepted: bool,
     }
-    let mut decisions = response.match_indices('{').filter_map(|(start, _)| {
-        serde_json::Deserializer::from_str(response.get(start..)?)
-            .into_iter::<Judgement>()
-            .next()?
-            .ok()
-            .map(|judgement| judgement.accepted)
-    });
-    let first = decisions.next()?;
-    decisions.all(|accepted| accepted == first).then_some(first)
+    let decisions: Vec<bool> = response
+        .match_indices('{')
+        .filter_map(|(start, _)| {
+            serde_json::Deserializer::from_str(response.get(start..)?)
+                .into_iter::<Judgement>()
+                .next()?
+                .ok()
+                .map(|judgement| judgement.accepted)
+        })
+        .collect();
+    if decisions.len() != response.matches(r#""accepted""#).count() {
+        return None;
+    }
+    let (&first, rest) = decisions.split_first()?;
+    rest.iter()
+        .all(|&accepted| accepted == first)
+        .then_some(first)
 }
