@@ -729,15 +729,7 @@ async fn document_whose_purge_event_failed_waits_for_the_next_run(
     drain_delete_queue(&pool, &delete_queue).await?;
     let retry_broker = FakeEventBroker::default();
     let retry_queue = FakeDeleteQueue::watching(&retry_broker);
-    purge_expired_documents(
-        &pool,
-        &retry_broker,
-        &retry_queue,
-        cutoff,
-        limits,
-        deadline,
-    )
-    .await?;
+    purge_expired_documents(&pool, &retry_broker, &retry_queue, cutoff, limits, deadline).await?;
 
     assert_eq!(retry_queue.enqueued(), vec!["expired-05".to_string()]);
 
@@ -748,9 +740,7 @@ async fn document_whose_purge_event_failed_waits_for_the_next_run(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "test/fixtures", scripts("expired_documents"))
 )]
-async fn purge_starts_no_page_near_the_lambda_deadline(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn purge_starts_no_page_near_the_lambda_deadline(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let event_broker = FakeEventBroker::default();
     let delete_queue = FakeDeleteQueue::watching(&event_broker);
 

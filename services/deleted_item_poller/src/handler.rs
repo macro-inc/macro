@@ -87,7 +87,10 @@ impl DocumentPurgeRun {
         span.record("event.published_count", self.events_published as i64);
         span.record("event.failed_count", self.events_failed as i64);
         span.record("delete_batch.sent_count", self.delete_batches_sent as i64);
-        span.record("delete_batch.failed_count", self.delete_batches_failed as i64);
+        span.record(
+            "delete_batch.failed_count",
+            self.delete_batches_failed as i64,
+        );
         span.record("document.enqueued_count", self.enqueued as i64);
         span.record("run.cap_reached", self.cap_reached);
         span.record("run.deadline_reached", self.deadline_reached);
