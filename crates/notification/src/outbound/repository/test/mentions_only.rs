@@ -172,8 +172,14 @@ where
 
 fn both() -> Delivered {
     Delivered {
-        web: vec!["macro|alice@example.com".into(), "macro|bob@example.com".into()],
-        push: vec!["macro|alice@example.com".into(), "macro|bob@example.com".into()],
+        web: vec![
+            "macro|alice@example.com".into(),
+            "macro|bob@example.com".into(),
+        ],
+        push: vec![
+            "macro|alice@example.com".into(),
+            "macro|bob@example.com".into(),
+        ],
     }
 }
 
