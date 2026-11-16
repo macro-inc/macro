@@ -90,6 +90,13 @@ pub(super) fn describe_document_event(event: &DocumentTopicEvent) -> DocumentEve
             document_id: metadata.document_id.clone(),
             event_type: "document.interaction",
         },
+        // Trash leaves the index alone, as document.deleted does; readers see
+        // deletedAt and the purge removes the entry.
+        DocumentTopicEvent::EmailAttachmentsTrashed(metadata) => DocumentEventDescription {
+            action: DocumentIndexAction::Ignore,
+            document_id: metadata.document_ids.first().cloned().unwrap_or_default(),
+            event_type: "document.email_attachments_trashed",
+        },
     }
 }
 

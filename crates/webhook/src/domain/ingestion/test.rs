@@ -23,7 +23,7 @@ use chrono::{DateTime, Utc};
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
     DocumentDeletedMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata,
+    DocumentUpdatedMetadata, EmailAttachmentsTrashedMetadata,
 };
 use entity_access::domain::models::{
     AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
@@ -665,6 +665,14 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
             Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
             })),
+        ),
+        (
+            "document.email_attachments_trashed",
+            Event::new(DocumentTopicEvent::EmailAttachmentsTrashed(
+                EmailAttachmentsTrashedMetadata {
+                    document_ids: vec![DOCUMENT_ID.to_string()],
+                },
+            )),
         ),
     ]
 }

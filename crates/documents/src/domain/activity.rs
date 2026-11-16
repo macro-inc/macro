@@ -129,6 +129,8 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
+            // A system trash after the mail is gone; nobody acted on these files.
+            DocumentTopicEvent::EmailAttachmentsTrashed(_) => Ingest::Ignore,
             DocumentTopicEvent::SyncContentUpdated(metadata) => {
                 let legacy = metadata.actor.clone().map(|actor| DocumentSyncEditor {
                     agent_correlation_id: None,

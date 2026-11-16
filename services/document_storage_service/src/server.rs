@@ -965,6 +965,16 @@ async fn run_server() -> anyhow::Result<()> {
         passwords_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
+    consumer_tracker.spawn(crate::released_attachments::run(
+        documents_hex::domain::released_attachments::ReleasedAttachmentService::new(
+            documents_hex::outbound::pg_released_attachments::PgReleasedAttachmentRepo::new(
+                db.clone(),
+            ),
+            macro_event_broker.clone(),
+        ),
+        db.clone(),
+        consumer_cancellation_token.clone(),
+    ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
             flags.clone(),

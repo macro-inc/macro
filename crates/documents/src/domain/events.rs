@@ -197,6 +197,14 @@ pub struct DocumentPurgedMetadata {
     pub document_id: String,
 }
 
+/// Metadata for [`DocumentTopicEvent::EmailAttachmentsTrashed`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct EmailAttachmentsTrashedMetadata {
+    /// The documents moved to the Trash, at most one queue batch.
+    pub document_ids: Vec<String>,
+}
+
 /// Why a document interaction was reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -279,6 +287,11 @@ pub enum DocumentTopicEvent {
     /// A peer joined, left, or a periodic save occurred.
     #[serde(rename = "document.interaction")]
     Interaction(DocumentInteractionMetadata),
+    /// Email attachments whose mail is gone were moved to the Trash by the
+    /// system, in one batch. Like the documents in a trashed folder, they are
+    /// removed from open lists and trigger nothing per document.
+    #[serde(rename = "document.email_attachments_trashed")]
+    EmailAttachmentsTrashed(EmailAttachmentsTrashedMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -328,6 +341,14 @@ impl DocumentMacroEvent {
     /// Build a purged event keyed by the document id.
     pub fn purged(key: impl Into<String>, metadata: DocumentPurgedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Purged(metadata))
+    }
+
+    /// Build an email-attachments-trashed event, keyed by one of its documents.
+    pub fn email_attachments_trashed(
+        key: impl Into<String>,
+        metadata: EmailAttachmentsTrashedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::EmailAttachmentsTrashed(metadata))
     }
 
     /// Build a copied event keyed by the new document id.

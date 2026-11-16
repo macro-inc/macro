@@ -74,6 +74,7 @@ fn event_type(event: &DocumentTopicEvent) -> &'static str {
         DocumentTopicEvent::Purged(_) => "document.purged",
         DocumentTopicEvent::Copied(_) => "document.copied",
         DocumentTopicEvent::Interaction(_) => "document.interaction",
+        DocumentTopicEvent::EmailAttachmentsTrashed(_) => "document.email_attachments_trashed",
     }
 }
 

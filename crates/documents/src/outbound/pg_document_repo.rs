@@ -376,6 +376,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(row.map_or((None, None), |row| (row.first_name, row.last_name)))
     }
 
+    // pg_released_attachments::trash restates these writes, set-based, for
+    // email attachments whose mail is gone; change the two together.
     #[tracing::instrument(err, skip(self))]
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;

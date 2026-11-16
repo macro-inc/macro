@@ -67,6 +67,14 @@ again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
+An email attachment's Drive copy goes to the Trash within about a minute once
+its email is gone (the message deleted at the provider, a draft sent or
+discarded, or the inbox disconnected or removed), unless its owner moved it
+into a folder, shared it, edited it or commented on it. It never shows up in
+**My Files** on its own, and it expires from the Trash like any other file.
+Verify by deleting a test message whose attachment was opened, then checking
+**Trash** and **My Files**.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock
