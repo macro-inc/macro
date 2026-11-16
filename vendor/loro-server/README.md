@@ -7,9 +7,12 @@ transcript bytes; editor/session clients use Loro1.17.1 with the internal copy d
 ../loro-editor/README.md. Both exchange
 the existing protocol bytes. Shared support crates follow the workspace lock.
 
-The sources are byte-identical to the crates.io 1.16.2 releases. The only change
-is the top manifest's `path` to the adjacent internal crate, plus the local agent
-guides and this README. `just check-loro-server-vendor` fails on any other drift.
+The sources are the crates.io releases (loro and loro-internal 1.16.2, loro-common
+and loro-kv-store 1.16.0). Manifests only add `path` lines to their vendored
+siblings, and `lint-only.patch` only drops one unused import and allows one unused
+re-export, because path crates build under the repository's `-D warnings`. Local
+agent guides and this README are the other additions. `just
+check-loro-server-vendor` fails on any other drift.
 
 Cargo cannot resolve two semver-compatible exact registry versions together.
 The separate source keeps the server on 1.16.2 while the workspace crates.io
