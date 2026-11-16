@@ -2,6 +2,7 @@ import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { pressHandlers } from '@ui';
 import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -11,7 +12,7 @@ import { SettingsSearchResults } from './settings-search-results';
 
 /**
  * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field, an optional action (inviting your team) above
+ * title bar, a search field (desktop only), an optional action (inviting your team) above
  * the grouped section pills, and the pills themselves.
  */
 export function SettingsSidebar(props: {
@@ -39,27 +40,30 @@ export function SettingsSidebar(props: {
         </div>
       </ViewSidebar.Header>
 
-      <ViewSidebar.Primary>
-        <SearchBar
-          label={t('settingsNav.searchSettings')}
-          placeholder={t('settingsNav.searchSettings')}
-          autocomplete="off"
-          value={props.searchQuery}
-          onValueChange={props.onSearchQueryChange}
-          size="sm"
-          onEscape={() => props.onSearchQueryChange('')}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') {
-              const first =
-                root?.querySelector<HTMLButtonElement>('nav button');
-              if (first) {
-                event.preventDefault();
-                first.focus();
+      {/* Touch searches from the dock, as other views' sidebars do. */}
+      <Show when={!isTouchDevice()}>
+        <ViewSidebar.Primary>
+          <SearchBar
+            label={t('settingsNav.searchSettings')}
+            placeholder={t('settingsNav.searchSettings')}
+            autocomplete="off"
+            value={props.searchQuery}
+            onValueChange={props.onSearchQueryChange}
+            size="sm"
+            onEscape={() => props.onSearchQueryChange('')}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                const first =
+                  root?.querySelector<HTMLButtonElement>('nav button');
+                if (first) {
+                  event.preventDefault();
+                  first.focus();
+                }
               }
-            }
-          }}
-        />
-      </ViewSidebar.Primary>
+            }}
+          />
+        </ViewSidebar.Primary>
+      </Show>
 
       <ViewSidebar.Content>
         {/* Search results replace the pills, so they replace the action too. */}
