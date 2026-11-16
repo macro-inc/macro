@@ -526,15 +526,13 @@ const STANDALONE_MEDIA_SELECTOR = 'img, video, audio, iframe, svg';
  * Whether any block outside the quoted thread holds text or media. Every
  * block counts, not just the first: a reply can open with an image, an empty
  * line before a list, or a heading. The free plan's watermark, which Send
- * Later saves with the draft, is not the user's writing either.
+ * Later saves with the draft and a reopened draft wraps in a block, is not
+ * the user's writing either.
  */
 function bodyHasWrittenContent(body: HTMLElement): boolean {
   return Array.from(body.childNodes).some((block) => {
     if (block instanceof Element) {
-      const isAddedByComposer =
-        block.classList.contains('macro_quote') ||
-        block.classList.contains('macro-watermark-node');
-      if (isAddedByComposer) return false;
+      if (block.classList.contains('macro_quote')) return false;
 
       const isMedia =
         block.matches(STANDALONE_MEDIA_SELECTOR) ||
@@ -542,8 +540,14 @@ function bodyHasWrittenContent(body: HTMLElement): boolean {
       if (isMedia) return true;
     }
 
-    return (block.textContent ?? '').trim() !== '';
+    return textWithoutWatermark(block).trim() !== '';
   });
+}
+
+function textWithoutWatermark(node: Node): string {
+  if (!(node instanceof Element)) return node.textContent ?? '';
+  if (node.classList.contains('macro-watermark-node')) return '';
+  return Array.from(node.childNodes).map(textWithoutWatermark).join('');
 }
 
 /**

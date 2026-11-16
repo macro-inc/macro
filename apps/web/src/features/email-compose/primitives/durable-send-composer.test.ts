@@ -688,14 +688,34 @@ it.each([
   }
 });
 
-it('refuses a reply with nothing written before reaching the outbox', async () => {
+it.each(['queued', 'legacy'] as const)(
+  'refuses a %s reply with nothing written before reaching the outbox',
+  async (delivery) => {
+    const context =
+      delivery === 'queued' ? queuedReplyContext() : createComposeContext();
+    const root = mountReplyComposer(context);
+    try {
+      root.edit('');
+      await root.sendEmail();
+
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it('refuses a saved reply whose text was deleted before Send', async () => {
   const context = queuedReplyContext();
   const root = mountReplyComposer(context);
   try {
+    root.edit('Draft text');
+    await vi.advanceTimersByTimeAsync(600);
     root.edit('');
     await root.sendEmail();
 
-    expect(context.drafts.saveLocalDraft).not.toHaveBeenCalled();
     expect(context.delivery.sendMessage).not.toHaveBeenCalled();
     expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
   } finally {
