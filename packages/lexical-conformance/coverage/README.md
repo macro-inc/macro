@@ -17,6 +17,8 @@ missing test file and certify no execution.
 
 `pending.txt` starts with every required row. It may only shrink relative to
 `--base=<revision>` (default `origin/main`, CI uses the fetched PR base SHA).
+Use `bun packages/lexical-conformance/coverage/shrink-pending.ts <base> <replay-log> <report>` after a full native replay to remove only verified passing rows and record each removed row's actual passing test. The report is historical output, never a substitute for fresh CI evidence.
+
 Unlisted gaps fail. `--initialize` is accepted only before this file exists;
 it is not an update mechanism. `--milestone=M1` rejects pending M1 rows.
 
@@ -24,7 +26,7 @@ Recorded JavaScript fixtures alone certify no Rust coverage. `just lexical-repla
 executes every admitted fixture, writes per-case pass/fail/ledger evidence to
 `results/replay.json`, and preserves Cargo's failing exit code. The fingerprint
 covers the exact corpus, Rust sources, vendored sources, manifests/lockfile and
-Rust configuration. Ledgered cases never count as passing replay.
+Rust configuration. Ledgered cases never count as passing replay. Set `CONFORMANCE_JOBS` and `CONFORMANCE_TEST_THREADS` only for a locally throttled run; CI retains four build jobs and its original test-thread defaults.
 
 `run-tests.ts` runs the four Rust library suites separately and writes matching
 literal test results. New property-test regression seeds are preserved under
@@ -60,5 +62,5 @@ Run checks in the package:
 ```sh
 bunx tsc --noEmit -p coverage/tsconfig.json
 bunx vitest run --config coverage/vitest.config.ts
-bunx @biomejs/biome check --config-path coverage coverage
+(\cd coverage && bunx @biomejs/biome check .)
 ```

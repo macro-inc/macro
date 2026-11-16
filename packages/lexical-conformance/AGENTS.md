@@ -23,6 +23,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
+- `coverage/shrink-pending.ts`: shrink only from fresh passing native replay and record each removed row's fixture/test witness; historical reports never replace CI execution.
 - `record/inventory.json`: S4 per-file expected counts; mixed files have no exact case labels.
 
 ## Boundaries

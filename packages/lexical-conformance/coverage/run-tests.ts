@@ -31,6 +31,16 @@ function saveRegressions() {
     } else rmSync(file);
   }
 }
+const jobs = process.env.CONFORMANCE_JOBS ?? '4';
+const threads = process.env.CONFORMANCE_TEST_THREADS;
+if (
+  !/^[1-9]\d*$/.test(jobs) ||
+  (threads !== undefined && !/^[1-9]\d*$/.test(threads))
+)
+  throw new Error(
+    'Conformance jobs and test threads must be positive integers'
+  );
+
 const fingerprint = inputs();
 const output = path.join(directory, 'results/tests.json');
 rmSync(output, { force: true });
@@ -49,7 +59,9 @@ for (const pkg of [
   'lexical_markdown',
   'lexical_conformance',
 ]) {
-  const result = spawnSync('cargo', ['test', '-p', pkg, '--lib', '-j4'], {
+  const args = ['test', '-p', pkg, '--lib', `-j${jobs}`];
+  if (threads !== undefined) args.push('--', '--test-threads', threads);
+  const result = spawnSync('cargo', args, {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,

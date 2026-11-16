@@ -9,6 +9,13 @@ import {
 import path from 'node:path';
 import { directory, inputs, replayEvidence, root } from './evidence';
 
+const jobs = process.env.CONFORMANCE_JOBS ?? '4';
+const threads = process.env.CONFORMANCE_TEST_THREADS ?? '4';
+if (![jobs, threads].every((value) => /^[1-9]\d*$/.test(value)))
+  throw new Error(
+    'Conformance jobs and test threads must be positive integers'
+  );
+
 const fingerprint = inputs();
 const output = path.join(root, 'target/lexical-conformance/cases.json');
 rmSync(output, { force: true });
@@ -21,10 +28,10 @@ const result = spawnSync(
     'lexical_conformance',
     '--test',
     'replay',
-    '-j4',
+    `-j${jobs}`,
     '--',
     '--test-threads',
-    '4',
+    threads,
     '--report-coverage',
   ],
   { cwd: root, stdio: 'inherit', env: process.env }
