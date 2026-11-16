@@ -544,9 +544,16 @@ for (const platform of [
       firstFailure = { error };
     } finally {
       // Reset the actual shared signal through its real copy action, not a
-      // localStorage write that the already-created hook never reads.
+      // localStorage write that the already-created hook never reads. A copy
+      // row returns its promise to the menu's copy item, which shows the
+      // feedback, instead of issuing detached work.
       try {
-        expect(await invoke(native.menu.copyAsPrompt.action)).toBe(true);
+        const copy = native.menu.copyAsPrompt;
+        expect(copy.copy).toBe(true);
+        const before = issued.length;
+        const copied = copy.action?.();
+        expect(issued.length).toBe(before);
+        expect(await copied).toBe(true);
         expect(native.lastUsed().key).toBe('copy');
       } catch (error) {
         firstFailure ??= { error };
