@@ -1198,7 +1198,9 @@ accepts the send, **Undo** stays on offer until the server's undo deadline (the
 accepted attempt's `sendTime`), not for a fixed client duration. It is one
 notice that stays on screen until the send ends and changes in place: **Undo**
 leaves at the deadline, and **Sending…** then becomes **Email sent** only after
-delivery; it never closes and reopens while the send is in motion. This holds
+delivery; it never closes and reopens while the send is in motion. A send
+that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
+its notice expire, and a new one follows it once the server accepts it. This holds
 when another Mail tab delivers or cancels the send first, and a cancelled reply
 still returns its thread to Inbox. When the server cannot say how such a send
 ended, the notice closes. A send that fails after it was queued turns the

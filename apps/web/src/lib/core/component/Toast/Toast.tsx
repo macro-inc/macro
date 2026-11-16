@@ -78,8 +78,9 @@ interface ToastOptions {
   /**
    * A toast this one takes the place of: while that toast is still open it
    * changes in place and keeps its id, so one process (a send, say) shows one
-   * toast through each of its states. A closed toast leaves this one to open
-   * as usual.
+   * toast through each of its states. Its options, `onDismiss` included,
+   * replace the earlier ones, and a timed toast starts its timer again. A
+   * closed toast leaves this one to open as usual.
    */
   replace?: number;
 }
@@ -155,7 +156,7 @@ function dismissActiveToast(region: string): boolean {
   if (activeId === undefined) return false;
 
   setActiveToastId(region, undefined);
-  toaster.dismiss(activeId);
+  dismiss(activeId);
   return true;
 }
 
@@ -201,7 +202,7 @@ function dismissIfRecent(message: string, type: ToastType): void {
     now - existingToast.timestamp < THROTTLE_DURATION &&
     existingToast.toastId != null
   ) {
-    toaster.dismiss(existingToast.toastId);
+    dismiss(existingToast.toastId);
   }
 }
 
@@ -214,6 +215,8 @@ function success(
 }
 
 function dismiss(toastId: number) {
+  // A toast queued past its region's limit never mounts, so its cleanup
+  // can't be what forgets it.
   openToasts.delete(toastId);
   toaster.dismiss(toastId);
 }
@@ -298,18 +301,25 @@ type ToastContentProps = {
   dismissStyle?: ToastDismissStyle;
   onDismiss?: () => void;
   onUserDismiss?: () => void;
+  /** Counts in-place replacements; each one restarts a timed toast's timer. */
+  revision?: number;
 };
 
 /** Shared presentation for the app service and isolated gallery regions. */
 export function ToastContent(props: ToastContentProps) {
   onCleanup(() => props.onDismiss?.());
 
-  // Kobalte's close timer doesn't follow a change to `persistent`, so a toast
-  // updated in place to new timing (a persistent "Sending…" becoming a
-  // timed "Sent") mounts a fresh frame, without the entrance animation.
+  // Kobalte's close timer doesn't follow a change to `persistent`, nor start
+  // again for new content, so a toast updated in place to new timing (a
+  // persistent "Sending…" becoming a timed "Sent"), or a timed toast given
+  // new content, mounts a fresh frame, without the entrance animation.
   let mounted = false;
+  const timing = () =>
+    props.persistent
+      ? 'persistent'
+      : `${props.duration}:${props.revision ?? 0}`;
   return (
-    <Show when={`${props.persistent ?? false}:${props.duration}`} keyed>
+    <Show when={timing()} keyed>
       {/* Show re-renders only a child that takes the value. */}
       {(_timing) => {
         const replaced = mounted;
@@ -566,10 +576,13 @@ async function promise<T>(
 
 // ─── showToast (internal) ────────────────────────────────────────────────────
 
-type ShownToast = Omit<ToastContentProps, 'toastId'>;
+type ShownToast = Omit<ToastContentProps, 'toastId' | 'revision'>;
 
-/** Open toasts by id, each with the setter `replace` changes it through. */
-const openToasts = new Map<number, (content: ShownToast) => void>();
+/** Open toasts by id, with their region and the setter `replace` changes them through. */
+const openToasts = new Map<
+  number,
+  { region: string; update: (content: ShownToast) => void }
+>();
 
 /**
  * Show a toast in `region`, or change the open toast `replace` names in place.
@@ -581,24 +594,25 @@ function showToast(
   replace: number | undefined,
   holdsSlot: boolean
 ): number {
-  const update = replace === undefined ? undefined : openToasts.get(replace);
-  if (replace !== undefined && update) {
-    update(content);
+  const open = replace === undefined ? undefined : openToasts.get(replace);
+  if (replace !== undefined && open) {
+    open.update(content);
     // The throttle must not dismiss this toast for a message it no longer shows.
     for (const [key, recent] of recentToasts) {
       if (recent.toastId === replace) recentToasts.delete(key);
     }
     if (!holdsSlot) {
-      clearTrackedToast(region, replace);
+      clearTrackedToast(open.region, replace);
     } else {
-      if (getActiveToastId(region) !== replace) dismissActiveToast(region);
-      setActiveToastId(region, replace);
+      if (getActiveToastId(open.region) !== replace)
+        dismissActiveToast(open.region);
+      setActiveToastId(open.region, replace);
     }
     return replace;
   }
 
   replaceActiveToast(region, !holdsSlot);
-  const [current, setCurrent] = createSignal(content);
+  const [current, setCurrent] = createSignal({ ...content, revision: 0 });
   const toastId = toaster.show(
     (props) => (
       <ToastContent
@@ -613,7 +627,11 @@ function showToast(
     ),
     { region }
   );
-  openToasts.set(toastId, (next) => setCurrent(() => next));
+  openToasts.set(toastId, {
+    region,
+    update: (next) =>
+      setCurrent((previous) => ({ ...next, revision: previous.revision + 1 })),
+  });
   trackActiveToast(region, toastId, !holdsSlot);
   return toastId;
 }
@@ -642,10 +660,11 @@ function createToast(
 
   if (isMobile() && hideOnMobile) return undefined;
 
-  if (!stack) {
-    // A toast changing in place may already show this message.
-    if (replace === undefined || !openToasts.has(replace))
-      dismissIfRecent(message, toastType);
+  // A toast changing in place may already show this message, and its later
+  // states are not new messages to throttle.
+  const replacing = replace !== undefined && openToasts.has(replace);
+  if (!stack && !replacing) {
+    dismissIfRecent(message, toastType);
     const key = createToastKey(message, toastType);
     const existingToast = recentToasts.get(key);
     if (existingToast?.timeoutId) {
@@ -674,7 +693,7 @@ function createToast(
     true
   );
 
-  if (!stack) {
+  if (!stack && !replacing) {
     const key = createToastKey(message, toastType);
     const timeoutId = setTimeout(() => {
       recentToasts.delete(key);

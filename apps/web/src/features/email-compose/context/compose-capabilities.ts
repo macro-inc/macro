@@ -461,6 +461,8 @@ export interface ComposeNoticeOptions {
   persistent?: boolean;
   /** An open notice this one changes in place, keeping its id. */
   replace?: number;
+  /** Keeps an earlier notice with the same message instead of replacing it. */
+  stack?: boolean;
   /** Runs once the notice closes, however it closes. */
   onDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */

@@ -257,3 +257,27 @@ it('keeps a mobile notice in the slot when it changes in place', () => {
   expect(screen.queryByText('Email sent')).toBeNull();
   expect(screen.getByText('Later notice')).toBeTruthy();
 });
+
+it('gives a timed toast its full time again when it changes in place', () => {
+  render(() => <ToastRegion />);
+  const id = toast.success('Email queued to send');
+  vi.advanceTimersByTime(4000);
+  toast.success('Email sent', { replace: id });
+  vi.advanceTimersByTime(4000);
+  expect(
+    screen
+      .getByText('Email sent')
+      .closest('[data-macro-toast]')
+      ?.hasAttribute('data-opened')
+  ).toBe(true);
+});
+
+it('opens a new toast in place of one the mobile slot dismissed before it showed', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  toast.custom({ title: 'Email failed to send' }, { persistent: true });
+  const queued = toast.success('Sending…');
+  toast.success('Copied');
+  const next = toast.success('Email sent', { replace: queued });
+  expect(next).not.toBe(queued);
+});

@@ -399,7 +399,7 @@ it.each(providers)(
       await reply.sendEmail();
       expect(notices.open()[0]?.options?.persistent).toBe(false);
       // The queued notice expires while the device is offline.
-      notices.open()[0]?.options?.onDismiss?.();
+      notices.expireAll();
 
       report({
         state: 'accepted',
@@ -410,6 +410,7 @@ it.each(providers)(
 
       expect(notices.log).toEqual([
         'open 1 success: Email queued to send [Undo]',
+        'expire 1',
         'open 2 success: Sending… [Undo]',
         'update 2 success: Sending…',
         'update 2 success: Email sent',
@@ -428,7 +429,7 @@ it.each(providers)(
     const reply = mountReplyComposer(context);
     try {
       await reply.sendEmail();
-      notices.open()[0]?.options?.onDismiss?.();
+      notices.expireAll();
       report({
         state: 'accepted',
         undoUntil: new Date(Date.now() + 5_000).toISOString(),
@@ -439,6 +440,7 @@ it.each(providers)(
 
       expect(notices.log).toEqual([
         'open 1 success: Sending… [Undo]',
+        'expire 1',
         'open 2 success: Email sent',
       ]);
     } finally {
@@ -469,6 +471,63 @@ it.each(providers)(
         'dismiss 1',
       ]);
       expect(context.delivery.undoSend).toHaveBeenCalledOnce();
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: keeps a failed send on screen when its draft is restored',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({ state: 'failed' });
+      report({ state: 'cancelled' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 failure: Email failed to send',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: stops holding the notice for a send that stalls, and follows it again once accepted',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({ state: 'pending' });
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(notices.open()[0]?.options?.persistent).toBe(false);
+      // The timed notice expires while the send keeps retrying.
+      notices.expireAll();
+
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 success: Sending… [Undo]',
+        'expire 1',
+        'open 2 success: Sending… [Undo]',
+        'update 2 success: Email sent',
+      ]);
     } finally {
       reply.dispose();
     }

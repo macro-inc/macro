@@ -38,18 +38,23 @@ export function recordNotices(context: EmailComposeContext) {
   vi.mocked(feedback.success).mockImplementation(show('success'));
   vi.mocked(feedback.failure).mockImplementation(show('failure'));
   vi.mocked(feedback.alert).mockImplementation(show('alert'));
-  vi.mocked(feedback.dismiss).mockImplementation((id) => {
+  const close = (id: number, how: 'dismiss' | 'expire') => {
     const notice = open.get(id);
     if (!notice) return;
     open.delete(id);
-    log.push(`dismiss ${id}`);
+    log.push(`${how} ${id}`);
     notice.options?.onDismiss?.();
-  });
+  };
+  vi.mocked(feedback.dismiss).mockImplementation((id) => close(id, 'dismiss'));
 
   return {
     log,
     /** Notices on screen, oldest first. */
     open: () => [...open.values()],
+    /** Closes every notice on screen as its timer, or the user, would. */
+    expireAll: () => {
+      for (const id of [...open.keys()]) close(id, 'expire');
+    },
     /** Presses Undo on the notice offering it. */
     pressUndo: () =>
       [...open.values()]

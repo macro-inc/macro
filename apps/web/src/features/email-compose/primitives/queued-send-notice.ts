@@ -5,14 +5,18 @@ import type {
   EmailDelivery,
 } from '../context/compose-capabilities';
 
+/** How long a send may go without progress before its notice stops waiting on screen. */
+const STALLED_SEND_MS = 30_000;
+
 /**
  * Tells the user only what a queued send has done. Undo stays on offer until
  * the server's own deadline, and the send is called sent once it is delivered.
  *
  * One notice follows the send and changes in place at each step, so it never
  * leaves and comes back while the send is in motion: it stays until the
- * outcome, then becomes it. A send queued offline can wait for hours, so its
- * notice expires as usual, and a new one follows the send once it goes out.
+ * outcome, then becomes it. A send that waits instead (queued offline,
+ * retrying, or waiting on sign-in) can do so for hours, so its notice expires
+ * as usual, and a new one follows the send once the server accepts it.
  */
 export function announceQueuedSend(options: {
   notices: EmailComposeFeedback;
@@ -29,10 +33,12 @@ export function announceQueuedSend(options: {
     options.delivery.watchSend !== undefined;
   let inMotion = watched && !options.queuedOffline;
   let notice: number | undefined;
+  let sendingMessage = 'Sending…';
   let offeringUndo = false;
   let undoRequested = false;
   let accepted = false;
   let undoDeadline: ReturnType<typeof setTimeout> | undefined;
+  let stall: ReturnType<typeof setTimeout> | undefined;
 
   const show = (
     tone: 'success' | 'failure' | 'alert',
@@ -42,6 +48,8 @@ export function announceQueuedSend(options: {
     try {
       const shown = notices.feedback[tone](message, {
         ...noticeOptions,
+        // Another send's notice with the same text is a different notice.
+        stack: true,
         replace: notice,
         onDismiss: () => {
           if (notice === shown) notice = undefined;
@@ -54,6 +62,7 @@ export function announceQueuedSend(options: {
   };
   const settle = () => {
     clearTimeout(undoDeadline);
+    clearTimeout(stall);
     offeringUndo = false;
   };
   const withdraw = () => {
@@ -61,7 +70,18 @@ export function announceQueuedSend(options: {
     if (notice != null) notices.feedback.dismiss(notice);
     notice = undefined;
   };
+  // The outcome stays until it is read; later progress never takes it back.
+  const finish = (
+    tone: 'success' | 'failure' | 'alert',
+    message: string,
+    noticeOptions?: ComposeNoticeOptions
+  ) => {
+    settle();
+    show(tone, message, noticeOptions);
+    notice = undefined;
+  };
   const sending = (message: string, offerUndo: boolean) => {
+    sendingMessage = message;
     offeringUndo = offerUndo && undo !== undefined;
     show('success', message, {
       actions: offeringUndo
@@ -80,25 +100,37 @@ export function announceQueuedSend(options: {
       persistent: inMotion,
     });
   };
+  // A send that stops making progress stops holding its notice on screen.
+  const watchForStall = () => {
+    clearTimeout(stall);
+    if (!inMotion) return;
+    stall = setTimeout(() => {
+      inMotion = false;
+      if (notice != null) sending(sendingMessage, offeringUndo);
+    }, STALLED_SEND_MS);
+  };
   // Delivery has begun: Undo goes, and the notice waits for the outcome.
   const closeUndo = () => {
     const wasOffering = offeringUndo;
     settle();
     if (wasOffering && notice != null) sending('Sending…', false);
+    watchForStall();
   };
 
   sending(options.queuedOffline ? 'Email queued to send' : 'Sending…', true);
   if (!options.sendAttemptId) return;
+  watchForStall();
   options.delivery.watchSend?.(options.sendAttemptId, (progress) =>
     match(progress)
       .with({ state: 'pending' }, () => {
         // After acceptance, pending means delivery or cancellation has begun.
         if (accepted) closeUndo();
+        else watchForStall();
       })
       .with({ state: 'accepted' }, ({ undoUntil }) => {
         accepted = true;
         if (undoRequested) return;
-        // A send queued offline has just gone out; one sent online already
+        // A send that waited has just been accepted; one sent online already
         // shows its notice, and one the user dismissed stays dismissed.
         const wentOut = !inMotion;
         inMotion = true;
@@ -108,16 +140,13 @@ export function announceQueuedSend(options: {
           return;
         }
         if (wentOut) sending('Sending…', true);
+        clearTimeout(stall);
         clearTimeout(undoDeadline);
         undoDeadline = setTimeout(closeUndo, remaining);
       })
-      .with({ state: 'sent' }, () => {
-        settle();
-        show('success', 'Email sent');
-      })
+      .with({ state: 'sent' }, () => finish('success', 'Email sent'))
       .with({ state: 'failed' }, () => {
-        settle();
-        show('failure', 'Email failed to send', {
+        finish('failure', 'Email failed to send', {
           subtext:
             'Open its conversation or Drafts and choose Cancel to recover the draft.',
           persistent: true,
@@ -128,12 +157,11 @@ export function announceQueuedSend(options: {
         withdraw();
         options.onUndelivered?.();
       })
-      .with({ state: 'unconfirmed' }, () => {
-        settle();
-        show('alert', 'Delivery unconfirmed', {
+      .with({ state: 'unconfirmed' }, () =>
+        finish('alert', 'Delivery unconfirmed', {
           subtext: 'Check your sent mail. We will not resend automatically.',
-        });
-      })
+        })
+      )
       .with({ state: 'untracked' }, withdraw)
       .exhaustive()
   );
