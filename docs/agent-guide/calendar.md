@@ -52,6 +52,18 @@ The busy-indicator example distinguishes a confirmed conflict from free and
 unknown availability. Live guest indicators remain absent until the existing
 authorized team-availability source is adapted; external guests have no source.
 
+On desktop, click the month title to open the month/year picker. Year arrows
+only browse; choosing a month navigates to its first day. Arrow keys move among
+months, including across years. Press G outside an input to open the picker and
+focus Go to date; enter a local date and press Enter to navigate. Escape closes
+the picker and restores focus. Touch retains its existing drawer until the
+phone-view redesign.
+
+Today uses a filled accent date marker. Month rows reserve a six-pixel gap below
+the date, fit 18px event rows to the available height, and expose overflowing
+events through `+N more`; that opens the whole day's events in a menu-surface
+popover.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
@@ -591,9 +603,10 @@ pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline m
 `Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
 When editing an existing event the kind is read-only (Google treats it as immutable), and an
 out-of-office event's decline settings can still be changed — they read as unset because the
-provider does not report the stored ones. Timed and all-day events use solid calendar-color
-blocks with dark text on desktop and mobile. Unanswered and tentative invitations have
-lighter fills; declined events are desaturated and struck through. Month-view timed events
+provider does not report the stored ones. Timed and all-day events use calendar-color
+translucent fills over the panel with theme-aware text. Unanswered invitations are
+outlined, tentative invitations have a softer fill, and declined events are muted
+and struck through. Drafts have a dashed edge. Month-view timed events
 keep their compact dot treatment. Out-of-office details show an `Out of office` line under
 the schedule. The details' calendar row names the calendar the event is on. A primary
 calendar reads as its inbox address, as in the calendar pickers, because Outlook names an

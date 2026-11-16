@@ -60,6 +60,19 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('@app/features/calendar/components/MonthDrawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
 }));
+vi.mock(
+  '@app/features/calendar/components/month-picker/MonthPickerPopover',
+  () => ({
+    MonthPickerPopover: (props: { date: Date }) => (
+      <span>
+        {new Intl.DateTimeFormat('en-US', {
+          month: 'long',
+          year: 'numeric',
+        }).format(props.date)}
+      </span>
+    ),
+  })
+);
 vi.mock('@app/features/calendar/components/PeriodSelector', () => ({
   PeriodSelector: () => <button>Choose calendar view</button>,
 }));

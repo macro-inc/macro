@@ -1,3 +1,5 @@
+@reference "../../index.css";
+
 .calendar-view {
 	container-name: calendar-view;
 	container-type: inline-size;
@@ -15,6 +17,13 @@
 	--fc-highlight-color: transparent;
 	--fc-today-bg-color: transparent;
 	--fc-now-indicator-color: var(--color-accent);
+}
+
+.calendar-view .fc .fc-popover {
+	@apply menu-surface;
+	position: absolute;
+	width: max-content;
+	max-width: min(24rem, calc(100vw - 2rem));
 }
 
 .calendar-view-content {
@@ -156,6 +165,7 @@
 	align-items: center;
 	justify-content: center;
 	font-weight: 600;
+	color: var(--button-accent-ink);
 }
 
 .calendar-view
@@ -175,26 +185,12 @@
 	width: 1.25rem;
 	height: 1.25rem;
 	border: 1px solid var(--color-accent);
+	background: var(--color-accent);
 	border-radius: 0.375rem;
 	content: "";
 	transform: translate(-50%, -50%);
 }
 
-.calendar-view
-	.fc
-	.fc-dayGridMonth-view
-	.calendar-day-selected
-	.fc-daygrid-day-number {
-	color: var(--color-surface);
-}
-
-.calendar-view
-	.fc
-	.fc-dayGridMonth-view
-	.calendar-day-selected
-	.fc-daygrid-day-number::before {
-	background: var(--color-accent);
-}
 
 .calendar-view
 	.fc
@@ -210,15 +206,17 @@
 	.fc-col-header-cell.fc-day-today
 	.calendar-day-header-date {
 	border: 1px solid var(--color-accent);
-	border-radius: 0.375rem;
+	border-radius: 9999px;
+	background: var(--color-accent);
+	color: var(--button-accent-ink);
 	font-weight: 600;
 }
 
 .calendar-view .fc .fc-timegrid .calendar-day-header-date-selected {
 	border: 1px solid var(--color-accent);
-	border-radius: 0.375rem;
+	border-radius: 9999px;
 	background: var(--color-accent);
-	color: var(--color-surface);
+	color: var(--button-accent-ink);
 	font-weight: 600;
 }
 
@@ -256,13 +254,12 @@
 	margin-left: 0.375rem;
 }
 
-/* Rich, opaque blocks keep busy schedules readable. Bound lightness for
-   dark-text contrast and boost chroma without turning neutral calendars colorful. */
+/* Calendar colors stay theme-aware: translucent ink over the panel surface. */
 .calendar-view .fc .fc-event {
-	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
-	--calendar-event-ink: oklch(0.2 0 0);
+	--calendar-event-fill: color-mix(in srgb, var(--event-calendar-color, var(--color-calendar)) 30%, var(--color-panel));
+	--calendar-event-ink: var(--color-ink);
 	--fc-event-bg-color: var(--calendar-event-fill);
-	--fc-event-border-color: var(--color-panel);
+	--fc-event-border-color: transparent;
 	--fc-event-text-color: var(--calendar-event-ink);
 	--calendar-event-ring: 0 0 0 0 transparent;
 	border: 1px solid var(--fc-event-border-color);
@@ -314,12 +311,17 @@
 .calendar-view .fc .calendar-multi-day-selection-preview-event {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
 	border-radius: 0.375rem;
-	background: var(--calendar-selection-color, var(--color-accent));
+	background: color-mix(in srgb, var(--calendar-selection-color, var(--color-accent)) 30%, var(--color-panel));
 	box-shadow: none;
 }
 
+.calendar-view .fc .fc-event-mirror:has(.calendar-event-selection-preview),
 .calendar-view .fc .calendar-multi-day-selection-preview-event {
-	color: var(--calendar-selection-color, var(--color-accent));
+	border-style: dashed;
+}
+
+.calendar-view .fc .calendar-multi-day-selection-preview-event {
+	color: var(--color-ink);
 	pointer-events: none;
 }
 
@@ -364,9 +366,9 @@
 	color: inherit;
 }
 
-/* Drag and resize mirrors use a filled accent background. */
+/* Mirrors keep readable text over the same translucent surface. */
 .calendar-view .fc .fc-event-mirror .calendar-event-content {
-	color: var(--color-surface);
+	color: var(--color-ink);
 }
 
 .calendar-view .fc .fc-event-mirror .calendar-event-selection-preview,
@@ -374,7 +376,7 @@
 	.fc
 	.calendar-multi-day-selection-preview-event
 	.calendar-event-selection-preview {
-	filter: invert(1) grayscale(1) contrast(100);
+	color: var(--color-ink);
 }
 
 .calendar-view .fc .fc-timegrid-event .fc-event-main {
@@ -500,15 +502,20 @@
 	background: transparent;
 }
 
-/* Unanswered and tentative invitations stay filled, with a softer tint. */
-.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])) {
-	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
+/* Unanswered invitations are outlined; tentative events retain a softer tint. */
+.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="needs_action"]) {
+	--fc-event-bg-color: transparent;
+	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
+}
+
+.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="tentative"]) {
+	--fc-event-bg-color: color-mix(in srgb, var(--event-calendar-color, var(--color-calendar)) 18%, var(--color-panel));
 }
 
 .calendar-view
 	.fc
 	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]) {
-	--fc-event-bg-color: oklch(from var(--calendar-event-fill) l calc(c * 0.25) h);
+	--fc-event-bg-color: color-mix(in srgb, var(--calendar-event-fill) 50%, var(--color-panel));
 }
 
 .calendar-view
@@ -558,8 +565,8 @@
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
 	z-index: 3;
 	--fc-event-border-color: var(--color-accent);
-	--fc-event-bg-color: var(--color-accent);
-	--fc-event-text-color: var(--color-surface);
+	--fc-event-bg-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-panel));
+	--fc-event-text-color: var(--color-ink);
 	opacity: 1;
 }
 
@@ -567,8 +574,8 @@
 	.fc
 	.fc-event:has(.calendar-event-content-selected)
 	.calendar-event-content-selected {
-	background-color: var(--color-accent);
-	color: var(--color-surface);
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
 }
 
 .calendar-view
@@ -585,6 +592,24 @@
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top {
 	justify-content: center;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
+	padding-bottom: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-events {
+	margin-top: 6px;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-event {
+	height: 18px;
+	min-height: 18px;
+	padding-block: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .calendar-event-content-layout {
+	padding-block: 1px;
 }
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,

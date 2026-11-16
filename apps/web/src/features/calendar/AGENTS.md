@@ -28,6 +28,11 @@ host lives in `../block-calendar/`.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
   `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and `?ui=time-input`; sheet parts use
   `?ui=mobile-sheet-parts`.
+- The desktop month picker composes `components/month-picker/` parts and keeps
+  its temporary year/date state in `primitives/create-month-picker.ts`; navigation
+  stays in the host's existing pager.
+- Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
+  focus scope attaches to real content and restores focus when the picker closes.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,
   and REST/GraphQL handoff; never add a parallel event cache.
 

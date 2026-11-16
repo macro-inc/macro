@@ -4,10 +4,12 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
+import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
+import { beginInteraction } from '@app/observability/flow';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -37,6 +39,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateBookingLinkItem,
@@ -45,11 +48,6 @@ import {
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
-
-const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
-  month: 'long',
-  year: 'numeric',
-}).format;
 
 function createLocalToday() {
   const [today, setToday] = createSignal(new Date());
@@ -143,18 +141,32 @@ export function Header(props: {
     }
   };
   onCleanup(clearSearchExpansionTimer);
+  const [monthPicker, setMonthPicker] = createStore({
+    open: false,
+    focusDateEntry: false,
+  });
+  const goToDate = () => setMonthPicker({ open: true, focusDateEntry: true });
+  const selectDate = (date: Date) => {
+    const interaction = beginInteraction('calendar.date.jump');
+    try {
+      setMonthPicker({ open: false, focusDateEntry: false });
+      calendarPager.navigateToDate(date);
+    } finally {
+      interaction.end();
+    }
+  };
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
     changeView: calendarPager.changeView,
     previousPeriod: calendarPager.previousPeriod,
     nextPeriod: calendarPager.nextPeriod,
     navigateToToday: calendarPager.navigateToToday,
+    goToDate: isTouchDevice() ? undefined : goToDate,
   });
 
   const currentDate = createMemo(
     () => calendarPager.navigationDate() ?? initialDate
   );
-  const dateTitle = createMemo(() => formatMonthTitle(currentDate()));
   const periodLabel = createMemo(() =>
     calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
   );
@@ -337,7 +349,15 @@ export function Header(props: {
           <div class="relative flex min-w-0 flex-1 items-center gap-2">
             {props.leading}
             <h1 class="min-w-0 truncate px-1 text-sm font-semibold text-ink">
-              {dateTitle()}
+              <MonthPickerPopover
+                date={currentDate()}
+                open={monthPicker.open}
+                focusDateEntry={monthPicker.focusDateEntry}
+                onOpenChange={(open) =>
+                  setMonthPicker({ open, focusDateEntry: false })
+                }
+                onSelect={selectDate}
+              />
             </h1>
           </div>
           <div

@@ -246,6 +246,8 @@ export function CalendarGrid(props: CalendarGridProps) {
       height="100%"
       expandRows
       fixedWeekCount={false}
+      views={{ dayGridMonth: { dayMaxEvents: true } }}
+      moreLinkClick="popover"
       handleWindowResize={false}
       allDayText="All day"
       nowIndicator
