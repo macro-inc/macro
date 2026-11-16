@@ -34,15 +34,24 @@ Memory reads enroll users in `memory_refresh_job`; migration also enrolls existi
 memory users. The cognition service runs an internal scheduled Rust closure on
 startup and every five minutes outside the local environment. The closure claims
 one user at a time with `FOR UPDATE SKIP LOCKED` and a 25-minute lease. A batch is
-bounded to 25 claims; a user's model work is bounded to 20 minutes. Failures keep
-their lease until it expires and do not prevent the remaining users from running.
+bounded to 25 claims; a user's model work is bounded to 20 minutes. Each claim of
+the same day counts as an attempt, including one whose worker crashed. A failed
+attempt is claimed again after 1, then 2 hours; the third failure gives the day
+up: the pieces that passed review commit, the profile stays as it was, and the
+user moves on to the next day. Failures do not prevent the remaining users from
+running.
 While the PostHog flag `disable-memory-refresh` is on for the service context
 `memory-refresh`, no new user is claimed: the flag is read before every claim, so a
 batch stops after the user in progress. A failed flag read keeps generation running.
 Shutdown cancels and drains the tracked task. The CLI awaits one user's generation
 and can be used locally with the existing provider and service configuration.
 
-Each claim targets the first unprocessed completed UTC day. An unenriched user's
+Each claim targets the first unprocessed completed UTC day. Before any model
+call, the activity log (`activity_events`, views and appearance changes excluded)
+is checked for that day; a day without activity commits with no report and no
+new profile. Each piece (daily, weekly, monthly, summary, profile) is stored in
+`memory_refresh_piece` as soon as it passes review, and later attempts at the
+same day reuse it instead of regenerating it; the day's commit deletes them. An unenriched user's
 first date is the UTC day before enrollment, preserved across failed first runs.
 Later days cannot leapfrog a missing day. The initial rollout does not synthesize
 historical activity predating enrollment.
