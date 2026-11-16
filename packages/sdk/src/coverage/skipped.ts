@@ -225,7 +225,6 @@ export const cognitionExcluded = [
   'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
-  'upsertAiProjection',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const cognitionBacklog =
