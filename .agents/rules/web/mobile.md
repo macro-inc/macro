@@ -121,7 +121,9 @@ read their code, and follow that pattern rather than inventing a new one.
 - iOS raises the keyboard only for a focus inside the tap. A tap that opens a
   composer whose field mounts later calls `triggerFocusInput` in the tap (see
   `raiseKeyboardForNewTaskTitle`), or a create menu item's `raiseKeyboard`;
-  popovers and the create menu leave focus with its stand-in.
+  popovers and the create menu leave focus with its stand-in. Rename openers
+  call `raiseKeyboardForRenameField`, so a new rename dialog marks its name
+  field with `RENAME_FIELD_ATTRIBUTE`.
 - UI over an editor must not take focus: cancel `pointerdown` and
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
