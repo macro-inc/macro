@@ -43,7 +43,7 @@ fn row(owner: &str, notification_id: Uuid) -> UserNotificationRow<serde_json::Va
 
 fn public<'e>(
     event: &'e NotificationTopicEvent<'_, serde_json::Value>,
-) -> macro_event_broker::access::PublicEvent<'e, super::NotificationPublicEvent> {
+) -> macro_event_broker::access::PublicEvent<'e, crate::domain::events::NotificationPublicEvent> {
     match event.access().expect("valid access") {
         Access::Public(public) => public,
         Access::Internal { reason } => panic!("expected public, got {reason}"),

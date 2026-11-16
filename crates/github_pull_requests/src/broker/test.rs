@@ -1,3 +1,5 @@
+use crate::domain::events::GithubPullRequestPublicEvent;
+use macro_event_broker::access::EventAccess as _;
 use macro_event_broker::access::{Access, Audience, EntityType};
 use serde_json::json;
 use uuid::Uuid;

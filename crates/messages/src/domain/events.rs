@@ -8,6 +8,10 @@
 use super::models::{Message, MessageParent, SimpleMention};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+#[cfg(feature = "broker")]
+use macro_event_broker::{TopicEvent, access::EventAccess};
+#[cfg(feature = "broker")]
+use macro_event_topics::MacroMessagesTopic;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -202,4 +206,74 @@ pub struct MessageAttachmentRemovedMetadata {
     pub actor: ChannelSender<'static>,
     /// Attachments removed by this mutation.
     pub attachments: Vec<MessageEventAttachment>,
+}
+
+#[cfg(feature = "broker")]
+/// Lifecycle events for the common message service, one per committed fact.
+/// Reactions and typing never reach the topic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum MessageTopicEvent {
+    /// A user or bot posted a root or reply.
+    #[serde(rename = "message.posted")]
+    Posted(MessagePostedMetadata),
+    /// A message's content was patched.
+    #[serde(rename = "message.patched")]
+    Patched(MessagePatchedMetadata),
+    /// A message was tombstoned.
+    #[serde(rename = "message.deleted")]
+    Deleted(MessageDeletedMetadata),
+    /// An entity (user, bot, document, …) was mentioned in a posted message.
+    #[serde(rename = "message.mentioned")]
+    Mentioned(MessageMentionedMetadata),
+    /// Attachments were added to a message.
+    #[serde(rename = "message.attachment_created")]
+    AttachmentCreated(MessageAttachmentCreatedMetadata),
+    /// Attachments were removed from a message.
+    #[serde(rename = "message.attachment_removed")]
+    AttachmentRemoved(MessageAttachmentRemovedMetadata),
+}
+
+#[cfg(feature = "broker")]
+impl TopicEvent for MessageTopicEvent {
+    type Topic = MacroMessagesTopic;
+    const SCHEMA_VERSION: u8 = 1;
+}
+
+#[cfg(feature = "broker")]
+impl EventAccess for MessageTopicEvent {
+    type PublicPayload = Self;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        use macro_event_broker::access::{Access, Audience, EntityRef, PublicEvent, Stage};
+        use std::borrow::Cow;
+
+        // The entity is the message's parent: access and `ids` filters are by
+        // the channel or document that owns the conversation.
+        let (name, parent) = match self {
+            Self::Posted(metadata) => ("message.posted", &metadata.parent),
+            Self::Patched(metadata) => ("message.patched", &metadata.parent),
+            Self::Deleted(metadata) => ("message.deleted", &metadata.parent),
+            Self::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
+            Self::AttachmentCreated(metadata) => ("message.attachment_created", &metadata.parent),
+            Self::AttachmentRemoved(metadata) => ("message.attachment_removed", &metadata.parent),
+        };
+        let entity_id = parent.entity_id();
+        Ok(Access::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(parent.access_entity_type(), entity_id.clone()),
+            audience: Audience::Entity {
+                entity_type: parent.access_entity_type(),
+                entity_id,
+            },
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }

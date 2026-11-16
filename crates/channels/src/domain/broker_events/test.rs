@@ -1,4 +1,5 @@
 use macro_event_broker::Event;
+use macro_event_broker::access::EventAccess as _;
 use serde_json::json;
 
 use super::*;

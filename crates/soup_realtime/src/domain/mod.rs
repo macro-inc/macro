@@ -1,5 +1,8 @@
 //! Core realtime Soup contracts and orchestration.
 
+/// Who receives realtime Soup events outside Macro.
+pub mod events;
+
 /// Versioned output message models.
 pub mod models;
 

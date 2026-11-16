@@ -16,20 +16,22 @@ use calendar_events::domain::events::{CalendarPublicEvent, CalendarTopicEvent};
 use call::domain::events::{CallRecordPublicEvent, CallTopicEvent};
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
-use channels::domain::mention_events::{MentionPublicEvent, MentionTopicEvent};
+use channels::domain::events::MentionPublicEvent;
+use channels::domain::mention_events::MentionTopicEvent;
 use chat::domain::events::{ChatPublicEvent, ChatTopicEvent};
 use databases::domain::events::{DatabasePublicEvent, DatabaseTopicEvent};
 use documents::domain::events::{DocumentPublicEvent, DocumentTopicEvent};
 use email::domain::events::{EmailPublicEvent, EmailTopicEvent};
 use event_access::Stage;
 use forms::domain::events::{FormPublicEvent, FormTopicEvent};
-use github::broker::{GithubWebhookPublicEvent, GithubWebhookTopicEvent};
-use github_pull_requests::broker::{GithubPullRequestPublicEvent, GithubPullRequestTopicEvent};
+use github::broker::GithubWebhookTopicEvent;
+use github::domain::events::GithubWebhookPublicEvent;
+use github_pull_requests::broker::GithubPullRequestTopicEvent;
+use github_pull_requests::domain::events::GithubPullRequestPublicEvent;
 use initiative::domain::events::{InitiativePublicEvent, InitiativeTopicEvent};
 use messages::outbound::broker::MessageTopicEvent;
-use notification::domain::models::websocket_notification_event::{
-    NotificationPublicEvent, NotificationTopicEvent,
-};
+use notification::domain::events::NotificationPublicEvent;
+use notification::domain::models::websocket_notification_event::NotificationTopicEvent;
 use projects::domain::events::{ProjectPublicEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyPublicEvent, PropertyTopicEvent};
 use serde::Serialize;

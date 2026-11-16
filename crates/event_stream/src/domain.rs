@@ -5,6 +5,8 @@
 pub mod access;
 /// The registry of public event names.
 pub mod catalog;
+/// Who receives the events this crate publishes (webhook lifecycle).
+pub mod events;
 /// Fan-out of log entries to open streams.
 pub mod fan_out;
 /// Subscriber filters shared with persisted webhooks.

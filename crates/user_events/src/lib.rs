@@ -9,7 +9,9 @@
 #[cfg(test)]
 mod test;
 
-use macro_event_broker::access::EventAccess;
+/// Who receives these events outside Macro.
+pub mod events;
+
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroUsersTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -42,41 +44,6 @@ impl TopicEvent for UserTopicEvent {
     type Topic = MacroUsersTopic;
 
     const SCHEMA_VERSION: u8 = 1;
-}
-
-impl EventAccess for UserTopicEvent {
-    type PublicPayload = Self;
-
-    fn access(
-        &self,
-    ) -> Result<
-        macro_event_broker::access::Access<'_, Self::PublicPayload>,
-        macro_event_broker::access::AccessError,
-    > {
-        use macro_event_broker::access::{
-            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
-        };
-        use std::borrow::Cow;
-
-        let (name, user_id) = match self {
-            Self::PictureChanged(metadata) => ("user.picture_changed", &metadata.user_id),
-        };
-        Ok(Access::Public(PublicEvent {
-            name,
-            entity: EntityRef::new(EntityType::User, user_id.to_string()),
-            // The user, their contacts, and the members of their teams.
-            audience: Audience::Any(vec![
-                Audience::ContactsOf {
-                    user_id: user_id.clone(),
-                },
-                Audience::TeamsOf {
-                    user_id: user_id.clone(),
-                },
-            ]),
-            stage: Stage::Stable,
-            payload: Cow::Borrowed(self),
-        }))
-    }
 }
 
 /// Publishable event for [`MacroUsersTopic`], keyed by user id so one user's

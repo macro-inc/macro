@@ -1,84 +1,15 @@
 //! Broker envelopes and publication for committed message facts.
 
+pub use crate::domain::events::MessageTopicEvent;
 use crate::domain::events::{
     MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata, MessageDeletedMetadata,
     MessageMentionedMetadata, MessagePatchedMetadata, MessagePostedMetadata,
 };
-use macro_event_broker::access::EventAccess;
-use macro_event_broker::{Event, MacroEvent, TopicEvent};
-use macro_event_topics::MacroMessagesTopic;
-use serde::{Deserialize, Serialize};
+use macro_event_broker::{Event, MacroEvent};
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
-
-/// Lifecycle events for the common message service, one per committed fact.
-/// Reactions and typing never reach the topic.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(tag = "event_type", content = "metadata")]
-pub enum MessageTopicEvent {
-    /// A user or bot posted a root or reply.
-    #[serde(rename = "message.posted")]
-    Posted(MessagePostedMetadata),
-    /// A message's content was patched.
-    #[serde(rename = "message.patched")]
-    Patched(MessagePatchedMetadata),
-    /// A message was tombstoned.
-    #[serde(rename = "message.deleted")]
-    Deleted(MessageDeletedMetadata),
-    /// An entity (user, bot, document, …) was mentioned in a posted message.
-    #[serde(rename = "message.mentioned")]
-    Mentioned(MessageMentionedMetadata),
-    /// Attachments were added to a message.
-    #[serde(rename = "message.attachment_created")]
-    AttachmentCreated(MessageAttachmentCreatedMetadata),
-    /// Attachments were removed from a message.
-    #[serde(rename = "message.attachment_removed")]
-    AttachmentRemoved(MessageAttachmentRemovedMetadata),
-}
-
-impl TopicEvent for MessageTopicEvent {
-    type Topic = MacroMessagesTopic;
-    const SCHEMA_VERSION: u8 = 1;
-}
-
-impl EventAccess for MessageTopicEvent {
-    type PublicPayload = Self;
-
-    fn access(
-        &self,
-    ) -> Result<
-        macro_event_broker::access::Access<'_, Self::PublicPayload>,
-        macro_event_broker::access::AccessError,
-    > {
-        use macro_event_broker::access::{Access, Audience, EntityRef, PublicEvent, Stage};
-        use std::borrow::Cow;
-
-        // The entity is the message's parent: access and `ids` filters are by
-        // the channel or document that owns the conversation.
-        let (name, parent) = match self {
-            Self::Posted(metadata) => ("message.posted", &metadata.parent),
-            Self::Patched(metadata) => ("message.patched", &metadata.parent),
-            Self::Deleted(metadata) => ("message.deleted", &metadata.parent),
-            Self::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
-            Self::AttachmentCreated(metadata) => ("message.attachment_created", &metadata.parent),
-            Self::AttachmentRemoved(metadata) => ("message.attachment_removed", &metadata.parent),
-        };
-        let entity_id = parent.entity_id();
-        Ok(Access::Public(PublicEvent {
-            name,
-            entity: EntityRef::new(parent.access_entity_type(), entity_id.clone()),
-            audience: Audience::Entity {
-                entity_type: parent.access_entity_type(),
-                entity_id,
-            },
-            stage: Stage::Stable,
-            payload: Cow::Borrowed(self),
-        }))
-    }
-}
 
 /// Message facts keyed by thread root to preserve conversation ordering.
 #[derive(Debug, Clone)]

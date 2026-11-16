@@ -13,21 +13,17 @@
 mod test;
 
 use crate::domain::{
+    events::{MemberJoinedEnvelope, TeamsTopicForDms},
     ports::ChannelService,
     teammate_dms::{TeammateDirectMessages, TeammateDmError, ensure_joined_member_dms},
 };
 use anyhow::Context as _;
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::access::EventAccess;
 use macro_event_broker::{
     Event, KafkaConsumerAdapter, MacroEvent, MacroEventCollection as _, MacroEventConsumerService,
-    TopicEvent,
 };
-use macro_event_topics::MacroTeamsTopic;
-use macro_user_id::user_id::MacroUserIdStr;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
-use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::Duration;
 use tokio_retry::{RetryIf, strategy::ExponentialBackoff};
@@ -55,66 +51,6 @@ fn retry_strategy() -> impl Iterator<Item = Duration> {
     ExponentialBackoff::from_millis(2)
         .factor(500)
         .take((MAX_ATTEMPTS - 1) as usize)
-}
-
-/// Channels-owned view of `team.member_joined` for ensuring teammate DMs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct TeammateDmsJoinedMetadata {
-    /// User who joined the team.
-    pub member_id: MacroUserIdStr<'static>,
-    /// Other current teammates the joining member should have a DM with.
-    #[serde(default)]
-    pub teammate_ids: Vec<MacroUserIdStr<'static>>,
-}
-
-/// Tagged envelope around a `team.member_joined` payload.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "event_type", content = "metadata")]
-pub(crate) enum MemberJoinedEnvelope {
-    /// Join payload used to ensure teammate DMs.
-    #[serde(rename = "team.member_joined")]
-    Payload(TeammateDmsJoinedMetadata),
-}
-
-/// Placeholder for team events this consumer ignores.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct IgnoredTeamEvent {
-    event_type: String,
-}
-
-/// Wire view of `macro.teams` records this consumer acts on.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub(crate) enum TeamsTopicForDms {
-    /// A member joined; create teammate DMs from the payload roster.
-    MemberJoined(MemberJoinedEnvelope),
-    /// Any other team event; ignored and committed.
-    Other(IgnoredTeamEvent),
-}
-
-impl TopicEvent for TeamsTopicForDms {
-    type Topic = MacroTeamsTopic;
-
-    const SCHEMA_VERSION: u8 = 1;
-}
-
-impl EventAccess for TeamsTopicForDms {
-    type PublicPayload = macro_event_broker::access::Unexposed;
-
-    fn access(
-        &self,
-    ) -> Result<
-        macro_event_broker::access::Access<'_, Self::PublicPayload>,
-        macro_event_broker::access::AccessError,
-    > {
-        use macro_event_broker::access::Access;
-
-        Ok(match self {
-            Self::MemberJoined(_) | Self::Other(_) => Access::Internal {
-                reason: "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic access",
-            },
-        })
-    }
 }
 
 /// `macro.teams` record decoded for teammate-DM ensure.

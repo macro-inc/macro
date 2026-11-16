@@ -1,6 +1,8 @@
 use super::*;
+use crate::domain::events::{IgnoredTeamEvent, TeammateDmsJoinedMetadata};
 use crate::domain::{dm::EnsureDmsSummary, ports::ChannelMutationErr};
 use macro_event_broker::{Event, MacroEvent as _, MacroEventCollection as _, MessageParts};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]

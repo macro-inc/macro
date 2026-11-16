@@ -9,7 +9,6 @@ mod test;
 
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
-use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChannelsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -204,71 +203,6 @@ impl TopicEvent for ChannelTopicEvent {
     type Topic = MacroChannelsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
-}
-
-impl EventAccess for ChannelTopicEvent {
-    type PublicPayload = Self;
-
-    fn access(
-        &self,
-    ) -> Result<
-        macro_event_broker::access::Access<'_, Self::PublicPayload>,
-        macro_event_broker::access::AccessError,
-    > {
-        use macro_event_broker::access::{
-            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
-        };
-        use std::borrow::Cow;
-
-        let (name, channel_id) = match self {
-            Self::Created(metadata) => ("channel.created", metadata.channel_id),
-            Self::Updated(metadata) => ("channel.updated", metadata.channel_id),
-            Self::PictureChanged(metadata) => ("channel.picture_changed", metadata.channel_id),
-            Self::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
-            Self::ParticipantAdded(metadata) => ("channel.participant_added", metadata.channel_id),
-            Self::ParticipantRemoved(metadata) => {
-                ("channel.participant_removed", metadata.channel_id)
-            }
-            Self::AccessRequested(metadata) => ("channel.access_requested", metadata.channel_id),
-        };
-        let channel_id = channel_id.to_string();
-        let channel = Audience::Entity {
-            entity_type: EntityType::Channel,
-            entity_id: channel_id.clone(),
-        };
-        let (audience, payload) = match self {
-            // Participant rows cascade with the channel: the captured
-            // participants are the audience, and the snapshot is routing
-            // only, stripped from the delivered payload.
-            Self::Deleted(metadata) if !metadata.participant_user_ids.is_empty() => {
-                let mut payload = metadata.clone();
-                let participants = std::mem::take(&mut payload.participant_user_ids);
-                (
-                    Audience::Any(vec![
-                        channel,
-                        Audience::Snapshot {
-                            user_ids: participants,
-                        },
-                    ]),
-                    Cow::Owned(Self::Deleted(payload)),
-                )
-            }
-            Self::Deleted(_)
-            | Self::Created(_)
-            | Self::Updated(_)
-            | Self::PictureChanged(_)
-            | Self::ParticipantAdded(_)
-            | Self::ParticipantRemoved(_)
-            | Self::AccessRequested(_) => (channel, Cow::Borrowed(self)),
-        };
-        Ok(Access::Public(PublicEvent {
-            name,
-            entity: EntityRef::new(EntityType::Channel, channel_id),
-            audience,
-            stage: Stage::Stable,
-            payload,
-        }))
-    }
 }
 
 /// Publishable event for [`MacroChannelsTopic`], keyed by channel id.
