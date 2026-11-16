@@ -62,9 +62,9 @@ export function EventCardView(props: {
       data-agent-card="event"
     >
       <CardSingle
-        tile={<DateTile date={props.day} past={props.past} />}
+        media={<DateTile date={props.day} past={props.past} />}
         title={props.title}
-        meta={props.meta}
+        description={props.meta}
         trailing={
           <Show when={props.onOpen}>
             <OpenArrow />

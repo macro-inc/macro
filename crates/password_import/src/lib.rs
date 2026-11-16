@@ -4,8 +4,11 @@
 //! typed [`ImportError`], never a panic. Secret values live only in [`Secret`].
 #![deny(missing_docs)]
 
+use std::collections::HashMap;
+
 mod bitwarden_csv;
 mod bitwarden_json;
+mod bitwarden_zip;
 mod bounded;
 mod csv_table;
 mod detect;
@@ -39,8 +42,9 @@ pub fn parse(
     let parts = match format {
         SourceFormat::OnePasswordPux => one_password_pux::parse(bytes, limits)?,
         SourceFormat::OnePasswordCsv => one_password_csv::parse(bytes, limits)?,
-        SourceFormat::BitwardenJson => bitwarden_json::parse(bytes, limits)?,
+        SourceFormat::BitwardenJson => bitwarden_json::parse(bytes, limits, &HashMap::new())?,
         SourceFormat::BitwardenCsv => bitwarden_csv::parse(bytes, limits)?,
+        SourceFormat::BitwardenZip => bitwarden_zip::parse(bytes, limits)?,
     };
 
     Ok(parts.into_export(format))

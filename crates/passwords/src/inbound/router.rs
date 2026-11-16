@@ -116,7 +116,7 @@ async fn purge_team_internal<A: MacroAuthorizationService>(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn csrf(request: axum::extract::Request, next: Next) -> Response {
+pub(super) async fn csrf(request: axum::extract::Request, next: Next) -> Response {
     if !matches!(
         *request.method(),
         axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
@@ -623,4 +623,4 @@ pub async fn move_folder<A: MacroAuthorizationService>(
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
