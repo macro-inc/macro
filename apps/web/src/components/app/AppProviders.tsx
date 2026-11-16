@@ -22,7 +22,6 @@ import { useGlobalAttachableHistory } from '@core/component/AI/signal/globalAtta
 import { toast } from '@core/component/Toast/Toast';
 import { TeamContextProvider } from '@core/context/team';
 import { useIsAuthenticated, useUserId, useUserInfo } from '@core/context/user';
-import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -142,9 +141,7 @@ export function AppProviders(props: ParentProps) {
           <SearchProvider>
             <IncomingMeetingInvitationsProvider>
               {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
-              <EditorEngineBoundary>
-                <ImperativeDialogHost />
-              </EditorEngineBoundary>
+              <ImperativeDialogHost />
               <AgentNavigationProvider>
                 <RoutineDraftsHost>{props.children}</RoutineDraftsHost>
               </AgentNavigationProvider>

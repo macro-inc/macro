@@ -1,5 +1,7 @@
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import { createNativeFocusTarget } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-focus';
+import { EditorEngineBoundary } from '@core/document-session/editor-engine';
+import { MessageLoadError } from '@core/messages/MessageLoadError';
 import type { SyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context-loader';
 import { createSignal } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -24,22 +26,33 @@ export default function SessionMarkdownEditor(props: {
       canEdit={permissions.canEdit()}
       error={error()}
       body={
-        <RustMarkdownEditor
-          context={props.context}
-          loadCachedSnapshot={props.loadCachedSnapshot}
-          autoFocus={props.autoFocus}
-          onReady={() => {
-            setReady(true);
-            props.onReady?.();
-          }}
-          onEmptyChange={setEmpty}
-          onRuntime={(runtime) => state.editor.setMd('nativeRuntime', runtime)}
-          onError={() =>
-            setError(
-              'The document editor could not open. Reopen the document to retry.'
-            )
-          }
-        />
+        // Paste preparation must finish before the editor accepts input.
+        <EditorEngineBoundary
+          failure={(retry) => (
+            <MessageLoadError onRetry={retry}>
+              Could not open this content.
+            </MessageLoadError>
+          )}
+        >
+          <RustMarkdownEditor
+            context={props.context}
+            loadCachedSnapshot={props.loadCachedSnapshot}
+            autoFocus={props.autoFocus}
+            onReady={() => {
+              setReady(true);
+              props.onReady?.();
+            }}
+            onEmptyChange={setEmpty}
+            onRuntime={(runtime) =>
+              state.editor.setMd('nativeRuntime', runtime)
+            }
+            onError={() =>
+              setError(
+                'The document editor could not open. Reopen the document to retry.'
+              )
+            }
+          />
+        </EditorEngineBoundary>
       }
       focusTarget={
         <FocusClickTarget
