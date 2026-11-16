@@ -11,7 +11,8 @@ use thiserror::Error;
 use tracing::Instrument;
 
 use crate::service::subscription_checkout::{
-    CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
+    CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, Subscribed,
+    SubscriptionHistory,
 };
 
 const TRIAL_SESSION_MARKER: &str = "onboarding_trial";
@@ -378,6 +379,10 @@ async fn subscription_history(
             .data
             .iter()
             .any(|sub| !subscription_terminal(sub.status));
+        history.has_trialing_subscription |= page
+            .data
+            .iter()
+            .any(|sub| sub.status == stripe::SubscriptionStatus::Trialing);
         if !page.has_more {
             break;
         }
@@ -393,20 +398,18 @@ async fn subscription_history(
 }
 
 impl<I: GtmInviteService> StripeCheckoutGateway<I> {
-    /// Whether the user's stored Stripe customer has a live subscription.
+    /// The live subscription on the user's stored Stripe customer, if any.
     /// Reads only: it never creates a customer.
     #[tracing::instrument(name = "support_follow_up.subscribed", skip_all, err, ret)]
-    pub async fn has_subscription(
+    pub async fn subscribed(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> Result<bool, StripeCheckoutError> {
+    ) -> Result<Option<Subscribed>, StripeCheckoutError> {
         Ok(match self.customer(user).await? {
-            Some(customer) => {
-                subscription_history(&self.stripe, &customer)
-                    .await?
-                    .has_existing_subscription
-            }
-            None => false,
+            Some(customer) => subscription_history(&self.stripe, &customer)
+                .await?
+                .subscribed(),
+            None => None,
         })
     }
 }

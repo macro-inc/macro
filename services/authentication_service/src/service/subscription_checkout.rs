@@ -19,11 +19,32 @@ pub struct SubscriptionHistory {
     pub has_existing_subscription: bool,
     /// Any previous subscription makes the customer ineligible for an introductory trial.
     pub has_previous_subscription: bool,
+    /// A subscription is in its trial and has not been charged yet.
+    pub has_trialing_subscription: bool,
+}
+
+/// How a customer with a live subscription holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Subscribed {
+    /// In the introductory trial, not charged yet.
+    Trial,
+    /// Charged for the plan.
+    Paid,
 }
 
 impl SubscriptionHistory {
     pub(crate) fn trial_eligible(self) -> bool {
         !self.has_existing_subscription && !self.has_previous_subscription
+    }
+
+    /// The live subscription, if there is one.
+    pub(crate) fn subscribed(self) -> Option<Subscribed> {
+        self.has_existing_subscription
+            .then_some(if self.has_trialing_subscription {
+                Subscribed::Trial
+            } else {
+                Subscribed::Paid
+            })
     }
 }
 

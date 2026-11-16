@@ -30,7 +30,7 @@ fn at(seconds: i64) -> DateTime<Utc> {
 fn finished() -> Signals {
     Signals {
         finished_setup: true,
-        paid: false,
+        subscribed: None,
         opened_checkout: false,
         on_phone: false,
         gmail_attempted: false,
@@ -125,13 +125,22 @@ fn sends_the_first_message_that_fits() {
             },
             Some(Path::GmailTrouble),
         ),
+        // A subscription comes first, worded for a trial or a charge.
         (
             Signals {
-                paid: true,
+                subscribed: Some(Subscribed::Paid),
                 gmail_attempted: true,
                 ..in_setup.clone()
             },
             Some(Path::Paid),
+        ),
+        (
+            Signals {
+                subscribed: Some(Subscribed::Trial),
+                gmail_attempted: true,
+                ..in_setup.clone()
+            },
+            Some(Path::Trial),
         ),
         // In the middle of connecting Gmail or checking out, it waits.
         (

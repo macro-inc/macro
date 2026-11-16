@@ -190,8 +190,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `support_follow_ups` row. Nothing is queued without `POSTHOG_API_KEY`.
 - Each replica's worker looks at a row 30 seconds after setup finishes
   (`user_onboarding.completed_at`), or at five minutes for someone still in
-  setup, who only gets a message when the reason is known (paid, Gmail never
-  connected, an open checkout, the phone app); otherwise the row is looked at
+  setup, who only gets a message when the reason is known (a trial or a paid
+  plan, Gmail never connected, an open checkout, the phone app); otherwise the row is looked at
   again when its one-minute claim lapses and dropped after an hour. A channel
   where anyone has posted is skipped; the channel is read last, right before
   the post. `choose` picks the first message that fits; the sender must stay a
@@ -200,7 +200,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `checkout_opened_at` to the latest attempt. For five minutes after either,
   the user may still be on Google's or Stripe's page, so the row waits; Stripe
   is read once after that, only for someone who opened a checkout, never
-  creating a customer. The mail provider comes from the domain's MX records
+  creating a customer; a subscription still in its trial gets the trial
+  message, a charged one the upgrade message. The mail provider comes from the domain's MX records
   (`outbound/mail_exchanges.rs`), the phone app from push device
   registrations, and GitHub from Macro's own link. The Outlook message goes
   only to users Settings offers Outlook to (`new_connections_enabled`), and

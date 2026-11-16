@@ -44,6 +44,7 @@ use crate::{
         subscription_checkout::StripeCheckoutGateway,
         support_follow_ups::{PendingFollowUp, PgSupportFollowUps},
     },
+    service::subscription_checkout::Subscribed,
 };
 
 #[cfg(test)]
@@ -412,24 +413,24 @@ where
         let domain = user.0.email_part().domain_part().to_ascii_lowercase();
         let checkout_opened = pending.checkout_opened_at.is_some();
         let checkout_under_way = under_way(pending.checkout_opened_at, now);
-        let (inbox, paid, devices) = tokio::try_join!(
+        let (inbox, subscribed, devices) = tokio::try_join!(
             async {
                 email_db_client::links::get::fetch_link_by_macro_id(&self.db, user.as_ref())
                     .await
                     .into_rootcause()
                     .context("failed to read the user's inbox")
             },
-            // Only someone who opened a checkout can have paid, so Stripe is
-            // asked once, for them alone, when the checkout has had time to
-            // finish.
+            // Only someone who opened a checkout can have subscribed, so
+            // Stripe is asked once, for them alone, when the checkout has had
+            // time to finish.
             async {
                 if checkout_opened && !checkout_under_way {
                     self.billing
-                        .has_subscription(user)
+                        .subscribed(user)
                         .await
                         .context("failed to read the user's subscription")
                 } else {
-                    Ok(false)
+                    Ok(None)
                 }
             },
             async {
@@ -441,8 +442,8 @@ where
         )?;
         let mut signals = Signals {
             finished_setup,
-            paid,
-            opened_checkout: checkout_opened && !paid,
+            subscribed,
+            opened_checkout: checkout_opened && subscribed.is_none(),
             on_phone: !devices.is_empty(),
             gmail_attempted: pending.gmail_attempted_at.is_some(),
             mid_attempt: checkout_under_way
@@ -658,7 +659,7 @@ enum TeamTie {
 #[derive(Debug, Clone)]
 struct Signals {
     finished_setup: bool,
-    paid: bool,
+    subscribed: Option<Subscribed>,
     opened_checkout: bool,
     on_phone: bool,
     gmail_attempted: bool,
@@ -678,6 +679,7 @@ struct Signals {
 #[derive(Debug, PartialEq, Eq, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum Path<'a> {
+    Trial,
     Paid,
     GmailTrouble,
     Outlook,
@@ -701,10 +703,12 @@ enum Path<'a> {
 /// The first message that fits, or `None` to look again in a minute: while
 /// the user is in the middle of connecting Gmail or checking out, or still in
 /// setup for no known reason. Someone in setup only hears about what is
-/// holding them: paying, Gmail, pricing, or being on the phone.
+/// holding them: a subscription, Gmail, pricing, or being on the phone.
 fn choose(s: &Signals) -> Option<Path<'_>> {
-    if s.paid {
-        return Some(Path::Paid);
+    match s.subscribed {
+        Some(Subscribed::Trial) => return Some(Path::Trial),
+        Some(Subscribed::Paid) => return Some(Path::Paid),
+        None => {}
     }
     if s.mid_attempt {
         return None;
@@ -772,16 +776,17 @@ fn tool_path(tools: &[Tool]) -> Option<Path<'_>> {
 /// The follow-up text. `user` is the mention that opens it.
 fn message(user: &str, path: &Path<'_>) -> String {
     let body = match path {
-        Path::Paid => {
-            "Thanks for subscribing! If you need any help getting set up I'm happy to hop on \
-             a call with you."
-                .to_owned()
-        }
+        Path::Trial => "Glad you started your trial! What do you want to get working first? I \
+             can help you set it up."
+            .to_owned(),
+        Path::Paid => "Thanks for upgrading! What do you want to get working first? I can help \
+             you set it up."
+            .to_owned(),
         Path::GmailTrouble => "Did connecting Gmail give you any trouble? If it was the \
              permissions screen, I can tell you what Macro does with your email."
             .to_owned(),
-        Path::Outlook => "Macro works with Outlook, it's just not in setup yet. You can add it \
-             from Settings → Email → Connect an Outlook account."
+        Path::Outlook => "Did you want your Outlook email in Macro? It isn't in setup yet, but \
+             you can add it from Settings → Email → Connect an Outlook account."
             .to_owned(),
         Path::GoogleInbox(domain) => {
             let mailbox = match domain {
@@ -790,8 +795,7 @@ fn message(user: &str, path: &Path<'_>) -> String {
             };
             format!(
                 "Your {mailbox} isn't in Macro yet. Was that on purpose, or did the permissions \
-                 screen put you off? I can tell you what Macro does with your email, and you \
-                 can add it any time from Settings → Email."
+                 screen put you off?"
             )
         }
         Path::Pricing => "Still deciding on a plan? Want me to set you up with a free month of \
@@ -801,8 +805,8 @@ fn message(user: &str, path: &Path<'_>) -> String {
             "Are you going to use Macro mostly on your phone, or on your computer too?".to_owned()
         }
         Path::Team(team) => format!(
-            "Excited to have {team} on Macro. Want to do a quick call to help get the rest of the \
-             team on board?"
+            "Excited to have {team} on Macro. Is the rest of the team joining, or are you trying \
+             it out first?"
         ),
         Path::SeveralImports(tools) => {
             let names: Vec<&str> = tools.iter().map(|tool| tool.name()).collect();
@@ -834,8 +838,8 @@ fn message(user: &str, path: &Path<'_>) -> String {
             )
         }
         Path::Teammate(team) => format!(
-            "Glad you've joined {team} on Macro. Is there anything I can help you get set up \
-             with?"
+            "Glad you've joined {team} on Macro. What will you mainly use it for: email, docs or \
+             tasks?"
         ),
         Path::SoloWork => {
             "Are you trying Macro just for yourself, or for the rest of your team too?".to_owned()
