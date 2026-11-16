@@ -29,6 +29,9 @@ host lives in `../block-calendar/`.
 
 ## Boundaries
 
+- Build redesigned calendar-owned UI as new Root-and-parts components; port preserved
+  behavior into primitives using old/new conformance tests, keep those temporary
+  tests out of commits, and retain replaced components unwired for reference.
 - Keep new behavior in `primitives/`, pure domain code in `core/`, transport
   adapters in `queries/`, and host composition in `views/`.
 - Keep presentation components independent of production services; use the
