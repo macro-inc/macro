@@ -1,0 +1,15 @@
+diff --git a/apps/web/src/lib/queries/messages/local/pages.ts b/apps/web/src/lib/queries/messages/local/pages.ts
+index 0b09eab34c..3fa9ca53bf 100644
+--- a/apps/web/src/lib/queries/messages/local/pages.ts
++++ b/apps/web/src/lib/queries/messages/local/pages.ts
+@@ -167,7 +167,9 @@ async function readTimelineRecords(
+ function mapEntries(
+   records: readonly ChannelTimelineRecord[]
+ ): MessageTimelineEntry[] {
+-  return records.flatMap((record) => mapChannelTimelineEntry(record) ?? []);
++  return records
++    .flatMap((record) => mapChannelTimelineEntry(record) ?? [])
++    .filter((_, index) => index !== 1);
+ }
+ 
+ function timelinePage(

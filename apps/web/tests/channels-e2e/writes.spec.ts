@@ -1,5 +1,5 @@
 import type { Api, SentMessage } from './harness/api';
-import { expectShown, type Named } from './harness/device';
+import { expectShown, loseKeptData, type Named } from './harness/device';
 import { expect, SOUP_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
@@ -425,4 +425,37 @@ test('WRT-14 a message written offline in one window shows in the other window o
   await expect(two.message('from the second window')).toBeVisible();
 
   await expectShown(one, ['one', 'two', 'three', 'from the second window']);
+});
+
+// If this fails, a message that was waiting when the device lost what it
+// kept turns up later, when the person no longer expects it, or shows as
+// sent when it was not.
+test('WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later', async ({
+  pageFor,
+  ada,
+  ben,
+}) => {
+  const { channel } = await scene(ada, ben);
+  const bens = new Conversation(await pageFor('ben'), channel.id);
+  await bens.open();
+  await expectShown(bens, ['one', 'two', 'three']);
+  const unblock = await blockWrites(bens.page.context());
+  await bens.send('waiting when the data went');
+  await expect(bens.list.getByText('Not sent yet')).toBeVisible({
+    timeout: 20_000,
+  });
+
+  await loseKeptData(bens.page);
+  await bens.open();
+  await expectShown(bens, ['one', 'two', 'three']);
+  await unblock();
+  await bens.send('after');
+
+  // The later message arriving shows that writes go through again; the
+  // earlier one is in the channel neither before it nor after.
+  const after = ['one', 'two', 'three', 'after'];
+  await expectServer(channel, after);
+  await bens.reload();
+  await expectShown(bens, after);
+  await expectServer(channel, after);
 });

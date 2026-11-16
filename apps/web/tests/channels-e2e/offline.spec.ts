@@ -1,3 +1,4 @@
+import { ChannelView } from './harness/channel';
 import {
   couldNotLoad,
   expectShown,
@@ -10,6 +11,7 @@ import {
   startAfresh,
 } from './harness/device';
 import { expect, SOUP_BUILD, test } from './harness/fixtures';
+import { historyText } from './harness/history';
 import { Conversation } from './harness/messages';
 import {
   codeFetched,
@@ -325,4 +327,34 @@ test('OFF-11 opening a held channel with no connection does not say that a new v
   await expectShown(offline, [...WHOLE, 'written offline']);
 
   await expect(page.getByText('New version available')).toHaveCount(0);
+});
+
+// If this fails, a person cannot go back to an old message they followed a
+// link to while connected: the device shows other messages, or none.
+test('OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection', async ({
+  page,
+  ada,
+  ben,
+  history,
+}) => {
+  const elsewhere = await ada.createChannel({ members: [ben.person] });
+  await ada.post(elsewhere.id, 'elsewhere');
+  const target = history.messages[14];
+  const view = new ChannelView(page, history.id);
+  await view.open({ messageId: target.id });
+  await expect(view.messageById(target.id)).toBeInViewport();
+  await startAfresh(page, elsewhere);
+
+  await goOffline(page.context());
+  // Back is how a browser follows a link with no connection: a link in a
+  // message opens a new tab, which cannot load.
+  await page.goBack();
+
+  await view.shown();
+  await expect(view.messageById(target.id)).toBeInViewport();
+  const texts = await view.texts();
+  const at = texts.indexOf(historyText(15));
+  expect(texts.slice(at - 3, at + 4)).toEqual(
+    [12, 13, 14, 15, 16, 17, 18].map(historyText)
+  );
 });

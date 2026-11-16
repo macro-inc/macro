@@ -147,3 +147,27 @@ export async function readAndReturn(
 export async function leaveAlone(page: Page, seconds: number): Promise<void> {
   await page.waitForTimeout(seconds * 1000);
 }
+
+/**
+ * The device loses what it kept: the browser clears the site's stored files,
+ * as it may when the disk is short, or the app replaces them for a new
+ * format. The page is taken off the app first, since the files of a running
+ * page cannot go; the caller opens the app again.
+ */
+export async function loseKeptData(page: Page): Promise<void> {
+  await page.route('**/kept-data-lost', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<html></html>' })
+  );
+  await page.goto('/kept-data-lost');
+  // The page just left holds its files for a moment more.
+  await expect(async () => {
+    await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const names: string[] = [];
+      for await (const name of root.keys()) names.push(name);
+      for (const name of names) {
+        await root.removeEntry(name, { recursive: true });
+      }
+    });
+  }).toPass({ timeout: 30_000 });
+}
