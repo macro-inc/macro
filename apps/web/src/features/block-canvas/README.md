@@ -107,9 +107,19 @@ Fit Scene and menu/keyboard zoom use the full canvas viewport without subtractin
 floating panels. Fit Scene centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
-Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
-per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
+Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.01 exponential rate
+per normalized wheel pixel and an exponent cap of 0.6 per event (about 82% zoom-in).
 Plain wheel input pans at its existing speed.
+On a touchscreen two fingers navigate in every tool, editable or read-only: their
+midpoint pans, their spread zooms around it, and a flick glides to a stop. One
+finger still belongs to the tool. A second finger landing drops whatever the first
+started (marquee, move, resize, shape, stroke, connector, erase, text box) with no
+history entry and restores the selection from before it; a finger left behind does
+nothing until every finger has lifted. Touches inside an embed being interacted
+with, or inside text being edited, stay with that editor.
+`attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
+`GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
+which the lightbox and opened images also use for their momentum.
 The Canvas panel's zoom menu offers **No grid snapping** (the default grid mode for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;
