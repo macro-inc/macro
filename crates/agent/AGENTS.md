@@ -17,6 +17,11 @@ and usage metering.
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
   announcements and argument deltas; the accumulator persists only final calls.
+- `src/system_prompt.rs`: `SystemPrompt`, built from named `PromptSection`s
+  in a shared, per-session and per-turn part; every model call records each
+  section's bytes and hash (`macro.genai.prompt.<section>.*`), plus tool
+  schema and history sizes, on rig's `chat_streaming` span whatever the
+  content policy (`src/telemetry.rs`).
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).

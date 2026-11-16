@@ -1,4 +1,4 @@
-import type { ListSearchSuggestions } from '@app/components/view-shell/ListHeader';
+import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
   createRecentEmailSearches,
