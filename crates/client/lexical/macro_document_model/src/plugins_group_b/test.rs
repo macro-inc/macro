@@ -539,3 +539,158 @@ fn backspace_widens_a_range_leaving_a_table_to_the_block_before_it() -> Result<(
     }
     Ok(())
 }
+
+// Upstream $deleteCellHandler runs once per table: a range from a cell of one
+// table to a cell of another is widened around both, to the block before the
+// first table and the block after the second.
+#[test]
+fn backspace_widens_a_range_between_two_tables_around_both() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let ((above, below), _) = editor.update(|tx| {
+        let above = tx.create(Paragraph::default())?;
+        let hello = tx.create_text("Hello world")?;
+        tx.append(above, &[hello.key()])?;
+        let first = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        let first_row = tx.first_child(first).expect("row");
+        let first_cell = tx.first_child(first_row).expect("cell");
+        let first_paragraph = tx.first_child(first_cell).expect("cell paragraph");
+        let one = tx.create_text("one")?;
+        tx.append(first_paragraph, &[one.key()])?;
+        let middle = tx.create(Paragraph::default())?;
+        let between = tx.create_text("between")?;
+        tx.append(middle, &[between.key()])?;
+        let second = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        let second_row = tx.first_child(second).expect("row");
+        let second_cell = tx.first_child(second_row).expect("cell");
+        let second_paragraph = tx.first_child(second_cell).expect("cell paragraph");
+        let two = tx.create_text("two")?;
+        tx.append(second_paragraph, &[two.key()])?;
+        let below = tx.create(Paragraph::default())?;
+        let after = tx.create_text("after")?;
+        tx.append(below, &[after.key()])?;
+        tx.append(
+            NodeKey::ROOT,
+            &[
+                above.key(),
+                first.key(),
+                middle.key(),
+                second.key(),
+                below.key(),
+            ],
+        )?;
+        let mut range = RangeSelection::collapsed(Point::text(one.key(), Utf16Offset(1)));
+        range.focus = Point::text(two.key(), Utf16Offset(2));
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok((above.key(), below.key()))
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Key {
+        command: KeyCommand::Backspace,
+        event: Some(KeyEvent {
+            key: "Backspace".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::No);
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .map(|range| (range.anchor, range.focus)),
+        Some((
+            Point::element(above, ChildIndex(1)),
+            Point::element(below, ChildIndex(0))
+        ))
+    );
+    Ok(())
+}
+
+// Upstream $deleteCellHandler: Backspace on a TableSelection that is not the
+// whole table clears the selected cells' text, keeps the table, and is
+// handled ($clearText removes the table only when every cell is selected).
+#[test]
+fn backspace_on_a_table_selection_clears_cells_and_keeps_the_table() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let ((table, row), _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 1, 3, IncludeHeaders::All(false))?;
+        let row = tx.first_child(table).expect("row");
+        let cells = tx.children_keys(row)?;
+        for (cell, label) in cells.iter().zip(["left", "middle", "right"]) {
+            let paragraph = tx.first_child(*cell).expect("cell paragraph");
+            let text = tx.create_text(label)?;
+            tx.append(paragraph, &[text.key()])?;
+        }
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let left = tx.cast::<TableCellNode>(cells[0]).expect("left");
+        let middle = tx.cast::<TableCellNode>(cells[1]).expect("middle");
+        select_cells(tx, table, left, middle)?;
+        Ok((table.key(), row))
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Key {
+        command: KeyCommand::Backspace,
+        event: Some(KeyEvent {
+            key: "Backspace".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    let state = editor.state().view();
+    assert!(state.is_attached(table));
+    assert_eq!(
+        state
+            .children_keys(row)?
+            .iter()
+            .map(|cell| state.text_content(*cell).to_string())
+            .collect::<Vec<_>>(),
+        ["", "", "right"]
+    );
+    Ok(())
+}
+
+// A range inside one cell is left to the default Backspace.
+#[test]
+fn backspace_inside_one_cell_is_left_to_the_default() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (range, _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        let row = tx.first_child(table).expect("row");
+        let cell = tx.first_child(row).expect("cell");
+        let paragraph = tx.first_child(cell).expect("cell paragraph");
+        let text = tx.create_text("inside")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(text.key(), Utf16Offset(1)));
+        range.focus = Point::text(text.key(), Utf16Offset(4));
+        tx.set_selection(Some(Selection::Range(range.clone())))?;
+        Ok(range)
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Key {
+        command: KeyCommand::Backspace,
+        event: Some(KeyEvent {
+            key: "Backspace".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::No);
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .map(|r| (r.anchor, r.focus)),
+        Some((range.anchor, range.focus))
+    );
+    Ok(())
+}

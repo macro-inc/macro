@@ -140,18 +140,24 @@ impl Plugin for Tables {
             ..
         } = command
         {
-            // Each upstream table observer checks its own table, so a range
-            // whose focus alone is in a table reaches that table's handler.
-            let Some(table) =
-                find_table_node(tx.view(), anchor).or_else(|| find_table_node(tx.view(), focus))
-            else {
-                return Ok(Handled::No);
-            };
-            return Ok(if delete_cell(tx, table)? == DeleteOutcome::NotHandled {
-                Handled::No
-            } else {
-                Handled::Yes
-            });
+            // Upstream registers $deleteCellHandler per table observer and
+            // each one runs: a table holding exactly one end widens the range
+            // around itself and passes on, so a range between two tables is
+            // widened around both. Clearing a TableSelection stops the chain.
+            let mut tables = Vec::new();
+            for key in [anchor, focus] {
+                if let Some(table) = find_table_node(tx.view(), key)
+                    && !tables.contains(&table)
+                {
+                    tables.push(table);
+                }
+            }
+            for table in tables {
+                if delete_cell(tx, table)? != DeleteOutcome::NotHandled {
+                    return Ok(Handled::Yes);
+                }
+            }
+            return Ok(Handled::No);
         }
         let Some(table) = find_table_node(tx.view(), anchor) else {
             return Ok(Handled::No);
