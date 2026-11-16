@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::net::Ipv4Addr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
@@ -342,10 +342,10 @@ impl Computers {
             return Ok(());
         }
         stage.run_step("Building the Macro computer image", || {
-            load_image(&REGULAR_BUILD)
+            load_image(&stage.quiet(), &REGULAR_BUILD)
         })?;
         stage.run_step("Building the agent teammate computer image", || {
-            load_image(&AGENT_BUILD)
+            load_image(&stage.quiet(), &AGENT_BUILD)
         })
     }
 
@@ -608,7 +608,33 @@ fn loaded_image_marker(build: &GuestBuild) -> PathBuf {
     repo_root().join("infra/local/generated").join(build.marker)
 }
 
-fn load_image(build: &GuestBuild) -> Result<()> {
+/// Build `build`'s image with Nix and load it into Docker unless the daemon
+/// already has it, each as its own step so telemetry shows which one is slow.
+fn load_image(stage: &Stage, build: &GuestBuild) -> Result<()> {
+    let mut built = None;
+    stage.run_step("Building the image with Nix", || {
+        built = Some(nix_build_image(build)?);
+        Ok(())
+    })?;
+    let store_path = built.context("nix build printed no output path")?;
+
+    let marker = loaded_image_marker(build);
+    let recorded = std::fs::read_to_string(&marker)
+        .ok()
+        .and_then(|raw| LoadedImage::parse(&raw));
+    if let (Some(recorded), Some(current)) = (&recorded, image_id(build.tag)?)
+        && recorded.store_path == store_path
+        && recorded.image_id == current
+    {
+        return Ok(());
+    }
+    stage.run_step("Loading the image into Docker", || {
+        docker_load_image(build, &marker, store_path)
+    })
+}
+
+/// The image's store path, built if it isn't yet.
+fn nix_build_image(build: &GuestBuild) -> Result<String> {
     let attribute = format!(".#{}", build.attribute);
     let output = Command::new("nix")
         .args(["build", "--no-link", "--print-out-paths", &attribute])
@@ -630,18 +656,11 @@ fn load_image(build: &GuestBuild) -> Result<()> {
         .filter(|line| !line.is_empty())
         .context("nix build printed no output path")?
         .to_owned();
+    Ok(store_path)
+}
 
-    let marker = loaded_image_marker(build);
-    let recorded = std::fs::read_to_string(&marker)
-        .ok()
-        .and_then(|raw| LoadedImage::parse(&raw));
-    if let (Some(recorded), Some(current)) = (&recorded, image_id(build.tag)?)
-        && recorded.store_path == store_path
-        && recorded.image_id == current
-    {
-        return Ok(());
-    }
-
+/// Load the image at `store_path` and remember which store path it came from.
+fn docker_load_image(build: &GuestBuild, marker: &Path, store_path: String) -> Result<()> {
     let load = Command::new("docker")
         .args(["load", "--quiet", "--input", &store_path])
         .output()
@@ -659,7 +678,7 @@ fn load_image(build: &GuestBuild) -> Result<()> {
             .with_context(|| format!("creating {}", parent.display()))?;
     }
     std::fs::write(
-        &marker,
+        marker,
         LoadedImage {
             store_path,
             image_id,

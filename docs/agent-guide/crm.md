@@ -322,7 +322,9 @@ Team rows show a profile photo when available, otherwise a
 letter avatar at the same 16px size as channel list icons. Team uses the same Soup
 row component as Emails, Files, and Calls: the avatar, name, and email are inline,
 the last-contacted timestamp sits at the right, and the side gutters and row
-spacing match. There is no column-heading row.
+spacing match. There is no column-heading row. Team loads 50 contacts at a time
+(name, else email, A to Z) and fetches the next page as you scroll to the end;
+its search asks the server, so it finds people on pages not yet loaded.
 Emails, Files, and Calls search the loaded row titles and supporting text and
 continue loading pages when the current pages have no match.
 Emails, Files, Calls, and References rows open their items without selection
@@ -438,13 +440,13 @@ team definition rather than opening an editor with system defaults. Check both
 the entity actions menu and command menu with stage requests delayed; cancel the
 editors without changing hosted data.
 
-`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
-At narrow widths, `Show CRM navigation` opens the same navigation in a menu
-without **Close** or `Collapse CRM sidebar`; picking a destination or clicking
-outside closes it.
-While the sidebar is collapsed or shown as a menu, the split's **Close** sits
-before either toggle, including on a pipeline, and stays hidden when the split
-cannot close.
+The CRM sidebar collapses and expands like every other workspace's: `Hide
+navigation`, `Show navigation` and `Cmd+.` animate it, and the choice persists
+across visits. At narrow widths `Show navigation` slides it in as an overlay
+that the backdrop, Escape or `Hide navigation` dismisses.
+While the sidebar is collapsed, the split's **Close** sits before
+`Show navigation` in every CRM header, including on a pipeline, a record and
+CRM settings, and stays hidden when the split cannot close.
 The sidebar's Records and Lists sections can also collapse independently.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
@@ -707,3 +709,59 @@ sections and reopen a record: each restarts the `crm.company` / `crm.contact`
 flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
+
+### Keep one thread out of CRM
+
+These controls require `enable-crm-thread-exclusions`, off by default everywhere.
+The API also refuses set/clear while its rollout flag is unavailable or disabled.
+Keep the flag off until ingestion and Team email reader binaries both support
+thread exceptions; older inlined readers ignore them.
+
+Open a thread from your own mailbox and choose **Keep this thread out of CRM**
+from its menu (the title menu on desktop, the thread menu on phone). This stops
+sharing your copy through CRM, including mail already contributed, on the next
+CRM read. It does not remove the email from your mailbox. Another consenting
+teammate's copy of the same conversation may still appear, including the same
+messages. Separately granted thread access is also unaffected.
+Sales Email uses your own mailbox, so your copy remains visible there too.
+
+Open **Email settings → Threads kept out of CRM** to see your exceptions.
+**Remove exception** makes that thread eligible again when your consent and
+other privacy settings permit; restoration also queues a backfill. Use **Next
+page** for further exceptions and **Back to first page** to return. Other members
+cannot see or change your exception list. Company and contact records and their
+existing interaction dates remain; later population recomputes dates from
+eligible history. Labels and folders are not supported yet.
+
+Members denied CRM viewing can still manage their own mailbox consent and
+thread exceptions. Viewing access does not authorize changes to another
+member's contribution.
+
+## Member access API
+
+Existing and new members start with CRM access. An admin or owner can patch a
+team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
+change this setting, and admins and owners cannot be denied. Mailbox contribution
+consent stays unchanged. Preference mutations return 503 while the deployment
+rollout is disabled; existing access checks continue to enforce stored denials.
+`GET /crm/member-access` reports current access even
+when record routes return access denied. Clients holding CRM caches may request
+the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
+server memoization never applies to record checks or this fresh endpoint. The
+next opted-in request after expiry observes the change (or a missing hint that
+requires a fresh proof); idle/offline clients have no fixed retirement deadline.
+Settings controls and retirement of already-cached client content follow
+separately.
+
+After denial, company/contact routes and contact pages, CRM lists, search, CRM
+activity, references, and CRM-derived email thread grants require current access
+on each request. Batched record previews omit denied records too.
+Whole-team pipeline grants no longer apply. Individually or channel-shared
+pipelines retain their own values and opaque company/contact IDs, but resolving
+record names or opening records requires separate CRM access. Text previously
+copied into a pipeline cell remains visible as pipeline content.
+
+Delivered CRM discussion notifications retain their text, and a queued one can
+still arrive under the existing notification policy. Opening the record requires
+current access. Exercise denial and regrant through direct API and agent requests
+as well as the UI once the client follow-up is installed.

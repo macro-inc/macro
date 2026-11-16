@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -16,7 +17,9 @@ export function QuestionDetails(props: {
 }) {
   return (
     <div class="space-y-3 p-4">
-      <p class="text-sm font-medium">{props.prompt || 'Database question'}</p>
+      <p class="text-sm font-medium">
+        {props.prompt || t('databaseAnswers.databaseQuestion')}
+      </p>
       <Show when={props.error}>
         {(error) => (
           <p role="alert" class="text-sm text-failure-ink">
@@ -27,13 +30,15 @@ export function QuestionDetails(props: {
       {props.results}
       <Show when={props.loading}>
         <p role="status" class="text-sm text-ink-muted">
-          Finding your answer…
+          {t('databaseAnswers.findingAnswer')}
         </p>
       </Show>
       <Show when={props.sql}>
         {(sql) => (
           <details class="text-xs">
-            <summary class="text-ink-muted">View SQL</summary>
+            <summary class="text-ink-muted">
+              {t('databaseAnswers.viewSql')}
+            </summary>
             <pre class="mt-2 overflow-auto whitespace-pre-wrap rounded-md bg-input p-2">
               {sql()()}
             </pre>
@@ -48,7 +53,7 @@ export function QuestionDetails(props: {
           disabled={props.loading}
         >
           <ArrowClockwiseIcon class="size-3.5" />
-          Refresh
+          {t('databaseAnswers.refresh')}
         </Button>
       </div>
     </div>

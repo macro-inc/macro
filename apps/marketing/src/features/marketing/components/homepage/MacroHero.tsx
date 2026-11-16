@@ -17,6 +17,7 @@ export function MacroHero() {
         <h2>{homepageDescription}</h2>
         <a
           class="site-nav-start homepage-hero-cta macro-home-button"
+          target="_self"
           href="/app/signup"
           onClick={routePhoneToMobileSignup}
         >

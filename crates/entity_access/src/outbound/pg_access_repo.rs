@@ -12,7 +12,7 @@ use crate::domain::telemetry::{record_source_ids, span_count};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
-        CrmEntityAccess, EntityType, UserTeamInfo,
+        CrmEntityAccess, EntityAudience, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -405,7 +405,10 @@ impl AccessRepository for PgAccessRepository {
         let id = id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
-        let sources = user_source_ids(&self.pool, user_id).await?;
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, user_id.map(|user| user.as_ref()))
+                .await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
     }
 
@@ -414,8 +417,25 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let sources = user_source_ids(&self.pool, Some(user_id)).await?;
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(pipeline_count = span_count(ids.len()), source_id_count = tracing::field::Empty))]
+    async fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
+        Ok(queries::pipeline_access::get_pipelines_access(&self.pool, ids, &sources).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
@@ -827,6 +847,18 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> Result<std::collections::HashSet<(EntityType, String)>, AccessError> {
+        Ok(
+            queries::crm_batch_access::visible_entities(&self.pool, user.as_ref(), entities)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_company_access(
         &self,
@@ -899,6 +931,17 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if entity_type == EntityType::CrmPipeline {
+            return Ok(queries::entity_audiences::get_entity_audiences(
+                &self.pool,
+                &[*entity_id],
+                entity_type,
+            )
+            .await?
+            .into_iter()
+            .flat_map(|audience| audience.users)
+            .collect());
+        }
         if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
             return queries::crm_entity_users::get_crm_entity_users(
                 &self.pool,
@@ -911,6 +954,17 @@ impl AccessRepository for PgAccessRepository {
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
             .map_err(anyhow_access_error)
+    }
+
+    #[tracing::instrument(err, skip(self, entity_ids), fields(entity_count = entity_ids.len()))]
+    async fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        queries::entity_audiences::get_entity_audiences(&self.pool, entity_ids, entity_type)
+            .await
+            .map_err(AccessError::from)
     }
 
     #[tracing::instrument(err, skip(self))]

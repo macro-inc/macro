@@ -1,6 +1,7 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import {
   DropdownMenu as KobalteDropdownMenu,
   type DropdownMenuTriggerProps as KobalteDropdownTriggerProps,
@@ -15,6 +16,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { cn } from '../utils/classname';
+import { createCopyState } from '../utils/create-copy-state';
 import {
   addCtrlJKMenuNavigation,
   highlightFirstMenuItemOnOpen,
@@ -25,6 +27,7 @@ import {
   type SelectionDismissal,
 } from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
+import { CopyFeedback } from './CopyButton';
 import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
 import { Tooltip } from './Tooltip';
@@ -107,6 +110,15 @@ export type DropdownItemProps = Omit<
    * row stays reachable so the reason can be read; selecting it does nothing.
    */
   disabledReason?: string;
+};
+/** A persistent menu item that reports copy completion with inline success feedback. */
+export type DropdownCopyItemProps = Omit<
+  DropdownItemProps,
+  'onSelect' | 'closeOnSelect' | 'disabledReason' | 'children'
+> & {
+  onCopy: () => void | boolean | Promise<void | boolean>;
+  icon?: JSX.Element;
+  children: JSX.Element;
 };
 export type DropdownMultiSelectItemProps = Omit<
   DropdownItemProps,
@@ -501,6 +513,29 @@ function DropdownItem(props: DropdownItemProps) {
   );
 }
 
+function DropdownCopyItem(props: DropdownCopyItemProps) {
+  const [local, rest] = splitProps(props, [
+    'onCopy',
+    'children',
+    'ref',
+    'icon',
+  ]);
+  const { copy, copied } = createCopyState();
+  return (
+    <DropdownItem
+      {...rest}
+      ref={local.ref}
+      closeOnSelect={false}
+      onSelect={() => copy(local.onCopy)}
+    >
+      <CopyFeedback copied={copied()}>
+        {local.icon ?? <CopyIcon class="size-4 shrink-0" />}
+      </CopyFeedback>
+      {local.children}
+    </DropdownItem>
+  );
+}
+
 /**
  * Kobalte skips `disabled` items, so their reason could never be reached by
  * keyboard. This row keeps its place in the menu, announced as disabled.
@@ -591,6 +626,7 @@ export const Dropdown = Object.assign(
     Trigger: DropdownTrigger,
     Group: DropdownGroup,
     Item: DropdownItem,
+    CopyItem: DropdownCopyItem,
     Sub: DropdownSub,
   }
 );

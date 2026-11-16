@@ -662,7 +662,10 @@ the shimmer.
   Unavailable paired agents stay visible with a reason.
   If Macro is unavailable, its catalog stays searchable but
   model choices are disabled in every list. Model discovery uses the
-  selected runtime. Every coding agent shows repository
+  selected runtime. When Cursor refuses the connected key (a team-owned
+  service token, a revoked key), the Cursor submenu says to reconnect with a
+  personal or service-account Cursor API key instead of the generic failure.
+  Every coding agent shows repository
   controls; chat agents hide those controls but keep the mode bar. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
   The most recently used supported,
@@ -696,8 +699,12 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Home's agent input also restores unsent text, under a
-  separate key from the Agents page composer. Check the Home path explicitly:
+  when switching channels. The phone Agents list's composer and the desktop
+  list views' AI input hold that same draft and attachments, so an edit in one
+  shows in the other at once: type on the composer page, go Back to the list,
+  edit there, and return; neither should show an older version. Home's agent
+  input also restores unsent text, under a separate key from the Agents page
+  composer. Check the Home path explicitly:
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
@@ -939,19 +946,23 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
-The draft runs in an ordinary hidden agent session of the in-process Macro
-agent, as the person, with its usual tools, on the model their Ask AI steps
-use, billed as agent session usage. It never appears in Home or the Agents list, notifies nobody,
-and is deleted when the draft comes back. It finds the channels, people,
-folders, labels, tags and agents the description names itself, paging and
-refining searches, and leaves out a name that matches nothing or several
-items, so the review shows the normal picker for it. It creates only what the
-routine must reference (such as a database "a new database called Bug log"
-asks for) and never does the routine's own work now ("every Monday make a
-task" makes no task). It hands the routine back by checking it with
-`macro.routines.check` (`POST /scheduled-actions/check`: saving's checks,
-including the type check of its code steps together, with nothing saved),
-naming what it created, and fixes what the check reports. The last check is
+First a fast call, billed as the person's automation usage, names the
+channels, people, folders, labels, tags, agents and other items the
+description refers to; document storage looks those names up as the person
+(`POST /search/names`) and settles each on the one item with that name, or
+leaves out a name that matches nothing or several items, so the review shows
+the normal picker for it. The routine is then written in a hidden agent
+session of the in-process Macro agent, as the person, on the model their Ask
+AI steps use, billed as agent session usage. It never appears in Home or the
+Agents list, notifies nobody, and is deleted when the draft comes back. It is
+given the items found and the SDK reference it needs, so it searches for
+nothing and writes one program. It creates only what the routine must
+reference (such as a database "a new database called Bug log" asks for) and
+never does the routine's own work now ("every Monday make a task" makes no
+task). It hands the routine back by checking it with `macro.routines.check`
+(`POST /scheduled-actions/check`: saving's checks, including the type check
+of its code steps together, with nothing saved), naming what it created, and
+fixes what the check reports. The last passing check (else the last check) is
 the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
@@ -962,19 +973,24 @@ message in the dialog instead of "Couldn’t draft that routine".
 
 With `enable-routine-background-drafts` (PostHog, on in development builds),
 Draft it starts the same draft in the background instead
-(`POST /scheduled-actions/draft-jobs`), answered once its session is admitted.
-The box gives way to the request, three milestones (**Read your request** or
-**Found what it names**, **Writing the steps**, **Check that it runs**, with
-**Fixing a problem the check found** while it fixes one) and **Cancel draft**,
-which puts the request back in the box. **Close this anytime**: the draft
+(`POST /scheduled-actions/draft-jobs`), answered once its AI usage is admitted.
+The box gives way to the request, three milestones, each with a detail line
+under it, and **Cancel draft**: **Looking up what it names**, then what it
+found by name (**Found #engineering and your Finance label**, with a line
+for any name left for the person, such as "No channel is called #marketing,
+so you'll pick one"); **Writing the steps**, then **Wrote 2 steps** with
+their titles; **Checking that it runs**, with **Fixing a problem the check
+found** while it fixes one. **Cancel draft** puts the request back in the
+box. **Close this anytime**: the draft
 carries on. While New routine is closed, a **Drafting routine** pill sits at
 the bottom right (above the dock on phones) with the current stage, and opens
 New routine. A finished draft gets a toast: **Routine draft ready** with
 **Review**, or **Couldn’t draft that routine** with the reason and **Edit
 request**, which reopens New routine with the request back in the box and the
 reason under it. A ready draft waits until it is opened or discarded, also
-across reloads and devices: New routine shows **Your draft is ready** with
-**Discard** and **Review**, and closing its toast only closes the toast.
+across reloads and devices, and one left unopened for 7 days is deleted. While
+one waits, New routine shows **Your draft is ready** with **Discard** and
+**Review**, and closing its toast only closes the toast.
 Reloading mid-draft brings the pill back. Off, the dialog waits on the
 blocking request as before; older clients keep using it.
 
@@ -1125,8 +1141,6 @@ The greeting, agent/model selector, coding repository/branch drawer, and send fl
 are shared. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.
-Home suggestions and document/project context populate this same draft as markdown
-mentions. A failed suggestion conversion preserves the text and shows an error.
 Session creation and prompt delivery use the shared pending-session flow.
 
 ## Sharing a chat
@@ -1319,8 +1333,9 @@ SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
-`render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image; a program's
+`render`; `ReadCanvas`, `ApplyCanvasEdits`, `EditCanvas` and `RenderCanvas`
+are hidden, and the model sees a render a program returns in
+`images: [await canvas.render()]` as an image block; a program's
 render or generated image shows in the reply through the image's
 `toMarkdown()` `<m-image>` line, since a document mention of a static file id
 reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
@@ -1441,7 +1456,10 @@ presenting, the agent asks “Should I kick it off?”, unless the user said not
 to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
-request”. SDK operation
+request”. The HTTP review decision endpoint requires direct user authentication;
+agent runs receive 403 for edits, submissions, and dismissals before their
+request body is decoded. The separate **DecideReview** chat tool keeps its
+existing user-prompted-turn checks. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1662,8 +1680,10 @@ plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and U
 `Open` button that only opens a new tab after you click it. Once answered the card collapses
 to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn. Anyone with edit access to the session may
-answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+square cancels the question and the turn. A directly authenticated user with
+edit access to the session may answer; agent runs and runtimes cannot answer
+questions or permission requests, even using a user's credentials. Viewers see
+the form locked with `Waiting for an editor`. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1696,7 +1716,10 @@ wants to do. The owner sees `Approval needed` with `Decline`, `Always allow`, an
 `Always allow` retains its existing scope: the named requester’s same Macro tool,
 or all tools of the connected app, for this session. It does not change which
 account a call selects. Declined, cancelled, expired, or superseded calls do not
-run. The Magic Chip reads `Waiting for approval` while a call is held.
+run. Agent runs receive 403 for `approve` and `approve_and_remember`, including
+when they use the owner's credentials; deny and cancel remain available under
+the existing owner and edit-access checks. The Magic Chip reads `Waiting for
+approval` while a call is held.
 
 Email/calendar reviews separately retain the account selected at creation. Only
 that account, with session edit access, may edit or submit those drafts. Older
@@ -1923,8 +1946,9 @@ way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
 a separate group. Its dashboard supports markdown, timelines, entity lists,
-channel messages, item cards, calendar agendas and tags, using the same
-full-width view as AI chat. An item card (one to four items: a document or
+channel messages, item cards, calendar agendas, tags and bot token cards
+(minted in the viewer's browser, so the secret never reaches the agent), using
+the same full-width view as AI chat. An item card (one to four items: a document or
 spreadsheet, an email thread, an event, a project, a channel, a routine, a form
 or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
@@ -2524,12 +2548,20 @@ also exercise direct ACP model-change requests, downgrade, and resume.
 
 ## Composing routines from a conversation
 
-The built-in **Compose Routines** skill walks an agent through creating or
-changing a routine with `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`: read
-the existing routine first, pick schedule or activity triggers, write code steps
-that act and decide (`macro.ai.decide`), keep to one Ask AI step, resolve every
-id before writing, and send the complete
-configuration, since an update replaces name, triggers, steps and required apps.
+The built-in **Compose Routines** skill is how an agent writes or changes a
+routine from a conversation. A code-mode session reads it right after the
+routines guide, without looking for it, and usually does the whole job in one
+program: it finds every item the request names by its exact name with the
+SDK (`macro.channels.search`, a name search of `macro.search.page`,
+`macro.users.search`, or the list for its kind), asking, with `AskUser` where
+it can or else in its reply, when a name has no exact match or several; then
+`macro.routines.check` and `create` or `update`; then a one- or two-sentence
+reply with the routine's link. The routine is saved switched on. A code step
+takes each item from a knob holding its name, which it looks up when it runs,
+and never messages the routine's owner: an Ask AI step tells them, as in the
+routine drafter. Hosts without code get the skill in the form they can follow:
+each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
+like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a

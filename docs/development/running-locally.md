@@ -997,11 +997,16 @@ stops sending [your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in)
 
 **What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
-plus a line per step, per service build (cargo units compiled, sccache hits) and
-per container's wait for its first passing health probe. Lines carry step and
-service names, timings, outcome, the commit, OS/arch and CPU count, and hashed
+plus a line per step (and when it started, in which lane and inside which
+step), per service build (cargo units compiled, sccache hits when the build
+goes through sccache, and the compile
+time of its slowest crates from `cargo build --timings`) and per container's wait
+for its first passing health probe. Lines carry step, crate and service names,
+timings, outcome, the commit, OS/arch, CPU count and model, memory size, and hashed
 host, worktree, instance and branch ids (`default` and `main` are sent as they
-are); never your name, paths, env values, error text or the token. Fields and queries:
+are); never your name, paths, env values, error text or the token. Add
+`machine = "<name>"` to the settings file to group your runs under a readable
+machine name on the dashboard; without it they are grouped by the hashed host. Fields and queries:
 [observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
 
 **Credentials.** The settings file holds the endpoint and the bearer token of

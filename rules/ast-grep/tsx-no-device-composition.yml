@@ -22,6 +22,7 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
@@ -36,6 +37,7 @@ ignores:
   - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
+  - apps/web/src/features/entity-appearance/appearance-menu.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
@@ -46,7 +48,6 @@ ignores:
   - apps/web/src/features/agents-view/views/AgentPicker.tsx
   - apps/web/src/features/agents-view/views/AgentsView.tsx
   - apps/web/src/features/agents-view/views/RepositoryPicker.tsx
-  - apps/web/src/features/block-agent/component/AgentSplitHeader.tsx
   - apps/web/src/features/block-agent/component/EffortSelector.tsx
   - apps/web/src/features/block-agent/ui/AgentInput.tsx
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx

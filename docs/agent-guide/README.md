@@ -64,7 +64,7 @@ On mobile, the single hamburger opens and closes navigation; there is no separat
 caret. Check Escape focus return and keyboard wrapping inside the open menu.
 Standalone marketing dev/preview servers hand `/app/*` navigation to
 `VITE_APP_BASE_URL` (`https://macro.com` by default); verify that signup leaves the local website instead of
-showing an empty header. Use an `apps/web` preview for local signup testing.
+showing an empty header. Click both the hero and header signup links and confirm a document request to `/app/signup`, not only a client-side URL change. On touch phones, both should load `/mobile-signup`. Use an `apps/web` preview for local signup testing.
 
 For the homepage, verify one opening section on desktop and mobile: the Macro
 logo surrounded by the 12 decorative app logos from the production welcome

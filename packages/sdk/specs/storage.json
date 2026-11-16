@@ -8577,6 +8577,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "includeContacts",
+            "in": "query",
+            "description": "Whether to embed every contact of the company (default `true`).\nA caller that pages contacts through\n`GET /crm/companies/{company_id}/contacts/page` sets it to `false`.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -8764,6 +8773,116 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/{company_id}/contacts/page": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::list_company_contacts_page"],
+        "summary": "List a CRM company's contacts a page at a time, filtered by archive\nstate and an optional name or email search. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`] as for\n`GET /crm/companies/{company_id}/contacts`; hidden contacts are\ninvisible to plain members.",
+        "operationId": "list_company_contacts_page",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company whose contacts to list",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "description": "`true` for the archived contacts (admins only: plain members get an\nempty list), `false` (default) for the active ones. Every contact of\nan archived company counts as archived.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Keep contacts whose name or primary email contains this text,\nignoring case. Blank matches every contact.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor from the previous page's `nextCursor`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Contacts per page, from 1 through 200 (default 50). Values outside\nthe range are clamped.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyContactsPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -9199,7 +9318,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
+        "summary": "Fetch a single CRM contact by id, with its company's name and\nvisibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:\nthe user must be on the team that owns the contact, and hidden\ncontacts are invisible to plain members. Admin/owner callers see\nhidden contacts so they can render the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
@@ -9219,7 +9338,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmContactResponse"
+                  "$ref": "#/components/schemas/CrmContactDetailResponse"
                 }
               }
             }
@@ -9906,7 +10025,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::email_privacy"],
-        "summary": "Apply one consent or domain-exclusion change as the authenticated member.",
+        "summary": "Apply one consent, domain, or thread exclusion change as the member.",
         "operationId": "update_crm_email_privacy",
         "requestBody": {
           "content": {
@@ -9925,6 +10044,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmailPrivacySettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/threads": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "List only the authenticated member's thread exclusions.",
+        "operationId": "list_crm_excluded_email_threads",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Read entries after this thread ID.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludedEmailThreads"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/member-access": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::member_access"],
+        "summary": "Read fresh authority without requiring CRM access.",
+        "operationId": "get_crm_member_access",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmMemberAccessResponse"
                 }
               }
             }
@@ -10986,6 +11155,71 @@
         }
       }
     },
+    "/crm/previews": {
+      "post": {
+        "tags": ["crm::inbound::axum_router::previews"],
+        "summary": "Title many CRM company and contact chips at once. Each record answers as\nits own read (`GET /crm/companies/{company_id}`,\n`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,\nor that does not exist, is left out of the response.",
+        "operationId": "preview_crm_records",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrmPreviewsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmPreviews"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "More than 100 ids of a kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A bot or harness credential"
+          },
+          "422": {
+            "description": "An id that is not a UUID"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],
@@ -11244,7 +11478,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -22740,7 +22974,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -23601,6 +23835,984 @@
         }
       }
     },
+    "/passwords/agent/teams/{team}/items": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Search the agent's catalog: metadata and current access only.",
+        "operationId": "passwords_agent_search",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Metadata search text; never a value search.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 100; default 50.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor from the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentSearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Create a login or API item attributed to this agent.",
+        "operationId": "passwords_agent_create",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentCreateItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replay of an accepted operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentWriteResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentWriteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}": {
+      "patch": {
+        "tags": ["passwords"],
+        "summary": "Replace supplied fields of a login or API item.",
+        "operationId": "passwords_agent_update",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentPatchItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentWriteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}/access-requests": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Ask authorized humans for access to an item.",
+        "operationId": "passwords_agent_request_access",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentAccessRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Already usable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentAccessRequestState"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentAccessRequestState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}/access-requests/mine": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "This agent's own request state for the item.",
+        "operationId": "passwords_agent_my_request",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentAccessRequestState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}/disclose": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Disclose one selected field to the agent's capability.",
+        "operationId": "passwords_agent_disclose",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentDiscloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentDisclosed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}/totp": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Enroll a verification-code seed on an item this agent created.",
+        "operationId": "passwords_agent_set_totp",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentSetTotp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/agent/teams/{team}/items/{item}/totp/code": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "The current verification code of a login or verification-code item.",
+        "operationId": "passwords_agent_totp_code",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Agent-Session-Id",
+            "in": "header",
+            "description": "Wake UUIDv7",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentTotpCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentTotpCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passwords/teams": {
       "get": {
         "tags": ["passwords"],
@@ -23636,6 +24848,103 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/agent-access-requests": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Pending agent requests on items the caller may manage.",
+        "operationId": "passwords_agent_access_requests",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "query",
+            "description": "Managed item: list every agent's access to it instead of the pending queue.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 100; default 50.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor from the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentAccessRequestPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
                 }
               }
             }
@@ -23998,6 +25307,117 @@
         }
       }
     },
+    "/passwords/teams/{team}/imports/{import_id}/items": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Import normalized credentials with independently retryable per-item outcomes.",
+        "operationId": "passwords_import_batch",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordImportBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordImportBatchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": ""
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passwords/teams/{team}/items": {
       "get": {
         "tags": ["passwords"],
@@ -24105,6 +25525,98 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/match": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Visible items named like the given names, for an import's duplicate check;\nnames travel in the body so they stay out of URLs and access logs.",
+        "operationId": "passwords_match",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordMatchNames"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordItemMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -24452,6 +25964,239 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Approve or deny a pending agent request.",
+        "operationId": "passwords_agent_resolve_request",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentAccessRequestState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/agents/{agent}/revoke": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Revoke an agent's standing approval, or its grant and approval.",
+        "operationId": "passwords_agent_revoke",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "agent",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordAgentRevokeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentItemAccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordAgentFailure"
                 }
               }
             }
@@ -28824,6 +30569,37 @@
             "type": "string",
             "format": "date-time",
             "description": "Most recent change."
+          }
+        }
+      },
+      "AccessRequestResolution": {
+        "type": "string",
+        "description": "How an agent's access request was resolved.",
+        "enum": ["approved", "denied", "revoked"]
+      },
+      "AccessRequestResolvedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`PasswordTopicEvent::AccessRequestResolved`].",
+        "required": ["teamId", "itemId", "requestId", "status"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Requested item."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Resolved request."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccessRequestResolution",
+            "description": "Resolution."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team owning the item."
           }
         }
       },
@@ -33916,6 +35692,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -35028,6 +36808,10 @@
             "type": "boolean",
             "description": "Whether the target holds several values."
           },
+          "percentage": {
+            "type": "boolean",
+            "description": "Whether the target shows a number as a percent."
+          },
           "reason": {
             "type": ["string", "null"],
             "description": "Why nothing converts, for a `never` cast."
@@ -35248,6 +37032,21 @@
               "kind": {
                 "type": "string",
                 "enum": ["derived"]
+              },
+              "percentage": {
+                "type": "boolean",
+                "description": "Whether a number formula is shown as a percent."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           }
@@ -35355,6 +37154,17 @@
               "type": {
                 "type": "string",
                 "enum": ["number"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           },
@@ -35746,6 +37556,24 @@
           "version": {
             "$ref": "#/components/schemas/TableVersion",
             "description": "The version the batch produced."
+          }
+        }
+      },
+      "CompanyContactsPageResponse": {
+        "type": "object",
+        "description": "One page of a company's contacts.",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactResponse"
+            },
+            "description": "The page's contacts, alphabetically by name (the email when\nunnamed), in the same order as `GET /crm/companies/{company_id}/contacts`."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page; absent on the last page."
           }
         }
       },
@@ -36543,6 +38371,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -37554,9 +39386,34 @@
           }
         }
       },
+      "CrmCompanyPreview": {
+        "type": "object",
+        "description": "What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The team's name override, else the primary domain's directory name."
+          },
+          "primaryDomain": {
+            "type": ["string", "null"],
+            "description": "The company's first domain, which titles a company with no name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The company's last interaction, as the company read's `updatedAt`."
+          }
+        }
+      },
       "CrmCompanyResponse": {
         "type": "object",
-        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest.",
+        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`).",
         "required": [
           "id",
           "teamId",
@@ -37573,7 +39430,7 @@
             "items": {
               "$ref": "#/components/schemas/CrmContactResponse"
             },
-            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers."
+            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`."
           },
           "createdAt": {
             "type": "string",
@@ -37617,6 +39474,80 @@
             "type": "string",
             "format": "date-time",
             "description": "Most recent known interaction with this company."
+          }
+        }
+      },
+      "CrmContactCompanyResponse": {
+        "type": "object",
+        "description": "The name and visibility of a contact's company.",
+        "required": ["id", "hidden"],
+        "properties": {
+          "domain": {
+            "type": ["string", "null"],
+            "description": "The company's oldest domain, which clients show when it has no\nname."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden. Only admin/owner callers can see a\nhidden company."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company; equal to the contact's `companyId`."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The company's display name, if it has one."
+          }
+        }
+      },
+      "CrmContactDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CrmContactResponse",
+            "description": "The contact."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "company": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrmContactCompanyResponse",
+                    "description": "The contact's company, when it has one the caller may see. Older\nservers omit it; clients then read the company itself."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the\ncontact, with what its page shows of its company."
+      },
+      "CrmContactPreview": {
+        "type": "object",
+        "description": "What a contact chip shows.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's primary email, which titles a contact with no name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The contact."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The contact's display name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record last changed."
           }
         }
       },
@@ -37724,10 +39655,69 @@
           }
         }
       },
+      "CrmMemberAccessResponse": {
+        "type": "object",
+        "description": "Current authority for the authenticated viewer; contribution consent is separate.",
+        "required": ["allowed"],
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "Whether the viewer may access that team's CRM."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The viewer's current team, if any."
+          }
+        }
+      },
       "CrmPermissionRole": {
         "type": "string",
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
+      },
+      "CrmPreviews": {
+        "type": "object",
+        "description": "The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.",
+        "required": ["companies", "contacts"],
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmCompanyPreview"
+            },
+            "description": "Company previews, in no particular order."
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactPreview"
+            },
+            "description": "Contact previews, in no particular order."
+          }
+        }
+      },
+      "CrmPreviewsRequest": {
+        "type": "object",
+        "description": "The CRM records whose chips to title.",
+        "properties": {
+          "companyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Companies to preview, at most 100."
+          },
+          "contactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Contacts to preview, at most 100."
+          }
+        }
       },
       "CrmStageInput": {
         "type": "object",
@@ -42930,6 +44920,26 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Hold back or restore only the caller's contribution of one thread.",
+            "required": ["thread_id", "excluded", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["set_thread_exclusion"]
+              },
+              "excluded": {
+                "type": "boolean",
+                "description": "False removes this exception; consent and other exclusions still apply."
+              },
+              "thread_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Must belong to a mailbox owned by the authenticated member."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Consent covers all available past and future emails in the primary mailbox.",
             "required": ["enabled", "action"],
             "properties": {
@@ -43762,6 +45772,46 @@
           }
         }
       },
+      "ExcludedEmailThread": {
+        "type": "object",
+        "description": "One private thread from the caller's own mailbox, never a teammate's copy.",
+        "required": ["thread_id", "link_id"],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact mailbox containing this copy."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Current subject, for the owner's privacy settings."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mailbox-local thread identity."
+          }
+        }
+      },
+      "ExcludedEmailThreads": {
+        "type": "object",
+        "description": "A bounded page of the caller's private threads, ordered by thread ID.",
+        "required": ["threads"],
+        "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Pass as `after` to read the next page."
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExcludedEmailThread"
+            },
+            "description": "At most fifty exclusions."
+          }
+        }
+      },
       "ExportDocumentResponse": {
         "type": "object",
         "required": ["presigned_url"],
@@ -44402,6 +46452,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -44413,6 +46468,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44779,6 +46839,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44841,6 +46906,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
@@ -48229,7 +50299,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "property"
+          "property",
+          "name"
         ]
       },
       "GuestChatMessage": {
@@ -48475,6 +50546,17 @@
               "format": "uuid"
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
+          },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -52571,7 +54653,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
           },
@@ -52628,6 +54710,691 @@
           "userId": {
             "type": "string",
             "description": "Authenticated Macro user identity; never a provider credential."
+          }
+        }
+      },
+      "PasswordAgentAccessRequestBody": {
+        "type": "object",
+        "description": "Access request body.",
+        "required": ["permission"],
+        "properties": {
+          "permission": {
+            "$ref": "#/components/schemas/PasswordPermission",
+            "description": "Requested permission."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentAccessRequestPage": {
+        "type": "object",
+        "description": "A page of requests for human review.",
+        "required": ["requests"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor of the next page."
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordAgentAccessRequestState"
+            },
+            "description": "Pending requests on items the caller may manage."
+          }
+        }
+      },
+      "PasswordAgentAccessRequestState": {
+        "type": "object",
+        "description": "An agent's request state.",
+        "required": [
+          "itemId",
+          "agentAccountId",
+          "status",
+          "revision",
+          "access"
+        ],
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/PasswordAgentItemAccess",
+            "description": "Current access."
+          },
+          "agentAccountId": {
+            "type": "string",
+            "description": "Agent account."
+          },
+          "itemId": {
+            "$ref": "#/components/schemas/PasswordItemId",
+            "description": "Item id."
+          },
+          "permission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordPermission",
+                "description": "Requested permission; null when none exists."
+              }
+            ]
+          },
+          "requestId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Request id; null when none exists."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Request revision; 0 when none exists."
+          },
+          "status": {
+            "$ref": "#/components/schemas/PasswordAgentRequestStatus",
+            "description": "Request status."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last transition."
+          }
+        }
+      },
+      "PasswordAgentAccessStatus": {
+        "type": "string",
+        "description": "Whether the agent can use an item now.",
+        "enum": ["usable", "request_access", "pending"]
+      },
+      "PasswordAgentApiField": {
+        "type": "string",
+        "description": "API credential fields an agent may select.",
+        "enum": ["key", "secret"]
+      },
+      "PasswordAgentCreateItem": {
+        "type": "object",
+        "description": "Agent item creation; the kind is the secret's tag.",
+        "required": ["operationId", "name", "secret"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUIDv7, stable across retries; becomes the item id."
+          },
+          "secret": {
+            "$ref": "#/components/schemas/PasswordAgentCreateSecret",
+            "description": "Typed values."
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Optional website URL."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentCreateSecret": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A website or application login.",
+            "required": ["password", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["login"]
+              },
+              "password": {
+                "$ref": "#/components/schemas/PasswordSecretString",
+                "description": "Required non-empty password."
+              },
+              "username": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "Optional username; omitted stores an empty slot."
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An API credential.",
+            "required": ["secret", "kind"],
+            "properties": {
+              "key": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "Optional API key; omitted stores an empty slot."
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["api"]
+              },
+              "secret": {
+                "$ref": "#/components/schemas/PasswordSecretString",
+                "description": "Required non-empty API secret."
+              }
+            }
+          }
+        ],
+        "description": "New item values; the item kind is this tag."
+      },
+      "PasswordAgentDiscloseRequest": {
+        "type": "object",
+        "description": "One-field disclosure request.",
+        "required": ["selector", "purpose"],
+        "properties": {
+          "expectedVersion": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "When given, the committed version must match."
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/PasswordAgentPurpose",
+            "description": "Audited intent."
+          },
+          "selector": {
+            "$ref": "#/components/schemas/PasswordAgentSecretSelector",
+            "description": "The single slot to disclose."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentDisclosed": {
+        "type": "object",
+        "description": "One disclosed field.",
+        "required": ["value", "version", "selector"],
+        "properties": {
+          "selector": {
+            "$ref": "#/components/schemas/PasswordAgentSecretSelector",
+            "description": "The selector that was disclosed."
+          },
+          "value": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "The selected value."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version it was read from."
+          }
+        }
+      },
+      "PasswordAgentEditableMetadata": {
+        "type": "object",
+        "description": "Agent-editable display fields.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "New URL; null clears it, absent keeps it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentErrorCode": {
+        "type": "string",
+        "description": "Closed, payload-free failure codes of the agent vault API.",
+        "enum": [
+          "unauthorized",
+          "invalid_agent",
+          "invalid_session_attribution",
+          "not_found",
+          "not_granted",
+          "pending",
+          "forbidden",
+          "invalid_request",
+          "unsupported_kind",
+          "field_not_set",
+          "version_conflict",
+          "vault_busy",
+          "rate_limited",
+          "vault_unavailable"
+        ]
+      },
+      "PasswordAgentFailure": {
+        "type": "object",
+        "description": "Sanitized agent vault failure.",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PasswordAgentErrorCode",
+            "description": "Machine-readable category; never contains request or secret values."
+          },
+          "retryAfterMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Present only on `rate_limited`.",
+            "minimum": 0
+          }
+        }
+      },
+      "PasswordAgentItemAccess": {
+        "type": "object",
+        "description": "Current agent access to one item, recomputed on every use.",
+        "required": ["status", "canUpdate", "canSetTotp", "permissionRevision"],
+        "properties": {
+          "canSetTotp": {
+            "type": "boolean",
+            "description": "Whether the agent may enroll a verification-code seed."
+          },
+          "canUpdate": {
+            "type": "boolean",
+            "description": "Whether the agent may update values and metadata."
+          },
+          "grantPermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordPermission",
+                "description": "The agent's current Agent grant on the item, if any. It shows what a\nreviewer can remove and is no authority: use also needs creator\nattribution or standing approval (`status`)."
+              }
+            ]
+          },
+          "pendingRequestId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Live request awaiting review."
+          },
+          "permissionRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision of this agent's grant/approval on the item."
+          },
+          "status": {
+            "$ref": "#/components/schemas/PasswordAgentAccessStatus",
+            "description": "Current status."
+          },
+          "useBasis": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordAgentUseBasis",
+                "description": "Basis of use when usable."
+              }
+            ]
+          }
+        }
+      },
+      "PasswordAgentLoginField": {
+        "type": "string",
+        "description": "Login item fields an agent may select.",
+        "enum": ["username", "password"]
+      },
+      "PasswordAgentPatchItem": {
+        "type": "object",
+        "description": "Agent item update.",
+        "required": ["operationId", "expectedVersion"],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version the update applies to."
+          },
+          "metadataPatch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordAgentEditableMetadata",
+                "description": "Display fields to replace."
+              }
+            ]
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUIDv7, stable across retries of this one update."
+          },
+          "secretPatch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordAgentSecretPatch",
+                "description": "Slots to replace."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentPurpose": {
+        "type": "string",
+        "description": "Accepted disclosure intent. Typing is a later additive value.",
+        "enum": ["copy"]
+      },
+      "PasswordAgentRequestStatus": {
+        "type": "string",
+        "description": "Wire request status.",
+        "enum": ["none", "pending", "approved", "denied", "revoked"]
+      },
+      "PasswordAgentResolveRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Grant the permission and standing approval together.",
+            "required": ["revision", "permission", "decision"],
+            "properties": {
+              "decision": {
+                "type": "string",
+                "enum": ["approve"]
+              },
+              "permission": {
+                "$ref": "#/components/schemas/PasswordPermission",
+                "description": "Granted permission."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Request revision observed by the reviewer."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Deny the request.",
+            "required": ["revision", "decision"],
+            "properties": {
+              "decision": {
+                "type": "string",
+                "enum": ["deny"]
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Request revision observed by the reviewer."
+              }
+            }
+          }
+        ],
+        "description": "Human decision on a pending request."
+      },
+      "PasswordAgentRevokeBody": {
+        "type": "object",
+        "description": "Human revocation of agent access.",
+        "required": ["expectedPermissionRevision", "scope"],
+        "properties": {
+          "expectedPermissionRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Permission revision observed by the reviewer."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PasswordAgentRevokeScope",
+            "description": "What to remove."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentRevokeScope": {
+        "type": "string",
+        "description": "What a revocation removes.",
+        "enum": ["approval", "grant_and_approval"]
+      },
+      "PasswordAgentSearchHit": {
+        "type": "object",
+        "description": "Metadata-only search hit; never values, usernames, notes or custom fields.",
+        "required": ["id", "name", "kind", "version", "access"],
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/PasswordAgentItemAccess",
+            "description": "Current access."
+          },
+          "id": {
+            "$ref": "#/components/schemas/PasswordItemId",
+            "description": "Item id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Stored kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Website URL."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed positive version."
+          }
+        }
+      },
+      "PasswordAgentSearchPage": {
+        "type": "object",
+        "description": "One search page.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordAgentSearchHit"
+            },
+            "description": "Hits, newest first."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor of the next page."
+          }
+        }
+      },
+      "PasswordAgentSecretPatch": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Login slots to replace.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["login"]
+              },
+              "password": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "New password."
+                  }
+                ]
+              },
+              "username": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "New username."
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "API credential slots to replace.",
+            "required": ["kind"],
+            "properties": {
+              "key": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "New API key."
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["api"]
+              },
+              "secret": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PasswordSecretString",
+                    "description": "New API secret."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Replacement of supplied slots; absent slots keep their stored value."
+      },
+      "PasswordAgentSecretSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A login item field.",
+            "required": ["field", "kind"],
+            "properties": {
+              "field": {
+                "$ref": "#/components/schemas/PasswordAgentLoginField",
+                "description": "Selected login field."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["login"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An API credential field.",
+            "required": ["field", "kind"],
+            "properties": {
+              "field": {
+                "$ref": "#/components/schemas/PasswordAgentApiField",
+                "description": "Selected API credential field."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["api"]
+              }
+            }
+          }
+        ],
+        "description": "Closed kind-aware selector of exactly one stored slot. Notes, custom fields\nand TOTP seeds are never selectable."
+      },
+      "PasswordAgentSetTotp": {
+        "type": "object",
+        "description": "Verification-code seed setup for an item the agent created.",
+        "required": ["operationId", "expectedVersion", "seed"],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version the setup applies to."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUIDv7, stable across retries; identifies the enrollment generation."
+          },
+          "seed": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Base32 seed."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentTotpCode": {
+        "type": "object",
+        "description": "A verification code with a conservative server-computed lifetime.",
+        "required": ["code", "expiresAt", "periodSeconds", "validForMs"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Current code; never the seed."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Conservative usable-until time under the documented provider clock bound;\nnot an observed generation instant."
+          },
+          "periodSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Code period in seconds.",
+            "minimum": 0
+          },
+          "validForMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Whole milliseconds from the server's final check until `expiresAt`.",
+            "minimum": 0
+          }
+        }
+      },
+      "PasswordAgentTotpCodeRequest": {
+        "type": "object",
+        "description": "Verification-code request.",
+        "required": ["purpose"],
+        "properties": {
+          "purpose": {
+            "$ref": "#/components/schemas/PasswordAgentPurpose",
+            "description": "Audited intent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordAgentUseBasis": {
+        "type": "string",
+        "description": "Why a usable item is usable.",
+        "enum": ["creator_grant", "approved_grant"]
+      },
+      "PasswordAgentWriteResult": {
+        "type": "object",
+        "description": "Created or updated item.",
+        "required": ["item", "version"],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/PasswordAgentSearchHit",
+            "description": "Item after the write."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version."
           }
         }
       },
@@ -52730,8 +55497,289 @@
       },
       "PasswordGranteeKind": {
         "type": "string",
-        "description": "Future principals can extend this without exposing agent controls in v1.",
-        "enum": ["user", "team"]
+        "description": "Grant recipient category. Agent grants are managed only through the agent\naccess routes and never appear in, or count toward, human sharing.",
+        "enum": ["user", "team", "agent"]
+      },
+      "PasswordImportBatch": {
+        "type": "object",
+        "description": "At most 25 credentials and 200 source folders in a request bounded to 4 MiB.",
+        "required": ["format", "target", "private", "folders", "items"],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportFolder"
+            },
+            "description": "Source folder tree, parents first; resend with each batch."
+          },
+          "format": {
+            "$ref": "#/components/schemas/PasswordImportFormat",
+            "description": "Source category recorded in the batch audit."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportItem"
+            },
+            "description": "Independently validated credentials."
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Omit the default team Edit grant on newly created items."
+          },
+          "target": {
+            "$ref": "#/components/schemas/PasswordImportTarget",
+            "description": "Root for source folders and otherwise unfiled items."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportBatchResult": {
+        "type": "object",
+        "description": "Partial batch success without credential values or display metadata.",
+        "required": ["folders", "items"],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportFolderResult"
+            },
+            "description": "Ensured source folders, in request order."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordImportItemResult"
+            },
+            "description": "One result per input item, in request order."
+          },
+          "targetFolderId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Destination folder; null for the vault root."
+          }
+        }
+      },
+      "PasswordImportErrorCode": {
+        "type": "string",
+        "description": "Closed, sanitized per-item failure categories.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "invalid_request",
+          "version_conflict",
+          "folder_missing",
+          "busy",
+          "vault_unavailable"
+        ]
+      },
+      "PasswordImportFolder": {
+        "type": "object",
+        "description": "Source folder; parents must precede children in every batch.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque identity from the client parser."
+          },
+          "name": {
+            "type": "string",
+            "description": "Validated using ordinary vault folder rules."
+          },
+          "parentKey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportKey",
+                "description": "Source parent; absent means the chosen target."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportFolderResult": {
+        "type": "object",
+        "description": "Source-to-vault folder identity without display names.",
+        "required": ["key", "folderId"],
+        "properties": {
+          "folderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Existing or ensured folder identity."
+          },
+          "key": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque source identity."
+          }
+        }
+      },
+      "PasswordImportFormat": {
+        "type": "string",
+        "description": "Recognized client-side source parser; contains no export contents.",
+        "enum": [
+          "one_password_pux",
+          "one_password_csv",
+          "bitwarden_json",
+          "bitwarden_csv",
+          "bitwarden_zip"
+        ]
+      },
+      "PasswordImportItem": {
+        "type": "object",
+        "description": "One normalized credential; intentionally has no Debug implementation.",
+        "required": ["sourceKey", "name", "kind", "favorite", "values"],
+        "properties": {
+          "favorite": {
+            "type": "boolean",
+            "description": "Favorite state from the export."
+          },
+          "folderKey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportKey",
+                "description": "Source folder; absent means the chosen target."
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Ordinary vault template."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, validated by the ordinary create path."
+          },
+          "sourceKey": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Stable source identity for idempotent retries."
+          },
+          "totp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordSecretString",
+                "description": "Optional zeroizing TOTP seed, enrolled only when missing."
+              }
+            ]
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Public website, validated before metadata persistence."
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/PasswordSecretValues",
+            "description": "Zeroizing confidential values sent only to the provider."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordImportItemResult": {
+        "type": "object",
+        "description": "Result for a single item; failed TOTP enrollment can still return the created item id.",
+        "required": ["sourceKey", "outcome"],
+        "properties": {
+          "errorCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordImportErrorCode",
+                "description": "Sanitized failure category, present only when failed."
+              }
+            ]
+          },
+          "itemId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordItemId",
+                "description": "Created or recovered identity, including when only TOTP failed."
+              }
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/PasswordImportOutcome",
+            "description": "Whether the item was newly created, retained, or failed."
+          },
+          "sourceKey": {
+            "$ref": "#/components/schemas/PasswordImportKey",
+            "description": "Opaque identity matching the request."
+          }
+        }
+      },
+      "PasswordImportKey": {
+        "type": "string",
+        "description": "Opaque source identity, bounded before hashing or returning it to a caller."
+      },
+      "PasswordImportOutcome": {
+        "type": "string",
+        "description": "Fixed per-item outcome.",
+        "enum": ["created", "already_present", "failed"]
+      },
+      "PasswordImportTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Validate and use a folder already in this team.",
+            "required": ["folderId", "kind"],
+            "properties": {
+              "folderId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Destination folder identity."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["existing"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Idempotently create a top-level destination folder.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["new"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Validated using ordinary vault folder rules."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Import directly into the team vault root.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["root"]
+              }
+            }
+          }
+        ],
+        "description": "Destination under which source folders are nested."
       },
       "PasswordItemFields": {
         "type": "object",
@@ -52869,6 +55917,21 @@
       "PasswordLoginUrl": {
         "type": "string",
         "description": "A public HTTP(S) login URL; credentials and userinfo are rejected before indexing."
+      },
+      "PasswordMatchNames": {
+        "type": "object",
+        "description": "Item names to look for before an import, in the body so they stay out of\nURLs and access logs.",
+        "required": ["names"],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names trimmed and lower-cased by the caller, compared with each item's\nlower-cased name; at most 500 (`password_import::vault::MAX_IMPORT_MATCH_NAMES`)."
+          }
+        },
+        "additionalProperties": false
       },
       "PasswordMoveFolderBody": {
         "type": "object",
@@ -53020,6 +56083,26 @@
         "type": "string",
         "format": "uuid",
         "description": "Team isolation boundary."
+      },
+      "PasswordTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An authorized human resolved, or revoked, an agent's access request.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["passwords.access_request.resolved"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/AccessRequestResolvedMetadata",
+                "description": "An authorized human resolved, or revoked, an agent's access request."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroPasswordsTopic`]."
       },
       "PasswordTotpBody": {
         "type": "object",
@@ -57922,7 +61005,8 @@
           "frecency",
           "touched_by_me",
           "notified_at",
-          "property"
+          "property",
+          "name"
         ]
       },
       "SoupApiSortDirection": {
@@ -59479,6 +62563,21 @@
                 "enum": ["harness"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Team, listed only by attention feeds.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupTeam",
+                "description": "Team, listed only by attention feeds."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -59729,6 +62828,26 @@
                 "description": "The property value, if set"
               }
             ]
+          }
+        }
+      },
+      "SoupTeam": {
+        "type": "object",
+        "description": "A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.",
+        "required": ["id", "name", "ownerId"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team uuid."
+          },
+          "name": {
+            "type": "string",
+            "description": "The team's display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who owns the team."
           }
         }
       },
@@ -64821,6 +67940,10 @@
           {
             "$ref": "#/components/schemas/UserTopicEvent",
             "description": "User profile events from the `macro.users` topic."
+          },
+          {
+            "$ref": "#/components/schemas/PasswordTopicEvent",
+            "description": "Vault facts addressed to one account from the `macro.passwords` topic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `message.posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."

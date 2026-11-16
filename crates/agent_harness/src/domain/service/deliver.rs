@@ -472,6 +472,9 @@ where
             return Ok(());
         };
         let session = self.sessions.get_session(session_id).await?;
+        // Every prompt names the agent itself, so it can tell a message that
+        // calls it by name from one meant for someone else.
+        let agent = self.sessions.session_bot(session.bot_id).await?;
         // Every prompt names the owner and its sender, so the agent can tell
         // a request from the person whose access it spends from anyone
         // else's. A session owned by a bot or team has no person to name.
@@ -496,6 +499,7 @@ where
             .compose(
                 &raw_prompt,
                 (!instructions.is_empty()).then_some(instructions.as_str()),
+                Some(&agent),
                 people.as_ref(),
                 context,
             )
