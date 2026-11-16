@@ -1,0 +1,64 @@
+import type { ListSearchSuggestions } from '@app/components/view-shell/ListHeader';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  createRecentEmailSearches,
+  matchRecentSearches,
+} from './recent-searches';
+
+/** A handful stays above the results without pushing them off screen. */
+const MAX_LISTED = 5;
+
+export type EmailSearchSuggestions = ListSearchSuggestions & {
+  /** The header's search field is open, so it owns the header. */
+  open: Accessor<boolean>;
+  setOpen: (open: boolean) => void;
+  /** Recent searches to list: only while the field has focus. */
+  listed: Accessor<string[]>;
+  setFocused: (focused: boolean) => void;
+};
+
+/**
+ * Recent searches offered under Email's search field. A search is remembered
+ * once the field is left with it, not on every keystroke.
+ */
+export function createEmailSearchSuggestions(options: {
+  userId: Accessor<string | undefined>;
+  search: Accessor<string>;
+  setSearch: (search: string) => void;
+}): EmailSearchSuggestions {
+  const recent = createRecentEmailSearches(options.userId);
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocusedState] = createSignal(false);
+  const [active, setActive] = createSignal(-1);
+
+  const listed = createMemo(() =>
+    focused()
+      ? matchRecentSearches(recent.recent(), options.search()).slice(
+          0,
+          MAX_LISTED
+        )
+      : []
+  );
+
+  return {
+    open,
+    setOpen,
+    listed,
+    setFocused: (next) => {
+      if (!next) recent.add(options.search());
+
+      setActive(-1);
+      setFocusedState(next);
+    },
+    count: () => listed().length,
+    // Typing can shorten the list under the active row.
+    active: () => Math.min(active(), listed().length - 1),
+    setActive,
+    pick: (index) => {
+      const query = listed()[index];
+      if (query === undefined) return;
+
+      options.setSearch(query);
+    },
+  };
+}

@@ -30,6 +30,18 @@ export function ListHeader(props: {
 }
 
 /**
+ * Rows a view lists under the field, such as recent searches. ArrowDown walks
+ * them before it reaches the results, and Enter picks the active one.
+ */
+export type ListSearchSuggestions = {
+  count: () => number;
+  /** The active row's index, or -1 while the field itself is active. */
+  active: () => number;
+  setActive: (index: number) => void;
+  pick: (index: number) => void;
+};
+
+/**
  * The query belongs to the view; only the expanded presentation is local.
  *
  * The field hands the keyboard to the results instead of trapping it:
@@ -45,10 +57,24 @@ export function ListHeaderSearch(props: {
   /** Moves keyboard focus into the view's result list. */
   focusResults?: () => void;
   registerFocus: (focus: () => void) => void;
+  /**
+   * The open field takes the rest of the header, and closes again when it is
+   * left empty. The view hides its other header actions while it is open.
+   */
+  wide?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
+  suggestions?: ListSearchSuggestions;
   ref?: (element: HTMLDivElement) => void;
 }) {
   const panel = useSplitPanel();
-  const [expanded, setExpanded] = createSignal(Boolean(props.value));
+  const [expanded, setExpandedState] = createSignal(Boolean(props.value));
+  const setExpanded = (open: boolean) => {
+    if (open === expanded()) return;
+
+    setExpandedState(open);
+    props.onOpenChange?.(open);
+  };
   let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
   const focus = () => {
@@ -102,7 +128,34 @@ export function ListHeaderSearch(props: {
     const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);
     if (goToFirst?.condition?.() ?? true) goToFirst?.keyDownHandler?.();
   };
-  onMount(() => props.registerFocus(focus));
+  onMount(() => {
+    props.registerFocus(focus);
+    // A view restored with a search starts with its field open.
+    if (expanded()) props.onOpenChange?.(true);
+  });
+
+  // Returns whether a suggestion took the key instead of the results.
+  const moveInSuggestions = (event: KeyboardEvent) => {
+    const suggestions = props.suggestions;
+    if (!suggestions) return false;
+
+    const active = suggestions.active();
+    if (event.key === 'ArrowDown' && active < suggestions.count() - 1) {
+      suggestions.setActive(active + 1);
+      return true;
+    }
+    if (event.key === 'ArrowUp' && active >= 0) {
+      suggestions.setActive(active - 1);
+      return true;
+    }
+    if (event.key === 'Enter' && active >= 0) {
+      suggestions.pick(active);
+      leave('first');
+      return true;
+    }
+
+    return false;
+  };
 
   // Escape in the list steps back out of the search. The field has left the
   // header whenever a thread or other detail has replaced the list, so that
@@ -130,7 +183,11 @@ export function ListHeaderSearch(props: {
   return (
     <div
       ref={props.ref}
-      class={cn('shrink-0', expanded() ? 'w-56 max-w-[40cqw] min-w-24' : 'w-8')}
+      class={cn(
+        !expanded() && 'w-8 shrink-0',
+        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24 shrink-0',
+        expanded() && props.wide && 'min-w-24 flex-1'
+      )}
     >
       <Show
         when={expanded()}
@@ -161,11 +218,20 @@ export function ListHeaderSearch(props: {
           onKeyDown={(event) => {
             // A view without a keyboard list keeps the keys for the field.
             if (!props.focusResults) return;
-            if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
             if (isComposing(event) || hasModifier(event)) return;
+            if (moveInSuggestions(event)) {
+              event.preventDefault();
+              return;
+            }
+            if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
 
             event.preventDefault();
             leave('first');
+          }}
+          onFocus={() => props.onFocusChange?.(true)}
+          onBlur={() => {
+            props.onFocusChange?.(false);
+            if (props.wide && !props.value.trim()) setExpanded(false);
           }}
           onEscape={() => leave('current')}
         />
