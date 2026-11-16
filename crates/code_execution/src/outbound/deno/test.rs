@@ -1404,6 +1404,6 @@ export async function main({token, hosts}) {
             .unwrap(),
     )
     .await;
-    server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
 }
