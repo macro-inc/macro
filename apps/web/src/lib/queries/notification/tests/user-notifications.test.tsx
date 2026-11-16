@@ -595,6 +595,28 @@ describe('useUserNotificationsQuery transport facade', () => {
     expect(query?.transport).toBe('rest');
     dispose();
   });
+
+  it('reports the active transport as pending, on REST, until the flags load', () => {
+    const [flag, setFlag] = createSignal({ enabled: false, loading: true });
+    useFeatureFlagMock.mockReturnValue(flag);
+    let active: UserNotificationsQuery | undefined;
+    let history: UserNotificationsQuery | undefined;
+
+    const dispose = renderWithClient(() => {
+      active = useUserNotificationsQuery(() => ({ limit: 500 }));
+      history = useUserNotificationsQuery(() => ({ limit: 50, done: true }));
+      return <div />;
+    });
+
+    expect(active?.isTransportPending).toBe(true);
+    expect(active?.transport).toBe('rest');
+    expect(history?.isTransportPending).toBe(false);
+
+    setFlag({ enabled: true, loading: false });
+    expect(active?.isTransportPending).toBe(false);
+    expect(active?.transport).toBe('graphql');
+    dispose();
+  });
 });
 
 describe('notification realtime status updates', () => {

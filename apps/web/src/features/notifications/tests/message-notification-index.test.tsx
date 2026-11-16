@@ -132,6 +132,14 @@ describe('MessageNotificationIndexProvider', () => {
       bulkMarkAsRead,
       isEnabled: () => true,
       withLocalOverrides: (n: UnifiedNotification) => n,
+      _notificationsQuery: {
+        get transport() {
+          return mocks.graphqlSoup().enabled ? 'graphql' : 'rest';
+        },
+        get isTransportPending() {
+          return mocks.graphqlSoup().loading;
+        },
+      },
     } as unknown as NotificationSource;
     // The normalized cache's answer for each entity's edge, by entity id.
     mocks.createQuery.mockImplementation((options: () => QueryOptions) => {
@@ -363,7 +371,30 @@ describe('MessageNotificationIndexProvider', () => {
     expect(bulkMarkAsRead).not.toHaveBeenCalled();
   });
 
-  it('keeps CRM contact threads on the feed, since no Soup read returns a contact', async () => {
+  it('reads a CRM contact thread from neither a Soup read nor the GraphQL feed, since neither holds a contact', () => {
+    const contactReply = notification(
+      'contact-reply',
+      { messageId: 'root' },
+      { entity_type: 'crm_contact', entity_id: 'contact-1' }
+    );
+    notificationsByEntity.mockReturnValue({
+      'crm_contact@contact-1': [contactReply],
+    });
+    render(() => (
+      <Thread
+        parent={{ type: 'crm_contact', id: 'contact-1' }}
+        messageIds={['root']}
+      />
+    ));
+
+    intersect();
+    expect(queries).toHaveLength(0);
+    expect(notificationsByEntity).not.toHaveBeenCalled();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+  });
+
+  it('keeps CRM contact threads on the feed in REST mode', async () => {
+    mocks.graphqlSoup = () => ({ enabled: false, loading: false });
     const contactReply = notification(
       'contact-reply',
       { messageId: 'root' },

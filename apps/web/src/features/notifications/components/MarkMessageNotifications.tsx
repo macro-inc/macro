@@ -1,11 +1,9 @@
+import { feedNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { useOptionalGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  compositeEntity,
-  type UnifiedNotification,
-} from '@notifications/types';
+import type { UnifiedNotification } from '@notifications/types';
 import type { MessageParent } from '@service-storage/messages';
 import type { JSXElement } from 'solid-js';
 import {
@@ -21,7 +19,8 @@ import { useMessageReadVisibility } from './MessageReadVisibility';
 
 /**
  * Share exact unread matches so each message avoids scanning the channel
- * history. An undefined index leaves each message reading the global feed.
+ * history. An undefined index leaves each message reading the global feed,
+ * for the parent types it can hold.
  */
 export const MessageNotificationIndexContext =
   createContext<
@@ -38,9 +37,10 @@ export function MarkMessageNotifications(props: {
 }) {
   // TODO(dev-rb/notifications): Without an index (REST mode, CRM contact
   // threads), messages still discover their notifications through the global
-  // NotificationSource. Keep matching metadata.messageId exactly: the
-  // CHANNEL_MESSAGE entity scope is thread-aware, so targeting a root also
-  // includes reply notifications.
+  // NotificationSource, which with GraphQL Soup holds none for CRM contacts.
+  // Keep matching metadata.messageId exactly: the CHANNEL_MESSAGE entity
+  // scope is thread-aware, so targeting a root also includes reply
+  // notifications.
   const notificationSource = useOptionalGlobalNotificationSource();
   const scopedIndex = useContext(MessageNotificationIndexContext);
   const isMessageNotification = (n: UnifiedNotification) => {
@@ -58,10 +58,7 @@ export function MarkMessageNotifications(props: {
         (notification) => notification.state === 'unseen'
       );
     }
-    const feed =
-      notificationSource.notificationsByEntity()[
-        compositeEntity(props.parent)
-      ] ?? [];
+    const feed = feedNotificationsForEntity(props.parent, notificationSource);
     return feed.filter(
       (notification) =>
         notification.state === 'unseen' && isMessageNotification(notification)

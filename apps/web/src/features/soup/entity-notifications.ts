@@ -1,3 +1,4 @@
+import type { Entity } from '@core/types';
 import type {
   ChannelEntity,
   ChannelMessageEntity,
@@ -106,6 +107,40 @@ export type EntityWithRawNotifications<T extends EntityData> = T & {
 };
 
 /**
+ * The types the GraphQL notification feed files notifications under: the
+ * entities its unfiltered NOTIFIED_AT page lists (`included_types` in
+ * crates/soup/src/outbound/pg_soup_repo/notified.rs, where initiatives and
+ * agent sessions are opt-in). A channel thread's edge adds only channel
+ * notifications, which are filed under the channel.
+ */
+const GRAPHQL_FEED_ENTITY_TYPES: ReadonlySet<Entity['type']> = new Set([
+  'document',
+  'chat',
+  'project',
+  'channel',
+  'email_thread',
+  'calendar_event',
+  'foreign_entity',
+]);
+
+/**
+ * The global feed's notifications filed under an entity. With GraphQL Soup,
+ * and until the flags say which transport applies, a type the GraphQL feed
+ * never holds reads nothing, so it never starts the feed; the REST feed
+ * holds every type.
+ */
+export function feedNotificationsForEntity(
+  entity: Entity,
+  source: NotificationSource
+): UnifiedNotification[] {
+  if (!GRAPHQL_FEED_ENTITY_TYPES.has(entity.type)) {
+    const query = source._notificationsQuery;
+    if (query.isTransportPending || query.transport === 'graphql') return [];
+  }
+  return source.notificationsByEntity()[compositeEntity(entity)] ?? [];
+}
+
+/**
  * Reads attached GraphQL notifications or the global source with the same
  * channel-thread scoping for membership checks and rendered rows.
  */
@@ -121,11 +156,7 @@ export function getEntityNotifications<T extends EntityData>(
       const applyOverrides = source.withLocalOverrides;
       return applyOverrides ? raw.map(applyOverrides) : raw;
     }
-    return (
-      source.notificationsByEntity()[
-        compositeEntity(toNotificationEntity(entity))
-      ] ?? []
-    );
+    return feedNotificationsForEntity(toNotificationEntity(entity), source);
   };
   const notifications = read();
   return options.scopeChannelThreads &&

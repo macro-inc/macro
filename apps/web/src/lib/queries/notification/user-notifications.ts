@@ -194,6 +194,8 @@ export type UserNotificationsQuery = {
   readonly isFetchingNextPage: boolean;
   readonly hasNextPage: boolean;
   readonly transport: 'rest' | 'graphql';
+  /** Whether the flags that choose `transport` are still loading; it reads `rest` until they do. */
+  readonly isTransportPending: boolean;
   fetchNextPage(): Promise<void>;
   refetch(): Promise<void>;
 };
@@ -291,6 +293,9 @@ export function useUserNotificationsQuery(
     },
     get transport() {
       return usesGraphql() ? 'graphql' : 'rest';
+    },
+    get isTransportPending() {
+      return args().done !== true && graphqlSoupFlag().loading;
     },
     async fetchNextPage() {
       if (usesGraphql()) await graphqlQuery().fetchNextPage();
