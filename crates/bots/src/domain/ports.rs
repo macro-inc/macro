@@ -494,6 +494,10 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The harness is an agent teammate's computer. People message the agent;
+    /// no other agent runs there.
+    #[error("This computer belongs to an agent teammate. Message them instead.")]
+    AgentTeammateComputer,
     /// The MCP app directory could not answer, so a slug was not stored.
     #[error("{0}")]
     Unavailable(String),

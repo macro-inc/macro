@@ -43,7 +43,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
     { type: 'database', id: 'wedding' },
   ]);
   expect(getDatabase).toHaveBeenCalledWith({ id: 'wedding' });
-  expect(owned.get('wedding')).toEqual({
+  expect(owned.previews.get('wedding')).toEqual({
     id: 'wedding',
     type: 'database',
     access: 'access',
@@ -60,7 +60,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
   const gone = await fetchRestPreviewBatch([
     { type: 'database', id: 'deleted' },
   ]);
-  expect(gone.get('deleted')).toEqual({
+  expect(gone.previews.get('deleted')).toEqual({
     id: 'deleted',
     type: 'database',
     access: 'does_not_exist',
@@ -73,7 +73,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
   const denied = await fetchRestPreviewBatch([
     { type: 'database', id: 'private' },
   ]);
-  expect(denied.get('private')).toEqual({
+  expect(denied.previews.get('private')).toEqual({
     id: 'private',
     type: 'database',
     access: 'no_access',

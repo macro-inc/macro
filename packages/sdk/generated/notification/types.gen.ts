@@ -506,10 +506,26 @@ export type CommonChannelMetadata = {
 };
 
 /**
+ * The agent teammate a computer was bought for, so its inviter hears about
+ * the agent rather than the machine.
+ */
+export type ComputerSetupAgent = {
+    /**
+     * The agent's name.
+     */
+    name: string;
+    /**
+     * The agent's Macro user id, to open a DM with it.
+     */
+    userId: string;
+};
+
+/**
  * A team's Macro computer finished first-time setup, or could not be set
  * up. Sent to its buyer, who continues (or retries) from the setup flow.
  */
 export type ComputerSetupMetadata = {
+    agent?: null | ComputerSetupAgent;
     /**
      * The computer that was set up.
      */
@@ -1404,6 +1420,12 @@ export type NotifEvent = {
     tag: 'channel_access_requested';
 } | {
     /**
+     * An agent asked for access to a vault item the user manages.
+     */
+    content: PasswordAccessRequestedMetadata;
+    tag: 'password_access_requested';
+} | {
+    /**
      * One of the user's routines finished a run, successfully or not.
      */
     content: RoutineRunFinishedMetadata;
@@ -1466,6 +1488,30 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
+
+/**
+ * An agent asked for access to a team vault item. Sent to the item's current
+ * human creator and the team's current administrators, with the agent as
+ * sender. Carries the item name and opaque ids only, never values.
+ */
+export type PasswordAccessRequestedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Item display name when the request was made.
+     */
+    itemName: string;
+    /**
+     * Request under review.
+     */
+    requestId: string;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
 
 /**
  * the value we send as the payload in the ios notification

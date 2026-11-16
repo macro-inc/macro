@@ -17,3 +17,6 @@ pub const GROUPS_REQUESTED: &str = "whatsapp_roster_requested";
 pub const ACCOUNT_CHANGED: &str = "whatsapp_account_changed";
 /// `<account_id>`: a replica released the account (session service only).
 pub const ACCOUNT_RELEASED: &str = "whatsapp_account_released";
+/// `<account_id>`: a profile picture's bytes are staged for DSS to store
+/// (DSS listens).
+pub const PICTURE_STAGED: &str = "whatsapp_picture_staged";

@@ -261,6 +261,7 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        _agent: Option<&agent_session::domain::model::SessionBot>,
         people: Option<&PromptPeople>,
         context: Option<&TriggerContext>,
     ) -> crate::domain::error::Result<String> {

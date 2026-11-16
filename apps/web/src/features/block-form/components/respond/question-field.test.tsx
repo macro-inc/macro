@@ -229,3 +229,47 @@ it('answers a time range with whole days, or with times once All day is off', as
   ]);
   vi.useRealTimers();
 });
+
+it('answers a percentage question in percentage points and sends the stored fraction', () => {
+  const [value, setValue] = createSignal<FormCellValue | undefined>({
+    type: 'number',
+    value: 0.125,
+  });
+  const changes: (FormCellValue | undefined)[] = [];
+  render(() => (
+    <QuestionField
+      scope="respond-rate"
+      question={{
+        id: 'q-rate',
+        columnId: 'rate',
+        helpText: '',
+        required: false,
+        widget: null,
+      }}
+      column={{
+        id: 'rate',
+        name: 'Rate',
+        kind: { type: 'number' },
+        options: [],
+        percentage: true,
+      }}
+      widget={null}
+      number={1}
+      value={value()}
+      problem={undefined}
+      disabled={false}
+      compact={false}
+      upload={async () => undefined}
+      renderEntityPicker={() => null}
+      renderRelationPicker={() => null}
+      onChange={(next) => {
+        changes.push(next);
+        setValue(next);
+      }}
+    />
+  ));
+  const input = screen.getByPlaceholderText<HTMLInputElement>('Percent');
+  expect(input.value).toBe('12.5');
+  fireEvent.input(input, { target: { value: '25' } });
+  expect(changes).toEqual([{ type: 'number', value: 0.25 }]);
+});

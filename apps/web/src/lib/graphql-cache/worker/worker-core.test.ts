@@ -1068,6 +1068,130 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs the rows of a typed search ahead of queued reads and their fences, past network results, but not past a local change', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const written = { changed: [], affectedOps: [], reset: false };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return '00000000-0000-4000-8000-000000000001';
+        },
+        teardownOperation: async () => {
+          order.push('teardown');
+        },
+        writeQuery: async () => {
+          order.push('write');
+          return { ...written, revision: INITIAL_CACHE_REVISION };
+        },
+        enqueueOptimisticMutation: async () => {
+          order.push('local-change');
+          return {
+            ...written,
+            revision: INITIAL_CACHE_REVISION,
+            revalidations: [],
+            transactionId: '1',
+            upsertKind: { kind: 'inserted' },
+            initialClaim: { kind: 'not-runnable' },
+          };
+        },
+        readRecordsByKeys: async (
+          _document: string,
+          _fragment: string,
+          keys: string[]
+        ) => {
+          order.push(`rows:${keys[0]}`);
+          return { revision: INITIAL_CACHE_REVISION, records: [] };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const rows = (id: number, key: string, typed: boolean) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: [`GraphqlSoupDocument:${key}`],
+        ...(typed ? { priority: 'typed-search' as const } : {}),
+      });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const queued = [
+      core.handleRequest(port, {
+        id: 3,
+        kind: 'read',
+        opId: 'visible',
+        query: 'query Visible { visible }',
+        priority: 'user-visible',
+      }),
+      core.handleRequest(port, { id: 4, kind: 'current-storage-generation' }),
+      rows(5, 'plain', false),
+      rows(6, 'typed', true),
+      core.handleRequest(port, { id: 7, kind: 'teardown', opId: 'visible' }),
+      core.handleRequest(port, {
+        id: 8,
+        kind: 'write',
+        query: 'query Current { document { id } }',
+        data: { document: { id: 'doc-1' } },
+      }),
+      rows(9, 'typed-after-network-write', true),
+      core.handleRequest(port, {
+        id: 10,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: '00000000-0000-4000-8000-000000000009',
+        query: 'mutation Update { update }',
+        data: { update: true },
+        createdAtMs: 10,
+        owner: 'runner',
+        nowMs: 10,
+        leaseExpiresAtMs: 1_010,
+      }),
+      core.handleRequest(port, { id: 11, kind: 'current-storage-generation' }),
+      core.handleRequest(port, {
+        id: 12,
+        kind: 'read',
+        opId: 'later',
+        query: 'query Later { later }',
+        priority: 'user-visible',
+      }),
+      rows(13, 'typed-after-local-change', true),
+    ];
+    blocker.resolve();
+    await Promise.all([running, ...queued]);
+    expect(order).toEqual([
+      'read:blocker',
+      'rows:GraphqlSoupDocument:typed',
+      'rows:GraphqlSoupDocument:typed-after-network-write',
+      'read:visible',
+      'generation',
+      'rows:GraphqlSoupDocument:plain',
+      'teardown',
+      'write',
+      'local-change',
+      'generation',
+      'read:later',
+      'rows:GraphqlSoupDocument:typed-after-local-change',
+    ]);
+  });
+
   it('collects the requests already sent before starting one, so a typed search is not run in arrival order', async () => {
     const order: string[] = [];
     const resumes: (() => void)[] = [];

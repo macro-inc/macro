@@ -26,6 +26,9 @@ read it before changing behaviour.
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
   authentication_service.
+- `src/outbound/pg/agents.rs`: `ComputerAgents`, also alone as
+  `PgComputerAgents`, which implements harnesses' `ComputerTeamAgents` so
+  harness listings mark an agent teammate's computer.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
@@ -72,6 +75,8 @@ read it before changing behaviour.
   `computers/setup_notice.rs`): `Ready` on the first macrod connection,
   `Failed` on each give-up before it (keyed by `failed_at`, so a retried
   attempt notifies again). It never fails the computer when it cannot be sent.
+  `SetupNotice.agent` names the agent teammate an agent computer runs
+  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related

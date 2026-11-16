@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{CastVerdict, ColumnConversion, ConvertedCell};
+use crate::domain::models::{CastVerdict, ColumnConfig, ColumnConversion, ConvertedCell};
 use models_databases::{EntityKind, EntityRef, RowChange};
 use models_properties::shared::EntityReference;
 
@@ -573,6 +573,7 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
         is_multi_select,
         specific_entity_type: None,
         relation: false,
+        percentage: false,
         cast: CastVerdict::Safe,
         reason: None,
         failures: 0,
@@ -627,6 +628,16 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
                 Some("2 values aren't numbers"),
                 &["Sam", "https://macro.com"]
             ),
+            ColumnCast {
+                percentage: true,
+                ..checked(
+                    DataType::Number,
+                    false,
+                    2,
+                    Some("2 values aren't numbers"),
+                    &["Sam", "https://macro.com"]
+                )
+            },
             checked(DataType::SelectString, false, 0, None, &[]),
             checked(DataType::SelectString, true, 0, None, &[]),
             no_values_fit(
@@ -1126,4 +1137,55 @@ async fn numeric_selects_offer_dates_only_while_the_column_is_empty() {
         assert_eq!(date.failures, 1);
         assert_eq!(date.reason.as_deref(), Some("1 value isn't a date"));
     }
+}
+
+#[tokio::test]
+async fn a_number_column_becomes_percentage_without_rescaling_values() {
+    let seeded = seeded().await;
+    let before = seeded.plus_ones_column.property_definition_id;
+    seeded
+        .service
+        .apply_ops(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            retype(&seeded, seeded.plus_ones_column.id, ColumnKind::Percentage),
+        )
+        .await
+        .unwrap();
+
+    let world = seeded.world.lock().unwrap();
+    let column = world
+        .columns
+        .iter()
+        .find(|column| column.id == seeded.plus_ones_column.id)
+        .unwrap();
+    assert_eq!(column.config, Some(ColumnConfig::Percentage));
+    assert_eq!(column.property_definition_id, before);
+    assert_eq!(
+        world.cells[&seeded.row_id][&before],
+        PropertyValue::Num(2.0)
+    );
+    drop(world);
+
+    seeded
+        .service
+        .apply_ops(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            retype(&seeded, seeded.plus_ones_column.id, ColumnKind::Number),
+        )
+        .await
+        .unwrap();
+    let world = seeded.world.lock().unwrap();
+    let column = world
+        .columns
+        .iter()
+        .find(|column| column.id == seeded.plus_ones_column.id)
+        .unwrap();
+    assert_eq!(column.config, None);
+    assert_eq!(column.property_definition_id, before);
+    assert_eq!(
+        world.cells[&seeded.row_id][&before],
+        PropertyValue::Num(2.0)
+    );
 }

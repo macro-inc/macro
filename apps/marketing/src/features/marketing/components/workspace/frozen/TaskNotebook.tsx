@@ -250,7 +250,7 @@ export function TaskNotebook(props: {
                   contentEditable
                   role="textbox"
                   aria-label="Task title"
-                  class="ph-no-capture text-2xl font-semibold outline-none"
+                  class="ph-no-capture text-2xl font-medium outline-none"
                   onBlur={(e) =>
                     save({
                       title:

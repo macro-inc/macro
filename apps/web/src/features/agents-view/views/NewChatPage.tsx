@@ -4,13 +4,12 @@ import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { t } from '@app/lib/i18n';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
@@ -59,6 +58,7 @@ import {
 import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
@@ -358,17 +358,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
-    return createInputAttachmentTracker({
-      // Unknown identities never read shared storage. Parents may own the
-      // text draft without owning files; those still persist here.
-      persistenceKey: identity
-        ? `${key}:${encodeURIComponent(identity)}`
-        : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({
@@ -622,11 +618,9 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      modelName={modelLabel(
+      modelName={catalogModelLabel(
         composerModelOverride(),
-        selectedCatalog
-          .models()
-          .find((model) => model.id === composerModelOverride())?.name
+        selectedCatalog.models()
       )}
       supportsImages={
         selectedCatalog

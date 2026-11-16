@@ -1,5 +1,5 @@
 import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
@@ -270,10 +270,9 @@ export function AgentComposer(props: {
             <QueuedPrompts
               items={queuedItems()}
               disabled={readOnly()}
-              onEdit={(actionId, prompt) => {
-                if (!readOnly())
-                  fireAndForget(queue.edit(actionId, prompt), 'agent-composer');
-              }}
+              onEdit={(actionId, prompt) =>
+                readOnly() ? undefined : queue.edit(actionId, prompt)
+              }
               onRemove={(actionId) => {
                 if (!readOnly())
                   fireAndForget(queue.remove(actionId), 'agent-composer');
@@ -343,11 +342,9 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        modelName={modelLabel(
+        modelName={catalogModelLabel(
           metadata()?.model ?? undefined,
-          metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
-          )?.name
+          metadata()?.supportedModels ?? []
         )}
         supportsImages={
           metadata()?.supportedModels.find(

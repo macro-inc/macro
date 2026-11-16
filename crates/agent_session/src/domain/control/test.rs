@@ -34,6 +34,61 @@ fn answers() -> [AgentAction; 2] {
 }
 
 #[test]
+fn a_program_cannot_answer_an_elicitation() {
+    let action = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation", "requestId": 0, "action": "accept"
+    }))
+    .unwrap();
+
+    let result = ControlEvent::authorized(
+        action,
+        None,
+        None,
+        None,
+        ControlPrincipal::Program,
+        access(AccessLevel::Owner),
+    );
+
+    assert!(matches!(result, Err(AgentSessionError::Forbidden)));
+}
+
+#[test]
+fn programs_cannot_answer_either_interaction_kind() {
+    for level in [AccessLevel::Edit, AccessLevel::Owner] {
+        for action in answers() {
+            assert!(matches!(
+                ControlEvent::authorized(
+                    action,
+                    None,
+                    None,
+                    None,
+                    ControlPrincipal::Program,
+                    access(level),
+                ),
+                Err(AgentSessionError::Forbidden)
+            ));
+        }
+    }
+}
+
+#[test]
+fn programs_can_still_stop_a_session() {
+    let action = serde_json::from_value(serde_json::json!({ "type": "stop" })).unwrap();
+
+    let event = ControlEvent::authorized(
+        action,
+        None,
+        None,
+        None,
+        ControlPrincipal::Program,
+        access(AccessLevel::Edit),
+    )
+    .unwrap();
+
+    assert_eq!(event.actor, Some(user()));
+}
+
+#[test]
 fn editors_and_owners_can_answer_both_interaction_kinds() {
     for level in [AccessLevel::Edit, AccessLevel::Owner] {
         for action in answers() {

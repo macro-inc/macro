@@ -9,7 +9,7 @@ import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
-  classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
@@ -518,7 +518,7 @@ async function activate(
       name: 'graphql_cache.db_ready',
       operationCategory: 'initialization',
       outcome: 'error',
-      errorCode: classifyCacheError(error),
+      ...describeCacheError(error),
       durationMs: now() - activationStartedAt,
     });
     telemetry.flush();

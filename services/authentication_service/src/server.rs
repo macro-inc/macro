@@ -407,10 +407,8 @@ async fn run_server() -> anyhow::Result<()> {
 
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
-    let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
-        user_roles_and_permissions_macro_db.clone(),
-        user_roles_and_permissions_macro_db,
-    );
+    let user_roles_and_permissions_service =
+        UserRolesAndPermissionsServiceImpl::new(user_roles_and_permissions_macro_db);
 
     let stripe_prices = api::StripePrices {
         premium: config.stripe_price_id.to_string(),
@@ -701,6 +699,13 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
+        match feature_flags.clone() {
+            Some(flags) => Arc::new(crate::outbound::crm_member_access::FlaggedCrmAccessRollout(
+                flags,
+            )),
+            None => Arc::new(teams::domain::crm_member_access::DisabledCrmAccessRollout),
+        };
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
@@ -715,6 +720,7 @@ async fn run_server() -> anyhow::Result<()> {
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_crm_access_rollout(crm_access_rollout)
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_rollout = feature_flags
         .clone()
@@ -757,6 +763,7 @@ async fn run_server() -> anyhow::Result<()> {
             computer_service.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
         ),
+        agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
@@ -800,6 +807,66 @@ async fn run_server() -> anyhow::Result<()> {
         computer_billing_stop.clone(),
     ));
     computer_billing.close();
+    // The Stripe event inbox: the webhook stores events; every replica's
+    // worker applies due cursors (leased, so replicas never collide), and
+    // one replica a day runs the detect-only audit.
+    let stripe_inbox_repo = stripe_inbox::outbound::pg::PgInbox::new(db.clone());
+    let stripe_inbox_reader = Arc::new(stripe_inbox::outbound::stripe_api::StripeApiReader::new(
+        stripe_client.clone(),
+        STRIPE_INBOX_READS_PER_SECOND,
+    ));
+    let stripe_consumers = Arc::new(crate::outbound::stripe_consumers::StripeConsumers {
+        prices: stripe_prices.seat_prices()?,
+        identity: crate::outbound::stripe_identity::PgStripeIdentity::new(db.clone()),
+        customers: stripe_inbox::domain::customers::StripeCustomers::new(
+            stripe_inbox_repo.clone(),
+            stripe_inbox_reader.clone(),
+        ),
+        roles: Arc::new(user_roles_and_permissions_service.clone()),
+        teams: teams_service.clone(),
+        billing: ai_billing_service.clone(),
+        computers: computer_service.clone(),
+        gtm: gtm_invite_service.clone(),
+        analytics: analytics_client.clone(),
+        stripe: stripe_client.clone(),
+    });
+    let stripe_inbox = Arc::new(stripe_inbox::domain::service::InboxService::new(
+        stripe_inbox_repo.clone(),
+        stripe_inbox_reader,
+        stripe_consumers,
+        matches!(config.environment, Environment::Production),
+    ));
+    let stripe_audit = Arc::new(stripe_inbox::domain::audit::AuditService::new(
+        stripe_inbox_repo,
+        Arc::new(stripe_inbox::outbound::stripe_api::StripeApiReader::new(
+            stripe_client.clone(),
+            STRIPE_AUDIT_READS_PER_SECOND,
+        )),
+        Arc::new(crate::outbound::stripe_audit::StripeDomainAudit {
+            teams: teams_repo_impl.clone(),
+            roles: Arc::new(user_roles_and_permissions_service.clone()),
+            identity: crate::outbound::stripe_identity::PgStripeIdentity::new(db.clone()),
+        }),
+    ));
+    let stripe_inbox_stop = CancellationToken::new();
+    let stripe_inbox_tasks = TaskTracker::new();
+    let stripe_inbox_wake = Arc::new(tokio::sync::Notify::new());
+    stripe_inbox_tasks.spawn(stripe_inbox::outbound::pg_wake::listen(
+        db.clone(),
+        stripe_inbox_wake.clone(),
+        stripe_inbox_stop.clone(),
+    ));
+    stripe_inbox_tasks.spawn(stripe_inbox::inbound::worker::run_inbox_worker(
+        stripe_inbox.clone(),
+        stripe_inbox_wake,
+        stripe_inbox_stop.clone(),
+    ));
+    stripe_inbox_tasks.spawn(stripe_inbox::inbound::worker::run_audit(
+        stripe_audit,
+        stripe_inbox::inbound::worker::AUDIT_CHECK_INTERVAL,
+        stripe_inbox_stop.clone(),
+    ));
+    stripe_inbox_tasks.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -844,6 +911,10 @@ async fn run_server() -> anyhow::Result<()> {
     let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
         PgBotsRepo::new(db.clone()),
         macro_event_broker.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(
+            harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+        ),
     ));
 
     let server_result = api::setup_and_serve(
@@ -894,7 +965,7 @@ async fn run_server() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
             computer_prices,
-            computer_billing_observer: computer_service.clone(),
+            stripe_inbox,
             computer_service,
             team_agents_service,
             domain_notice_service,
@@ -938,6 +1009,19 @@ async fn run_server() -> anyhow::Result<()> {
     // step commits on its own and the next sweep, on any replica, resumes.
     if let Some(sweep) = settlement_sweep {
         sweep.abort();
+    }
+
+    // Lets an inbox pass finish its applies; an interrupted one is only
+    // retried, since cursors advance after each apply.
+    stripe_inbox_stop.cancel();
+    if tokio::time::timeout(STRIPE_INBOX_DRAIN_TIMEOUT, stripe_inbox_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = STRIPE_INBOX_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the stripe inbox worker to finish"
+        );
     }
 
     // Lets a billing pass in progress finish its Stripe call and record it.
@@ -984,6 +1068,12 @@ async fn run_server() -> anyhow::Result<()> {
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPUTER_BILLING_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
+const STRIPE_INBOX_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
+/// Stripe reads per replica for the inbox: its 20 req/s share of the live
+/// limit, over up to ten replicas.
+const STRIPE_INBOX_READS_PER_SECOND: u32 = 2;
+/// Stripe reads for the daily audit, which one replica runs.
+const STRIPE_AUDIT_READS_PER_SECOND: u32 = 5;
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";

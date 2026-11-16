@@ -302,10 +302,13 @@ pub struct ToolField {
     /// Whether the user cannot write it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub read_only: bool,
+    /// For monetary amounts, the field that stores this entry's currency code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency_field: Option<String>,
 }
 
-impl From<&PipelineField> for ToolField {
-    fn from(field: &PipelineField) -> Self {
+impl ToolField {
+    fn for_pipeline(field: &PipelineField, overview: &PipelineOverview) -> Self {
         Self {
             name: field.name.clone(),
             field_type: field.kind.into(),
@@ -315,8 +318,11 @@ impl From<&PipelineField> for ToolField {
                 .iter()
                 .map(|(_, label)| label.clone())
                 .collect(),
-            required: field.required,
+            required: overview.requires(field),
             read_only: !field.writable,
+            currency_field: overview
+                .currency_field(field)
+                .map(|currency| currency.name.clone()),
         }
     }
 }
@@ -370,7 +376,11 @@ impl From<&PipelineOverview> for ToolPipeline {
                 AccessLevel::Owner => ToolPipelineAccess::Owner,
             },
             shared_with_team: pipeline.sharing == PipelineSharing::Team,
-            fields: overview.fields.iter().map(ToolField::from).collect(),
+            fields: overview
+                .fields
+                .iter()
+                .map(|field| ToolField::for_pipeline(field, overview))
+                .collect(),
             version: overview.version.0,
         }
     }
@@ -412,6 +422,9 @@ pub struct ToolEntry {
     /// Its filled-in fields by name: text, a number, true/false, a date, or a
     /// list when a field holds several values. People are macro| user ids.
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Currency codes keyed by monetary field name, including renamed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub currencies: BTreeMap<String, String>,
 }
 
 impl From<&PipelineEntryView> for ToolEntry {
@@ -419,6 +432,7 @@ impl From<&PipelineEntryView> for ToolEntry {
         Self {
             entry_id: entry.entry_id.into_uuid(),
             record: entry.record.as_ref().map(Into::into),
+            currencies: entry.currencies.clone(),
             fields: entry
                 .fields
                 .iter()

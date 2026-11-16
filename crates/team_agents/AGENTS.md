@@ -64,7 +64,9 @@ An agent's status comes from its computer (`provisioning`, `running`,
 ## Gotchas
 
 - The flag is a rollout gate, never authorization; team roles come from the
-  receipt.
+  receipt. Admin requests check the acting admin; enrollment checks the
+  agent's creator (`agent_credentials::agent_teammates_enabled`), because
+  PostHog targeting never matches an agent's own account.
 - Never log or trace the agent's user id: it carries an email. Use
   `agent_credentials::telemetry_id`.
 - Each enrollment rotates the agent's API key and repo token, so a lost

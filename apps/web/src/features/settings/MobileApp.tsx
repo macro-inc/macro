@@ -135,8 +135,8 @@ function StoreQrCode() {
         size="sm"
         tooltip={t('settingsMobileApp.copyStoreLink', { store: store().name })}
         onClick={() => copy(storeListingUrl(platform()))}
+        icon={<LinkIcon class="size-3.5" />}
       >
-        <LinkIcon class="size-3.5" />
         {t('settingsMobileApp.copyLink')}
       </CopyButton>
     </div>
