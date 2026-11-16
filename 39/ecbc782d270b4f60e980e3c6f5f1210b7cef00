@@ -1,0 +1,21 @@
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_4034a1ab8352ec::t_ab3cd24be5ba30 356-367,369-373
+packages/sdk-ocaml/analyzer/test/corpus/forged_reexported_type.ml
+  s_4034a1ab8352ec::t_eb3b5feca6b2a3 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "39ecbc782d270b4f60e980e3c6f5f1210b7cef00",
+  "prompts": {},
+  "sessions": {
+    "s_4034a1ab8352ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c071e5-bedc-444f-93e5-7bacdda05a7b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
