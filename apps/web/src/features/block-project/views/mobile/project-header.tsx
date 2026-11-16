@@ -1,14 +1,13 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
 import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName } from '@core/block';
-import { isMobile } from '@core/mobile/isMobile';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { useProjectHeaderTools } from '../shared/project-header-parts';
 
 /**
  * The project block's header on touch: the title with its menu, and Info.
- * The title menu offers Share, and on phones Chat and Create too.
+ * The title menu offers Chat, Create and Share.
  */
 export function MobileProjectHeader() {
   const entityKind = useBlockAliasedName();
@@ -28,11 +27,7 @@ export function MobileProjectHeader() {
         menuName={name()}
         iconType="project"
         itemType="project"
-        menuTools={
-          isMobile()
-            ? [actions.chat, ...createTools, actions.share]
-            : [actions.share]
-        }
+        menuTools={[actions.chat, ...createTools, actions.share]}
         ops={ops()}
       />
       <CreateDialog />
