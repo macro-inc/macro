@@ -11,10 +11,12 @@
  *
  * Source's own undo is fixture history (@lexical/history), which restores the
  * exact snapshot. The app undoes through Loro (registerLoroHistory) instead, so
- * native's undo is compared with that app path derived from the same run: the
- * stored-null rule on the JSON and the local awareness on the selection (see
- * appUndone). Full app Loro history acceptance stays with the
- * table-hover-browser-test history epoch.
+ * native's undo is compared with appUndone: a model of that app path, written
+ * here from Source's code and probes, not a Source run. It applies the
+ * stored-null rule to the JSON and the local awareness to the selection, with
+ * the awareness observed only after the live selection and after the action.
+ * Full app Loro history acceptance stays with the table-hover-browser-test
+ * history epoch.
  */
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
@@ -272,14 +274,25 @@ function normalize(value: unknown): unknown {
 
 // --- Source -------------------------------------------------------------
 
-/** Storage-null keys Source's Loro reconcile reads back as null when absent. */
+/**
+ * Storage-null keys Source's Loro reconcile reads back as null when absent.
+ * Source's writer stores null for these and for the application's
+ * own-undefined fields (probe logs be8649fb, 1d9a47d4, 8672bafb). The
+ * own-undefined fields here (table frozenColumnCount, frozenRowCount,
+ * rowStriping and colWidths; tablecell width) read back absent anyway:
+ * TableNode.updateFromJSON coerces null to 0/false and exportJSON omits falsy
+ * values (@lexical/table LexicalTable.dev.mjs:3775, :3788-3790), and
+ * TableCellNode coerces a null width to undefined and exports it so (:88,
+ * :150). Every fixture sets colWidths.
+ */
 const STORAGE_NULL_KEYS: Record<string, string[]> = {
   text: ['detail', 'format', 'style'],
   paragraph: ['direction', 'indent', 'textFormat', 'textStyle'],
 };
 /**
  * The app's undo JSON: after a Loro-driven import every storage-null key a
- * node holds absent reads null, touched or not (Source probe log 8803f2b1).
+ * node holds absent reads null, touched or not (Source undo/redo probe log
+ * 8803f2b1).
  */
 function storageNullRule(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(storageNullRule);
@@ -375,8 +388,9 @@ function $observeAwareness(previous: Awareness | null): Awareness | null {
  * The app's undo selection: the from-Loro update clears it, then
  * $createSelectionFromPeerAwareness (cursor.ts:375) builds a range from the
  * local awareness when both points resolve, with the format of the selection
- * the undo replaced and an empty style. Keys stand in for Loro cursors, which
- * the undone nodes keep.
+ * the undo replaced and an empty style. Node keys stand in for Loro cursors,
+ * and the offset clamp stands in for a cursor's position, which always
+ * resolves in range.
  */
 function $appUndoSelection(
   awareness: Awareness | null,
