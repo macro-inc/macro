@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM notification\n            WHERE event_item_type = 'channel'\n              AND event_item_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5aeea0cfb9868c37fd11de725ee5febc78a76f06f102373429af5b88dee8e6b2"
+}

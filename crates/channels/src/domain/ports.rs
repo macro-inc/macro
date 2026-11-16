@@ -351,7 +351,8 @@ pub trait ChannelRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Delete a channel after the domain service has authorized the caller.
+    /// Delete a channel after the domain service has authorized the caller,
+    /// together with every notification about it.
     fn delete_channel(
         &self,
         channel_id: Uuid,

@@ -21,6 +21,8 @@ use std::{
 };
 use uuid::Uuid;
 
+mod delete_channel;
+
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CH3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c03);
