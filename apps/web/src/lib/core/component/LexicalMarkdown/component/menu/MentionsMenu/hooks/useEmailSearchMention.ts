@@ -1,6 +1,11 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
+import type { EmailEntity } from '@entity';
+import {
+  type SoupItemsQueryArgs,
+  useSoupItemsQuery,
+} from '@queries/soup/items';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
@@ -10,6 +15,27 @@ import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
 const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
+
+/** The viewer's newest threads, for when Quick Access holds no emails. */
+const RECENT_EMAIL_THREADS_ARGS: SoupItemsQueryArgs = {
+  params: { limit: 20, sort_method: 'updated_at' },
+  body: { ...QUERY_FILTERS_BASE, email_filters: {} },
+};
+
+function emailEntityItem(email: EmailEntity): EntityItem {
+  return {
+    kind: 'entity',
+    id: email.id,
+    bucket: 'email',
+    searchText: email.name ?? 'No Subject',
+    sortTimestamp: email.updatedAt ? new Date(email.updatedAt).getTime() : 0,
+    timestamps: {
+      updatedAt: email.updatedAt ?? null,
+      createdAt: email.createdAt ?? null,
+    },
+    data: email as unknown as EntityItem['data'],
+  };
+}
 
 type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
@@ -32,7 +58,9 @@ type UseEmailSearchMentionResult = {
 /**
  * Provides email mentions through unified search by default. Quick Access
  * supplies them behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS, and for
- * `recentWhenShort` menus while the term is too short to search.
+ * `recentWhenShort` menus while the term is too short to search; when it has
+ * no threads (its email bucket needs the GraphQL cache), the newest threads
+ * come from the REST Soup list instead.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
@@ -49,6 +77,31 @@ export function useEmailSearchMention(
     buckets: ['email'],
     searchTerm,
     enabled: () => usesQuickAccess() && listEnabled(),
+  });
+  // Drafts, local ones included, are not threads a mention can point to.
+  const cachedThreads = createLazyMemo(() =>
+    cachedEmails.items().filter((item) => !item.data.isDraft)
+  );
+  const usesRecentThreads = () =>
+    usesQuickAccess() &&
+    !cachedEmails.isLoading() &&
+    cachedThreads().length === 0;
+  const recentThreadsQuery = useSoupItemsQuery(
+    () => RECENT_EMAIL_THREADS_ARGS,
+    () => ({
+      enabled: usesRecentThreads() && listEnabled(),
+      staleTime: 60_000,
+    })
+  );
+  const recentThreads = createLazyMemo((): EntityItem[] => {
+    if (!recentThreadsQuery.isSuccess) return [];
+    return recentThreadsQuery.data
+      .filter(
+        (entity): entity is EmailEntity =>
+          entity.type === 'email' && !entity.isDraft
+      )
+      .map(emailEntityItem)
+      .sort((a, b) => b.sortTimestamp - a.sortTimestamp);
   });
 
   const args = createLazyMemo((): SearchSoupQueryArgs => {
@@ -102,11 +155,14 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
-    // Drafts, local ones included, are not threads a mention can point to.
-    if (usesQuickAccess())
-      return cachedEmails.items().filter((item) => !item.data.isDraft);
-
     const term = searchTerm();
+    if (usesRecentThreads()) {
+      const recent = recentThreads();
+      if (!term) return recent;
+      return emailSearch(recent, term).map(({ item }) => item);
+    }
+    if (usesQuickAccess()) return cachedThreads();
+
     const remoteEmails = remoteEmailList();
     if (!term) return remoteEmails;
     return emailSearch(remoteEmails, term).map(({ item }) => item);
@@ -115,7 +171,7 @@ export function useEmailSearchMention(
   return {
     emails,
     totalCount: () =>
-      usesQuickAccess()
+      usesQuickAccess() && !usesRecentThreads()
         ? cachedEmails.totalCount() -
           (cachedEmails.items().length - emails().length)
         : emails().length,

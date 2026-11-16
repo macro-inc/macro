@@ -1,4 +1,5 @@
 import type { EntityItem } from '@core/context/quickAccess';
+import type { EmailEntity } from '@entity';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useEmailSearchMention } from './useEmailSearchMention';
@@ -19,36 +20,68 @@ const LOCAL_DRAFT: EntityItem = {
   } as EntityItem['data'],
 };
 
-const RECENT_THREAD: EntityItem = {
-  id: 'recent-thread',
+const CACHED_THREAD: EntityItem = {
+  id: 'cached-thread',
   kind: 'entity',
   bucket: 'email',
   searchText: 'Invitation to the project',
   sortTimestamp: 1,
   timestamps: { updatedAt: null, createdAt: null },
   data: {
-    id: 'recent-thread',
+    id: 'cached-thread',
     name: 'Invitation to the project',
     type: 'email',
     ownerId: 'owner',
   } as EntityItem['data'],
 };
 
+const OLDER_REST_THREAD = {
+  type: 'email',
+  id: 'older-rest-thread',
+  name: 'Quarterly numbers',
+  ownerId: 'owner',
+  isDraft: false,
+  updatedAt: new Date('2026-11-03T09:00:00Z'),
+} as EmailEntity;
+
+const REST_DRAFT = {
+  type: 'email',
+  id: 'rest-draft',
+  name: 'Unsent reply',
+  ownerId: 'owner',
+  isDraft: true,
+  updatedAt: new Date('2026-11-06T09:00:00Z'),
+} as EmailEntity;
+
+const NEWER_REST_THREAD = {
+  type: 'email',
+  id: 'newer-rest-thread',
+  name: 'Receipt 1042',
+  ownerId: 'owner',
+  isDraft: false,
+  updatedAt: new Date('2026-11-05T12:00:00Z'),
+} as EmailEntity;
+
 const mocks = vi.hoisted(() => ({
+  bucketRows: [] as EntityItem[],
   searchEnabled: [] as boolean[],
+  restEnabled: [] as boolean[],
 }));
 
 beforeEach(() => {
+  mocks.bucketRows = [];
   mocks.searchEnabled.length = 0;
+  mocks.restEnabled.length = 0;
 });
 
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     usesRecordSelection: () => false,
     useList: (options: { enabled: () => boolean }) => ({
-      items: () => (options.enabled() ? [LOCAL_DRAFT, RECENT_THREAD] : []),
-      totalCount: () => (options.enabled() ? 2 : 0),
+      items: () => (options.enabled() ? mocks.bucketRows : []),
+      totalCount: () => (options.enabled() ? mocks.bucketRows.length : 0),
       hasMore: () => false,
+      isLoading: () => false,
       isLoadingMore: () => false,
       loadMore: async () => undefined,
     }),
@@ -71,11 +104,21 @@ vi.mock('@queries/soup/search', () => ({
   }),
 }));
 
+vi.mock('@queries/soup/items', () => ({
+  useSoupItemsQuery: (_args: unknown, options: () => { enabled: boolean }) => ({
+    get isSuccess() {
+      mocks.restEnabled.push(options().enabled);
+      return options().enabled;
+    },
+    data: [OLDER_REST_THREAD, REST_DRAFT, NEWER_REST_THREAD],
+  }),
+}));
+
 vi.mock('@app/features/next-soup/filters/query-filters', () => ({
   QUERY_FILTERS_BASE: {},
 }));
 
-it('lists recent threads, not drafts, for an email-only menu until the term can be searched', () => {
+it('lists the newest REST threads, without drafts, when Quick Access has no emails', () => {
   const [term, setTerm] = createSignal('');
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -85,15 +128,53 @@ it('lists recent threads, not drafts, for an email-only menu until the term can 
     dispose,
   }));
 
-  expect(mention.emails().map((item) => item.id)).toEqual(['recent-thread']);
-  expect(mention.totalCount()).toBe(1);
+  expect(mention.emails().map((item) => item.id)).toEqual([
+    'newer-rest-thread',
+    'older-rest-thread',
+  ]);
+  expect(mocks.restEnabled.at(-1)).toBe(true);
 
-  setTerm('in');
-  expect(mention.emails().map((item) => item.id)).toEqual(['recent-thread']);
+  setTerm('Qu');
+  expect(mention.emails().map((item) => item.id)).toEqual([
+    'older-rest-thread',
+  ]);
 
-  setTerm('invitation');
+  setTerm('Quarterly');
   expect(mention.emails()).toEqual([]);
   expect(mocks.searchEnabled.at(-1)).toBe(true);
+  dispose();
+});
+
+it('lists Quick Access threads, not drafts, and leaves the REST list alone when it has some', () => {
+  mocks.bucketRows = [LOCAL_DRAFT, CACHED_THREAD];
+  const { mention, dispose } = createRoot((dispose) => ({
+    mention: useEmailSearchMention({
+      searchTerm: () => '',
+      recentWhenShort: () => true,
+    }),
+    dispose,
+  }));
+
+  expect(mention.emails().map((item) => item.id)).toEqual(['cached-thread']);
+  expect(mention.totalCount()).toBe(1);
+  expect(mocks.restEnabled).not.toContain(true);
+  dispose();
+});
+
+it('falls back to REST threads when Quick Access lists only drafts', () => {
+  mocks.bucketRows = [LOCAL_DRAFT];
+  const { mention, dispose } = createRoot((dispose) => ({
+    mention: useEmailSearchMention({
+      searchTerm: () => '',
+      recentWhenShort: () => true,
+    }),
+    dispose,
+  }));
+
+  expect(mention.emails().map((item) => item.id)).toEqual([
+    'newer-rest-thread',
+    'older-rest-thread',
+  ]);
   dispose();
 });
 
@@ -105,5 +186,6 @@ it('keeps a mixed menu on search, so an empty term lists no threads', () => {
 
   expect(mention.emails()).toEqual([]);
   expect(mocks.searchEnabled.at(-1)).toBe(true);
+  expect(mocks.restEnabled).not.toContain(true);
   dispose();
 });
