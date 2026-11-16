@@ -341,7 +341,7 @@ pub struct TotpCode {
     pub period: u32,
 }
 /// Sanitized domain failures. Provider messages may contain secrets, so are discarded.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("vault item not found")]
     /// Resource absent or hidden by its authorization boundary.

@@ -82,8 +82,8 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
 - Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
-  login per team per lease (clamped to 60 s), single-flight (waiters share a failed
-  login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
+  login per team per lease (clamped to 60 s), single-flight (waiters get the
+  failed login's error), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
   1024 teams; a slot with a caller is never evicted. A 401/403 on a cached token
   replaces it once and re-runs the whole operation, so every `with_session`
   closure must be safe to re-run. A denied fresh token is policy: no retry, no
