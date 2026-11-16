@@ -1181,8 +1181,5 @@ fn undo_after_resync_restores_the_selection_before_the_edit() {
             .expect("undo after resync")
     );
     assert_eq!(surface.state().root_text_content().as_ref(), "abc");
-    assert_eq!(
-        view_selection(surface.state().selection()),
-        at(1)
-    );
+    assert_eq!(view_selection(surface.state().selection()), at(1));
 }

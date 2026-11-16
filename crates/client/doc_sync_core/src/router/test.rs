@@ -285,8 +285,7 @@ fn an_endless_unfinished_route_message_drops_the_route() {
                 payload: SliceWrapper::from_cooked(&chunk),
             },
         );
-        if o
-            .to_sessions
+        if o.to_sessions
             .iter()
             .any(|(_, e)| matches!(e, RouteEvent::Closed { .. }))
         {

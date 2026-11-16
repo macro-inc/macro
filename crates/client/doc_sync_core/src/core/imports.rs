@@ -719,7 +719,8 @@ impl SyncCore {
         for entry in &self.wal.entries {
             // A held Gap row's parents are missing everywhere, so it can never be
             // covered; it stays in the WAL and replays once they arrive.
-            if entry.superseded || matches!(entry.park, Some(ParkReason::Poison | ParkReason::Gap)) {
+            if entry.superseded || matches!(entry.park, Some(ParkReason::Poison | ParkReason::Gap))
+            {
                 continue;
             }
             // Validate every retained row before it can contribute recovery history.

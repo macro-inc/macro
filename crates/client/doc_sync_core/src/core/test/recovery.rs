@@ -148,7 +148,8 @@ fn s7_013_fourth_corruption_reset_closes_session() {
     let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
     for _ in 0..3 {
         h.send(SyncInput::ImportFailed(corrupt()));
-        h.core.finish_reset(false, false, now(0), &mut h.doc, &mut h.out);
+        h.core
+            .finish_reset(false, false, now(0), &mut h.doc, &mut h.out);
     }
     h.send(SyncInput::ImportFailed(corrupt()));
     assert!(matches!(
@@ -164,7 +165,8 @@ fn s7_016_outdated_rebase_is_unbudgeted_and_rate_limited() {
     h.send(SyncInput::Tick);
     assert!(h.core.rebase_active);
     assert!(h.core.reset_times.is_empty());
-    h.core.finish_reset(true, true, now(0), &mut h.doc, &mut h.out);
+    h.core
+        .finish_reset(true, true, now(0), &mut h.doc, &mut h.out);
     h.at(1, SyncInput::ImportFailed(ImportFailure::Outdated));
     assert_eq!(h.core.rebase_due, Some(Millis(10000)));
 }
