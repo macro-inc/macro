@@ -147,6 +147,8 @@ let () =
             .contains("traceparent: 00-01234567890123456789012345678901-0123456789012345-01\r\n")
     );
     let progress = progress(&events);
+    // Session activity reads numeric ids, as the TypeScript SDK sends.
+    assert!(progress.iter().all(|event| event["id"] == 1));
     assert_eq!(
         progress
             .iter()
