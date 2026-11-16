@@ -1,0 +1,29 @@
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_dfeff50ab3a311::t_6f391efc26efa9 57-59
+  s_dfeff50ab3a311::t_f3e844f4ade78d 60
+  s_dfeff50ab3a311::t_f718dd7c1824bb 50-51
+apps/web/src/features/block-canvas/README.md
+  s_dfeff50ab3a311::t_b59869cfb5c1a0 92-93,97-98
+apps/web/src/features/block-canvas/browser-test/README.md
+  s_dfeff50ab3a311::t_5d4b0d17692e58 41
+apps/web/src/features/block-canvas/views/artifact-controls.tsx
+  s_dfeff50ab3a311::t_f4d2266b6d454b 14-20,27-28,103,105-109,111,113-114,125,129-132
+docs/agent-guide/canvas.md
+  s_dfeff50ab3a311::t_4e022e4d669e54 33-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0e24ab23a9c85ffe24f881bb0ae5b62f24249e16",
+  "prompts": {},
+  "sessions": {
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
