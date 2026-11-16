@@ -787,14 +787,9 @@ export function openTeamMembersSettings(
 
 /**
  * Where a notification was opened from: the app's own lists, a browser
- * notification, a native (iOS, Android, macOS) notification, or a home
- * recommendation that opens through its notification.
+ * notification, or a native (iOS, Android, macOS) notification.
  */
-export type NotificationOpenSource =
-  | 'in_app'
-  | 'browser_push'
-  | 'native_push'
-  | 'home_recommendation';
+export type NotificationOpenSource = 'in_app' | 'browser_push' | 'native_push';
 
 /**
  * Opens the notification given the layout manager.
