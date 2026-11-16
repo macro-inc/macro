@@ -56,6 +56,13 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     // to schedule one to check back later; creating a routine the user asked
     // for (the routines guide's skill) stays, as the bot's direct tools could.
     assert!(!tools.system_prompt().contains("To check back later"));
+    // The routines guide still teaches creating routines; the reply prompt
+    // overrides it, since a routine or session would run without the mention.
+    assert!(
+        tools.system_prompt().contains(
+            "You cannot create, change or run routines, or start or prompt agent sessions"
+        )
+    );
 }
 
 #[test]
