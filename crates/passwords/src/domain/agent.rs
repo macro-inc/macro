@@ -701,6 +701,9 @@ pub enum AgentError {
     #[error("vault unavailable")]
     /// A dependency is unavailable or the deadline elapsed.
     Unavailable,
+    #[error("team vault is not provisioned")]
+    /// The team's vault has not been set up; retrying cannot help.
+    NotProvisioned,
 }
 impl From<Error> for AgentError {
     fn from(error: Error) -> Self {
@@ -711,6 +714,7 @@ impl From<Error> for AgentError {
             Error::Conflict | Error::FolderMissing => Self::Conflict,
             Error::Busy => Self::Busy,
             Error::Unavailable => Self::Unavailable,
+            Error::NotProvisioned => Self::NotProvisioned,
         }
     }
 }

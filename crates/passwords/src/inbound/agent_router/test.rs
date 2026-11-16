@@ -129,3 +129,18 @@ async fn a_missing_csrf_header_is_a_typed_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body, serde_json::json!({"code": "forbidden"}));
 }
+
+#[tokio::test]
+async fn an_unprovisioned_team_vault_has_its_own_code() {
+    let response = AgentApiError(AgentError::from(
+        crate::domain::models::Error::NotProvisioned,
+    ))
+    .into_response();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 1 << 16).await.unwrap();
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        serde_json::json!({"code": "vault_not_provisioned"})
+    );
+}

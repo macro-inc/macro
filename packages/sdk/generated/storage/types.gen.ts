@@ -15739,7 +15739,7 @@ export type PasswordAgentEditableMetadata = {
 /**
  * Closed, payload-free failure codes of the agent vault API.
  */
-export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized agent vault failure.
@@ -34593,6 +34593,9 @@ export type PasswordsAgentCreateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34634,6 +34637,9 @@ export type PasswordsAgentUpdateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34744,6 +34750,9 @@ export type PasswordsAgentDiscloseErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34781,6 +34790,9 @@ export type PasswordsAgentSetTotpErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34818,6 +34830,9 @@ export type PasswordsAgentTotpCodeErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
