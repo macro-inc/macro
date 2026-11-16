@@ -31,24 +31,26 @@ export function useDownloadDocumentAsMarkdownText() {
   });
 }
 
-export function useCopyDocumentAsMarkdown() {
+export function useCopyDocumentAsMarkdown(options: { silent?: boolean } = {}) {
   const { state } = useMarkdownDocument();
 
   return createCallback(async () => {
     const editor = state.editor.md.editor;
     const runtime = state.editor.md.nativeRuntime;
-    if (!editor && !runtime) return;
+    if (!editor && !runtime) return false;
 
     try {
       const markdown = runtime
         ? runtime.executor.session.markdown(1)
         : editor && editorStateAsMarkdown(editor, 'external');
-      if (markdown === undefined) return;
+      if (markdown === undefined) return false;
       await navigator.clipboard.writeText(markdown);
-      toast.success('Markdown copied to clipboard');
+      if (!options.silent) toast.success('Markdown copied to clipboard');
+      return true;
     } catch (error) {
       console.error('Failed to copy markdown', error);
       toast.failure('Failed to copy markdown');
+      return false;
     }
   });
 }
