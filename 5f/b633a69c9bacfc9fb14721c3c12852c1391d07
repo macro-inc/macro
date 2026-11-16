@@ -1,0 +1,20 @@
+.github/workflows/pr-ci.yml
+  h_659b58cf3b37bf 533
+.github/workflows/sdk-ocaml-check.yml
+  h_659b58cf3b37bf 12,41-45
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+  h_659b58cf3b37bf 3-4,16-17,22,58,70-80
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check/test.rs
+  h_659b58cf3b37bf 28-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5fb633a69c9bacfc9fb14721c3c12852c1391d07",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
