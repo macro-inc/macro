@@ -37,3 +37,20 @@ it('opens on request in a narrow split, and an explicit close stays closed', () 
     dispose();
   });
 });
+
+it('keeps an automatic panel the viewer used open when the call narrows', () => {
+  createRoot((dispose) => {
+    const [wide, setWide] = createSignal(true);
+    const panel = createCallPanel(
+      () => true,
+      () => {},
+      wide
+    );
+    expect(panel.state.open).toBe(true);
+    panel.selectTab('participants');
+    setWide(false);
+    expect(panel.state.open).toBe(true);
+    expect(panel.state.tab).toBe('participants');
+    dispose();
+  });
+});

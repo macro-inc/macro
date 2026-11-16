@@ -34,6 +34,8 @@ export function CallChatPanel(props: {
   sidebarMount?: HTMLElement;
   overlayMount?: HTMLElement;
   returnFocus?: HTMLButtonElement;
+  /** The viewer focused or pressed something inside the panel. */
+  onInteract?: () => void;
 }) {
   const sidebarSize = createElementSize(() => props.sidebarMount);
   const [sidebarBody, setSidebarBody] = createSignal<HTMLDivElement>();
@@ -123,6 +125,8 @@ export function CallChatPanel(props: {
         ref={body}
         class="flex min-h-0 flex-1 flex-col"
         onKeyDown={closeOnEscape}
+        onFocusIn={() => props.onInteract?.()}
+        onPointerDown={() => props.onInteract?.()}
       >
         <div class="flex h-12 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>

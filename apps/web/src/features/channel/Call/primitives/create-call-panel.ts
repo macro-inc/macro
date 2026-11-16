@@ -48,6 +48,11 @@ export function createCallPanel(
       focusOnOpen,
       defaultRevision: defaultRevision(),
     });
+  // Using an automatic panel makes it the viewer's, so it stays open when the
+  // call later narrows below the width where it may open by itself.
+  const claim = () => {
+    if (view().open && !state.open) open(false);
+  };
   const close = () => {
     setState({ open: false, defaultRevision: defaultRevision() });
     restoreFocus();
@@ -62,6 +67,10 @@ export function createCallPanel(
       if (view().open) close();
       else open(true);
     },
-    selectTab: (tab: CallPanelTab) => setState({ tab, focusOnOpen: false }),
+    claim,
+    selectTab: (tab: CallPanelTab) => {
+      claim();
+      setState({ tab, focusOnOpen: false });
+    },
   };
 }
