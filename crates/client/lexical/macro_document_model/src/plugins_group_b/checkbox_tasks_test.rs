@@ -223,6 +223,13 @@ fn replacement_swaps_attached_items_for_task_mentions_in_one_update() -> Result<
         ]
     );
     let view = editor.state().view();
+    // Source $replaceCheckboxWithMention passes no createdAt, and
+    // $createDocumentMentionNode then defaults it to Date.now().
+    let stamped = lexical_rich_nodes::utils::dfs(view, None, None)
+        .into_iter()
+        .filter_map(|record| view.get::<DocumentMentionNode>(record.node))
+        .all(|mention| mention.created_at == Maybe::Value(1_000_000));
+    assert!(stamped);
     assert!(!view.contains(keys[0]) && !view.contains(keys[1]));
     assert!(view.contains(keys[2]));
     let roots: Vec<_> = view.children_keys(NodeKey::ROOT)?;

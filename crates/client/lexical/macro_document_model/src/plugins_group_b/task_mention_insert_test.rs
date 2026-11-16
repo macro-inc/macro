@@ -79,6 +79,9 @@ fn inserts_a_space_and_the_task_mention_at_the_saved_point() -> Result<(), Error
         .expect("mention");
     assert_eq!(mention.block_name, Maybe::Value("task".into()));
     assert_eq!(mention.mention_uuid, Maybe::Value("m-1".into()));
+    // Source $createDocumentMentionNode stamps createdAt (Date.now()); the
+    // model stamps it from the session clock.
+    assert_eq!(mention.created_at, Maybe::Value(1_000_000));
     Ok(())
 }
 
