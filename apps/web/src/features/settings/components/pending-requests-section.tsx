@@ -13,7 +13,7 @@ import { SettingsCard } from '../primitives';
 import { RuntimeName } from './connected-runtimes-section';
 
 const ROW_CLASS =
-  'flex items-start justify-between gap-4 px-4 py-3 @max-[480px]:flex-col @max-[480px]:gap-2';
+  'flex items-start justify-between gap-4 px-6 py-4 @max-[480px]:flex-col @max-[480px]:gap-2';
 const ACTIONS_CLASS =
   'flex shrink-0 flex-wrap items-center justify-end gap-1 @max-[480px]:justify-start @max-[480px]:pl-2';
 
@@ -26,18 +26,35 @@ const ACTIONS_CLASS =
 export function PendingRequestsSection() {
   const pending = usePendingRuntimeRequests();
   const count = () => pending().incoming.length + pending().outgoing.length;
+  // Every query tick rebuilds the pending objects, so rows are keyed by
+  // request id: a row keyed by object would remount on each refetch, refetch
+  // its own state on mount, and replace its buttons under the pointer.
+  const incomingIds = () => pending().incoming.map(({ request }) => request.id);
+  const outgoingIds = () => pending().outgoing.map(({ request }) => request.id);
+  const incoming = (id: string) =>
+    pending().incoming.find(({ request }) => request.id === id);
+  const outgoing = (id: string) =>
+    pending().outgoing.find(({ request }) => request.id === id);
   return (
     <Show when={count() > 0}>
       <div data-pending-runtime-requests>
         <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
           {t('runtimeSharing.pendingRequestsTitle')}
         </h2>
-        <SettingsCard>
-          <For each={pending().incoming}>
-            {(pending) => <IncomingRequestRow pending={pending} />}
+        <SettingsCard inset="wide">
+          <For each={incomingIds()}>
+            {(id) => (
+              <Show when={incoming(id)}>
+                {(pending) => <IncomingRequestRow pending={pending()} />}
+              </Show>
+            )}
           </For>
-          <For each={pending().outgoing}>
-            {(pending) => <OutgoingRequestRow pending={pending} />}
+          <For each={outgoingIds()}>
+            {(id) => (
+              <Show when={outgoing(id)}>
+                {(pending) => <OutgoingRequestRow pending={pending()} />}
+              </Show>
+            )}
           </For>
         </SettingsCard>
       </div>

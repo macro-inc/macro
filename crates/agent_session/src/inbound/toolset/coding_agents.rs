@@ -166,10 +166,10 @@ pub fn coding_agent_toolset() -> AsyncToolCollection<CodingAgentToolContext> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(
     title = "CreateAgentSession",
-    description = "Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure."
+    description = "Start a new session with a coding or chat agent from ListAgents (or macro.agents.list() in ExecuteCode). Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure."
 )]
 pub struct CreateAgentSession {
-    /// Agent persona botId from ListAgents.
+    /// Agent persona botId from ListAgents, or the id of an agent from macro.agents.list().
     pub agent_id: Uuid,
     /// Complete initial task and relevant context.
     pub prompt: String,

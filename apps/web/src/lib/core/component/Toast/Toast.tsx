@@ -51,7 +51,7 @@ interface ToastAction {
 }
 
 type ToastActionLayout = 'stacked' | 'inline';
-type ToastDismissStyle = 'button' | 'icon';
+export type ToastDismissStyle = 'button' | 'icon';
 
 /**
  * Common options for all toast calls.
@@ -375,7 +375,6 @@ export function ToastContent(props: {
                               ? { color: props.custom.color }
                               : undefined
                           }
-                          data-icon-motion="none"
                         >
                           <Dynamic
                             component={Icon()}

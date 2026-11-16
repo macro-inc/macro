@@ -482,6 +482,16 @@ impl<
         let Some(lease) = self.repository.claim_projection(Uuid::now_v7()).await? else {
             return Ok(false);
         };
+        self.publish(&lease).await?;
+        Ok(true)
+    }
+    #[tracing::instrument(
+        name = "calendar.projection_relay",
+        skip_all,
+        fields(event_id = %lease.event_id, revision = lease.revision, link_id = %lease.link_id),
+        err(level = tracing::Level::DEBUG)
+    )]
+    async fn publish(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
         let event = super::events::CalendarMacroEvent::for_change(lease.event.clone());
         self.broker
             .send_event(&event)
@@ -492,7 +502,6 @@ impl<
         self.notifier
             .calendar_changed(&lease.event.metadata().owner_id, lease.link_id, true)
             .await;
-        self.repository.complete_projection(&lease).await?;
-        Ok(true)
+        self.repository.complete_projection(lease).await
     }
 }

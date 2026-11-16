@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM team_agents WHERE user_id = $1) AS \"agent!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8010e4f893f3ed9f1f560ea8ef9221405076f075c8dfe40748034f3068a2010d"
+}

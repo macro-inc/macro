@@ -34,6 +34,8 @@ export class SavedViewsNamespace {
    * optionally `importance` (`signal` or `noise`), `read` (`unread` or
    * `read`), `done` (`not-done` or `done`) and `receivedWithinDays` (1, 7,
    * 30 or 90). Separate filters must all match.
+   *
+   * @write
    */
   create(opts: {
     name: string;
@@ -47,6 +49,8 @@ export class SavedViewsNamespace {
   /**
    * The saved views you can see, in your own order, auto-paginated: placed
    * views first, then by creation time. Each handle already holds its record.
+   *
+   * @readonly
    */
   list(opts?: {
     /** Only views of this kind, such as `email`. */
@@ -71,6 +75,9 @@ export class SavedViewsNamespace {
    * Set your own order of one kind's views: `views` first, in the order
    * given, and the rest after them by creation time. Returns the views in
    * their new order; their definitions are unchanged.
+   *
+   * @write
+   * @idempotent
    */
   async reorder(kind: string, views: SavedView[]): Promise<SavedView[]> {
     const records = unwrap(

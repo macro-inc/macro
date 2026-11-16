@@ -19,6 +19,7 @@ mod test;
 mod admission;
 mod deliver;
 mod external_replies;
+mod idle;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
@@ -28,6 +29,9 @@ mod reattach;
 mod session_mcp;
 mod warm;
 
+pub use idle::IDLE_RELEASE_NO_RETRY_FLAG;
+
+use feature_flags::FeatureFlags;
 use futures::FutureExt as _;
 use std::sync::Arc;
 
@@ -207,6 +211,12 @@ struct AgentHarnessInner<
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
     presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits.
+    worker_idle_timeout: std::time::Duration,
+    /// Whether an idle release that kept its session is tried again; `None`
+    /// always retries.
+    idle_release_retry: Option<Arc<dyn idle::IdleReleaseRetry>>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -404,6 +414,8 @@ where
                 projections: DashMap::new(),
                 typing_phases: DashMap::new(),
                 presented_shapes: DashMap::new(),
+                worker_idle_timeout: queue::WORKER_IDLE_TIMEOUT,
+                idle_release_retry: None,
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
@@ -424,6 +436,31 @@ where
         self
     }
 
+    /// Release quiet sessions and retire their command workers after
+    /// `timeout` with no command, instead of
+    /// [`queue::WORKER_IDLE_TIMEOUT`]. Set before cloning the harness.
+    pub fn with_worker_idle_timeout(mut self, timeout: std::time::Duration) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure the idle timeout before cloning the harness")
+            .worker_idle_timeout = timeout;
+        self
+    }
+
+    /// Read [`IDLE_RELEASE_NO_RETRY_FLAG`] for each session owner before an
+    /// idle release that kept the session is tried again; without flags it
+    /// always is. Set before cloning the harness.
+    pub fn with_idle_release_flags<Flags: FeatureFlags + 'static>(
+        mut self,
+        flags: Option<Flags>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure idle release flags before cloning the harness")
+            .idle_release_retry = flags.map(|flags| {
+            Arc::new(idle::FlaggedIdleReleaseRetry(flags)) as Arc<dyn idle::IdleReleaseRetry>
+        });
+        self
+    }
+
     /// Configure durable system-event delivery before cloning the harness.
     pub fn with_notifications(
         mut self,
@@ -433,6 +470,18 @@ where
             .expect("configure outbox before cloning harness")
             .notification_store = Some(store);
         self
+    }
+
+    /// How many sessions have a command worker in this process right now.
+    #[must_use]
+    pub fn command_workers(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// How many sessions have their durable queue loaded in this process.
+    #[must_use]
+    pub fn hydrated_sessions(&self) -> usize {
+        self.inner.hydrated.len()
     }
 
     /// Reconcile durable events through the same routed worker as user prompts.

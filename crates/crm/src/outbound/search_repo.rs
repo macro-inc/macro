@@ -55,7 +55,7 @@ fn escape_like(term: &str) -> String {
 }
 
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, term), fields(term_len = term.len()), err)]
     async fn search_company_names(
         &self,
         team_id: &Uuid,

@@ -37,9 +37,6 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      email: ${{ steps.set-matrix.outputs.email }}
-      dss: ${{ steps.set-matrix.outputs.dss }}
-      others: ${{ steps.set-matrix.outputs.others }}
       binaries: ${{ steps.set-matrix.outputs.binaries }}
       lambdas: ${{ steps.set-matrix.outputs.lambdas }}
     steps:
@@ -58,16 +55,6 @@ jobs:
         services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | .key]' "$cfg")
         binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
         lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
-        email=$(jq -c '[.[] | select(. == "email-service")]' <<< "$services")
-        dss=$(jq -c '[.[] | select(. == "document-storage-service")]' <<< "$services")
-        others=$(jq -c '[.[] | select(. != "email-service" and . != "document-storage-service")]' <<< "$services")
-        if [[ "$dss" != '[]' && "$email" == '[]' ]]; then
-          echo '::error::DSS requires an enabled email-service deployment and consumer readiness proof'
-          exit 1
-        fi
-        echo "email=${email}" >> "$GITHUB_OUTPUT"
-        echo "dss=${dss}" >> "$GITHUB_OUTPUT"
-        echo "others=${others}" >> "$GITHUB_OUTPUT"
         echo "matrix=${services}" >> "$GITHUB_OUTPUT"
         echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
         echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"
@@ -339,178 +326,6 @@ jobs:
       uses: ./.github/actions/migrate-cloud-storage-db
       with:
         environment: ${{ inputs.environment }}
-  deploy-email:
-    needs:
-    - setup
-    - warm-binaries
-    - warm-lambdas
-    - build-service-binaries
-    - build-lambda-artifacts
-    - migrate-db
-    if: ${{ !cancelled() && needs.setup.outputs.email != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
-    name: Deploy ${{ matrix.service }}
-    runs-on: namespace-profile-linux-small
-    env:
-      PULUMI_HOME: /pulumi
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.setup.outputs.email) }}
-      fail-fast: false
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-    - id: project-name
-      name: Get project name
-      uses: ./.github/actions/get-project-name
-      with:
-        service-name: ${{ matrix.service }}
-    - id: check-artifacts
-      name: Check artifact config
-      run: |
-        has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
-        has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-        echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
-        echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-      env:
-        SERVICE: ${{ matrix.service }}
-    - name: Download handoff artifacts
-      if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}
-      run: |
-        set -euo pipefail
-        if ! command -v nsc >/dev/null 2>&1; then
-          echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
-          exit 1
-        fi
-        mkdir -p "$RUNNER_TEMP/handoff"
-        if [[ "$HAS_BINARIES" == "true" ]]; then
-          nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
-        fi
-        if [[ "$HAS_LAMBDAS" == "true" ]]; then
-          nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
-        fi
-      shell: bash
-      env:
-        HAS_BINARIES: ${{ steps.check-artifacts.outputs.has_binaries }}
-        HAS_LAMBDAS: ${{ steps.check-artifacts.outputs.has_lambdas }}
-        BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}
-    - name: Cache Pulumi plugins
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        path: /pulumi/plugins
-      continue-on-error: true
-    - name: Ensure Pulumi home is writable
-      run: |
-        set -euo pipefail
-        sudo mkdir -p /pulumi
-        if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
-      shell: bash
-    - name: Deploy ${{ matrix.service }}
-      uses: ./.github/actions/deploy-cloud-storage-pulumi
-      with:
-        environment: ${{ inputs.environment }}
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-        use-namespace-builder: 'true'
-        prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
-        lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
-        dd-app-key: ${{ secrets.DD_APP_KEY }}
-        dd-api-key: ${{ secrets.DD_API_KEY }}
-    - name: Verify exact email consumers and old-task drain
-      run: |
-        set -euo pipefail
-        pulumi stack output crmBackfillConsumer --json \
-          --stack "macro-inc/email-service/$ENVIRONMENT" \
-          --cwd infra/stacks/email-service > "$RUNNER_TEMP/crm-email-consumer.json"
-        bun .github/scripts/wait-crm-email-consumers.ts "$RUNNER_TEMP/crm-email-consumer.json"
-      shell: bash
-      env:
-        ENVIRONMENT: ${{ inputs.environment }}
-        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-  deploy-dss:
-    needs:
-    - setup
-    - warm-binaries
-    - warm-lambdas
-    - build-service-binaries
-    - build-lambda-artifacts
-    - migrate-db
-    - deploy-email
-    if: ${{ !cancelled() && needs.setup.outputs.dss != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && needs.deploy-email.result == 'success' }}
-    name: Deploy ${{ matrix.service }}
-    runs-on: namespace-profile-linux-small
-    env:
-      PULUMI_HOME: /pulumi
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.setup.outputs.dss) }}
-      fail-fast: false
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-    - id: project-name
-      name: Get project name
-      uses: ./.github/actions/get-project-name
-      with:
-        service-name: ${{ matrix.service }}
-    - id: check-artifacts
-      name: Check artifact config
-      run: |
-        has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
-        has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-        echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
-        echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-      env:
-        SERVICE: ${{ matrix.service }}
-    - name: Download handoff artifacts
-      if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}
-      run: |
-        set -euo pipefail
-        if ! command -v nsc >/dev/null 2>&1; then
-          echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
-          exit 1
-        fi
-        mkdir -p "$RUNNER_TEMP/handoff"
-        if [[ "$HAS_BINARIES" == "true" ]]; then
-          nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
-        fi
-        if [[ "$HAS_LAMBDAS" == "true" ]]; then
-          nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
-        fi
-      shell: bash
-      env:
-        HAS_BINARIES: ${{ steps.check-artifacts.outputs.has_binaries }}
-        HAS_LAMBDAS: ${{ steps.check-artifacts.outputs.has_lambdas }}
-        BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}
-    - name: Cache Pulumi plugins
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        path: /pulumi/plugins
-      continue-on-error: true
-    - name: Ensure Pulumi home is writable
-      run: |
-        set -euo pipefail
-        sudo mkdir -p /pulumi
-        if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
-      shell: bash
-    - name: Deploy ${{ matrix.service }}
-      uses: ./.github/actions/deploy-cloud-storage-pulumi
-      with:
-        environment: ${{ inputs.environment }}
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-        use-namespace-builder: 'true'
-        prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
-        lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
-        dd-app-key: ${{ secrets.DD_APP_KEY }}
-        dd-api-key: ${{ secrets.DD_API_KEY }}
   deploy-services:
     needs:
     - setup
@@ -519,14 +334,14 @@ jobs:
     - build-service-binaries
     - build-lambda-artifacts
     - migrate-db
-    if: ${{ !cancelled() && needs.setup.outputs.others != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     name: Deploy ${{ matrix.service }}
     runs-on: namespace-profile-linux-small
     env:
       PULUMI_HOME: /pulumi
     strategy:
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.others) }}
+        service: ${{ fromJson(needs.setup.outputs.matrix) }}
       fail-fast: false
     steps:
     - name: Checkout Repo
@@ -599,8 +414,6 @@ jobs:
     - build-service-binaries
     - build-lambda-artifacts
     - migrate-db
-    - deploy-email
-    - deploy-dss
     - deploy-services
     if: always()
     name: Deployment Summary

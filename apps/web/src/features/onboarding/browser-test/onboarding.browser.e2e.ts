@@ -840,3 +840,39 @@ test.describe('subscription recovery', () => {
     });
   }
 });
+
+test('connecting an inbox starts the first suggestions generation once, without routine suggestions', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=tools', {
+    suggestionsEnabled: true,
+  });
+  await expect(heading(page, 'Connect your tools.')).toBeVisible();
+  const starts = () =>
+    page.evaluate(
+      () =>
+        window.onboardingFixture
+          .calls()
+          .filter((call) => call === 'startSuggestionGeneration').length
+    );
+  expect(await starts()).toBe(0);
+
+  const connect = (addresses: string[]) =>
+    page.evaluate((addresses) => {
+      const ownerId = window.onboardingFixture.world().viewer?.id ?? '';
+      window.onboardingFixture.update({
+        emailAccounts: addresses.map((address) => ({
+          address,
+          isPrimary: true,
+          ownerId,
+        })),
+      });
+    }, addresses);
+  await connect(['work@example.com']);
+  await expect.poll(starts).toBe(1);
+
+  // A second inbox starts nothing more.
+  await connect(['work@example.com', 'home@example.com']);
+  await page.waitForTimeout(300);
+  expect(await starts()).toBe(1);
+});

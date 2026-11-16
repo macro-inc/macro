@@ -33,6 +33,7 @@ fn default_allow_domain_join() -> bool {
         (status = 200, body = Team),
         (status = 400, body = model_error_response::ErrorResponse),
         (status = 403, body = model_error_response::ErrorResponse),
+        (status = 409, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     ),
 )]

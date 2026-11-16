@@ -243,7 +243,7 @@ where
         fields(
             agent.session.id = %session_id,
             harness = %dial.harness,
-            agent.session.reattached = false,
+            agent.session.reattached = tracing::field::Empty,
             agent.runtime.reattach_stale = false,
         )
     )]
@@ -252,19 +252,22 @@ where
         session_id: AgentSessionId,
         dial: DialTicket,
     ) -> Result<bool> {
+        let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
         if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
         {
+            span.record("agent.session.reattached", false);
             return Ok(false);
         }
         if self.sessions.attached_mcp_servers(session_id).is_some() {
+            span.record("agent.session.reattached", false);
             self.ensure_hydrated(session_id).await?;
             return Ok(true);
         }
         self.reconnect(session_id, AttachPath::Dial, Some(dial))
             .await?;
-        tracing::Span::current().record("agent.session.reattached", true);
+        span.record("agent.session.reattached", true);
         Ok(true)
     }
 
@@ -435,6 +438,7 @@ where
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
+                client: None,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -505,6 +509,7 @@ where
             actor,
             announce: _,
             context: _,
+            client: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)

@@ -145,8 +145,10 @@ pub(crate) fn action(task: Value) -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 

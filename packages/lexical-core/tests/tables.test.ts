@@ -234,6 +234,23 @@ describe('m-table internal transformer', () => {
       expect(cell.__headerState).toBe(TableCellHeaderStates.NO_STATUS);
     });
   });
+
+  it('ignores spans beyond the safe integer range', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell colspan="1e300" rowspan="9007199254740993">a</m-table-cell></m-table-row></m-table>'
+    );
+
+    editor.getEditorState().read(() => {
+      const [row] = $getFirstTable().getChildren().filter($isTableRowNode);
+      const [cell] = (row as TableRowNode)
+        .getChildren()
+        .filter($isTableCellNode);
+      expect(cell.getColSpan()).toBe(1);
+      expect(cell.getRowSpan()).toBe(1);
+    });
+  });
 });
 
 describe('lists inside table cells', () => {

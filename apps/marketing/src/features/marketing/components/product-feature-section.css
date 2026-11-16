@@ -1,13 +1,10 @@
-/* Restore the original product-chapter rhythm on lower subpage sections only. */
+/* Match the homepage: one reading column above each wider product demo. */
 .feature-page[data-product-spacing=true] .feature-page-section {
   position: relative;
-  width: min(1160px, calc(100vw - 80px));
+  width: min(800px, calc(100% - 64px));
   margin-block: 0;
-  margin-inline: calc((100% - min(1160px, 100vw - 80px)) / 2);
-  padding-block: 88px 76px;
-}
-.feature-page[data-product-spacing=true] :is(.feature-page-jump-links, .tasks-founder-letter) + .feature-page-section {
-  margin-top: 48px;
+  margin-inline: auto;
+  padding-block: 64px 44px;
 }
 
 .feature-page-section::before {
@@ -16,32 +13,30 @@
   inset: 0 auto auto 50%;
   width: 100vw;
   transform: translateX(-50%);
-  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 5.4%, transparent);
   pointer-events: none;
 }
 
 .product-feature-intro {
-  --feature-heading-size: clamp(32px, 3.1vw, 44px);
-  display: grid;
-  grid-template-columns: minmax(0, .96fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 40px;
-  margin-bottom: 52px;
+  width: min(640px, 100%);
+  margin: 0 auto 28px;
   text-align: left;
 }
 
 .product-feature-intro h2 {
-  margin: 0;
-  max-width: none;
-  font: calc(330 + var(--cream-slab-weight-increase, 0)) var(--feature-heading-size)/1.2 'Roboto Slab Variable', display, serif;
+  margin: 0 0 24px;
+  font: calc(320 + var(--cream-slab-weight-increase, 0)) 40px/1.2 'Roboto Slab Variable', display, serif;
   letter-spacing: -.035em;
-  text-wrap: initial;
+  white-space: nowrap;
 }
+
+.product-feature-intro h2 > span { display: inline-block; }
 
 .product-feature-intro p {
   max-width: none;
-  color: var(--color-ink-muted);
-  font: 400 clamp(17px, 1.3vw, 18px)/calc(var(--feature-heading-size) * .8) 'Inter Variable', Inter, sans-serif;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font: 370 17.5px/1.8 'Inter Variable', Inter, sans-serif;
+  letter-spacing: normal;
   text-wrap: pretty;
 }
 
@@ -59,24 +54,14 @@
   top: 0;
 }
 
-.product-feature-intro h2 > span { display: block; white-space: nowrap; }
-
-/* Stack before either column becomes cramped; never clamp or hide copy. */
-@media (max-width: 1199px) {
-  .product-feature-intro { grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 32px; }
-  .product-feature-intro h2 > span { white-space: normal; }
-  .product-feature-intro p { max-width: 60ch; font-size: 18px; line-height: 1.55; }
-}
-
-@media (max-width: 799px) {
-  .feature-page[data-product-spacing=true] .feature-page-section {
-    width: calc(100% - 36px);
-    margin-inline: auto;
-    padding-block: 56px;
-  }
-  .product-feature-intro h2 { max-width: none; font-size: clamp(28px, 7.2vw, 42px); }
-  .product-feature-intro p { max-width: 42ch; font-size: 17px; }
-}
 @media (max-width: 699px) {
+  .feature-page[data-product-spacing=true] .feature-page-section {
+    width: calc(100% - 32px);
+    max-width: 540px;
+    padding-block: 52px 32px;
+  }
   .feature-page[data-product-spacing=true] .product-page .feature-page-section { width: 100%; }
+  .product-feature-intro { width: calc(100% - 16px); margin-bottom: 20px; }
+  .product-feature-intro h2 { font-size: 28px; margin-bottom: 20px; white-space: normal; text-wrap: balance; }
+  .product-feature-intro p { line-height: 1.55; }
 }

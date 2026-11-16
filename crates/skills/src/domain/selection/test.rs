@@ -175,7 +175,7 @@ async fn select(
         skills,
         jev.as_ref(),
         &owner(),
-        SkillRequest {
+        RoutingRequest {
             latest,
             previous: None,
         },
@@ -368,7 +368,7 @@ async fn the_classifier_sees_the_request_and_each_description() {
         &skills,
         Some(&cognition),
         &owner(),
-        SkillRequest {
+        RoutingRequest {
             latest: "now do it for Q3",
             previous: Some("summarise Q2 revenue"),
         },

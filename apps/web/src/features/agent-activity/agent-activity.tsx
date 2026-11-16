@@ -1,10 +1,11 @@
+import { ActivityLine } from '@app/features/block-agent/ui';
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import {
   type AgentActivityData,
   isAgentActivityCard,
 } from '@macro-inc/lexical-core';
 import { Key } from '@solid-primitives/keyed';
 import { Show } from 'solid-js';
-import { ActivityLine } from './components/activity-line';
 import type { ActivityRowView } from './components/activity-rows';
 import { ActivitySummary } from './components/activity-summary';
 import { PresentedView } from './components/presented-view';
@@ -45,7 +46,8 @@ function LiveActivity(props: AgentActivityData) {
     () => props.segment,
     rows
   );
-  return <Run rows={activity()} sealed={false} />;
+  const summary = useSessionActivity(() => props.agentSessionId);
+  return <Run rows={activity()} sealed={false} summary={summary()} />;
 }
 
 /**
@@ -53,7 +55,12 @@ function LiveActivity(props: AgentActivityData) {
  * stands in for the step that presented it and never folds into the run's
  * line or summary.
  */
-function Run(props: { rows: readonly ActivityRowView[]; sealed: boolean }) {
+function Run(props: {
+  rows: readonly ActivityRowView[];
+  sealed: boolean;
+  /** The session's live status line over an open run's steps. */
+  summary?: string;
+}) {
   const steps = () =>
     props.rows.filter((row) => !isAgentActivityCard(row.card));
   const views = () =>
@@ -63,7 +70,10 @@ function Run(props: { rows: readonly ActivityRowView[]; sealed: boolean }) {
   return (
     <>
       <Show when={steps().length > 0}>
-        <Show when={props.sealed} fallback={<ActivityLine rows={steps()} />}>
+        <Show
+          when={props.sealed}
+          fallback={<ActivityLine steps={steps()} summary={props.summary} />}
+        >
           <ActivitySummary rows={steps()} />
         </Show>
       </Show>
@@ -85,5 +95,5 @@ const THINKING: ActivityRowView = {
  * uses, so the reply never reads as finished while the agent works.
  */
 export function AgentThinking() {
-  return <ActivityLine rows={[THINKING]} />;
+  return <ActivityLine steps={[THINKING]} />;
 }

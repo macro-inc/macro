@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT cs.link_id AS \"link_id!\", ce.email AS \"email!\"\n            FROM UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)\n            JOIN crm_contact_emails ce ON ce.email = p.email\n            JOIN crm_contact_sources cs\n              ON cs.contact_id = ce.contact_id AND cs.link_id = p.link_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3cccda4a5112c1bec29cbd69d30eda420468939f01a56fd7eaf4682a1849a51f"
+}

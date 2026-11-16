@@ -9,6 +9,6 @@
  * Link or switch a contact with a known personal-provider email.
  */
 export interface SetContactCompanyRequest {
-  /** Destination company in the same team. Unlinking is not supported. */
+  /** Destination company in the same team. */
   companyId: string;
 }

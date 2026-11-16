@@ -7,13 +7,14 @@ export function RecordVisibilityFilter(props: {
   archived: boolean;
   onChange: (archived: boolean) => void;
   disabled?: boolean;
+  size?: 'sm' | 'md';
 }) {
   return (
     <Dropdown>
       <Dropdown.Trigger
         as={Button}
         variant="secondary"
-        size="sm"
+        size={props.size ?? 'sm'}
         aria-label={t('viewMenus.crmVisibility')}
       >
         <FunnelIcon class="size-4" />

@@ -22,7 +22,12 @@ That skill is the source of truth for:
 - When to use `jj` versus `git`.
 - Which SQLx APIs are allowed.
 - When to run `just prepare_db`.
-- The SQL performance and security checklist.
+- The SQL security checklist.
+
+For query cost and migration safety, also load and follow
+`.agents/skills/query-review/SKILL.md` (it checks the plans that
+`.agents/skills/query-writing/SKILL.md` requires of the author) and
+`.agents/skills/migration-review/SKILL.md`, and include their report tables.
 
 ## PostgreSQL 14 Compatibility
 
@@ -50,4 +55,5 @@ Return a short Markdown report with these sections:
 3. `PostgreSQL 14 Compatibility` — findings, verification evidence (including server version), and any unverified migrations or queries.
 4. `Macro Usage` — whether changed queries use SQLx macros; list justified exceptions.
 5. `prepare_db` — passed, failed, or skipped with reason.
-6. `Performance/Security Findings` — bullets with severity and suggested fixes, or `None found`.
+6. `Query and Migration Review` — the report tables from the query-review and migration-review skills.
+7. `Security Findings` — bullets with severity and suggested fixes, or `None found`.

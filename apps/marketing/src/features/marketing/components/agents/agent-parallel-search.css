@@ -1,0 +1,12 @@
+.agent-parallel-search { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; height:100%; }
+.agent-parallel-search [data-tool-row]:has([data-search-scope=email]) > div > svg { color:var(--search-email); }
+.agent-parallel-search [data-tool-row]:has([data-search-scope=channel]) > div > svg { color:var(--search-channel); }
+.agent-parallel-search [data-tool-row]:has([data-search-scope=document]) > div > svg { color:var(--search-document); }
+.agent-parallel-search [data-tool-row]:has([data-search-scope=task]) > div > svg { color:var(--search-task); }
+.agent-parallel-search [data-tool-row]:has([data-search-scope=call]) > div > svg { color:var(--search-call); }
+.agent-search-source { display:flex; flex-direction:column; gap:8px; padding:16px; margin-top:16px; border:1px solid var(--color-edge-muted); border-radius:12px; background:var(--color-panel); font-size:14px; }
+.agent-search-source button { align-self:flex-end; color:var(--color-ink-extra-muted); }
+.agent-search-source p { margin:0; }
+.agent-search-source span { color:var(--color-ink-extra-muted); font-size:12px; }
+
+.agent-parallel-search [data-search-scope] > div > span { white-space:normal; overflow:visible; }

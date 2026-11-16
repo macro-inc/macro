@@ -1,6 +1,5 @@
 #![recursion_limit = "256"]
 
-use activity::inbound::toolset::activity_toolset;
 use agent_session::inbound::toolset::{ReadAgentSession, coding_agent_toolset};
 use ai_toolset::AsyncToolCollection;
 mod frontend_compat;
@@ -10,7 +9,6 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 #[cfg(test)]
 mod test;
 
-pub mod ai_operations;
 mod build_context;
 pub mod crm_csv_files;
 mod deferred;
@@ -27,7 +25,6 @@ pub mod search;
 mod search_tools;
 mod self_knowledge;
 pub mod serde_utils;
-mod subagent;
 mod tool_context;
 pub mod user_tool_review;
 
@@ -62,7 +59,6 @@ use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
-use subagent::{Subagent, SubagentContext};
 use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -82,7 +78,7 @@ pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
     NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
-    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
+    TaskPropertiesAdapter, ToolActivityReadService, ToolBookingLinkService,
     ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
     ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
@@ -104,7 +100,7 @@ pub use tool_context::{
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
     ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
+    ToolViewOnlyDatabasesSqlToolContext, build_activity_read_service,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
     build_calendar_tool_context, build_channel_media_upload_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
@@ -168,14 +164,13 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
-/// Toolset available to subagents — everything except email and the Subagent
-/// tool itself (subagents cannot create subagents).
-pub(crate) fn subagent_toolset() -> AiToolSet {
+/// The tools every host shares, before host-specific email, calendar and
+/// discovery tools are added.
+pub(crate) fn base_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
-        .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolImageGenerationToolContext>(
             image_generation::inbound::toolset::image_generation_toolset(),
@@ -269,7 +264,6 @@ pub const EAGER_TOOLS: &[&str] = &[
     "SelfKnowledge",
     "SendChannelMessage",
     "ShareWithChannel",
-    "Subagent",
     "TextEditorCodeExecution",
     "WebFetch",
     "WebSearch",
@@ -294,7 +288,7 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
 }
 
 fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
-    let toolset = subagent_toolset()
+    let toolset = base_toolset()
         .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
@@ -317,8 +311,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
-        .add_tool::<Subagent, SubagentContext>();
+        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset());
     // Only Macro's own agents connect servers for the user.
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {
@@ -438,6 +431,8 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
             ToolEntityAccessService,
         >())
         .merge(&read::read_thread())
+        .merge(&schemas::subagent::subagent())
+        .merge(&schemas::read_activity::read_activity())
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }

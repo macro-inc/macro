@@ -241,10 +241,7 @@ function KeyPropertiesRow(props: {
                           <Match when={userCount() > 1}>
                             <div class="flex items-center gap-1">
                               <Show when={props.maxUserStackUsers === 0}>
-                                <UsersIcon
-                                  class="size-4 shrink-0 mobile:size-5"
-                                  data-icon-motion="none"
-                                />
+                                <UsersIcon class="size-4 shrink-0 mobile:size-5" />
                               </Show>
                               <Property.UserStack
                                 property={shown()}

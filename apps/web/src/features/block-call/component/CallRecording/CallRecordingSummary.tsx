@@ -1,12 +1,18 @@
+import { t } from '@app/lib/i18n';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
+import { Spinner, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
-export function CallRecordingSummarySection(props: { record: CallRecord }) {
+export function CallRecordingSummarySection(props: {
+  record: CallRecord;
+  hideHeading?: boolean;
+}) {
   const summary = createMemo(() => {
     const value = props.record.summary;
     if (!value) return null;
@@ -23,19 +29,33 @@ export function CallRecordingSummarySection(props: { record: CallRecord }) {
 
   return (
     <Show when={shouldShow()}>
-      <section class="flex flex-col gap-3">
-        <h3 class="text-sm font-semibold text-ink">Summary</h3>
+      <section class="flex flex-col gap-2">
+        <Show when={!props.hideHeading}>
+          <h3 class="flex min-h-7 items-center text-base font-semibold text-ink">
+            <Tooltip
+              as="span"
+              label={t('calls.detailAttribution')}
+              class="gap-2"
+              tabIndex={0}
+            >
+              <SparkleIcon class="size-4 shrink-0" />
+              {t('calls.detailSummary')}
+            </Tooltip>
+          </h3>
+        </Show>
         <Show
           when={summary()}
           fallback={
-            <div class="flex items-center gap-2 animate-pulse">
-              <div class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-extra-muted border-t-ink-muted" />
-              <span class="text-sm text-ink-subtle">Generating summary…</span>
+            <div class="flex items-center gap-2">
+              <Spinner />
+              <span class="text-sm text-ink-subtle">
+                {t('calls.detailGeneratingSummary')}
+              </span>
             </div>
           }
         >
           {(text) => (
-            <div class="text-sm/6 text-ink text-pretty">
+            <div class="text-sm/6 text-ink-muted text-pretty">
               <StaticMarkdownContext theme={aiChatTheme}>
                 <StaticMarkdown markdown={text()} />
               </StaticMarkdownContext>

@@ -38,6 +38,7 @@ it('keeps off-page selections and self without reordering clicked rows or retain
       suggestions: {
         inputKey: query,
         windowKey: () => 'window',
+        continued: () => false,
         data: page,
         search: query,
         setSearch: setQuery,

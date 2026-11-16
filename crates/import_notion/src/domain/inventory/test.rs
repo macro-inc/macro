@@ -6,7 +6,8 @@ use chrono::{TimeZone, Utc};
 use super::{full_markdown, inventory};
 use crate::domain::model::{
     DataSourceSummary, ImportScope, Inventory, InventoryProgress, NotionDataSource, NotionId,
-    NotionPage, NotionParent, NotionUser, PageMarkdown, Paged, SearchHit, SearchObject,
+    NotionPage, NotionParent, NotionUser, PageMarkdown, Paged, RowsNext, RowsPage, SearchHit,
+    SearchObject,
 };
 use crate::domain::ports::{NotionApi, NotionError};
 
@@ -18,7 +19,7 @@ struct FakeWorkspace {
     /// Data sources a database container holds, by database id.
     databases: HashMap<NotionId, Vec<NotionId>>,
     /// Rows by data source id; the first page of a query.
-    rows: HashMap<NotionId, Paged<NotionPage>>,
+    rows: HashMap<NotionId, RowsPage>,
     /// The page after the first, by data source id, for any cursor.
     later_rows: HashMap<NotionId, Vec<NotionPage>>,
     markdown: HashMap<NotionId, PageMarkdown>,
@@ -91,17 +92,17 @@ impl NotionApi for FakeWorkspace {
         &self,
         id: &NotionId,
         cursor: Option<String>,
-    ) -> Result<Paged<NotionPage>, NotionError> {
+    ) -> Result<RowsPage, NotionError> {
         self.queries.lock().unwrap().push(id.clone());
         if cursor.is_some() {
-            return Ok(Paged {
-                results: self.later_rows.get(id).cloned().unwrap_or_default(),
-                next_cursor: None,
+            return Ok(RowsPage {
+                rows: self.later_rows.get(id).cloned().unwrap_or_default(),
+                next: RowsNext::End,
             });
         }
-        Ok(self.rows.get(id).cloned().unwrap_or(Paged {
-            results: Vec::new(),
-            next_cursor: None,
+        Ok(self.rows.get(id).cloned().unwrap_or(RowsPage {
+            rows: Vec::new(),
+            next: RowsNext::End,
         }))
     }
 
@@ -163,9 +164,11 @@ async fn everything_lists_documents_and_data_sources_with_rows_counted_from_sear
         data_sources: vec![roadmap.clone()],
         rows: HashMap::from([(
             roadmap.id.clone(),
-            Paged {
-                results: vec![row.clone()],
-                next_cursor: Some("more".into()),
+            RowsPage {
+                rows: vec![row.clone()],
+                next: RowsNext::More {
+                    cursor: "more".into(),
+                },
             },
         )]),
         later_rows: HashMap::from([(
@@ -395,7 +398,7 @@ async fn a_database_root_missing_from_search_is_expanded_into_its_data_sources()
             &self,
             id: &NotionId,
             cursor: Option<String>,
-        ) -> Result<Paged<NotionPage>, NotionError> {
+        ) -> Result<RowsPage, NotionError> {
             self.0.query_data_source(id, cursor).await
         }
         async fn users(&self, cursor: Option<String>) -> Result<Paged<NotionUser>, NotionError> {
@@ -462,9 +465,11 @@ async fn a_data_source_search_shows_no_rows_for_is_queried_page_by_page() {
         data_sources: vec![roadmap.clone()],
         rows: HashMap::from([(
             roadmap.id.clone(),
-            Paged {
-                results: vec![row.clone()],
-                next_cursor: Some("more".into()),
+            RowsPage {
+                rows: vec![row.clone()],
+                next: RowsNext::More {
+                    cursor: "more".into(),
+                },
             },
         )]),
         later_rows: HashMap::from([(

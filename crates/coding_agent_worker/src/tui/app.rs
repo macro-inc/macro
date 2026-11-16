@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -18,6 +18,7 @@ use super::process;
 use crate::config::{Config, HarnessCredentials};
 use crate::daemon::{Daemon, InheritedAgent};
 use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
+use crate::profiles::ConfigSelection;
 
 /// How often the dashboard re-reads the server.
 pub(crate) const REFRESH_EVERY: Duration = Duration::from_secs(3);
@@ -101,9 +102,9 @@ pub(crate) enum Mode {
 pub(crate) struct App {
     pub(crate) config_path: PathBuf,
     pub(crate) config: Config,
-    /// This machine's hostname: the name pairing requests, shown until the
-    /// server's name is known.
-    pub(crate) machine_name: String,
+    /// The name pairing requests - this machine's hostname, and the profile
+    /// after it - shown until the server's name is known.
+    pub(crate) pairing_name: String,
     pub(crate) credentials: Option<HarnessCredentials>,
     /// The one HTTP client every dashboard read sends over. Building a client
     /// loads and parses the system's root certificates, and the dashboard
@@ -136,10 +137,11 @@ pub(crate) struct App {
 
 impl App {
     pub(crate) fn load(
-        config_path: &Path,
+        selection: &ConfigSelection,
         logs: LogBuffer,
         inherited: Option<InheritedAgent>,
     ) -> rootcause::Result<Self> {
+        let config_path = selection.path.as_path();
         let config = Config::load(config_path)?;
         let credentials = config
             .credentials
@@ -150,7 +152,7 @@ impl App {
         Ok(Self {
             config_path: config_path.to_owned(),
             config,
-            machine_name: machine_name(),
+            pairing_name: selection.pairing_name(&machine_name()),
             credentials,
             http: dashboard_client()?,
             snapshot: Snapshot::default(),
@@ -300,7 +302,7 @@ impl App {
             Err(error) => return self.fail(format!("config reload failed: {error}")),
         }
         let client = PairingClient::new(&self.config);
-        match client.start().await {
+        match client.start(self.pairing_name.clone()).await {
             Ok(created) => {
                 // The approval page pre-fills the code, so opening the
                 // browser is usually the whole remaining gesture.

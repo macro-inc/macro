@@ -25,11 +25,15 @@ type ServerRequest = {
 const server = vi.hoisted(() => ({
   incoming: [] as ServerRequest[],
   mine: null as ServerRequest | null,
+  stateReads: 0,
 }));
 
 vi.mock('@service-storage/access-requests', () => ({
   accessRequestsClient: {
     state: async (entity: { entityId: string }) => {
+      server.stateReads++;
+      // A real read finishes on a later task, after the row has rendered.
+      await new Promise((resolve) => setTimeout(resolve));
       if (entity.entityId === MINE) {
         const pending = server.incoming.filter(
           (request) => request.status === 'pending'
@@ -134,6 +138,7 @@ function show() {
 beforeEach(() => {
   server.incoming = [request('r-alice', ALICE)];
   server.mine = request('r-mine', VIEWER);
+  server.stateReads = 0;
 });
 afterEach(() => queryClient.clear());
 
@@ -141,7 +146,23 @@ describe('PendingRequestsSection', () => {
   it('lists requests on the viewer’s machines and their own', async () => {
     show();
     await waitFor(() => expect(rows('incoming')).toBe(1));
-    expect(rows('outgoing')).toBe(1);
+    await waitFor(() => expect(rows('outgoing')).toBe(1));
+  });
+
+  it('keeps its rows across refetches, so a click during one still lands', async () => {
+    show();
+    const approve = await screen.findByRole('button', { name: 'Approve' });
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    const settledReads = server.stateReads;
+
+    await queryClient.refetchQueries();
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+
+    expect(approve.isConnected).toBe(true);
+    // One refetch reads each machine once, not once per remounted row.
+    expect(server.stateReads - settledReads).toBe(2);
+    fireEvent.click(approve);
+    await waitFor(() => expect(server.incoming[0]?.status).toBe('granted'));
   });
 
   it('drops a request once it is approved', async () => {

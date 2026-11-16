@@ -158,6 +158,7 @@ fn harness_with_outbox(outbox: Arc<Outbox>) -> (TestBench, TurnSignals) {
         None,
         None,
         Some(outbox),
+        None,
     )
 }
 async fn event(outbox: &Outbox, session: AgentSessionId, subject: &str, wake: bool) {
@@ -384,6 +385,7 @@ async fn recovered_system_identity_overrides_a_legacy_wire_owner() {
             kind: agent_session::domain::model::PrompterKind::System,
             action_id: action,
             user: None,
+            client: None,
         },
     )
     .await

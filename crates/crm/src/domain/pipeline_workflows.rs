@@ -41,15 +41,16 @@ use super::{
 
 pub use fields::{FieldInput, FieldKind, FieldValue, NewFieldKind, PipelineField};
 pub use models::{
-    AddedEntries, EntryAddition, EntryQuery, EntryTarget, EntryUpdate, FieldChange, FoundEntries,
-    MAX_SCANNED_ROWS, NewField, NewPipeline, OptionCounts, PipelineEdit, PipelineEntryView,
-    PipelineOverview, RecordEntries, RecordTarget, RemovedEntries, UpdatedEntries, UpdatedEntry,
-    WorkflowError,
+    AddedEntries, EntryAddition, EntryQuery, EntryTarget, EntryUpdate, FieldChange, FieldTotal,
+    FoundEntries, MAX_SCANNED_ROWS, NewField, NewPipeline, OptionCounts, PipelineEdit,
+    PipelineEntryView, PipelineOverview, RecordEntries, RecordTarget, RemovedEntries,
+    UpdatedEntries, UpdatedEntry, WorkflowError,
 };
 pub use records::PipelineRecord;
 
 use entries::{
-    entry_view, field_values, matches_search, option_counts, record_id, totals, value_of,
+    currencies, entry_view, field_values, matches_search, option_counts, record_id, totals,
+    value_of,
 };
 use ops::{STAGE_FIELD, add_field, add_options, cells, select_field};
 
@@ -449,6 +450,36 @@ where
     }
 }
 
+/// The ops that give a new pipeline its requested stages and fields.
+fn schema_ops(
+    overview: &PipelineOverview,
+    input: &NewPipeline,
+) -> Result<Vec<DatabaseOp>, WorkflowError> {
+    let mut ops = Vec::new();
+    if !input.stages.is_empty() && input.record_type.is_none() {
+        ops.push(add_field(
+            overview,
+            &NewField {
+                name: STAGE_FIELD.to_owned(),
+                kind: NewFieldKind::Select,
+                options: input.stages.clone(),
+            },
+        )?);
+    } else if !input.stages.is_empty() {
+        let stage = overview.field(STAGE_FIELD)?;
+        ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
+            table: overview.pipeline.pipeline.table_id,
+            column: stage.id,
+            change: ColumnChange::DeleteOption { option: *option },
+        }));
+        ops.push(add_options(overview, stage, &input.stages));
+    }
+    for field in &input.fields {
+        ops.push(add_field(overview, field)?);
+    }
+    Ok(ops)
+}
+
 /// The rows `additions` insert into a generic pipeline: free-form, so each
 /// names only its fields and is always a new row.
 fn generic_inserts(
@@ -645,6 +676,7 @@ where
                             .unwrap_or_else(|| PipelineRecord::unnamed(entry.record_id)),
                     ),
                     fields: field_values(&fields, &entry.cells),
+                    currencies: currencies(&pipeline, &fields, &entry.cells),
                 };
                 match found
                     .iter_mut()
@@ -699,7 +731,10 @@ where
         } else {
             let op = DatabaseOp::Rows {
                 table: overview.pipeline.pipeline.table_id,
-                change: RowsChange::Insert { rows: inserts },
+                change: RowsChange::Insert {
+                    rows: inserts,
+                    ids: None,
+                },
             };
             let (results, version) = self.apply(receipt, viewer, OpBatch::from(vec![op])).await?;
             let added = results
@@ -808,6 +843,10 @@ where
                         .unwrap_or_default()
                 };
                 let (old, new) = (cells_of(&before), cells_of(&after));
+                let old_currencies =
+                    currencies(&overview.pipeline.pipeline, &overview.fields, &old);
+                let new_currencies =
+                    currencies(&overview.pipeline.pipeline, &overview.fields, &new);
                 let record = overview.record_field().map(|field| {
                     record_id(new.get(&field.id))
                         .map(|id| {
@@ -823,6 +862,8 @@ where
                     .iter()
                     .filter_map(|(name, _)| overview.field(name).ok())
                     .map(|field| FieldChange {
+                        before_currency: old_currencies.get(&field.name).cloned(),
+                        after_currency: new_currencies.get(&field.name).cloned(),
                         field: field.name.clone(),
                         before: old
                             .get(&field.id)
@@ -897,7 +938,7 @@ where
             .create(
                 team,
                 CreatePipeline {
-                    name: input.name,
+                    name: input.name.clone(),
                     record_type: input.record_type,
                     sharing: input.sharing,
                 },
@@ -909,38 +950,20 @@ where
         if input.stages.is_empty() && input.fields.is_empty() {
             return Ok(overview);
         }
-        let mut ops = Vec::new();
-        if !input.stages.is_empty() && input.record_type.is_none() {
-            ops.push(add_field(
-                &overview,
-                &NewField {
-                    name: STAGE_FIELD.to_owned(),
-                    kind: NewFieldKind::Select,
-                    options: input.stages.clone(),
-                },
-            )?);
-        } else if !input.stages.is_empty() {
-            let stage = overview.field(STAGE_FIELD)?;
-            ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
-                table: overview.pipeline.pipeline.table_id,
-                column: stage.id,
-                change: ColumnChange::DeleteOption { option: *option },
-            }));
-            ops.push(add_options(&overview, stage, &input.stages));
-        }
-        for field in &input.fields {
-            ops.push(add_field(&overview, field)?);
-        }
+        // The pipeline exists from here on, so a stage or field the caller sent
+        // that cannot be set says so: retrying it would create a duplicate.
+        let created = |error: WorkflowError| {
+            WorkflowError::Invalid(format!(
+                "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
+                 could not set its stages and fields: {error}. Edit the pipeline to change them.",
+                overview.pipeline.pipeline.name
+            ))
+        };
+        let ops = schema_ops(&overview, &input).map_err(created)?;
         let receipt = self.receipt::<EditAccessLevel>(viewer, id).await?;
         self.apply(receipt, viewer, OpBatch::from(ops))
             .await
-            .map_err(|error| {
-                WorkflowError::Invalid(format!(
-                    "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Change them with EditPipeline.",
-                    overview.pipeline.pipeline.name
-                ))
-            })?;
+            .map_err(created)?;
         self.overview(&view).await
     }
 

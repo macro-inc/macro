@@ -14,6 +14,7 @@ export {
   ListEntityMetadataQueryProvider,
   ListEntityNoopMetadataProvider,
 } from './composed/list-entity/list-entity-metadata-provider';
+export { KnownFoldersProvider } from './context/known-folders';
 export {
   EntitySelectionToolbar,
   type EntitySelectionToolbarProps,
@@ -64,6 +65,7 @@ export {
   EntityDragSelectionContext,
 } from './utils/draggable';
 export { unreadFilterFn } from './utils/filter';
+export type { KnownFolder } from './utils/folder-path';
 export {
   filterNotDoneNotifications,
   filterValidNotifications,

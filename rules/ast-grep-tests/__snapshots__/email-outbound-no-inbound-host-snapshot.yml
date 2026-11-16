@@ -1,0 +1,195 @@
+id: email-outbound-no-inbound-host
+snapshots:
+  ? |
+    fn send() { crate::api::handler(); }
+  : labels:
+    - source: crate::api::handler
+      style: primary
+      start: 12
+      end: 31
+  ? |
+    fn send() { crate::pubsub::util::cg_refresh_email_unchecked(); }
+  : labels:
+    - source: crate::pubsub::util::cg_refresh_email_unchecked
+      style: primary
+      start: 12
+      end: 59
+  ? |
+    fn send() { super::pubsub::util::cg_refresh_email_unchecked(); }
+  : labels:
+    - source: super::pubsub::util::cg_refresh_email_unchecked
+      style: primary
+      start: 12
+      end: 59
+  ? |
+    fn send() { super::super::api::handler(); }
+  : labels:
+    - source: super::super::api::handler
+      style: primary
+      start: 12
+      end: 38
+  ? |
+    use crate::api::context::ApiContext;
+  : labels:
+    - source: crate::api::context::ApiContext
+      style: primary
+      start: 4
+      end: 35
+  ? |
+    use crate::pubsub as inbound;
+  : labels:
+    - source: crate::pubsub as inbound
+      style: primary
+      start: 4
+      end: 28
+  ? |
+    use crate::pubsub::context::PubSubContext;
+  : labels:
+    - source: crate::pubsub::context::PubSubContext
+      style: primary
+      start: 4
+      end: 41
+  ? |
+    use crate::pubsub::util::cg_refresh_calendar;
+  : labels:
+    - source: crate::pubsub::util::cg_refresh_calendar
+      style: primary
+      start: 4
+      end: 44
+  ? |
+    use crate::{api::context::ApiContext};
+  : labels:
+    - source: crate::{api::context::ApiContext}
+      style: primary
+      start: 4
+      end: 37
+    - source: crate
+      style: secondary
+      start: 4
+      end: 9
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+  ? |
+    use crate::{pubsub::context::PubSubContext};
+  : labels:
+    - source: crate::{pubsub::context::PubSubContext}
+      style: primary
+      start: 4
+      end: 43
+    - source: crate
+      style: secondary
+      start: 4
+      end: 9
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 12
+      end: 42
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 12
+      end: 42
+  ? |
+    use super::api::context::ApiContext;
+  : labels:
+    - source: super::api::context::ApiContext
+      style: primary
+      start: 4
+      end: 35
+  ? |
+    use super::pubsub as inbound;
+  : labels:
+    - source: super::pubsub as inbound
+      style: primary
+      start: 4
+      end: 28
+  ? |
+    use super::pubsub::context::PubSubContext;
+  : labels:
+    - source: super::pubsub::context::PubSubContext
+      style: primary
+      start: 4
+      end: 41
+  ? |
+    use super::super::api::context::ApiContext;
+  : labels:
+    - source: super::super::api::context::ApiContext
+      style: primary
+      start: 4
+      end: 42
+  ? |
+    use super::super::pubsub::context::PubSubContext;
+  : labels:
+    - source: super::super::pubsub::context::PubSubContext
+      style: primary
+      start: 4
+      end: 48
+  ? |
+    use super::super::{pubsub::context::PubSubContext, domain::Service};
+  : labels:
+    - source: super::super::{pubsub::context::PubSubContext, domain::Service}
+      style: primary
+      start: 4
+      end: 67
+    - source: super::super
+      style: secondary
+      start: 4
+      end: 16
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 19
+      end: 49
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 19
+      end: 49
+  ? |
+    use super::{api::context::ApiContext, domain::Service};
+  : labels:
+    - source: super::{api::context::ApiContext, domain::Service}
+      style: primary
+      start: 4
+      end: 54
+    - source: super
+      style: secondary
+      start: 4
+      end: 9
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+  ? |
+    use super::{super::api::context::ApiContext};
+  : labels:
+    - source: super::{super::api::context::ApiContext}
+      style: primary
+      start: 4
+      end: 44
+    - source: super
+      style: secondary
+      start: 4
+      end: 9
+    - source: super::api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 43
+    - source: super::api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 43
+  ? |
+    use {super::super::api::context::ApiContext};
+  : labels:
+    - source: super::super::api::context::ApiContext
+      style: primary
+      start: 5
+      end: 43
