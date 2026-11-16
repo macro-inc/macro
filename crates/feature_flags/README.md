@@ -30,6 +30,17 @@ Do not substitute an email address, derive a new ID, or share one user's snapsho
 with another. Snapshots have no automatic refresh; a new load creates a new one.
 No flag is an authorization grant by itself.
 
+## Global service evaluation
+
+Use `ServiceFeatureFlags::load_service(ServiceContext::new("service-name"))` for
+an explicit global rollout. Service contexts never fabricate Macro user IDs.
+The strict transport and snapshot validation are shared with authenticated-user
+loads. Consumers use one stable service context across human routes, background
+jobs and lifecycle calls. Consumers may require a separate authenticated-user
+load of the same key for actor cohorts; configure the service context explicitly
+alongside those actors rather than using an owner identity for background work.
+`FakeFeatureFlags::set_service` configures service results independently of users.
+
 ## PostHog adapter
 
 Construct once at the service composition root and clone to share its HTTP pool:

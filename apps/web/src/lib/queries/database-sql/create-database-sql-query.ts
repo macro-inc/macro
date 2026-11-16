@@ -175,6 +175,7 @@ function runStatement(
     requestPolicy,
     cache: capabilities.cacheHost(),
     membership,
+    signal,
     people: (ids) =>
       local
         .read(
@@ -246,6 +247,12 @@ export function createDatabaseSqlQuery(
   let disposed = false;
   let scopeOwner = untrack(capabilities.account);
   let active: AbortController | undefined;
+  // The opening cache read outlives later runs of its statement; it is
+  // aborted only when the statement, account, or people cache changes.
+  let opening: AbortController | undefined;
+  // The run whose answer is on screen, so the opening read never replaces a
+  // newer one.
+  let shown = 0;
   let cancelFrame: (() => void) | undefined;
   let networkRead: ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> | undefined;
   let baselines: LocalMembership['baselines'] = new Map();
@@ -259,12 +266,22 @@ export function createDatabaseSqlQuery(
       reportFailure?: boolean;
       keepLoading?: boolean;
       allowDisposed?: boolean;
+      /**
+       * The opening cache read: a later run doesn't cancel it, and its answer
+       * shows unless a newer one already has.
+       */
+      opening?: boolean;
     } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
-    active?.abort();
     const controller = new AbortController();
-    active = controller;
+    if (options.opening) {
+      opening?.abort();
+      opening = controller;
+    } else {
+      active?.abort();
+      active = controller;
+    }
     const account = capabilities.account();
     if (
       !account ||
@@ -275,7 +292,7 @@ export function createDatabaseSqlQuery(
     const valid = () =>
       (!disposed ||
         (options.allowDisposed && sameAccount(account, scopeOwner))) &&
-      generation === latest &&
+      (options.opening ? generation > shown : generation === latest) &&
       !controller.signal.aborted &&
       sameAccount(account, capabilities.account());
     const querySpan = Telemetry.span('database_sql.query');
@@ -333,6 +350,7 @@ export function createDatabaseSqlQuery(
               )
               .map((answer): DatabaseSqlRun => {
                 if (!answer || !valid()) return { landed: false };
+                shown = generation;
                 querySpan.setAttr('database_sql.row_count', answer.rows.length);
                 querySpan.setAttr('database_sql.truncated', answer.truncated);
                 const changed = profileDatabasePhase(
@@ -395,6 +413,7 @@ export function createDatabaseSqlQuery(
         return result;
       } finally {
         if (active === controller) active = undefined;
+        if (opening === controller) opening = undefined;
         querySpan.end();
       }
     };
@@ -426,6 +445,7 @@ export function createDatabaseSqlQuery(
     const cached = run(current, 'cache-only', false, reason, {
       reportFailure: false,
       keepLoading: true,
+      opening: true,
     });
     const generation = latest;
     const reconcile = async () => {
@@ -448,6 +468,7 @@ export function createDatabaseSqlQuery(
         scopeOwner = account;
         cancelFrame?.();
         active?.abort();
+        opening?.abort();
         latest += 1;
         baselines = new Map();
         networkRead = undefined;
@@ -530,6 +551,7 @@ export function createDatabaseSqlQuery(
     const host = capabilities.localPeople?.();
     const reset = () => {
       active?.abort();
+      opening?.abort();
       latest += 1;
       baselines = new Map();
       batch(() => {
@@ -571,6 +593,7 @@ export function createDatabaseSqlQuery(
     disposed = true;
     local.dispose();
     active?.abort();
+    opening?.abort();
     cancelFrame?.();
     latest += 1;
   });

@@ -8,6 +8,7 @@
 
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineTask } from './routineTask';
 import type { RunVisibility } from './runVisibility';
 import type { ScheduledActionClaimed } from './scheduledActionClaimed';
@@ -19,6 +20,8 @@ import type { ScheduledActionSuggestionId } from './scheduledActionSuggestionId'
 import type { ScheduledActionTemplateId } from './scheduledActionTemplateId';
 
 export interface ScheduledAction {
+  /** Optional presentation overrides; absent values use routine defaults. */
+  appearance?: EntityAppearance;
   claimed?: ScheduledActionClaimed;
   /** Independent of execution bookkeeping in `updated_at`. */
   configuration_revision: number;

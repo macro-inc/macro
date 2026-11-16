@@ -5,7 +5,14 @@ import type {
 	WakeContext,
 	Woke,
 } from "../core/agent.ts";
-import type { Accept, Behavior, Event, WakeFor } from "../core/behavior.ts";
+import {
+	type Accept,
+	type Behavior,
+	type Event,
+	inTurn,
+	type Schedule,
+	type WakeFor,
+} from "../core/behavior.ts";
 import type { Signatures } from "../core/capability.ts";
 import { codeMode, type Exported, type Load } from "../core/code.ts";
 import { describeError } from "../core/error.ts";
@@ -144,3 +151,59 @@ export const reportFailures =
 				error: handled.error,
 			});
 	};
+
+/**
+ * A pool of `workers`. Giving it work resolves once a worker has started the
+ * work, not when the work is done, so whoever gives it work is held back only
+ * while every worker is busy. Nothing is queued beyond the callers waiting
+ * for a worker. Work that rejects frees its worker like any other.
+ */
+export const pool = (
+	workers: number,
+): ((work: () => Promise<void>) => Promise<void>) => {
+	if (!Number.isInteger(workers) || workers < 1)
+		throw new Error(
+			`a pool needs a whole number of workers, at least 1: got ${workers}`,
+		);
+	let free = workers;
+	const waiting: (() => void)[] = [];
+	/** Hands the worker to whoever has waited longest, or frees it. */
+	const release = (): void => {
+		const next = waiting.shift();
+		if (next === undefined) free += 1;
+		else next();
+	};
+	return async (work) => {
+		if (free > 0) free -= 1;
+		else await new Promise<void>((resolve) => waiting.push(resolve));
+		// try, not .then: work that isn't async can throw before it returns a promise.
+		void (async () => {
+			try {
+				await work();
+			} catch {
+				// Work reports its own failures; a worker only has to be freed.
+			} finally {
+				release();
+			}
+		})();
+	};
+};
+
+/**
+ * Handles events on a pool's workers, given how the pool starts work: a
+ * source moves to its next event as soon as a worker has started on this
+ * one, and waits only when every worker is busy. Hook events are handled in
+ * turn and take no worker: the wake that fired one is waiting on its
+ * handlers, on a worker of its own.
+ */
+export const onWorkers = ({
+	run,
+	start,
+}: {
+	readonly run: Lifecycle;
+	readonly start: (work: () => Promise<void>) => Promise<void>;
+}): Schedule => {
+	const hooks: readonly unknown[] = Object.values(run.hooks);
+	return (handling, event) =>
+		hooks.includes(event.source) ? inTurn(handling, event) : start(handling);
+};

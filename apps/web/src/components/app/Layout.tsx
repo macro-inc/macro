@@ -85,6 +85,7 @@ import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
+import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
@@ -149,6 +150,7 @@ export function RootFrame(props: ParentProps) {
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();
+  useCloseTabShortcut();
 
   // save last_path to cookie
   createEffect(() => {

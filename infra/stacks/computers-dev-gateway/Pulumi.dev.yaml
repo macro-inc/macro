@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-1
+  computers-dev-gateway:hostEndpointAddress: 136.90.77.56
+  computers-dev-gateway:hostPublicKey: YDEHVLqhCbIQLBKLah0powVxrZqpwpPYC2MzXN3T60g=
+  computers-dev-gateway:gatewayPrivateKey:
+    secure: AAABAMN9vSFmRNpfGlHz7M5WokxGbhfBeFCWARjPNP+UQwlNUHvBHokTskaUxZtt3Y7BkTVW0qaBw+GyN2whraOiep0TcjRMl8CIFA==

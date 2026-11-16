@@ -46,3 +46,43 @@ fn skills_render_non_empty_titled_markdown() {
         assert!(content.starts_with(&format!("# {}", skill.name)));
     }
 }
+
+/// The Compose Routines skill finds items with the SDK's existing searches
+/// and lists, tells the owner through an Ask AI step, and ends with the
+/// code-step text CreateRoutine and the drafter read. The code form code mode
+/// carries leaves out the routine-tools part, and the routine-tools form
+/// leaves out the code-step text, which `CreateRoutine`'s description already
+/// carries.
+#[test]
+fn compose_routines_finds_items_with_the_sdk_and_ends_with_the_code_step_text() {
+    let content = compose_routines::SKILL.render_content();
+    for rule in [
+        "macro.channels.search(name)",
+        "searchOn: 'name', matchType: 'exact'",
+        "macro.users.search(name)",
+        "macro.initiatives.summaries()",
+        "macro.routines.check(routine, { created })",
+        "a code step never messages or emails the routine's owner",
+        "This replaces what the routines guide says about ids in knobs.",
+        "# Without code",
+    ] {
+        assert!(content.contains(rule), "{rule}");
+    }
+    let code = compose_routines::CODE.to_string();
+    assert!(
+        content
+            .trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
+    assert!(
+        code.trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
+    assert!(code.contains("macro.routines.check(routine, { created })"));
+    assert!(!code.contains("# Without code"));
+    let direct = compose_routines::DIRECT.to_string();
+    assert!(direct.contains("a code step never messages or emails the routine's owner"));
+    assert!(!direct.contains(routine_program::CODE_STEPS));
+    assert!(direct.contains("`NameSearch`"));
+    assert!(!direct.contains("ExecuteCode"));
+}

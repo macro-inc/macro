@@ -41,6 +41,7 @@ pub fn cargo_workspace_dependency_check() -> Workflow {
 
 fn rust_ci_job() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())

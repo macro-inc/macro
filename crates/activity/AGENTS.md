@@ -16,11 +16,13 @@ distribution.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the ingest/query service
   and the ports it depends on.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
+- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; the adapter preserves agent correlation and SDK verbs, and appearance broker events must not insert duplicate history.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
-- `src/inbound/toolset/` (`ai_tools`) and `src/inbound/axum_router.rs`
-  (`axum`, mounted by cognition): `ReadActivity` and `GET /activity`, the
-  acting user's own activity through `ReadActivityResponse::read`.
+- `src/domain/activity_range.rs` (`reads`) and `src/inbound/axum_router.rs`
+  (`axum`, mounted by cognition): `GET /activity`, the acting user's own
+  activity through `ReadActivityResponse::read`, which the SDK's
+  `macro.activity.mine()` reads. There is no direct AI tool for it.
 
 ## Scope
 
@@ -30,6 +32,7 @@ distribution.
   crate depends on this with `default-features = false` (models only) and
   implements its own event → `DomainActivity` mapping; the hosting service
   declares consumed topics and dispatches.
+- Keep appearance changes in entity history, but exclude them from personal/team feeds, contribution totals, and attribution recency.
 
 ## Boundaries
 
@@ -55,7 +58,8 @@ distribution.
 
 ## Checks
 
-- `cargo test -p activity` (`SQLX_OFFLINE` unset).
+- `cargo test -p activity --features reads` (`SQLX_OFFLINE` unset); without
+  `reads` the range tests in `domain/activity_range/test.rs` don't compile in.
 
 - External chats have their own unread state and are excluded from activity ranking/Soup until that integration is added.
 

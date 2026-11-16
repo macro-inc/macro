@@ -249,6 +249,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     .unwrap();
     assert_eq!(shared, Some(shared_definition));
     transaction.commit().await.unwrap();
+    // Current readers also require metadata added after this historical cutover.
+    sqlx::query!("ALTER TABLE database_entities ADD COLUMN appearance jsonb")
+        .execute(&pool)
+        .await
+        .unwrap();
     // The owner remains and can immediately create and write a fresh app database.
     let database = repo
         .create_database(
@@ -256,9 +261,10 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 name: "Fresh start".into(),
                 owner_id: user(),
                 acting_bot: None,
+                first_table: None,
             },
             FirstTable {
-                name: "Contacts",
+                name: "Contacts".into(),
                 title_column: "Name",
             },
         )

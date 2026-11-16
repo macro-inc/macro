@@ -1,7 +1,7 @@
 /* A native Macro document with a checklist selected (MarkdownPopup). */
 .task-checklist-doc { position: relative; padding: 40px 56px 32px; text-align: left; }
-.task-checklist-doc h1 { font: 600 24px/1.4 'Inter Variable', Inter, sans-serif; margin-bottom: 20px; }
-.task-checklist-doc h2 { font: 600 17px/1.5 'Inter Variable', Inter, sans-serif; margin: 8px 0 10px; }
+.task-checklist-doc h1 { font: 500 24px/1.4 'Inter Variable', Inter, sans-serif; margin-bottom: 20px; }
+.task-checklist-doc h2 { font: 500 17px/1.5 'Inter Variable', Inter, sans-serif; margin: 8px 0 10px; }
 .task-checklist-block { position: relative; border-radius: 6px; }
 .task-checklist-list { list-style: none; margin: 0; padding: 0; }
 .task-checklist-list > li { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 15px; }

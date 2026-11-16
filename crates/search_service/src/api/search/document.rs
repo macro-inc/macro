@@ -17,7 +17,7 @@ use system_properties::SystemPropertyKey;
 use crate::api::context::SearchHandlerState;
 
 /// Enriches document search results with metadata
-#[tracing::instrument(skip(ctx, results), err)]
+#[tracing::instrument(skip(ctx, results, search_term), err)]
 pub(in crate::api::search) async fn enrich_documents(
     ctx: &SearchHandlerState,
     user_id: &str,

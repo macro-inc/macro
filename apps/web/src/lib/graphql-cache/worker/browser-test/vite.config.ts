@@ -35,7 +35,7 @@ export default defineConfig(({ command }) => ({
     emptyOutDir: true,
     sourcemap: true,
     assetsInlineLimit: 0,
-    rollupOptions: {
+    rolldownOptions: {
       input: Object.fromEntries(
         [
           'calendar-points.html',

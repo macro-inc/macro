@@ -35,7 +35,7 @@ async fn set_company_name_writes_override_that_wins_over_directory(
     );
     // The override wins over the directory name on the read path.
     let record = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company should be readable");
     assert_eq!(record.name.as_deref(), Some("Acme (ours)"));

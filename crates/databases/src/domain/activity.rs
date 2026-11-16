@@ -84,6 +84,8 @@ impl ActivitySource for DatabaseTopicEvent {
                 CommonAction::Edited,
                 metadata.database_id,
             ),
+            // Appearance history commits with the owning entity write.
+            DatabaseTopicEvent::AppearanceChanged { .. } => Ingest::Ignore,
             DatabaseTopicEvent::Purged(metadata) => Ingest::Purge(vec![(
                 EntityType::Database,
                 metadata.database_id.to_string(),

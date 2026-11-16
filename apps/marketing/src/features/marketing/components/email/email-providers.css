@@ -1,0 +1,29 @@
+/* The app's "continue with your work email" screen, drawn at rest. */
+.email-providers { width: 100%; color: var(--color-ink); font-family: 'Inter Variable', Inter, sans-serif; text-align: center; }
+.email-providers-screen { display: flex; flex-direction: column; align-items: center; padding: 56px 24px 44px; }
+.email-providers h3 { margin: 0; font: 315 34px/1.2 'Roboto Slab Variable', display, serif; letter-spacing: -.025em; }
+.email-providers-screen > p { margin: 26px 0 0; color: var(--color-ink-muted); font-size: 15px; line-height: 24px; }
+
+.email-providers-buttons { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); margin-top: 28px; }
+.email-providers-buttons span { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 56px; box-sizing: border-box; padding: 0 24px; border-radius: 999px; font-size: 16px; font-weight: 500; white-space: nowrap; }
+.email-providers-google { background: var(--color-ink); color: #000; }
+.email-providers-google svg { flex: none; width: 20px; height: 20px; }
+/* The secondary button is the app's dark input surface with a lit rim. */
+.email-providers-microsoft { background: #141415; box-shadow: inset 0 0 0 1px #ffffff12, inset 0 1px 0 #ffffff1f; }
+.email-providers-microsoft svg { flex: none; width: 18px; height: 18px; }
+
+.email-providers-trust { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; width: min(512px, 100%); margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--color-edge-muted); }
+.email-providers-trust > div { display: flex; min-width: 0; flex-direction: column; align-items: center; }
+.email-providers-trust svg { width: 20px; height: 20px; color: var(--color-ink-muted); }
+.email-providers-trust strong { margin-top: 12px; font-size: 12px; font-weight: 500; line-height: 20px; }
+.email-providers-trust span { margin-top: 4px; color: var(--color-ink-extra-muted, var(--color-ink-muted)); font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 699px) {
+  .email-providers-screen { padding: 36px 16px 28px; }
+  .email-providers h3 { font-size: 26px; }
+  .email-providers-screen > p { margin-top: 20px; font-size: 14px; }
+  .email-providers-screen { padding-inline: 10px; }
+  .email-providers-trust { gap: 6px; }
+  .email-providers-trust strong { font-size: 11.5px; white-space: nowrap; }
+  .email-providers-trust span { font-size: 10.5px; white-space: nowrap; }
+}

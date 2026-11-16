@@ -191,6 +191,41 @@ describe('independent email dispatch', () => {
     });
   });
 
+  it('retries after the API returns while navigator.onLine still reads offline', async () => {
+    // Native webviews can report offline while the API is reachable, and
+    // then never fire `online`.
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const storage = await setup();
+    await storage.journal.putSend(storage.session, intent(), true);
+    let reachable = false;
+    const submit = vi.fn(async () => {
+      if (!reachable)
+        throw new CombinedError({
+          networkError: new Error('Connection refused'),
+        });
+      return accepted;
+    });
+    run({
+      ...storage,
+      submit,
+      status: vi.fn(async () => null),
+      cancel: vi.fn(),
+      report: vi.fn(),
+    });
+    await vi.waitFor(() => expect(submit).toHaveBeenCalled());
+    reachable = true;
+    // Only the dispatcher's own timers run from here: no `online` event.
+    for (let second = 0; second < 40; second++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      const [row] = await storage.journal.sends(storage.session);
+      if (row.phase === 'committed') break;
+    }
+    expect((await storage.journal.sends(storage.session))[0]).toMatchObject({
+      phase: 'committed',
+      response: { sendEmailMessage: { attempt: accepted } },
+    });
+  });
+
   it('recovers a lost acceptance response after restart without a second submission', async () => {
     const storage = await setup();
     await storage.journal.putSend(storage.session, intent(), true);

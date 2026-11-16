@@ -80,15 +80,16 @@ sidebars start with a suggestions card while the scheduler has suggestions for
 that area; it never shows on touch devices. The card shows up to three
 different routine icons overlapping (each routine's other area besides the
 sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
-you**, the suggestions' names, and a caret, inside a border that fades from
-violet through blue. Clicking it opens **Routines for <area>**: a two-column
+you**, the suggestions' names, and a caret, framed like the Email sidebar's
+**Accounts** card. Clicking it opens **Routines for <area>**: a two-column
 grid of cards, with **For you** and **Templates** tabs (each with a count)
 when the area has both AI's picks and Macro's templates. Each card has the
 area icon, **For you** (violet), **Draft** or **Template** badges, the name,
 what it does as the routine page's knob sentence (underlined values change in
 place before turning it on; without code steps it reads as a summary), its
 trigger → first step, and below a divider AI's reason or **From Macro** beside
-**Turn on** (AI's catalog picks) or a quiet **Review →** / **Use →** label.
+**Turn on** (AI's catalog picks) or a quiet **Review →** / **Use →** label,
+or **Enabled** once on. Long names and reasons wrap.
 The whole card is one button (hover tint, focus ring around the card, Enter
 and Space). While AI's suggestions are still arriving (they come one by one),
 the footer says **Finding more for you…** and the grid refreshes every 2
@@ -100,8 +101,8 @@ seconds.
   `Open <name>` and opens the routine.
 - **Turn on** (`Turn on <name>`, AI's catalog picks) saves the routine in one
   click with the values on the card, switched on and pointing back at its
-  suggestion; the card then shows **Enabled**, which opens it, and its values
-  read as plain text. Turn on, the underlined values and **×** sit above the
+  suggestion; the card then shows an **Enabled** badge and its values read as
+  plain text. Turn on, the underlined values and **×** sit above the
   card's own target, so clicking them does only that.
 - The card's **×** on hover (`Not interested in <name>`) dismisses it at once
   in every area's list and the Routines page; it isn't suggested again.

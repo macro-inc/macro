@@ -41,7 +41,7 @@ export default defineConfig(async (environment) => {
       outDir: resolve(directory, '../../node_modules/.functional-dist'),
       minify: false,
       sourcemap: false,
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           optimisticMutations: resolve(
             directory,

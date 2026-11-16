@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Every grant one signed-in caller holds on each of many documents: the four\n-- sources of `get_document_access`, checked for each requested id in turn.\n-- Keep each source's conditions equivalent to that query's; the caller takes\n-- the highest level per document, as `get_document_access` does.\n--\n-- The OFFSET 0 fences keep the plan to index lookups from each requested\n-- document and each of its attachments, whatever the row estimates. Without\n-- them, stale statistics on the attachment tables led the planner to hash\n-- whole email and discussion tables.\n--\n-- $1: document ids, $2: the caller's source ids, $3: the caller's user id.\nSELECT\n    requested.id AS \"document_id!\",\n    grants.access_level AS \"access_level!: AccessLevel\"\nFROM (\n    -- The document and attachment tables key documents by text, in the\n    -- canonical form `uuid::text` produces.\n    SELECT id, id::text AS document_id\n    FROM unnest($1::uuid[]) AS ids(id)\n) AS requested\nCROSS JOIN LATERAL (\n    SELECT access_level\n    FROM (\n        -- Source 1: entity_access source_id match\n        SELECT access_level\n        FROM entity_access\n        WHERE entity_id = requested.id\n          AND entity_type = 'document'\n          AND source_id = ANY($2)\n\n        UNION ALL\n        -- Source 2: document link share permission\n        SELECT share_permission.\"linkShareAccessLevel\"\n        FROM \"Document\" document\n        JOIN \"DocumentPermission\" document_permission\n          ON document_permission.\"documentId\" = document.id\n        JOIN \"SharePermission\" share_permission\n          ON share_permission.id = document_permission.\"sharePermissionId\"\n        WHERE document.id = requested.document_id\n          AND share_permission.\"linkShareAccessLevel\" IS NOT NULL\n          AND (\n              share_permission.\"linkShare\" = 'PUBLIC'\n              OR (\n                  share_permission.\"linkShare\" = 'TEAM'\n                  AND EXISTS (\n                      SELECT 1\n                      FROM owner_team(document.owner) owner_team\n                      WHERE owner_team.team_id::text = ANY($2)\n                  )\n              )\n          )\n\n        UNION ALL\n        -- Source 3: email-attachment documents inherit access from any linked\n        -- thread the caller can reach: Edit for the inbox's owner or delegate,\n        -- View through a thread-level grant of any level.\n        SELECT\n            CASE\n                WHEN inbox.owned THEN 'edit'::\"AccessLevel\"\n                ELSE 'view'::\"AccessLevel\"\n            END\n        FROM document_email de\n        CROSS JOIN LATERAL (\n            -- The attachment's thread and inbox, by primary keys.\n            SELECT\n                t.id AS thread_id,\n                l.macro_id = $3\n                  OR EXISTS (\n                      SELECT 1\n                      FROM macro_user_links mul\n                      WHERE mul.link_id = l.id\n                        AND mul.primary_macro_id = $3\n                  ) AS owned\n            FROM email_attachments ea\n            JOIN email_messages em ON em.id = ea.message_id\n            JOIN email_threads t ON t.id = em.thread_id\n            JOIN email_links l ON l.id = t.link_id\n            WHERE ea.id = de.email_attachment_id\n            OFFSET 0\n        ) AS inbox\n        WHERE de.document_id = requested.document_id\n          AND (\n              inbox.owned\n              OR EXISTS (\n                  SELECT 1\n                  FROM entity_access thread_access\n                  WHERE thread_access.entity_id = inbox.thread_id\n                    AND thread_access.entity_type = 'email_thread'\n                    AND thread_access.source_id = ANY($2)\n              )\n          )\n\n        UNION ALL\n        -- Source 4: a file attached to a document discussion is visible to\n        -- current viewers of that document.\n        SELECT 'view'::\"AccessLevel\"\n        FROM comms_attachments a\n        CROSS JOIN LATERAL (\n            -- The attachment's live message, thread and parent document, by keys.\n            SELECT 1\n            FROM (\n                -- By primary key alone: given the parent and deletion filters,\n                -- the planner can prefer a partial index on the parent type,\n                -- which reads every document discussion.\n                SELECT m.id, m.thread_id, m.parent_entity_type, m.parent_entity_id, m.deleted_at\n                FROM comms_messages m\n                WHERE m.id = a.message_id\n                OFFSET 0\n            ) AS m\n            JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)\n            JOIN \"Document\" parent_doc\n              ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id\n            LEFT JOIN \"DocumentPermission\" dp ON dp.\"documentId\" = parent_doc.id\n            LEFT JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n            WHERE m.id = a.message_id\n              AND m.deleted_at IS NULL\n              AND mt.deleted_at IS NULL\n              AND parent_doc.\"deletedAt\" IS NULL\n              AND (\n                  parent_doc.owner = $3\n                  OR EXISTS (\n                      SELECT 1\n                      FROM entity_access pa\n                      WHERE pa.entity_type = 'document'\n                        AND pa.entity_id::text = parent_doc.id\n                        AND pa.source_id = ANY($2)\n                  )\n                  OR (\n                      sp.\"linkShareAccessLevel\" IS NOT NULL\n                      AND (\n                          sp.\"linkShare\" = 'PUBLIC'\n                          OR (\n                              sp.\"linkShare\" = 'TEAM'\n                              AND EXISTS (\n                                  SELECT 1\n                                  FROM owner_team(parent_doc.owner) tu\n                                  WHERE tu.team_id::text = ANY($2)\n                              )\n                          )\n                      )\n                  )\n              )\n            OFFSET 0\n        ) AS visible\n        WHERE a.entity_type = 'document'\n          AND a.entity_id = requested.document_id\n    ) AS sources\n    OFFSET 0\n) AS grants\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5d2d09b11a9e151ba5fcfecea5ff57d548fcd77e03e2633e577d60af0af276f9"
+}
