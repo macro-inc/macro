@@ -50,7 +50,7 @@ impl CompaniesRepositoryImpl {
                 sql.push(" JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = ")
                     .push_bind(user_id.to_owned())
                     .push(
-                        " WHERE (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')",
+                        " WHERE (tu.crm_access OR tu.team_role <> 'member') AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')",
                     );
             }
             CrmContactListScope::Team {

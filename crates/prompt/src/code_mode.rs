@@ -8,7 +8,7 @@ static TITLE: &str = "Code Mode";
 /// The rules every code-mode host shares.
 macro_rules! shared {
     () => {
-        r##"- Prefer `ExecuteCode` for Macro work, including searches, reads, writes and calculations, even a single call; the user need not ask for code. Keep direct tools for what the SDK does not cover: questions to the user and `RenderCanvas` to see a canvas. Search across every kind of item with `macro.search`, and browse activity, the inbox and mixed-entity feeds with `macro.workspace`.
+        r##"- Prefer `ExecuteCode` for Macro work, including searches, reads, writes and calculations, even a single call; the user need not ask for code. Keep direct tools for what the SDK does not cover, such as questions to the user. Search across every kind of item with `macro.search`, and browse activity, the inbox and mixed-entity feeds with `macro.workspace`.
 - Discover before writing: entity indexes in context list each method's signature. Read the symbols a program uses with `ReadCodeDocs`, all in one call, unless their reference is already in context, and call `DescribeCodeTools` only for an entity index not in context. Do not guess methods or options.
 - Do one job in one program. Put conditions, loops and dependent reads and writes inside it instead of checking in one execution and acting in the next, and run independent work in parallel.
 - Return compact evidence: the ids and `webUrl()` of what you found or changed, outcomes, failures and coverage limits, not SDK objects or raw batches.
@@ -20,7 +20,8 @@ macro_rules! shared {
 
 static INSTRUCTIONS: &str = concat!(
     shared!(),
-    r##"- When a turn made, changed or sent something the user will want to open, or the answer is a set of workspace items, present them with `execution.views.present` without being asked, and keep your reply to a one-line lead-in.
+    r##"- To see a canvas, return `images: [await canvas.render()]` from `main`.
+- When a turn made, changed or sent something the user will want to open, or the answer is a set of workspace items, present them with `execution.views.present` without being asked, and keep your reply to a one-line lead-in.
 "##
 );
 

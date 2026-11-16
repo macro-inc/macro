@@ -158,10 +158,16 @@
         "properties": {
           "client_token": {
             "$ref": "#/components/schemas/SecretString"
+          },
+          "lease_duration": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
-          "client_token"
+          "client_token",
+          "lease_duration"
         ],
         "type": "object"
       },

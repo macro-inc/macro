@@ -190,3 +190,5 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Skill: `database-core`, `cloud-storage-hexagonal-architecture` · Rules:
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+- CRM list, association, and attention visibility includes effective per-member CRM access; team membership alone is insufficient. Current primary-backed gates also protect cached-source reads.
