@@ -21,14 +21,16 @@ fn selected_checkboxes(state: &EditorState) -> Result<Option<Vec<NodeKey>>, Erro
         return Ok(None);
     };
     let view = state.view();
+    // Source's Set: first-seen order, constant-time membership.
     let mut items: Vec<NodeKey> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for node in range.nodes(view)? {
         let mut current = Some(node);
         while let Some(key) = current.filter(|key| *key != NodeKey::ROOT) {
             if let Some(item) = view.cast::<ListItemNode>(key)
                 && get_checked(&view, item).is_some()
             {
-                if !items.contains(&key) {
+                if seen.insert(key) {
                     items.push(key);
                 }
                 break;
