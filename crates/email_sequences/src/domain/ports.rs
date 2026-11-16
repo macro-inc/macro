@@ -251,6 +251,12 @@ pub trait SequenceRepo: Send + Sync + 'static {
         team_id: Uuid,
         emails: &[String],
     ) -> impl Future<Output = Result<Vec<(String, RecipientState)>, Self::Err>> + Send;
+    /// How many enrollments the sequence has, in any status.
+    fn enrollment_count(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> impl Future<Output = Result<usize, Self::Err>> + Send;
     /// Insert an enrollment; `None` if the address is already in the sequence.
     fn insert_enrollment(
         &self,

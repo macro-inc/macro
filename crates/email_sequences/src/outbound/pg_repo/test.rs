@@ -1123,3 +1123,40 @@ async fn an_owner_who_left_a_team_still_sends_from_the_inbox_in_their_new_one(po
     assert_eq!(in_flight(&pool, stranded).await, None);
     assert_eq!(status(&pool, stranded).await.0, "active");
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn a_full_sequence_takes_no_more_people(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    // One place is left.
+    let filled = i32::try_from(crate::domain::service::MAX_PEOPLE - 1).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_sequence_enrollments (id, sequence_id, team_id, email, status, timezone, send_time)
+           SELECT gen_random_uuid(), $1, $2, 'person' || n || '@example.com', 'completed', 'UTC', '09:00'
+           FROM generate_series(1, $3::int) AS n"#,
+        sequence,
+        TEAM,
+        filled,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let results = svc
+        .enroll(
+            OWNER,
+            sequence,
+            EnrollRequest {
+                crm_contact_ids: vec![ADA, BOB],
+                start: Utc::now(),
+                timezone: "America/New_York".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(results[0].enrollment_id.is_some());
+    assert_eq!(results[1].skipped, Some(EnrollSkip::SequenceFull));
+}

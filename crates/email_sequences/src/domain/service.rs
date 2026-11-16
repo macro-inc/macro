@@ -27,6 +27,10 @@ pub(super) const STUCK_AFTER: Duration = Duration::minutes(30);
 /// Most contacts one enroll request may add.
 const MAX_ENROLL: usize = 50;
 
+/// Most people one sequence holds, in any status, so that listing it and
+/// pausing or re-timing everyone in it stay a bounded amount of work.
+pub(crate) const MAX_PEOPLE: usize = 1_000;
+
 /// Changes to a sequence; `None` leaves a field as it is.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema), schema(as = UpdateSequenceRequest))]
@@ -735,16 +739,26 @@ where
         let now = Utc::now();
         let clock = timing::send_clock(request.start, timezone);
         let due_at = timing::first_due(request.start, now);
+        let mut room = MAX_PEOPLE.saturating_sub(
+            self.repo
+                .enrollment_count(&mut tx, sequence.id)
+                .await
+                .map_err(internal)?,
+        );
         for (crm_contact_id, email, name) in accepted {
             let unsubscribed = recipients
                 .iter()
                 .find(|(address, _)| *address == email)
                 .is_some_and(|(_, recipient)| recipient.unsubscribed);
-            if unsubscribed {
+            if unsubscribed || room == 0 {
                 results.push(EnrollResult {
                     crm_contact_id,
                     enrollment_id: None,
-                    skipped: Some(EnrollSkip::Unsubscribed),
+                    skipped: Some(if unsubscribed {
+                        EnrollSkip::Unsubscribed
+                    } else {
+                        EnrollSkip::SequenceFull
+                    }),
                 });
                 continue;
             }
@@ -765,6 +779,7 @@ where
                 )
                 .await
                 .map_err(internal)?;
+            room -= usize::from(enrollment_id.is_some());
             results.push(EnrollResult {
                 crm_contact_id,
                 skipped: enrollment_id

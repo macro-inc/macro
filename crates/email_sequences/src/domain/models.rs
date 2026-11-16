@@ -398,6 +398,8 @@ pub enum EnrollSkip {
     Unsubscribed,
     /// The address is already in this sequence.
     AlreadyEnrolled,
+    /// The sequence holds as many people as it can.
+    SequenceFull,
 }
 
 /// What enrolling one contact did.

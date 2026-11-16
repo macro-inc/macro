@@ -637,6 +637,20 @@ impl SequenceRepo for PgSequenceRepo {
             .collect()
     }
 
+    async fn enrollment_count(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> Result<usize, PgSequenceError> {
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_sequence_enrollments WHERE sequence_id = $1"#,
+            sequence_id,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(usize::try_from(count).unwrap_or(usize::MAX))
+    }
+
     async fn insert_enrollment(
         &self,
         tx: &mut Self::Tx,
