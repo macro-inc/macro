@@ -48,12 +48,15 @@ export function ViewSidebarToggle(props: {
       : props.action === 'expand'
         ? 'Show navigation'
         : 'Hide navigation';
+  // A touch sheet or overlay closes from its backdrop; it shows no Hide.
+  const dismissesFromBackdrop = () =>
+    ws?.aside.isSheet() || (isTouchDevice() && ws?.aside.isOverlay());
   const visible = () =>
     !(ws?.collectionLayout() && pane === 'detail') &&
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
       ? ws.aside.isCollapsed() || ws.aside.isOverlay()
-      : !ws.aside.isCollapsed());
+      : !ws.aside.isCollapsed() && !dismissesFromBackdrop());
   // Show and Hide are separate actions, not a persistently pressed toggle.
   return (
     <Show when={visible()}>
@@ -63,11 +66,13 @@ export function ViewSidebarToggle(props: {
           content: label(),
           hotkey: TOKENS.workspace.toggleNavigation,
         }}
-        variant={props.presentation === 'pill' ? 'secondary' : 'ghost'}
-        size={props.presentation === 'pill' ? 'icon-lg' : 'icon-xs'}
+        variant="ghost"
+        size={props.presentation === 'pill' ? 'icon-md' : 'icon-xs'}
         class={cn(
           'shrink-0',
-          props.presentation === 'pill' && 'size-10 rounded-full',
+          // The same island as the touch filter button beside it.
+          props.presentation === 'pill' &&
+            'island bg-chrome pointer-events-auto relative size-10 rounded-full',
           props.action === 'collapse' && 'ml-auto',
           props.action === 'collapse' &&
             ws?.aside.isOverlay() &&
@@ -97,7 +102,9 @@ export function ViewSidebarToggle(props: {
       >
         {/* Touch opens navigation as a sheet, behind the familiar menu icon. */}
         <Show when={isTouchDevice()} fallback={<SidebarIcon class="size-4" />}>
-          <ListIcon class="size-4" />
+          <ListIcon
+            class={props.presentation === 'pill' ? 'size-6 shrink-0' : 'size-4'}
+          />
         </Show>
       </Button>
     </Show>
