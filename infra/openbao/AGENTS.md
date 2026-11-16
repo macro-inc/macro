@@ -16,6 +16,9 @@ role, and never deletes or replaces secret values.
   can connect through a loopback tunnel endpoint (`--connect`).
 - `../local/openbao/bootstrap.py`: local entrypoint, with its own loopback-only
   HTTP guard.
+- `copy_secrets.py`: the one-off copy of every team's values from the legacy
+  hosted vault to its replacement in the OpenBao account. It only appends,
+  keeps version numbers, and prints counts and ids only.
 
 ## Checks
 
