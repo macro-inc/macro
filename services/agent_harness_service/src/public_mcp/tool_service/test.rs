@@ -752,7 +752,6 @@ mod code_mode {
         assert_eq!(*runs.2.lock().unwrap(), [Some(session), None]);
     }
 
-    /// A request the middleware left without a caller runs nothing.
     /// Returns one rendered image, as a program returning `await canvas.render()`.
     struct Renders;
     #[async_trait::async_trait]
@@ -812,6 +811,7 @@ mod code_mode {
         );
     }
 
+    /// A request the middleware left without a caller runs nothing.
     #[tokio::test]
     async fn execute_code_without_a_caller_runs_nothing() {
         let runs = Arc::new(Runs::default());

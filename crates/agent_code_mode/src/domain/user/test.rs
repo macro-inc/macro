@@ -307,3 +307,33 @@ async fn more_than_two_images_fail_the_result() {
     assert!(receipt.model_media.is_empty());
     assert!(receipt.error.unwrap().contains("at most 2 SDK images"));
 }
+
+#[tokio::test]
+async fn an_image_someone_else_owns_is_not_shown() {
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 1, "images": [{"id": "render-1"}]}))),
+        Arc::new(Credentials::default()),
+        Arc::new(Pixels),
+    );
+    let someone_else = MacroUserIdStr::parse_from_str("macro|someone-else@example.com").unwrap();
+
+    let receipt = service
+        .execute(
+            &someone_else,
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert!(receipt.model_media.is_empty());
+    assert!(
+        receipt
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("image render-1 could not be shown")
+    );
+}

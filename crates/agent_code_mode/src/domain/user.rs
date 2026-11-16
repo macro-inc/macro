@@ -135,8 +135,6 @@ impl UserCodeMode for UserCodeModeService {
         let span = tracing::Span::current();
         span.record("status", tracing::field::debug(status));
         span.record("activity", activity.len());
-        // The credential acts as the authenticated user, so only files that
-        // user owns are shown.
         let mut model_media = Vec::new();
         attach_returned_images(
             self.images.as_ref(),
@@ -148,6 +146,7 @@ impl UserCodeMode for UserCodeModeService {
         )
         .instrument(tracing::info_span!(
             "code_mode.result_images",
+            agent_session_id = session.map(tracing::field::display),
             images = tracing::field::Empty,
             failed_image = tracing::field::Empty,
         ))
