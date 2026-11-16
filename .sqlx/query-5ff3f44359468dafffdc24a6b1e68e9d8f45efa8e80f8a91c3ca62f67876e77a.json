@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cr.id AS \"call_id!\",\n            cr.channel_id AS \"channel_id?\",\n            cr.created_by AS \"created_by!\",\n            cr.started_at AS \"started_at!\",\n            cr.ended_at AS \"ended_at!\",\n            cr.duration_ms AS \"duration_ms!\",\n            cr.custom_name AS \"custom_name?\",\n            EXISTS (\n                SELECT 1 FROM call_record_participants crp\n                WHERE crp.call_record_id = cr.id AND crp.user_id = $2\n            ) AS \"attended!\",\n            CASE\n                WHEN EXISTS (\n                    SELECT 1 FROM call_record_participants crp\n                    WHERE crp.call_record_id = cr.id AND crp.user_id = $2\n                ) THEN 'ATTENDED'\n                WHEN EXISTS (\n                    SELECT 1 FROM comms_channel_participants ccp\n                    WHERE ccp.channel_id = cr.channel_id\n                      AND ccp.user_id = $2\n                      AND ccp.left_at IS NULL\n                ) THEN 'MISSED'\n                ELSE 'UNATTENDED'\n            END AS \"status!\"\n        FROM call_records cr\n        WHERE cr.id = ANY($1)\n        UNION ALL\n        -- Imported calls, timed as the call list times them; the importer\n        -- attended the meeting.\n        SELECT\n            ce.id,\n            NULL::uuid,\n            ce.user_id,\n            COALESCE(ce.started_at, ce.created_at),\n            COALESCE(ce.ended_at, ce.started_at, ce.created_at),\n            COALESCE(ce.duration_ms, 0),\n            ce.title,\n            ce.user_id = $2,\n            CASE WHEN ce.user_id = $2 THEN 'ATTENDED' ELSE 'UNATTENDED' END\n        FROM call_entities ce\n        WHERE ce.id = ANY($1) AND ce.created_via <> 'native'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ended_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "custom_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "attended!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5ff3f44359468dafffdc24a6b1e68e9d8f45efa8e80f8a91c3ca62f67876e77a"
+}

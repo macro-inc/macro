@@ -328,3 +328,163 @@ async fn standalone_search_requires_individual_access_even_with_team_or_public_s
     );
     Ok(())
 }
+
+const IMPORT_PARTICIPANT: Uuid = Uuid::from_u128(0x2101);
+const IMPORT_TRANSCRIPT: Uuid = Uuid::from_u128(0x2102);
+
+/// An imported meeting with its owner's grant, a public link (which must not
+/// make it findable), one attendee, and two segments: one labelled with the
+/// attendee's name, one with an unknown speaker.
+async fn insert_imported_call(
+    pool: &PgPool,
+    owner_id: &str,
+    call_id: Uuid,
+    started_at: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+
+    let mut tx = pool.begin().await?;
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
+        VALUES ($1, 'PUBLIC', 'view')"#,
+        call_id.to_string(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO call_entities (id, user_id, title, created_via, started_at, share_permission_id)
+        VALUES ($1, $2, 'Pricing review', 'import', $3, $4)
+        "#,
+        call_id,
+        owner_id,
+        started_at,
+        call_id.to_string(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    entity_access_db_utils::insert_entity_access_row(
+        &mut tx,
+        &call_id,
+        EntityType::Call,
+        owner_id,
+        EntityAccessSourceType::User,
+        AccessLevel::Owner,
+    )
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO call_entity_participants (call_id, id, display_name) VALUES ($1, $2, 'Ada');
+        "#,
+        call_id,
+        IMPORT_PARTICIPANT,
+    )
+    .execute(tx.as_mut())
+    .await?;
+    sqlx::query!(
+        "INSERT INTO call_entity_transcripts (call_id, id) VALUES ($1, $2)",
+        call_id,
+        IMPORT_TRANSCRIPT,
+    )
+    .execute(tx.as_mut())
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO call_entity_transcript_segments
+            (call_id, transcript_id, sequence_num, speaker_label, content, start_ms)
+        VALUES
+            ($1, $2, 0, 'ada', 'The renewal quote is ready', 0),
+            ($1, $2, 1, 'Someone else', 'Send it over', 2000)
+        "#,
+        call_id,
+        IMPORT_TRANSCRIPT,
+    )
+    .execute(tx.as_mut())
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+#[sqlx::test]
+async fn imported_call_is_found_only_by_its_owner_and_individual_grantees(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+
+    insert_user(&pool, REQUESTER).await?;
+    insert_user(&pool, SAME_TEAM_OWNER).await?;
+    insert_team(
+        &pool,
+        REQUESTER_TEAM,
+        SAME_TEAM_OWNER,
+        &[REQUESTER, SAME_TEAM_OWNER],
+    )
+    .await?;
+    let call_id = Uuid::from_u128(0x2001);
+    insert_imported_call(&pool, SAME_TEAM_OWNER, call_id, Utc::now()).await?;
+
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::insert_entity_access_row(
+        &mut tx,
+        &call_id,
+        EntityType::Call,
+        &REQUESTER_TEAM.to_string(),
+        EntityAccessSourceType::Team,
+        AccessLevel::View,
+    )
+    .await?;
+    tx.commit().await?;
+
+    assert_eq!(
+        get_accessible_call_ids(&pool, SAME_TEAM_OWNER, &["ATTENDED".to_string()]).await?,
+        vec![call_id],
+    );
+    // Neither the team grant nor the public link makes it findable.
+    assert!(
+        get_accessible_call_ids(&pool, REQUESTER, &[])
+            .await?
+            .is_empty()
+    );
+
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::insert_entity_access_row(
+        &mut tx,
+        &call_id,
+        EntityType::Call,
+        REQUESTER,
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+    )
+    .await?;
+    tx.commit().await?;
+    assert_eq!(
+        get_accessible_call_ids(&pool, REQUESTER, &["UNATTENDED".to_string()]).await?,
+        vec![call_id],
+    );
+    let metadata = get_call_records_metadata(&pool, REQUESTER, &[call_id]).await?;
+    assert_eq!(metadata[0].custom_name.as_deref(), Some("Pricing review"));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn imported_call_search_payload_matches_the_detail_view(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, REQUESTER).await?;
+    let call_id = Uuid::from_u128(0x2001);
+    let started_at = Utc::now();
+    insert_imported_call(&pool, REQUESTER, call_id, started_at).await?;
+
+    let payload = get_call_record_search_payload(&pool, &call_id)
+        .await?
+        .expect("imported call exists");
+    assert_eq!(payload.custom_name.as_deref(), Some("Pricing review"));
+    let segments = &payload.segments;
+    assert_eq!(segments[0].content, "The renewal quote is ready");
+    // The label names the attendee, so the segment is theirs.
+    assert_eq!(segments[0].speaker_id, IMPORT_PARTICIPANT.to_string());
+    assert_eq!(segments[1].speaker_id, "Someone else");
+    assert_eq!(
+        segments[1].started_at,
+        started_at + chrono::Duration::milliseconds(2_000)
+    );
+    Ok(())
+}
