@@ -432,6 +432,8 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
+Give phone member identities a full-width row, wrap addresses at `@`/`.` boundaries with an anywhere fallback for overlong runs, keep `(you)` attached, place role/removal controls below, and use labelled `SettingsRow` switches with matching card insets.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
 and the Share drawer over the page, have a backend-free

@@ -127,7 +127,7 @@ function RoleSelect(props: {
       <Select.Trigger
         variant="ghost"
         as={Button}
-        class="w-18 rounded-xs px-2 text-xs touch:min-h-11 data-expanded:bg-ink/10"
+        class="w-18 rounded-xs px-2 text-xs touch:min-h-11 touch:justify-start touch:px-0 data-expanded:bg-ink/10"
         disabled={props.disabled}
       >
         <Select.Value<RoleOption>>
@@ -151,6 +151,35 @@ function RoleSelect(props: {
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
   return plan === 'max' ? 'max' : 'premium';
+}
+
+function MemberIdentity(props: { value: string; currentUser?: boolean }) {
+  const lastWord = () => props.value.match(/\S+$/)?.[0] ?? '';
+  const prefix = () =>
+    props.value.slice(0, props.value.length - lastWord().length);
+  const parts = () => lastWord().split(/(?<=[.@])/);
+  return (
+    <span
+      data-member-identity
+      classList={{ 'touch:text-xs': props.value.includes('@') }}
+    >
+      {prefix()}
+      <For each={parts().slice(0, -1)}>
+        {(part) => (
+          <span class="touch:inline-block touch:max-w-full">{part}</span>
+        )}
+      </For>
+      <span class="touch:inline-block touch:max-w-full">
+        {parts().at(-1)}
+        <Show when={props.currentUser}>
+          {' '}
+          <span class="inline-block whitespace-nowrap text-xs font-normal text-ink-muted">
+            (you)
+          </span>
+        </Show>
+      </span>
+    </span>
+  );
 }
 
 function MemberRow(props: {
@@ -185,34 +214,33 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="py-2" data-team-member={props.member.user_id}>
-      <div class="flex items-start gap-3 px-4 py-1">
+    <div class="py-2 touch:pb-0" data-team-member={props.member.user_id}>
+      <div class="flex items-start gap-3 px-4 py-1 touch:grid touch:grid-cols-[44px_minmax(0,1fr)] touch:gap-y-0">
         <div class="flex min-h-9 touch:min-h-11 shrink-0 items-center touch:[&_[role=button]]:min-h-11 touch:[&_[role=button]]:min-w-11 [&_[role=button]]:items-center [&_[role=button]]:justify-center">
           <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
         </div>
         <div class="min-w-0 flex-1 py-2">
           <div class="min-w-0 text-sm font-medium text-ink [overflow-wrap:anywhere]">
-            <span>{displayName()}</span>{' '}
-            <Show when={props.isCurrentUser}>
-              <span class="inline-block whitespace-nowrap text-xs font-normal text-ink-muted">
-                (you)
-              </span>
-            </Show>
+            <MemberIdentity
+              value={displayName()}
+              currentUser={props.isCurrentUser}
+            />
             <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+              {' '}
               <AgentTag />
             </Show>
           </div>
           <Show when={showEmail()}>
             <div class="text-xs text-ink-muted [overflow-wrap:anywhere]">
-              {email()}
+              <MemberIdentity value={email() ?? ''} />
             </div>
           </Show>
         </div>
-        <div class="flex min-h-9 touch:min-h-11 items-center gap-1 shrink-0">
+        <div class="flex min-h-9 touch:min-h-11 items-center gap-1 shrink-0 touch:col-start-2 touch:justify-between">
           <Show
             when={props.isOwner && !isMemberOwner()}
             fallback={
-              <span class="flex w-18 min-h-9 touch:min-h-11 items-center justify-center text-xs text-ink-muted capitalize">
+              <span class="flex w-18 min-h-9 touch:min-h-11 items-center justify-center touch:justify-start text-xs text-ink-muted capitalize">
                 {props.member.role}
               </span>
             }

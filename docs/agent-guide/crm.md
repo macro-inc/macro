@@ -719,9 +719,10 @@ consent stays unchanged. Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
 In team settings, admins and owners see a CRM access switch for each member.
 Owners and admins show the reason they always retain access instead of a disabled switch.
-Member rows place the CRM label and switch on opposite sides below the identity and role controls;
-the current-user marker stays separate from wrapping names or email addresses. A failed save keeps
-the previous state and can be retried; members do not see these controls.
+Member rows place the CRM label and switch on opposite sides below the identity and role controls.
+On phones, identity uses the full row width, addresses wrap at domain/local-part boundaries,
+and role/removal controls sit together underneath; the current-user marker stays attached to the address.
+A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 show no access while cache retirement awaits successful permission verification.

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
 type Agent = {
@@ -415,11 +416,14 @@ async function scriptAuthService(
 
 async function screenshot(page: Page, testInfo: TestInfo, name: string) {
   const file = `${testInfo.project.name}-${name}.png`;
-  await page.screenshot({ path: testInfo.outputPath(file), fullPage: true });
+  // Full-page capture temporarily resizes mobile emulation and can switch its
+  // pointer mode. Keep the phone capture at the viewport we just verified.
+  const fullPage = testInfo.project.name !== 'phone';
+  await page.screenshot({ path: testInfo.outputPath(file), fullPage });
   if (screenshotDirectory)
     await page.screenshot({
       path: `${screenshotDirectory}/${file}`,
-      fullPage: true,
+      fullPage,
     });
 }
 
@@ -816,8 +820,13 @@ for (const width of [360, 390]) {
     await page.setViewportSize({ width, height: 844 });
     const longEmail = 'member.with.a.long.email.address@example.com';
     const longMember = `macro|${longEmail}`;
+    const normalEmail = 'member.crm.access@example.com';
+    const normalMember = `macro|${normalEmail}`;
     const backend = await scriptAuthService(page, 2, {
-      extraMembers: [{ user_id: longMember, role: 'member' }],
+      extraMembers: [
+        { user_id: longMember, role: 'member' },
+        { user_id: normalMember, role: 'member' },
+      ],
     });
     await page.goto('/');
     await page.getByRole('heading', { name: 'Members', exact: true }).waitFor();
@@ -846,6 +855,9 @@ for (const width of [360, 390]) {
       const toggle = row
         .querySelector('[role="group"][aria-label^="CRM access"]')!
         .getBoundingClientRect();
+      const identity = row
+        .querySelector('[data-member-identity]')!
+        .getBoundingClientRect();
       return {
         avatarHeight: avatar.height,
         avatarWidth: avatar.width,
@@ -858,7 +870,8 @@ for (const width of [360, 390]) {
           role.y + role.height / 2 - remove.y - remove.height / 2
         ),
         toggleRight: toggle.right - bounds.right,
-        roleOffset: role.y - bounds.y,
+        roleBelowIdentity: role.top >= identity.bottom,
+        roleIndent: role.left - identity.left,
       };
     });
     expect(layout.avatarHeight).toBeGreaterThanOrEqual(44);
@@ -870,11 +883,59 @@ for (const width of [360, 390]) {
     expect(layout.toggleWidth).toBeGreaterThanOrEqual(44);
     expect(layout.controlAlignment).toBeLessThan(1);
     expect(layout.toggleRight).toBeLessThanOrEqual(-15);
-    const ownerRoleOffset = await owner.evaluate((row) => {
-      const remove = row.querySelector('[aria-label="Remove member"]')!;
-      return remove.getBoundingClientRect().y - row.getBoundingClientRect().y;
-    });
-    expect(Math.abs(ownerRoleOffset - layout.roleOffset)).toBeLessThan(1);
+    expect(layout.roleBelowIdentity).toBe(true);
+    expect(Math.abs(layout.roleIndent)).toBeLessThan(1);
+    for (const [id, normal] of [
+      [longMember, false],
+      [normalMember, true],
+    ] as const) {
+      const lineBreaks = await page
+        .locator(`[data-team-member="${id}"] [data-member-identity]`)
+        .evaluate((identity) => {
+          const walker = document.createTreeWalker(
+            identity,
+            NodeFilter.SHOW_TEXT
+          );
+          const characters: { text: string; top: number }[] = [];
+          let node = walker.nextNode();
+          while (node) {
+            for (let i = 0; i < (node.textContent?.length ?? 0); i++) {
+              const range = document.createRange();
+              range.setStart(node, i);
+              range.setEnd(node, i + 1);
+              const bounds = range.getBoundingClientRect();
+              if (bounds.width === 0) continue;
+              characters.push({
+                text: node.textContent![i],
+                top: bounds.top,
+              });
+            }
+            node = walker.nextNode();
+          }
+          return characters.flatMap((character, i) =>
+            i > 0 && Math.abs(character.top - characters[i - 1].top) > 1
+              ? [characters[i - 1].text]
+              : []
+          );
+        });
+      expect(
+        lineBreaks.every((before) => before === '.' || before === '@')
+      ).toBe(true);
+      if (normal) expect(lineBreaks).toEqual([]);
+    }
+    const markerOffset = await owner
+      .getByText('(you)', { exact: true })
+      .evaluate((marker) => {
+        const suffix = marker.parentElement!.firstChild!;
+        const range = document.createRange();
+        range.setStart(suffix, suffix.textContent!.length - 1);
+        range.setEnd(suffix, suffix.textContent!.length);
+        return Math.abs(
+          marker.getBoundingClientRect().bottom -
+            range.getBoundingClientRect().bottom
+        );
+      });
+    expect(markerOffset).toBeLessThan(2);
     expect(
       await member.getByText(longEmail, { exact: true }).evaluate((email) => {
         const style = getComputedStyle(email);
@@ -888,10 +949,43 @@ for (const width of [360, 390]) {
       await page.evaluate(() => document.documentElement.scrollWidth)
     ).toBeLessThanOrEqual(width);
     await screenshot(page, testInfo, `crm-member-layout-${width}`);
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-touch-device',
+      'true'
+    );
     const toggle = member.getByRole('group', { name: /^CRM access for/ });
     await toggle.click({ position: { x: 1, y: 1 } });
     await expect(toggle.getByRole('switch')).not.toBeChecked();
     expect(backend.crmSaves).toEqual([{ user_id: longMember, enabled: false }]);
+    await page.evaluate(
+      async ({ id, source }) => {
+        const { seedMockDisplayNames } = await import(source);
+        seedMockDisplayNames([
+          { id, firstName: 'Example Workspace', lastName: 'Member' },
+        ]);
+      },
+      {
+        id: OWNER,
+        source: `/@fs${fileURLToPath(
+          new URL('../../../../lib/core/user/displayName.ts', import.meta.url)
+        )}`,
+      }
+    );
+    await expect(owner.locator('[data-member-identity]').first()).toContainText(
+      'Example Workspace Member'
+    );
+    const nameMarkerOffset = await owner
+      .getByText('(you)', { exact: true })
+      .evaluate((marker) => {
+        const suffix = marker.parentElement!.firstChild!;
+        const range = document.createRange();
+        range.selectNodeContents(suffix);
+        return Math.abs(
+          marker.getBoundingClientRect().bottom -
+            range.getBoundingClientRect().bottom
+        );
+      });
+    expect(nameMarkerOffset).toBeLessThan(3);
   });
 }
 
