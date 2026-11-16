@@ -67,6 +67,26 @@ const event: CalendarEvent = {
   ],
 };
 describe('event RSVP confirmation', () => {
+  it('keeps repeated response controls scoped to their own occurrence', () => {
+    render(() => (
+      <>
+        <EventRsvpSection event={{ ...event, eventId: 'first' }} />
+        <EventRsvpSection
+          event={{ ...event, eventId: 'second', occurrenceKey: '2026-09-18' }}
+        />
+      </>
+    ));
+    fireEvent.click(screen.getAllByText('Yes')[1]);
+    fireEvent.click(screen.getByText('Save response'));
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        eventId: 'second',
+        occurrenceKey: '2026-09-18',
+        scope: 'this_event',
+      }),
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
+  });
   it('cancels without submitting and resets the scope on the next response', () => {
     render(() => <EventRsvpSection event={event} />);
     fireEvent.click(screen.getByText('Yes'));
