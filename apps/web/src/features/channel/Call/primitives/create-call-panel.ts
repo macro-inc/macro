@@ -12,7 +12,9 @@ type CallPanelState = {
 
 export function createCallPanel(
   opensByDefault: Accessor<boolean>,
-  restoreFocus: () => void
+  restoreFocus: () => void,
+  /** Whether an automatic open may show now; it waits while this is false. */
+  automaticOpenFits: Accessor<boolean>
 ) {
   // Remember each automatic-open transition without copying it into UI state.
   // Explicit close records the revision, so the same discussion cannot reopen it.
@@ -29,7 +31,8 @@ export function createCallPanel(
     defaultRevision: 0,
   });
   const view = createMemo(() => {
-    const automatic = defaultRevision() > state.defaultRevision;
+    const automatic =
+      defaultRevision() > state.defaultRevision && automaticOpenFits();
     return {
       open: automatic || state.open,
       mounted: defaultRevision() > 0 || state.mounted,
