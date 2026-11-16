@@ -226,6 +226,27 @@ it('glides after a two-finger flick and stops when touched', () => {
   expect(editor.getCamera()).toEqual(gliding);
 });
 
+it('does not glide when the system cancels the fingers mid-flick', () => {
+  vi.useFakeTimers({
+    toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+  });
+  const { editor, finger } = setup({ tool: () => 'select' });
+
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 300, 200);
+  for (let step = 1; step <= 5; step++) {
+    finger(1, 'pointermove', 200 + step * 20, 200, 8);
+    finger(2, 'pointermove', 300 + step * 20, 200, 8);
+  }
+  // One finger is taken away; the other lifts normally right after.
+  finger(1, 'pointercancel', 0, 0);
+  finger(2, 'pointerup', 400, 200);
+  const released = editor.getCamera();
+
+  vi.advanceTimersByTime(500);
+  expect(editor.getCamera()).toEqual(released);
+});
+
 it('does not glide when the fingers rest before lifting', () => {
   vi.useFakeTimers({
     toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
@@ -298,6 +319,20 @@ it('leaves a pen stroke alone when fingers land beside it', () => {
   pen('pointerup', 220, 200);
   expect(editor.document).not.toBe(before);
   expect(Object.keys(editor.document.items)).toHaveLength(3);
+});
+
+it('navigates again after a pen whose release was lost to another window', () => {
+  const { editor, finger, pen } = setup({ tool: () => 'pencil' });
+
+  // The pen goes down, then the window loses focus and never sees it lift.
+  pen('pointerdown', 150, 150);
+  window.dispatchEvent(new Event('blur'));
+
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 300, 200);
+  finger(1, 'pointermove', 150, 200);
+  finger(2, 'pointermove', 350, 200);
+  expect(editor.getCamera().scale).toBe(2);
 });
 
 it('turns a finger held still into a long press and spends the finger', () => {
