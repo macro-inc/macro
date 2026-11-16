@@ -70,6 +70,8 @@ tools/HTTP/GraphQL surfaces over them.
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
   `nix develop --command just prepare_db` from the repository root.
+- For member-access changes, also run `cargo test -p crm --all-features member_access`;
+  the HTTP, search and tool revocation test requires the `search` feature.
 - After tool input or description changes, regenerate frontend tool types and
   public MCP reference pages using the
   [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
