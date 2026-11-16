@@ -18,17 +18,18 @@ mod legacy_upgrade {
     //!
     //! Needs LibreOffice (with Writer, Calc and Impress) on the host:
     //! `LOK_PATH=/usr/lib/libreoffice/program cargo test -p convert_service -- --ignored`.
+    //! See the service's AGENTS.md for running them from the Nix shell.
 
     use std::io::Read;
     use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
     use std::time::Duration;
 
     use model::document::FileType;
 
     use crate::config::LokPath;
-    use crate::process::convert::run_lok_conversion;
-    use crate::utils::{conversion_timeout, get_lok_filter_from_file_types};
+    use crate::process::convert::{Conversion, convert_in_job_folder, run_lok_conversion};
+    use crate::scratch::Scratch;
+    use crate::utils::get_lok_filter_from_file_types;
 
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -54,35 +55,53 @@ mod legacy_upgrade {
         db
     }
 
-    /// LibreOffice shares one user profile per host, so conversions run one
-    /// at a time, as the worker does.
-    static LOK: Mutex<()> = Mutex::new(());
-
     /// Upgrades a fixture and returns the OpenXML bytes.
     fn upgrade(name: &str, from: FileType, to: FileType) -> Vec<u8> {
         convert_bytes(&std::fs::read(fixture(name)).unwrap(), from, to)
     }
 
-    fn convert_bytes(input_bytes: &[u8], from: FileType, to: FileType) -> Vec<u8> {
-        let _lok = LOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let lok_path = LokPath::new().expect("set LOK_PATH to LibreOffice's program directory");
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join(format!("IN.{}", from.as_str()));
-        let output = dir.path().join(format!("OUT.{}", to.as_str()));
-        std::fs::write(&input, input_bytes).unwrap();
+    fn lok_path() -> LokPath {
+        LokPath::new().expect("set LOK_PATH to LibreOffice's program directory")
+    }
 
+    fn conversion(from: FileType, to: FileType) -> Conversion {
         let filter = get_lok_filter_from_file_types(&from, &to).unwrap();
-        run_lok_conversion(
-            "legacy-upgrade-test",
-            lok_path.as_ref(),
-            input.to_str().unwrap(),
-            output.to_str().unwrap(),
-            to.as_str(),
-            &filter,
-            conversion_timeout(&from, &to),
+        Conversion::new(from, to, filter)
+    }
+
+    fn job_folders(root: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(root.join("jobs"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect()
+    }
+
+    /// LibreOffice scratch files in the host's temporary directory.
+    fn host_scratch_files() -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn convert_bytes(input_bytes: &[u8], from: FileType, to: FileType) -> Vec<u8> {
+        let root = tempfile::tempdir().unwrap();
+        let scratch = Scratch::reset(root.path()).unwrap();
+
+        let output = convert_in_job_folder(
+            &scratch,
+            lok_path().as_ref(),
+            &conversion(from, to),
+            input_bytes,
         )
         .unwrap();
-        std::fs::read(output).unwrap()
+
+        assert_eq!(job_folders(root.path()), Vec::<PathBuf>::new());
+        output
     }
 
     fn zip_part(bytes: &[u8], name: &str) -> String {
@@ -240,46 +259,99 @@ mod legacy_upgrade {
     #[test]
     #[ignore = "needs LibreOfficeKit; see module docs"]
     fn unreadable_input_fails_instead_of_hanging() {
-        let _lok = LOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let lok_path = LokPath::new().expect("set LOK_PATH to LibreOffice's program directory");
-        let dir = tempfile::tempdir().unwrap();
-        let input = dir.path().join("IN.ppt");
-        std::fs::write(&input, b"not a powerpoint file").unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let scratch = Scratch::reset(root.path()).unwrap();
+        let mut conversion = conversion(FileType::Ppt, FileType::Pptx);
+        conversion.max_wait = Duration::from_secs(60);
 
-        let result = run_lok_conversion(
-            "legacy-upgrade-garbage",
-            lok_path.as_ref(),
-            input.to_str().unwrap(),
-            dir.path().join("OUT.pptx").to_str().unwrap(),
-            "pptx",
-            "",
-            Duration::from_secs(60),
+        let result = convert_in_job_folder(
+            &scratch,
+            lok_path().as_ref(),
+            &conversion,
+            b"not a powerpoint file",
         );
 
-        assert!(result.is_err());
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("conversion failed"), "{error}");
+        assert_eq!(job_folders(root.path()), Vec::<PathBuf>::new());
     }
 
     #[test]
     #[ignore = "needs LibreOfficeKit; see module docs"]
     fn conversions_leave_no_libreoffice_scratch_files_outside_the_job_folder() {
-        // The worker only removes the job folder, and a child killed at its
-        // timeout never runs LibreOffice's own scratch cleanup.
-        let scratch = || {
-            let mut names: Vec<_> = std::fs::read_dir(std::env::temp_dir())
-                .unwrap()
-                .filter_map(|entry| entry.ok())
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .filter(|name| name.starts_with("lu") && name.ends_with(".tmp"))
-                .collect();
-            names.sort();
-            names
-        };
-        let before = scratch();
+        let before = host_scratch_files();
 
         let docx = upgrade("memo.doc", FileType::Doc, FileType::Docx);
         convert_bytes(&docx, FileType::Docx, FileType::Pdf);
 
-        assert_eq!(scratch(), before);
+        assert_eq!(host_scratch_files(), before);
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn a_conversion_keeps_its_libreoffice_profile_in_its_folder() {
+        // The profile is rewritten by every conversion. One shared by the host
+        // would be written outside the job folder, by several jobs at once.
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let input = folder.path().join("IN.doc");
+        let output = folder.path().join("OUT.docx");
+        std::fs::copy(fixture("memo.doc"), &input).unwrap();
+
+        run_lok_conversion(
+            &conversion(FileType::Doc, FileType::Docx),
+            lok_path().as_ref(),
+            folder.path(),
+            cache.path(),
+            &input,
+            &output,
+        )
+        .unwrap();
+
+        assert!(output.is_file());
+        let profile = std::fs::read_dir(folder.path().join(".config"))
+            .unwrap()
+            .count();
+        assert_eq!(profile, 1);
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn a_conversion_killed_at_its_time_limit_leaves_no_job_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let scratch = Scratch::reset(root.path()).unwrap();
+        let mut conversion = conversion(FileType::Doc, FileType::Docx);
+        // LibreOffice takes longer than this to start.
+        conversion.max_wait = Duration::from_millis(50);
+
+        let result = convert_in_job_folder(
+            &scratch,
+            lok_path().as_ref(),
+            &conversion,
+            &std::fs::read(fixture("memo.doc")).unwrap(),
+        );
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("timed out"), "{error}");
+        assert_eq!(job_folders(root.path()), Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    #[ignore = "needs LibreOfficeKit; see module docs"]
+    fn conversions_run_side_by_side() {
+        // The worker converts a batch of messages at once.
+        let memo = std::fs::read(fixture("memo.doc")).unwrap();
+
+        let outputs: Vec<Vec<u8>> = std::thread::scope(|scope| {
+            let jobs: Vec<_> = (0..4)
+                .map(|_| scope.spawn(|| convert_bytes(&memo, FileType::Doc, FileType::Docx)))
+                .collect();
+            jobs.into_iter().map(|job| job.join().unwrap()).collect()
+        });
+
+        for docx in outputs {
+            assert!(zip_part(&docx, "word/document.xml").contains("Quarterly Memo"));
+        }
     }
 
     #[test]
@@ -393,47 +465,424 @@ mod conversion_table {
     }
 }
 
-mod job_cleanup {
-    //! Tests `remove_job_folder` directly: CI builds with `--all-features`,
-    //! where `disable_cleanup` turns `cleanup_folder` into a no-op.
+mod child_process {
+    //! Forks real child processes. None of them needs LibreOffice.
 
+    use std::io::Read;
     use std::path::Path;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
 
-    use crate::utils::remove_job_folder;
+    use anyhow::Context;
 
-    /// Removes a job folder prepared by `setup` and checks the outcome.
-    fn check(setup: fn(&Path), expect_ok: bool) {
-        let root = tempfile::tempdir().unwrap();
-        let job = root.path().join("job");
-        setup(&job);
+    use nix::sys::resource::{Resource, getrlimit, setrlimit};
+    use nix::sys::signal::{SigHandler, Signal, raise, signal};
+    use nix::unistd::{ForkResult, fork, pause};
 
-        let result = remove_job_folder(job.to_str().unwrap());
+    use crate::process::child::{ChildExit, run_confined};
 
-        assert_eq!(result.is_ok(), expect_ok, "{result:?}");
-        if expect_ok {
-            assert!(!job.exists());
-        }
+    const TIME_LIMIT: Duration = Duration::from_secs(30);
+
+    #[test]
+    fn a_child_that_finishes_its_work_succeeds() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || Ok(())).unwrap();
+
+        assert_eq!(exit, ChildExit::Succeeded);
     }
 
     #[test]
-    fn removes_the_job_folder() {
-        check(
-            |job| {
-                std::fs::create_dir(job).unwrap();
-                std::fs::write(job.join("IN.docx"), b"input").unwrap();
-            },
-            true,
+    fn a_child_starts_while_other_threads_read_the_environment() {
+        // A child forked while another thread reads the environment inherits
+        // the standard library's environment lock held, with no thread left
+        // to release it.
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let stop = AtomicBool::new(false);
+
+        let unfinished = std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    while !stop.load(Ordering::Relaxed) {
+                        std::hint::black_box(std::env::var_os("HOME"));
+                    }
+                });
+            }
+
+            let unfinished = (0..50)
+                .map(|_| run_confined(folder.path(), cache.path(), TIME_LIMIT, || Ok(())))
+                .find(|exit| !matches!(exit, Ok(ChildExit::Succeeded)));
+            stop.store(true, Ordering::Relaxed);
+            unfinished
+        });
+
+        assert!(unfinished.is_none(), "{unfinished:?}");
+    }
+
+    #[test]
+    fn a_child_whose_work_fails_reports_the_failure() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            anyhow::bail!("unable to load document")
+        })
+        .unwrap();
+
+        assert_eq!(
+            exit,
+            ChildExit::Failed("unable to load document".to_string())
         );
     }
 
     #[test]
-    fn a_job_that_failed_before_creating_its_folder_cleans_up() {
-        check(|_| {}, true);
+    fn a_child_reports_what_caused_its_failure() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            Err(anyhow::anyhow!("file is corrupt")).context("unable to load document")
+        })
+        .unwrap();
+
+        assert_eq!(
+            exit,
+            ChildExit::Failed("unable to load document: file is corrupt".to_string())
+        );
     }
 
     #[test]
-    fn other_failures_still_surface() {
-        check(|job| std::fs::write(job, b"not a folder").unwrap(), false);
+    fn a_child_with_no_room_to_write_its_error_reports_its_status() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            // As on a full disk, the error file is created and the write to
+            // it fails. Ignoring the signal turns the limit into that error.
+            unsafe { signal(Signal::SIGXFSZ, SigHandler::SigIgn) }?;
+            setrlimit(Resource::RLIMIT_FSIZE, 0, 0)?;
+            anyhow::bail!("unable to save document")
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Exited(1));
+        let error = std::fs::read(folder.path().join("error")).unwrap();
+        assert_eq!(error, b"");
+    }
+
+    #[test]
+    fn a_killed_child_leaves_its_files_in_its_folder() {
+        // LibreOffice finds where to write from these, and a killed process
+        // removes nothing.
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            let home = std::env::var_os("HOME").context("HOME is not set")?;
+            std::fs::write(std::env::temp_dir().join("scratch.tmp"), "scratch")?;
+            std::fs::write(Path::new(&home).join("profile"), "profile")?;
+            std::fs::write("relative", "relative")?;
+            raise(Signal::SIGKILL)?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Signaled(Signal::SIGKILL));
+        let mut files: Vec<_> = std::fs::read_dir(folder.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        files.sort();
+        assert_eq!(files, ["profile", "relative", "scratch.tmp"]);
+    }
+
+    #[test]
+    fn a_child_whose_work_panics_exits_instead_of_running_the_parents_code() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            panic!("conversion panicked")
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Exited(101));
+    }
+
+    #[test]
+    fn a_child_that_crashes_reports_its_signal() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            raise(Signal::SIGABRT)?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Signaled(Signal::SIGABRT));
+    }
+
+    #[test]
+    fn a_child_still_running_at_its_time_limit_is_killed() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(
+            folder.path(),
+            cache.path(),
+            Duration::from_millis(100),
+            || -> anyhow::Result<()> {
+                loop {
+                    pause();
+                }
+            },
+        )
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::TimedOut);
+    }
+
+    #[test]
+    fn a_child_killed_at_its_time_limit_takes_the_processes_it_started_with_it() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let (mut reader, writer) = std::io::pipe().unwrap();
+
+        let exit = run_confined(
+            folder.path(),
+            cache.path(),
+            Duration::from_millis(100),
+            move || -> anyhow::Result<()> {
+                // The child and the process it starts both hold the pipe open
+                // for as long as they live.
+                let _writer = writer;
+                if let ForkResult::Child = unsafe { fork() }? {
+                    loop {
+                        pause();
+                    }
+                }
+                loop {
+                    pause();
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(exit, ChildExit::TimedOut);
+
+        // The pipe reaches its end only once every process holding it is gone.
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || done.send(reader.read(&mut [0u8; 1])));
+        let read = finished.recv_timeout(TIME_LIMIT).unwrap().unwrap();
+        assert_eq!(read, 0);
+    }
+
+    #[test]
+    fn a_child_writes_only_inside_its_folder() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            let (core_soft, core_hard) = getrlimit(Resource::RLIMIT_CORE)?;
+            let observed = format!(
+                "TMPDIR={:?}\nHOME={:?}\nXDG_CACHE_HOME={:?}\nXDG_CONFIG_HOME={:?}\ncore={core_soft},{core_hard}\n",
+                std::env::temp_dir(),
+                std::env::var_os("HOME"),
+                std::env::var_os("XDG_CACHE_HOME"),
+                std::env::var_os("XDG_CONFIG_HOME"),
+            );
+            // A relative path resolves against the working directory.
+            std::fs::write("observed", observed)?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Succeeded);
+        let observed = std::fs::read_to_string(folder.path().join("observed")).unwrap();
+        let expected = format!(
+            "TMPDIR={:?}\nHOME={:?}\nXDG_CACHE_HOME={:?}\nXDG_CONFIG_HOME=None\ncore=0,0\n",
+            folder.path(),
+            Some(folder.path().as_os_str()),
+            Some(cache.path().as_os_str()),
+        );
+        assert_eq!(observed, expected);
+    }
+}
+
+mod job_folders {
+    //! A job's folder is gone once the job is, however the job ended.
+
+    use model::document::FileType;
+
+    use crate::process::convert::{Conversion, convert_in_job_folder};
+    use crate::scratch::Scratch;
+
+    #[test]
+    fn a_failed_conversion_leaves_no_job_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let scratch = Scratch::reset(root.path()).unwrap();
+        let conversion = Conversion::new(
+            FileType::Docx,
+            FileType::Pdf,
+            "writer_pdf_Export".to_string(),
+        );
+
+        // LibreOffice is not installed here, so the child process fails.
+        let result = convert_in_job_folder(
+            &scratch,
+            "/nonexistent/libreoffice/program",
+            &conversion,
+            b"input",
+        );
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("conversion failed"), "{error}");
+        assert_eq!(
+            std::fs::read_dir(root.path().join("jobs")).unwrap().count(),
+            0
+        );
+    }
+}
+
+mod conversion_slots {
+    //! Conversions take turns: each one holds a slot for as long as it runs.
+
+    use std::sync::Arc;
+    use std::sync::mpsc;
+
+    use tokio::sync::oneshot;
+
+    use crate::process::convert::Converter;
+    use crate::scratch::Scratch;
+
+    #[tokio::test]
+    async fn a_job_that_gives_up_its_slot_lets_the_next_job_in() {
+        let root = tempfile::tempdir().unwrap();
+        let converter = Converter::new(Arc::new(Scratch::reset(root.path()).unwrap()), 1);
+
+        let first = converter.reserve().await.unwrap();
+        let mut second = std::pin::pin!(converter.reserve());
+        assert!(futures::poll!(second.as_mut()).is_pending());
+
+        // A job whose input cannot be fetched never converts.
+        drop(first);
+        second.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_conversion_holds_its_slot_until_it_ends() {
+        let root = tempfile::tempdir().unwrap();
+        let converter = Arc::new(Converter::new(
+            Arc::new(Scratch::reset(root.path()).unwrap()),
+            1,
+        ));
+        let (started, has_started) = oneshot::channel();
+        let (finish, may_finish) = mpsc::channel::<()>();
+
+        let running = tokio::spawn({
+            let converter = converter.clone();
+            async move {
+                let slot = converter.reserve().await.unwrap();
+                slot.run(move || {
+                    started.send(()).unwrap();
+                    may_finish.recv().unwrap();
+                    "converted"
+                })
+                .await
+            }
+        });
+        has_started.await.unwrap();
+        assert_eq!(converter.free_slots(), 0);
+
+        finish.send(()).unwrap();
+        assert_eq!(running.await.unwrap().unwrap(), "converted");
+        assert_eq!(converter.free_slots(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_conversion_keeps_its_slot_after_its_caller_stops_waiting() {
+        // A request that goes away leaves its LibreOffice running.
+        let root = tempfile::tempdir().unwrap();
+        let converter = Arc::new(Converter::new(
+            Arc::new(Scratch::reset(root.path()).unwrap()),
+            1,
+        ));
+        let (started, has_started) = oneshot::channel();
+        let (finish, may_finish) = mpsc::channel::<()>();
+
+        let caller = tokio::spawn({
+            let converter = converter.clone();
+            async move {
+                let slot = converter.reserve().await.unwrap();
+                slot.run(move || {
+                    started.send(()).unwrap();
+                    may_finish.recv().unwrap();
+                })
+                .await
+            }
+        });
+        has_started.await.unwrap();
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        assert_eq!(converter.free_slots(), 0);
+
+        finish.send(()).unwrap();
+        // The next conversion gets the slot only once the abandoned one ends.
+        let slot = converter.reserve().await.unwrap();
+        slot.run(|| ()).await.unwrap();
+        assert_eq!(converter.free_slots(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_conversion_that_panics_frees_its_slot() {
+        let root = tempfile::tempdir().unwrap();
+        let converter = Arc::new(Converter::new(
+            Arc::new(Scratch::reset(root.path()).unwrap()),
+            1,
+        ));
+
+        let panicked = tokio::spawn({
+            let converter = converter.clone();
+            async move {
+                let slot = converter.reserve().await.unwrap();
+                slot.run(|| panic!("conversion panicked")).await
+            }
+        });
+
+        assert!(panicked.await.unwrap_err().is_panic());
+        assert_eq!(converter.free_slots(), 1);
+    }
+}
+
+mod disk_pause {
+    //! The worker leaves messages on the queue while the disk is low.
+
+    use std::time::Duration;
+
+    use crate::disk::DiskGuard;
+    use crate::process::runner::wait_for_disk_space;
+
+    #[tokio::test(start_paused = true)]
+    async fn the_worker_waits_for_as_long_as_the_disk_is_low() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk = DiskGuard::new(dir.path(), u64::MAX, 0);
+
+        let waited = tokio::time::timeout(Duration::from_secs(3600), wait_for_disk_space(&disk));
+
+        assert!(waited.await.is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_worker_does_not_wait_when_the_disk_has_room() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk = DiskGuard::new(dir.path(), 0, 0);
+        let started = tokio::time::Instant::now();
+
+        wait_for_disk_space(&disk).await;
+
+        assert_eq!(started.elapsed(), Duration::ZERO);
     }
 }
 
@@ -447,7 +896,10 @@ mod process_message_span {
     use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
     use tracing_subscriber::layer::SubscriberExt as _;
 
-    use crate::process::convert::process_message;
+    use std::sync::Arc;
+
+    use crate::process::convert::{Converter, process_message};
+    use crate::scratch::Scratch;
 
     fn s3() -> s3_client::S3 {
         let config = aws_sdk_s3::Config::builder()
@@ -502,7 +954,7 @@ mod process_message_span {
     }
 
     /// Runs `process_message` and returns its result and exported span.
-    async fn run(message: &Message) -> (anyhow::Result<()>, SpanData) {
+    async fn run(converter: &Converter, message: &Message) -> (anyhow::Result<()>, SpanData) {
         let exporter = InMemorySpanExporter::default();
         let provider = SdkTracerProvider::builder()
             .with_simple_exporter(exporter.clone())
@@ -514,7 +966,7 @@ mod process_message_span {
             let _guard =
                 tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
             tracing::callsite::rebuild_interest_cache();
-            process_message(&worker(), &s3(), &lambda(), message).await
+            process_message(&worker(), &s3(), &lambda(), converter, message).await
         };
 
         let span = exporter
@@ -527,23 +979,34 @@ mod process_message_span {
     }
 
     #[tokio::test]
-    async fn a_job_that_fails_before_creating_its_folder_errors_the_span_by_its_failure() {
-        let job_id = "process-message-span-unsupported";
-        let (result, span) = run(&message(job_id, "uploads/notes.txt", "uploads/notes.pdf")).await;
+    async fn a_job_that_fails_before_converting_errors_the_span_by_its_failure() {
+        let root = tempfile::tempdir().unwrap();
+        let converter = Converter::new(Arc::new(Scratch::reset(root.path()).unwrap()), 1);
+        let message = message(
+            "process-message-span-unsupported",
+            "uploads/notes.txt",
+            "uploads/notes.pdf",
+        );
+
+        let (result, span) = run(&converter, &message).await;
 
         assert!(result.is_err());
-        assert!(!std::path::Path::new(job_id).exists());
+        assert_eq!(
+            std::fs::read_dir(root.path().join("jobs")).unwrap().count(),
+            0
+        );
+        let job_id = span
+            .attributes
+            .iter()
+            .find(|attribute| attribute.key.as_str() == "job_id")
+            .map(|attribute| attribute.value.to_string());
+        assert_eq!(job_id.as_deref(), Some("process-message-span-unsupported"));
         let Status::Error { description } = &span.status else {
             panic!("expected an errored span, got {:?}", span.status);
         };
         assert!(
             description.contains("unsupported conversion"),
             "span error should be the conversion failure: {description}"
-        );
-        let events: Vec<_> = span.events.iter().map(|event| &*event.name).collect();
-        assert!(
-            !events.contains(&"unable to cleanup folder"),
-            "cleaning up a missing folder must not log an error: {events:?}"
         );
     }
 }

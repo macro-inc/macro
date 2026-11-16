@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::Context;
 use axum::{
@@ -16,9 +16,7 @@ use model::{
 };
 
 use crate::{
-    config::LOK_PATH,
-    process::convert::run_lok_conversion,
-    utils::{cleanup_folder, conversion_timeout, get_lok_filter_from_file_types},
+    disk::LOW_DISK_MESSAGE, process::convert::Conversion, utils::get_lok_filter_from_file_types,
 };
 
 use super::context::{ApiContext, AuthorizationService};
@@ -36,6 +34,7 @@ use super::context::{ApiContext, AuthorizationService};
             (status = 400, description = "invalid request", body = ErrorResponse),
             (status = 401, description = "unauthorized", body = ErrorResponse),
             (status = 500, description = "internal server error", body = ErrorResponse),
+            (status = 503, description = "low disk space", body = ErrorResponse),
         )
     )]
 #[tracing::instrument(skip(ctx, _internal_authorization))]
@@ -47,6 +46,17 @@ pub async fn handler(
     let job_id = macro_uuid::generate_uuid_v7().to_string();
 
     tracing::info!(job_id=%job_id, "starting conversion job");
+
+    ctx.disk.check().map_err(|e| {
+        tracing::error!(error=?e, job_id=%job_id, "refusing conversion: low disk space");
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                message: LOW_DISK_MESSAGE.into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let from_file_type: FileType = req
         .from_key
@@ -93,8 +103,20 @@ pub async fn handler(
             .into_response()
     })?;
 
-    // Make directory of job_id
-    let file_content = ctx
+    // Taken before the input is fetched, so the inputs held in memory are
+    // those of running conversions and not of every request waiting its turn.
+    let slot = ctx.converter.reserve().await.map_err(|e| {
+        tracing::error!(error=?e, job_id=%job_id, "conversion failed");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "conversion failed".into(),
+            }),
+        )
+            .into_response()
+    })?;
+
+    let input = ctx
         .s3_client
         .get(&req.from_bucket, &req.from_key)
         .await
@@ -109,52 +131,11 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    std::fs::create_dir(format!("./{}", job_id)).map_err(|e| {
-        tracing::error!(error=?e, job_id=%job_id, "unable to create directory");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to create directory".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    let in_file_path = format!("./{}/IN.{}", job_id, from_file_type.as_str());
-    let out_file_path = format!("./{}/OUT.{}", job_id, to_file_type.as_str());
-
-    let result = async {
-        let mut file = File::create(&in_file_path).map_err(|e| {
-            tracing::error!(error=?e, job_id=%job_id, "unable to create file");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to create file".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        file.write_all(&file_content).map_err(|e| {
-            tracing::error!(error=?e, job_id=%job_id, "unable to write file");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to write file".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        run_lok_conversion(
-            &job_id,
-            &LOK_PATH,
-            &in_file_path,
-            &out_file_path,
-            to_file_type.as_str(),
-            &filter,
-            conversion_timeout(&from_file_type, &to_file_type),
-        )
+    let conversion = Conversion::new(from_file_type, to_file_type, filter);
+    let output = ctx
+        .converter
+        .convert(slot, conversion, input)
+        .await
         .map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "conversion failed");
             (
@@ -166,37 +147,19 @@ pub async fn handler(
                 .into_response()
         })?;
 
-        let file_content = std::fs::read(&out_file_path).map_err(|e| {
-            tracing::error!(error=?e, job_id=%job_id, "unable to read file");
+    ctx.s3_client
+        .put(&req.to_bucket, &req.to_key, &output)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, job_id=%job_id, "unable to upload file");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to read file".into(),
+                    message: "unable to upload file".into(),
                 }),
             )
                 .into_response()
         })?;
-
-        ctx.s3_client
-            .put(&req.to_bucket, &req.to_key, &file_content)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, job_id=%job_id, "unable to upload file");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to upload file".into(),
-                    }),
-                )
-                    .into_response()
-            })
-    }
-    .await;
-
-    if let Err(e) = cleanup_folder(&job_id) {
-        tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
-    }
-    result?;
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }
