@@ -39,12 +39,13 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     // SDK-covered tools and the Anthropic sandbox are gone; the rest stay.
     for dropped in [
         "ReadContent",
+        "RenderCanvas",
         "BashCodeExecution",
         "TextEditorCodeExecution",
     ] {
         assert!(!names.iter().any(|name| name == dropped), "{dropped} kept");
     }
-    assert!(names.iter().any(|name| name == "RenderCanvas"));
+    assert!(names.iter().any(|name| name == "SelfKnowledge"));
     assert!(tools.system_prompt().contains("Code Mode"));
     // Replies cannot present views, so the bot is never told to.
     assert!(
@@ -101,7 +102,7 @@ fn code_mode_tools() -> CodeModeTools {
 fn a_hidden_native_tool_is_refused_not_dispatched() {
     let tools = code_mode_tools();
     assert_eq!(tools.route("ExecuteCode"), Route::Code);
-    assert_eq!(tools.route("RenderCanvas"), Route::Direct);
+    assert_eq!(tools.route("SelfKnowledge"), Route::Direct);
     for hidden in [
         "ReadContent",
         "SendChannelMessage",
