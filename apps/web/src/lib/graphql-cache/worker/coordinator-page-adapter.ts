@@ -4,7 +4,7 @@ import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
-  classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
 import { offerCompiledEngine } from './compiled-engine';
@@ -68,7 +68,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   ) => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
   /** Another context holds the database, so the cache stays off until reload. */
-  onCacheUnavailable?: (reason: string) => void;
+  /** `superseded`: a newer build took the database over, so this build never
+   * gets it back. */
+  onCacheUnavailable?: (reason: string, superseded: boolean) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
   /** When this page's app build was made, in ms since the epoch. Defaults to
@@ -450,7 +452,7 @@ export class CacheCoordinatorPageAdapter {
         name: 'graphql_cache.lock_wait',
         operationCategory: 'lifecycle',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         durationMs: this.now() - lockStartedAt,
       });
       throw error;
@@ -688,7 +690,10 @@ export class CacheCoordinatorPageAdapter {
         );
         break;
       case 'cache-unavailable':
-        this.options.onCacheUnavailable?.(message.reason);
+        this.options.onCacheUnavailable?.(
+          message.reason,
+          message.superseded === true
+        );
         break;
       case 'cache-superseded':
         this.options.onCacheSuperseded?.(message.reason);

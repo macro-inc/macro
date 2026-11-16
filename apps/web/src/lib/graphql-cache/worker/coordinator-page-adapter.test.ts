@@ -367,7 +367,25 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
-      'another app version holds the database'
+      'another app version holds the database',
+      false
+    );
+  });
+
+  it('relays that a newer build took the database over', async () => {
+    const onCacheUnavailable = vi.fn();
+    const port = await registeredAdapter({ onCacheUnavailable });
+
+    port.receive({
+      ...version,
+      kind: 'cache-unavailable',
+      reason: 'a newer version of the app took over the local cache',
+      superseded: true,
+    });
+
+    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
+      'a newer version of the app took over the local cache',
+      true
     );
   });
 

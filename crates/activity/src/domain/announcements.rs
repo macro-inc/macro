@@ -68,8 +68,13 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
             // Its identifier must remain private, including after access is revoked.
             // Other domains retain their existing subject-feed behavior.
             if let Ok(viewer) = MacroUserIdStr::parse_from_str(subject) {
-                let allowed = kind != EntityType::Initiative
-                    || row_recipients.contains(subject)
+                let allowed = !matches!(
+                    kind,
+                    EntityType::Initiative
+                        | EntityType::CrmCompany
+                        | EntityType::CrmContact
+                        | EntityType::CrmPipeline
+                ) || row_recipients.contains(subject)
                     || self
                         .audience
                         .viewer_can_see(kind, id, &viewer)

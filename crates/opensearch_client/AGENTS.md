@@ -70,9 +70,11 @@ projects.
   struct decodes; do the same for a new one, or each child comes back with
   its full `content`.
 - Fetch time and response size follow the number of inner hits returned,
-  because the plain highlighter re-analyses each one. Document content
-  clauses share one budget per document (`INNER_HITS_PER_DOCUMENT`); do not
-  give each term its own.
+  because the plain highlighter re-analyses each one. The content clauses
+  of a document, chat, agent session or call share one budget per result
+  (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
+  result carries at most that many matches, not every match; do not give
+  each term its own.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

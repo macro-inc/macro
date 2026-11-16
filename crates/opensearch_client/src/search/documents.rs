@@ -7,6 +7,7 @@ use crate::{
         model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
         properties::{PROPERTIES_PATH, build_tag_filter},
         query::Keys,
+        utils::{INNER_HITS_PER_RESULT, split_inner_hits_budget},
     },
 };
 
@@ -26,13 +27,6 @@ const CHILD_RELATION: &str = "chunk";
 /// the email keyword-field threshold — shorter prefixes explode the term
 /// set on the analyzer and risk hitting `max_clause_count`.
 const MIN_PREFIX_LEN: usize = 3;
-
-/// Budget of chunks returned for one document, shared by its `has_child`
-/// clauses. Every returned chunk is re-analysed by the plain highlighter and
-/// shipped in the response, so fetch time and payload follow the chunk count,
-/// not the term count. A grouped result row previews one passage and expands
-/// to the rest.
-const INNER_HITS_PER_DOCUMENT: u32 = 10;
 
 /// The chunk `_source` fields a `SearchHit` carries. Inner hits do not inherit
 /// the request-level `_source` filter, so without this every chunk comes back
@@ -284,7 +278,7 @@ impl DocumentQueryBuilder {
 
     /// One `has_child` clause per term, each carrying its own `inner_hits` so
     /// highlights and chunk-nav data come back alongside the parent. The
-    /// clauses split [`INNER_HITS_PER_DOCUMENT`] between them, so a document
+    /// clauses split [`INNER_HITS_PER_RESULT`] between them, so a document
     /// returns at most that many chunks however many terms the query has. The
     /// shared `highlight_query` ORs every term so a returned chunk gets tagged
     /// for every term it contains, not just the one its clause matched.
@@ -296,24 +290,19 @@ impl DocumentQueryBuilder {
             .map(|term| build_child_content_query(term, &self.inner.match_type))
             .collect();
         let highlight_query = build_any_term_highlight_query(&term_queries);
-        // Past the budget, only the first clauses carry inner hits. A matching
-        // document has a chunk for every term, so each row still gets passages.
-        let clauses_with_inner_hits = u32::try_from(term_queries.len())
-            .unwrap_or(u32::MAX)
-            .clamp(1, INNER_HITS_PER_DOCUMENT);
-        let inner_hits_per_term = INNER_HITS_PER_DOCUMENT / clauses_with_inner_hits;
+        let budget = split_inner_hits_budget(term_queries.len());
 
         term_queries
             .into_iter()
-            .zip(0u32..)
-            .map(|(inner_query, idx)| {
+            .enumerate()
+            .map(|(idx, inner_query)| {
                 let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
-                if idx >= clauses_with_inner_hits {
+                let Some(size) = budget.size_for_clause(idx) else {
                     return has_child.into();
-                }
+                };
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
-                    .size(inner_hits_per_term)
+                    .size(size)
                     .source_fields(CHUNK_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
                 has_child.inner_hits(inner_hits).into()
@@ -376,7 +365,7 @@ impl DocumentQueryBuilder {
 
         let inner_hits = InnerHits::new()
             .name(PASSAGE_INNER_HITS_NAME)
-            .size(INNER_HITS_PER_DOCUMENT)
+            .size(INNER_HITS_PER_RESULT)
             .source_fields(CHUNK_SOURCE_FIELDS)
             .highlight(inner_hits_content_highlight(&highlight_query));
         Some(
