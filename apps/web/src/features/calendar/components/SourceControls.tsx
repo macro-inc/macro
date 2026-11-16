@@ -160,8 +160,9 @@ export function CalendarSourceLabel(props: { source: CalendarSource }) {
         </Tooltip>
       </Show>
       <Show when={props.source.isSubscription}>
-        <span
-          title="Subscription calendar"
+        <Tooltip
+          as="span"
+          label="Subscription calendar"
           class="flex shrink-0 text-ink-muted"
         >
           <RssIcon
@@ -169,7 +170,7 @@ export function CalendarSourceLabel(props: { source: CalendarSource }) {
             class="size-3"
             aria-label="Subscription calendar"
           />
-        </span>
+        </Tooltip>
       </Show>
     </>
   );

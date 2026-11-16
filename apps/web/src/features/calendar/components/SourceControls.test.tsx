@@ -182,7 +182,7 @@ describe('SourceControls', () => {
     const { expandAccount, container } = renderControls();
     expandAccount('gab@macro.com');
     const indicators = container.querySelectorAll(
-      '[title="Subscription calendar"]'
+      '[aria-label="Subscription calendar"]'
     );
     expect(indicators).toHaveLength(1);
   });
