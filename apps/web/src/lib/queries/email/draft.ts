@@ -14,7 +14,6 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { refreshEmailThreadCache } from './cache-cleanup';
-import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -52,7 +51,6 @@ export function useSaveDraftMutation(
               .catch(Telemetry.error);
             const threadId = data.draft.thread_db_id;
             if (!threadId) return;
-            markThreadDraftSaved(threadId);
             if (!vars.skipSoupRefetch) {
               void refetchSoupEntity(threadId, 'emailThread').catch(
                 Telemetry.error

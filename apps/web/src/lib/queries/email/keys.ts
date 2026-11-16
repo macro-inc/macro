@@ -13,9 +13,6 @@ export const emailKeys = createQueryKeys('email', {
   thread: (threadId: string) => ({
     queryKey: [threadId],
   }),
-  threadMessages: (threadId: string) => ({
-    queryKey: ['messages', threadId],
-  }),
   threadReadReceipts: (threadId: string) => ({
     queryKey: ['read-receipts', threadId],
   }),

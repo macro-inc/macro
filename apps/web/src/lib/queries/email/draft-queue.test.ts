@@ -17,7 +17,6 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import { queryClient } from '../client';
 import { refetchSoupEntity } from '../soup/cache';
-import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
   beginDraftAttempt,
@@ -60,7 +59,6 @@ vi.mock('../soup/cache', () => ({
   invalidateSoupEntity: vi.fn(),
   refetchSoupEntity: vi.fn(),
 }));
-vi.mock('./draft-cache', () => ({ markThreadDraftSaved: vi.fn() }));
 vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 
 import {
@@ -185,7 +183,6 @@ it('keeps active thread messages intact after a committed draft save', async () 
     draftId: serverId,
     threadId: 'server-thread',
   });
-  expect(markThreadDraftSaved).toHaveBeenCalledWith('server-thread');
   expect(queryClient.invalidateQueries).toHaveBeenCalledExactlyOnceWith({
     queryKey: emailKeys.previews._def,
   });

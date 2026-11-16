@@ -1,7 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useSaveDraftMutation } from './draft';
-import { clearSavedDraftThreadCache } from './draft-cache';
 import { emailKeys } from './keys';
 import { mountEmailMutation } from './tests/mutation';
 import { useSendMessageMutation, useUnscheduleMessageMutation } from './thread';
@@ -78,7 +77,7 @@ it('returns the saved identity when a subsequent cache refresh rejects', async (
   expect(mocks.save.mock.calls[0][0]).not.toHaveProperty('send_time');
 });
 
-it('defers saved thread message eviction until leaving the thread', async () => {
+it('refreshes previews and the thread entity after a draft save', async () => {
   mocks.save.mockResolvedValue(
     ok({
       draft: { db_id: 'draft', thread_db_id: 'saved-thread', link_id: 'inbox' },
@@ -90,17 +89,6 @@ it('defers saved thread message eviction until leaving the thread', async () => 
     queryKey: emailKeys.previews._def,
   });
   expect(mocks.refetch).toHaveBeenCalledWith('saved-thread', 'emailThread');
-  expect(mocks.remove).toHaveBeenCalledExactlyOnceWith({
-    queryKey: emailKeys.threadMessages('saved-thread').queryKey,
-    type: 'inactive',
-  });
-  mocks.remove.mockClear();
-  clearSavedDraftThreadCache('saved-thread');
-  expect(mocks.remove).toHaveBeenCalledExactlyOnceWith({
-    queryKey: emailKeys.threadMessages('saved-thread').queryKey,
-  });
-  clearSavedDraftThreadCache('saved-thread');
-  expect(mocks.remove).toHaveBeenCalledOnce();
 });
 
 it('keeps send successful and reconciles caches when analytics throws', async () => {

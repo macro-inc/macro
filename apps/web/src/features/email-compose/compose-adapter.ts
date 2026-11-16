@@ -37,7 +37,6 @@ import {
   transferEmailDraft,
   useDeleteDraftMutation,
 } from '@queries/email/draft';
-import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import { subscribeToDraftLifecycleChanges } from '@queries/email/draft-lifecycle-events';
 import {
   assertEmailDraftQueueAvailable,
@@ -432,14 +431,12 @@ export function createEmailComposeContext(): EmailComposeContext {
         try {
           const threadId = result.threadId;
           if (threadId) {
-            markThreadDraftSaved(threadId);
             fireAndForget(
               refreshEmailLists(threadId, !!completingThread),
               'email-compose'
             );
           }
           if (previousThreadId && previousThreadId !== threadId) {
-            markThreadDraftSaved(previousThreadId);
             invalidateSoupEntity(previousThreadId);
             void refetchSoupEntity(previousThreadId, 'emailThread').catch(
               reportError
@@ -471,7 +468,6 @@ export function createEmailComposeContext(): EmailComposeContext {
         });
         try {
           publishDraftLifecycleChange(input.draftId, inboxId);
-          if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
         }

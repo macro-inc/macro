@@ -41,35 +41,6 @@ import {
 import { emailKeys } from './keys';
 import { type MarkThreadAsSeenParams, markEmailThreadSeen } from './read-state';
 
-const THREAD_STALE_TIME = 5 * 60 * 1000;
-
-/** Shared REST infinite-query options for thread fetching. */
-export function threadQueryOptions(threadId: string) {
-  return {
-    queryKey: emailKeys.threadMessages(threadId).queryKey,
-    queryFn: async ({ pageParam }: { pageParam: number }) => {
-      const result = await throwOnErr(
-        async () =>
-          await emailClient.getThread({
-            thread_id: threadId,
-            offset: pageParam,
-            limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-          })
-      );
-
-      return result.thread;
-    },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage: Thread, allPages: Thread[]) => {
-      if (lastPage.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT) {
-        return undefined;
-      }
-      return allPages.reduce((sum, p) => sum + p.messages.length, 0);
-    },
-    staleTime: THREAD_STALE_TIME,
-  };
-}
-
 /**
  * Flatten infinite query pages into a single thread with all messages.
  */
