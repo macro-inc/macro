@@ -277,10 +277,11 @@ export function registerEvents(view: EditorView): {
     root.addEventListener(name, wrapped);
     listeners.push(() => root.removeEventListener(name, wrapped));
   }
-  // Source input reads the model NodeSelection; the browser's caret beside it
-  // was never admitted.
+  // Source input reads the model NodeSelection or TableSelection; the
+  // browser's caret beside it was never admitted.
   function inputSelection(): ViewSelection {
-    return view.selection().selection.kind === 'node'
+    const kind = view.selection().selection.kind;
+    return kind === 'node' || kind === 'table'
       ? { kind: 'keep' }
       : readSelection(view);
   }
@@ -487,7 +488,7 @@ export function registerEvents(view: EditorView): {
                 ? CommandCode.DeleteLine
                 : CommandCode.DeleteWord,
           argument: formatArgument ?? (backward ? 0 : 1),
-          selection: selectionMessage(readSelection(view)),
+          selection: selectionMessage(inputSelection()),
           target: selectedTarget,
           characterTarget: { ...selectedTarget, kind: 0 },
         }),
@@ -529,9 +530,9 @@ export function registerEvents(view: EditorView): {
       );
     }
     let selection: ViewSelection;
-    // Source keydown keeps a NodeSelection; selectionchange admits a new DOM
-    // range only after a mouse press.
-    if (keepRange || published.kind === 'node') {
+    // Source keydown keeps a NodeSelection or TableSelection; selectionchange
+    // admits a new DOM range only after a mouse press.
+    if (keepRange || published.kind === 'node' || published.kind === 'table') {
       selection = { kind: 'keep' };
     } else if (routed === CommandCode.Undo || routed === CommandCode.Redo) {
       selection = readSelectionFromChange(view);
@@ -841,6 +842,12 @@ export function registerEvents(view: EditorView): {
         getTableObserverFromTableElement(table)?.preserveDragSelection(dom)
       )
         return;
+      // Pinned $internalCreateSelection clones a TableSelection on
+      // selectionchange too: a caret Chromium seeds once the table selection
+      // cleared the DOM range (at the root's first caret position) keeps it.
+      // A mouse press asks for a new range, keys end it in the model's table
+      // handlers, and a range leaving the table is re-anchored by the model.
+      if (dom.isCollapsed && !fromMouseDown) return;
     }
     const selection = readSelectionFromChange(view);
     const marked = view.recentSelectionMark();
