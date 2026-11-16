@@ -45,6 +45,7 @@ location_check = []
 
 [dependencies]
 passwords = { path = "../../crates/passwords" }
+password_events = { path = "../../crates/password_events" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
@@ -177,6 +178,7 @@ graphql_channel = { path = "../../crates/graphql_channel" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound"] }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -186,6 +188,7 @@ initiative = { path = "../../crates/initiative", features = ["inbound", "postgre
 jsonwebtoken = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
@@ -226,7 +229,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
-notification_inbox = { path = "../../crates/notification_inbox" }
+notification_inbox = { path = "../../crates/notification_inbox", features = ["outbound"] }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
@@ -320,6 +323,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 bebop = { workspace = true }
 sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
 tokio-tungstenite = { workspace = true }

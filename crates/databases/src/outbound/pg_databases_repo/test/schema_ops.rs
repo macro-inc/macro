@@ -347,6 +347,7 @@ async fn a_table_id_another_database_already_has_is_refused_as_taken(pool: PgPoo
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -411,6 +412,7 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -511,6 +513,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -892,7 +895,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         created.config,
         Some(ColumnConfig::Derived {
-            formula: times(2.0)
+            formula: times(2.0),
+            percentage: false,
         })
     );
 
@@ -928,7 +932,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         edited.config,
         Some(ColumnConfig::Derived {
-            formula: times(3.0)
+            formula: times(3.0),
+            percentage: false,
         })
     );
     assert_eq!(

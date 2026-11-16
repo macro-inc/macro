@@ -38,9 +38,10 @@ impl<S> Clone for SoupWorkRegistrationSignal<S> {
 impl<S: SoupRealtimeService> WorkRegistrationSignal for SoupWorkRegistrationSignal<S> {
     async fn session_changed(&self, session: AgentSessionId) -> Result<(), Report> {
         self.0
-            .notify_users(SoupRealtimePatch::for_entity(Patch::Updated(
+            .notify_users(vec![SoupRealtimePatch::for_entity(Patch::Updated(
                 EntityType::AgentSession.with_entity_string(session.to_string()),
-            )))
+            ))])
             .await
+            .map(drop)
     }
 }

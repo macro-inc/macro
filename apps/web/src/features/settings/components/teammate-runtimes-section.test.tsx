@@ -19,7 +19,7 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessDirectoryQuery: () => ({
+  useRunnableHarnessDirectoryQuery: () => ({
     isSuccess: true,
     get data() {
       return mocks.directory;

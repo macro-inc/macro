@@ -144,6 +144,15 @@ pub struct CrmEntityAccess {
     pub team_role: TeamRole,
 }
 
+/// Entities of one type whose current users are the same, with those users.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntityAudience {
+    /// Entities every one of these users can currently access.
+    pub entity_ids: Vec<String>,
+    /// Users with current access to each of the entities.
+    pub users: Vec<MacroUserIdStr<'static>>,
+}
+
 /// The role a user has within a channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

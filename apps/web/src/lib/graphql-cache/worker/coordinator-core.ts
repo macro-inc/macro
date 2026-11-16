@@ -1,5 +1,6 @@
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  CACHE_SUPERSEDED_ERROR_CODE,
   type CachePush,
   type CacheRequest,
   type CacheResponse,
@@ -103,7 +104,13 @@ export type CoordinatorAction =
   | { kind: 'schedule-reset-activation' }
   | { kind: 'broadcast-cache-unavailable'; reason: string }
   | { kind: 'broadcast-cache-superseded'; reason: string }
-  | { kind: 'notify-cache-unavailable'; tabId: string; reason: string }
+  | {
+      kind: 'notify-cache-unavailable';
+      tabId: string;
+      reason: string;
+      /** A newer build took the database over: this build never gets it back. */
+      superseded?: true;
+    }
   | {
       kind: 'broadcast-engine-replaced';
       ownerEpoch: OwnerEpoch;
@@ -247,6 +254,7 @@ export class CoordinatorCore {
           kind: 'notify-cache-unavailable',
           tabId,
           reason: this.supersededReason,
+          superseded: true,
         },
       ];
     }
@@ -986,7 +994,9 @@ export class CoordinatorCore {
       tabId,
       requestId,
       reason,
-      OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+      reason === SUPERSEDED_REASON
+        ? CACHE_SUPERSEDED_ERROR_CODE
+        : OWNER_LOCK_UNAVAILABLE_ERROR_CODE
     );
   }
 

@@ -214,6 +214,22 @@ impl std::fmt::Display for SeatPlan {
     }
 }
 
+/// Historical production price ids that resolve to Premium, as the
+/// webhook's unknown-price fallback gave them before the Stripe inbox. They
+/// are no longer sold; subscribers still on them keep Premium entitlements.
+pub const LEGACY_PREMIUM_PRICE_IDS: [&str; 10] = [
+    "price_1PnRu9JaD7zvQeOBbExpFxPX",
+    "price_1KnR08JaD7zvQeOB7S30pQ0C",
+    "price_1R4534JaD7zvQeOBnyHpk46u",
+    "price_1QkYJ7JaD7zvQeOBULL5LfzK",
+    "price_1Qct0VJaD7zvQeOBrm90jWcu",
+    "price_1Q3Nz7JaD7zvQeOBuAWaJW0o",
+    "price_1PWjFJJaD7zvQeOBPPfc00Lo",
+    "price_1PMGAEJaD7zvQeOBCU4pxeVv",
+    "price_1PLvmeJaD7zvQeOBqWj1lWp8",
+    "price_1PbnpmJaD7zvQeOBU8VQg0Wa",
+];
+
 /// The Stripe price ids behind each plan's per-seat subscription item.
 #[derive(Debug, Clone)]
 pub struct SeatPrices {
@@ -244,6 +260,18 @@ impl SeatPrices {
         } else {
             None
         }
+    }
+
+    /// The plan whose entitlements a personal subscriber on `price_id`
+    /// holds: a sold seat price's plan, or Premium for a
+    /// [`LEGACY_PREMIUM_PRICE_IDS`] price. Only roles use it; seat billing,
+    /// plan changes and AI plans keep [`Self::plan_for_price`].
+    pub fn entitlement_plan(&self, price_id: &str) -> Option<SeatPlan> {
+        self.plan_for_price(price_id).or_else(|| {
+            LEGACY_PREMIUM_PRICE_IDS
+                .contains(&price_id)
+                .then_some(SeatPlan::Premium)
+        })
     }
 
     /// Every price that carries a seat item.
@@ -400,6 +428,8 @@ pub struct TeamWithMembers {
     pub team: Team,
     /// The members of the team
     pub members: Vec<TeamMember<'static>>,
+    /// Current effective CRM access for each member, independent of mailbox consent.
+    pub crm_member_access: HashMap<String, bool>,
     /// Provider-confirmed pending seat changes, keyed by member user ID.
     /// Empty when no changes apply to this viewer; absent when the lookup fails.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -432,8 +462,8 @@ fn default_crm_backfill() -> bool {
     true
 }
 
-/// Compatibility response for `PATCH /team/crm`. CRM records are always
-/// available; this endpoint does not enroll mailboxes or backfill emails.
+/// Compatibility response for `PATCH /team/crm`. Record access follows member
+/// permissions; this endpoint does not enroll mailboxes or backfill emails.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsResponse {
@@ -486,6 +516,8 @@ pub struct PatchTeamRequest {
     pub name: Option<String>,
     /// The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
     pub slug: Option<String>,
+    /// Change one member's CRM access. Admins and owners always retain access.
+    pub member_crm_access: Option<PatchTeamMemberCrmAccess>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
     /// The default link-share scope for items owned by the team. Omit to
@@ -504,6 +536,17 @@ pub struct PatchTeamRequest {
 pub struct PatchTeamPlanRequest {
     /// The new team plan
     pub team_plan: TeamPlan,
+}
+
+/// An administrator's change to one member's CRM access.
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamMemberCrmAccess {
+    /// The current member to update.
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub user_id: MacroUserIdStr<'static>,
+    /// Whether the member may use CRM records and team-shared pipelines.
+    pub enabled: bool,
 }
 
 /// Request to update a team user's role
@@ -750,6 +793,15 @@ pub struct TeamInviteSnapshot<'a> {
     pub last_sent_at: DateTime<Utc>,
     /// Whether the invite creates an agent account
     pub is_agent: bool,
+}
+
+/// Deleted membership state retained for compensation after a failed removal.
+#[derive(Debug, Clone)]
+pub struct RemovedTeamMember<'a> {
+    /// Membership identity, role and billing plan at deletion.
+    pub member: TeamMember<'a>,
+    /// Stored preference, including a denial masked by an administrative role.
+    pub crm_access: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.

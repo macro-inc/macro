@@ -52,13 +52,20 @@ vi.mock('@app/features/soup/search/context', () => ({
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
 vi.mock('@queries/soup/search', () => ({
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'alice' }));
+// A test can swap in a signal to change the signed-in account.
+const viewer = vi.hoisted(() => ({
+  current: (): string | undefined => 'alice',
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => viewer.current(),
+}));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
 vi.mock('./use-scheduled-email-source', () => ({
   useScheduledEmailSource: () => ({
@@ -119,7 +126,7 @@ const ids = (source: EmailDataSource) =>
     .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []));
 
 let dispose: (() => void) | undefined;
-function mount(search = '') {
+function mount(search = '', keepRowsWhileSearching = false) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [state, setState] = createStore<EmailViewState>({
@@ -179,6 +186,8 @@ function mount(search = '') {
       });
     const [searchHasMore, setSearchHasMore] = createSignal(true);
     const [searchFetching, setSearchFetching] = createSignal(false);
+    const [searchUnanswered, setSearchUnanswered] = createSignal(false);
+    const [searchPaging, setSearchPaging] = createSignal(false);
     const searchNext = vi.fn(async () => {
       setSearchHasMore(false);
     });
@@ -201,13 +210,15 @@ function mount(search = '') {
             return options?.().enabled ?? true;
           },
           get isSuccess() {
-            return discovery || !retentionLoading();
+            return discovery ? !searchUnanswered() : !retentionLoading();
           },
           isPlaceholderData: false,
           get isFetching() {
             return discovery && searchFetching();
           },
-          isFetchingNextPage: false,
+          get isFetchingNextPage() {
+            return discovery && searchPaging();
+          },
           get hasNextPage() {
             return discovery && searchHasMore();
           },
@@ -291,6 +302,7 @@ function mount(search = '') {
     const source = useEmailDataSource(state, {
       tagSets: () => [],
       tagSetsReady,
+      keepRowsWhileSearching: () => keepRowsWhileSearching,
     });
     return {
       source,
@@ -299,6 +311,8 @@ function mount(search = '') {
       searchNext,
       setSearchHasMore,
       setSearchFetching,
+      setSearchUnanswered,
+      setSearchPaging,
       setState,
       setEntities,
       setDiscoveryEntities,
@@ -322,6 +336,91 @@ function mount(search = '') {
 }
 
 describe('Email list query transitions', () => {
+  it('keeps the rows on screen as previous rows while a search loads', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('', true);
+      expect(ids(root.source)).toEqual(['noise']);
+
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+      expect(root.source.isLoading()).toBe(false);
+
+      // The request has settled its debounce but not started: nothing is
+      // fetching, and the rows still must not blank.
+      root.setSearchUnanswered(true);
+      root.setSearchFetching(false);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      root.setSearchUnanswered(false);
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+
+      // Loading a further page of the same search is not a new wait.
+      batch(() => {
+        root.setSearchPaging(true);
+        root.setSearchFetching(true);
+      });
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      batch(() => {
+        root.setSearchPaging(false);
+        root.setSearchFetching(false);
+      });
+
+      // Another tab's rows are never shown under this one's name.
+      root.setSearchFetching(true);
+      root.setState('tab', 'important');
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never keeps rows from another account while a search loads', () => {
+    vi.useFakeTimers();
+    const [account, setAccount] = createSignal<string | undefined>('alice');
+    viewer.current = account;
+    try {
+      const root = mount('', true);
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      setAccount('bob');
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      viewer.current = () => 'alice';
+      vi.useRealTimers();
+    }
+  });
+
+  it('blanks the list while a search loads unless rows are kept', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('');
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
 
   it.each(['spam', 'trash'] as const)(
@@ -589,8 +688,8 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['archived', 'active']);
   });
 
-  it('offers no inbox pages while the search text is too short for the service', async () => {
-    const { source, query } = mount('ss');
+  it('offers no inbox pages while the search text holds nothing the service can search for', async () => {
+    const { source, query } = mount('"');
     expect(source.items()).toEqual([]);
     expect(source.hasMore()).toBe(false);
     expect(source.isLoading()).toBe(false);

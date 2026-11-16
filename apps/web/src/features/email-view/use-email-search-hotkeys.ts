@@ -5,8 +5,9 @@ import type { Accessor } from 'solid-js';
 /**
  * Email's search keys, registered for as long as Email is mounted.
  *
- * `/` always reaches a search field: the list header's while it is on screen,
- * and the sidebar's once a thread or a new email has replaced that header.
+ * `/` always reaches the list header's search field: once a thread or a new
+ * email has replaced that header, the key returns to the list first, as Back
+ * does, and the field takes focus when it mounts.
  * Cmd+F belongs to the list header's field only; without it the key is left
  * alone, so the browser can still find text in the open thread or draft.
  */
@@ -14,10 +15,11 @@ export function useEmailSearchHotkeys(options: {
   scopeId: string;
   enabled: Accessor<boolean>;
   canSearch: Accessor<boolean>;
-  /** Returns false when the sidebar's search field cannot be shown. */
-  openSidebarSearch: () => boolean;
+  /** Brings the list, and with it the header's search field, back on screen. */
+  showList: () => void;
 }) {
   let focusListSearch: (() => void) | undefined;
+  let focusWhenListReturns = false;
 
   const runListSearch = () => {
     if (!focusListSearch) return false;
@@ -32,7 +34,13 @@ export function useEmailSearchHotkeys(options: {
     scopeId: options.scopeId,
     description: 'Search email',
     condition: () => options.enabled() && options.canSearch(),
-    keyDownHandler: () => runListSearch() || options.openSidebarSearch(),
+    keyDownHandler: () => {
+      if (runListSearch()) return true;
+
+      focusWhenListReturns = true;
+      options.showList();
+      return true;
+    },
   });
 
   useViewControlHotkeys({
@@ -49,6 +57,11 @@ export function useEmailSearchHotkeys(options: {
     /** Returns the function that releases the list header's search field. */
     registerListSearch: (focus: () => void) => {
       focusListSearch = focus;
+
+      if (focusWhenListReturns) {
+        focusWhenListReturns = false;
+        focus();
+      }
 
       return () => {
         if (focusListSearch === focus) focusListSearch = undefined;

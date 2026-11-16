@@ -4,7 +4,6 @@ mod api;
 pub mod config;
 mod core;
 mod model;
-mod refresh;
 mod server;
 mod service;
 
