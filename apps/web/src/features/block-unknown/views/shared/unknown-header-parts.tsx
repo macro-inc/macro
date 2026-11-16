@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { toast } from '@core/component/Toast/Toast';
@@ -30,7 +31,9 @@ export function useUnknownHeaderTools(onShare: () => void) {
     { op: 'moveToProject' },
     {
       group: 'file',
-      label: 'Download',
+      get label() {
+        return t('entityActions.download');
+      },
       icon: DownloadSimple,
       action: downloadDocument,
     },
@@ -39,7 +42,7 @@ export function useUnknownHeaderTools(onShare: () => void) {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: onShare,
     focusTarget: getShareDrawerRecipientInput,

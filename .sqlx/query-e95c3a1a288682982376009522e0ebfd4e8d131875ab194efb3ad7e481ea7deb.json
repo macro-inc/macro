@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, type AS event_type, created_at, received_at, object_id, payload, traceparent\n            FROM stripe_events\n            WHERE ordering_key = $1\n              AND type = ANY($2)\n              AND (created_at, id) > (COALESCE($3, '-infinity'::timestamptz), COALESCE($4, ''))\n            ORDER BY created_at, id\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "object_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e95c3a1a288682982376009522e0ebfd4e8d131875ab194efb3ad7e481ea7deb"
+}

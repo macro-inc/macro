@@ -3,7 +3,11 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use futures::{StreamExt as _, stream};
@@ -15,7 +19,7 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
 
 use super::{
-    models::{Patch, SoupRealtimeMessage, SoupRealtimePatch},
+    models::{Delivery, Patch, SoupRealtimeMessage, SoupRealtimePatch},
     ports::{
         SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
         SoupRealtimeSubscriptionService, UserAccessExpander,
@@ -114,27 +118,27 @@ const PUBLISH_CONCURRENCY: usize = 16;
 
 /// Domain service that expands entity access and fans out lightweight patches.
 pub struct SoupRealtimeServiceImpl {
-    sender: tokio::sync::mpsc::Sender<PendingPatch>,
+    sender: tokio::sync::mpsc::Sender<PendingBatch>,
     _bg: JoinHandle<()>,
 }
 
-struct PendingPatch {
-    patch: SoupRealtimePatch,
-    completed: oneshot::Sender<Result<(), Report>>,
+struct PendingBatch {
+    patches: Vec<SoupRealtimePatch>,
+    completed: oneshot::Sender<Result<Delivery, Report>>,
     span: tracing::Span,
 }
 
 struct Worker<A, P> {
     access_expander: A,
     publisher: P,
-    rx: tokio::sync::mpsc::Receiver<PendingPatch>,
+    rx: tokio::sync::mpsc::Receiver<PendingBatch>,
 }
 
 impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
     async fn run(&mut self) {
         while let Some(pending) = self.rx.recv().await {
             let result = self
-                .process_one(pending.patch)
+                .process_batch(pending.patches)
                 .instrument(pending.span)
                 .await;
             // A cancelled caller leaves its source event uncommitted for replay.
@@ -142,40 +146,86 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         }
     }
 
-    #[tracing::instrument(err, skip(self), fields(recipient_count))]
-    async fn process_one(&self, msg: SoupRealtimePatch) -> Result<(), Report> {
-        let mut users = self
+    /// Resolves the recipients of every patch in one lookup, then publishes the
+    /// patches in order, each to all of its recipients at once.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            entity_count = patches.len(),
+            recipient_set_count = tracing::field::Empty,
+            publish_count = tracing::field::Empty,
+        )
+    )]
+    async fn process_batch(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
+        let mut seen = HashSet::with_capacity(patches.len());
+        let access_sources = patches
+            .iter()
+            .map(|patch| &patch.access_source)
+            .filter(|source| seen.insert(*source))
+            .cloned()
+            .collect::<Vec<_>>();
+        let shared_access = self
             .access_expander
-            .expand_user_access(&msg.access_source)
+            .expand_user_access(&access_sources)
             .await
             .context("failed to expand current user access")?;
 
-        let mut seen = HashSet::with_capacity(users.len());
-        users.retain(|user_id| seen.insert(user_id.clone()));
-        tracing::Span::current().record("recipient_count", users.len());
-
-        let messages = users
-            .into_iter()
-            .map(|user_id| SoupRealtimeMessage::new(user_id, msg.patch.clone()))
-            .collect::<Vec<_>>();
-        let results = stream::iter(
-            messages
-                .into_iter()
-                .map(|message| self.publisher.publish(message)),
-        )
-        .buffer_unordered(PUBLISH_CONCURRENCY)
-        .collect::<Vec<_>>()
-        .await;
-
-        let failure_count = results.iter().filter(|result| result.is_err()).count();
-        if let Some(error) = results.into_iter().find_map(Result::err) {
-            return Err(error
-                .context(format!(
-                    "{failure_count} realtime Soup publication(s) failed"
-                ))
-                .into_dynamic());
+        // Entities sharing access point at one deduplicated recipient list.
+        let mut recipient_lists = Vec::with_capacity(shared_access.len());
+        let mut recipient_list_by_source = HashMap::with_capacity(access_sources.len());
+        let mut recipient_sets = HashSet::new();
+        for access in shared_access {
+            let mut users = access.users;
+            users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+            users.dedup();
+            if !users.is_empty() {
+                recipient_sets.insert(users.clone());
+            }
+            for entity in access.entities {
+                recipient_list_by_source.insert(entity, recipient_lists.len());
+            }
+            recipient_lists.push(users);
         }
-        Ok(())
+
+        let mut publish_count = 0;
+        for patch in patches {
+            let users = recipient_list_by_source
+                .get(&patch.access_source)
+                .and_then(|&index| recipient_lists.get(index))
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let messages = users
+                .iter()
+                .map(|user_id| SoupRealtimeMessage::new(user_id.clone(), patch.patch.clone()))
+                .collect::<Vec<_>>();
+            let results = stream::iter(
+                messages
+                    .into_iter()
+                    .map(|message| self.publisher.publish(message)),
+            )
+            .buffer_unordered(PUBLISH_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
+
+            let failure_count = results.iter().filter(|result| result.is_err()).count();
+            if let Some(error) = results.into_iter().find_map(Result::err) {
+                return Err(error
+                    .context(format!(
+                        "{failure_count} realtime Soup publication(s) failed"
+                    ))
+                    .into_dynamic());
+            }
+            publish_count += users.len();
+        }
+
+        let span = tracing::Span::current();
+        span.record("recipient_set_count", recipient_sets.len());
+        span.record("publish_count", publish_count);
+        Ok(Delivery {
+            recipient_sets,
+            publish_count,
+        })
     }
 }
 
@@ -207,12 +257,12 @@ impl SoupRealtimeServiceImpl {
 }
 
 impl SoupRealtimeService for SoupRealtimeServiceImpl {
-    #[tracing::instrument(skip(self), err)]
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+    #[tracing::instrument(skip_all, fields(patch_count = patches.len()), err)]
+    async fn notify_users(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
         let (completed, result) = oneshot::channel();
         self.sender
-            .send(PendingPatch {
-                patch,
+            .send(PendingBatch {
+                patches,
                 completed,
                 span: tracing::Span::current(),
             })

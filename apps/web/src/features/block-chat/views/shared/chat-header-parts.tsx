@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
@@ -53,7 +54,7 @@ export function useChatHeaderTools(props: ChatHeaderProps) {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     focusTarget: getShareDrawerRecipientInput,

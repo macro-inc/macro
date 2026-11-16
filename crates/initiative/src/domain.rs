@@ -10,8 +10,6 @@ pub mod history;
 pub mod lookup;
 pub mod models;
 #[cfg(feature = "ports")]
-pub mod personal_activity;
-#[cfg(feature = "ports")]
 pub mod ports;
 pub mod reads;
 #[cfg(feature = "ports")]

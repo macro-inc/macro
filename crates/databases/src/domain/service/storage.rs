@@ -7,8 +7,42 @@ use crate::domain::catalog::{ColumnEntry, StorageTable};
 use crate::domain::journal::Restoration;
 use crate::domain::models::{AppliedOps, WritesOutcome};
 use crate::domain::ports::DatabaseStorage;
-use crate::domain::storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery};
+use crate::domain::storage::{
+    DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery, StorageRowsRead,
+    StorageTableRows,
+};
 use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
+
+/// A column as storage consumers see it, in the resource `database`.
+fn column_detail(column: ColumnEntry, database: DatabaseId) -> ColumnDetail {
+    ColumnDetail {
+        sql_name: catalog::sql_identifier(column.name()),
+        shared_outside_database: column.shared_outside(database),
+        column: column.column,
+        definition: column.definition,
+        writable: true,
+    }
+}
+
+/// A row's cells keyed by the column placing each definition.
+fn storage_row(
+    row_id: RowId,
+    cells: &HashMap<PropertyDefinitionId, PropertyValue>,
+    columns: &[ColumnEntry],
+) -> StorageRow {
+    StorageRow {
+        row_id,
+        cells: columns
+            .iter()
+            .filter_map(|column| {
+                cells
+                    .get(&column.column.property_definition_id)
+                    .cloned()
+                    .map(|value| (column.column.id, value))
+            })
+            .collect(),
+    }
+}
 
 impl<R, D, C, E, A, B> DatabasesServiceImpl<R, D, C, E, A, B>
 where
@@ -19,16 +53,12 @@ where
     A: AccessDirectory,
     B: MacroEventBroker,
 {
-    async fn storage_entries(&self, id: DatabaseId) -> Result<Vec<StorageTable>, DatabaseError> {
-        let tables = self
-            .repository
-            .tables_for_databases(&[id])
-            .await
-            .map_err(repository_error)?;
-        let ids: Vec<_> = tables.iter().map(|table| table.id).collect();
+    /// The columns of `tables` with their definitions, by table, then in
+    /// display order.
+    async fn column_entries(&self, tables: &[TableId]) -> Result<Vec<ColumnEntry>, DatabaseError> {
         let columns = self
             .repository
-            .columns_for_tables(&ids)
+            .columns_for_tables(tables)
             .await
             .map_err(repository_error)?;
         let definition_ids: Vec<_> = columns
@@ -43,40 +73,50 @@ where
             .into_iter()
             .map(|definition| (definition.definition.id, definition))
             .collect();
+        columns
+            .into_iter()
+            .map(|column| {
+                Ok(ColumnEntry {
+                    definition: definitions
+                        .get(&column.property_definition_id)
+                        .cloned()
+                        .ok_or(DatabaseError::NotFound)?,
+                    column,
+                    writable: true,
+                })
+            })
+            .collect()
+    }
+
+    async fn storage_entries(&self, id: DatabaseId) -> Result<Vec<StorageTable>, DatabaseError> {
+        let tables = self
+            .repository
+            .tables_for_databases(&[id])
+            .await
+            .map_err(repository_error)?;
+        let ids: Vec<_> = tables.iter().map(|table| table.id).collect();
+        let columns = self.column_entries(&ids).await?;
         let views = self
             .repository
             .views_for_tables(&ids)
             .await
             .map_err(repository_error)?;
-        tables
+        Ok(tables
             .into_iter()
-            .map(|table| {
-                let columns = columns
+            .map(|table| StorageTable {
+                columns: columns
                     .iter()
-                    .filter(|column| column.table_id == table.id)
-                    .map(|column| {
-                        Ok(ColumnEntry {
-                            column: column.clone(),
-                            definition: definitions
-                                .get(&column.property_definition_id)
-                                .cloned()
-                                .ok_or(DatabaseError::NotFound)?,
-                            writable: true,
-                        })
-                    })
-                    .collect::<Result<_, DatabaseError>>()?;
-                let views = views
+                    .filter(|column| column.column.table_id == table.id)
+                    .cloned()
+                    .collect(),
+                views: views
                     .iter()
                     .filter(|view| view.table_id == table.id)
                     .cloned()
-                    .collect();
-                Ok(StorageTable {
-                    table,
-                    columns,
-                    views,
-                })
+                    .collect(),
+                table,
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -129,13 +169,7 @@ where
                 columns: entry
                     .columns
                     .into_iter()
-                    .map(|column| ColumnDetail {
-                        sql_name: catalog::sql_identifier(column.name()),
-                        shared_outside_database: column.shared_outside(id),
-                        column: column.column,
-                        definition: column.definition,
-                        writable: true,
-                    })
+                    .map(|column| column_detail(column, id))
                     .collect(),
                 views: entry.views,
             })
@@ -209,20 +243,11 @@ where
         let rows = page
             .into_iter()
             .map(|row_id| {
-                let cells = values.remove(&row_id).unwrap_or_default();
-                StorageRow {
+                storage_row(
                     row_id,
-                    cells: entry
-                        .columns
-                        .iter()
-                        .filter_map(|column| {
-                            cells
-                                .get(&column.column.property_definition_id)
-                                .cloned()
-                                .map(|value| (column.column.id, value))
-                        })
-                        .collect(),
-                }
+                    &values.remove(&row_id).unwrap_or_default(),
+                    &entry.columns,
+                )
             })
             .collect();
         let version = self
@@ -249,39 +274,87 @@ where
         table: TableId,
         rows: &[RowId],
     ) -> Result<Vec<StorageRow>, DatabaseError> {
-        let entry = self
-            .storage_entries(id)
+        Ok(self
+            .storage_tables_rows(&[StorageRowsRead {
+                database: id,
+                table,
+                rows: rows.to_vec(),
+            }])
             .await?
-            .into_iter()
-            .find(|entry| entry.table.id == table)
-            .ok_or(DatabaseError::NotFound)?;
-        let rows: HashSet<_> = rows.iter().collect();
+            .pop()
+            .ok_or(DatabaseError::NotFound)?
+            .rows)
+    }
+
+    async fn storage_tables_rows(
+        &self,
+        reads: &[StorageRowsRead],
+    ) -> Result<Vec<StorageTableRows>, DatabaseError> {
+        if reads.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut databases: Vec<_> = reads.iter().map(|read| read.database).collect();
+        databases.sort();
+        databases.dedup();
+        let tables = self
+            .repository
+            .tables_for_databases(&databases)
+            .await
+            .map_err(repository_error)?;
+        let reads: Vec<_> = reads
+            .iter()
+            .filter(|read| {
+                tables
+                    .iter()
+                    .any(|table| table.id == read.table && table.database_id == read.database)
+            })
+            .collect();
+        if reads.is_empty() {
+            return Ok(Vec::new());
+        }
+        let table_ids: Vec<_> = reads.iter().map(|read| read.table).collect();
+        let columns = self.column_entries(&table_ids).await?;
+        // A row counts only for the table it was asked for with.
+        let asked: HashSet<_> = reads
+            .iter()
+            .flat_map(|read| read.rows.iter().map(|row| (read.table, *row)))
+            .collect();
+        let row_ids: Vec<_> = asked.iter().map(|(_, row)| *row).collect();
         let wanted: Vec<_> = self
             .repository
-            .row_refs(table)
+            .rows_in_tables(&table_ids, &row_ids)
             .await
             .map_err(repository_error)?
             .into_iter()
-            .map(|row| row.id)
-            .filter(|row| rows.contains(row))
+            .map(|(table, row)| (table, row.id))
+            .filter(|wanted| asked.contains(wanted))
             .collect();
-        let mut cells = self.cells.cells(&wanted).await.map_err(repository_error)?;
-        Ok(wanted
+        let ids: Vec<_> = wanted.iter().map(|(_, row)| *row).collect();
+        let cells = self.cells.cells(&ids).await.map_err(repository_error)?;
+        let empty = HashMap::new();
+        Ok(reads
             .into_iter()
-            .map(|row_id| {
-                let cells = cells.remove(&row_id).unwrap_or_default();
-                StorageRow {
-                    row_id,
-                    cells: entry
-                        .columns
-                        .iter()
-                        .filter_map(|column| {
-                            cells
-                                .get(&column.column.property_definition_id)
-                                .cloned()
-                                .map(|value| (column.column.id, value))
-                        })
+            .map(|read| {
+                let columns: Vec<_> = columns
+                    .iter()
+                    .filter(|column| column.column.table_id == read.table)
+                    .cloned()
+                    .collect();
+                // Only this read's rows, even when another read names the
+                // same table.
+                let named: HashSet<_> = read.rows.iter().collect();
+                let rows = wanted
+                    .iter()
+                    .filter(|(table, row)| *table == read.table && named.contains(row))
+                    .map(|(_, row)| storage_row(*row, cells.get(row).unwrap_or(&empty), &columns))
+                    .collect();
+                StorageTableRows {
+                    table: read.table,
+                    columns: columns
+                        .into_iter()
+                        .map(|column| column_detail(column, read.database))
                         .collect(),
+                    rows,
                 }
             })
             .collect())

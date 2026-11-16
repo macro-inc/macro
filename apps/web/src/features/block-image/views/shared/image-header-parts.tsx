@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useBlockId } from '@core/block';
@@ -49,7 +50,9 @@ export function useImageHeaderTools() {
     { op: 'moveToProject' },
     {
       group: 'file',
-      label: 'Download',
+      get label() {
+        return t('entityActions.download');
+      },
       icon: Download,
       action: downloadDocument,
     },
@@ -64,21 +67,21 @@ export function useImageHeaderTools() {
   });
 
   const askMacro: BlockTool = {
-    label: 'Ask Macro',
+    label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent(chatEntity()),
     buttonComponent: (control) => (
       <ChatWithAgentButton
         grouped={control.grouped}
         entity={chatEntity()}
-        label="Ask Macro"
+        label={t('entityActions.askMacro')}
       />
     ),
   };
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     focusTarget: getShareDrawerRecipientInput,

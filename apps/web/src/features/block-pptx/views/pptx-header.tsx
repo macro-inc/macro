@@ -1,4 +1,5 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import { BlockToolbar } from '@components/app/block-toolbar';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
@@ -35,7 +36,7 @@ export function PptxHeader(props: PptxHeaderProps) {
           <HeaderActionGroup label="Presentation actions">
             <ChatWithAgentButton
               grouped
-              label="Ask Macro"
+              label={t('entityActions.askMacro')}
               entity={chatEntity(props)}
             />
           </HeaderActionGroup>

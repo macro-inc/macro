@@ -14,7 +14,7 @@ pub enum ControlPrincipal {
     /// A user authenticated directly, including a user API key.
     User,
     /// A user's credential used by an agent's program: the user's authority,
-    /// but no app tab. A tab it names is dropped, not trusted.
+    /// but no right to answer interactions or name an app tab.
     Program,
     /// A bot, daemon, or internal service, possibly forwarding a user's request.
     Runtime(Option<MacroUserIdStr<'static>>),
@@ -38,9 +38,9 @@ impl ControlPrincipal {
 }
 
 impl ControlEvent {
-    /// Only an authenticated user with edit access may answer an interaction.
-    /// Runtime principals may forward ordinary controls, but cannot use their
-    /// acting-user identity to approve their own permission or elicitation.
+    /// Only a directly authenticated user with edit access may answer an interaction.
+    /// Programs and runtimes may forward ordinary controls, but cannot use a
+    /// user's identity to answer their own permission or elicitation.
     ///
     /// Trigger context is only accepted from a runtime forwarding a prompt it
     /// was triggered with. A user could otherwise tell an owner's agent that
@@ -60,6 +60,16 @@ impl ControlEvent {
         if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some()) {
             return Err(AgentSessionError::Forbidden);
         }
+
+        if !matches!(principal, ControlPrincipal::User)
+            && matches!(
+                action,
+                AgentAction::RespondToPermission(_) | AgentAction::RespondElicitation(_)
+            )
+        {
+            return Err(AgentSessionError::Forbidden);
+        }
+
         let client = principal.admit_client(client)?;
         let actor = match principal {
             ControlPrincipal::User | ControlPrincipal::Program if context.is_some() => {
@@ -71,15 +81,7 @@ impl ControlEvent {
                     .map_err(|_| AgentSessionError::Forbidden)?
                     .clone(),
             ),
-            ControlPrincipal::Runtime(actor) => {
-                if matches!(
-                    action,
-                    AgentAction::RespondToPermission(_) | AgentAction::RespondElicitation(_)
-                ) {
-                    return Err(AgentSessionError::Forbidden);
-                }
-                actor
-            }
+            ControlPrincipal::Runtime(actor) => actor,
         };
         Ok(Self {
             action,

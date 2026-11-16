@@ -3,8 +3,11 @@ import { t } from '@app/lib/i18n';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { useGetPermissions } from '@core/signal/permissions';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Show } from 'solid-js';
@@ -21,6 +24,8 @@ export function MobileCallRecordingHeader(props: {
   record: CallRecord;
   callId: string;
 }) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const record = () => props.record;
   const { blockId, callName, ops, entity, actions } =
     useCallRecordingHeaderTools(record);
@@ -34,6 +39,9 @@ export function MobileCallRecordingHeader(props: {
 
   return (
     <MobileBlockHeader
+      entityKind={entityKind}
+      permissions={permissions()}
+      badge={<SplitPermissionsBadge />}
       id={blockId}
       name={callName()}
       iconType="call"

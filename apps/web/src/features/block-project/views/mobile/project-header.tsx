@@ -1,5 +1,8 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName } from '@core/block';
 import { isMobile } from '@core/mobile/isMobile';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { useProjectHeaderTools } from '../shared/project-header-parts';
 
@@ -8,6 +11,8 @@ import { useProjectHeaderTools } from '../shared/project-header-parts';
  * The title menu offers Share, and on phones Chat and Create too.
  */
 export function MobileProjectHeader() {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const { id, name, ops, createTools, CreateDialog, actions } =
     useProjectHeaderTools();
   const title = useBlockDocumentName(name());
@@ -15,6 +20,9 @@ export function MobileProjectHeader() {
   return (
     <>
       <MobileBlockHeader
+        entityKind={entityKind}
+        permissions={permissions()}
+        badge={<SplitPermissionsBadge />}
         id={id}
         name={title() ?? ''}
         menuName={name()}

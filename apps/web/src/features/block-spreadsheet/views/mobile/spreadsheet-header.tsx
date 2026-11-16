@@ -1,6 +1,9 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { Show } from 'solid-js';
 import {
@@ -16,11 +19,16 @@ import {
  * is in the title menu.
  */
 export function MobileSpreadsheetHeader(props: SpreadsheetHeaderProps) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const title = useBlockDocumentName();
   const { ops, actions } = spreadsheetHeaderTools(props);
 
   return (
     <MobileBlockHeader
+      entityKind={entityKind}
+      permissions={permissions()}
+      badge={<SplitPermissionsBadge />}
       id={props.documentId}
       name={title() ?? ''}
       menuName={props.name()}

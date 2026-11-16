@@ -1,104 +1,70 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
-import { useTeamAgentsQuery } from '@queries/team-agents/team-agents';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { ClaudeSignInEntry } from '@queries/computers/claude';
+import { useComputersQuery } from '@queries/computers/computers';
 import type { TeamAgent } from '@service-auth/team-agents';
-import { ActionDialogShell, Button, Spinner } from '@ui';
-import { createMemo, Show } from 'solid-js';
-import { ClaudeSignInFlow } from '../computers/views/claude-sign-in-flow';
-import { agentComputerHarness } from '../core/team-agent-claude';
+import { createSignal, Show } from 'solid-js';
+import { SetupProgressHeader } from '../computers/components/setup-progress-header';
+import { ClaudeSignInDialog } from '../computers/views/claude-sign-in-dialog';
+import { teamAgentComputer } from '../core/team-agent-setup';
+import { useRetryTeamAgentSetup } from '../primitives/team-agent-status';
 
 /**
- * Bring your AI for an agent teammate just invited: sign its new computer in
- * to the team's Claude plan, or skip and keep Macro credits. The sign-in link
- * comes from the computer, so the step waits until macrod connects there.
- *
- * Rendered as an `ActionDialogShell`'s body and footer; the host owns the dialog.
+ * Bring your AI for an agent teammate: sign its computer in to the team's
+ * Claude plan, with the computer's setup progress above it. Opened from the
+ * agent's row in Members or from its ready notification, never as a step of
+ * the invite, and always closable; the agent runs on Macro credits until
+ * then.
  */
-export function AgentClaudeStep(props: {
-  teamId: string;
+export function AgentClaudeDialog(props: {
   agent: TeamAgent;
-  /** The computers rollout, which Claude sign-in sits behind. */
-  enabled: boolean;
-  onDone: () => void;
+  /** The runtime on the agent's computer, connected. */
+  harnessId: string;
+  entry: ClaudeSignInEntry;
+  onClose: () => void;
 }) {
-  // The invite answers before the computer is bought or enrolled; the team's
-  // agent list polls until it is, and the harness list until macrod connects.
-  const agents = useTeamAgentsQuery(
-    () => props.teamId,
-    () => true
-  );
-  const harnesses = useHarnessesQuery();
-  const live = () =>
-    (agents.isSuccess ? agents.data.agents : []).find(
-      (agent) => agent.userId === props.agent.userId
+  const computers = useComputersQuery(() => true);
+  const computer = () =>
+    teamAgentComputer(
+      props.agent,
+      computers.isSuccess ? computers.data : undefined
     );
-  const computerId = () => live()?.computerId ?? props.agent.computerId;
-  // Setup stopped: nothing will connect until someone acts on the computer.
-  const failed = () => live()?.status === 'failed';
-
-  // Once connected, stay on the sign-in even if a poll misses the computer,
-  // so a half-pasted code is not thrown away.
-  let readyHarnessId: string | undefined;
-  const harnessId = createMemo(() => {
-    if (!props.enabled) return undefined;
-    if (readyHarnessId) return readyHarnessId;
-    const harness = agentComputerHarness(
-      computerId(),
-      harnesses.isSuccess ? harnesses.data : undefined
-    );
-    if (harness?.connected) readyHarnessId = harness.id;
-    return readyHarnessId;
-  });
-
-  const title = () => t('teamAgents.bringAiTitle', { name: props.agent.name });
+  const retry = useRetryTeamAgentSetup();
+  // Collapsed by default, as in computer setup: the line says where it is.
+  const [progressExpanded, setProgressExpanded] = createSignal(false);
 
   return (
-    <Show
-      when={harnessId()}
-      fallback={
-        <>
-          <ActionDialogShell.Body>
-            <ActionDialogShell.Header>
-              <ActionDialogShell.Title>{title()}</ActionDialogShell.Title>
-              <ActionDialogShell.Description>
-                {failed()
-                  ? t('teamAgents.bringAiFailed', { name: props.agent.name })
-                  : t('teamAgents.bringAiWaiting', { name: props.agent.name })}
-              </ActionDialogShell.Description>
-            </ActionDialogShell.Header>
-            <Show when={!failed()}>
-              <p
-                role="status"
-                class="flex items-center gap-2 text-sm font-medium text-ink"
-              >
-                <Spinner size="sm" decorative />
-                {t('computers.preparingSignIn')}
-              </p>
-            </Show>
-          </ActionDialogShell.Body>
-          <ActionDialogShell.Footer>
-            <Button type="button" variant="ghost" onClick={props.onDone}>
-              {t('teamAgents.keepCredits')}
-            </Button>
-          </ActionDialogShell.Footer>
-        </>
+    <ClaudeSignInDialog
+      harnessId={props.harnessId}
+      entry={props.entry}
+      title={t('teamAgents.bringAiTitle', { name: props.agent.name })}
+      header={
+        <Show when={computer()}>
+          {(current) => (
+            <SetupProgressHeader
+              steps={null}
+              computer={current()}
+              signIn="needed"
+              connected
+              signedIn={false}
+              showProgress
+              expanded={progressExpanded()}
+              onExpandedChange={setProgressExpanded}
+              onRetry={() =>
+                fireAndForget(retry.run(props.agent), 'team-agent.retry')
+              }
+              retrying={retry.pending()}
+            />
+          )}
+        </Show>
       }
-    >
-      {(id) => (
-        <ClaudeSignInFlow
-          harnessId={id()}
-          entry="team_agent_invite"
-          title={title()}
-          onSignedIn={() => {
-            toast.success(
-              t('teamAgents.claudeSignedIn', { name: props.agent.name })
-            );
-            props.onDone();
-          }}
-          onUseCredits={props.onDone}
-        />
-      )}
-    </Show>
+      onSignedIn={() =>
+        toast.success(
+          t('teamAgents.claudeSignedIn', { name: props.agent.name })
+        )
+      }
+      onClose={props.onClose}
+    />
   );
 }

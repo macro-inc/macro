@@ -12,9 +12,11 @@ import { readFile } from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Telemetry } from '@macro-inc/observability/core';
 import { guards } from '../../../agent/guards/index.ts';
-import type { Base } from '../../../context/index.ts';
 import { claude } from '../../../context/children.ts';
+import type { Base } from '../../../context/index.ts';
 import type { Work } from '../../../contracts.ts';
+import { settings } from '../../heartbeat/config.ts';
+import { gitCommand } from '../../heartbeat/repository.ts';
 import { readIdentity } from '../../identity/index.ts';
 import {
   type Brain,
@@ -35,6 +37,7 @@ import type { IdList } from '../ledger.ts';
 import type { CallApi } from '../macro.ts';
 import { callScreen } from '../session.ts';
 import type { MakeShare, Placed, PlaceInput, PlaceOutcome } from '../types.ts';
+import { currentVoiceFile, voiceFetchMs } from '../voice-file.ts';
 import { parseVoice } from '../voices.ts';
 import type { WorkingTime } from '../working.ts';
 import { callDisk } from './disk.ts';
@@ -109,7 +112,16 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
       const { live } = await import('./voiceLive.ts');
       return live({
         relay: await base.relay(),
-        voice: parseVoice(await disk.read(join(config.root, voiceFile))),
+        voice: parseVoice(
+          await currentVoiceFile({
+            git: async (args) =>
+              shell.run(gitCommand(settings.git, config.root, args), {
+                env: await base.environment(),
+                timeoutMs: voiceFetchMs,
+              }),
+            readLocal: () => disk.read(join(config.root, voiceFile)),
+          })
+        ),
         name: config.identity.name,
         time,
       });
