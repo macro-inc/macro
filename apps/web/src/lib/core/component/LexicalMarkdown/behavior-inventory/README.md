@@ -1,5 +1,11 @@
 # Editor behavior regression ledger
 
+`document-replace-oracle.test.ts` runs the actual find/replace, word count and
+progress plugins over shared fixtures and checks
+`macro_document_model/src/plugins_group_b/document_find/replace-oracle.json`,
+which the native Rust port replays; regenerate it with
+`UPDATE_DOCUMENT_REPLACE_ORACLE=1`.
+
 These tests exercise production Lexical APIs and Macro plugins through their
 normal imports. User-mention I/O controls retain the real editor, commands and
 shared tracking action while controlling transport and entropy. They pin

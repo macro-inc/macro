@@ -10,7 +10,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
-- Read document Find through the closed current-generation `group-b.document-find` query, preserving Source UTF-16 literal legacy-case matching, keyed leaf pieces and ownerless block separators; use the existing regress UCS-2 path, with no state/selection writes or panel, replacement or statistics policy.
+- Read document Find through the closed current-generation `group-b.document-find` query, preserving Source UTF-16 literal legacy-case matching, keyed leaf pieces and ownerless block separators; use the existing regress UCS-2 path, with no state or selection writes. Replace through the `group-b.document-replace` command (one ordinary undoable update, Source skip/once/NodeSelection rules) and read editor statistics through `group-b.document-stats`. Regenerate `document_find/replace-oracle.json` with `UPDATE_DOCUMENT_REPLACE_ORACLE=1 bunx vitest run src/lib/core/component/LexicalMarkdown/behavior-inventory/document-replace-oracle.test.ts` from apps/web; that test also checks its freshness.
 
 - Run Code vertical navigation on generic KeyDown LOW with its immutable Up/Down eligibility; keep key-specific application stopping after generic dispatch and ordinary Core movement at Editor priority.
 
