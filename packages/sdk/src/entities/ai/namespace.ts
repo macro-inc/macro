@@ -19,7 +19,7 @@ export type {
 /**
  * Shared cognition endpoints, charged to the authenticated acting user.
  *
- * @routing Use when generating structured objects or classifying supplied content with Jev; not generating images (`macro.images`) or answering the user yourself.
+ * @routing Use when asking a model to answer named yes/no questions or fill a JSON Schema from content you supply, or when reading AI usage; not generating images (`macro.images`) or answering the user yourself.
  */
 export class AiNamespace {
   /**
@@ -59,7 +59,7 @@ export class AiNamespace {
    * Ask named yes/no questions about JSON input. Each probability estimates
    * yes, from 0 to 1. This classifies supplied data without running tools.
    *
-   * @write
+   * @readonly
    */
   async decide(request: DecisionRequest): Promise<DecisionResponse> {
     return unwrap(await this.client.cognition.decisions({ body: request }));
