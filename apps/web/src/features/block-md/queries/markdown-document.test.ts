@@ -36,6 +36,10 @@ vi.mock('@core/document-session/engine-selection', () => ({
 vi.mock('@queries/storage/documentLoad/sync-document-context', () => ({
   fetchSyncDocumentOpenContext: mocks.fetchContext,
 }));
+// jsdom's Blob cannot be hashed; the block's placeholder file is not under test.
+vi.mock('@service-storage/util/makeFileFromBlob', () => ({
+  makeFileFromBlob: async () => ({}),
+}));
 vi.mock('@service-sync/source', () => ({
   createSyncServiceSource: mocks.createSyncServiceSource,
 }));
