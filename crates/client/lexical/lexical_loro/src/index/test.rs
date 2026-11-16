@@ -240,3 +240,46 @@ fn unbinding_the_first_claimant_of_a_duplicate_id_rebinds_the_survivor() -> Resu
     assert_eq!(index.ids.get("shared"), None);
     Ok(())
 }
+
+// Projection refreshes rebind a node to its map with the same id; that must not hand the
+// id to another claimant. Only an unbind or an id change releases the claim, and a
+// removed non-primary claimant must never be promoted later.
+#[test]
+fn rebinding_a_claimant_with_the_same_id_keeps_its_claim() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((first, second, third), _) = editor
+        .update(|tx| {
+            let first = tx.create(Paragraph::default())?;
+            let second = tx.create(Paragraph::default())?;
+            let third = tx.create(Paragraph::default())?;
+            Ok((first.key(), second.key(), third.key()))
+        })
+        .expect("nodes");
+    let doc = new_doc(7)?;
+    let maps = [("first", first), ("second", second), ("third", third)].map(|(name, key)| {
+        let map = doc.get_map(name);
+        map.insert("type", "paragraph").expect("type");
+        map.insert("$", schema::to_loro(&json!({"id":"shared"})))
+            .expect("state");
+        (map, key)
+    });
+    let mut index = NodeIndex::default();
+    for (map, key) in &maps {
+        index.bind(*key, map, &PLAIN)?;
+    }
+    index.bind(first, &maps[0].0, &PLAIN)?;
+    index.bind(second, &maps[1].0, &PLAIN)?;
+    assert_eq!(index.ids.get("shared"), Some(&first));
+    index.unbind(second);
+    index.unbind(first);
+    assert_eq!(index.ids.get("shared"), Some(&third));
+    maps[2]
+        .0
+        .insert("$", schema::to_loro(&json!({"id":"moved"})))?;
+    index.bind(third, &maps[2].0, &PLAIN)?;
+    assert_eq!(index.ids.get("shared"), None);
+    assert_eq!(index.ids.get("moved"), Some(&third));
+    Ok(())
+}

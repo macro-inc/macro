@@ -43,7 +43,13 @@ impl NodeIndex {
             .map(schema::validated_state_id)
             .transpose()?
             .flatten();
-        self.unbind(key);
+        // A refresh that keeps the id keeps its place among the id's claimants.
+        let same_id = self.nodes.get(&key).is_some_and(|old| old.id == id);
+        if same_id {
+            self.release_containers(key);
+        } else {
+            self.unbind(key);
+        }
         self.owner.insert(map.id(), (key, Slot::Node));
         self.owned.insert(key, vec![map.id()]);
         let mut plain_composite = false;
@@ -60,7 +66,7 @@ impl NodeIndex {
                 self.index_field(key, slot, container);
             }
         });
-        if let Some(id) = &id {
+        if !same_id && let Some(id) = &id {
             let claimant = *self.ids.entry(id.clone()).or_insert(key);
             if claimant != key {
                 self.duplicate_ids.entry(id.clone()).or_default().push(key);
@@ -101,7 +107,7 @@ impl NodeIndex {
         }
     }
     pub fn unbind(&mut self, key: NodeKey) {
-        if let Some(old) = self.nodes.swap_remove(&key) {
+        if let Some(old) = self.release_containers(key) {
             if let Some(id) = old.id {
                 let duplicates = self.duplicate_ids.get_mut(&id);
                 if self.ids.get(&id) == Some(&key) {
@@ -120,12 +126,17 @@ impl NodeIndex {
                     self.duplicate_ids.remove(&id);
                 }
             }
-            if let Some(ids) = self.owned.remove(&key) {
-                for id in ids {
-                    self.owner.remove(&id);
-                }
+        }
+    }
+    /// Drop `key`'s slots and container ownership, leaving its id claim untouched.
+    fn release_containers(&mut self, key: NodeKey) -> Option<NodeSlots> {
+        let old = self.nodes.swap_remove(&key)?;
+        if let Some(ids) = self.owned.remove(&key) {
+            for id in ids {
+                self.owner.remove(&id);
             }
         }
+        Some(old)
     }
     /// The indexed map of `key`'s synced parent, for parent-dependent stored normalization.
     pub fn synced_parent_map(
