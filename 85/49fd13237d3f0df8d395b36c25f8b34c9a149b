@@ -1,0 +1,37 @@
+packages/sdk-ocaml/README.md
+  s_e015be4a6833c1::t_6967ac36600461 217-228
+packages/sdk-ocaml/analyzer/bin/macro_sdk_calls.ml
+  s_e015be4a6833c1::t_e77cbe078909cc 1,6-8,11,43-46
+packages/sdk-ocaml/analyzer/index/index.ml
+  s_e015be4a6833c1::t_92507e13ef14f1 70-77,94
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_e015be4a6833c1::t_81e86086fc198b 67-84,92,102,107-110,130,176-202,214-219,224-229,243-248,259,268-269,297-298,305-328,336,366-373,478-480,487-489,591,596,631-634,647,675
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_e015be4a6833c1::t_c3cfdbf62f83c5 19,23,25-30,54,61-62
+packages/sdk-ocaml/analyzer/test/corpus/abstract_view.ml
+  s_e015be4a6833c1::t_a8dc097349b777 1-19
+packages/sdk-ocaml/analyzer/test/corpus/dune
+  s_e015be4a6833c1::t_fc3770b5cd2703 7
+packages/sdk-ocaml/analyzer/test/corpus/other_unit.ml
+  s_e015be4a6833c1::t_d49be7ca36d057 1-3
+packages/sdk-ocaml/analyzer/test/corpus/uses_dynlink.ml
+  s_e015be4a6833c1::t_55bf84e4cfb98f 1-3
+packages/sdk-ocaml/analyzer/test/test_coverage.ml
+  s_e015be4a6833c1::t_de9760e8a7f8af 78-79,82-83,90-93,95-124,128-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8549fd13237d3f0df8d395b36c25f8b34c9a149b",
+  "prompts": {},
+  "sessions": {
+    "s_e015be4a6833c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "497631fe-089f-4a0c-bf2f-36800aaf41e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
