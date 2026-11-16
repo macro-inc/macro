@@ -139,6 +139,7 @@ function mount(
   const bodyPopup: BodyFormattingPopupHost = {
     rectangle: () => DOMRect.fromRect({ x: 10, y: 10, width: 80, height: 16 }),
     selectionText: () => options.text ?? 'Select this phrase',
+    captureLink: () => ({ insert: vi.fn() }),
     registerPopup: (callbacks) => {
       registrations++;
       popup = callbacks;

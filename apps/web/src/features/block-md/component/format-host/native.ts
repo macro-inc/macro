@@ -350,6 +350,22 @@ export function createNativeDocumentFormattingHost(
     const bodyPopup: BodyFormattingPopupHost = {
       rectangle,
       selectionText: text,
+      captureLink() {
+        const target = actions.captureLinkTarget();
+        return {
+          insert(url) {
+            // Source linkText, read at submit: `selection()?.text ?? input`. An
+            // empty selection text stays empty; only a missing selection falls
+            // back to the raw typed input.
+            const label =
+              view.selection().selection.kind === 'none' ? url : selectionText;
+            fireAndForget(
+              complete(target.insert(url, label)),
+              'markdown-link-insert'
+            );
+          },
+        };
+      },
       registerPopup: menu.registerPopup,
       registerListeners: menu.registerListeners,
     };

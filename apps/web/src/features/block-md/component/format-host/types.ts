@@ -42,6 +42,10 @@ export interface BodyFormattingPopupHost {
   /** The published model selection's plain text; '' for a caret or a
    *  zero-text range (Source MarkdownPopup `selection()?.text`). */
   selectionText: Accessor<string>;
+  /** Source savedLinkSelection: capture the current selection; `insert(input)`
+   *  later adds a link over it, labelled with the selection text at submit, or
+   *  with the raw input when no selection exists. */
+  captureLink(): { insert(url: string): void };
   registerPopup: FormatMenuHost['registerPopup'];
   registerListeners: FormatMenuHost['registerListeners'];
 }

@@ -471,3 +471,45 @@ test('Remove link uses the caret admitted after the opening click', async () => 
   );
   expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
+
+test('the body popup Link button opens the Source link prompt and links the selection', async () => {
+  const fixture = setup();
+  fixture.runtime.port.setState(state('label'));
+  fixture.runtime.root.focus();
+  select(fixture.runtime, 'label');
+  await screen.findByRole('button', { name: 'Bold' });
+  // Source FormatTools order: Bold, Italic, Link, More, block type.
+  const buttons = screen
+    .getByRole('toolbar')
+    .querySelectorAll<HTMLButtonElement>('button');
+  expect(
+    [...buttons].map(
+      (button) =>
+        button.getAttribute('aria-label') ??
+        (button.getAttribute('aria-haspopup') ? 'menu:' : '') +
+          (button.textContent ?? '')
+    )
+  ).toEqual(['Bold', 'Italic', 'Insert Link', 'More formatting', 'menu:Body']);
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Link' }));
+  // Source MarkdownPopup: the prompt replaces the toolbar; nothing is linked yet.
+  const input = screen.getByPlaceholderText<HTMLInputElement>(
+    'Paste or insert link'
+  );
+  expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
+  expect(
+    [...fixture.runtime.view.mirror.values()].some(
+      (node) => node.type === 'link'
+    )
+  ).toBe(false);
+  fireEvent.input(input, { target: { value: 'example.org' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await vi.waitFor(() =>
+    expect(fixture.runtime.root.querySelector('a')?.textContent).toBe('label')
+  );
+  const link = [...fixture.runtime.view.mirror.values()].find(
+    (node) => node.type === 'link'
+  );
+  expect(link?.props().url).toBe('https://example.org');
+  expect(screen.queryByPlaceholderText('Paste or insert link')).toBeNull();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
+});

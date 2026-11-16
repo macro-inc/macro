@@ -57,6 +57,7 @@ test('body popup uses real FormatTools order and all six More actions on the act
     'Bold',
     'Italic',
     '',
+    '',
     'Body',
   ]);
   expect(
@@ -89,7 +90,7 @@ test('body popup uses real FormatTools order and all six More actions on the act
   await page.keyboard.press('Escape');
   for (const format of formats) {
     if (format.label === 'Underline') {
-      await group.getByRole('button').nth(2).click();
+      await group.getByRole('button').nth(3).click();
       const menu = page.getByRole('menu');
       await info.attach('body-popup-six-More', {
         body: await page.screenshot(),

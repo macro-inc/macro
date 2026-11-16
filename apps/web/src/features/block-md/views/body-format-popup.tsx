@@ -8,6 +8,7 @@ import type {
   NativeBodyPopupFrame,
 } from '../component/format-host/native-body-popup';
 import { NativeBodyToolbar } from '../component/format-host/native-body-toolbar';
+import { createNativeLinkSlot } from '../component/format-host/native-link-slot';
 
 // Source shows its selection actions independently of formatting authority.
 function controls(frame: NativeBodyPopupFrame) {
@@ -27,6 +28,7 @@ function controls(frame: NativeBodyPopupFrame) {
 function DesktopBodyFormatPopup(props: { frame: NativeBodyPopupFrame }) {
   const frame = props.frame;
   const popup = frame.props;
+  const linkSlot = createNativeLinkSlot(popup.popup);
   return (
     <Show when={controls(frame) && frame.shown() && frame.anchor()}>
       {(reference) => (
@@ -37,14 +39,14 @@ function DesktopBodyFormatPopup(props: { frame: NativeBodyPopupFrame }) {
             ref={frame.setMenu}
           >
             <NativeBodyToolbar
-              slots={popup.slots ?? []}
+              slots={[...(popup.slots ?? []), linkSlot]}
               interactable={popup.host.interactable}
-              formatTools={() => (
+              formatTools={(requestLink) => (
                 <>
                   <FormatTools
                     withinPopup
                     formattingHost={popup.host}
-                    showLinkButton={false}
+                    onRequestLink={requestLink}
                   />
                   {/* Source MarkdownPopup: FormatTools then a divider before later actions. */}
                   <Show
