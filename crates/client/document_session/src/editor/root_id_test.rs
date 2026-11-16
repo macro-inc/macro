@@ -118,7 +118,7 @@ fn key_ops(
 }
 /// Whether `commit` writes the current documentMetadata version, in the stored shape the doc has: a
 /// `version` insert on the nested documentMetadata map when one exists, otherwise a
-/// `documentMetadata` insert on the root `$` map whose plain value holds 10.
+/// `documentMetadata` insert on the root `$` map whose plain value holds that version.
 fn writes_metadata_version(
     commit: &serde_json::Value,
     root_state: &serde_json::Value,
