@@ -524,6 +524,8 @@ jobs:
             - 'crates/client/lexical/**'
             - 'packages/loro-mirror/**'
             - 'packages/lexical-core/markdown-loro-schema.ts'
+            - 'vendor/loro-server/**'
+            - 'tooling/scripts/check-loro-server-vendor.sh'
             - 'Cargo.toml'
             - 'Cargo.lock'
             - 'package.json'

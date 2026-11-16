@@ -2,20 +2,14 @@
 
 These crates.io Loro and loro-internal1.16.2 distributions come from upstream
 revision af130d97d8b110add13283fc5bfc81d97a9a609f. Preserve their MIT licenses.
-The sync server and native Room replay use this encoder to retain exact Worker
+The deployed sync worker and native Room replay use this encoder to retain exact Worker
 transcript bytes; editor/session clients use Loro1.17.1 with the internal copy described in
 ../loro-editor/README.md. Both exchange
 the existing protocol bytes. Shared support crates follow the workspace lock.
 
-Local changes: the top manifest selects the adjacent internal crate; its encoder
-drops an unused HasIdSpan import because shared types now provide inherent methods.
-Dense tracker ranges use an equivalent checked slice fill, with sequential-update
-parity tests; assignment order, bounds and debug checks remain unchanged. The
-unpublished upstream dev-utils helper is restored as a development-only dependency
-for those standalone tests.
-Agent guides are local; the upstream internal guide is retained as UPSTREAM-AGENTS.md.
-Trailing whitespace is trimmed in README.md and Encoding.md. No encoder algorithm,
-state transition, serializer, protocol, format or corpus expectation is changed.
+The sources are byte-identical to the crates.io 1.16.2 releases. The only change
+is the top manifest's `path` to the adjacent internal crate, plus the local agent
+guides and this README. `just check-loro-server-vendor` fails on any other drift.
 
 Cargo cannot resolve two semver-compatible exact registry versions together.
 The separate source keeps the server on 1.16.2 while the workspace crates.io
