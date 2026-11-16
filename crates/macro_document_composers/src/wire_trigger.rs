@@ -278,6 +278,12 @@ pub struct MarkedPassage {
 pub struct FollowUpContext {
     /// How the message reached this agent.
     pub addressed_by: AddressedBy,
+    /// For an inferred message, the judge's confidence, as a whole
+    /// percentage, that it was meant for this agent. Absent otherwise, and
+    /// on events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub confidence: Option<u8>,
     /// The discussion it was posted in.
     pub discussion: DiscussionContext,
 }

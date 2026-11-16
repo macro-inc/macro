@@ -9,6 +9,16 @@ pub struct AgentContextPerson {
     /// Display name.
     pub name: String,
 }
+/// The agent reading a prompt, as people in its discussions name it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentContextAgent {
+    /// Its sender id, `bot|{id}`.
+    pub id: String,
+    /// Display name.
+    pub name: String,
+    /// `@` handle, without the `@`.
+    pub handle: String,
+}
 /// Source-formatted time facts supplied by the caller.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +41,9 @@ pub struct AgentContextPrompt {
     /// Private instructions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
+    /// The agent reading the prompt, so it knows its own name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentContextAgent>,
     /// Owner of the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<AgentContextPerson>,

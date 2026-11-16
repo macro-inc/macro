@@ -120,6 +120,17 @@ for (const addressed_by of ['mention', 'explicit_reply', 'inferred'])
     addressed_by,
     discussion,
   });
+addContext('follow-up:inferred:confidence', {
+  kind: 'follow_up',
+  addressed_by: 'inferred',
+  confidence: 85,
+  discussion,
+});
+addContext(
+  'agent',
+  { kind: 'follow_up', addressed_by: 'mention', discussion },
+  { agent: { id: 'bot|agent', name: 'Agent <&>', handle: 'agent' } }
+);
 for (const anchor of [
   {
     type: 'spreadsheet',

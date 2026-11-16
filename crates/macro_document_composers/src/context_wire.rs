@@ -9,6 +9,7 @@ mod trigger;
 struct Prompt {
     prompt_markdown: String,
     instructions: Option<String>,
+    agent: Option<Agent>,
     owner: Option<Person>,
     sender: Option<Person>,
     current_time: Option<CurrentTime>,
@@ -25,6 +26,12 @@ struct Prompt {
 struct Person {
     id: String,
     name: String,
+}
+#[derive(Deserialize)]
+struct Agent {
+    id: String,
+    name: String,
+    handle: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -207,6 +214,13 @@ fn conversation(input: &Prompt) -> Result<Option<XmlNode>> {
     }
     Ok(Some(node))
 }
+/// Nothing else in the prompt names the agent, so without this it cannot tell
+/// a message calling it by name from one calling someone else.
+fn you(agent: &Agent) -> XmlNode {
+    let Agent { id, name, handle } = agent;
+    el("you", vec![note(format!("You are {name}, an agent in Macro. People address you as {name} or @{handle}. A message that names another person or agent is meant for them, not you."))])
+        .attribute("name", name).attribute("handle", handle).attribute("id", id)
+}
 fn session(owner: &Person, sender: Option<&Person>) -> XmlNode {
     let mut prompted = el("prompted_by", vec![]);
     if let Some(sender) = sender {
@@ -277,6 +291,9 @@ pub fn compose_agent_context_prompt(input: &Value, context: &DocumentContext) ->
         );
     }
     let mut nodes = Vec::new();
+    if let Some(agent) = &prompt.agent {
+        nodes.push(you(agent));
+    }
     if let Some(owner) = &prompt.owner {
         nodes.push(session(owner, prompt.sender.as_ref()));
     }

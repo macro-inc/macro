@@ -221,8 +221,11 @@ pub(super) fn render(source: &Value) -> Result<XmlNode> {
         "follow_up" => {
             let d = &source["discussion"]; let name = string(&d["sender"],"name").unwrap_or("");
             let addressed = string(source,"addressed_by").unwrap_or("");
-            let (marker,explanation) = match addressed { "mention" => ("mentioned_you","It mentions you."), "explicit_reply" => ("replied_to_you","It quote-replies to one of your messages without mentioning you."), "inferred" => ("addressed_to_you","It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it."), _ => return Err(Error::InvalidArgument("unknown follow-up address".into())) };
-            Ok(el("trigger",vec![note(format!("This session was already running when {name} posted this message in its discussion. {explanation} The message is the prompt.{}",agent_request(d))),discussion(d,marker,"prompt",true,None)?]).attribute("kind",kind).attribute("addressed_by",addressed))
+            let confidence = source.get("confidence").filter(|value| !value.is_null()).map(Value::to_string);
+            let judged = confidence.as_ref().map_or_else(|| "a model judged".to_owned(), |confidence| format!("a model judged, {confidence}% confident,"));
+            let (marker,explanation) = match addressed { "mention" => ("mentioned_you","It mentions you.".to_owned()), "explicit_reply" => ("replied_to_you","It quote-replies to one of your messages without mentioning you.".to_owned()), "inferred" => ("addressed_to_you",format!("It neither mentions you nor quote-replies to you: {judged} from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it.")), _ => return Err(Error::InvalidArgument("unknown follow-up address".into())) };
+            let node = el("trigger",vec![note(format!("This session was already running when {name} posted this message in its discussion. {explanation} The message is the prompt.{}",agent_request(d))),discussion(d,marker,"prompt",true,None)?]).attribute("kind",kind).attribute("addressed_by",addressed);
+            Ok(match confidence { Some(confidence) => node.attribute("confidence", confidence), None => node })
         }
         "task_assigned" => {
             let name = string(&source["assigned_by"],"name").unwrap_or("");

@@ -109,6 +109,10 @@ pub struct AgentContextRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "non_null_option")]
     pub instructions: Option<String>,
+    /// The agent reading the prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "non_null_option")]
+    pub agent: Option<crate::AgentContextAgent>,
     /// Session owner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "non_null_option")]
