@@ -6,6 +6,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { phoneFromJid } from '../../whatsapp-linked/core/account';
 import type { ChatDetail } from '../core/chat';
 import { providerIdentity } from '../providers/identity';
+import { ProviderPicture } from './provider-picture';
 
 /** Member lists longer than this get a filter above the list. */
 const FILTER_FROM = 12;
@@ -25,12 +26,14 @@ function MemberRow(props: { member: Member; own: boolean }) {
   const phone = () => phoneFromJid(props.member.id);
   return (
     <li class="flex min-h-9 items-center gap-2 px-1" data-chat-member>
-      <span
-        aria-hidden="true"
-        class="flex size-6 shrink-0 items-center justify-center rounded-full bg-hover text-[10px] font-medium text-ink-muted"
-      >
-        {initials(props.member.name)}
-      </span>
+      <ProviderPicture url={props.member.pictureUrl} size="md" class="shrink-0">
+        <span
+          aria-hidden="true"
+          class="flex size-full items-center justify-center rounded-full bg-hover text-[10px] font-medium text-ink-muted"
+        >
+          {initials(props.member.name)}
+        </span>
+      </ProviderPicture>
       <div class="flex min-w-0 flex-1 flex-col">
         <span class="ph-no-capture truncate text-sm text-ink">
           {props.member.name}

@@ -154,6 +154,7 @@ impl IntoResponse for AgentGitHttpError {
             AgentGitError::RepoTooLarge { .. } => text(StatusCode::PAYLOAD_TOO_LARGE, message),
             AgentGitError::PushRateLimited => text(StatusCode::TOO_MANY_REQUESTS, message),
             AgentGitError::RepoBusy => text(StatusCode::CONFLICT, message),
+            AgentGitError::MissingCreator => text(StatusCode::UNPROCESSABLE_ENTITY, message),
             AgentGitError::Internal(report) => {
                 tracing::error!(error = ?report, "agent git request failed");
                 text(

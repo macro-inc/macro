@@ -17,7 +17,10 @@ import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import { createProjectMutation } from './create-project';
-import { createProjectDetailQuery } from './project-identity';
+import {
+  createProjectDetailQuery,
+  createProjectIdentityQuery,
+} from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
 import { refreshProjectQueries } from './project-revalidation';
 import { createProjectSoupSource } from './project-soup';
@@ -100,6 +103,21 @@ export function createProjectSources(
           if (!readEnabled()) return;
           await refresh();
         },
+      };
+    },
+    createProjectIdentitySource(id) {
+      const readEnabled = createReadGate();
+      const query = createProjectIdentityQuery(
+        soup.client,
+        userId,
+        id,
+        readEnabled
+      );
+      return {
+        project: () =>
+          !readEnabled() || query.isPending || accessLost(query.error)
+            ? undefined
+            : query.data,
       };
     },
     createCommands() {

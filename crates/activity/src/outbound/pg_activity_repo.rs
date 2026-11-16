@@ -352,7 +352,7 @@ impl ActivityReads for PgActivityRepo {
         let zone = window.zone.name();
         let rankable_entity_types = rankable_entity_types();
         // `timestamp AT TIME ZONE` picks the later UTC instant when local
-        // midnight is repeated (Havana 2026-11-01 is 04:00Z and 05:00Z).
+        // midnight is repeated (Havana 2027-11-07 is 04:00Z and 05:00Z).
         // Widen the sargable envelope, then keep rows by local date so the
         // first midnight is included and the exclusive end stays exclusive.
         let day_rows = sqlx::query!(

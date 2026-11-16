@@ -165,6 +165,7 @@ describe('grid cell', () => {
           column={{
             ...column,
             dataType,
+            defaultValue: dataType === 'SELECT_STRING' ? 'Open' : undefined,
             options: [{ id: 'open', label: 'Open', color: null }],
           }}
           value={
@@ -188,6 +189,31 @@ describe('grid cell', () => {
       expect(screen.queryByRole('textbox')).toBeNull();
     }
   );
+
+  it('keeps required system selects when Delete or Backspace is pressed', () => {
+    const onWrite = vi.fn(async () => true);
+    render(() => (
+      <GridCell
+        column={{
+          ...column,
+          dataType: 'SELECT_STRING',
+          fixedOptions: true,
+          defaultValue: 'Open',
+          nullable: false,
+          options: [{ id: 'open', label: 'Open', color: null }],
+        }}
+        value="Open"
+        canEdit
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+      />
+    ));
+    const trigger = screen.getByRole('button');
+    for (const key of ['Delete', 'Backspace'])
+      fireEvent.keyDown(trigger, { key });
+    expect(onWrite).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain('Open');
+  });
 
   it('keeps an empty cell visually blank when the host supplies no placeholder', () => {
     const onWrite = vi.fn(async () => true);

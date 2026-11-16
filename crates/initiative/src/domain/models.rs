@@ -219,6 +219,10 @@ pub enum InitiativeError {
     /// The caller cannot perform this action.
     #[error("unauthorized")]
     Unauthorized,
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),

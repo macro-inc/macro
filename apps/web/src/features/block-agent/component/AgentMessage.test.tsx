@@ -713,6 +713,45 @@ describe('Message tool runs', () => {
     ]);
   });
 
+  it('folds programs and the thoughts between them before their records load', () => {
+    const thought = (value: string): MessagePart => ({
+      kind: 'thought',
+      text: value,
+    });
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            text('Looking.'),
+            program('find'),
+            thought('Found the thread.'),
+            program('read'),
+            text('\n'),
+            thought('Now the draft.'),
+            program('draft', 'completed'),
+            text('Done.'),
+          ],
+          { kind: 'end_turn' },
+          [
+            row('find:0', 'Search email'),
+            row('read:0', 'Read email thread'),
+            row('read:1', 'Read attachment'),
+            row('draft', 'Workspace step failed', 'failed'),
+          ]
+        )}
+        inFlight={false}
+      />
+    ));
+    // No saved record yet: the fold's receipt rows stand for each program.
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('4');
+    expect(group.dataset.failed).toBe('1');
+    expect(
+      view.getAllByTestId('thought').every((row) => group.contains(row))
+    ).toBe(true);
+  });
+
   it("names a running program's observed operations ahead of its receipt", () => {
     programs.steps.live = 2;
     programs.activity.live = [

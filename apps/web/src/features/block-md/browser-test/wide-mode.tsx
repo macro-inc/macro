@@ -33,6 +33,8 @@ import {
 } from '../component/MarkdownDocument';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { markdownHeaderMenu } from '../views/markdown-header';
+import { mobileMarkdownHeaderMenu } from '../views/mobile/markdown-header';
 
 const PARAMS = new URLSearchParams(location.search);
 
@@ -84,7 +86,11 @@ function SeedComment() {
 }
 
 function Menu() {
-  const { menuTools } = useMarkdownDocumentTools();
+  const { actions } = useMarkdownDocumentTools();
+  // The rows the real header for this platform offers.
+  const menuTools = isTouchDevice()
+    ? mobileMarkdownHeaderMenu(actions)
+    : markdownHeaderMenu(actions);
   return (
     <nav
       class="absolute right-3 top-3 z-10 flex gap-2"

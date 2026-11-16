@@ -217,6 +217,7 @@ export * from './createSessionThread';
 export * from './createSessionThreadChannelId';
 export * from './createSessionThreadParent';
 export * from './createSessionThreadThreadId';
+export * from './credentialRejectedResponse';
 export * from './decisionVia';
 export * from './discoverAgentCapabilitiesRequest';
 export * from './discoverAgentCapabilitiesRequestHarnessId';

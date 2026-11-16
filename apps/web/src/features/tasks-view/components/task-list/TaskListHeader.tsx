@@ -1,3 +1,4 @@
+import type { SortSelection } from '@app/features/soup';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -11,6 +12,8 @@ import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
 import { type TaskGridColumnId, taskGridTemplate } from './task-grid-template';
 
+const SEARCH_SORT: SortSelection<TaskSortId> = { id: 'updated_at' };
+
 function SortableHeader(props: {
   label: string;
   area: string;
@@ -21,15 +24,36 @@ function SortableHeader(props: {
   narrowIcon?: JSX.Element;
   onWidthChange?: (width: number) => void;
 }) {
-  const { state, setPrimarySort } = useTasksView();
-  const active = () =>
-    state.sort[0]?.id === props.sortId ||
-    (props.reverseSortId !== undefined &&
-      state.sort[0]?.id === props.reverseSortId);
+  const { state, source, setPrimarySort } = useTasksView();
+  // Service search keeps its own result order, so while it runs the header
+  // offers no sort and marks only Updated, newest first, without touching the
+  // stored sort.
+  const keepsSearchOrder = () =>
+    Boolean(state.search.trim()) && !source.sortsSearchResults;
+  const shownSort = () => (keepsSearchOrder() ? SEARCH_SORT : state.sort[0]);
+  const sortable = () => !keepsSearchOrder() && props.sortId !== undefined;
+  const active = () => {
+    const id = shownSort()?.id;
+    if (id === undefined) return false;
+
+    return id === props.sortId || id === props.reverseSortId;
+  };
   const reversed = () =>
     active() &&
-    (state.sort[0]?.id === props.reverseSortId ||
-      state.sort[0]?.reversed === true);
+    (shownSort()?.id === props.reverseSortId || shownSort()?.reversed === true);
+  const measureWidth = (element: HTMLElement) => {
+    if (!props.onWidthChange) return;
+
+    createResizeObserver(element, ({ width }) => props.onWidthChange?.(width));
+  };
+  const arrow = () => (
+    <ArrowDownIcon
+      class={cn(
+        'size-3 shrink-0 transition-transform',
+        reversed() && 'rotate-180'
+      )}
+    />
+  );
   const alignment = () => {
     if (props.align === 'end') return 'justify-end';
     return 'justify-start';
@@ -44,7 +68,7 @@ function SortableHeader(props: {
           <Tooltip
             label={props.label}
             as="span"
-            tabIndex={props.sortId ? undefined : 0}
+            tabIndex={sortable() ? undefined : 0}
           >
             {props.narrowIcon}
           </Tooltip>
@@ -68,16 +92,10 @@ function SortableHeader(props: {
       style={{ 'grid-area': props.area }}
     >
       <Switch>
-        <Match when={props.sortId}>
+        <Match when={sortable() && props.sortId}>
           {(sortId) => (
             <button
-              ref={(element) => {
-                if (props.onWidthChange) {
-                  createResizeObserver(element, ({ width }) =>
-                    props.onWidthChange?.(width)
-                  );
-                }
-              }}
+              ref={measureWidth}
               type="button"
               aria-label={props.label}
               data-blocks-navigation
@@ -94,14 +112,18 @@ function SortableHeader(props: {
               }}
             >
               {label()}
-              <ArrowDownIcon
-                class={cn(
-                  'size-3 shrink-0 transition-transform',
-                  reversed() && 'rotate-180'
-                )}
-              />
+              {arrow()}
             </button>
           )}
+        </Match>
+        <Match when={active()}>
+          <span
+            ref={measureWidth}
+            class="flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink"
+          >
+            {label()}
+            {arrow()}
+          </span>
         </Match>
         <Match when={true}>
           <span class="truncate">{label()}</span>
@@ -123,13 +145,7 @@ export function TaskListHeader(props: {
       style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
-      <span
-        role="columnheader"
-        class="ms-2 truncate"
-        style={{ 'grid-area': 'content' }}
-      >
-        Task
-      </span>
+      <SortableHeader label="Task" area="content" sortId="title" />
       <SortableHeader
         label="Due date"
         area="dueDate"

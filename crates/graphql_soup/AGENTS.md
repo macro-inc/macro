@@ -29,6 +29,7 @@ viewer pattern), which apply to every type defined here.
   caller-defined half-open UTC `ranges`, and `missingValueBucketKey`; client query
   keys restart pagination when ranges change.
 - Use `PROPERTY`, `sortPropertyDefinitionId`, and `sortDirection` for numeric property sorting through ordinary Soup requests; preserve timestamp cursor decoding.
+- `NAME` orders by each item's own name and takes no property definition; it shares the selected-sort cursor, so its continuations decode as property positions.
 - Property sorts and date-range groups use source-owned item access gates without a separate property-definition check; validate ranges during input conversion.
 - Build `groupSoup` through Soup's shared `build_grouped_response`; keep `document_server_facts` in `GroupedSoup::from_response` for cache projections.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`

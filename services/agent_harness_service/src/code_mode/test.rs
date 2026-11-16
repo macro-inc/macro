@@ -155,23 +155,25 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// An SDK operation's path with every parameter filled in.
+fn concrete(path: &str) -> String {
+    path.split('/')
+        .map(|segment| {
+            if segment.starts_with('{') {
+                "x"
+            } else {
+                segment
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// The scope's list of POST reads covers every read the SDK sends as a POST,
 /// and the only writes it lets a generation session make are its own tools
 /// and creating an email draft.
 #[test]
 fn the_generation_scope_matches_the_sdk_catalog() {
-    let concrete = |path: &str| {
-        path.split('/')
-            .map(|segment| {
-                if segment.starts_with('{') {
-                    "x"
-                } else {
-                    segment
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
     let intended = [
         "scheduled-action.addSuggestion",
         "scheduled-action.rewriteSuggestion",
@@ -208,21 +210,8 @@ fn the_generation_scope_matches_the_sdk_catalog() {
 /// listed here as reviewed, so a new one is classified before it ships.
 #[test]
 fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
-    let concrete = |path: &str| {
-        path.split('/')
-            .map(|segment| {
-                if segment.starts_with('{') {
-                    "x"
-                } else {
-                    segment
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
     // Send-looking writes that reach nobody else.
     let reviewed = [
-        "agent-harness.addConnectedMcpServer",
         "auth.generateEmailLink",
         "auth.deleteTeamInviteLink",
         "auth.deleteTeamInviteHandler",
@@ -232,9 +221,10 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "auth.joinTeamByInviteLink",
         "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
+        // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
+        // Stopping a chat's stream reaches nobody and starts nothing.
         "cognition.stopChatStream",
-        "cognition.callTool",
         "email.createDraft",
         "email.deleteDraft",
         "email.deleteScheduledDraft",
@@ -277,7 +267,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
-        "storage.externalChatUpdatePermissions",
         "storage.removeBotFromChannelByBot",
         "storage.deleteCallRecord",
         "storage.editCallRecord",
@@ -319,6 +308,50 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.setChannelSection",
         "storage.updateChannelSection",
         "scheduled-action.attachSuggestionDraft",
+        // Reads and inference sent as POST.
+        "agent-harness.agentSessionsForPullRequest",
+        "agent-harness.agentSessionsForPullRequests",
+        "agent-harness.chooseAgentMode",
+        "agent-harness.classify",
+        "agent-harness.extract",
+        "agent-harness.discoverAgentCapabilitiesHandler",
+        "agent-harness.discoverConnectedApps",
+        "agent-harness.loadAgentModelsHandler",
+        // Changes to a session the run can edit, like edits to a shared
+        // document: presenting a review or view, opening it in the person's
+        // app, and its name, links and settings. None of them runs a
+        // session, and deciding a review is refused.
+        "agent-harness.createSessionReview",
+        "agent-harness.openInApp",
+        "agent-harness.presentSessionView",
+        "agent-harness.deleteAgentSession",
+        "agent-harness.linkAgentSessionPullRequest",
+        "agent-harness.linkAgentSessionTask",
+        "agent-harness.putAgentSessionAutoArchive",
+        "agent-harness.putAgentSessionSandboxSize",
+        "agent-harness.refreshAgentSessionChanges",
+        "agent-harness.registerAgentSessionWork",
+        "agent-harness.removeQueuedAction",
+        "agent-harness.renameAgentSession",
+        "agent-harness.setAgentSessionArchived",
+        "agent-harness.unlinkAgentSessionPullRequest",
+        "agent-harness.unregisterAgentSessionWork",
+        // The person's own preferences.
+        "agent-harness.putAgentAutoArchivePreferences",
+        "agent-harness.putAgentCodingPreferences",
+        "agent-harness.putAgentSandboxSize",
+        // Rejecting a pending tool call runs nothing; running or rewriting
+        // one is refused.
+        "cognition.rejectToolCall",
+        // Withdrawing the person's own request, like a channel's.
+        "storage.accessRequestsCancel",
+        // Unauthenticated: a credential adds nothing.
+        "storage.claimHarnessPairing",
+        "storage.createHarnessPairing",
+        // Document tokens for the editing worker, whose routes edit
+        // documents, which a run that sends nothing may do.
+        "storage.getDocumentPermissionsToken",
+        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
@@ -352,13 +385,33 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "welcome",
             "draft",
             "email",
+            "permissions",
+            "access",
+            "/agents",
+            "/bots",
+            "agent-sessions",
+            "harness",
+            "/tool",
         ]
         .iter()
         .any(|word| text.contains(word))
     };
     let scope = SessionScope::NoSend;
+    let operations = code_execution::domain::operations();
+    // A reviewed entry names an operation the scope still allows, so a
+    // renamed or newly refused one doesn't linger.
+    let stale: Vec<&str> = reviewed
+        .iter()
+        .copied()
+        .filter(|key| {
+            operations.get(*key).is_none_or(|operation| {
+                !scope.allows(&operation.method, &concrete(&operation.path))
+            })
+        })
+        .collect();
+    assert!(stale.is_empty(), "stale reviewed entries: {stale:#?}");
     let mut unclassified = Vec::new();
-    for (key, operation) in code_execution::domain::operations() {
+    for (key, operation) in operations {
         if !operation.write || !looks_like_a_send(key, &operation.path) {
             continue;
         }
@@ -368,4 +421,229 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         }
     }
     assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
+}
+
+/// A run that sends nothing starts no work that runs with the person's full
+/// access: no agent session, session control or queued prompt, tool
+/// approval, review decision, session share, chat tool call, or agent or
+/// bot, which acts later.
+#[test]
+fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
+    let operations = code_execution::domain::operations();
+    for key in [
+        "agent-harness.createAgentSession",
+        "agent-harness.controlAgentSession",
+        "agent-harness.editQueuedAction",
+        "agent-harness.steerQueuedAction",
+        "agent-harness.answerAgentSessionToolApproval",
+        "agent-harness.decideSessionReview",
+        "agent-harness.updateAgentSessionPermissions",
+        "agent-harness.startFreshAgentConversation",
+        "agent-harness.retryAgentConversationTurn",
+        "agent-harness.warmAgentSessionHandler",
+        "agent-harness.reportAgentSessionAppConnected",
+        "cognition.callTool",
+        "storage.createAgent",
+        "storage.updateAgent",
+        "storage.patchAgent",
+        "storage.createBot",
+        "storage.patchBot",
+    ] {
+        let operation = operations
+            .get(key)
+            .unwrap_or_else(|| panic!("{key} is not in the SDK"));
+        assert!(
+            !SessionScope::NoSend.allows(&operation.method, &concrete(&operation.path)),
+            "{key} ({} {})",
+            operation.method,
+            operation.path
+        );
+    }
+}
+
+/// How a host's service holds a scoped session's credential to its scope.
+enum ScopeEnforcement {
+    /// `agent_correlation::inbound::propagate`: the scope stored with the
+    /// correlation and the one the credential signs.
+    Propagate,
+    /// `agent_correlation::inbound::enforce_signed_scope`: the signed scope
+    /// alone, for a service with no database.
+    SignedScope,
+    /// The service accepts no Macro API token, so the credential grants
+    /// nothing there.
+    NoMacroCredential,
+}
+
+/// Decided per host when it is added.
+fn enforcement(host: SdkHost) -> ScopeEnforcement {
+    match host {
+        SdkHost::Storage
+        | SdkHost::Search
+        | SdkHost::Properties
+        | SdkHost::Auth
+        | SdkHost::AgentHarness
+        | SdkHost::Email
+        | SdkHost::Calendar
+        | SdkHost::Cognition
+        | SdkHost::Notification
+        | SdkHost::ScheduledAction
+        | SdkHost::Connection
+        | SdkHost::Contacts => ScopeEnforcement::Propagate,
+        // The static file service and the CDN in front of it.
+        SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
+        // CloudFront serves document content only to URLs the storage service
+        // signs; the editing worker accepts only document tokens the storage
+        // service mints with a POST a generation session can't make, and its
+        // routes edit documents, which a run that sends nothing may do;
+        // unfurl previews public links for any caller.
+        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
+            ScopeEnforcement::NoMacroCredential
+        }
+    }
+}
+
+/// Every host the SDK can reach, including the ones it falls back to when
+/// code mode passes none, is one code mode knows, and its service holds a
+/// scoped session's credential to its scope: it checks the scope on a path
+/// the scope understands, or accepts no Macro credential and the SDK calls
+/// nothing there outside either scope.
+#[test]
+fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
+    use std::str::FromStr;
+    let host = |name: &str| {
+        SdkHost::from_str(name).unwrap_or_else(|_| {
+            panic!("the SDK reaches {name}, which code mode doesn't know: add it to SdkHost")
+        })
+    };
+    type Hosts = std::collections::BTreeMap<String, String>;
+    let environments: std::collections::BTreeMap<String, Hosts> =
+        serde_json::from_str(code_mode_assets::HOSTS).unwrap();
+    assert_eq!(
+        environments.keys().collect::<Vec<_>>(),
+        ["dev", "local", "prod"]
+    );
+    for (environment, sdk) in &environments {
+        assert!(sdk.contains_key("static-files"), "{environment}: {sdk:?}");
+        for (name, url) in sdk {
+            let path = url::Url::parse(url)
+                .unwrap()
+                .path()
+                .trim_end_matches('/')
+                .to_owned();
+            match enforcement(host(name)) {
+                ScopeEnforcement::Propagate | ScopeEnforcement::SignedScope => assert!(
+                    agent_correlation::scope::matches(
+                        &format!("{path}/suggestions"),
+                        "/suggestions"
+                    ),
+                    "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
+                ),
+                ScopeEnforcement::NoMacroCredential => {}
+            }
+        }
+    }
+    for (key, operation) in code_execution::domain::operations() {
+        let (service, _) = key.split_once('.').unwrap();
+        if let ScopeEnforcement::NoMacroCredential = enforcement(host(service)) {
+            for scope in [SessionScope::Generation, SessionScope::NoSend] {
+                assert!(
+                    scope.allows(&operation.method, &concrete(&operation.path)),
+                    "{key} ({} {}) is outside {scope:?} on a host that can't refuse it",
+                    operation.method,
+                    operation.path
+                );
+            }
+        }
+    }
+}
+
+const PRIVATE: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const PUBLIC: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// Session and public MCP runs sign the scope they store with the
+/// correlation, so services with no database hold the run to it too.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) {
+    use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'owner@example.com', 'owner@example.com', 'stripe_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|owner@example.com', 'owner@example.com', '00000000-0000-4000-8000-000000000001');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
+        1,
+    )));
+    let owner = session.owner_user().unwrap().clone();
+    // The agent the fixture's session runs, which a correlation must name.
+    let agent = bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xa9e7));
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: agent,
+        owner: owner.clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let signed = |token: &str| match handler(
+        &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        token,
+    )
+    .unwrap()
+    {
+        JwtToken::MacroApiToken(token) => {
+            assert!(token.agent_correlation_id.is_some());
+            token.agent_scope
+        }
+        JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
+    };
+    for (scope, name) in [
+        (Some(SessionScope::Generation), Some("generation")),
+        (Some(SessionScope::NoSend), Some("no_send")),
+        (None, None),
+    ] {
+        let run = RunCredentials {
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: Arc::new(Gate {
+                verdict: NativeToolVerdict::RunAs(owner.clone()),
+                calls: AtomicUsize::new(0),
+            }),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+        }
+        .issue(&identity, "fixture", CancellationToken::new())
+        .await
+        .unwrap();
+        assert_eq!(signed(&run.token).as_deref(), name, "session run {scope:?}");
+        let run = UserRunCredentials {
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+        }
+        .issue(
+            &owner,
+            &ai_toolset::ToolCaller::Agent(agent),
+            Some(session.id.as_uuid()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+    }
 }
