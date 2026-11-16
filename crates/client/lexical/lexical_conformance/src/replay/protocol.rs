@@ -127,6 +127,8 @@ pub(super) struct EditorSession {
     committed_version: u64,
     attached: bool,
     rich_text_registered: bool,
+    markdown_shortcuts: Option<Value>,
+    markdown_shortcut_commit: Option<Commit>,
     pending_writes: bool,
     selections: SelectionBindings,
     pending_install: Option<Commit>,
@@ -151,6 +153,8 @@ impl Replayer {
             committed_version: std::mem::take(&mut self.committed_version),
             attached: std::mem::take(&mut self.attached),
             rich_text_registered: std::mem::take(&mut self.rich_text_registered),
+            markdown_shortcuts: self.markdown_shortcuts.take(),
+            markdown_shortcut_commit: self.markdown_shortcut_commit.take(),
             pending_writes: std::mem::take(&mut self.pending_writes),
             selections: std::mem::take(&mut self.selections),
             pending_install: std::mem::take(&mut self.pending_install),
@@ -166,6 +170,8 @@ impl Replayer {
         self.committed_version = session.committed_version;
         self.attached = session.attached;
         self.rich_text_registered = session.rich_text_registered;
+        self.markdown_shortcuts = session.markdown_shortcuts;
+        self.markdown_shortcut_commit = session.markdown_shortcut_commit;
         self.pending_writes = session.pending_writes;
         self.selections = session.selections;
         self.pending_install = session.pending_install;

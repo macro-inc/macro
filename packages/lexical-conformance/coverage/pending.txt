@@ -947,7 +947,6 @@ S2:@lexical/markdown:TEXT_FORMAT_TRANSFORMERS
 S2:@lexical/markdown:TEXT_MATCH_TRANSFORMERS
 S2:@lexical/markdown:TRANSFORMERS
 S2:@lexical/markdown:UNORDERED_LIST
-S2:@lexical/markdown:registerMarkdownShortcuts
 S2:@lexical/offset:$createChildrenArray
 S2:@lexical/offset:$createOffsetView
 S2:@lexical/offset:OffsetView
@@ -1076,7 +1075,6 @@ S2:lexical:$isTokenOrTab
 S2:lexical:$normalizeCaret
 S2:lexical:$normalizeSelection__EXPERIMENTAL
 S2:lexical:$parseSerializedNode
-S2:lexical:$setCompositionKey
 S2:lexical:$setState
 S2:lexical:$splitNode
 S2:lexical:$updateRangeSelectionFromCaretRange

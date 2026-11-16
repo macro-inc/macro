@@ -73,6 +73,8 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) markdown_shortcuts: Option<Value>,
+    pub(crate) markdown_shortcut_commit: Option<Commit>,
     pub(crate) tab_indent: Option<Option<u32>>,
     pub(crate) code_highlight: bool,
     pub(crate) d6_collapse_code_highlight: bool,
@@ -317,6 +319,9 @@ impl Replayer {
                             commit.next.clone(),
                         )?;
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
+                        if self.markdown_shortcuts.is_some() {
+                            self.markdown_shortcut_commit = Some(commit);
+                        }
                         self.updates.clear();
                         self.causes.clear();
                         Ok(())
@@ -331,6 +336,17 @@ impl Replayer {
                     let mut tx = ed.transaction();
                     self.begin_slots(&mut tx, true)?;
                     self.pending_writes = false;
+                    if kind == "update"
+                        && op["cause"] == "listener-enqueued"
+                        && self.markdown_shortcuts.is_some()
+                        && !crate::api::markdown::shortcuts::followup(self, &mut tx)?
+                    {
+                        // The shared engine may split a declined candidate. Its
+                        // contract requires dropping that candidate, not publishing it.
+                        drop(tx);
+                        tx = ed.transaction();
+                        self.begin_slots(&mut tx, true)?;
+                    }
                     if kind == "commit" && self.version == 1 && self.attached {
                         tx.mark_dirty(NodeKey::ROOT)?;
                         tx.add_tag(UpdateTag::HistoryMerge);
@@ -358,6 +374,9 @@ impl Replayer {
                                 &commit.next,
                                 Some(&commit),
                             )?;
+                            if self.markdown_shortcuts.is_some() {
+                                self.markdown_shortcut_commit = Some(commit);
+                            }
                             self.updates.clear();
                             self.causes.clear();
                             break;
@@ -441,6 +460,9 @@ impl Replayer {
                         == "@lexical/react/LexicalTabIndentationPlugin.registerTabIndentation" =>
                 {
                     crate::api::tab::register(self, &op["args"])
+                }
+                "plugin" if op["name"] == "@lexical/markdown.registerMarkdownShortcuts" => {
+                    crate::api::markdown::shortcuts::register(self, &op["args"])
                 }
                 "plugin" if op["name"] == "@lexical/code-prism.registerCodeHighlighting" => {
                     if op["args"] != json!([{"$ed":0}]) {
@@ -593,7 +615,7 @@ impl Replayer {
                     self.on_update.push(callback.clone());
                 }
                 if op["cause"] != "test"
-                    && !(self.rich_text_registered
+                    && !((self.rich_text_registered || self.markdown_shortcuts.is_some())
                         && op["cause"] == "listener-enqueued"
                         && op["calls"] == json!([]))
                 {

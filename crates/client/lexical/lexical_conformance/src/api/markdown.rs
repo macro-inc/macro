@@ -9,6 +9,7 @@ use lexical_model::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
 mod recorded;
+pub(crate) mod shortcuts;
 use recorded::with_registry;
 fn registry(
     value: Option<&Value>,

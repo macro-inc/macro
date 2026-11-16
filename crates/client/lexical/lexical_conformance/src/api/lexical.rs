@@ -366,7 +366,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "LexicalEditor.dispatchCommand" => {
             let command = string(&a.first().ok_or_else(|| fail("command"))?["$cmd"])?;
-            let handled = super::tab::dispatch(r, tx, command, a.get(1).unwrap_or(&Value::Null))?;
+            let payload = a.get(1).unwrap_or(&Value::Null);
+            if command == "KEY_ENTER_COMMAND" && super::markdown::shortcuts::enter(r, tx, payload)?
+            {
+                return Ok(json!(true));
+            }
+            let handled = super::tab::dispatch(r, tx, command, payload)?;
             Ok(json!(handled))
         }
         "lexical/LexicalUtils.scheduleMicroTask" => {

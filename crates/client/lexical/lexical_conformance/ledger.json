@@ -6,66 +6,6 @@
   ],
   "entries": [
     {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > Enter key triggers > should create a code block with language when ```javascript is typed and Enter is pressed",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > Enter key triggers > should create an empty code block when ``` is typed and Enter is pressed",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > Enter key triggers > should transform heading on Enter when a line was inserted at once (no trailing space listener trigger)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > composition-end trigger characters (#7026) > applies inline code when compositionend commits the trigger as a multi-character chunk",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > composition-end trigger characters (#7026) > applies inline code when the closing backtick is committed via compositionend",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
-      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
-      "test": "Markdown > should remove leading node and execute transform if replace does not return false",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
-      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
-      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
-    },
-    {
       "file": "packages/lexical-playground/__tests__/unit/LayoutContainerNode.test.ts",
       "test": "LayoutContainerNode HTML serialization > exportDOM > exports with inline grid-template-columns style",
       "status": "xfail",

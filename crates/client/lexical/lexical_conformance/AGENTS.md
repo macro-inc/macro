@@ -14,6 +14,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/replay/carets.rs`: shared caret metadata and owned single-consumption cursors; move cursors out before model traversal.
 - `src/replay/editors.rs`: per-editor installation and selection slots; prune dead record pointers only after checking all retained snapshots.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
+- `src/api/markdown/shortcuts.rs`: per-editor shortcut registration, real Enter handling and isolated shared-engine follow-ups at recorded listener boundaries.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
@@ -32,7 +33,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
 - Fix divergences in the owning model crate; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
-- Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; Macro fixtures use the source-ordered Macro transformer lists and list indent 2.
+- Route markdown conversions, normalization and registered shortcuts through lexical_markdown with decoded transformer identifiers; Macro fixtures use the source-ordered Macro transformer lists and list indent 2. Run shortcuts only in the recorded listener follow-up after the insertion/composition-end commit; drop false candidates and tag successful follow-ups HistoryPush. Enter replay accepts recorded null events; real DOM events fail until their preventDefault boundary is hosted.
 - Table node fixtures and the core table-caret case use concrete table payloads; keep their grid and selection observations strict.
 - Apply legacy codeHighlight projection to JSON and code positions only. For fixtures registering Prism, use the named d6_collapse_code_highlight projection described in README.md; replay real code-indentation handlers and never create syntax-highlight nodes.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
