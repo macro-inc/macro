@@ -1,5 +1,6 @@
 #![allow(unused, reason = "relic from op log on r2")]
-use crate::{error::ResultExt, generated::schema::owned::Operation};
+use crate::error::ResultExt;
+use sync_protocol::owned::Operation;
 use worker::Result;
 
 pub trait OperationIndexStorage {

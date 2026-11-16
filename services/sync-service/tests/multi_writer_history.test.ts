@@ -1,7 +1,7 @@
 import { LoroMap, LoroMovableList, LoroText } from "loro-crdt";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { FromPeer, FromRemote } from "../bebop/generated/schema";
+import { FromPeer, FromRemote } from "../../../crates/sync_protocol/bebop/generated/schema";
 import { createTestUser, setupMiniflare } from "./utils";
 
 let mf: Miniflare;

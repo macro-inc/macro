@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	FromPeer,
 	InitializeFromSnapshotRequest,
-} from "../bebop/generated/schema";
+} from "../../../crates/sync_protocol/bebop/generated/schema";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 
 type User = Awaited<ReturnType<typeof createTestUser>>;

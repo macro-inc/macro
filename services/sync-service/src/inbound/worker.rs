@@ -1,5 +1,6 @@
 use bebop::{Record, SubRecord};
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
+use sync_protocol::InitializeFromSnapshotRequest;
 use tracing::{Instrument, error};
 use wasm_bindgen::JsValue;
 use worker::{Env, Headers, Method, Request, RequestInit, Response, Result, Stub};
@@ -12,7 +13,6 @@ use crate::{
     d1::copy_user_mappings,
     durable_object::{CopyDocumentRequest, GetSnapshotRequest, response, status_codes},
     error::ResultExt,
-    generated::schema::InitializeFromSnapshotRequest,
     timeit_log,
     timeout::{DEFAULT_TIMEOUT_MS, timeout},
 };
@@ -31,7 +31,7 @@ pub async fn router(env: Env, req: Request) -> Result<Response> {
         .route("/health", get(|| async { "healthy" }))
         .route(
             "/schema",
-            get(|| async { include_str!("../../bebop/schema.bop") }),
+            get(|| async { include_str!("../../../../crates/sync_protocol/bebop/schema.bop") }),
         )
         .route("/surface/{surface_id}/activate", post(activate_route))
         .route("/document/{document_id}/copy", any(copy_route))

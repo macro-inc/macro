@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::permissions::WriteAccess;
 use macro_sync_service_jwt::session::{SurfaceClaims, SurfaceSessionKind};
 
 const ID: &str = "01952cbd-76ad-7a65-9c21-020304050607";
