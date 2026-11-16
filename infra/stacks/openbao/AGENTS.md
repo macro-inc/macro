@@ -11,6 +11,7 @@ guide; [the Pulumi rule](../../../.agents/rules/infra/pulumi.md) covers deploys.
 - `index.ts`: the whole stack.
 - `server-config.ts`: the server HCL. Keep its request duration, Raft layout
   and audit device in step with the Passwords local OpenBao config.
+- `image/Dockerfile`: our image, upstream OpenBao plus the AWS KMS seal plugin.
 
 ## Checks
 
@@ -29,10 +30,19 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 - The `openbao` Doppler project has a dev config only and is created by hand.
   Don't add it to `doppler-projects`, which would also create `prd`.
 - The stack is not in `services-config.json`; deploys are manual.
-- OpenBao 2.7 has no built-in AWS KMS seal. `server-config.ts` loads the
-  `kms-aws` plugin from ghcr.io into `plugins/`, a sibling of the Raft `data/`
-  directory. On a version bump, update both the image digest and the binary
-  sha256 from the official openbao/openbao-plugins release.
+- OpenBao 2.7 has no built-in AWS KMS seal. `image/Dockerfile` copies the
+  `kms-aws` plugin from its digest-pinned image into `/usr/lib/openbao/plugins`;
+  `server-config.ts` runs it by `command` and checks its sha256. Never turn on
+  `plugin_auto_download` or pull anything at runtime: the task needs only AWS
+  APIs. On a version bump, update the image digests in the Dockerfile and the
+  linux_amd64 sha256 from the official openbao/openbao-plugins release together.
+- No `withTelemetry`: its sidecars pull from Docker Hub and public ECR and send
+  to Datadog and Grafana over the internet. Logs use the `awslogs` driver into
+  the `openbao` log group, which the shared Firehose forwards to Datadog.
+- Task egress is still HTTPS to `0.0.0.0/0`: the shared VPC (dev and prod)
+  routes through a NAT and has no interface endpoints, and adding private-DNS
+  endpoints there would reroute every prod service. Don't add those here; the
+  lockdown comes with OpenBao's own VPC (README "Network").
 - The ALB admits only the document storage service and the OpenBao task's own
   security group (the operator SSM tunnel, README "Operator tunnel"). Never add
   CIDR ingress.
