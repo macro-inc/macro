@@ -9,3 +9,7 @@ generate:
 test:
     dune build
     dune test
+
+# Build the WebAssembly transport (fetch/) and run its tests under Deno.
+test-wasm:
+    dune build --profile wasm --build-dir _build_wasm @fetch/runtest
