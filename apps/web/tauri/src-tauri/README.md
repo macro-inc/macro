@@ -442,6 +442,11 @@ to the public web copies (`rewriteNativeFrameUrls` in
 are still published. Web Inspector on a native build shows minified code and a
 failed source map load.
 
+Videos are left out the same way, including from the Nix desktop frontend:
+Vite writes them to `dist/web-hosted/`, every native bundle deletes that
+directory, and the apps stream them from the web deploy through `webHostedUrl`
+(see [videos in native bundles](../../AGENTS.md#videos-stay-out-of-native-bundles)).
+
 From `apps/web`, use `just ios-build` for a release build or
 `just ios-build --no-update` to disable automatic bundle updates.
 `just ios-build-no-update` remains a compatibility alias. Both modes use
