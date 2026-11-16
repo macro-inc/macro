@@ -57,3 +57,8 @@ Callbacks run without a history borrow, and replacing a callback releases the
 previous capture outside both the history borrow and lock. The document session
 uses its host wall clock and the application merge interval; the server copy and
 wire formats are unchanged.
+
+The upstream `loro-internal/benches/automerge-paper.json.gz` benchmark input is
+omitted: no build or test here reads it, and its recorded edit trace carries
+contributor email addresses. Restore it from the upstream release to run those
+benches or examples.
