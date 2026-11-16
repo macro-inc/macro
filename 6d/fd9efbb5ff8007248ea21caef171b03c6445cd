@@ -1,0 +1,99 @@
+crates/channels/src/domain/events.rs
+  s_c40fd2f0323f22::t_6430d706d77e79 14-24,184-395
+crates/agent_trigger/src/domain/events.rs
+  s_c40fd2f0323f22::t_2c0f4b952f3023 1-4,6-99
+  s_c40fd2f0323f22::t_3dd888f2c2bd29 5
+crates/notification/src/domain.rs
+  s_c40fd2f0323f22::t_a9d73f8309eb67 2
+crates/github_pull_requests/src/domain/events.rs
+  s_c40fd2f0323f22::t_64c174c242c7a9 2-3
+  s_c40fd2f0323f22::t_63b9e936d30c98 15-81
+crates/notification/src/domain/events.rs
+  s_c40fd2f0323f22::t_a9d73f8309eb67 1-5,10-224
+  s_306189c962039e::t_bdf26e2600e9ec 6-9
+crates/event_stream/src/domain/catalog.rs
+  s_c40fd2f0323f22::t_0dbf433f892c3c 27-28
+  s_c40fd2f0323f22::t_64c174c242c7a9 29-30
+  s_c40fd2f0323f22::t_c8c05292f253f4 33-34
+  s_4683e1a66774d8::t_974cd3e9e1b3c9 19-20
+crates/github/src/domain.rs
+  s_c40fd2f0323f22::t_c389612a933e59 5-7
+crates/messages/src/outbound/broker.rs
+  s_c40fd2f0323f22::t_712c2baa89e9e0 8
+  s_c40fd2f0323f22::t_bfb728f073dc7f 3
+crates/soup_realtime/src/domain/events.rs
+  s_c40fd2f0323f22::t_877b797fc7c742 1-24
+crates/messages/src/domain/events.rs
+  s_c40fd2f0323f22::t_712c2baa89e9e0 11-14,210-279
+crates/soup_realtime/src/domain/mod.rs
+  s_c40fd2f0323f22::t_877b797fc7c742 3-5
+crates/user_events/src/events.rs
+  s_c40fd2f0323f22::t_97ab0b3f4b6851 1-40
+crates/user_events/src/lib.rs
+  s_c40fd2f0323f22::t_97ab0b3f4b6851 12-14
+crates/github/src/domain/events.rs
+  s_c40fd2f0323f22::t_c389612a933e59 1-92
+crates/call/src/domain/events.rs
+  s_c40fd2f0323f22::t_3b6c5167e402d6 10,388-451
+  s_c40fd2f0323f22::t_c5de3791ef373a 452-453
+crates/agent_trigger/src/domain/mod.rs
+  s_c40fd2f0323f22::t_4cadeab8a61c8e 4
+crates/call/AGENTS.md
+  s_8b139b3d2541ba::t_351e7907369537 18-20,57
+crates/channels/src/domain/broker_events/test.rs
+  s_c40fd2f0323f22::t_c4303be7edb8e4 2
+crates/channels/src/domain/mention_events/test.rs
+  s_c40fd2f0323f22::t_e6d37bf1a54078 3
+crates/channels/src/inbound/teammate_dms_consumer.rs
+  s_c40fd2f0323f22::t_3cb1157cd4be77 16
+crates/channels/src/inbound/teammate_dms_consumer/test.rs
+  s_c40fd2f0323f22::t_a1ea797efe7998 2,5
+crates/event_stream/src/domain.rs
+  s_c40fd2f0323f22::t_b6f794283b5eea 8-9
+crates/event_stream/src/domain/events.rs
+  s_4683e1a66774d8::t_ccc335e2c9926c 1-63
+crates/github_pull_requests/src/broker/test.rs
+  s_c40fd2f0323f22::t_bc3c3ceef5524a 1-2
+crates/notification/src/domain/models/websocket_notification_event/test.rs
+  s_c40fd2f0323f22::t_f802e6795394d1 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6dfd9efbb5ff8007248ea21caef171b03c6445cd",
+  "prompts": {},
+  "sessions": {
+    "s_306189c962039e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09ed9977-6fc9-449f-9d43-ef06312ff04e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4683e1a66774d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c138c6c8-9768-4bdc-b1dd-7c44090db916",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
