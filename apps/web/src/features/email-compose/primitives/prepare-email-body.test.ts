@@ -61,6 +61,10 @@ describe('prepareEmailBodyFromHtml', () => {
       body: '<p><br></p><div class="macro_quote"><p>Shown quote</p></div>',
       written: false,
     },
+    {
+      body: '<p><br></p><span class="macro-watermark-node">-- Sent with Macro</span>',
+      written: false,
+    },
   ])('finds written content in $body', ({ body, written }) => {
     expect(prepareEmailBodyFromHtml(body).hasWrittenContent).toBe(written);
   });
