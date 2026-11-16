@@ -204,3 +204,39 @@ test('a paste that inserts nothing still drops the selection, as Source', async 
   ]);
   expect(fixture.view.selection().selection.kind).toBe('none');
 });
+
+for (const [label, comment] of [
+  ['view-only', false],
+  ['comment-only', true],
+] as const)
+  test(`a live demotion to ${label} reaches no bar edit while the UI is still editable`, async () => {
+    const fixture = mount([
+      ['A', 'B'],
+      ['C', 'D'],
+    ]);
+    const host = createNativeTableSelectionActionsHost(
+      fixture.view,
+      () => true
+    );
+    const [a, b] = cellKeys(fixture);
+    if (a === undefined || b === undefined) throw new Error('Missing cells');
+    selectCells(fixture, a, b);
+    fixture.authorize(false, comment);
+    expect(fixture.view.isEditable).toBe(true);
+    const before = fixture.view.query.serializedState();
+    const selected = fixture.view.selection().selection;
+    // Cut still copies (a read); only its clearing is an edit.
+    expect(host.clipboardData()?.['text/plain']).toContain('A');
+    host.clearCells();
+    expect(tableEditPublished(await host.merge())).toBe(false);
+    expect(tableEditPublished(await host.split())).toBe(false);
+    await host.paste(transfer('pasted'));
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.view.query.serializedState()).toBe(before);
+    // A refused paste keeps the selection; it was never entered.
+    expect(fixture.view.selection().selection).toEqual(selected);
+    expect(rowTexts(fixture)).toEqual([
+      ['A', 'B'],
+      ['C', 'D'],
+    ]);
+  });

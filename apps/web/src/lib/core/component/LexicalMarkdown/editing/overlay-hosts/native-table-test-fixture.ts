@@ -79,6 +79,18 @@ export function nativeTableSurface() {
     port: runtime.port,
     root,
     errors,
+    /** Live session authorization, reaching the session before UI editability. */
+    authorize(write: boolean, comment: boolean) {
+      runtime.executor.run(() =>
+        runtime.executor.session.authorization(
+          true,
+          write,
+          comment,
+          runtime.executor.now(),
+          Date.now()
+        )
+      );
+    },
     async close() {
       await runtime.close();
       root.remove();

@@ -1,8 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import type { PasteEntry } from '@macro-inc/lexical-wasm-view/view/clipboard';
 import { readSelection } from '@macro-inc/lexical-wasm-view/view/selection';
 import type { Accessor } from 'solid-js';
-import { dispatchApplicationCommand } from '../../plugins/group-b/command';
+import { dispatchKeyCommandIfSessionEdit } from '../../plugins/group-b/command';
 import { readNativeTableFacts } from '../../plugins/tables/nativeFacts';
 import {
   type NativeTableEditOutcome,
@@ -115,12 +116,13 @@ export function createNativeTableSelectionActionsHost(
     },
     clearCells() {
       if (!editable()) return;
-      // The same path as backspacing a table selection, which also collapses it.
-      dispatchApplicationCommand(
+      // The same path as backspacing a table selection, which also collapses
+      // it; admitted only under current session Edit authority.
+      dispatchKeyCommandIfSessionEdit(
         view,
         'group-b.key',
-        {},
-        new KeyboardEvent('keydown', { key: 'Backspace' })
+        new KeyboardEvent('keydown', { key: 'Backspace' }),
+        () => {}
       );
     },
     clearSelection() {
@@ -135,22 +137,32 @@ export function createNativeTableSelectionActionsHost(
       const selection = cached.kind === 'table' ? cached : readSelection(view);
       if (selection.kind !== 'table' && selection.kind !== 'range')
         return Promise.resolve();
-      const pasteThenCollapse = async () => {
-        try {
-          // Source drops the selection in the same update whatever the insert
-          // did; an admitted paste (even one inserting nothing) returns true.
-          // false means the document or selection changed during the import,
-          // and that newer selection is kept.
-          const admitted = await view.clipboard.paste(dataTransfer, selection);
-          if (admitted && view.isMounted)
+      return new Promise<void>((resolve) => {
+        // Source drops the selection in the same update whatever the insert
+        // did. Native collapses only once the queued paste actually ran
+        // (handled or unhandled); a refused entry or a paste dropped before
+        // queueing (the view changed during the import) keeps the selection.
+        const settled = (entry: PasteEntry) => {
+          if (entry !== 'refused' && view.isMounted)
             view.port.selectionFromView({ kind: 'none' });
-        } catch (error) {
-          view.options.onError(error);
-        }
-      };
-      const pasted = pasteThenCollapse();
-      fireAndForget(pasted, 'native-table-selection-paste');
-      return pasted;
+          resolve();
+        };
+        const queue = async () => {
+          try {
+            const queued = await view.clipboard.paste(
+              dataTransfer,
+              selection,
+              { plainOnly: false },
+              settled
+            );
+            if (!queued) resolve();
+          } catch (error) {
+            view.options.onError(error);
+            resolve();
+          }
+        };
+        fireAndForget(queue(), 'native-table-selection-paste');
+      });
     },
   };
 }

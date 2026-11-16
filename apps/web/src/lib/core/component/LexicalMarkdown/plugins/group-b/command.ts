@@ -87,6 +87,25 @@ export function dispatchApplicationCommandIfSessionEdit(
   if (input) view.port.inputIfSessionEdit(input, after);
 }
 
+/**
+ * A keyboard application command admitted only under current session Edit
+ * authority, checked when the queued input actually runs; a refusal makes no
+ * session call and reports through `refused`.
+ */
+export function dispatchKeyCommandIfSessionEdit(
+  view: EditorView,
+  name: string,
+  event: KeyboardEvent,
+  refused: () => void
+): void {
+  const input = applicationInput(view, name, {}, event);
+  if (!input) {
+    refused();
+    return;
+  }
+  view.port.input(input, undefined, event, refused);
+}
+
 /** One immutable bulk read, rejecting a reply against a retired mirror generation. */
 export function queryApplication(
   view: EditorView,

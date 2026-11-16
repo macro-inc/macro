@@ -36,6 +36,8 @@ export interface ClipboardFacts {
   readonly entries: readonly IClipboardEntryMsg[];
   release(): void;
 }
+/** What a queued paste input did at its actual entry. */
+export type PasteEntry = 'handled' | 'unhandled' | 'refused';
 export class ClipboardAccess {
   private readonly providers = new Set<
     (clipboard: DataTransfer) => ClipboardFacts
@@ -62,10 +64,17 @@ export class ClipboardAccess {
       this.view.root.ownerDocument
     );
   }
+  /**
+   * `settled`, when given, admits the queued paste only under current session
+   * Edit authority and reports the input's actual entry: `handled` or
+   * `unhandled` once it ran, `refused` when that authority was gone (no
+   * session call). A `true` result only means the input was queued.
+   */
   async paste(
     clipboard: DataTransfer,
     selection: ViewSelection = readSelection(this.view),
-    intent: IPasteIntentMsg = { plainOnly: false }
+    intent: IPasteIntentMsg = { plainOnly: false },
+    settled?: (outcome: PasteEntry) => void
   ): Promise<boolean> {
     const view = this.view;
     if (!view.isEditable || !view.isMounted) return false;
@@ -172,11 +181,24 @@ export class ClipboardAccess {
               intent: { plainOnly },
             })
           : EditorInputMsg.fromEditorPaste(paste);
+        const onRefused = settled
+          ? () => {
+              outcome = 'refused';
+              release();
+              settled('refused');
+            }
+          : undefined;
         phase.run(() =>
-          this.port.input(input, (handled) => {
-            outcome = handled ? 'success' : 'unhandled';
-            release();
-          })
+          this.port.input(
+            input,
+            (handled) => {
+              outcome = handled ? 'success' : 'unhandled';
+              release();
+              settled?.(handled ? 'handled' : 'unhandled');
+            },
+            undefined,
+            onRefused
+          )
         );
       } finally {
         phase.end();
