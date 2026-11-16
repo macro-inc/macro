@@ -3,12 +3,12 @@
 //! session, and a later update that brings the tree back under the cap recovers it.
 use doc_sync_core::{Access, Millis, Now, UnixMillis};
 use document_session::{
-    application_editor_config, EditorConfig, EditorSurface, Surface, SurfaceConfig, ViewEffect,
+    EditorConfig, EditorSurface, Surface, SurfaceConfig, ViewEffect, application_editor_config,
 };
 use lexical_model::*;
 use macro_document_model::EditorType;
 use serde_json::json;
-use std::sync::{atomic::AtomicI64, Arc};
+use std::sync::{Arc, atomic::AtomicI64};
 
 fn at(ms: u32) -> Now {
     Now {
@@ -63,8 +63,8 @@ fn kinds(effects: &[ViewEffect]) -> Vec<String> {
 }
 
 #[test]
-fn a_remote_update_past_the_depth_cap_is_refused_and_a_later_undo_recovers(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_remote_update_past_the_depth_cap_is_refused_and_a_later_undo_recovers()
+-> Result<(), Box<dyn std::error::Error>> {
     std::thread::Builder::new()
         .stack_size(64 << 20)
         .spawn(|| -> Result<(), String> {
@@ -162,8 +162,8 @@ fn a_remote_update_past_the_depth_cap_is_refused_and_a_later_undo_recovers(
 // containers, so the move is a delete and a recreate that reuses the chain's $.ids; the
 // session refuses it like any too-deep update.
 #[test]
-fn a_remote_move_that_pushes_a_valid_chain_past_the_cap_is_refused(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_remote_move_that_pushes_a_valid_chain_past_the_cap_is_refused()
+-> Result<(), Box<dyn std::error::Error>> {
     std::thread::Builder::new()
         .stack_size(64 << 20)
         .spawn(|| -> Result<(), String> {
