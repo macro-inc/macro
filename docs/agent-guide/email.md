@@ -310,9 +310,8 @@ under the new heading. Active searches also hide retained results and show loadi
 while selected tag sets are pending. Background refreshes retain the current list.
 
 While the search field has text the list shows only search states: no Watch
-tutorial row, a spinner while the search runs, `Keep typing to search` under 3
-characters (the search service's minimum; Focus filters its own list at any
-length), and `No results` when nothing matches. `Load More` appears only under
+tutorial row, a spinner while the search runs (from the first character), and
+`No results` when nothing matches. `Load More` appears only under
 result rows: a page whose hits the tab or a client-side filter drops (Archived
 keeps only archived hits) pages on by itself until a row shows or results run
 out. To check the tab switch,

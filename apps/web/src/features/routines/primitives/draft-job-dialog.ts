@@ -42,9 +42,11 @@ export function createDraftJobDialog(options: {
   /** Open a finished draft; answers why it couldn't, if it couldn't. */
   open(job: ReadyJob, from: 'dialog' | 'banner'): string | undefined;
   discard(id: string): void;
+  /** Hand a finished draft to the app's pill and toasts. */
+  report(job: DraftJob): void;
 }) {
-  // Every draft this dialog showed under way: it reports them while it's
-  // open, so nothing else does.
+  // The drafts this dialog shows under way, and those it showed until they
+  // finished: it reports them while it's open, so nothing else does.
   const [watched, setWatched] = createSignal<readonly string[]>([]);
   // A draft that finished on screen stays shown while its page opens.
   const [opening, setOpening] = createSignal<DraftingJob>();
@@ -86,8 +88,13 @@ export function createDraftJobDialog(options: {
         setWatched((list) => [...list, job.id]);
       }
       if (!previous || previous.id === job?.id) return;
-      const finished = options.jobs().find((each) => each.id === previous.id);
-      if (finished) settle(finished, previous);
+      const latest = options.jobs().find((each) => each.id === previous.id);
+      if (latest?.state === 'drafting') {
+        // A newer draft took its place: the pill and toasts report it now.
+        setWatched((list) => list.filter((id) => id !== previous.id));
+        return;
+      }
+      if (latest) settle(latest, previous);
     })
   );
 
@@ -120,6 +127,10 @@ export function createDraftJobDialog(options: {
       return id ? [...watched(), id] : watched();
     })
   );
+  let closed = false;
+  onCleanup(() => {
+    closed = true;
+  });
 
   const view = (): DraftJobDialogView => {
     const job = opening() ?? drafting();
@@ -133,6 +144,11 @@ export function createDraftJobDialog(options: {
     async describe(description: string): Promise<string | undefined> {
       const job = await options.start(description);
       if (typeof job === 'string') return job;
+      // Closed meanwhile: one under way is listed already; one finished isn't.
+      if (closed) {
+        if (job.state !== 'drafting') options.report(job);
+        return undefined;
+      }
       return match(job)
         .with({ state: 'drafting' }, () => {
           setRestored(undefined);
