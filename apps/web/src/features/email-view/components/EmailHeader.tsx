@@ -6,6 +6,7 @@ import {
 import {
   ListHeader,
   ListHeaderSearch,
+  type ListSearchResultsRow,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -34,8 +35,8 @@ import {
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
-  /** Restores list focus when Escape leaves the search field. */
-  onSearchEscape?: () => void;
+  /** Moves the keyboard from the search field into the list. */
+  focusSearchResults?: (row: ListSearchResultsRow) => void;
   /** Hands the search field's focus to the view's search keys. */
   registerSearch?: (focus: () => void) => () => void;
   tabOnly?: boolean;
@@ -187,7 +188,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           label="Search email"
           value={state.search}
           onValueChange={(search) => setState('search', search)}
-          onEscape={props.onSearchEscape}
+          focusResults={props.focusSearchResults}
           registerFocus={(focus) => {
             releaseSearch = props.registerSearch?.(focus);
           }}

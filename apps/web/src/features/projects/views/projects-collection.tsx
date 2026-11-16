@@ -599,7 +599,7 @@ export function ProjectsCollection(props: {
               label="Search projects"
               value={collection.search()}
               onValueChange={collection.setSearch}
-              onEscape={() => grid?.focus()}
+              focusResults={() => grid?.focus()}
               registerFocus={(focus) => {
                 focusSearch = focus;
               }}

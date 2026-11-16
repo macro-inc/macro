@@ -1,3 +1,5 @@
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
@@ -20,16 +22,28 @@ export function ListHeader(props: {
   );
 }
 
-/** The query belongs to the view; only the expanded presentation is local. */
+/** Where the keyboard lands when the search field hands it to the results. */
+export type ListSearchResultsRow = 'first' | 'current';
+
+/**
+ * The query belongs to the view; only the expanded presentation is local.
+ *
+ * The field hands the keyboard to the results instead of trapping it:
+ * ArrowDown or Enter moves to the first result, and Escape leaves the field
+ * with the query and its results intact. Escape pressed again, in the list,
+ * clears the search.
+ */
 export function ListHeaderSearch(props: {
   label: string;
   placeholder?: string;
   value: string;
   onValueChange: (value: string) => void;
-  onEscape?: () => void;
+  /** Moves keyboard focus into the view's result list. */
+  focusResults?: (row: ListSearchResultsRow) => void;
   registerFocus: (focus: () => void) => void;
   ref?: (element: HTMLDivElement) => void;
 }) {
+  const panel = useSplitPanel();
   const [expanded, setExpanded] = createSignal(Boolean(props.value));
   let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
@@ -40,12 +54,39 @@ export function ListHeaderSearch(props: {
       input?.select();
     });
   };
-  const close = () => {
+  const clear = () => {
     props.onValueChange('');
     setExpanded(false);
+  };
+  const close = () => {
+    clear();
     trigger?.focus();
   };
+  const leave = (row: ListSearchResultsRow) => {
+    // An empty field has no search to keep on screen.
+    if (!props.value.trim()) clear();
+
+    input?.blur();
+    props.focusResults?.(row);
+  };
   onMount(() => props.registerFocus(focus));
+
+  // Escape in the list steps back out of the search. The field has left the
+  // header whenever a thread or other detail has replaced the list, so that
+  // view's own Escape runs instead.
+  if (panel) {
+    registerHotkey({
+      hotkey: 'escape',
+      scopeId: panel.splitHotkeyScope,
+      description: 'Clear search',
+      condition: () => panel.isPanelActive() && props.value.trim().length > 0,
+      keyDownHandler: () => {
+        clear();
+        return true;
+      },
+      registrationType: 'add',
+    });
+  }
 
   return (
     <div
@@ -76,12 +117,22 @@ export function ListHeaderSearch(props: {
           value={props.value}
           onValueChange={props.onValueChange}
           onClose={close}
-          onEscape={() => {
-            close();
-            props.onEscape?.();
+          onKeyDown={(event) => {
+            // A view without a keyboard list keeps the keys for the field.
+            if (!props.focusResults) return;
+            if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
+            if (event.isComposing || hasModifier(event)) return;
+
+            event.preventDefault();
+            leave('first');
           }}
+          onEscape={() => leave('current')}
         />
       </Show>
     </div>
   );
+}
+
+function hasModifier(event: KeyboardEvent) {
+  return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
 }

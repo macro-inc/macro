@@ -21,7 +21,7 @@ import { DriveFolderPath } from './drive-folder-hierarchy';
 import { DriveMobileTabs } from './drive-mobile-tabs';
 
 export function DriveHeader() {
-  const { state } = useDriveView();
+  const { state, list } = useDriveView();
 
   const isRecent = () => {
     const location = state.value().location;
@@ -81,6 +81,10 @@ export function DriveHeader() {
               label="Search Drive"
               placeholder="Search files"
               value={state.value().search}
+              focusResults={(row) => {
+                if (row === 'first') list.controller.navigate.toFirst();
+                panel.panelRef()?.focus();
+              }}
               onValueChange={state.setSearch}
               registerFocus={(focus) => {
                 focusSearch = focus;

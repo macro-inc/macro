@@ -97,7 +97,7 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled, savedViews } = useTasksView();
+  const { state, setState, projectsEnabled, savedViews, list } = useTasksView();
   const navigate = useNavigate();
   const layout = useSplitLayout();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -114,7 +114,12 @@ function TasksViewRoot() {
 
   const taskList = () => (
     <>
-      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+      <TasksHeader
+        focusSearchResults={(row) => {
+          if (row === 'first') list.navigate.toFirst();
+          listElement()?.focus();
+        }}
+      />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
         <Show
