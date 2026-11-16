@@ -133,8 +133,7 @@ export function useHistoryQuery() {
   const graphqlCacheHost = () => {
     if (authenticated() !== true || !graphqlSoupFlag().enabled)
       return undefined;
-    const cacheHost = getGraphqlSoupCacheHost();
-    return cacheHost?.disabled ? undefined : cacheHost;
+    return getGraphqlSoupCacheHost();
   };
 
   createEffect(() => {

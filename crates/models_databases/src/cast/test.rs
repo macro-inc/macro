@@ -448,6 +448,7 @@ fn column_kinds_read_as_their_type_names() {
         [
             "text",
             "number",
+            "percentage",
             "select",
             "select[]",
             "date",
