@@ -595,18 +595,19 @@ function rawOutcome(outcome: Outcome) {
  */
 function rowSink(name: string) {
   const output = process.env.BOOKING_LINK_MENU_OUT;
-  if (!output) throw new Error('BOOKING_LINK_MENU_OUT is required');
   const slug = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
   return (
     engine: 'source' | 'source-oracle' | 'native',
     phase: string,
     data: object
-  ) =>
+  ) => {
+    if (!output) return;
     writeFileSync(
       `${output}/${slug}--${engine}--${phase}.json`,
       `${JSON.stringify({ row: name, engine, phase, ...data }, null, 1)}\n`,
       { flag: 'wx' }
     );
+  };
 }
 
 /**
