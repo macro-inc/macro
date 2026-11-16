@@ -194,9 +194,13 @@ change.
 
 ### 1. Implement `EventAccess`
 
-In the crate's `events.rs` (or `broker.rs`), next to the topic enum (an
-illustrative `widget` family; copy a real one such as
-`crates/teams/src/domain/events.rs`):
+Implement `EventAccess` in your crate's `events.rs` (usually
+`src/domain/events.rs`), the one place a crate declares who receives its
+events outside Macro: the impl, its public projection types and any helper
+they use, even when the topic enum lives elsewhere (`broker.rs`). ast-grep
+`rust-event-access-in-events-rs` rejects an impl in any other file. An
+illustrative `widget` family follows; copy a real one such as
+`crates/teams/src/domain/events.rs`:
 
 ```rust
 impl EventAccess for WidgetTopicEvent {

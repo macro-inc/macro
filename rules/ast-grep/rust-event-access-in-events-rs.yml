@@ -1,0 +1,22 @@
+id: rust-event-access-in-events-rs
+language: rust
+severity: error
+message: Implement `EventAccess` in the crate's `events.rs`, the one place a crate declares who receives its events outside Macro.
+note: |-
+  Every crate keeps its external event access in one file: the
+  `impl EventAccess` blocks, their public projection types and the helpers
+  they use live in the crate's `events.rs` (usually `src/domain/events.rs`),
+  even when the topic enum is defined elsewhere. Move this impl there. See
+  `crates/event_access/ACCESS_MODEL.md`, "Exposing a crate's events".
+files:
+  - crates/**
+  - services/**
+ignores:
+  - '**/events.rs'
+  # The broker's own fixtures and example.
+  - crates/macro_event_broker/**
+rule:
+  kind: impl_item
+  has:
+    field: trait
+    regex: '(^|::)EventAccess$'

@@ -15,7 +15,7 @@ section below is one place, in order; past misses are called out inline.
 | Adding | Copy | Why |
 | --- | --- | --- |
 | A topic | The `macro.messages` registration: `crates/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
-| Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
+| Events on a topic | `crates/github_pull_requests/src/broker.rs` and `src/domain/events.rs` (one variant), `crates/messages/src/domain/events.rs` and `src/outbound/broker.rs` (several) | Topic enum, its access in `events.rs`, keyed envelope, broker-backed adapter for a domain port |
 | A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
 | A per-process fan-out (GraphQL subscription) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
@@ -51,7 +51,8 @@ Put the types next to the domain that owns the fact
 - A topic enum with `#[serde(tag = "event_type", content = "metadata")]` and
   `#[serde(rename = "<entity>.<past_tense>")]` per variant, implementing
   `TopicEvent { type Topic; const SCHEMA_VERSION: u8 }` and `EventAccess {
-  type PublicPayload; fn access }` (section 8).
+  type PublicPayload; fn access }` (section 8). The `EventAccess` impl and
+  its public projection always go in the crate's `events.rs`.
 - A `XMacroEvent { key, event: Event<XTopicEvent> }` implementing `MacroEvent`,
   with one constructor per variant. Build envelopes with `Event::new` (UUIDv7
   `event_id`).
@@ -195,7 +196,8 @@ decision guide and the full steps to expose a family are in
 [`crates/event_access/ACCESS_MODEL.md`](../../crates/event_access/ACCESS_MODEL.md).
 The checklist:
 
-- `impl EventAccess` next to the topic enum: an exhaustive `match`, no
+- `impl EventAccess` in the crate's `events.rs` (ast-grep
+  `rust-event-access-in-events-rs`): an exhaustive `match`, no
   wildcard arm (ast-grep `rust-access-no-wildcard-arm`), returning
   `Access::Internal { reason }` or `Access::Public(PublicEvent { .. })`. Set
   `type PublicPayload = Unexposed` when nothing on the topic is public.

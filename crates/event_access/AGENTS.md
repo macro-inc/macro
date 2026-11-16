@@ -51,6 +51,9 @@ Producers reach these types through `macro_event_broker::access`.
 
 ## Gotchas
 
+- Every `impl EventAccess`, with its public projection and helpers, lives in
+  its crate's `events.rs` (ast-grep `rust-event-access-in-events-rs`), even
+  when the topic enum is elsewhere.
 - `access()` matches are exhaustive with no `_ =>` arm (ast-grep
   `rust-access-no-wildcard-arm`, which also covers helpers returning an
   `Access`), so a new variant must be classified.
