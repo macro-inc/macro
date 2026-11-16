@@ -107,24 +107,24 @@ impl NodeIndex {
         }
     }
     pub fn unbind(&mut self, key: NodeKey) {
-        if let Some(old) = self.release_containers(key) {
-            if let Some(id) = old.id {
-                let duplicates = self.duplicate_ids.get_mut(&id);
-                if self.ids.get(&id) == Some(&key) {
-                    match duplicates.and_then(|keys| (!keys.is_empty()).then(|| keys.remove(0))) {
-                        Some(survivor) => {
-                            self.ids.insert(id.clone(), survivor);
-                        }
-                        None => {
-                            self.ids.remove(&id);
-                        }
+        if let Some(old) = self.release_containers(key)
+            && let Some(id) = old.id
+        {
+            let duplicates = self.duplicate_ids.get_mut(&id);
+            if self.ids.get(&id) == Some(&key) {
+                match duplicates.and_then(|keys| (!keys.is_empty()).then(|| keys.remove(0))) {
+                    Some(survivor) => {
+                        self.ids.insert(id.clone(), survivor);
                     }
-                } else if let Some(keys) = duplicates {
-                    keys.retain(|claimant| *claimant != key);
+                    None => {
+                        self.ids.remove(&id);
+                    }
                 }
-                if self.duplicate_ids.get(&id).is_some_and(Vec::is_empty) {
-                    self.duplicate_ids.remove(&id);
-                }
+            } else if let Some(keys) = duplicates {
+                keys.retain(|claimant| *claimant != key);
+            }
+            if self.duplicate_ids.get(&id).is_some_and(Vec::is_empty) {
+                self.duplicate_ids.remove(&id);
             }
         }
     }
