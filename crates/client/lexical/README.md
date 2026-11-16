@@ -52,8 +52,8 @@ reserved dependencies only; remove each as its first consumer lands. Give every 
 `CLAUDE.md` symlink, and check its wasm dependency tree.
 
 Rust pins Loro **1.17.1**. The Bun catalog stays on 1.16.3 and the sync-service
-npm package on main's ^1.13.7; the native editor interoperates with both, which
-sync_sim checks. Version 1.16.3 included a core cross-document container fix, so
+npm package on main's ^1.13.7. sync_sim's default and legacy runs both use
+1.16.3, so the committed suite checks interop with 1.16.3 only. Version 1.16.3 included a core cross-document container fix, so
 the Rust pin does not go below it. The
 1.17.1 source retains the clock/randomness controls required by sessions:
 `set_record_timestamp(false)`, explicit `CommitOptions::timestamp`,

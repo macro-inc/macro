@@ -239,7 +239,7 @@ database writes only for the original account/session.
 
 - Keep native document editing and the public runtime unavailable until the actual Initialize projection; retain private cleanup ownership during loading and surface initialization errors through the existing error chrome.
 
-Use the [native preview install check](scripts/editor-live-check/README.md) to verify a native preview build end to end, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
+Require the maintained [six-step native preview install check](scripts/editor-live-check/README.md) before and after every native preview installation, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
 
 Verify Await ownership with the actual peer plugin and parsed stored state in `LexicalMarkdown/decorator-host/peer-ownership-source.test.ts`; distinguish the Created listener from the root-sensitive initialization command and preserve the ownerless fallback.
 
