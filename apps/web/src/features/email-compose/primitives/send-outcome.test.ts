@@ -533,3 +533,59 @@ it.each(providers)(
     }
   }
 );
+
+it.each(providers)(
+  '%s: keeps a dismissed notice closed when its stalled send is accepted',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      notices.expireAll();
+      await vi.advanceTimersByTimeAsync(30_000);
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'expire 1',
+        'open 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: shows delivery of an offline send accepted after its undo deadline',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
+    context.delivery.queueActive = () => true;
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      notices.expireAll();
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() - 1_000).toISOString(),
+      });
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Email queued to send [Undo]',
+        'expire 1',
+        'open 2 success: Sending…',
+        'update 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);

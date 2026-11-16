@@ -216,8 +216,10 @@ function success(
 
 function dismiss(toastId: number) {
   // A toast queued past its region's limit never mounts, so its cleanup
-  // can't be what forgets it.
+  // can't be what closes it.
+  const open = openToasts.get(toastId);
   openToasts.delete(toastId);
+  if (open && !open.mounted()) open.close();
   toaster.dismiss(toastId);
 }
 
@@ -581,7 +583,12 @@ type ShownToast = Omit<ToastContentProps, 'toastId' | 'revision'>;
 /** Open toasts by id, with their region and the setter `replace` changes them through. */
 const openToasts = new Map<
   number,
-  { region: string; update: (content: ShownToast) => void }
+  {
+    region: string;
+    update: (content: ShownToast) => void;
+    mounted: () => boolean;
+    close: () => void;
+  }
 >();
 
 /**
@@ -599,7 +606,9 @@ function showToast(
     open.update(content);
     // The throttle must not dismiss this toast for a message it no longer shows.
     for (const [key, recent] of recentToasts) {
-      if (recent.toastId === replace) recentToasts.delete(key);
+      if (recent.toastId !== replace) continue;
+      clearTimeout(recent.timeoutId);
+      recentToasts.delete(key);
     }
     if (!holdsSlot) {
       clearTrackedToast(open.region, replace);
@@ -613,24 +622,34 @@ function showToast(
 
   replaceActiveToast(region, !holdsSlot);
   const [current, setCurrent] = createSignal({ ...content, revision: 0 });
+  let mounted = false;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    openToasts.delete(toastId);
+    clearTrackedToast(region, toastId);
+    current().onDismiss?.();
+  };
   const toastId = toaster.show(
-    (props) => (
-      <ToastContent
-        {...current()}
-        toastId={props.toastId}
-        onDismiss={() => {
-          openToasts.delete(props.toastId);
-          clearTrackedToast(region, props.toastId);
-          current().onDismiss?.();
-        }}
-      />
-    ),
+    (props) => {
+      mounted = true;
+      return (
+        <ToastContent
+          {...current()}
+          toastId={props.toastId}
+          onDismiss={close}
+        />
+      );
+    },
     { region }
   );
   openToasts.set(toastId, {
     region,
     update: (next) =>
       setCurrent((previous) => ({ ...next, revision: previous.revision + 1 })),
+    mounted: () => mounted,
+    close,
   });
   trackActiveToast(region, toastId, !holdsSlot);
   return toastId;

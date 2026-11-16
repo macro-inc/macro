@@ -281,3 +281,15 @@ it('opens a new toast in place of one the mobile slot dismissed before it showed
   const next = toast.success('Email sent', { replace: queued });
   expect(next).not.toBe(queued);
 });
+
+it('reports closing a toast that was dismissed before it showed', () => {
+  render(() => <ToastRegion />);
+  toast.success('First', { stack: true });
+  toast.success('Second', { stack: true });
+  toast.success('Third', { stack: true });
+  const onDismiss = vi.fn();
+  const queued = toast.success('Queued', { stack: true, onDismiss });
+  toast.dismiss(queued!);
+  toast.dismiss(queued!);
+  expect(onDismiss).toHaveBeenCalledOnce();
+});

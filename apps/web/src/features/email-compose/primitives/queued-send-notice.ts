@@ -33,6 +33,8 @@ export function announceQueuedSend(options: {
     options.delivery.watchSend !== undefined;
   let inMotion = watched && !options.queuedOffline;
   let notice: number | undefined;
+  // Only the user closes a notice that waits for the outcome.
+  let progressDismissed = false;
   let sendingMessage = 'Sending…';
   let offeringUndo = false;
   let undoRequested = false;
@@ -45,6 +47,7 @@ export function announceQueuedSend(options: {
     message: string,
     noticeOptions?: ComposeNoticeOptions
   ) => {
+    const persistent = noticeOptions?.persistent ?? false;
     try {
       const shown = notices.feedback[tone](message, {
         ...noticeOptions,
@@ -52,7 +55,9 @@ export function announceQueuedSend(options: {
         stack: true,
         replace: notice,
         onDismiss: () => {
-          if (notice === shown) notice = undefined;
+          if (notice !== shown) return;
+          notice = undefined;
+          if (persistent) progressDismissed = true;
         },
       });
       notice = shown;
@@ -67,8 +72,9 @@ export function announceQueuedSend(options: {
   };
   const withdraw = () => {
     settle();
-    if (notice != null) notices.feedback.dismiss(notice);
+    const withdrawn = notice;
     notice = undefined;
+    if (withdrawn != null) notices.feedback.dismiss(withdrawn);
   };
   // The outcome stays until it is read; later progress never takes it back.
   const finish = (
@@ -130,16 +136,17 @@ export function announceQueuedSend(options: {
       .with({ state: 'accepted' }, ({ undoUntil }) => {
         accepted = true;
         if (undoRequested) return;
-        // A send that waited has just been accepted; one sent online already
-        // shows its notice, and one the user dismissed stays dismissed.
-        const wentOut = !inMotion;
+        // A send that waited has just been accepted: its notice may have
+        // expired. One the user dismissed stays dismissed.
+        const reopen = !inMotion && !progressDismissed;
         inMotion = true;
         const remaining = Date.parse(undoUntil) - Date.now();
         if (remaining <= 0) {
+          if (reopen) sending('Sending…', false);
           closeUndo();
           return;
         }
-        if (wentOut) sending('Sending…', true);
+        if (reopen) sending('Sending…', true);
         clearTimeout(stall);
         clearTimeout(undoDeadline);
         undoDeadline = setTimeout(closeUndo, remaining);
