@@ -57,8 +57,9 @@ Producers reach these types through `macro_event_broker::access`.
 - A public payload is an explicit projection that derives `utoipa::ToSchema`;
   routing fields (recipients, snapshots) go on the `Audience`, never in the
   payload.
-- Personal data uses `Audience::Recipient`, never `Owner`: `Owner` resolves
-  like an accessor and reaches the owner's team webhooks.
+- Personal data uses `Audience::Recipient`. No audience but `Team`,
+  `Workspace`, `GithubInstallation` and an entity the team itself holds
+  reaches a team webhook (ACCESS_MODEL.md, "Team webhooks").
 - An internal reason is one plain string: why the event is internal, or what
   is missing before it could be public.
 - `event_access::AccessError` (a broken event contract) is not

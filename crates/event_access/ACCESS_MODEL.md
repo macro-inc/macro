@@ -83,14 +83,14 @@ users named in the event.
 
 | Audience | Decided by | Entity-access check? | Live streams admit | Webhooks match |
 | --- | --- | --- | --- | --- |
-| `Entity { entity_type, entity_id }` | the entity's explicit accessors (`entity_access`) | **Yes** | a stream whose user is an accessor, any scope | the accessors' personal and team workspaces |
-| `EntityAtLeast { .., min_level }` | explicit accessors at or above `comment`, `edit` or `owner` | **Yes** | a stream whose user's level is at least the floor | those accessors' personal and team workspaces |
+| `Entity { entity_type, entity_id }` | the entity's explicit accessors (`entity_access`) | **Yes** | a stream whose user is an accessor, any scope | the accessors' personal workspaces, and the workspaces of teams that hold access themselves ([Team webhooks](#team-webhooks)) |
+| `EntityAtLeast { .., min_level }` | explicit accessors at or above `comment`, `edit` or `owner` | **Yes** | a stream whose user's level is at least the floor | those accessors' personal workspaces, and teams granted at or above the floor |
 | `Team { team_id, min_role }` | `team_user` membership and role | No: team membership | a stream whose user is a member (or admin) of the team | `member`: the team workspace; `admin`: each current admin's personal workspace |
-| `TeamsOf { user_id }` | the user's teams | No: team membership | team-scoped streams whose holder's workspace (their most privileged team) is one of the user's teams | the user's personal and team workspaces |
-| `ContactsOf { user_id }` | the user and their contact graph | No: contacts | personal streams of the user and of each contact | the user's own workspaces (webhooks cannot enumerate contacts) |
+| `TeamsOf { user_id }` | the user's teams | No: team membership | team-scoped streams whose holder's workspace (their most privileged team) is one of the user's teams | the user's personal workspace |
+| `ContactsOf { user_id }` | the user and their contact graph | No: contacts | personal streams of the user and of each contact | the user's personal workspace (webhooks cannot enumerate contacts) |
 | `GithubInstallation { installation_id }` | a claim on the installation (`has_claim`, the rule routines use) | No: GitHub claim | a stream whose user holds a claim | claimants' personal workspaces (no team expansion), and owning teams' workspaces when the webhook's creator holds a claim |
 | `Recipient { user_id }` | the one user named in the event | No: explicit user | that user's personal streams; on flagged streams a bot only if the user owns it | that user's personal workspace only |
-| `Owner { user_id }` | the owning user named in the event | No: explicit user | as `Recipient` | the owner's personal and team workspaces |
+| `Owner { user_id }` | the owning user named in the event | No: explicit user | as `Recipient` | the owner's personal workspace |
 | `Snapshot { user_ids }` | users the producer captured (grants already gone) | No: explicit users | those users' personal streams, bots acting for them included | each user's personal workspace |
 | `Person { user_id }` | the user named in the event | No: explicit user | that user's own streams, any scope | never (live streams only) |
 | `Workspace { workspace_id }` | one webhook workspace | No: workspace | the stream whose workspace it is (personal: its user; team-scoped: its holder's most privileged team) | that workspace |
@@ -99,7 +99,7 @@ users named in the event.
 Code: streams `AudienceResolver::admits` in
 `crates/event_stream/src/domain/access.rs`; webhooks
 `resolve_audience_and_enqueue` in `crates/webhook/src/domain/ingestion.rs`
-and `resolve_workspace_ids` in `crates/webhook/src/outbound/pg_repository.rs`.
+(`teams_with_access` for team workspaces).
 
 On flagged streams, webhook, bot and API key lifecycle events reach only the
 account holder (their own credential, a bot they own, or a harness runtime
@@ -110,11 +110,32 @@ acting for them; `is_account_holder` in
 
 ### Team webhooks
 
-> **TODO (pending decision): the final rule for how entity events reach
-> team-workspace webhooks will be written here.** Until then, the table above
-> describes today's behaviour: people reached through access (`Entity`,
-> `EntityAtLeast`, `Owner`, `TeamsOf`, `ContactsOf`) expand to every team
-> workspace they belong to (`resolve_workspace_ids`).
+A team workspace's webhooks receive an event only when the team itself is in
+the audience, never because one of its members is:
+
+- an `Entity` or `EntityAtLeast` event, when the team holds access to the
+  entity as a team (`EntityTeamAccess::get_teams_by_entity` in
+  `crates/entity_access/src/domain/ports.rs`, read uncached by
+  `teams_with_access` in `crates/webhook/src/domain/ingestion.rs`):
+  - the entity carries a `team` grant for the team, or a grant to a channel
+    the team owns (a team channel), including grants inherited from a project
+    (`queries/entity_teams.rs` in `crates/entity_access`); under an access
+    floor, only grants at or above it count;
+  - a channel event, when it is the team's own channel; a call, when it
+    belongs to such a channel;
+  - a CRM company or contact the team owns, while every member may see it
+    (not hidden);
+- a `Team { member }` event for that team, a `Workspace` event naming it, or
+  a GitHub installation it owns (gated on the webhook creator's claim).
+
+So a member's private DM, a document shared with the member alone, or the
+member's own agent sessions reach the member's personal workspace and no team
+workspace. `Owner`, `TeamsOf` and `ContactsOf` reach the named user's
+personal workspace only. Revoking the team's grant stops delivery to the team
+workspace from the next event, since the lookup is uncached.
+
+Live streams are unchanged: a team-scoped stream authenticates as one user
+and is admitted on that user's access.
 
 ## Preview stage
 
@@ -192,8 +213,8 @@ Ask, in order:
    project, chat, database, form, call)? `Entity`. Only some levels should
    see it (form responses for editors)? `EntityAtLeast`.
 2. Is it personal data (mail, calendar, notifications, activity, a user's
-   own bots or property definitions)? `Recipient`. Never `Owner`: `Owner`
-   also reaches the owner's team webhooks.
+   own bots or property definitions)? `Recipient`, which says it is
+   addressed to that one user.
 3. Is it about a team itself (settings, members, team bots)? `Team` with
    `member`, or `admin` when it carries an invitee's email or similar.
 4. Are the people who should hear it gone from the grants by the time the

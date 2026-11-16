@@ -11,7 +11,7 @@ mod test;
 use crate::domain::{
     events::WebhookTopicEvent,
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
-    ports::{WebhookEventEnqueuer, WebhookInterest, WebhookRepo, WebhookWorkspaceResolver},
+    ports::{WebhookEventEnqueuer, WebhookInterest, WebhookRepo},
 };
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
@@ -19,7 +19,7 @@ use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::{AccessError, AccessLevel, EntityType};
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::ports::{EntityAccessService, EntityTeamAccess};
 use event_stream::domain::filters::{self, FilterSubject, WildcardSupport};
 use event_stream::domain::normalize::NormalizeError;
 use event_stream::domain::ports::{
@@ -355,8 +355,8 @@ impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I> 
 
 impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
-    A: EntityAccessService,
-    R: WebhookRepo + WebhookWorkspaceResolver,
+    A: EntityAccessService + EntityTeamAccess,
+    R: WebhookRepo,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
     T: TeamDirectory,
@@ -374,6 +374,22 @@ where
         // not a listing cached for up to 10 s.
         self.entity_access_service
             .get_users_by_entity_uncached(entity_id, entity_type)
+            .await
+            .map_err(WebhookEventIngestionError::EntityAccess)
+    }
+
+    /// The teams that hold access to an entity themselves, uncached: their
+    /// team workspaces receive its events. A member's own access never
+    /// reaches a team workspace.
+    #[tracing::instrument(skip(self), err)]
+    async fn teams_with_access(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> Result<Vec<Uuid>, WebhookEventIngestionError> {
+        self.entity_access_service
+            .get_teams_by_entity(entity_id, entity_type, min_level)
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
     }
@@ -445,15 +461,10 @@ where
         entity_type: EntityType,
         min_level: MinAccessLevel,
     ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
-        let floor = match min_level {
-            MinAccessLevel::Comment => AccessLevel::Comment,
-            MinAccessLevel::Edit => AccessLevel::Edit,
-            MinAccessLevel::Owner => AccessLevel::Owner,
-        };
         // One set-based read over the grants, uncached, not a level lookup
         // per accessor.
         self.entity_access_service
-            .get_users_by_entity_at_least(entity_id, entity_type, floor)
+            .get_users_by_entity_at_least(entity_id, entity_type, access_level(min_level))
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
     }
@@ -627,6 +638,15 @@ fn normalize_staged<E: TopicEvent>(
     Ok(Some((public.event, public.audience, public.stage)))
 }
 
+/// The access level an [`MinAccessLevel`] floor names.
+fn access_level(min_level: MinAccessLevel) -> AccessLevel {
+    match min_level {
+        MinAccessLevel::Comment => AccessLevel::Comment,
+        MinAccessLevel::Edit => AccessLevel::Edit,
+        MinAccessLevel::Owner => AccessLevel::Owner,
+    }
+}
+
 fn directory_error(report: rootcause::Report) -> WebhookEventIngestionError {
     WebhookEventIngestionError::WorkspaceResolution(anyhow::anyhow!("{report:?}"))
 }
@@ -651,34 +671,49 @@ fn audience_members(audience: &Audience) -> Vec<&Audience> {
 
 /// The webhook workspaces an audience reaches.
 ///
-/// People reached through access (entity accessors, owners, a user whose
-/// contacts or teams are the audience) expand to their personal and team
-/// workspaces in one resolution. Addressed people and workspaces match
-/// exactly, with no team expansion. Webhooks cannot enumerate contacts, so
-/// `ContactsOf` reaches only the user's own workspaces.
+/// A person's workspace is their personal one (their user id). A team
+/// workspace (the team id) is reached only through the team itself: an
+/// entity granted to the team (`EntityTeamAccess`), a team audience, a named
+/// workspace, or a GitHub installation the team owns. A member's own access
+/// never reaches their teams' webhooks. Webhooks cannot enumerate contacts,
+/// so `ContactsOf` reaches only the user's personal workspace.
 #[derive(Default)]
 struct WorkspaceAudience {
-    /// Whether any member needs workspace resolution, even with no people.
-    resolve: bool,
-    /// People to resolve into personal and team workspaces, in order.
-    people: Vec<MacroUserIdStr<'static>>,
-    /// Workspaces matched exactly.
-    exact: Vec<String>,
+    /// Workspace ids, in order, without duplicates.
+    workspace_ids: Vec<String>,
+    /// People reached through an entity's access, for the span.
+    accessor_count: usize,
 }
 
 impl WorkspaceAudience {
+    fn add(&mut self, workspace_id: String) {
+        if !self.workspace_ids.contains(&workspace_id) {
+            self.workspace_ids.push(workspace_id);
+        }
+    }
+
     fn add_person(&mut self, person: &MacroUserIdStr<'static>) {
-        self.resolve = true;
-        if !self.people.contains(person) {
-            self.people.push(person.clone());
+        self.add(person.to_string());
+    }
+
+    fn add_accessors(&mut self, accessors: Vec<MacroUserIdStr<'static>>) {
+        self.accessor_count += accessors.len();
+        for accessor in &accessors {
+            self.add_person(accessor);
+        }
+    }
+
+    fn add_teams(&mut self, teams: Vec<Uuid>) {
+        for team in teams {
+            self.add(team.to_string());
         }
     }
 }
 
 impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
-    A: EntityAccessService,
-    R: WebhookRepo + WebhookWorkspaceResolver,
+    A: EntityAccessService + EntityTeamAccess,
+    R: WebhookRepo,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
     T: TeamDirectory,
@@ -730,40 +765,17 @@ where
         let mut claim_gates = Vec::new();
         for member in audience_members(audience) {
             match member {
+                // Accessors match their personal workspaces; a team workspace
+                // only when the team itself holds access.
                 Audience::Entity {
                     entity_type,
                     entity_id,
                 } => {
-                    workspaces.resolve = true;
-                    for accessor in self.users_with_access(entity_id, *entity_type).await? {
-                        workspaces.add_person(&accessor);
-                    }
-                }
-                Audience::Owner { user_id }
-                | Audience::TeamsOf { user_id }
-                | Audience::ContactsOf { user_id } => workspaces.add_person(user_id),
-                Audience::Recipient { user_id } => workspaces.exact.push(user_id.to_string()),
-                // Live streams only: a webhook never matches through it.
-                Audience::Person { .. } => {}
-                Audience::Snapshot { user_ids } => workspaces
-                    .exact
-                    .extend(user_ids.iter().map(ToString::to_string)),
-                Audience::Workspace { workspace_id } => {
-                    workspaces.exact.push(workspace_id.clone());
-                }
-                Audience::Team {
-                    team_id,
-                    min_role: MinTeamRole::Member,
-                } => workspaces.exact.push(team_id.to_string()),
-                Audience::Team {
-                    team_id,
-                    min_role: MinTeamRole::Admin,
-                } => {
-                    workspaces.exact.extend(
-                        self.team_admins(*team_id)
-                            .await?
-                            .into_iter()
-                            .map(|admin| admin.to_string()),
+                    workspaces
+                        .add_accessors(self.users_with_access(entity_id, *entity_type).await?);
+                    workspaces.add_teams(
+                        self.teams_with_access(entity_id, *entity_type, None)
+                            .await?,
                     );
                 }
                 Audience::EntityAtLeast {
@@ -771,19 +783,53 @@ where
                     entity_id,
                     min_level,
                 } => {
-                    workspaces.resolve = true;
-                    for accessor in self
-                        .accessors_at_least(entity_id, *entity_type, *min_level)
-                        .await?
-                    {
-                        workspaces.add_person(&accessor);
+                    workspaces.add_accessors(
+                        self.accessors_at_least(entity_id, *entity_type, *min_level)
+                            .await?,
+                    );
+                    workspaces.add_teams(
+                        self.teams_with_access(
+                            entity_id,
+                            *entity_type,
+                            Some(access_level(*min_level)),
+                        )
+                        .await?,
+                    );
+                }
+                // Named people match their personal workspace only.
+                Audience::Owner { user_id }
+                | Audience::TeamsOf { user_id }
+                | Audience::ContactsOf { user_id }
+                | Audience::Recipient { user_id } => workspaces.add_person(user_id),
+                // Live streams only: a webhook never matches through it.
+                Audience::Person { .. } => {}
+                Audience::Snapshot { user_ids } => {
+                    for user_id in user_ids {
+                        workspaces.add_person(user_id);
+                    }
+                }
+                Audience::Workspace { workspace_id } => workspaces.add(workspace_id.clone()),
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Member,
+                } => workspaces.add(team_id.to_string()),
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Admin,
+                } => {
+                    for admin in self.team_admins(*team_id).await? {
+                        workspaces.add_person(&admin);
                     }
                 }
                 Audience::GithubInstallation { installation_id } => {
                     let (claimant_workspaces, owning_teams) =
                         self.installation_workspaces(installation_id).await?;
-                    workspaces.exact.extend(claimant_workspaces);
-                    workspaces.exact.extend(owning_teams.iter().cloned());
+                    for workspace_id in claimant_workspaces
+                        .into_iter()
+                        .chain(owning_teams.iter().cloned())
+                    {
+                        workspaces.add(workspace_id);
+                    }
                     claim_gates.push(ClaimGate {
                         installation_id: installation_id.clone(),
                         team_workspaces: owning_teams,
@@ -796,17 +842,8 @@ where
                 }
             }
         }
-        tracing::Span::current().record("accessor_count", workspaces.people.len());
-
-        let mut workspace_ids = if workspaces.resolve {
-            self.repository
-                .resolve_workspace_ids(workspaces.people)
-                .await
-                .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?
-        } else {
-            Vec::new()
-        };
-        workspace_ids.extend(workspaces.exact);
+        tracing::Span::current().record("accessor_count", workspaces.accessor_count);
+        let workspace_ids = workspaces.workspace_ids;
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
         self.match_and_enqueue(event, stage, workspace_ids, &claim_gates)
@@ -824,8 +861,8 @@ struct ClaimGate {
 impl<A, R, Q, P, T, G, I> WebhookEventIngestionService
     for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
-    A: EntityAccessService,
-    R: WebhookRepo + WebhookWorkspaceResolver,
+    A: EntityAccessService + EntityTeamAccess,
+    R: WebhookRepo,
     Q: WebhookEventEnqueuer,
     P: PreviewFlag,
     T: TeamDirectory,

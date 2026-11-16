@@ -122,27 +122,38 @@ feature flag. Live streams (`GET /events/stream`) live in
   `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
-  removed). Persisted webhooks go only to the changed user's own personal and
-  team workspaces. The live stream also reaches the user's contacts (user
+  removed). Persisted webhooks go only to the changed user's personal
+  workspace. The live stream also reaches the user's contacts (user
   scope only) and the team-scoped streams of the user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
 
 Call events use `entity_type = "call"` and the call ID as the entity and
-ordering key. Public events resolve the call's current accessor set before
-matching personal and team webhooks or streaming to a subscriber. Ringing,
+ordering key. Public events resolve the call's current accessor set (and the
+team owning the call's channel) before matching personal and team webhooks or
+streaming to a subscriber. Ringing,
 answered, declined, and invited events address one user: only that user's
 personal webhook workspace and personal event stream may receive them. The
 broker's recipient routing field is removed from delivered metadata.
 
-For document, channel, and message events, ingestion asks `EntityAccessService`
-for the people who currently have access to the entity, uncached, so a grant
-or revocation just before the event counts; a message's entity is
-its parent channel or document. The matching workspace set
-contains each person's Macro user ID, for personal webhooks, plus every team ID
-to which any of those people belongs. The set is deduplicated before matching,
-so one person or team is considered only once.
+For entity audiences (document, channel, message and every other entity
+family), ingestion asks `entity_access`, uncached, so a grant or revocation
+just before the event counts; a message's entity is its parent channel or
+document. The matching workspace set holds:
+
+- each person who currently has access to the entity, as their Macro user ID
+  (their personal webhooks);
+- each team that holds access to the entity itself
+  (`EntityTeamAccess::get_teams_by_entity`): the entity is granted to the team,
+  or to a channel the team owns, or it is the team's own channel (or a call in
+  it), or a CRM record the team owns that every member may see.
+
+A team webhook never receives an event only because one of its members can
+see the entity: a member's private DM or a document shared with them alone
+reaches their personal workspace, not their teams'. Owner, contact and
+"teams of" audiences likewise match only the named user's personal
+workspace. The set is deduplicated before matching.
 
 `message.mentioned` is emitted once per distinct entity `@`-mentioned in a
 message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
@@ -243,7 +254,7 @@ to wildcard and preview matches and checks `entity_types`.
 
 Ingestion concurrently enqueues one message for every matched webhook and waits
 for every send. It succeeds only if all sends complete. Repository,
-workspace-resolution, queue, and database/internal access failures are
+directory, queue, and database/internal access failures are
 transient: the consumer makes up to five in-process attempts with 1, 2, 4, and
 8-second delays. If all five fail, it exits without committing the Kafka offset;
 the service supervisor restarts it and Kafka redelivers the event. Invalid

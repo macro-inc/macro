@@ -456,10 +456,10 @@ impl EventAccess for AgentSessionLifecycleEvent {
             // ownership, and the channel or document it was opened from still
             // knows its audience: deliver to the union of the two.
             Self::Deleted(deleted) => {
-                // As before declared access: webhooks resolve the owner like an
-                // accessor (Owner: personal and team workspaces), streams
-                // match the owner's personal stream for any credential acting
-                // for them (Workspace, not a personal class).
+                // Webhooks match the owner's personal workspace (Owner);
+                // streams match the owner's personal stream for any
+                // credential acting for them (Workspace, not a personal
+                // class).
                 let owner = Audience::Any(vec![
                     Audience::Owner {
                         user_id: deleted.identity.owner_id.clone(),

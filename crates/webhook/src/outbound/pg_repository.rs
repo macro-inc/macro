@@ -141,40 +141,6 @@ async fn fetch_user_team_workspace_id(
 impl WebhookWorkspaceResolver for PgRepository {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(skip(self, people), err)]
-    async fn resolve_workspace_ids(
-        &self,
-        people: Vec<MacroUserIdStr<'static>>,
-    ) -> Result<Vec<String>, Self::Err> {
-        let mut workspace_ids = people
-            .iter()
-            .map(|person| person.as_ref().to_string())
-            .collect::<Vec<_>>();
-        workspace_ids.sort_unstable();
-        workspace_ids.dedup();
-
-        if workspace_ids.is_empty() {
-            return Ok(workspace_ids);
-        }
-
-        let team_workspace_ids = sqlx::query_scalar!(
-            r#"
-            SELECT DISTINCT team_id::text AS "team_id!"
-            FROM team_user
-            WHERE user_id = ANY($1)
-            ORDER BY team_id::text
-            "#,
-            &workspace_ids
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        workspace_ids.extend(team_workspace_ids);
-        workspace_ids.sort_unstable();
-        workspace_ids.dedup();
-        Ok(workspace_ids)
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn get_user_team_workspace_id(
         &self,

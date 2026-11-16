@@ -101,16 +101,10 @@ pub trait WebhookInterest: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
-/// Resolver that expands people into personal and team webhook workspace ids.
+/// Resolver of a user's team webhook workspace.
 pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
     /// Resolver error.
     type Err: Into<anyhow::Error> + Send;
-
-    /// Resolve a deterministic, deduplicated set of personal and team workspace ids.
-    fn resolve_workspace_ids(
-        &self,
-        people: Vec<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// The caller's team workspace, matching persisted-webhook create/list:
     /// highest `team_role`, one team.

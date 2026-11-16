@@ -232,10 +232,9 @@ pub enum Audience {
         user_id: MacroUserIdStr<'static>,
     },
     /// The owning user, such as a deleted session's owner. Webhooks match the
-    /// owner as they match any accessor (their personal and team
-    /// workspaces); streams match the owner's personal stream. Because it
-    /// reaches the owner's team webhooks, never use it for personal data;
-    /// use [`Self::Recipient`].
+    /// owner's personal workspace, never their teams'; streams match the
+    /// owner's personal stream. Delivery treats it as [`Self::Recipient`];
+    /// declare personal data with [`Self::Recipient`], which says so.
     Owner {
         /// The owning user.
         user_id: MacroUserIdStr<'static>,
