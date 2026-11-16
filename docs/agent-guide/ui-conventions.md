@@ -59,7 +59,9 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 ## More menus
 
 Top-level action rows use one appropriate shared interface icon, including Mute
-and Change icon; simple choices such as mute durations stay text-only. Copy actions
+and Change icon. Match each action across header, context, preview, and mobile
+menus using the [canonical action icons](../../apps/web/src/components/icon/system/README.md#menu-action-icons);
+simple choices such as mute durations stay text-only. Copy actions
 retain the open menu and focused row; the explicit icon blurs and fades to a plain
 green check after the clipboard write succeeds, then resets after the last copy.
 Labels remain unchanged and success toasts do not appear. A failed copy keeps the

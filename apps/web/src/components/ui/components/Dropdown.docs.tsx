@@ -1,6 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { t } from '@app/lib/i18n';
 import { ContextMenuContent, CopyMenuItem } from '@core/component/ContextMenu';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { createSignal, For } from 'solid-js';
 import { Dropdown } from './Dropdown';
@@ -70,6 +71,7 @@ function CopyDemo() {
       <Dropdown.Trigger>Copy</Dropdown.Trigger>
       <Dropdown.Content class="min-w-48">
         <Dropdown.CopyItem
+          icon={<LinkIcon class="size-4" />}
           onCopy={() => navigator.clipboard.writeText(location.href)}
         >
           Copy link
@@ -91,6 +93,7 @@ function ContextCopyDemo() {
         <ContextMenuContent>
           <CopyMenuItem
             text={t('entityActions.copyLink')}
+            icon={LinkIcon}
             onCopy={() => navigator.clipboard.writeText(location.href)}
           />
         </ContextMenuContent>

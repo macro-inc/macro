@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dropdown } from '@ui';
@@ -34,7 +35,11 @@ export function SavedViewMenuItems(props: {
         </Dropdown.Item>
         <Show when={props.onCopyLink}>
           {(onCopyLink) => (
-            <Dropdown.CopyItem disabled={props.disabled} onCopy={onCopyLink()}>
+            <Dropdown.CopyItem
+              icon={<LinkIcon class="size-4" />}
+              disabled={props.disabled}
+              onCopy={onCopyLink()}
+            >
               Copy link
             </Dropdown.CopyItem>
           )}

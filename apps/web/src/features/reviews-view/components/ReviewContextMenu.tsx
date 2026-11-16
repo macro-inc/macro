@@ -14,8 +14,7 @@ import { openExternalUrl } from '@core/util/url';
 import type { GithubPullRequestEntity } from '@entity';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
-import CopyIcon from '@icon/system/regular/copy.svg';
-import BrowserTabIcon from '@icon/system/regular/tabs.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Show } from 'solid-js';
 
@@ -40,7 +39,7 @@ export function ReviewContextMenuContent(props: {
         />
         <Show when={canOpenInNewTab()}>
           <MenuItem
-            icon={BrowserTabIcon}
+            icon={ArrowSquareOutIcon}
             text={t('entityActions.openInNewTab')}
             onClick={() =>
               openInNewTab(() => props.onOpen(props.review.id, false))
@@ -48,7 +47,7 @@ export function ReviewContextMenuContent(props: {
           />
         </Show>
         <CopyMenuItem
-          icon={CopyIcon}
+          icon={LinkIcon}
           text={t('entityActions.copyLinkCommand')}
           onCopy={() => copyLink.execute([props.review])}
         />

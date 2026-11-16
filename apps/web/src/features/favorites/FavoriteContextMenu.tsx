@@ -13,10 +13,10 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import TabIcon from '@icon/system/regular/arrow-square-out.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import StarIcon from '@icon/system/regular/star.svg';
-import TabIcon from '@icon/system/regular/tabs.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useRemoveFavoriteMutation } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';

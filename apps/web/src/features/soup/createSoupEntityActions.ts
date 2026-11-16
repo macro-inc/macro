@@ -66,6 +66,7 @@ import ArchiveIcon from '@icon/system/regular/archive.svg';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
+import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -85,6 +86,8 @@ import StarIcon from '@icon/system/regular/star.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UserIcon from '@icon/system/regular/user.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -509,7 +512,7 @@ export function createSoupEntityActions(
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
-        icon: BellIcon,
+        icon: allMuted ? BellIcon : BellSlashIcon,
         label: allMuted
           ? t('entityActions.unmuteNotifications')
           : t('entityActions.muteNotifications'),
@@ -727,7 +730,7 @@ export function createSoupEntityActions(
     ) {
       senderItems.push({
         id: 'sender-signal',
-        icon: EnvelopeOpenIcon,
+        icon: SignalIcon,
         label: t('entityActions.senderToSignal'),
         onClick: handle(markSenderSignalAction.executeWithSoup),
       });
@@ -739,7 +742,7 @@ export function createSoupEntityActions(
     ) {
       senderItems.push({
         id: 'sender-noise',
-        icon: BellIcon,
+        icon: NoiseIcon,
         label: t('entityActions.senderToNoise'),
         onClick: handle(markSenderNoiseAction.executeWithSoup),
       });

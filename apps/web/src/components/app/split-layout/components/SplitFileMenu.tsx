@@ -41,7 +41,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, type EntityData } from '@entity';
-import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
 import BellSlash from '@icon/system/regular/bell-slash.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
@@ -50,6 +49,7 @@ import Check from '@icon/system/regular/check.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import Link from '@icon/system/regular/link.svg';
 import PaintBrush from '@icon/system/regular/paint-brush.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
@@ -836,7 +836,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                       toast.failure(t('entityActions.toastMoveToFolderFailed')),
                   });
                 },
-                icon: ArrowRight,
+                icon: FolderIcon,
                 get hotkeyToken() {
                   return activeHotkeyToken(TOKENS.entity.action.moveToFolder);
                 },

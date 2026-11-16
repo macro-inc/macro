@@ -9,10 +9,10 @@ import type {
 } from '@core/messages/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
-import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
-import PencilIcon from '@icon/system/regular/pencil.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -83,7 +83,7 @@ function buildActionItems(
     {
       id: 'create-task',
       label: 'Create task',
-      icon: CheckSquareIcon,
+      icon: TaskIcon,
       onClick: actions?.onCreateTask,
     },
     {

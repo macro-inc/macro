@@ -16,8 +16,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
 import Minimize from '@icon/system/regular/arrows-in.svg';
-import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import Sparkle from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
@@ -637,11 +639,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     <span class="flex-1 truncate">Ask Macro</span>
                   </Dropdown.Item>
                 </Show>
-                <Dropdown.CopyItem onCopy={handleCopy}>
+                <Dropdown.CopyItem
+                  icon={<LinkIcon class="size-4" />}
+                  onCopy={handleCopy}
+                >
                   <span class="flex-1 truncate">Copy Link</span>
                 </Dropdown.CopyItem>
                 <Show when={props.blockName === 'task'}>
                   <Dropdown.CopyItem
+                    icon={<GitBranchIcon class="size-4" />}
                     onCopy={() =>
                       copyBranchNameToClipboard(props.item.id, { silent: true })
                     }
@@ -651,7 +657,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 </Show>
                 <Show when={!isSplitAlreadyOpen()}>
                   <Dropdown.Item onSelect={openInNewSplit}>
-                    <ColumnsPlusRight class="size-4 shrink-0" />
+                    <SplitIcon class="size-4 shrink-0" />
                     <span class="flex-1 truncate">Open in New Split</span>
                   </Dropdown.Item>
                 </Show>

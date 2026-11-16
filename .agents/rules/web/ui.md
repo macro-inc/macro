@@ -10,7 +10,7 @@ alwaysApply: false
 
 Components, styling, and interaction conventions.
 
-- Give top-level More-menu actions one appropriate shared interface icon; keep simple choice lists such as mute durations text-only.
+- Give top-level More-menu actions one appropriate shared interface icon; use the same glyph for the same action in header, context, and mobile menus, following the [canonical action icons](../../../apps/web/src/components/icon/system/README.md#menu-action-icons), and keep simple choice lists such as mute durations text-only.
 - Keep clipboard menu actions open and transition their explicit icon to a plain green check with CSS blur/fade after success; share copy state, not DOM inspection, and preserve failure feedback and labels.
 
 - **FE-22** Pending or permission-gated actions render as a dimmed version of

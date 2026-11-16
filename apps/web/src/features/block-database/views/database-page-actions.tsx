@@ -5,11 +5,12 @@ import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
+import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
@@ -211,7 +212,10 @@ export function DatabasePageActions(props: {
                       }}
                     />
                   </Show>
-                  <Dropdown.CopyItem onCopy={actions().onCopyLink}>
+                  <Dropdown.CopyItem
+                    icon={<LinkIcon class="size-4" />}
+                    onCopy={actions().onCopyLink}
+                  >
                     Copy Link
                   </Dropdown.CopyItem>
                   <Dropdown.CopyItem onCopy={actions().onCopyId}>
@@ -226,7 +230,7 @@ export function DatabasePageActions(props: {
                   <Show when={actions().onMoveToFolder}>
                     {(moveToFolder) => (
                       <Dropdown.Item onSelect={moveToFolder()}>
-                        <ArrowRightIcon class="size-4 shrink-0" />
+                        <FolderIcon class="size-4 shrink-0" />
                         {t('entityActions.moveToFolder')}
                       </Dropdown.Item>
                     )}

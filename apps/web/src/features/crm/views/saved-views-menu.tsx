@@ -311,6 +311,7 @@ export function CompanyViewsMenu(
             </div>
           </Show>
           <Dropdown.CopyItem
+            icon={<LinkIcon class="size-4" />}
             onCopy={() => copyShareLink(captureCurrentView(), { silent: true })}
           >
             <span class="flex-1 truncate">Copy link to current view</span>

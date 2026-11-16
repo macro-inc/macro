@@ -8,6 +8,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -379,6 +380,7 @@ export function DispatchAgentButton(
           </Dropdown.CopyItem>
           <Show when={isTask()}>
             <Dropdown.CopyItem
+              icon={<GitBranchIcon class="size-4" />}
               onCopy={() =>
                 copyBranchNameToClipboard(blockId, { silent: true })
               }
