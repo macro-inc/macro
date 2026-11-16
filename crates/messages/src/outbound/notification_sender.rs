@@ -26,6 +26,13 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             .sender_id
             .as_bot()
             .and(n.message.triggered_via.clone())
+            .map(|name| {
+                mcp_client_label::McpClientLabel {
+                    name,
+                    kind: n.message.triggered_via_kind,
+                }
+                .display_name()
+            })
             .or_else(|| {
                 n.message
                     .bot_profile

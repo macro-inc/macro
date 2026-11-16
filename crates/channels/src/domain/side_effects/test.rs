@@ -314,7 +314,7 @@ async fn mcp_client_post_is_named_after_the_client() {
         sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: Some("macro|alice@example.com".to_string()),
         triggered_via: Some("Claude Code".to_string()),
-        triggered_via_kind: None,
+        triggered_via_kind: Some(McpClientKind::ClaudeCode),
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -330,6 +330,38 @@ async fn mcp_client_post_is_named_after_the_client() {
     assert_eq!(profile.name, "Claude Code");
     assert_eq!(profile.avatar_url, None);
     assert_eq!(*lookup_count.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn unverified_client_post_is_named_as_unverified() {
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        triggered_by: Some("macro|alice@example.com".to_string()),
+        triggered_via: Some("Claude".to_string()),
+        triggered_via_kind: None,
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("a client post should have a profile");
+
+    assert_eq!(profile.name, "Claude (unverified app)");
 }
 
 #[tokio::test]

@@ -1,4 +1,5 @@
 import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
+import { UNVERIFIED_CLIENT_MARK } from '@core/component/mcpClientMark';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
@@ -38,7 +39,13 @@ vi.mock('./BotIcon', () => ({
     <span
       data-testid="bot-icon"
       data-avatar={props.avatarUrl ?? ''}
-      data-mark={props.mark ? 'mark' : ''}
+      data-mark={
+        props.mark === UNVERIFIED_CLIENT_MARK
+          ? 'unverified'
+          : props.mark
+            ? 'mark'
+            : ''
+      }
     >
       {props.name}
     </span>
@@ -86,6 +93,7 @@ describe('SenderIcon', () => {
         name: 'Macro',
         triggered_by: 'macro|alice@example.com',
         triggered_via: 'Claude Code',
+        triggered_via_kind: 'claude_code',
       })
     );
     expect(getByTestId('bot-icon').textContent).toBe('Claude Code');
@@ -109,7 +117,7 @@ describe('SenderIcon', () => {
     expect(icon.dataset.mark).toBe('mark');
   });
 
-  it('draws an unrecognized MCP client with its initial', () => {
+  it('draws an unverified MCP client with the neutral app mark, never its initial', () => {
     const { getByTestId } = renderSender(
       message(MACRO_AGENT_PRINCIPAL_ID, {
         type: 'bot',
@@ -120,7 +128,10 @@ describe('SenderIcon', () => {
         triggered_via_kind: null,
       })
     );
-    expect(getByTestId('bot-icon').dataset.mark).toBe('');
+    expect(getByTestId('bot-icon').dataset.mark).toBe('unverified');
+    expect(getByTestId('user-card').dataset.name).toBe(
+      'Claude (unverified app)'
+    );
   });
 
   it('draws a team bot with its own uploaded avatar', () => {

@@ -21,6 +21,7 @@ import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
+import mcpClients from './en/mcp-clients';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
@@ -70,6 +71,7 @@ export default {
   suggestions,
   localRuntime,
   markdownEditor,
+  mcpClients,
   mobile,
   nav,
   notificationsInbox,

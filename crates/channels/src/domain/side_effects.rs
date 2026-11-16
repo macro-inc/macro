@@ -20,7 +20,9 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use messages::domain::models::{McpClientKind, PostMessageNotificationPolicy, SimpleMention};
+use messages::domain::models::{
+    McpClientKind, McpClientLabel, PostMessageNotificationPolicy, SimpleMention,
+};
 use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;
@@ -540,8 +542,12 @@ where
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         let bot_id = message.sender_id.as_bot()?.bot_id();
         if let Some(client) = &message.triggered_via {
-            return Some(BotSenderProfile {
+            let label = McpClientLabel {
                 name: client.clone(),
+                kind: message.triggered_via_kind,
+            };
+            return Some(BotSenderProfile {
+                name: label.display_name(),
                 avatar_url: None,
             });
         }

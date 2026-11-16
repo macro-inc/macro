@@ -50,3 +50,19 @@ pub struct McpClientLabel {
     /// The product the registration was verified as, if any.
     pub kind: Option<McpClientKind>,
 }
+
+impl McpClientLabel {
+    /// The name people see the client's posts under, in notifications and
+    /// anywhere else the product's mark isn't drawn. A client the registration
+    /// didn't verify chose its own name, so it is never shown bare: an
+    /// unverified "Claude" must not read as Anthropic's.
+    pub fn display_name(&self) -> String {
+        match self.kind {
+            Some(_) => self.name.clone(),
+            None => format!("{} (unverified app)", self.name),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;

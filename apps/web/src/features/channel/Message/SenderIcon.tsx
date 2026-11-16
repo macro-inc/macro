@@ -1,11 +1,15 @@
 import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
-import { mcpClientMark } from '@core/component/mcpClientMark';
+import {
+  mcpClientMark,
+  UNVERIFIED_CLIENT_MARK,
+} from '@core/component/mcpClientMark';
 import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   getBotDisplayName,
+  isUnverifiedClientSender,
   senderFromStorageId,
 } from '@queries/messages/message-sender';
 import type { MessageSender } from '@service-storage/messages';
@@ -69,11 +73,15 @@ export function SenderIcon(props: SenderIconProps) {
     };
   };
 
-  // Guests and external authors take the avatar slot before a bot does.
-  const clientMark = () =>
-    message().guest_name || externalAuthor()
-      ? undefined
-      : mcpClientMark(botSender()?.triggered_via_kind);
+  // Guests and external authors take the avatar slot before a bot does. A
+  // client the server didn't verify gets a neutral robot rather than its
+  // initial.
+  const clientMark = () => {
+    if (message().guest_name || externalAuthor()) return undefined;
+    const bot = botSender();
+    if (bot && isUnverifiedClientSender(bot)) return UNVERIFIED_CLIENT_MARK;
+    return mcpClientMark(bot?.triggered_via_kind);
+  };
 
   const avatar = () => (
     <Show

@@ -1,3 +1,4 @@
+import RobotIcon from '@icon/system/regular/robot.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import OpenAiIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -25,3 +26,12 @@ export function mcpClientMark(
   if (!kind) return undefined;
   return MARKS[kind];
 }
+
+/**
+ * The avatar for a client the server did not verify: a generic robot, never
+ * an initial, which could pass for a product's mark.
+ */
+export const UNVERIFIED_CLIENT_MARK: FirstPartyBotMark = {
+  Icon: RobotIcon,
+  tone: 'ink',
+};

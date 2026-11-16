@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import type {
   Message as EntityMessage,
@@ -57,12 +58,30 @@ export function getBotDisplayName(
 
   if (parsed.type !== 'bot' && !systemName) return undefined;
 
+  if (parsed.triggered_via) {
+    return isUnverifiedClientSender(parsed)
+      ? t('mcpClients.unverifiedName', { name: parsed.triggered_via })
+      : parsed.triggered_via;
+  }
+
   return (
-    parsed.triggered_via ??
     parsed.name ??
     systemName ??
     bots.find((bot) => bot.id === parsed.id)?.name ??
     'Bot'
+  );
+}
+
+/**
+ * Whether a bot post came through an MCP client the server did not verify.
+ * Such a client chose its own name, so it is never shown bare: an unverified
+ * "Claude" must not read as Anthropic's.
+ */
+export function isUnverifiedClientSender(sender: MessageSender): boolean {
+  return (
+    sender.type === 'bot' &&
+    Boolean(sender.triggered_via) &&
+    !sender.triggered_via_kind
   );
 }
 
