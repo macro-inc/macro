@@ -56,6 +56,13 @@ async function paste(
       { engine, html, text }
     );
   }
+  // Headless Chromium denies clipboard writes unless the context grants it,
+  // as CI's does; local runs may inherit a profile that already allows it.
+  await page
+    .context()
+    .grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(page.url()).origin,
+    });
   await page.evaluate(
     async ({ html, text }) => {
       await navigator.clipboard.write([
