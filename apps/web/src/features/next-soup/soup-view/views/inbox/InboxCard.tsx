@@ -46,12 +46,12 @@ function Root(props: RootProps): JSX.Element {
         // ListEntity.css — which also carries the mobile rail value — so group
         // headers can line their label up with this card's content.
         'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-xl py-2.5 pr-2 pl-(--soup-row-padding-l)',
-        // Mobile renders the same cards in slightly different visual
+        // Touch renders the same cards in slightly different visual
         // language: a full-bleed row whose left rail holds the unread dot
         // (see the span below) instead of the checkbox gutter, with the
         // avatar column centered against the content. The --soup-inbox-*
         // vars come from `.soup-list-entity` on the row wrapper.
-        'mobile:rounded-none mobile:grid-cols-[auto_minmax(0,1fr)_max-content] mobile:items-center mobile:content-center mobile:pr-3',
+        'touch:rounded-none touch:grid-cols-[auto_minmax(0,1fr)_max-content] touch:items-center touch:content-center touch:pr-3',
         {
           'bg-list-selected': props.selected,
           'bg-list-selected-highlighted': props.selected && props.highlighted,
@@ -89,7 +89,7 @@ function Icon(props: IconProps): JSX.Element {
   return (
     <span
       class={cn(
-        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible mobile:size-(--soup-inbox-icon-diameter)',
+        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible touch:size-(--soup-inbox-icon-diameter)',
         props.class
       )}
     >
