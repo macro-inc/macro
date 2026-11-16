@@ -15,7 +15,8 @@ pub(crate) const PAUSE_FLAG: &str = "disable-memory-refresh";
 pub(crate) const FLAG_CONTEXT: ServiceContext = ServiceContext::new("memory-refresh");
 
 /// Check due users every five minutes. Only completed UTC days are generated;
-/// retries and restarts resume from the last committed day, one day at a time.
+/// retries and restarts resume from the last committed day, one day at a time,
+/// and a day that keeps failing is given up after a bounded number of claims.
 /// [`PAUSE_FLAG`] is read from `flags`, when there are flags, before each claim.
 pub fn start<R, F>(
     service: Arc<MemoryServiceImpl<R>>,
