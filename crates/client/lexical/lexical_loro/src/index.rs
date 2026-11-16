@@ -189,6 +189,21 @@ impl NodeIndex {
     }
 }
 pub(crate) fn projected_children(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<Vec<LoroMap>> {
+    lifted_children(map, policy, 0)
+}
+/// `wrappers` counts the transparent wrappers lifted so far; nesting them past the stored
+/// cap fails instead of recursing further.
+fn lifted_children(
+    map: &LoroMap,
+    policy: &dyn SyncPolicy,
+    wrappers: usize,
+) -> Result<Vec<LoroMap>> {
+    if wrappers > crate::schema::MAX_STORED_DEPTH {
+        return Err(lexical_model::Error::NestingTooDeep {
+            limit: lexical_model::MAX_NODE_DEPTH,
+        }
+        .into());
+    }
     let mut result = Vec::new();
     if let Some(list) = schema::children(map)? {
         for i in 0..list.len() {
@@ -198,7 +213,7 @@ pub(crate) fn projected_children(map: &LoroMap, policy: &dyn SyncPolicy) -> Resu
                 continue;
             }
             if policy.is_transparent_json(&json) {
-                result.extend(projected_children(&child, policy)?);
+                result.extend(lifted_children(&child, policy, wrappers + 1)?);
             } else {
                 result.push(child);
             }

@@ -427,3 +427,41 @@ fn trees_deeper_than_the_node_cap_fail_on_local_edits_and_json_import() {
         .join()
         .expect("no stack overflow");
 }
+
+// Moving a valid subtree can push its untouched leaves past the cap: the moved node's whole
+// subtree is checked, not only the dirty nodes and their ancestors.
+#[test]
+fn moving_a_valid_deep_subtree_one_level_down_fails_at_the_cap() {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("builder");
+            let ((host, chain), _) = editor
+                .update(|tx| {
+                    let host = tx.create(Paragraph::default())?;
+                    tx.append(NodeKey::ROOT, &[host.key()])?;
+                    let chain = tx.create(Paragraph::default())?;
+                    tx.append(NodeKey::ROOT, &[chain.key()])?;
+                    let mut parent = chain.key();
+                    for _ in 1..MAX_NODE_DEPTH {
+                        let child = tx.create(Paragraph::default())?;
+                        tx.append(parent, &[child.key()])?;
+                        parent = child.key();
+                    }
+                    Ok((host.key(), chain.key()))
+                })
+                .expect("a 512-deep chain fits");
+            let error = editor
+                .update(|tx| tx.append(host, &[chain]))
+                .expect_err("its leaf would sit at 513");
+            assert!(
+                matches!(error, Error::NestingTooDeep { limit } if limit == MAX_NODE_DEPTH),
+                "{error}"
+            );
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow");
+}

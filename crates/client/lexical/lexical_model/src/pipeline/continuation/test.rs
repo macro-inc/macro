@@ -266,3 +266,77 @@ fn new_sliced_pass_after_flush_must_finish_before_commit() -> Result<(), Error> 
     CALLS.with(|calls| assert_eq!(*calls.borrow(), vec!["root root", "root root"]));
     Ok(())
 }
+
+/// A committed host block followed by a valid MAX_NODE_DEPTH-deep chain under the root.
+fn host_and_chain() -> Editor {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    editor
+        .update(|tx| {
+            let host = tx.create(Paragraph::default())?;
+            let chain = tx.create(Paragraph::default())?;
+            tx.append(NodeKey::ROOT, &[host.key(), chain.key()])?;
+            let mut parent = chain.key();
+            for _ in 1..crate::json::MAX_NODE_DEPTH {
+                let child = tx.create(Paragraph::default())?;
+                tx.append(parent, &[child.key()])?;
+                parent = child.key();
+            }
+            Ok(())
+        })
+        .expect("a 512-deep chain fits");
+    editor
+}
+fn move_chain_under_host(tx: &mut Transaction<'_>) -> Result<(), Error> {
+    let host = tx.first_child_or_err(NodeKey::ROOT)?;
+    let chain = tx
+        .last_child(NodeKey::ROOT)
+        .ok_or(Error::NoChild(NodeKey::ROOT))?;
+    tx.append(host, &[chain])
+}
+fn is_too_deep(error: &Error) -> bool {
+    matches!(error, Error::NestingTooDeep { limit } if *limit == crate::json::MAX_NODE_DEPTH)
+}
+// The depth check runs after queued updates mutate, not only before the pipeline starts.
+#[test]
+fn a_queued_update_that_moves_a_chain_past_the_cap_is_refused() {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| {
+            let mut editor = host_and_chain();
+            let error = editor
+                .update(|tx| tx.queue_update(move_chain_under_host, UpdateOptions::default()))
+                .expect_err("the queued move pushes the leaf to 513");
+            assert!(is_too_deep(&error), "{error}");
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow");
+}
+// Cooperative stepping runs the same check as a flush.
+#[test]
+fn stepping_the_pipeline_over_a_tree_past_the_cap_is_refused() {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| {
+            let mut editor = host_and_chain();
+            let error = editor
+                .update(|tx| {
+                    move_chain_under_host(tx)?;
+                    while tx.step_pipeline(
+                        FlushMode::Transforms,
+                        PipelineBudget {
+                            max_work: NonZeroUsize::MIN,
+                        },
+                    )? == PipelineProgress::Pending
+                    {}
+                    Ok(())
+                })
+                .expect_err("stepping refuses the 513-deep leaf");
+            assert!(is_too_deep(&error), "{error}");
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow");
+}

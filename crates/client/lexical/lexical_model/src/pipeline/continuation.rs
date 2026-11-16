@@ -125,6 +125,9 @@ impl PipelineContinuation {
                 self.phase = Phase::Dirty;
             }
             Phase::Dirty => {
+                // After queued updates and selection transforms, before normalization and
+                // transforms, for every runner: flush, resumed flush and step_pipeline.
+                tx.check_dirty_depth()?;
                 if tx.dirty_leaves.is_empty() && tx.dirty_elements.is_empty() {
                     self.phase = Phase::Selection;
                 } else if self.mode == FlushMode::NormalizeOnly
@@ -214,6 +217,8 @@ impl PipelineContinuation {
                 self.phase = Phase::Finish;
             }
             Phase::Finish => {
+                // Transforms and their queued updates mutate too; nothing past the cap seals.
+                tx.check_dirty_depth()?;
                 #[cfg(feature = "foreign-nodes")]
                 ForeignReadOperation::check()?;
                 #[cfg(feature = "foreign-nodes")]

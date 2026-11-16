@@ -104,9 +104,6 @@ impl Transaction<'_> {
             return Err(Error::Invariant("cannot change a suspended pipeline mode"));
         }
         let suspended = self.pipeline_continuation.is_some();
-        if !suspended {
-            self.check_dirty_depth()?;
-        }
         let mut continuation = self.pipeline_continuation.take().map_or_else(
             || continuation::PipelineContinuation::new(mode),
             |value| *value,
@@ -120,10 +117,16 @@ impl Transaction<'_> {
         }
         result.map(|_| ())
     }
-    /// Fail before any recursive transform when a dirty node sits deeper than
-    /// [`crate::json::MAX_NODE_DEPTH`]. Walks parents iteratively, at most the limit per node.
-    fn check_dirty_depth(&self) -> Result<(), Error> {
+    /// Fail before any recursive transform when a node would sit deeper than
+    /// [`crate::json::MAX_NODE_DEPTH`]. Each dirty node's depth is walked up iteratively; a
+    /// node whose parent changed since the committed state (created or moved) also has its
+    /// subtree walked, since its untouched descendants move with it.
+    pub(crate) fn check_dirty_depth(&self) -> Result<(), Error> {
+        let limit = crate::json::MAX_NODE_DEPTH;
+        let too_deep = || Error::NestingTooDeep { limit };
         let view = self.view();
+        let committed = self.editor.state.view();
+        let reparented = |key: NodeKey| view.parent(key) != committed.parent(key);
         for key in self
             .dirty_leaves
             .iter()
@@ -134,12 +137,24 @@ impl Transaction<'_> {
             let mut node = key;
             while let Some(parent) = view.parent(node) {
                 depth += 1;
-                if depth > crate::json::MAX_NODE_DEPTH {
-                    return Err(Error::NestingTooDeep {
-                        limit: crate::json::MAX_NODE_DEPTH,
-                    });
+                if depth > limit {
+                    return Err(too_deep());
                 }
                 node = parent;
+            }
+            // A reparented dirty parent walks this subtree already.
+            let covered = view.parent(key).is_some_and(|parent| {
+                self.dirty_elements.contains_key(&parent) && reparented(parent)
+            });
+            if !reparented(key) || covered {
+                continue;
+            }
+            let mut stack = vec![(key, depth)];
+            while let Some((node, depth)) = stack.pop() {
+                if depth > limit {
+                    return Err(too_deep());
+                }
+                stack.extend(view.children(node).map(|child| (child, depth + 1)));
             }
         }
         Ok(())

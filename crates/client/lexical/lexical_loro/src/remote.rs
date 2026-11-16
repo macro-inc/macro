@@ -9,9 +9,9 @@ pub(crate) struct PendingBatch {
     /// path was not retained (copying every such path is quadratic in depth).
     pub too_deep: bool,
 }
-/// Two path entries per nested node (its map and its children list) plus the root and
-/// own-field containers: a longer path cannot belong to a tree within the nesting cap.
-const MAX_EVENT_PATH: usize = 2 * lexical_model::MAX_NODE_DEPTH + 16;
+/// Two path entries per stored level (a map and its children list) plus the root and
+/// own-field containers: a longer path cannot belong to a tree within the stored cap.
+const MAX_EVENT_PATH: usize = 2 * crate::schema::MAX_STORED_DEPTH + 16;
 #[derive(Clone)]
 pub(crate) struct OwnedDiff {
     target: ContainerID,

@@ -351,6 +351,8 @@ impl Transaction<'_> {
         }
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
+        // A prepared seal can publish without a flush; check it here as well.
+        self.check_dirty_depth()?;
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
         let selection_changed = self.selection_will_change();

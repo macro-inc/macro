@@ -372,3 +372,80 @@ fn initial_transparent_cleanup_is_observed_read_only_then_preserves_local_fields
     assert_eq!(doc.oplog_vv(), stable);
     Ok(())
 }
+// A legal tree at the model cap with a transparent wrapper on the path: the wrapper adds a
+// stored level but no model depth, so both the structural import and a later text edit at
+// the deepest leaf project instead of being marked too deep.
+#[test]
+fn a_wrapped_tree_at_the_model_cap_projects_its_remote_edits() -> Result<()> {
+    std::thread::Builder::new()
+        .stack_size(64 << 20)
+        .spawn(|| -> Result<()> {
+            let editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("editor");
+            let doc = new_doc(1)?;
+            let mut projection = LoroProjection::initialize(&doc, editor.state(), &FILTER, 0)?;
+            let longest = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let seen = longest.clone();
+            let _paths = doc.subscribe_root(std::sync::Arc::new(move |event| {
+                for diff in &event.events {
+                    seen.fetch_max(diff.path.len(), std::sync::atomic::Ordering::Relaxed);
+                }
+            }));
+            let peer = fork_doc(&doc, 2)?;
+            let before = peer.oplog_vv();
+            let mut list = schema::children(&peer.get_map("root"))?.expect("root children");
+            let element =
+                |list: &loro::LoroMovableList, id: &str| -> Result<loro::LoroMovableList> {
+                    let map = list.insert_container(0, LoroMap::new())?;
+                    map.insert("type", "paragraph")?;
+                    map.insert("version", 1)?;
+                    map.insert("format", "")?;
+                    map.insert("indent", 0)?;
+                    map.insert("direction", loro::LoroValue::Null)?;
+                    map.insert("$", schema::to_loro(&json!({"id": id})))?;
+                    Ok(map.insert_container("children", loro::LoroMovableList::new())?)
+                };
+            for _ in 0..lexical_model::MAX_NODE_DEPTH - 2 {
+                list = element(&list, "p")?;
+            }
+            list = element(&list, "wrap")?;
+            list = element(&list, "p")?;
+            let leaf = list.insert_container(0, LoroMap::new())?;
+            leaf.insert("type", "text")?;
+            leaf.insert("version", 1)?;
+            let text = leaf.insert_container("text", loro::LoroText::new())?;
+            text.insert(0, "deep")?;
+            peer.commit();
+            let (_, changes) = projection.remote(
+                &doc,
+                editor.state(),
+                &peer.export(ExportMode::updates(&before))?,
+            )?;
+            assert!(!changes.changes.is_empty());
+            let structural = longest.load(std::sync::atomic::Ordering::Relaxed);
+            let before = peer.oplog_vv();
+            text.insert(4, "er")?;
+            peer.commit();
+            let edited = projection.remote(
+                &doc,
+                editor.state(),
+                &peer.export(ExportMode::updates(&before))?,
+            );
+            println!(
+                "WRAPPED-CAP longest event path: structural {structural}, text edit {}",
+                longest.load(std::sync::atomic::Ordering::Relaxed)
+            );
+            assert!(edited.is_ok(), "{:?}", edited.err());
+            assert!(
+                longest.load(std::sync::atomic::Ordering::Relaxed)
+                    <= 2 * crate::schema::MAX_STORED_DEPTH + 16
+            );
+            let read = reconstruct_state(&doc, &FILTER);
+            assert!(read.is_ok(), "{:?}", read.err());
+            Ok(())
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow")
+}
