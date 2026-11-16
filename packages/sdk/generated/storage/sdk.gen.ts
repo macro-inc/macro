@@ -1728,7 +1728,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Apply one consent or domain-exclusion change as the authenticated member.
+     * Apply one consent, domain, or thread exclusion change as the member.
      */
     public updateCrmEmailPrivacy<ThrowOnError extends boolean = false>(options: Options<UpdateCrmEmailPrivacyData, ThrowOnError>): RequestResult<UpdateCrmEmailPrivacyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).put<UpdateCrmEmailPrivacyResponses, unknown, ThrowOnError>({
@@ -1739,6 +1739,13 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * List only the authenticated member's thread exclusions.
+     */
+    public listCrmExcludedEmailThreads<ThrowOnError extends boolean = false>(options?: Options<ListCrmExcludedEmailThreadsData, ThrowOnError>): RequestResult<ListCrmExcludedEmailThreadsResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListCrmExcludedEmailThreadsResponses, unknown, ThrowOnError>({ url: '/crm/email-privacy/threads', ...options });
     }
 
     /**
@@ -4187,10 +4194,115 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Search the agent's catalog: metadata and current access only.
+     */
+    public passwordsAgentSearch<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentSearchData, ThrowOnError>): RequestResult<PasswordsAgentSearchResponses, PasswordsAgentSearchErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<PasswordsAgentSearchResponses, PasswordsAgentSearchErrors, ThrowOnError>({ url: '/passwords/agent/teams/{team}/items', ...options });
+    }
+
+    /**
+     * Create a login or API item attributed to this agent.
+     */
+    public passwordsAgentCreate<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentCreateData, ThrowOnError>): RequestResult<PasswordsAgentCreateResponses, PasswordsAgentCreateErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentCreateResponses, PasswordsAgentCreateErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Replace supplied fields of a login or API item.
+     */
+    public passwordsAgentUpdate<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentUpdateData, ThrowOnError>): RequestResult<PasswordsAgentUpdateResponses, PasswordsAgentUpdateErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PasswordsAgentUpdateResponses, PasswordsAgentUpdateErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items/{item}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Ask authorized humans for access to an item.
+     */
+    public passwordsAgentRequestAccess<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentRequestAccessData, ThrowOnError>): RequestResult<PasswordsAgentRequestAccessResponses, PasswordsAgentRequestAccessErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentRequestAccessResponses, PasswordsAgentRequestAccessErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items/{item}/access-requests',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * This agent's own request state for the item.
+     */
+    public passwordsAgentMyRequest<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentMyRequestData, ThrowOnError>): RequestResult<PasswordsAgentMyRequestResponses, PasswordsAgentMyRequestErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<PasswordsAgentMyRequestResponses, PasswordsAgentMyRequestErrors, ThrowOnError>({ url: '/passwords/agent/teams/{team}/items/{item}/access-requests/mine', ...options });
+    }
+
+    /**
+     * Disclose one selected field to the agent's capability.
+     */
+    public passwordsAgentDisclose<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentDiscloseData, ThrowOnError>): RequestResult<PasswordsAgentDiscloseResponses, PasswordsAgentDiscloseErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentDiscloseResponses, PasswordsAgentDiscloseErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items/{item}/disclose',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Enroll a verification-code seed on an item this agent created.
+     */
+    public passwordsAgentSetTotp<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentSetTotpData, ThrowOnError>): RequestResult<PasswordsAgentSetTotpResponses, PasswordsAgentSetTotpErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PasswordsAgentSetTotpResponses, PasswordsAgentSetTotpErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items/{item}/totp',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The current verification code of a login or verification-code item.
+     */
+    public passwordsAgentTotpCode<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentTotpCodeData, ThrowOnError>): RequestResult<PasswordsAgentTotpCodeResponses, PasswordsAgentTotpCodeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentTotpCodeResponses, PasswordsAgentTotpCodeErrors, ThrowOnError>({
+            url: '/passwords/agent/teams/{team}/items/{item}/totp/code',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * List current teams available to the authenticated human.
      */
     public passwordsTeams<ThrowOnError extends boolean = false>(options?: Options<PasswordsTeamsData, ThrowOnError>): RequestResult<PasswordsTeamsResponses, PasswordsTeamsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<PasswordsTeamsResponses, PasswordsTeamsErrors, ThrowOnError>({ url: '/passwords/teams', ...options });
+    }
+
+    /**
+     * Pending agent requests on items the caller may manage.
+     */
+    public passwordsAgentAccessRequests<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentAccessRequestsData, ThrowOnError>): RequestResult<PasswordsAgentAccessRequestsResponses, PasswordsAgentAccessRequestsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<PasswordsAgentAccessRequestsResponses, PasswordsAgentAccessRequestsErrors, ThrowOnError>({ url: '/passwords/teams/{team}/agent-access-requests', ...options });
     }
 
     /**
@@ -4346,6 +4458,34 @@ export class Sdk extends HeyApiClient {
      */
     public passwordsActivity<ThrowOnError extends boolean = false>(options: Options<PasswordsActivityData, ThrowOnError>): RequestResult<PasswordsActivityResponses, PasswordsActivityErrors, ThrowOnError> {
         return (options.client ?? this.client).get<PasswordsActivityResponses, PasswordsActivityErrors, ThrowOnError>({ url: '/passwords/teams/{team}/items/{item}/activity', ...options });
+    }
+
+    /**
+     * Approve or deny a pending agent request.
+     */
+    public passwordsAgentResolveRequest<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentResolveRequestData, ThrowOnError>): RequestResult<PasswordsAgentResolveRequestResponses, PasswordsAgentResolveRequestErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentResolveRequestResponses, PasswordsAgentResolveRequestErrors, ThrowOnError>({
+            url: '/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Revoke an agent's standing approval, or its grant and approval.
+     */
+    public passwordsAgentRevoke<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentRevokeData, ThrowOnError>): RequestResult<PasswordsAgentRevokeResponses, PasswordsAgentRevokeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PasswordsAgentRevokeResponses, PasswordsAgentRevokeErrors, ThrowOnError>({
+            url: '/passwords/teams/{team}/items/{item}/agents/{agent}/revoke',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -5075,146 +5215,6 @@ export class Sdk extends HeyApiClient {
     public whatsappPasskey<ThrowOnError extends boolean = false>(options: Options<WhatsappPasskeyData, ThrowOnError>): RequestResult<WhatsappPasskeyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).post<WhatsappPasskeyResponses, unknown, ThrowOnError>({
             url: '/whatsapp/pairing/{id}/passkey',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * List only the authenticated member's thread exclusions.
-     */
-    public listCrmExcludedEmailThreads<ThrowOnError extends boolean = false>(options?: Options<ListCrmExcludedEmailThreadsData, ThrowOnError>): RequestResult<ListCrmExcludedEmailThreadsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListCrmExcludedEmailThreadsResponses, unknown, ThrowOnError>({ url: '/crm/email-privacy/threads', ...options });
-    }
-
-    /**
-     * Search the agent's catalog: metadata and current access only.
-     */
-    public passwordsAgentSearch<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentSearchData, ThrowOnError>): RequestResult<PasswordsAgentSearchResponses, PasswordsAgentSearchErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<PasswordsAgentSearchResponses, PasswordsAgentSearchErrors, ThrowOnError>({ url: '/passwords/agent/teams/{team}/items', ...options });
-    }
-
-    /**
-     * Create a login or API item attributed to this agent.
-     */
-    public passwordsAgentCreate<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentCreateData, ThrowOnError>): RequestResult<PasswordsAgentCreateResponses, PasswordsAgentCreateErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentCreateResponses, PasswordsAgentCreateErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Replace supplied fields of a login or API item.
-     */
-    public passwordsAgentUpdate<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentUpdateData, ThrowOnError>): RequestResult<PasswordsAgentUpdateResponses, PasswordsAgentUpdateErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<PasswordsAgentUpdateResponses, PasswordsAgentUpdateErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items/{item}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Ask authorized humans for access to an item.
-     */
-    public passwordsAgentRequestAccess<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentRequestAccessData, ThrowOnError>): RequestResult<PasswordsAgentRequestAccessResponses, PasswordsAgentRequestAccessErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentRequestAccessResponses, PasswordsAgentRequestAccessErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items/{item}/access-requests',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * This agent's own request state for the item.
-     */
-    public passwordsAgentMyRequest<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentMyRequestData, ThrowOnError>): RequestResult<PasswordsAgentMyRequestResponses, PasswordsAgentMyRequestErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<PasswordsAgentMyRequestResponses, PasswordsAgentMyRequestErrors, ThrowOnError>({ url: '/passwords/agent/teams/{team}/items/{item}/access-requests/mine', ...options });
-    }
-
-    /**
-     * Disclose one selected field to the agent's capability.
-     */
-    public passwordsAgentDisclose<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentDiscloseData, ThrowOnError>): RequestResult<PasswordsAgentDiscloseResponses, PasswordsAgentDiscloseErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentDiscloseResponses, PasswordsAgentDiscloseErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items/{item}/disclose',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Enroll a verification-code seed on an item this agent created.
-     */
-    public passwordsAgentSetTotp<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentSetTotpData, ThrowOnError>): RequestResult<PasswordsAgentSetTotpResponses, PasswordsAgentSetTotpErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<PasswordsAgentSetTotpResponses, PasswordsAgentSetTotpErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items/{item}/totp',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * The current verification code of a login or verification-code item.
-     */
-    public passwordsAgentTotpCode<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentTotpCodeData, ThrowOnError>): RequestResult<PasswordsAgentTotpCodeResponses, PasswordsAgentTotpCodeErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentTotpCodeResponses, PasswordsAgentTotpCodeErrors, ThrowOnError>({
-            url: '/passwords/agent/teams/{team}/items/{item}/totp/code',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Pending agent requests on items the caller may manage.
-     */
-    public passwordsAgentAccessRequests<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentAccessRequestsData, ThrowOnError>): RequestResult<PasswordsAgentAccessRequestsResponses, PasswordsAgentAccessRequestsErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<PasswordsAgentAccessRequestsResponses, PasswordsAgentAccessRequestsErrors, ThrowOnError>({ url: '/passwords/teams/{team}/agent-access-requests', ...options });
-    }
-
-    /**
-     * Approve or deny a pending agent request.
-     */
-    public passwordsAgentResolveRequest<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentResolveRequestData, ThrowOnError>): RequestResult<PasswordsAgentResolveRequestResponses, PasswordsAgentResolveRequestErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentResolveRequestResponses, PasswordsAgentResolveRequestErrors, ThrowOnError>({
-            url: '/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Revoke an agent's standing approval, or its grant and approval.
-     */
-    public passwordsAgentRevoke<ThrowOnError extends boolean = false>(options: Options<PasswordsAgentRevokeData, ThrowOnError>): RequestResult<PasswordsAgentRevokeResponses, PasswordsAgentRevokeErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<PasswordsAgentRevokeResponses, PasswordsAgentRevokeErrors, ThrowOnError>({
-            url: '/passwords/teams/{team}/items/{item}/agents/{agent}/revoke',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

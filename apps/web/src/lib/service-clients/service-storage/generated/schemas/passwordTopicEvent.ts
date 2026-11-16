@@ -7,6 +7,8 @@
 import type { PasswordTopicEventOneOf } from './passwordTopicEventOneOf';
 
 /**
- * Events that can be published to [`MacroPasswordsTopic`].
+ * The public projection of [`PasswordTopicEvent`], delivered under the same
+event names: the metadata without its routing recipient. Published under
+the topic's schema names, which the public API already uses.
  */
 export type PasswordTopicEvent = PasswordTopicEventOneOf;

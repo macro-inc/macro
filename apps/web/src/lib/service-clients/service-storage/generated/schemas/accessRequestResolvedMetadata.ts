@@ -7,7 +7,7 @@
 import type { AccessRequestResolution } from './accessRequestResolution';
 
 /**
- * Metadata for [`PasswordTopicEvent::AccessRequestResolved`].
+ * Public body of `passwords.access_request.resolved`.
  */
 export interface AccessRequestResolvedMetadata {
   /** Requested item. */
