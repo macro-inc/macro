@@ -14,7 +14,7 @@ const SEQUENCE: Sequence = {
   name: 'Intro',
   linkId: 'link',
   footer: '',
-  status: 'active',
+  status: 'draft',
   steps: [
     { id: 'a', delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
   ],
@@ -29,9 +29,10 @@ type Update = (
 /** Like the update mutation, a saved sequence reaches the cache before the save resolves. */
 function setup(
   answer: Update = async (request) =>
-    ok({ ...SEQUENCE, ...request } as Sequence)
+    ok({ ...SEQUENCE, ...request } as Sequence),
+  start: Sequence = SEQUENCE
 ) {
-  const [sequence, setSequence] = createSignal<Sequence | undefined>(SEQUENCE);
+  const [sequence, setSequence] = createSignal<Sequence | undefined>(start);
   const update = vi.fn<Update>(async (request) => {
     const result = await answer(request);
     if (result.isOk()) setSequence(result.value);
@@ -128,6 +129,67 @@ describe('createSequenceDraft', () => {
       expect(update).toHaveBeenCalledTimes(2);
       expect(update).toHaveBeenLastCalledWith({ footer: 'AB' });
       expect(draft.draft()?.footer).toBe('AB');
+    });
+
+    it('saves an edit undone during a save back to what it was', async () => {
+      vi.useFakeTimers();
+      let finishFirst!: () => void;
+      const { draft, update } = setup(async (request) => {
+        if (request.footer === 'A')
+          await new Promise<void>((resolve) => {
+            finishFirst = resolve;
+          });
+        return ok({ ...SEQUENCE, ...request } as Sequence);
+      });
+
+      draft.change({ ...draft.draft()!, footer: 'A' });
+      await vi.advanceTimersByTimeAsync(800);
+      draft.change({ ...draft.draft()!, footer: '' });
+      finishFirst();
+      await vi.advanceTimersByTimeAsync(800);
+
+      expect(update).toHaveBeenLastCalledWith({ footer: '' });
+      expect(draft.draft()?.footer).toBe('');
+    });
+  });
+
+  describe('an active sequence', () => {
+    const ACTIVE: Sequence = { ...SEQUENCE, status: 'active' };
+    const active = () =>
+      setup(
+        async (request) => ok({ ...ACTIVE, ...request } as Sequence),
+        ACTIVE
+      );
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('changes only when its owner saves', async () => {
+      vi.useFakeTimers();
+      const { draft, update, dispose } = active();
+      draft.change({ ...draft.draft()!, footer: 'Half-typ' });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(update).not.toHaveBeenCalled();
+      expect(draft.unsaved()).toBe(true);
+
+      draft.change({ ...draft.draft()!, footer: 'Half-typed no more' });
+      expect(await draft.save()).toBe(true);
+      expect(update).toHaveBeenCalledWith({ footer: 'Half-typed no more' });
+      expect(draft.unsaved()).toBe(false);
+
+      draft.change({ ...draft.draft()!, footer: 'Left behind' });
+      dispose();
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops its edits on discard', () => {
+      const { draft, update } = active();
+      draft.change({ ...draft.draft()!, footer: 'Never mind' });
+      draft.discard();
+      expect(draft.unsaved()).toBe(false);
+      expect(draft.draft()?.footer).toBe('');
+      expect(update).not.toHaveBeenCalled();
     });
   });
 });

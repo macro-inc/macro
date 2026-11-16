@@ -37,6 +37,10 @@ export default {
   addPeople: 'Add people',
   actions: 'Sequence actions',
   saving: 'Saving…',
+  saveChanges: 'Save changes',
+  discardChanges: 'Discard',
+  unsavedChanges:
+    'This sequence is sending. Emails keep using the saved version until you save your changes.',
   resumeSequence: 'Resume',
   senderUnavailable:
     'The sending inbox can’t send. Emails wait until you reconnect it or choose another inbox.',
@@ -144,6 +148,7 @@ export default {
   skipNoEmail: 'No usable email address',
   skipUnsubscribed: 'Unsubscribed',
   skipAlreadyEnrolled: 'Already in this sequence',
+  skipSequenceFull: 'This sequence is full',
   skipUnknown: 'Skipped',
 
   // Errors
@@ -154,6 +159,7 @@ export default {
   errorActionUnavailable:
     'That isn’t available right now. Try again in a moment.',
   errorCrmUnavailable: 'Sequences need a team with Customers turned on.',
+  errorPersonRequired: 'Only a person can change a sequence, in Customers.',
   errorInternal: 'Something went wrong. Try again.',
   problemNameRequired: 'Give the sequence a name.',
   problemStepsRequired: 'Add at least one email.',

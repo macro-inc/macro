@@ -12,11 +12,13 @@ const AUTOSAVE_DELAY_MS = 800;
 type Edit = { saved: SequenceDraft; draft: SequenceDraft };
 
 /**
- * Local edits over the saved copy they started from, saved shortly after each
- * change. A save sends only the fields that changed, so it keeps a field
- * changed elsewhere since. Saves run one at a time; edits made while one is
- * in flight are sent next. A refused save keeps the edits and its failure
- * until the next change.
+ * Local edits over the saved copy they started from. A draft or paused
+ * sequence saves shortly after each change. An active one emails people from
+ * its saved copy, so its edits wait for `save` and are dropped on leaving. A
+ * save sends only the fields that changed, so it keeps a field changed
+ * elsewhere since. Saves run one at a time; edits made while one is in flight
+ * are sent next. A refused save keeps the edits and its failure until the
+ * next change.
  */
 export function createSequenceDraft(
   source: Pick<SequenceSource, 'sequence' | 'update'>
@@ -32,6 +34,7 @@ export function createSequenceDraft(
     return sequence && toDraft(sequence);
   };
   const draft = () => edit()?.draft ?? saved();
+  const live = () => source.sequence()?.status === 'active';
 
   async function send(status?: SequenceStatus) {
     const base = saved();
@@ -51,11 +54,11 @@ export function createSequenceDraft(
       return false;
     }
     const next = toDraft(result.value);
-    const current = edit()?.draft;
+    // What the user has now: an edit made during the save, including one back
+    // to the copy saved before it, which leaves no edit behind.
+    const current = edit()?.draft ?? base;
     setEdit(
-      current && draftChanges(next, current)
-        ? { saved: next, draft: current }
-        : undefined
+      draftChanges(sent, current) ? { saved: next, draft: current } : undefined
     );
     return true;
   }
@@ -79,7 +82,8 @@ export function createSequenceDraft(
   // Leaving the editor saves what is left; a refused draft would be refused again.
   onCleanup(() => {
     autosave.clear();
-    if (edit() && failure()?.kind !== 'refused') fireAndForget(save(), SURFACE);
+    if (edit() && !live() && failure()?.kind !== 'refused')
+      fireAndForget(save(), SURFACE);
   });
 
   // An edit undone back to the saved copy is no edit.
@@ -91,7 +95,13 @@ export function createSequenceDraft(
         ? { saved: base, draft: next }
         : undefined
     );
-    autosave();
+    if (!live()) autosave();
   };
-  return { draft, change, save, saving, failure };
+  /** Whether an active sequence has edits its owner hasn't saved. */
+  const unsaved = () => live() && !!edit();
+  const discard = () => {
+    setFailure(undefined);
+    setEdit(undefined);
+  };
+  return { draft, change, save, discard, unsaved, saving, failure };
 }
