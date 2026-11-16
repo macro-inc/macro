@@ -297,14 +297,14 @@ fn document_version_upgrade_preserves_other_root_state_and_environment_tags() ->
     let metadata = state.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
     assert_eq!(
         metadata.as_ref(),
-        &json!({"version": 10, "environmentTags": ["dev"]})
+        &json!({"version": 11, "environmentTags": ["dev"]})
     );
     assert_eq!(state.get_state(NodeKey::ROOT, &OTHER)?, "keep");
     assert!(
         include_str!(
             "../../../../../../apps/web/src/lib/core/component/LexicalMarkdown/version.ts"
         )
-        .contains("export const MARKDOWN_VERSION_COUNTER = 10.0;")
+        .contains("export const MARKDOWN_VERSION_COUNTER = 11.0;")
     );
     editor.update(|tx| {
         tx.set_state(

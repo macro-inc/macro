@@ -161,7 +161,7 @@ fn the_source_written_null_field_document_opens_and_loads_as_source_does() {
     // peerIdPlugin, and this native session's PeerIdPlugin covers Await only.
     // The root's $.documentMetadata row is derived from Source code, not the
     // probe (its wrapper lacks the plugin): documentMetadataPlugin.ts:116-127
-    // sets version = MARKDOWN_VERSION_COUNTER (version.ts:43, 10) in a queued
+    // sets version = MARKDOWN_VERSION_COUNTER (version.ts:44, 11) in a queued
     // HISTORY_MERGE update after any update with mutatedNodes, and
     // $setDocumentMetadata (:54-58) merges over parse()'s result. The stored
     // map here has no root $ (source_stored()), so parse() returns
@@ -187,7 +187,7 @@ fn the_source_written_null_field_document_opens_and_loads_as_source_does() {
     assert_eq!(
         actual,
         vec![
-            serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":10}},"format":"",
+            serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":11}},"format":"",
                 "type":"root","version":1}),
             serde_json::json!({"$":{"id":"OdqPM9gw"},"direction":null,"format":"","indent":null,
                 "textFormat":null,"textStyle":null,"type":"paragraph","version":1}),
@@ -211,7 +211,7 @@ fn the_source_written_null_field_document_opens_and_loads_as_source_does() {
         serde_json::json!({"format":"","type":"root","version":1})
     );
     // The open also stores the minted root id (6e501bb9), the same id as the model's.
-    expected[0] = serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":10}},
+    expected[0] = serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":11}},
         "format":"","type":"root","version":1});
     assert_eq!(after, expected);
     // Control: a null-style text renders; the view receives its Initialize.

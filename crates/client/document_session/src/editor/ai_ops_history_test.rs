@@ -78,14 +78,14 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
 
 /// `before` (the seeded fixture) as Source holds it after an undo restores it.
 fn before_source() -> SerializedEditorState {
-    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":null,"style":null,"text":"Alpha beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":null,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#)
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":null,"style":null,"text":"Alpha beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":null,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#)
         .expect("Source-rule literal")
 }
 
 /// `after_first` as Source holds it after an undo restores it: the first op's
 /// setText wrote text format 0 and paragraph textFormat 0, which stay values.
 fn after_first_source() -> SerializedEditorState {
-    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":0,"style":null,"text":"Omega beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":0,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#)
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":0,"style":null,"text":"Omega beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":0,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#)
         .expect("Source-rule literal")
 }
 

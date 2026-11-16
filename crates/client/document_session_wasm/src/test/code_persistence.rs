@@ -95,7 +95,7 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
         .is_some_and(|id| !id.is_empty()));
     // The OFF first-edit receipt pins bare metadata in actual storage:
     // 17135650998faced89334561c0fed993b0f4c5113a3da1740b47bb6dfe511eec.
-    let bare = serde_json::json!({"version":10});
+    let bare = serde_json::json!({"version":11});
     assert_eq!(before["root"]["$"]["documentMetadata"], bare);
     let persisted = lexical_loro::snapshot::raw_state_to_loro_snapshot(
         &before,
@@ -160,7 +160,7 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
     // Ordinary Source parse/reopen receipt:
     // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2.
     before["root"]["$"]["documentMetadata"] =
-        serde_json::json!({"version":10,"environmentTags":null});
+        serde_json::json!({"version":11,"environmentTags":null});
     // Source's raw setEditorState keeps the writer's id-less root, so the stored root has
     // none; the reader's open ids it (INITIALIZE_DOCUMENT_IDS) and stores it.
     let root_id = after["root"]["$"]["id"]

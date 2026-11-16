@@ -20,7 +20,7 @@ fn stored_await() -> loro::LoroDoc {
         &doc,
         &serde_json::json!({
             "type":"root", "version":1, "direction":null, "format":"", "indent":0,
-            "$":{"id":"root0001", "documentMetadata":{"version":10}},
+            "$":{"id":"root0001", "documentMetadata":{"version":11}},
             "children":[{
                 "type":"paragraph", "version":1, "direction":null, "format":"", "indent":0,
                 "textFormat":0, "textStyle":"", "$":{"id":"para0001"}, "children":[{

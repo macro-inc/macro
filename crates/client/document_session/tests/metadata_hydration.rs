@@ -47,11 +47,11 @@ fn opening_a_metadata_free_document_upgrades_it_before_input()
     Surface::init(&mut surface, &doc, now, Access::Edit, &mut effects)?;
     assert_eq!(
         surface.state().to_json()?.root["$"]["documentMetadata"]["version"],
-        json!(10)
+        json!(11)
     );
     assert_eq!(
         doc.get_deep_value().to_json_value()["root"]["$"]["documentMetadata"]["version"],
-        json!(10)
+        json!(11)
     );
     let opened = doc.oplog_vv();
     let paragraph = surface
@@ -391,7 +391,7 @@ fn load_normalisation_survives_first_edit_undo(
     );
     let raw = loaded.get_deep_value().to_json_value();
     assert_eq!(raw["root"]["children"][0]["$"]["searchText"], json!(""));
-    assert_eq!(raw["root"]["$"]["documentMetadata"]["version"], json!(10));
+    assert_eq!(raw["root"]["$"]["documentMetadata"]["version"], json!(11));
     // write-path-3 (decode 5f5e1b4e): the load group is a Source undo item.
     assert!(
         session.surface().history().can_undo,
@@ -457,7 +457,7 @@ fn load_normalisation_survives_first_edit_undo(
     );
     assert_eq!(
         raw["root"]["$"]["documentMetadata"]["version"],
-        json!(10),
+        json!(11),
         "undoing the first edit removed documentMetadata"
     );
     Ok(())
@@ -543,7 +543,7 @@ fn stored_root(doc: &loro::LoroDoc) -> serde_json::Value {
 
 /// write-path-3 [Enter, Undo, Undo] (forensics 414abf76): Enter is its own group; the
 /// first Undo reverts only Enter, the second reverts both load commits in one step, and
-/// the live model keeps version 10.
+/// the live model keeps version 11.
 #[test]
 fn enter_undo_undo_reverts_enter_then_the_load_group() -> Result<(), Box<dyn std::error::Error>> {
     use lexical_model::*;
@@ -575,7 +575,7 @@ fn enter_undo_undo_reverts_enter_then_the_load_group() -> Result<(), Box<dyn std
     local_input(&mut surface, &doc, undo(), 1220)?;
     let root = stored_root(&doc);
     assert_eq!(root["children"].as_array().map(Vec::len), Some(1));
-    assert_eq!(root["$"]["documentMetadata"]["version"], json!(10));
+    assert_eq!(root["$"]["documentMetadata"]["version"], json!(11));
     assert_eq!(root["children"][0]["$"]["searchText"], json!(""));
     assert!(surface.history().can_undo);
     assert!(surface.history().can_redo);
@@ -592,7 +592,7 @@ fn enter_undo_undo_reverts_enter_then_the_load_group() -> Result<(), Box<dyn std
     assert!(surface.history().can_redo);
     assert_eq!(
         surface.state().to_json()?.root["$"]["documentMetadata"]["version"],
-        json!(10),
+        json!(11),
         "the live model retains the metadata"
     );
     Ok(())
@@ -643,7 +643,7 @@ fn undo_first_then_redo_reverts_and_restores_the_load_group()
     assert!(surface.history().can_undo);
     assert!(!surface.history().can_redo);
     let root = stored_root(&doc);
-    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 11}));
     assert_eq!(root["children"][0]["$"]["searchText"], json!(""));
     Ok(())
 }
@@ -658,7 +658,7 @@ fn an_edit_after_undo_first_re_emits_metadata_and_search_text_inside_its_own_upd
     let (mut surface, doc) = open_stale_document()?;
     assert_eq!(
         stored_root(&doc)["$"]["documentMetadata"],
-        json!({"version": 10}),
+        json!({"version": 11}),
         "the open wrote the load metadata"
     );
     local_input(
@@ -704,7 +704,7 @@ fn an_edit_after_undo_first_re_emits_metadata_and_search_text_inside_its_own_upd
         assert!(edit.contains(&expected), "missing {expected:?} in {edit:?}");
     }
     let root = stored_root(&doc);
-    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 11}));
     assert_eq!(root["children"][0]["$"]["searchText"], json!("a"));
     Ok(())
 }
@@ -718,7 +718,7 @@ fn undo_after_the_re_emitting_edit_reverts_it_with_its_re_emit()
     let (mut surface, doc) = open_stale_document()?;
     assert_eq!(
         stored_root(&doc)["$"]["documentMetadata"],
-        json!({"version": 10}),
+        json!({"version": 11}),
         "the open wrote the load metadata"
     );
     let undo = || Input::Command {
@@ -778,7 +778,7 @@ fn redo_after_a_fresh_edit_is_a_no_op() -> Result<(), Box<dyn std::error::Error>
     let (mut surface, doc) = open_stale_document()?;
     assert_eq!(
         stored_root(&doc)["$"]["documentMetadata"],
-        json!({"version": 10}),
+        json!({"version": 11}),
         "the open wrote the load metadata"
     );
     local_input(
@@ -850,7 +850,7 @@ fn reopening_bare_stored_metadata_writes_the_parsed_null_slot()
         ]
     }});
     let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
-    // A Source peer's load write: documentMetadata as a Map container holding version 10.
+    // A Source peer's load write: documentMetadata as a Map container holding version 11.
     let writer = lexical_loro::new_doc(60)?;
     writer.import(&snapshot)?;
     let root_state = match writer.get_map("root").get("$") {
@@ -858,11 +858,11 @@ fn reopening_bare_stored_metadata_writes_the_parsed_null_slot()
         _ => return Err("root state map".into()),
     };
     let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
-    metadata.insert("version", 10)?;
+    metadata.insert("version", 11)?;
     writer.commit();
     assert_eq!(
         stored_root(&writer)["$"]["documentMetadata"],
-        json!({"version": 10})
+        json!({"version": 11})
     );
     assert!(metadata.id().is_normal());
     let doc = lexical_loro::new_doc(51)?;
@@ -898,7 +898,7 @@ fn reopening_bare_stored_metadata_writes_the_parsed_null_slot()
     );
     assert_eq!(
         stored_root(&doc)["$"]["documentMetadata"],
-        json!({"version": 10, "environmentTags": null})
+        json!({"version": 11, "environmentTags": null})
     );
     Ok(())
 }
@@ -1015,7 +1015,7 @@ fn the_re_emitting_edit_publishes_like_an_ordinary_edit() -> Result<(), Box<dyn 
         _ => return Err("root state map".into()),
     };
     let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
-    metadata.insert("version", 10)?;
+    metadata.insert("version", 11)?;
     metadata.insert("environmentTags", loro::LoroValue::Null)?;
     writer.commit();
     let ordinary_doc = lexical_loro::new_doc(50)?;
@@ -1068,7 +1068,7 @@ fn the_re_emitting_edit_publishes_like_an_ordinary_edit() -> Result<(), Box<dyn 
     let flagged = type_text(&mut re_emitting, &doc, "a", 2000)?;
     assert_eq!(
         stored_root(&doc)["$"]["documentMetadata"],
-        json!({"version": 10})
+        json!({"version": 11})
     );
     assert_eq!(effect_kinds(&flagged), effect_kinds(&plain));
     Ok(())
@@ -1152,7 +1152,7 @@ fn the_load_follow_up_runs_root_transforms_after_a_final_table()
         types,
         [json!("paragraph"), json!("table"), json!("paragraph")]
     );
-    assert_eq!(root["$"]["documentMetadata"], json!({"version": 10}));
+    assert_eq!(root["$"]["documentMetadata"], json!({"version": 11}));
     let replay = lexical_loro::new_doc(81)?;
     replay.import(&snapshot)?;
     let mut per_commit = Vec::new();
@@ -1193,7 +1193,7 @@ fn the_load_follow_up_runs_root_transforms_after_a_final_table()
     Ok(())
 }
 
-/// An already-normalized document (version 10, environmentTags present, searchText
+/// An already-normalized document (current version, environmentTags present, searchText
 /// present) opens with no Loro commit and no undo item.
 #[test]
 fn opening_a_normalized_document_writes_nothing() -> Result<(), Box<dyn std::error::Error>> {
@@ -1213,7 +1213,7 @@ fn opening_a_normalized_document_writes_nothing() -> Result<(), Box<dyn std::err
         _ => return Err("root state map".into()),
     };
     let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
-    metadata.insert("version", 10)?;
+    metadata.insert("version", 11)?;
     metadata.insert("environmentTags", loro::LoroValue::Null)?;
     writer.commit();
     let doc = lexical_loro::new_doc(50)?;
@@ -1276,7 +1276,7 @@ fn guard_set_state_without_root_metadata_deletes_it_unreachable_from_the_app()
         _ => return Err("root state map".into()),
     };
     let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
-    metadata.insert("version", 10)?;
+    metadata.insert("version", 11)?;
     metadata.insert("environmentTags", loro::LoroValue::Null)?;
     writer.commit();
     let doc = lexical_loro::new_doc(50)?;
@@ -1460,18 +1460,26 @@ fn open_stored_in(
     Ok((surface, doc, per_commit))
 }
 
-/// Table reopen capture (b) (table-reopen-b.json 0f0dba80): reopening a keyless, normalized
-/// document sends one update with only root environmentTags:null and no table-node op;
-/// history then has an undo item. Fixture: Source's received snapshot bytes.
+/// Table reopen capture (b) (table-reopen-b.json 0f0dba80): reopening a keyless document
+/// sends one update with only root metadata ops and no table-node op; history then has an
+/// undo item. Fixture: Source's received snapshot bytes, captured at version 10. The capture
+/// sent only environmentTags:null; at version 11 the same open also upgrades the stored
+/// version in that update (documentMetadataPlugin), so the version insert comes first.
 #[test]
-fn reopening_a_keyless_normalized_table_sends_only_the_null_metadata_slot()
+fn reopening_a_keyless_version_10_table_writes_only_root_metadata()
 -> Result<(), Box<dyn std::error::Error>> {
     // RemoteInitialSync snapshot from table-reopen-b.json (frame d7dc61da), SHA-256
     // f60b590a08550c51d2584f971258860a56c3f2e8b1a51310d63fd8ec0d804555.
     let (surface, _doc, per_commit) = open_stored(include_bytes!(
         "testdata/table-keyless-reopen-received.loro"
     ))?;
-    assert_eq!(per_commit, [vec![map_op("insert", "environmentTags")]]);
+    assert_eq!(
+        per_commit,
+        [vec![
+            map_op("insert", "version"),
+            map_op("insert", "environmentTags")
+        ]]
+    );
     assert!(surface.history().can_undo);
     assert!(!surface.history().can_redo);
     Ok(())
@@ -1613,7 +1621,7 @@ fn undo_restores_the_stored_search_text_into_the_live_model_like_source()
     use lexical_model::*;
     let stored = json!({ "root": {
         "type":"root", "version":1, "format":"", "indent":0, "direction":null,
-        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+        "$":{"id":"root","documentMetadata":{"version":11}}, "children":[
             {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
              "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
         ]
@@ -1675,7 +1683,7 @@ fn undo_brings_stored_search_text_into_untouched_blocks_like_source()
     use lexical_model::*;
     let stored = json!({ "root": {
         "type":"root", "version":1, "format":"", "indent":0, "direction":null,
-        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+        "$":{"id":"root","documentMetadata":{"version":11}}, "children":[
             {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
              "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
         ]
@@ -1746,7 +1754,7 @@ fn a_remote_update_brings_stored_search_text_into_the_live_model_like_source()
     use lexical_model::*;
     let stored = json!({ "root": {
         "type":"root", "version":1, "format":"", "indent":0, "direction":null,
-        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+        "$":{"id":"root","documentMetadata":{"version":11}}, "children":[
             {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
              "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]},
             {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
@@ -1844,7 +1852,7 @@ fn environment_tags_null_round_trips_across_two_peers_like_source()
     let (mut a, a_doc) = open_stale_document()?;
     assert_eq!(
         stored_root(&a_doc)["$"]["documentMetadata"],
-        json!({"version": 10})
+        json!({"version": 11})
     );
     let b_doc = lexical_loro::new_doc(60)?;
     b_doc.import(&a_doc.export(loro::ExportMode::Snapshot)?)?;
@@ -2152,7 +2160,7 @@ fn type_at_start(
 fn empty_document() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let stored = json!({ "root": {
         "type":"root", "version":1, "format":"", "indent":0, "direction":null,
-        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+        "$":{"id":"root","documentMetadata":{"version":11}}, "children":[
             {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
              "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
         ]

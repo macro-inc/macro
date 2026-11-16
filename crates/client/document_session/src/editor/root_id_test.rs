@@ -116,7 +116,7 @@ fn key_ops(
         .map(|op| op["content"].clone())
         .collect()
 }
-/// Whether `commit` writes documentMetadata version 10, in the stored shape the doc has: a
+/// Whether `commit` writes the current documentMetadata version, in the stored shape the doc has: a
 /// `version` insert on the nested documentMetadata map when one exists, otherwise a
 /// `documentMetadata` insert on the root `$` map whose plain value holds 10.
 fn writes_metadata_version(
@@ -134,12 +134,12 @@ fn writes_metadata_version(
                 Some(container) => {
                     &op["container"] == container
                         && content["key"].as_str() == Some("version")
-                        && content["value"] == serde_json::json!(10)
+                        && content["value"] == serde_json::json!(11)
                 }
                 None => {
                     &op["container"] == root_state
                         && content["key"].as_str() == Some("documentMetadata")
-                        && content["value"]["version"] == serde_json::json!(10)
+                        && content["value"]["version"] == serde_json::json!(11)
                 }
             }
         })
@@ -273,7 +273,7 @@ fn record(
     );
     decoded
 }
-/// Positive control: the matcher must find the known metadata version 10 write.
+/// Positive control: the matcher must find the known current metadata version write.
 fn finds_metadata(commits: &[serde_json::Value], doc: &loro::LoroDoc) {
     let root_state = root_state_container(doc);
     let metadata = metadata_container(doc);
@@ -327,7 +327,7 @@ fn an_edit_open_stores_a_minted_root_id_in_its_first_change() {
     // (b) Loro stores the same id.
     assert_eq!(id_of(&stored_root_state(&doc)), model, "stored root id");
     // (c) The FIRST local commit inserts it and writes no metadata version; a DISTINCT later
-    // commit writes version 10.
+    // commit writes the current version.
     let root_state = root_state_container(&doc);
     let metadata = metadata_container(&doc);
     let first = commits.first().expect("a local commit");
@@ -345,7 +345,7 @@ fn an_edit_open_stores_a_minted_root_id_in_its_first_change() {
             &root_state,
             metadata.as_ref()
         )),
-        "a later, distinct commit writes metadata version 10"
+        "a later, distinct commit writes the current metadata version"
     );
 }
 

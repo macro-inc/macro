@@ -128,7 +128,7 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
         lexical_loro::reconstruct_state(&doc, config.policy)
             .unwrap()
             .root["$"]["documentMetadata"],
-        serde_json::json!({"version":10})
+        serde_json::json!({"version":11})
     );
     let mut state = writer.state().to_json().unwrap();
     // Installs the custom-code subtree this test reopens.
@@ -178,7 +178,7 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
     // Ordinary Source parse/reopen export adds the null slot (receipt SHA-256
     // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2).
     expected.root["$"]["documentMetadata"] =
-        serde_json::json!({"version":10,"environmentTags":null});
+        serde_json::json!({"version":11,"environmentTags":null});
     // The writer stores the leaf's and the end paragraph's undefined fields as
     // null and the reload reads them back raw, as Source does (slice B: probes
     // be8649fb and ee140e14, Lexical 0.45.0 setFormat :6831, setDetail :6848,
@@ -213,7 +213,7 @@ fn editable_draft_cleanup_preserves_metadata_and_writes_its_parsed_null_slot() {
     let doc = lexical_loro::new_doc(7).unwrap();
     lexical_loro::mirror::set_state(&doc, &serde_json::json!({
         "type":"root","version":1,"format":"","indent":0,"direction":null,
-        "$":{"id":"cleanup-root","documentMetadata":{"version":10}},
+        "$":{"id":"cleanup-root","documentMetadata":{"version":11}},
         "children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
             "$":{"id":"cleanup-paragraph"},"children":[{
                 "type":"comment-mark","version":1,"isDraft":true,"ids":["draft"],
@@ -235,14 +235,14 @@ fn editable_draft_cleanup_preserves_metadata_and_writes_its_parsed_null_slot() {
     // An Edit open writes the parsed null slot (first open 605dfc47, reopen 5486fba0).
     assert_eq!(
         after.state.root["$"]["documentMetadata"],
-        serde_json::json!({"version":10,"environmentTags":null})
+        serde_json::json!({"version":11,"environmentTags":null})
     );
     let text = &after.state.root["children"][0]["children"][0];
     assert_eq!(text["text"], "preserved");
     assert_eq!(text["$"]["id"], "cleanup-text");
     assert_eq!(
         reader.state().to_json().unwrap().root["$"]["documentMetadata"],
-        serde_json::json!({"version":10,"environmentTags":null})
+        serde_json::json!({"version":11,"environmentTags":null})
     );
     reader
         .projection
@@ -311,7 +311,7 @@ fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slo
     // The open writes the load metadata as its own undo group (write-path-3 5f5e1b4e).
     assert_eq!(
         surface.state().to_json().unwrap().root["$"]["documentMetadata"],
-        serde_json::json!({"version":10})
+        serde_json::json!({"version":11})
     );
     // Input arrives after Loro's 400 ms merge interval, as in the tape (Enter at +1060 ms).
     let now = Now {
@@ -351,7 +351,7 @@ fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slo
         )
         .unwrap();
     let typed = surface.state().to_json().unwrap();
-    let bare = serde_json::json!({"version":10});
+    let bare = serde_json::json!({"version":11});
     assert_eq!(typed.root["$"]["documentMetadata"], bare);
     assert_eq!(
         lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],

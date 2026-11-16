@@ -79,7 +79,7 @@ fn initial_followups_run_and_the_upgrade_is_a_following_host_update()
     let (_, upgrade) = editor.dispatch(&document_metadata_upgrade())?;
     assert!(upgrade.tags.contains(&UpdateTag::HistoryMerge));
     let edited = editor.state().to_json()?;
-    assert_eq!(edited.root["$"]["documentMetadata"]["version"], json!(10));
+    assert_eq!(edited.root["$"]["documentMetadata"]["version"], json!(11));
     assert!(
         editor
             .state()

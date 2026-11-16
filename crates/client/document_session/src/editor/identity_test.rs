@@ -244,7 +244,7 @@ mod metadata {
     use std::sync::Arc;
 
     /// Current stored document schema version, synchronized with the web version counter.
-    pub const DOCUMENT_VERSION: f64 = 10.0;
+    pub const DOCUMENT_VERSION: f64 = 11.0;
     /// Source-compatible document metadata parser, isolated to live application surfaces.
     pub static DOCUMENT_METADATA: StateKey<Arc<Value>> =
         StateKey::new("documentMetadata", |value| {
@@ -324,6 +324,6 @@ fn metadata_code_subtree_redo_preserves_raw_state() {
             ..EditorConfig::default()
         },
         "code",
-        r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"const localValue = 1;x","type":"text","version":1,"$":{"id":"session-7-3"},"detail":null}],"format":"","type":"code","version":1,"$":{"id":"session-7-2"}},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-4"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root","documentMetadata":{"version":10}}}}"#,
+        r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"const localValue = 1;x","type":"text","version":1,"$":{"id":"session-7-3"},"detail":null}],"format":"","type":"code","version":1,"$":{"id":"session-7-2"}},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-4"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root","documentMetadata":{"version":11}}}}"#,
     );
 }

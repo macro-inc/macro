@@ -6,7 +6,7 @@ use std::sync::{Arc, LazyLock};
 static DEFAULT_METADATA: LazyLock<Arc<Value>> = LazyLock::new(|| Arc::new(json!({"version": -1})));
 
 /// Current stored document schema version, synchronized with the web version counter.
-pub const DOCUMENT_VERSION: f64 = 10.0;
+pub const DOCUMENT_VERSION: f64 = 11.0;
 /// Source-compatible document metadata parser, isolated to live application surfaces.
 pub static DOCUMENT_METADATA: StateKey<Arc<Value>> = StateKey::new("documentMetadata", |value| {
     let Some(value) = value.filter(|value| value.is_object() || value.is_array()) else {
