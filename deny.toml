@@ -249,6 +249,7 @@ deny = [
     "hosted_runtimes",           # Provisioning span propagation tests only (dev-dependency)
     "initiative",                # initiative.read span field tests only (dev-dependency)
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
+    "lexical_client",            # Route span tests and the explicit test-utils trace collector only
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only
