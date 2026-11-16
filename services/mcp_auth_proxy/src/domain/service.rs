@@ -12,20 +12,22 @@ use std::{
 };
 
 use super::{
-    access_token_clients::AccessTokenClients,
+    access_token_clients::{AccessTokenClients, client_label},
     browser_binding::BrowserBinding,
+    client_name::{ClientName, ReservedClientName},
     models::{
-        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientDelivery,
+        AccessToken, AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientDelivery,
         ClientRegistrationRequest, ClientRegistrationResponse, CodeDelivery, ConsentPrompt,
         EmailCodeRequest, EmailSignInStep, IssuedAuthorizationCode, PendingAuthorization,
         RefreshToken, RefreshTokenBinding, RegisteredClient, RevocationRequest, SignInMethod,
         TokenRequest, TokenResponse, UpstreamLogin, UpstreamTokens, UserConsent,
     },
     ports::{
-        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, OAuthProvider,
-        RefreshTokenBindingStore, UpstreamGrantError,
+        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, MacroApiTokenMinter,
+        OAuthProvider, RefreshTokenBindingStore, UpstreamGrantError,
     },
     redirect_uri::{RedirectTrust, RedirectUriPolicy},
+    resource::{McpResource, McpResources},
 };
 
 pub(crate) const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
@@ -49,8 +51,8 @@ pub const REVOKED_GRANT_TTL: Duration = REFRESH_TOKEN_BINDING_TTL;
 const MAX_REDIRECT_URIS_PER_CLIENT: usize = 8;
 /// Longest redirect URI accepted at registration.
 const MAX_REDIRECT_URI_LEN: usize = 512;
-/// Longest client name the consent screen shows before shortening it.
-const MAX_CONSENT_CLIENT_NAME_CHARS: usize = 64;
+/// Stored for a client that registers without a usable name.
+const UNNAMED_CLIENT_NAME: &str = "MCP client";
 /// What the consent screen calls a client whose name has nothing printable.
 const UNNAMED_CLIENT: &str = "Unnamed app";
 
@@ -175,20 +177,10 @@ pub struct McpAuthProxyServiceDeps<I> {
     pub oauth_provider: Arc<dyn OAuthProvider>,
     /// Sends and redeems emailed sign-in codes.
     pub email_codes: Arc<dyn EmailCodeProvider>,
-}
-
-/// Streamable HTTP resource URL advertised in protected-resource metadata.
-///
-/// MCP clients require a `resource` field. When `MCP_PUBLIC_URL` is an origin
-/// (the current Doppler value), append `/mcp`. When it already ends in `/mcp`
-/// (a later gateway cutover), do not append again.
-fn mcp_resource_url(public_url: &str) -> String {
-    let base = public_url.trim_end_matches('/');
-    if base.ends_with("/mcp") {
-        base.to_owned()
-    } else {
-        format!("{base}/mcp")
-    }
+    /// The MCP servers tokens may be issued for.
+    pub resources: McpResources,
+    /// Mints the tokens of the resources that call Macro's APIs directly.
+    pub macro_api_tokens: Arc<dyn MacroApiTokenMinter>,
 }
 
 /// Domain service backing the MCP OAuth broker.
@@ -201,6 +193,8 @@ pub struct McpAuthProxyServiceImpl<I> {
     email_codes: Arc<dyn EmailCodeProvider>,
     redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
+    resources: McpResources,
+    macro_api_tokens: Arc<dyn MacroApiTokenMinter>,
 }
 
 impl<I> Clone for McpAuthProxyServiceImpl<I> {
@@ -214,6 +208,8 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
             email_codes: Arc::clone(&self.email_codes),
             redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
+            resources: self.resources.clone(),
+            macro_api_tokens: Arc::clone(&self.macro_api_tokens),
         }
     }
 }
@@ -232,6 +228,8 @@ where
             refresh_token_bindings,
             oauth_provider,
             email_codes,
+            resources,
+            macro_api_tokens,
         } = deps;
 
         Self {
@@ -246,6 +244,8 @@ where
             email_codes,
             redirect_uri_policy,
             public_url,
+            resources,
+            macro_api_tokens,
         }
     }
 
@@ -342,6 +342,40 @@ where
             });
     }
 
+    /// The access token `resource` is given for an upstream one, and the
+    /// seconds it is valid for: the upstream token itself, or a Macro API
+    /// token signed with the client's name, which may expire sooner.
+    async fn access_token_for(
+        &self,
+        resource: McpResource,
+        upstream: AccessToken,
+        client_id: &str,
+        expires_in: u64,
+    ) -> Result<(AccessToken, u64), TokenExchangeError> {
+        match resource {
+            McpResource::Harness => Ok((upstream, expires_in)),
+            McpResource::Chatgpt => {
+                let client_name = self
+                    .client_registrations
+                    .find_client(client_id)
+                    .await
+                    .map_err(TokenExchangeError::ClientRegistrationStore)?
+                    .and_then(|client| client_label(&client.client_name));
+
+                let minted = self
+                    .macro_api_tokens
+                    .mint(
+                        &upstream,
+                        client_name.as_deref(),
+                        Duration::from_secs(expires_in),
+                    )
+                    .await
+                    .map_err(TokenExchangeError::MintAccessToken)?;
+                Ok((minted.token, minted.lifetime.as_secs()))
+            }
+        }
+    }
+
     /// Refreshes an upstream token for the client the refresh token belongs to.
     ///
     /// A public client has no credential to present, so the binding recorded
@@ -351,6 +385,7 @@ where
     async fn refresh_token_exchange(
         &self,
         params: TokenRequest,
+        resource: McpResource,
     ) -> Result<TokenResponse, TokenExchangeError> {
         let client_id = params
             .client_id
@@ -409,6 +444,10 @@ where
                 }
                 TokenExchangeError::RefreshFailed(error)
             })?;
+        // Before rebinding, so a failed mint leaves the presented token bound.
+        let (access_token, expires_in) = self
+            .access_token_for(resource, tokens.access_token, &client_id, tokens.expires_in)
+            .await?;
 
         let rotated_digest = refresh_token_digest(&tokens.refresh_token);
         // The upstream token is already issued at this point. A binding write
@@ -424,7 +463,7 @@ where
             })
             .is_ok();
 
-        self.bind_access_token(tokens.access_token.as_str(), &binding)
+        self.bind_access_token(access_token.as_str(), &binding)
             .await;
 
         if rebound && rotated_digest != presented_digest {
@@ -441,16 +480,17 @@ where
         }
 
         Ok(TokenResponse {
-            access_token: tokens.access_token,
+            access_token,
             refresh_token: tokens.refresh_token,
             token_type: "Bearer",
-            expires_in: tokens.expires_in,
+            expires_in,
         })
     }
 
     async fn exchange_authorization_code_token(
         &self,
         params: TokenRequest,
+        resource: McpResource,
     ) -> Result<TokenResponse, TokenExchangeError> {
         // Read the client id before consuming the code, so a malformed request
         // does not spend a code that is still good.
@@ -499,6 +539,15 @@ where
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
+        let (access_token, expires_in) = self
+            .access_token_for(
+                resource,
+                issued.access_token,
+                &issued.client_id,
+                seconds_until(issued.access_token_expires_at),
+            )
+            .await?;
+
         let binding = RefreshTokenBinding {
             client_id: issued.client_id,
             grant_id: uuid::Uuid::new_v4().to_string(),
@@ -507,14 +556,14 @@ where
             .bind(&refresh_token_digest(&issued.refresh_token), &binding)
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
-        self.bind_access_token(issued.access_token.as_str(), &binding)
+        self.bind_access_token(access_token.as_str(), &binding)
             .await;
 
         Ok(TokenResponse {
-            access_token: issued.access_token,
+            access_token,
             refresh_token: issued.refresh_token,
             token_type: "Bearer",
-            expires_in: seconds_until(issued.access_token_expires_at),
+            expires_in,
         })
     }
 }
@@ -545,7 +594,7 @@ where
         tracing::debug!("oauth-protected-resource metadata requested");
         let base = &self.public_url;
         serde_json::json!({
-            "resource": mcp_resource_url(base),
+            "resource": self.resources.harness(),
             "authorization_server": base,
             "authorization_servers": [base],
         })
@@ -573,11 +622,17 @@ where
             }
         }
 
+        let client_name = match request.client_name.as_deref().map(ClientName::parse) {
+            Some(Err(ReservedClientName)) => {
+                return Err(RegisterClientError::ReservedClientName);
+            }
+            Some(Ok(Some(name))) => name.into(),
+            Some(Ok(None)) | None => UNNAMED_CLIENT_NAME.to_owned(),
+        };
+
         let client = RegisteredClient {
             client_id: uuid::Uuid::new_v4().to_string(),
-            client_name: request
-                .client_name
-                .unwrap_or_else(|| "mcp-client".to_owned()),
+            client_name,
             redirect_uris: request.redirect_uris,
         };
 
@@ -890,9 +945,14 @@ where
         &self,
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
+        let resource = self.resources.resolve(params.resource.as_deref());
+
         match params.grant_type.as_str() {
-            "authorization_code" => self.exchange_authorization_code_token(params).await,
-            "refresh_token" => self.refresh_token_exchange(params).await,
+            "authorization_code" => {
+                self.exchange_authorization_code_token(params, resource)
+                    .await
+            }
+            "refresh_token" => self.refresh_token_exchange(params, resource).await,
             _ => Err(TokenExchangeError::UnsupportedGrantType),
         }
     }
@@ -983,41 +1043,14 @@ fn redirect_host(uri: &str) -> Option<String> {
     }
 }
 
-/// The self-reported client name as the consent screen shows it: control,
-/// bidirectional-override and zero-width characters dropped and length
-/// capped, so a name cannot restyle or crowd out the rest of the prompt.
+/// The stored client name as the consent screen shows it, held to the same
+/// rules as at registration so a name stored before them cannot restyle or
+/// crowd out the rest of the prompt.
 fn consent_client_name(client_name: &str) -> String {
-    let printable: String = client_name
-        .chars()
-        .filter(|character| !character.is_control() && !is_invisible_formatting(*character))
-        .collect();
-    let trimmed = printable.trim();
-
-    if trimmed.is_empty() {
-        return UNNAMED_CLIENT.to_owned();
+    match ClientName::parse(client_name) {
+        Ok(Some(name)) => name.into(),
+        Ok(None) | Err(ReservedClientName) => UNNAMED_CLIENT.to_owned(),
     }
-    if trimmed.chars().count() <= MAX_CONSENT_CLIENT_NAME_CHARS {
-        return trimmed.to_owned();
-    }
-
-    let mut shortened: String = trimmed
-        .chars()
-        .take(MAX_CONSENT_CLIENT_NAME_CHARS)
-        .collect();
-    shortened.push('\u{2026}');
-    shortened
-}
-
-/// Characters that change how surrounding text renders without showing
-/// themselves: bidirectional overrides and isolates, and zero-width marks.
-fn is_invisible_formatting(character: char) -> bool {
-    matches!(
-        character,
-        '\u{200B}'..='\u{200F}'
-            | '\u{202A}'..='\u{202E}'
-            | '\u{2060}'..='\u{2069}'
-            | '\u{FEFF}'
-    )
 }
 
 /// Appends query parameters to a redirect URI, keeping any query the client
@@ -1050,6 +1083,9 @@ pub enum RegisterClientError {
         /// The rejected URI, for logging.
         uri: String,
     },
+    /// The client named itself as Macro.
+    #[error("client_name is reserved")]
+    ReservedClientName,
     /// The registration could not be persisted.
     #[error("failed to persist client registration")]
     ClientRegistrationStore(anyhow::Error),
@@ -1184,6 +1220,12 @@ pub enum TokenExchangeError {
     /// broker faults.
     #[error("refresh token exchange failed: {0}")]
     RefreshFailed(UpstreamGrantError),
+    /// Client registrations could not be read.
+    #[error("failed to read client registrations")]
+    ClientRegistrationStore(anyhow::Error),
+    /// The resource's access token could not be minted.
+    #[error("failed to mint the access token")]
+    MintAccessToken(anyhow::Error),
 }
 
 /// Errors returned when revoking a token.

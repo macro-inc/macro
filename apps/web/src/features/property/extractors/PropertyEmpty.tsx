@@ -18,7 +18,6 @@ export function PropertyEmptyIcon(props: {
     <span
       class={cn('inline-flex size-3 shrink-0', props.class)}
       aria-hidden="true"
-      data-icon-motion="none"
     >
       <Switch
         fallback={

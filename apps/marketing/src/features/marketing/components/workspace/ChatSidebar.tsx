@@ -1,7 +1,7 @@
-import Caret from '@phosphor/caret-right.svg';
-import Hash from '@phosphor/hash.svg';
-import Search from '@phosphor/magnifying-glass.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
+import Caret from '@icon/system/regular/caret-right.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
 import { Tabs } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';

@@ -26,6 +26,8 @@ vi.mock('@property/hooks/usePropertyEntityDisplay', () => ({
     icon: () => null,
     nativeProjectId: () => 'launch',
     isLoading: () => false,
+    blockOrFileType: () => undefined,
+    linkParams: () => undefined,
   }),
 }));
 

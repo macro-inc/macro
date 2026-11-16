@@ -1,5 +1,5 @@
 use super::{
-    ApplyUpdateResult, BundleRoot, BundleSource, UpdateStatus,
+    ApplyUpdateResult, BundleRoot, BundleSource, StartupSelection, UpdateStatus,
     tests::{
         FakeFs, cache_dir, clear_required_status, seed_bundle, seed_pending_bundle_root,
         seed_persisted_bundle_root, service_with_status_and_fs,
@@ -37,7 +37,10 @@ async fn rollback_interrupted_before_reload_ack_does_not_restore_retired_bundles
     // No acknowledgement: model quitting or crashing during the live reload.
     drop(service);
     let (mut restarted, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
-    assert!(!restarted.load_bundle_root(&cache_dir, 0).await);
+    assert_eq!(
+        restarted.load_bundle_root(&cache_dir, 0).await.selection,
+        StartupSelection::Embedded
+    );
     assert_eq!(restarted.bundle_build().await, None);
     assert!(matches!(
         restarted.status().borrow().as_ref().unwrap(),
@@ -57,7 +60,10 @@ async fn an_explicit_embedded_selection_can_restore_a_later_pending_download() {
     seed_pending_bundle_root(&fs, &cache_dir, &pending);
     let (mut service, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-    assert!(service.load_bundle_root(&cache_dir, 0).await);
+    assert_eq!(
+        service.load_bundle_root(&cache_dir, 0).await.selection,
+        StartupSelection::CompletedDownload
+    );
     assert_eq!(
         service.apply_update(&cache_dir).await.unwrap(),
         ApplyUpdateResult::ReloadNeeded

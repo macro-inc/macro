@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableRoutineConditions } from '@core/constant/featureFlags';
+import {
+  enableEventRoutines,
+  enableRoutineConditions,
+} from '@core/constant/featureFlags';
 import { isGeofenceSupported } from '@core/mobile/native-geofence';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Show, Suspense } from 'solid-js';
@@ -62,6 +65,7 @@ export function RoutineTriggers(props: {
   layout?: 'rows' | 'add' | 'inline';
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
+  const eventRoutines = useFeatureFlag(enableEventRoutines);
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
     () =>
@@ -99,6 +103,7 @@ export function RoutineTriggers(props: {
         renderPlaceAccess={
           isGeofenceSupported() ? () => <PlaceAccess /> : undefined
         }
+        offerEvents={eventRoutines().enabled}
         renderEventGroup={(group, options) => (
           <Show
             when={group !== 'GitHub' || github().linked !== false}

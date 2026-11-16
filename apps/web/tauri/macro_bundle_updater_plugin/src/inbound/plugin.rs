@@ -12,6 +12,7 @@ use crate::{
         models::{UpdateError, UpdateStatus},
         ports::AutoUpdateService,
         service::{ApplyUpdateResult, Service},
+        startup::{BundleStartup, StartupSelection},
     },
     outbound::{
         api_client::BundleClient,
@@ -31,10 +32,12 @@ const WIFI_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 fn diagnostic_wire_types() {
     let generated = specta_typescript::Typescript::default()
         .export(
-            &specta::Types::default().register::<BundleReloadDiagnostics>(),
+            &specta::Types::default()
+                .register::<BundleReloadDiagnostics>()
+                .register::<BundleStartup>(),
             specta_serde::Format,
         )
-        .expect("export bundle reload types");
+        .expect("export bundle updater types");
     let generated = generated
         .lines()
         .map(str::trim_end)
@@ -42,7 +45,7 @@ fn diagnostic_wire_types() {
         .join("\n")
         + "\n";
     let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../src/observability/generated/bundle-reloads.ts");
+        .join("../../src/observability/generated/bundle-updater.ts");
     if std::env::var_os("UPDATE_NATIVE_DIAGNOSTIC_TYPES").is_some() {
         std::fs::create_dir_all(output.parent().expect("generated directory"))
             .expect("create directory");
@@ -74,6 +77,14 @@ pub fn bundle_reload_diagnostics<R: Runtime>(
     let state = app.try_state::<std::sync::Mutex<BundleReloadDiagnostics>>()?;
     let diagnostics = state.lock().ok()?;
     Some(diagnostics.clone())
+}
+
+/// Read how startup chose this launch's bundle. `None` when startup did not
+/// consult bundle storage: automatic updates are disabled or the storage
+/// directory is unavailable.
+pub fn bundle_startup<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<BundleStartup> {
+    app.try_state::<BundleStartup>()
+        .map(|startup| startup.inner().clone())
 }
 
 fn record_reload_dispatch<R: Runtime>(app: &tauri::AppHandle<R>, source: &'static str) {
@@ -496,9 +507,11 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         if !self.auto_update {
             tracing::info!("[bundle-update] automatic bundle updates are disabled in this build");
         } else if let Ok(cache_dir) = bundle_storage_dir(app) {
-            let restored_pending = tauri::async_runtime::block_on(async {
+            let startup = tauri::async_runtime::block_on(async {
                 service.load_bundle_root(&cache_dir, native_build).await
             });
+            let restored_pending = startup.selection == StartupSelection::CompletedDownload;
+            app.manage(startup);
             if restored_pending {
                 match tauri::async_runtime::block_on(async {
                     service.apply_update(&cache_dir).await

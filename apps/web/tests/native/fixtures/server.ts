@@ -131,6 +131,8 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
         throw new Error('ItemPreviews only serves fixture favorites');
       return { items: rows.map((row) => row.api), nextCursor: null };
     }
+    // Contacts are not under test; the CRM directory is empty.
+    if (operation === 'CrmContacts') return { items: [], nextCursor: null };
     if (operation === 'SoupMailBackfill') return metadataPage(input);
     if (operation === 'SoupSharedMailBackfill')
       return { items: sharedMail, nextCursor: null };
@@ -202,6 +204,18 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             id: USER_ID,
             emailLinks: filterMatrix ? matrixAccounts : accounts,
             emailLabels: [],
+            // Unrelated app-chrome reads: empty pages, schema-conformant.
+            savedViews: { nodes: [], nextCursor: null },
+            calendars: [],
+            calendarOccurrences: {
+              nodes: [],
+              hasNextPage: false,
+              endCursor: null,
+              syncStatus: 'READY',
+              watermark: [],
+            },
+            workFeed: { entries: [], nextCursor: null, nextPosition: null },
+            contacts: { nodes: [], nextCursor: null },
             favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
               (corpus ?? [])
                 .filter(

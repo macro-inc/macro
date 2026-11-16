@@ -8,3 +8,6 @@
 #   @example-corp.com                  any email at that domain
 #
 # Prefer placeholders (customer@example.com) over exceptions.
+
+# Preserve the pinned upstream API specification verbatim.
+crates/incus_client/spec/rest-api.yaml:lxc-devel@lists.linuxcontainers.org

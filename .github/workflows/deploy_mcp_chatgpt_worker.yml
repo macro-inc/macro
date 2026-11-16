@@ -1,0 +1,41 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker.rs
+name: Deploy MCP ChatGPT Worker
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        default: dev
+        options:
+        - dev
+        - prod
+        description: The environment to deploy to
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Install dependencies
+      run: bun install --frozen-lockfile && (cd packages/sdk && bun install --frozen-lockfile)
+    - name: Deploy with wrangler
+      run: bunx wrangler deploy --env ${{ inputs.environment }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: services/mcp-chatgpt-worker
+concurrency:
+  group: deploy-mcp-chatgpt-worker-${{ inputs.environment }}
+  cancel-in-progress: false

@@ -5,14 +5,11 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { activitySearch } from './activity-search';
 import { openEntityInSplit } from './open-entity-in-split';
 import { useActivityFeedFlag } from './use-activity-feed-flag';
-
-const MyActivityView = lazy(async () => ({
-  default: (await import('./views/my-activity-view')).MyActivityView,
-}));
+import { MyActivityView } from './views/my-activity-view';
 
 function TrackedActivityView() {
   usePageViewTracking('activity');

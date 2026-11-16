@@ -1,5 +1,5 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Layer } from '@ui/components/Layer';
 import { For, onCleanup, onMount } from 'solid-js';
 

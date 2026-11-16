@@ -6,6 +6,7 @@ import { createExternalChatCapabilities } from '@app/features/external-chat/quer
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { ExternalChatView } from '@app/features/external-chat/views/external-chat-view';
 import { InMacroChats } from '@app/features/external-view/components/in-macro-section';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -41,6 +42,7 @@ import { queryReadyGate } from '@queries/gate';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
+import { ChatHeaderFixture } from './split-header-fixture';
 
 declare global {
   interface Window {
@@ -78,6 +80,7 @@ const noQuickAccess: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 function ChatHarness(props: { chatId: string }) {
@@ -101,29 +104,31 @@ function ChatHarness(props: { chatId: string }) {
   });
   return (
     <div class="relative h-dvh">
-      <ToastRegion />
-      {/* The app's bottom chrome host, where the composer floats on touch. */}
-      <Show when={isTouchDevice()}>
-        <FloatRegionHost />
-      </Show>
-      <ExternalChatContextProvider value={source}>
-        <SidePanel.Root floating defaultOpen={false}>
-          <ExternalChatView
-            userId={userId()}
-            share={
-              <ShareTrigger
-                onClick={share}
-                id={props.chatId}
-                blockType="external_chat"
-              />
-            }
-            onShare={share}
-            onConnect={() => {
-              location.search = '';
-            }}
-          />
-        </SidePanel.Root>
-      </ExternalChatContextProvider>
+      <ChatHeaderFixture>
+        <ToastRegion />
+        {/* The app's bottom chrome host, where the composer floats on touch. */}
+        <Show when={isTouchDevice()}>
+          <FloatRegionHost />
+        </Show>
+        <ExternalChatContextProvider value={source}>
+          <SidePanel.Root floating defaultOpen={false}>
+            <ExternalChatView
+              userId={userId()}
+              share={
+                <ShareTrigger
+                  onClick={share}
+                  id={props.chatId}
+                  blockType="external_chat"
+                />
+              }
+              onShare={share}
+              onConnect={() => {
+                location.search = '';
+              }}
+            />
+          </SidePanel.Root>
+        </ExternalChatContextProvider>
+      </ChatHeaderFixture>
     </div>
   );
 }
@@ -195,6 +200,7 @@ function Page() {
   );
 }
 
+initializeLexical();
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
 render(

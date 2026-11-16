@@ -14,7 +14,7 @@ type CallSessionControllerOptions = {
     tokenResponse: CallTokenResponse,
     metadata?: CallSessionConnectMetadata
   ) => Promise<void>;
-  jsDisconnect: () => Promise<void>;
+  jsDisconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
   clearOptimisticJoin: () => void;
 };
 
@@ -41,6 +41,8 @@ export type CallSessionConnectMetadata = {
   localTracks?: CallPrejoinTracks;
   /** Public meeting pages use the browser media controls on every platform. */
   useBrowserSession?: boolean;
+  /** Reconnects and restored visits must not announce a new participant. */
+  recovery?: boolean;
 };
 
 export type CallSessionDisconnectOptions = {
@@ -93,13 +95,13 @@ function createJsLivekitSessionController(options: {
     tokenResponse: CallTokenResponse,
     metadata?: CallSessionConnectMetadata
   ) => Promise<void>;
-  jsDisconnect: () => Promise<void>;
+  jsDisconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
 }): CallSessionController {
   return {
     shouldRequestToken: () => true,
     connectWithToken: (tokenResponse, metadata) =>
       options.jsConnect(tokenResponse, metadata),
-    disconnect: () => options.jsDisconnect(),
+    disconnect: (disconnectOptions) => options.jsDisconnect(disconnectOptions),
   };
 }
 

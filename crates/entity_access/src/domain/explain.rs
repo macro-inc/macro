@@ -31,7 +31,7 @@ impl<R> ExplainAccessService for ExplainAccessServiceImpl<R>
 where
     R: ExplainAccessRepository,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn explain_access(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,

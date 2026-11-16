@@ -83,6 +83,11 @@ async fn register<I: InflightAuthStore + 'static>(
             );
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+        Err(RegisterClientError::ReservedClientName) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "client_name may not be Macro's own name",
+        )
+            .into_response(),
         Err(RegisterClientError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to persist client registration");
             (
@@ -552,6 +557,7 @@ fn start_authorization_error_response(error: StartAuthorizationError) -> Respons
         StartAuthorizationError::InvalidRedirectUri => {
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+
         StartAuthorizationError::UnregisteredRedirectUri => (
             axum::http::StatusCode::BAD_REQUEST,
             "redirect_uri was not registered for this client",
@@ -785,6 +791,22 @@ async fn token<I: InflightAuthStore + 'static>(
                 "failed to access inflight auth state",
             )
         }
+        Err(TokenExchangeError::ClientRegistrationStore(error)) => {
+            tracing::error!(error=?error, "failed to read client registrations");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to read client registrations",
+            )
+        }
+        Err(TokenExchangeError::MintAccessToken(error)) => {
+            tracing::error!(error=?error, "failed to mint the resource's access token");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to issue the access token",
+            )
+        }
         Err(TokenExchangeError::RefreshTokenBindingStore(error)) => {
             tracing::error!(error=?error, "failed to access refresh token bindings");
             (
@@ -906,7 +928,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_router(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys: None,
+            },
             mcp_service,
         )
     }
@@ -914,6 +940,7 @@ where
 
 /// MCP routes for a shared HTTP listener whose process owns health checks.
 pub fn mounted_mcp_router<I, S>(
+    user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
     auth_proxy: McpAuthProxyServiceImpl<I>,
     jwt_args: JwtValidationArgs,
     mcp_service: S,
@@ -932,7 +959,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_routes(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys,
+            },
             mcp_service,
         )
     }
@@ -983,6 +1014,7 @@ fn mcp_cors_layer() -> CorsLayer {
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
+            HeaderName::from_static("x-macro-user-api-key"),
             HeaderName::from_static("mcp-protocol-version"),
             HeaderName::from_static("mcp-session-id"),
         ])

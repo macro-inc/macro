@@ -2,7 +2,7 @@ import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { SoupChatInput } from '@app/features/chat/SoupChatInput';
+import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import {
   makeMarkDoneAction,
   resolveEntityActionViewContext,
@@ -478,7 +478,7 @@ export const SoupView = (props: SoupViewProps) => {
                 }
               >
                 <Show when={props.filterBarVariant !== 'tag'}>
-                  <HeaderActionGroup label="Filters">
+                  <HeaderActionGroup label="Filters" size="md">
                     <UnifiedFilterDropdown
                       grouped
                       hideLabel
@@ -488,7 +488,7 @@ export const SoupView = (props: SoupViewProps) => {
                     />
                   </HeaderActionGroup>
                 </Show>
-                <HeaderActionGroup label="View options">
+                <HeaderActionGroup label="View options" size="md">
                   <Show when={!isComponentListView('home')}>
                     <SoupViewContextSort grouped />
                   </Show>
@@ -533,7 +533,7 @@ export const SoupView = (props: SoupViewProps) => {
         >
           <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
             <div class="pointer-events-auto w-full min-w-0 max-w-3xl">
-              <SoupChatInput />
+              <MobileAgentComposer />
             </div>
           </div>
         </Show>

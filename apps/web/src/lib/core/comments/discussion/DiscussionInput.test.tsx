@@ -8,7 +8,9 @@ const editor = vi.hoisted(() => ({
   root: undefined as HTMLTextAreaElement | undefined,
   isIOS: true,
 }));
-const pickPhotos = vi.hoisted(() => vi.fn<() => Promise<File[] | null>>());
+const pickPhotos = vi.hoisted(() =>
+  vi.fn<(openFileInput: () => void) => Promise<File[]>>()
+);
 const addMedia = vi.hoisted(() => vi.fn());
 const failure = vi.hoisted(() => vi.fn());
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure } }));
@@ -20,7 +22,7 @@ vi.mock('@solid-primitives/platform', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/mobile/nativePhotoLibrary', () => ({
-  pickNativePhotoLibraryMedia: pickPhotos,
+  pickPhotoLibraryMediaOrFiles: pickPhotos,
 }));
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'ios' && editor.isIOS,
@@ -145,21 +147,19 @@ describe('collapsed discussion attachments', () => {
     );
   });
 
-  it.each([true, false])(
-    'opens the browser picker when native selection is unavailable (iOS: %s)',
-    async (isIOS) => {
-      editor.isIOS = isIOS;
-      pickPhotos.mockResolvedValue(null);
-      const browserPicker = renderCollapsed();
+  it('opens the browser picker when the photo library hands off to it', async () => {
+    pickPhotos.mockImplementation(async (openFileInput) => {
+      openFileInput();
+      return [];
+    });
+    const browserPicker = renderCollapsed();
 
-      screen.getByRole('button', { name: 'Attach images' }).click();
-      await vi.runAllTimersAsync();
+    screen.getByRole('button', { name: 'Attach images' }).click();
+    await vi.runAllTimersAsync();
 
-      expect(pickPhotos).toHaveBeenCalledTimes(isIOS ? 1 : 0);
-      expect(browserPicker).toHaveBeenCalledOnce();
-      expect(addMedia).not.toHaveBeenCalled();
-    }
-  );
+    expect(browserPicker).toHaveBeenCalledOnce();
+    expect(addMedia).not.toHaveBeenCalled();
+  });
 
   it('does not open another picker when native selection is cancelled', async () => {
     const browserPicker = renderCollapsed();

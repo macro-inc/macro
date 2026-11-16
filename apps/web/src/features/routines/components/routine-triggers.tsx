@@ -72,6 +72,8 @@ type EventSlots = {
   ) => JSX.Element;
   /** This device's location access, shown in a place's settings where it applies. */
   renderPlaceAccess?: () => JSX.Element;
+  /** False hides event triggers from the menu; existing ones stay editable. */
+  offerEvents?: boolean;
 };
 
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
@@ -463,6 +465,7 @@ function AddTrigger(
         onOpenChange={setMenuOpen}
         onSelect={setPending}
         renderGroup={props.renderEventGroup}
+        offerEvents={props.offerEvents}
         triggerLabel="Add trigger"
         triggerVariant={props.variant}
         triggerSize={props.size}
@@ -520,6 +523,7 @@ function EventToken(
         onOpenChange={setMenuOpen}
         current={eventTriggerLabel(props.trigger)}
         renderGroup={props.renderEventGroup}
+        offerEvents={props.offerEvents}
         onSelect={(value) => {
           if (value.kind !== 'event') {
             setSchedule({ ...value, id: props.trigger.id });
@@ -913,6 +917,7 @@ export function RoutineTriggers(
     renderEventCondition: props.renderEventCondition,
     renderEventGroup: props.renderEventGroup,
     renderPlaceAccess: props.renderPlaceAccess,
+    offerEvents: props.offerEvents,
   });
   return (
     <Switch>

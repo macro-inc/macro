@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Keep the viewer as a scalar initplan. With a high-degree viewer, substituting\n-- its literal into each branch can make Postgres scan a global ordering index\n-- and discard unrelated edges instead of seeking the viewer's composite index.\n-- Valid IDs are nonempty. An empty initial bound avoids a nullable OR turning\n-- deep cursors into post-scan filters when a prepared statement uses a generic plan.\nWITH viewer AS MATERIALIZED (SELECT $1::text AS id)\nSELECT contact AS \"contact!\"\nFROM (\n    (\n        SELECT user1 AS contact\n        FROM contacts_connections\n        WHERE user2 = (SELECT id FROM viewer) AND user1 > COALESCE($2::text, '')\n        ORDER BY user1\n        LIMIT $3\n    )\n    UNION ALL\n    (\n        SELECT user2 AS contact\n        FROM contacts_connections\n        WHERE user1 = (SELECT id FROM viewer) AND user2 > COALESCE($2::text, '')\n        ORDER BY user2\n        LIMIT $3\n    )\n    UNION ALL\n    SELECT $1::text AS contact WHERE $1 > COALESCE($2::text, '')\n) AS directory\nORDER BY contact\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "250089cc4fd6f04a2cd41c849f5d492d9455a4b45da37803d4c454def3c1415a"
+}

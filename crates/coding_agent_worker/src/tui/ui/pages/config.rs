@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod test;
 
-use harnesses::domain::models::HarnessOwner;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
@@ -100,7 +99,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
 
 /// The runtime settings the web owns, read-only from the server's snapshot.
 fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
-    let mut lines = vec![section("Runtime", "set on the web", width)];
+    let mut lines = vec![section("Machine", "set on the web", width)];
     let row = |label: &str, value: Span<'static>| {
         Line::from(vec![
             Span::styled(format!("  {label:<14}"), Style::new().fg(DIM)),
@@ -112,12 +111,13 @@ fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
             lines.push(row("Name", Span::raw(harness.name.clone())));
             lines.push(row(
                 "Access",
-                match harness.owner {
-                    HarnessOwner::User { .. } => Span::raw("Private"),
-                    HarnessOwner::Team { .. } => Span::styled(
+                if harness.shared_team_ids.is_empty() {
+                    Span::raw("Private")
+                } else {
+                    Span::styled(
                         "Team · teammates can command agents on this machine",
                         Style::new().fg(WARN),
-                    ),
+                    )
                 },
             ));
             lines.push(row(

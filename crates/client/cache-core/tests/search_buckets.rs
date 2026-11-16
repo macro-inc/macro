@@ -54,7 +54,7 @@ async fn patch(
 }
 
 #[test]
-fn only_requested_buckets_load_and_empty_buckets_are_cached() {
+fn every_search_visits_only_requested_buckets_and_skips_unknown_buckets() {
     pollster::block_on(async {
         let mut storage = InMemoryStorage::new();
         let mut entries: Vec<_> = (0..1_000)
@@ -87,8 +87,8 @@ fn only_requested_buckets_load_and_empty_buckets_are_cached() {
                 1
             );
         }
-        assert_eq!(diagnostics.search_catalog_load_count(), 1);
-        assert_eq!(diagnostics.search_catalog_rows_loaded(), 1);
+        assert_eq!(diagnostics.search_query_count(), 2);
+        assert_eq!(diagnostics.search_rows_visited(), 2);
         for _ in 0..2 {
             assert!(
                 engine
@@ -99,7 +99,7 @@ fn only_requested_buckets_load_and_empty_buckets_are_cached() {
                     .is_empty()
             );
         }
-        assert_eq!(diagnostics.search_catalog_load_count(), 2);
+        assert_eq!(diagnostics.search_query_count(), 4);
         assert_eq!(
             engine
                 .search(&request(&["document", "note"]))
@@ -109,23 +109,23 @@ fn only_requested_buckets_load_and_empty_buckets_are_cached() {
                 .len(),
             2
         );
-        assert_eq!(diagnostics.search_catalog_load_count(), 3);
-        assert_eq!(diagnostics.search_catalog_rows_loaded(), 2);
+        assert_eq!(diagnostics.search_query_count(), 6);
+        assert_eq!(diagnostics.search_rows_visited(), 4);
         assert_eq!(diagnostics.record_get_count(), 0);
         assert_eq!(
             engine.search(&request(&[])).await.unwrap().documents.len(),
             20
         );
         assert_eq!(
-            diagnostics.search_catalog_load_count(),
-            SearchProfile::QuickAccessV1.buckets().len()
+            diagnostics.search_query_count(),
+            6 + SearchProfile::QuickAccessV1.buckets().len()
         );
-        assert_eq!(diagnostics.search_catalog_rows_loaded(), 1_002);
+        assert_eq!(diagnostics.search_rows_visited(), 1_006);
     });
 }
 
 #[test]
-fn loaded_catalogs_handle_moves_hiding_deletion_and_external_invalidation() {
+fn searches_observe_moves_hiding_deletion_and_external_invalidation() {
     pollster::block_on(async {
         let key = EntityKey::entity("GraphqlSoupDocument", &["doc"]);
         let mut storage = InMemoryStorage::new();
@@ -214,7 +214,7 @@ fn loaded_catalogs_handle_moves_hiding_deletion_and_external_invalidation() {
 }
 
 #[test]
-fn moving_to_an_unloaded_bucket_does_not_mark_its_other_rows_loaded() {
+fn moving_to_another_bucket_keeps_its_existing_rows_searchable() {
     pollster::block_on(async {
         let moved = EntityKey::entity("GraphqlSoupDocument", &["moved"]);
         let other = EntityKey::entity("GraphqlSoupDocument", &["existing-note"]);
@@ -247,12 +247,12 @@ fn moving_to_an_unloaded_bucket_does_not_mark_its_other_rows_loaded() {
                 .len(),
             2
         );
-        assert_eq!(diagnostics.search_catalog_load_count(), 2);
+        assert_eq!(diagnostics.search_query_count(), 2);
     });
 }
 
 #[test]
-fn optimistic_bucket_moves_overlay_borrowed_catalogs_through_settlement() {
+fn optimistic_bucket_moves_overlay_storage_matches_through_settlement() {
     pollster::block_on(async {
         for commit in [false, true] {
             let key = EntityKey::entity("GraphqlSoupDocument", &["doc"]);
@@ -392,6 +392,6 @@ fn bounded_browse_preserves_cross_bucket_cursor_order_and_ties() {
             }
         }
         assert_eq!(actual, expected);
-        assert_eq!(diagnostics.search_catalog_load_count(), 0);
+        assert_eq!(diagnostics.search_query_count(), 0);
     });
 }

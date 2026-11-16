@@ -38,7 +38,6 @@ vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'viewer@example.com',
   useUserContext: () => ({ isLoading: () => false }),
 }));
-vi.mock('@core/user', () => ({ useContacts: () => () => [] }));
 const [linksLoaded, setLinksLoaded] = createSignal(true);
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({

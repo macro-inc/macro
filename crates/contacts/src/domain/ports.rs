@@ -1,4 +1,8 @@
+use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
+use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::query::{ContactLookup, ContactSearch};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -19,12 +23,128 @@ pub trait ContactsRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Bounded directory reads, separate from the deployed full-list API.
+pub trait ContactsPageRepository: Send + Sync + 'static {
+    /// Select only requested graph neighbors or self, preserving request order.
+    fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Return only the viewer's graph neighbors and self, in stable contact-ID
+    /// order, after the cursor. Apply the bound in storage, not after loading all
+    /// contacts. Preserve continuation progress when skipping invalid legacy IDs.
+    fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+}
+
+/// Bounded contact reads for authenticated inbound adapters.
+pub trait ContactsPageService: Send + Sync + 'static {
+    /// Authorize exact IDs against the authenticated viewer's directory.
+    fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Read the authenticated viewer's contacts, including self, without an
+    /// in-memory full-directory intermediate. The adapter supplies the viewer
+    /// from authentication, never from a request body or cursor.
+    fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+}
+
+/// One bounded, ranked read of the people a viewer may search for.
+pub trait PeopleSearchRepository: Send + Sync + 'static {
+    /// Match `needle` (lowercase, at least two characters) against the email and
+    /// Macro profile name of the viewer's contacts, self, and current teammates.
+    /// Rank teammates first, then prefix matches, and return at most `limit`.
+    fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        needle: &str,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// Ranked people search for authenticated inbound adapters.
+pub trait PeopleSearchService: Send + Sync + 'static {
+    /// Search only the authenticated viewer's contacts and current team. A query
+    /// too short to search returns no people without reading storage.
+    fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// Resolves names only for the authorized, bounded IDs selected by the directory.
+pub trait ContactNameReader: Send + Sync + 'static {
+    /// Resolve at most MAX_CONTACT_PAGE_SIZE IDs with Macro profile names taking
+    /// precedence over this viewer's address book. Missing names are not errors.
+    fn contact_names(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        contacts: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<ContactName>, Report>> + Send;
+}
+
+/// Enriched directory reads for authenticated inbound adapters.
+pub trait ContactDirectory: Send + Sync + 'static {
+    /// Filter in source-ID order with bounded scan work. A non-null continuation
+    /// means more source rows remain, even when no matches were returned.
+    fn search_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        search: &ContactSearch,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactPage, Report>> + Send;
+
+    /// Resolve requested IDs only after graph membership checks, omitting unknown
+    /// or unrelated people and retaining first-requested order.
+    fn lookup_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<Contact>, Report>> + Send;
+
+    /// Read and enrich only one authorized page, preserving its continuation.
+    fn contact_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactPage, Report>> + Send;
+}
+
 /// Port trait for notifying users about contact changes.
 pub trait ContactsNotifier: Send + Sync + 'static {
     /// Invalidates cached contacts for the given user IDs.
     fn invalidate_contacts_for_users(
         &self,
         user_ids: Vec<MacroUserIdStr<'_>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port trait for telling a user's contacts that the user's picture changed.
+pub trait UserPictureNotifier: Send + Sync + 'static {
+    /// Notify `recipients` (one bounded page of contacts) that `user_id`'s
+    /// picture changed so they refetch it.
+    fn notify_picture_changed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        recipients: &[MacroUserIdStr<'static>],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

@@ -4,7 +4,7 @@ use super::*;
 use cache_core::page_retention::{SOUP_PAGE_OWNER, compact_soup_pages};
 
 const VERSION_KEY: &str = "soup_page_retention_version";
-const VERSION: &str = "1";
+const VERSION: &str = "2";
 
 pub(super) fn save_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     driver::execute(

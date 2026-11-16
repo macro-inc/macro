@@ -1,3 +1,8 @@
+import { AppearanceGlyph } from '@app/features/entity-appearance/components/appearance-glyph';
+import {
+  appearanceColor,
+  type EntityAppearance,
+} from '@app/features/entity-appearance/core/appearance';
 import { ICON_SIZE_CLASSES } from './entity-icon-sizes';
 
 export { ICON_SIZE_CLASSES } from './entity-icon-sizes';
@@ -553,6 +558,8 @@ function validateEntity(entity: string): EntityWithValidIcon {
 }
 
 export type EntityIconProps = {
+  /** Shared per-entity presentation overrides; category icons omit this. */
+  appearance?: EntityAppearance | null;
   /**
    * Either the name of a block itself – like 'chat' or 'write' – or a file
    * type opened by a block – like 'py', 'pdf', etc. Or a set of known types
@@ -611,9 +618,15 @@ export function EntityIcon(props: EntityIconProps) {
         props.useBackground && 'p-[20%]',
         props.class
       )}
+      style={{
+        color: appearanceColor(props.appearance?.color),
+        'container-type': 'inline-size',
+      }}
     >
       {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
-      <Dynamic component={config().icon} class="size-full" />
+      <AppearanceGlyph appearance={props.appearance}>
+        <Dynamic component={config().icon} class="size-full" />
+      </AppearanceGlyph>
     </div>
   );
 }
@@ -736,6 +749,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .with({ type: 'form' }, () => 'form')
+    .with({ type: 'harness' }, () => 'default')
     .exhaustive(() => 'default');
 }
 

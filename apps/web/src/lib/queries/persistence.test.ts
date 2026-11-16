@@ -6,6 +6,7 @@ import {
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
+import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
@@ -15,6 +16,7 @@ import type {
 } from './persistence/per-query-idb';
 import {
   createQueryPersistenceScopes,
+  shouldPersistCalendarQuery,
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
@@ -28,6 +30,7 @@ function createMockStore(): ClearablePerQueryPersistence & {
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
+  prune: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
 } {
   const entries = new Map<string, PersistedQueryEntry>();
@@ -39,6 +42,11 @@ function createMockStore(): ClearablePerQueryPersistence & {
     }),
     remove: vi.fn((hash: string) => {
       entries.delete(hash);
+    }),
+    prune: vi.fn(async (keep: (entry: PersistedQueryEntry) => boolean) => {
+      for (const [hash, entry] of entries) {
+        if (!keep(entry)) entries.delete(hash);
+      }
     }),
     flush: vi.fn(async () => {}),
     clear: vi.fn(async () => {
@@ -63,12 +71,19 @@ function createScope(
 
 describe('setupQueryPersistence', () => {
   it('allowlists persisted channel query families', () => {
+    expect(shouldPersistChannelQuery(channelKeys.listChannels._def)).toBe(
+      false
+    );
+    expect(
+      shouldPersistChannelQuery(channelKeys.listChannels(undefined).queryKey)
+    ).toBe(false);
+    expect(shouldPersistChannelQuery(channelKeys.activity._def)).toBe(false);
     expect(shouldPersistChannelQuery(channelKeys.withID('a').queryKey)).toBe(
       false
     );
-    expect(shouldPersistChannelQuery(channelKeys.listChannels.queryKey)).toBe(
-      true
-    );
+    expect(
+      shouldPersistChannelQuery(channelKeys.listChannels('viewer').queryKey)
+    ).toBe(true);
     expect(
       shouldPersistChannelQuery(
         messageKeys.messages({ type: 'channel', id: 'a' }, null).queryKey
@@ -77,6 +92,39 @@ describe('setupQueryPersistence', () => {
     expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
       false
     );
+  });
+
+  it('persists calendar reads only when their key names an account', () => {
+    const range = {
+      start: '2026-11-08T05:00:00.000Z',
+      end: '2026-11-15T05:00:00.000Z',
+      startDate: '2026-11-08',
+      endDate: '2026-11-15',
+    };
+    const occurrences = calendarKeys.occurrences('viewer', range);
+
+    expect(shouldPersistCalendarQuery(occurrences.queryKey)).toBe(true);
+    expect(shouldPersistCalendarQuery(occurrences._ctx.graphql.queryKey)).toBe(
+      true
+    );
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars('viewer').queryKey
+      )
+    ).toBe(true);
+    expect(
+      shouldPersistCalendarQuery(calendarKeys.occurrences('', range).queryKey)
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars(undefined).queryKey
+      )
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.teamOutOfOffice('viewer', range).queryKey
+      )
+    ).toBe(false);
   });
 
   it('writes only the changed query on update', () => {
@@ -175,13 +223,13 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(messageQueryKey, { value: 'skip' });
     expect(store.set).not.toHaveBeenCalled();
 
-    queryClient.setQueryData(channelKeys.listChannels.queryKey, {
+    queryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, {
       value: 'persist',
     });
     expect(store.set).toHaveBeenCalledTimes(1);
     expect(
       (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(channelKeys.listChannels.queryKey);
+    ).toEqual(channelKeys.listChannels('viewer').queryKey);
   });
 
   it('restores query data from store on added event', async () => {
@@ -428,6 +476,23 @@ describe('setupQueryPersistence', () => {
     queryClient.clear();
   });
 
+  it('does not persist shared or editable name values, including legacy unscoped keys', () => {
+    const scopes = createQueryPersistenceScopes('test');
+    const keys = [
+      authKeys.userName(
+        'macro|viewer@example.com',
+        1,
+        2,
+        'macro|person@example.com'
+      ).queryKey,
+      authKeys.userNameSelf('macro|viewer@example.com', 1).queryKey,
+      ['auth', 'userName', 'macro|person@example.com'],
+      ['auth', 'userNameSelf'],
+    ];
+    for (const key of keys)
+      expect(scopes.some((scope) => scope.shouldPersist(key))).toBe(false);
+  });
+
   it('configures only native user-info persistence without an expiry', () => {
     const scopes = createQueryPersistenceScopes('test');
     const userInfoScope = scopes.find((scope) =>
@@ -469,6 +534,46 @@ describe('setupQueryPersistence', () => {
 
     expect(queryClient.getQueryData(['channel', 'v'])).toBeUndefined();
     expect(store.remove).toHaveBeenCalledWith('["channel","v"]');
+  });
+
+  it('keeps an entry that outlives its query, restores it stale, and sweeps old ones', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const entry = (hash: string, ageMs: number): PersistedQueryEntry => ({
+      queryHash: hash,
+      queryKey: JSON.parse(hash),
+      data: { value: hash },
+      dataUpdatedAt: Date.now() - ageMs,
+      persistedAt: Date.now() - ageMs,
+      buster: 'test',
+    });
+    const week = 7 * 24 * 60 * 60 * 1000;
+    store.entries.set('["range","recent"]', entry('["range","recent"]', 1000));
+    store.entries.set('["range","old"]', entry('["range","old"]', week + 1));
+
+    const scope = createScope(['range'], store, { outlivesQuery: true });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
+    await Promise.resolve();
+
+    expect([...store.entries.keys()]).toEqual(['["range","recent"]']);
+
+    queryClient.prefetchQuery({
+      queryKey: ['range', 'recent'],
+      queryFn: () => new Promise(() => {}),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const restored = queryClient.getQueryState(['range', 'recent']);
+    expect(restored?.data).toEqual({ value: '["range","recent"]' });
+    expect(restored?.dataUpdatedAt).toBe(0);
+    // The stale stamp is not written over the entry's real age.
+    expect(store.set).not.toHaveBeenCalled();
+
+    queryClient.removeQueries({ queryKey: ['range', 'recent'] });
+
+    expect(store.remove).not.toHaveBeenCalled();
+    expect(store.entries.has('["range","recent"]')).toBe(true);
   });
 
   it('stops persistence on unsubscribe', () => {
