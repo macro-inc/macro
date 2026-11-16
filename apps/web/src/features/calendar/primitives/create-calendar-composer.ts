@@ -11,7 +11,7 @@ import {
 import type { EventEditorDisabledFields } from '../components/composer/event-form-model';
 import { outOfOfficeNoticeFor } from '../components/composer/out-of-office';
 import type { CalendarComposerOptions } from '../core/composer';
-import { buildRecurrenceLines } from '../utils/recurrence';
+import { rezoneRecurrenceUntil } from '../utils/recurrence';
 import { createComposerMetadata } from './create-composer-metadata';
 
 /** Conformance-backed behavior for the new UI; no component or service ownership. */
@@ -197,21 +197,26 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     const customRuleInNewZone =
       submission.changes.timeZoneChanged &&
       controller.recurrenceChoice() === 'custom';
-    if (customRuleInNewZone) {
-      submission.values = {
-        ...submission.values,
-        recurrenceLines: buildRecurrenceLines(
-          controller.customConfig(),
-          state().allDay,
+    const ends = controller.customConfig().ends;
+    let values = submission.values;
+    // A zone change only reinterprets the inclusive end date. The editable
+    // config omits fields such as WKST, so rebuilding the rule changes its meaning.
+    if (customRuleInNewZone && ends.kind === 'on' && values.recurrenceLines) {
+      values = {
+        ...values,
+        recurrenceLines: rezoneRecurrenceUntil(
+          values.recurrenceLines,
+          ends.date,
+          values.time.kind === 'allDay',
           metadata.state.timeZone
         ),
       };
     }
     const scope = options.showRecurringEditNotice ? editScope() : undefined;
     if (Object.keys(submission.changes).length > 0) {
-      options.onSubmit(submission.values, scope, submission.changes);
+      options.onSubmit(values, scope, submission.changes);
     } else {
-      options.onSubmit(submission.values, scope);
+      options.onSubmit(values, scope);
     }
   };
 

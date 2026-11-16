@@ -546,6 +546,35 @@ export function buildRecurrenceLines(
   return [`RRULE:${parts.join(';')}`];
 }
 
+/** Rezone an inclusive end date without dropping provider-only RRULE fields. */
+export function rezoneRecurrenceUntil(
+  lines: string[],
+  date: string,
+  allDay: boolean,
+  timeZone: string
+): string[] {
+  const value = untilValue(date, allDay, timeZone);
+  return lines.map((line) => {
+    const separator = line.indexOf(':');
+    const property = line
+      .slice(0, separator)
+      .split(';', 1)[0]
+      ?.trim()
+      .toUpperCase();
+    if (separator < 0 || property !== 'RRULE') return line;
+    const fields = line
+      .slice(separator + 1)
+      .split(';')
+      .map((field) => {
+        const equals = field.indexOf('=');
+        if (field.slice(0, equals).trim().toUpperCase() !== 'UNTIL')
+          return field;
+        return `${field.slice(0, equals + 1)}${value}`;
+      });
+    return `${line.slice(0, separator + 1)}${fields.join(';')}`;
+  });
+}
+
 /**
  * Parse recurrence properties into an editable config. Returns `undefined`
  * for rules the editor cannot round-trip (extra dates, exclusions, or

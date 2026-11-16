@@ -24,6 +24,58 @@ function createController() {
 }
 
 describe('calendar composer model', () => {
+  it.each([
+    {
+      rule: 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,SU;WKST=SU',
+      expected: 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,SU;WKST=SU',
+    },
+    {
+      rule: 'RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20300701T235959Z;BYDAY=TU,SU;WKST=SU',
+      expected:
+        'RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20300702T035959Z;BYDAY=TU,SU;WKST=SU',
+    },
+  ])(
+    'preserves biweekly rule semantics when changing time zone: $rule',
+    ({ rule, expected }) => {
+      createRoot((dispose) => {
+        disposers.push(dispose);
+        const controller = createCalendarEventFormController({
+          initialValue: {
+            ...defaultEditorInitialValues(
+              new Date('2030-01-01T09:00:00'),
+              false
+            ),
+            title: 'Planning',
+            calendarId: 'calendar-1',
+            recurrenceLines: [rule],
+          },
+          isEdit: true,
+          recurrenceTimeZone: 'UTC',
+          calendarOptions: () => [
+            {
+              id: 'calendar-1',
+              label: 'Calendar',
+              color: 'var(--color-accent)',
+            },
+          ],
+          guestOptions: () => [],
+        });
+        const onSubmit = vi.fn();
+        const model = createCalendarComposer({
+          controller,
+          pending: false,
+          isEdit: true,
+          initialMetadata: { timeZone: 'UTC' },
+          onSubmit,
+        });
+        expect(controller.recurrenceChoice()).toBe('custom');
+        expect(model.setTimeZone('America/New_York')).toBe(true);
+        model.submit();
+        expect(onSubmit).toHaveBeenCalledOnce();
+        expect(onSubmit.mock.lastCall?.[0].recurrenceLines).toEqual([expected]);
+      });
+    }
+  );
   it('blocks a DST-gap submission and recovers when the range is corrected', () => {
     createRoot((dispose) => {
       disposers.push(dispose);

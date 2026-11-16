@@ -11,7 +11,26 @@ import {
   type RecurrenceConfig,
   recurrenceConfigsEqual,
   recurrencePresetsFor,
+  rezoneRecurrenceUntil,
 } from './recurrence';
+
+describe('rezoneRecurrenceUntil', () => {
+  it('changes only UNTIL and keeps provider fields and other recurrence properties', () => {
+    const lines = [
+      'RRULE:UNTIL=20300701T235959Z;FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,SU;WKST=SU',
+      'EXDATE:20300108T090000Z',
+      'RDATE:20300110T090000Z',
+    ];
+    expect(
+      rezoneRecurrenceUntil(lines, '2030-07-01', false, 'America/New_York')
+    ).toEqual([
+      'RRULE:UNTIL=20300702T035959Z;FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,SU;WKST=SU',
+      'EXDATE:20300108T090000Z',
+      'RDATE:20300110T090000Z',
+    ]);
+    expect(lines[0]).toContain('UNTIL=20300701T235959Z');
+  });
+});
 
 describe('parseRecurrenceLines', () => {
   it('parses useful rule fields and explicit recurrence dates', () => {
