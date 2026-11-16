@@ -657,7 +657,6 @@ dependencies = [
  "agent_session_realtime",
  "agent_trigger",
  "ai_billing",
- "ai_projections",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -767,7 +766,6 @@ dependencies = [
  "model-error-response",
  "model_notifications",
  "model_owner",
- "models_ai_projection",
  "models_dcs",
  "models_permissions",
  "models_search",
@@ -801,7 +799,6 @@ dependencies = [
  "soup_realtime",
  "sqlx",
  "sqs_client",
- "sqs_worker",
  "sse-core",
  "static_file",
  "static_file_service_client",
@@ -1228,44 +1225,6 @@ dependencies = [
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
-]
-
-[[package]]
-name = "ai_projections"
-version = "0.1.0"
-dependencies = [
- "agent",
- "ai_tools",
- "ai_toolset",
- "ai_usage",
- "anyhow",
- "aws-sdk-sqs",
- "axum",
- "chrono",
- "connection_gateway_client",
- "futures",
- "http-body-util",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "model-entity",
- "model-error-response",
- "model_user",
- "models_ai_projection",
- "rootcause",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "sqs_client",
- "sqs_worker",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
- "utoipa",
- "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13726,14 +13685,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_ai_projection"
-version = "0.1.0"
-dependencies = [
- "serde",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_bulk_upload"
 version = "0.1.0"
 dependencies = [
@@ -19897,7 +19848,6 @@ dependencies = [
  "chrono",
  "futures",
  "model",
- "models_ai_projection",
  "models_email",
  "opentelemetry",
  "s3_key",

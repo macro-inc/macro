@@ -34,7 +34,6 @@ members = [
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
   "crates/ai_billing",
-  "crates/ai_projections",
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bot_id",
