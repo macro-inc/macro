@@ -47,8 +47,18 @@ opens **Filter Home**.
 
 With the GraphQL Soup flag on, desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
-instead of merging sources in the browser; Noise, search, and touch devices keep
-the merged feed. Verify these against a backend that serves the work feed: a
+instead of merging sources in the browser; Noise and touch devices keep
+the merged feed.
+
+Typing in **Search Home** there filters the feed first: every loaded Home row
+whose name matches the query is listed, in Home's order, whatever its type or
+age, followed by the search service's hits (content matches in mail, documents,
+tasks and chats that pass Home's notification filters). The Watch tutorial row
+is hidden while the field has text. Rows on feed pages that have not loaded
+yet, and a row whose only match is its sender or body, are found only if the
+search service returns them. To check, type a word from the title of a row of
+each type further down the list (an agent session, a task older than two
+weeks, a channel, a project): each must appear. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
 What an agent session does for you is the session's work, not yours: a task or
 document it creates stays out of Home unless a notification brings it in, and

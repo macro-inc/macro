@@ -245,7 +245,8 @@ tools — hexagonal, heavily feature-gated.
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
-  them together. A copy stays only when no better copy passes the same checks,
+  them together. Apply `crm_email_thread_excluded` to both the candidate and
+  competing copies; a copy stays only when no better copy passes the same checks,
   so the representative never depends on the cursor; `test/crm_team_read.rs`
   compares every stream with the general builder page by page. The superset
   keeps only the read inboxes' own contacts, because a message lists only its

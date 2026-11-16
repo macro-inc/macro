@@ -10035,7 +10035,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::email_privacy"],
-        "summary": "Apply one consent or domain-exclusion change as the authenticated member.",
+        "summary": "Apply one consent, domain, or thread exclusion change as the member.",
         "operationId": "update_crm_email_privacy",
         "requestBody": {
           "content": {
@@ -10054,6 +10054,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmailPrivacySettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/threads": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "List only the authenticated member's thread exclusions.",
+        "operationId": "list_crm_excluded_email_threads",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Read entries after this thread ID.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludedEmailThreads"
                 }
               }
             }
@@ -35476,6 +35507,10 @@
             "type": "boolean",
             "description": "Whether the target holds several values."
           },
+          "percentage": {
+            "type": "boolean",
+            "description": "Whether the target shows a number as a percent."
+          },
           "reason": {
             "type": ["string", "null"],
             "description": "Why nothing converts, for a `never` cast."
@@ -35696,6 +35731,21 @@
               "kind": {
                 "type": "string",
                 "enum": ["derived"]
+              },
+              "percentage": {
+                "type": "boolean",
+                "description": "Whether a number formula is shown as a percent."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           }
@@ -35803,6 +35853,17 @@
               "type": {
                 "type": "string",
                 "enum": ["number"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           },
@@ -43558,6 +43619,26 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Hold back or restore only the caller's contribution of one thread.",
+            "required": ["thread_id", "excluded", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["set_thread_exclusion"]
+              },
+              "excluded": {
+                "type": "boolean",
+                "description": "False removes this exception; consent and other exclusions still apply."
+              },
+              "thread_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Must belong to a mailbox owned by the authenticated member."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Consent covers all available past and future emails in the primary mailbox.",
             "required": ["enabled", "action"],
             "properties": {
@@ -44387,6 +44468,46 @@
           },
           "userId": {
             "type": "string"
+          }
+        }
+      },
+      "ExcludedEmailThread": {
+        "type": "object",
+        "description": "One private thread from the caller's own mailbox, never a teammate's copy.",
+        "required": ["thread_id", "link_id"],
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact mailbox containing this copy."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Current subject, for the owner's privacy settings."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mailbox-local thread identity."
+          }
+        }
+      },
+      "ExcludedEmailThreads": {
+        "type": "object",
+        "description": "A bounded page of the caller's private threads, ordered by thread ID.",
+        "required": ["threads"],
+        "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Pass as `after` to read the next page."
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExcludedEmailThread"
+            },
+            "description": "At most fifty exclusions."
           }
         }
       },
