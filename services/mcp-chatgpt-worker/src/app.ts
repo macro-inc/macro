@@ -142,27 +142,12 @@ function unauthorized(config: Config) {
 }
 
 /**
- * The tools `TOOLS` names, in the catalog's order, or every tool when it's
- * unset. A name no tool has fails loudly: a typo would silently drop a tool.
- */
-function offeredTools(config: Config): Tool[] {
-  const tools = buildTools(catalog, config.TOOL_GROUPING);
-  if (!config.TOOLS) return tools;
-  const names = new Set(tools.map((tool) => tool.name));
-  const unknown = config.TOOLS.filter((name) => !names.has(name));
-  if (unknown.length)
-    throw new Error(`TOOLS names no such tool: ${unknown.join(', ')}`);
-  const offered = new Set(config.TOOLS);
-  return tools.filter((tool) => offered.has(tool.name));
-}
-
-/**
  * The Worker's request handler: protected-resource metadata, and the MCP
  * endpoint, a stateless Streamable HTTP server whose tools run the SDK as
  * the bearer token's user.
  */
 export function createHandler(config: Config) {
-  const tools = offeredTools(config);
+  const tools = buildTools(catalog, config.TOOL_GROUPING);
   const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const listed = tools.map(
     ({ name, title, description, inputSchema, annotations }) => ({

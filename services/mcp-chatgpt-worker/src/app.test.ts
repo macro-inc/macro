@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createHandler } from './app';
 import { parseConfig } from './config';
@@ -187,52 +186,6 @@ describe('createHandler', () => {
     expect(body.result.structuredContent.error.code).toBe('invalid');
   });
 
-  test('TOOLS limits tools/list and tools/call to the tools it names', async () => {
-    vi.stubGlobal('fetch', async () => Response.json([]));
-    const handle = createHandler(
-      parseConfig({ ...BINDINGS, TOOLS: 'search_read, documents_read' })
-    );
-
-    const listed = await (
-      await handle(rpc('tools/list', {}, 'user-token'))
-    ).json();
-    const called = await (
-      await handle(
-        rpc(
-          'tools/call',
-          { name: 'pins_read', arguments: { op: 'pins.list' } },
-          'user-token'
-        )
-      )
-    ).json();
-
-    expect(
-      listed.result.tools.map((tool: { name: string }) => tool.name)
-    ).toEqual(['documents_read', 'search_read', 'people_read']);
-    expect(called.error.message).toContain('Unknown tool pins_read');
-  });
-
-  test('TOOLS naming a tool that does not exist fails loudly', () => {
-    expect(() =>
-      createHandler(parseConfig({ ...BINDINGS, TOOLS: 'documents_reed' }))
-    ).toThrow('TOOLS names no such tool: documents_reed');
-  });
-
-  test("every deployed env's TOOLS names real tools", () => {
-    const wrangler = JSON.parse(
-      readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/^\s*\/\/.*$/gm, '')
-    );
-    for (const env of ['dev', 'prod']) {
-      const vars = wrangler.env[env].vars;
-      expect(vars.TOOLS, env).toBeTruthy();
-      expect(() =>
-        createHandler(parseConfig({ ...BINDINGS, TOOLS: vars.TOOLS }))
-      ).not.toThrow();
-    }
-  });
-
   describe('person tokens', () => {
     type Seen = { url: string; body: unknown };
 
@@ -387,10 +340,8 @@ describe('createHandler', () => {
       ]);
     });
 
-    test('people_read is listed, read-only, alongside TOOLS', async () => {
-      const handle = createHandler(
-        parseConfig({ ...BINDINGS, TOOLS: 'search_read' })
-      );
+    test('people_read is listed last, read-only', async () => {
+      const handle = createHandler(parseConfig(BINDINGS));
 
       const body = await (
         await handle(rpc('tools/list', {}, 'user-token'))
@@ -399,9 +350,7 @@ describe('createHandler', () => {
         (tool: { name: string }) => tool.name === 'people_read'
       );
 
-      expect(
-        body.result.tools.map((tool: { name: string }) => tool.name)
-      ).toEqual(['search_read', 'people_read']);
+      expect(body.result.tools.at(-1).name).toBe('people_read');
       expect(people.annotations).toMatchObject({
         readOnlyHint: true,
         openWorldHint: false,
