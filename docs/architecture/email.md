@@ -252,7 +252,7 @@ state cannot disagree because they retained separate snapshots.
 
 Production compose and thread composition no longer fetch the complete personal
 contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
-To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+To/Cc/Bcc input; the input owns its open/query lifetime and one growing, bounded list of pages.
 The field is required at composition boundaries, with explicit `undefined` for
 hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
 `recipients` and reply-session options contain scoped extras and thread addresses,

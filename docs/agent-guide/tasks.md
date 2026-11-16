@@ -16,7 +16,7 @@ clicking a row or its checkbox toggles and stays open, Enter adds and closes, an
 Shift/Only selects just one option and stays open. Escape dismisses the menu.
 Assignee uses the team/agent roster and retains selected outsiders. Created by
 loads bounded personal windows only while its submenu or mobile accordion is
-open; search and Next options replace that window without losing selections. Me
+open; search starts a new list and scrolling loads further pages, without losing selections. Me
 is a semantic viewer choice, distinct from the named fixed self option.
 Unavailable selected IDs remain selected, and Only changes its own group without
 clearing other restrictions.
@@ -340,8 +340,8 @@ remain Unassigned with a warning. When lookup is unavailable, retry or explicitl
 choose an assignee/Unassigned before importing. Manual choices override later
 lookup results, including an explicit Unassigned choice.
 
-The mapping button opens the shared single-user property picker. Search or use
-Next options/PageDown; choosing a person replaces the previous choice and retains
+The mapping button opens the shared single-user property picker. Search, or
+scroll (PageDown on desktop) for later pages; choosing a person replaces the previous choice and retains
 their name/email. Desktop uses inline controls; narrow screens stack them.
 
 Clear or a new upload resets mappings. A late file read cannot replace a newer
@@ -1180,8 +1180,8 @@ disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`; both actions use bordered buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
-the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
+confirm `Add N tasks`. Scrolling to the end (or PageDown) appends later loaded
+task pages to the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.

@@ -1124,7 +1124,7 @@ Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
 In Soup-based list toolbars, Assignee and Created by menus and filter chips load
-suggestions only while open. Next options replaces the page; selected and unavailable
+suggestions only while open, and list further pages as they scroll; selected and unavailable
 saved IDs remain selected across searches. Me remains available, Assignee also has
 Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
 restores the Owned constraint. Chip labels resolve separately while menus are closed.
@@ -1378,7 +1378,7 @@ Macro activity triggers by surface:
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks.
-Specific-item pickers use Next options/PageDown to append later loaded pages.
+Specific-item pickers append later loaded pages as they scroll (or on PageDown).
 Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger

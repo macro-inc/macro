@@ -390,8 +390,8 @@ Organizer and Attendee virtualize a bounded contact window, using shared
 name/email matching. Matching selected values stay pinned independently of the
 page; their labels resolve through explicit email lookup, including cached
 point reads offline. Unknown or external selections keep their email labels.
-Next contacts replaces the suggestion page without clearing selections. Empty
-server pages may still have a continuation; partial/offline caches are labeled
+Scrolling to the end lists the next contacts below without clearing selections.
+An empty page reads on until a page matches or the directory ends; partial/offline caches are labeled
 rather than claiming no contacts exist. Adding a valid email clears the contact
 search. Typing keeps focus in the input as async rows arrive, and ArrowDown moves
 into the checkbox rows. Desktop/phone coverage uses the production filters and
