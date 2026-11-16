@@ -41,13 +41,25 @@ const readTheme = async (themeUrl: URL): Promise<Theme> => {
   return JSON.parse(await response.text()).theme;
 };
 
+// A Java properties key ends at the first unescaped `=`, `:` or whitespace.
 const messageKey = (line: string) => {
   const trimmed = line.trimStart();
   if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('!')) {
     return undefined;
   }
-  const separator = trimmed.indexOf('=');
-  return separator > 0 ? trimmed.slice(0, separator).trimEnd() : undefined;
+  let key = '';
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (char === '\\' && index + 1 < trimmed.length) {
+      index += 1;
+      key += trimmed[index];
+    } else if (char === '=' || char === ':' || /\s/.test(char)) {
+      break;
+    } else {
+      key += char;
+    }
+  }
+  return key === '' ? undefined : key;
 };
 
 const theme = await readTheme(url);
@@ -63,12 +75,10 @@ if (/\\\r?$/m.test(defaults)) {
 // FusionAuth rejects any save of a bundle that lacks a key its version
 // requires, so a theme copied before an upgrade needs them added first.
 const present = new Set(messages.split(/\r?\n/).map(messageKey));
-const missing = defaults
-  .split(/\r?\n/)
-  .filter((line) => {
-    const key = messageKey(line);
-    return key !== undefined && !present.has(key);
-  });
+const missing = defaults.split(/\r?\n/).filter((line) => {
+  const key = messageKey(line);
+  return key !== undefined && !present.has(key);
+});
 const withEnd = (text: string) => (text.endsWith('\n') ? text : `${text}\n`);
 const filled =
   missing.length === 0
