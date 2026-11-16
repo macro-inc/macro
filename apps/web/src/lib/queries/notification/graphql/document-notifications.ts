@@ -21,6 +21,7 @@ import {
   createSignal,
   onCleanup,
   type Setter,
+  untrack,
 } from 'solid-js';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import { registerNotificationReader } from '../revalidation';
@@ -96,6 +97,7 @@ export function createDocumentNotificationsQuery(
           requestPolicy: 'network-only',
           throwOnError: true,
         });
+        failure = undefined;
       } catch (error) {
         failure = { error };
       }
@@ -153,15 +155,25 @@ type DocumentNotificationsQuery = ReturnType<
 type DocumentNotificationsHolder = { enabled: Accessor<boolean> };
 type SharedDocumentNotifications = {
   query: DocumentNotificationsQuery;
+  holders: Accessor<readonly DocumentNotificationsHolder[]>;
   setHolders: Setter<readonly DocumentNotificationsHolder[]>;
   dispose: () => void;
+  /** The last reader's holder, kept live while a quick remount may reuse it. */
+  lingering?: {
+    holder: DocumentNotificationsHolder;
+    timer: ReturnType<typeof setTimeout>;
+  };
 };
+
+/** A reader that remounts within this (a split change) reuses the query. */
+const RELEASE_GRACE_MS = 30_000;
 
 const sharedQueries = new Map<string, SharedDocumentNotifications>();
 
 /**
  * The open document's notifications, one live query per document however many
- * readers (drawer, side panel, splits) show them. It ends with its last reader.
+ * readers (drawer, side panel, splits) show them. It ends a grace period
+ * after its last reader.
  */
 export function useDocumentNotificationsQuery(
   documentId: string,
@@ -177,20 +189,37 @@ export function useDocumentNotificationsQuery(
       const query = createDocumentNotificationsQuery(documentId, () =>
         holders().some((holder) => holder.enabled())
       );
-      return { query, setHolders, dispose };
+      return { query, holders, setHolders, dispose };
     });
     sharedQueries.set(documentId, shared);
   }
   const entry = shared;
   const holder = { enabled };
-  entry.setHolders((holders) => [...holders, holder]);
+  const lingering = entry.lingering;
+  if (lingering) {
+    clearTimeout(lingering.timer);
+    entry.lingering = undefined;
+  }
+  entry.setHolders((holders) => [
+    ...holders.filter((other) => other !== lingering?.holder),
+    holder,
+  ]);
   onCleanup(() => {
-    const remaining = entry.setHolders((holders) =>
-      holders.filter((other) => other !== holder)
+    const remaining = untrack(entry.holders).filter(
+      (other) => other !== holder
     );
-    if (remaining.length > 0) return;
-    sharedQueries.delete(documentId);
-    entry.dispose();
+    if (remaining.length > 0) {
+      entry.setHolders(remaining);
+      return;
+    }
+    entry.lingering = {
+      holder,
+      timer: setTimeout(() => {
+        entry.lingering = undefined;
+        sharedQueries.delete(documentId);
+        entry.dispose();
+      }, RELEASE_GRACE_MS),
+    };
   });
   return entry.query;
 }

@@ -4,7 +4,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Accessor, createRoot, createSignal, onCleanup } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createDocumentNotificationsQuery,
   useDocumentNotificationsQuery,
@@ -214,20 +214,34 @@ describe('open document notifications', () => {
     await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(2));
   });
 
-  it('still reads a delivery queued behind a failed read, and reports the failure', async () => {
+  it('still reads a delivery queued behind a failed read, and succeeds with it', async () => {
     const f = setup();
     const first = Promise.withResolvers<void>();
     mocks.refetch.mockReturnValueOnce(first.promise);
     f.notification('GraphqlNewNotification', 'a');
     f.notification('GraphqlNewNotification', 'b');
-    const error = new Error('offline');
-    first.reject(error);
+    first.reject(new Error('offline'));
 
     await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(2));
     expect(mocks.work[1]).toBe(mocks.work[0]);
-    await expect(mocks.work[0]).rejects.toBe(error);
+    await expect(mocks.work[0]).resolves.toBeUndefined();
     f.notification('GraphqlNewNotification', 'c');
     expect(mocks.refetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a failure of the last read', async () => {
+    const f = setup();
+    const first = Promise.withResolvers<void>();
+    const error = new Error('still offline');
+    mocks.refetch
+      .mockReturnValueOnce(first.promise)
+      .mockRejectedValueOnce(error);
+    f.notification('GraphqlNewNotification', 'a');
+    f.notification('GraphqlNewNotification', 'b');
+    first.resolve();
+
+    await expect(mocks.work[0]).rejects.toBe(error);
+    expect(mocks.refetch).toHaveBeenCalledTimes(2);
   });
 
   it('reads, listens and registers nothing while the session cannot read notifications', async () => {
@@ -260,8 +274,13 @@ describe('open document notifications', () => {
 
 describe('shared open document notifications', () => {
   const holders: (() => void)[] = [];
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
   afterEach(() => {
     for (const release of holders.splice(0)) release();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   function hold(documentId = 'doc', enabled: Accessor<boolean> = () => true) {
@@ -303,9 +322,33 @@ describe('shared open document notifications', () => {
     expect(destroyed).not.toHaveBeenCalled();
     expect(mocks.listeners.size).toBe(1);
     sidePanel.release();
+    vi.runOnlyPendingTimers();
     expect(destroyed).toHaveBeenCalledOnce();
     expect(mocks.listeners.size).toBe(0);
 
+    hold();
+    expect(mocks.createQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets a reader that remounts within the grace period reuse the query', () => {
+    const destroyed = mockQuery();
+    hold().release();
+    vi.advanceTimersByTime(29_000);
+    expect(destroyed).not.toHaveBeenCalled();
+    expect(mocks.listeners.size).toBe(1);
+
+    const remounted = hold();
+    expect(mocks.createQuery).toHaveBeenCalledOnce();
+    expect(mocks.createQuery.mock.calls[0][0]().enabled).toBe(true);
+    vi.advanceTimersByTime(60_000);
+    expect(destroyed).not.toHaveBeenCalled();
+
+    remounted.release();
+    vi.advanceTimersByTime(29_000);
+    expect(destroyed).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_000);
+    expect(destroyed).toHaveBeenCalledOnce();
+    expect(mocks.listeners.size).toBe(0);
     hold();
     expect(mocks.createQuery).toHaveBeenCalledTimes(2);
   });
