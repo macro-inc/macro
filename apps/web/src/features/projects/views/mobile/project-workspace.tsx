@@ -7,7 +7,10 @@ import { AddProjectTasks } from '../../add-project-tasks';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectWorkspaceProps } from '../../context/project-workspace';
 import { canEditProject } from '../../core/project';
-import { showProjectTaskAction } from '../../primitives/project-task-action';
+import {
+  showInlineProjectTaskAction,
+  showProjectTaskAction,
+} from '../../primitives/project-task-action';
 import { ProjectTasksProvider } from '../../project-tasks-provider';
 import { ProjectSummary } from '../shared/project-summary';
 import { ProjectTasksEmptyState } from '../shared/project-tasks-empty-state';
@@ -19,9 +22,19 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [summary, setSummary] = createSignal<HTMLDivElement>();
   const [heading, setHeading] = createSignal<HTMLDivElement>();
+  const [taskArea, setTaskArea] = createSignal<HTMLElement>();
+  const viewportSize = createElementSize(scroller);
+  const taskAreaSize = createElementSize(taskArea);
   const summarySize = createElementSize(summary);
   const headingSize = createElementSize(heading);
   const [scrollTop, setScrollTop] = createSignal(0);
+  // Measure tasks without the fallback control so showing it cannot hide itself.
+  const inlineTaskAction = () =>
+    props.project.taskIds.length > 0 &&
+    showInlineProjectTaskAction(
+      taskAreaSize.height ?? 0,
+      viewportSize.height ?? 0
+    );
   const showTaskAction = () =>
     showProjectTaskAction(scrollTop(), summarySize.height ?? 0);
   return (
@@ -50,49 +63,57 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               {props.discussion}
             </ProjectSummary>
           </div>
-          <div
-            ref={setHeading}
-            class="sticky top-0 z-10 flex h-14 items-center gap-2 bg-panel px-4"
-          >
-            <ProjectProgress project={props.project} />
-            <h2 class="text-base font-semibold">{t('nav.tasks')}</h2>
-            <span class="text-sm text-ink-muted">
-              {t('common.progressTasksDone', {
-                completed: props.project.completedTaskCount ?? 0,
-                count: props.project.taskCount ?? props.project.taskIds.length,
-              })}
-            </span>
-            <div class="ml-auto">
-              <TasksFilterDrawer />
+          <section ref={setTaskArea} aria-label={t('nav.tasks')}>
+            <div
+              ref={setHeading}
+              class="sticky top-0 z-10 flex h-14 items-center gap-2 bg-panel px-4"
+            >
+              <ProjectProgress project={props.project} />
+              <h2 class="text-base font-semibold">{t('nav.tasks')}</h2>
+              <span class="text-sm text-ink-muted">
+                {t('common.progressTasksDone', {
+                  completed: props.project.completedTaskCount ?? 0,
+                  count:
+                    props.project.taskCount ?? props.project.taskIds.length,
+                })}
+              </span>
+              <div class="ml-auto">
+                <TasksFilterDrawer />
+              </div>
             </div>
-          </div>
-          <Show
-            when={props.project.taskIds.length > 0}
-            fallback={
-              <ProjectTasksEmptyState
-                project={props.project}
-                onCreateTask={
-                  canEditProject(props.project) ? props.onCreateTask : undefined
-                }
-              />
-            }
-          >
-            <TasksContent
-              scrollContainer={scroller()}
-              scrollStart={
-                (summarySize.height ?? 0) + (headingSize.height ?? 0) + 4
+            <Show
+              when={props.project.taskIds.length > 0}
+              fallback={
+                <ProjectTasksEmptyState
+                  project={props.project}
+                  onCreateTask={
+                    canEditProject(props.project)
+                      ? props.onCreateTask
+                      : undefined
+                  }
+                />
               }
-              stickyInset={headingSize.height ?? 0}
-            />
+            >
+              <TasksContent
+                scrollContainer={scroller()}
+                scrollStart={
+                  (summarySize.height ?? 0) + (headingSize.height ?? 0) + 4
+                }
+                stickyInset={headingSize.height ?? 0}
+              />
+            </Show>
+          </section>
+          <Show when={canEditProject(props.project)}>
+            <div classList={{ 'px-4 py-4': inlineTaskAction() }}>
+              <AddProjectTasks
+                project={props.project}
+                onCreateTask={props.onCreateTask}
+                inline={inlineTaskAction()}
+                hidden={!showTaskAction()}
+              />
+            </div>
           </Show>
         </div>
-        <Show when={canEditProject(props.project)}>
-          <AddProjectTasks
-            project={props.project}
-            onCreateTask={props.onCreateTask}
-            hidden={!showTaskAction()}
-          />
-        </Show>
       </ProjectTasksProvider>
     </ProjectWorkspaceLayout>
   );

@@ -1210,10 +1210,11 @@ The header has caret-only Back, the truncating project title, Share, and Details
 there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
 beneath the header and shows the progress ring, completed/total count, and Filters.
 Once the summary scrolls out and tasks fill the viewport, the floating Task menu
-appears; its reserved height prevents a layout jump. Empty projects keep an inline
-Add task action. Back returns to the previous destination or Projects for a direct
-link, skipping obsolete same-project section entries. Check 390px with a long name,
-expanded description, grouped task scrolling, Back/Forward, Share, and Details.
+appears; its reserved height prevents a layout jump. Empty projects and projects
+whose task list cannot fill the viewport keep an inline Add task action. Back
+returns to the previous destination or Projects for a direct link, skipping
+obsolete same-project section entries. Check 390px with a long name, expanded
+description, grouped task scrolling, Back/Forward, Share, and Details.
 
 Choose `Add existing tasks` from Add task on desktop, or from the floating Task
 control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.
