@@ -31,6 +31,7 @@ pub fn loro_pair() -> Workflow {
             "loro-pair",
             Job::default()
                 .name("loro-pair")
+                .timeout_minutes(30u32)
                 .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
                 .add_step(steps::checkout(false, false))
                 .add_step(steps::mount_cache_volume())

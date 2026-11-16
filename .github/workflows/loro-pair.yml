@@ -21,6 +21,7 @@ jobs:
   loro-pair:
     name: loro-pair
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 30
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
