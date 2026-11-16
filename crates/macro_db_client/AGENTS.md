@@ -157,6 +157,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by

@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { Button, cn, Item, Card as UiCard } from '@ui';
 import {
   createContext,
   createSignal,
@@ -9,7 +9,6 @@ import {
   Show,
   useContext,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 /** How wide a card may grow: one item, an ask or list, or content to read. */
 export type CardWidth = 'compact' | 'standard' | 'wide';
@@ -46,11 +45,12 @@ function useCard(): CardState | undefined {
 }
 
 /**
- * The one shell every agent card uses: a 12px-radius panel with a hairline
- * edge and no shadow, holding a header, a body and a footer. In dark themes
- * the hairline is the card's only edge, so it is never dropped.
+ * The one shell every agent card uses: the app's `Card` from `@ui`, filled at
+ * depth 3 as the routine and For you cards are. Compose the inside from its
+ * parts: `Card.Header` with an `Item`, `CardBody`, `CardFooter`.
  *
- * A card with `onOpen` is a link to its item: the whole card opens it.
+ * A card with `onOpen` opens its item from anywhere on it: a button covers
+ * the card, so it must hold no other controls.
  */
 export function Card(
   props: ParentProps<{
@@ -64,6 +64,10 @@ export function Card(
     onOpen?: (event: MouseEvent) => void;
     /** Read aloud for a card that opens something. */
     label?: string;
+    /** Names the card as a region, for a card that holds many things. */
+    region?: string;
+    /** The card's content is loading. */
+    busy?: boolean;
     class?: string;
     'data-agent-card'?: string;
   }>
@@ -81,18 +85,17 @@ export function Card(
   };
   return (
     <CardContext.Provider value={state}>
-      <Dynamic
-        component={props.onOpen ? 'button' : 'div'}
-        type={props.onOpen ? 'button' : undefined}
-        aria-label={props.onOpen ? props.label : undefined}
-        onClick={(event: MouseEvent) => props.onOpen?.(event)}
+      <UiCard
+        variant="filled"
+        depth={3}
+        role={props.region ? 'region' : undefined}
+        aria-label={props.region}
+        aria-busy={props.busy || undefined}
         data-agent-card={props['data-agent-card'] ?? ''}
         class={cn(
-          'group/card flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel text-left text-ink',
-          'transition-[opacity,translate,background-color,border-color] duration-300 ease-out starting:translate-y-1 starting:opacity-0',
+          'group/card w-full overflow-hidden',
+          'transition-[opacity,translate,border-color] duration-300 ease-out starting:translate-y-1 starting:opacity-0',
           WIDTHS[props.width ?? 'compact'],
-          props.onOpen &&
-            'not-touch:hover:border-edge not-touch:hover:bg-hover',
           props.selected &&
             'border-accent/40 shadow-[0_0_0_3px_var(--color-accent-bg)]',
           props.muted && 'opacity-70',
@@ -101,73 +104,32 @@ export function Card(
         style={fixed() ? { height: `${props.height}px` } : undefined}
       >
         {props.children}
-      </Dynamic>
+        <Show when={props.onOpen}>
+          {(open) => (
+            <button
+              type="button"
+              aria-label={props.label}
+              class="absolute inset-0 rounded-[inherit] outline-none not-touch:hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+              onClick={(event) => open()(event)}
+            />
+          )}
+        </Show>
+      </UiCard>
     </CardContext.Provider>
   );
 }
 
 /**
- * A card's header: a tile that says what it is about, a title, a subtitle,
- * and anything trailing - a status pill or a menu.
- */
-export function CardHeader(props: {
-  tile?: JSX.Element;
-  title: JSX.Element;
-  /** What happened to the item, beside its title: `Created`. */
-  badge?: JSX.Element;
-  subtitle?: JSX.Element;
-  trailing?: JSX.Element;
-  /** Center the tile on the text instead of aligning to the top. */
-  center?: boolean;
-  /** The header is the whole card, or sits above a hairline. */
-  padded?: boolean;
-  /** Let a long title wrap rather than truncate. */
-  wrap?: boolean;
-}) {
-  return (
-    <div
-      class={cn(
-        'flex flex-none gap-2.5 px-3 pt-3',
-        props.center ? 'items-center' : 'items-start',
-        props.padded && 'pb-3'
-      )}
-    >
-      {props.tile}
-      <div class="flex min-w-0 flex-1 flex-col">
-        <span class="flex min-w-0 items-center gap-1.5">
-          <span
-            class={cn(
-              'text-sm font-medium text-ink',
-              props.wrap ? '[overflow-wrap:anywhere]' : 'truncate'
-            )}
-          >
-            {props.title}
-          </span>
-          {props.badge}
-        </span>
-        <Show when={props.subtitle}>
-          <span class="truncate text-xs leading-5 text-ink-muted">
-            {props.subtitle}
-          </span>
-        </Show>
-      </div>
-      {props.trailing}
-    </div>
-  );
-}
-
-/**
- * A card's body. Under a fixed height it fills the space between the header
- * and the footer and clips under a fade; rows marked `data-card-row` that
- * fall below it are counted for the footer. A live log anchors to the
- * bottom instead, so its newest row stays in view and the fade sits on top.
+ * A card's body, `Card.Body` under its header. Under a fixed height it fills
+ * the space between the header and the footer and clips under a fade; rows
+ * marked `data-card-row` that fall below it are counted for the footer. A
+ * live log anchors to the bottom instead, so its newest row stays in view and
+ * the fade sits on top.
  */
 export function CardBody(
   props: ParentProps<{
-    /** Tight padding for lists of rows. */
+    /** Rows that bring their own padding: the body only insets them. */
     tight?: boolean;
-    /** No padding: the content brings its own. */
-    flush?: boolean;
     /** Keep the newest content in view: the fade moves to the top. */
     anchor?: 'top' | 'bottom';
     class?: string;
@@ -204,15 +166,11 @@ export function CardBody(
     });
   });
   return (
-    <div
+    <UiCard.Body
       ref={body}
       class={cn(
-        'relative flex min-h-0 min-w-0 flex-col',
-        props.flush
-          ? 'gap-0 p-0'
-          : props.tight
-            ? 'gap-0.5 px-1.5 py-2'
-            : 'gap-2 p-3',
+        'relative flex min-h-0 flex-col pt-0',
+        props.tight ? 'gap-0.5 px-1 pb-2' : 'gap-2',
         card?.fixed() &&
           cn(
             'flex-1 overflow-hidden',
@@ -225,14 +183,14 @@ export function CardBody(
       )}
     >
       {props.children}
-    </div>
+    </UiCard.Body>
   );
 }
 
 /**
- * A card's footer: actions on the right, the primary last, a dismissal
- * pushed to the far left with `mr-auto`. It pins with a hairline above it
- * when the card has a fixed height.
+ * A card's footer, `Card.Footer`: `Card.Metadata` on the left, actions on the
+ * right. Its hairline shows when the card holds a fixed height, so it reads
+ * as pinned, or when `line` asks for it.
  */
 export function CardFooter(
   props: ParentProps<{
@@ -244,23 +202,23 @@ export function CardFooter(
 ) {
   const card = useCard();
   return (
-    <div
+    <UiCard.Footer
       class={cn(
-        'mt-auto flex flex-none flex-wrap items-center gap-2',
-        props.small ? 'px-3 py-2' : 'p-3',
-        (props.line || card?.fixed()) && 'border-t border-edge-muted',
+        'mt-auto flex-none',
+        props.small && 'py-2',
+        !(props.line || card?.fixed()) && 'border-t-0 pt-0',
         props.class
       )}
     >
       {props.children}
-    </div>
+    </UiCard.Footer>
   );
 }
 
 /**
  * What a fixed card is hiding, and the way to see it: "4 more below" with
- * "Show all 9", which grows the card in place. Nothing while everything
- * fits.
+ * "Show all 9", which grows the card in place. The count of everything while
+ * everything fits.
  */
 export function CardHiddenCount(props: {
   /** Everything the body holds, for "Show all N". */
@@ -274,62 +232,58 @@ export function CardHiddenCount(props: {
     <Show
       when={hidden() > 0}
       fallback={
-        <span class="mr-auto text-xs text-ink-subtle">
+        <UiCard.Metadata>
           {props.total} {props.noun ?? (props.total === 1 ? 'item' : 'items')}
-        </span>
+        </UiCard.Metadata>
       }
     >
-      <span class="mr-auto text-xs text-ink-subtle">{hidden()} more below</span>
-      <button
-        type="button"
-        class="text-xs font-medium text-ink-muted not-touch:hover:text-ink touch:min-h-[44px]"
-        onClick={(event) => {
+      <UiCard.Metadata>{hidden()} more below</UiCard.Metadata>
+      <Button
+        size="sm"
+        variant="ghost"
+        class="touch:min-h-11"
+        onClick={(event: MouseEvent) => {
           event.stopPropagation();
           card?.expand();
         }}
       >
         Show all {props.total}
-      </button>
+      </Button>
     </Show>
   );
 }
 
 /**
- * A card that is one row: an item named by its tile, title and a line about
- * it, with whatever trails it - an arrow for a link, a button.
+ * A card that is one row, `Card.Header` holding an `Item`: the media that
+ * says what it is, its title, a line about it, and whatever trails it - an
+ * arrow for a link.
  */
-export function CardSingle(
-  props: ParentProps<{
-    tile?: JSX.Element;
-    title: JSX.Element;
-    badge?: JSX.Element;
-    meta?: JSX.Element;
-    trailing?: JSX.Element;
-    /** Strike the title: the item is gone. */
-    struck?: boolean;
-  }>
-) {
+export function CardSingle(props: {
+  media: JSX.Element;
+  title: JSX.Element;
+  description?: JSX.Element;
+  trailing?: JSX.Element;
+  /** Strike the title: the item is gone. */
+  struck?: boolean;
+}) {
   return (
-    <div class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5">
-      {props.tile}
-      <span class="flex min-w-0 flex-1 flex-col">
-        <span class="flex min-w-0 items-center gap-1.5">
-          <span
-            class={cn(
-              'truncate text-sm font-medium text-ink',
-              props.struck && 'line-through'
-            )}
-          >
+    <UiCard.Header class="flex-1 justify-center">
+      <Item class="gap-3 border-0 p-0">
+        {props.media}
+        <Item.Content class="gap-0">
+          <UiCard.Title class={cn('truncate', props.struck && 'line-through')}>
             {props.title}
-          </span>
-          {props.badge}
-        </span>
-        <Show when={props.meta}>
-          <span class="truncate text-xs text-ink-muted">{props.meta}</span>
+          </UiCard.Title>
+          <Show when={props.description}>
+            <UiCard.Description class="truncate">
+              {props.description}
+            </UiCard.Description>
+          </Show>
+        </Item.Content>
+        <Show when={props.trailing}>
+          <Item.Actions>{props.trailing}</Item.Actions>
         </Show>
-        {props.children}
-      </span>
-      {props.trailing}
-    </div>
+      </Item>
+    </UiCard.Header>
   );
 }

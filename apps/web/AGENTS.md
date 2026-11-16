@@ -225,9 +225,9 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 The same suite's `list-search.browser.e2e.ts` drives the list header's search
-field over the real hotkey engine and list controller: ArrowDown and Enter move
-to the first result, and Escape keeps the search in the field and clears it
-from the list after a selection.
+field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
+list controller: ArrowDown and Enter move to the first result, and Escape keeps
+the search in the field and clears it from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -1027,6 +1027,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Keep flag-off mobile Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
+  Show all loaded channel favorites in saved order in the sectioned phone layout's horizontal scroller; apply the six-pin limit only to the legacy three-column grid.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
@@ -1051,6 +1052,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
+  A sidebar that is its own list uses `ViewSidebar.Search` in the header's
+  search slot: the same keys (`list-search-keys.ts`), with `focusResults`
+  pointing at the sidebar's list, and an emptied field collapses through the
+  header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
+  Its search clears only on an Escape pressed inside the sidebar
+  (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
+  conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
+  a keyboard list. Covered by `ViewSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1574,6 +1583,10 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Desktop shows every import run in the corner's import tray
+(`features/import-jobs`, in `ToastRegion`), independent of the import dialog
+and never on phones. Its backend-free check is
+`bunx playwright test --config src/features/import-jobs/browser-test/playwright.config.ts`.
 
 ### Agent backend hosting
 

@@ -27,6 +27,15 @@ pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 /// (`autoAccept` or `prompt`), so a runtime can tell its agent.
 pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
 
+/// A session a runtime reported on dial, as reconciliation sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeSession {
+    /// The session.
+    pub id: AgentSessionId,
+    /// No activity for the dormancy window and nothing waiting on it.
+    pub dormant: bool,
+}
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
