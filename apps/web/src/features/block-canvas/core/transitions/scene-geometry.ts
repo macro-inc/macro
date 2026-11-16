@@ -3,33 +3,37 @@ import {
   type Bounds,
   children,
   connectorPath,
+  corners,
   enclosing,
   type GraphicsDocument,
-  nodeCorners,
+  IDENTITY,
   type Point,
   shapeProjection,
   transformPoint,
   worldBounds,
+  worldMatrix,
 } from '@macro-inc/graphics';
 import { artifactContentRect } from './camera-path';
 
-/** Where a slide's document is drawn on the canvas, in world units. */
+/**
+ * Where a slide's document is drawn on the canvas, in world units. The design
+ * ratio fits the artifact's own box, and that fitted rect is then carried into
+ * the world, so a rotated slide encloses what it really draws.
+ */
 export function slideContentRect(
   document: GraphicsDocument,
   slide: ArtifactItem
 ): Bounds {
-  const box = document.items[slide.id]
-    ? enclosing(nodeCorners(document, slide.id))
-    : {
-        x: 0,
-        y: 0,
-        width: slide.geometry.width,
-        height: slide.geometry.height,
-      };
-  return artifactContentRect(box, {
-    width: slide.geometry.designWidth,
-    height: slide.geometry.designHeight,
-  });
+  const fitted = artifactContentRect(
+    { x: 0, y: 0, width: slide.geometry.width, height: slide.geometry.height },
+    { width: slide.geometry.designWidth, height: slide.geometry.designHeight }
+  );
+  const transform = document.items[slide.id]
+    ? worldMatrix(document, slide.id)
+    : IDENTITY;
+  return enclosing(
+    corners(fitted).map((point) => transformPoint(transform, point))
+  );
 }
 
 /** Everything on the canvas, or undefined when it is empty. */

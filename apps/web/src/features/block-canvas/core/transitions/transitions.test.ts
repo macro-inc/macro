@@ -1,5 +1,7 @@
 import {
   createScene,
+  multiply,
+  rotation,
   type ShapeItem,
   translation,
   validSlideTransition,
@@ -17,7 +19,7 @@ import {
 import { cameraPlan } from './camera-plan';
 import { classicKeyframes, type LayerKeyframe } from './classic-keyframes';
 import { easingCss, easingFunction } from './easing';
-import { connectorRoute } from './scene-geometry';
+import { connectorRoute, slideContentRect } from './scene-geometry';
 import {
   deckDefaultForAll,
   editedTransition,
@@ -249,6 +251,20 @@ describe('camera plans', () => {
     expect(route?.[0]).toEqual({ x: 160, y: 180 });
     expect(route?.at(-1)).toEqual({ x: 1160, y: 180 });
     expect(connectorRoute(document, 'a', 'missing')).toBeUndefined();
+  });
+
+  it('frames a rotated slide by what it draws, not its enclosing box', () => {
+    const turned: ShapeItem<'artifact'> = {
+      ...artifact('turned', 0, 0, 'a3'),
+      transform: multiply(translation(500, 100), rotation(Math.PI / 2)),
+    };
+    const rect = slideContentRect(createScene([turned]), turned);
+    // The 320×180 slide stands on its side, so it draws 180×320 to the left
+    // of its anchor.
+    expect(rect.x).toBeCloseTo(320);
+    expect(rect.y).toBeCloseTo(100);
+    expect(rect.width).toBeCloseTo(180);
+    expect(rect.height).toBeCloseTo(320);
   });
 
   it('starts and ends on the slides as present mode frames them', () => {
