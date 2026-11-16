@@ -53,10 +53,11 @@ local stack (`just run_local --instance <name>`, then
 instead of a seeded persona, for a backend that asks for an emailed code.
 Screenshots go to `PARITY_OUTPUT` (default `/tmp/view-parity`).
 
-The `file-*` views open file blocks that `seed/scenarios/view-parity-files.json`
-creates for its own persona. Apply it as well, then run them signed in as
-`PARITY_LOGIN_EMAIL=pat@seed.macro.local` with
-`PARITY_VIEWS=file-image,file-video,file-code,file-unknown,file-pdf,file-canvas`.
+The `file-*` views open blocks (files and a chat) that
+`seed/scenarios/view-parity-files.json` creates for its own persona. Apply it
+as well, then run them signed in as `PARITY_LOGIN_EMAIL=pat@seed.macro.local`,
+selecting them by id (`PARITY_VIEWS=file-image,file-chat`; the ids are in
+`views.ts`).
 
 A dev build serves thousands of modules per page, so the first run is slow.
 Chromium drops in-flight requests whenever a network interface changes
