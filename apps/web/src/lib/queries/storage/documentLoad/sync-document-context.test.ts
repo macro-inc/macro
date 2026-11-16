@@ -22,6 +22,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   native: true,
+  rustEngine: false,
   login: true,
   restore: vi.fn(),
   userInfo: vi.fn(),
@@ -31,6 +32,11 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.native,
+}));
+vi.mock('@core/document-session/engine-selection', () => ({
+  get RUST_EDITOR_ENGINE() {
+    return mocks.rustEngine;
+  },
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => mocks.login }));
 vi.mock('@core/auth/push-registration-lifecycle', () => ({
@@ -105,6 +111,7 @@ const entry: PersistedQueryEntry = {
 beforeEach(async () => {
   vi.resetAllMocks();
   mocks.native = true;
+  mocks.rustEngine = false;
   mocks.login = true;
   queryClient.clear();
   await clearOfflineDocumentContexts();
@@ -411,34 +418,56 @@ describe('stored-file document open context', () => {
 
 describe('flagged browser offline document ownership', () => {
   it('reopens the cached browser body without a remote load', async () => {
-    const previous = rustEditorModel.override;
-    rustEditorModel.override = true;
+    mocks.rustEngine = true;
     mocks.native = false;
     mocks.restore.mockResolvedValue(entry);
-    try {
-      await expectCachedOpen(fetchSyncDocumentOpenContext('doc-1'));
-      expect(mocks.bundle).not.toHaveBeenCalled();
-    } finally {
-      rustEditorModel.override = previous;
-    }
+    await expectCachedOpen(fetchSyncDocumentOpenContext('doc-1'));
+    expect(mocks.bundle).not.toHaveBeenCalled();
   });
 
   it('does not reuse another account cache when reopening offline', async () => {
-    const previous = rustEditorModel.override;
-    rustEditorModel.override = true;
+    mocks.rustEngine = true;
     mocks.native = false;
     queryClient.setQueryData(authKeys.userInfo.queryKey, {
       id: 'viewer-b',
       authenticated: true,
     });
     mocks.bundle.mockRejectedValue(new Error('Offline'));
+    const result = await fetchSyncDocumentOpenContext('doc-1');
+    expect(result.isErr()).toBe(true);
+    expect(mocks.bundle).toHaveBeenCalledTimes(1);
+    expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe('engine choice after boot', () => {
+  it('keeps the boot engine choice when the rollout turns on later', async () => {
+    const previous = rustEditorModel.override;
+    rustEditorModel.override = true;
+    mocks.native = false;
+    mocks.restore.mockResolvedValue(entry);
+    mocks.bundle.mockResolvedValue({});
     try {
-      const result = await fetchSyncDocumentOpenContext('doc-1');
-      expect(result.isErr()).toBe(true);
+      await fetchSyncDocumentOpenContext('doc-1');
+      expect(mocks.restore).not.toHaveBeenCalled();
       expect(mocks.bundle).toHaveBeenCalledTimes(1);
-      expect(mocks.snapshot).not.toHaveBeenCalled();
     } finally {
       rustEditorModel.override = previous;
+    }
+  });
+});
+
+describe('unflagged browser logout', () => {
+  it('leaves the native document context storage untouched', async () => {
+    mocks.native = false;
+    localStorage.removeItem('document-open-context:epoch');
+    const opened = vi.spyOn(indexedDB, 'open');
+    try {
+      await clearOfflineDocumentContexts();
+      expect(localStorage.getItem('document-open-context:epoch')).toBeNull();
+      expect(opened).not.toHaveBeenCalled();
+    } finally {
+      opened.mockRestore();
     }
   });
 });
