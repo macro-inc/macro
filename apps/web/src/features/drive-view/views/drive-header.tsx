@@ -75,6 +75,7 @@ export function DriveHeader() {
             label="Search Drive"
             placeholder="Search files"
             value={state.value().search}
+            focusResults={() => panel.panelRef()?.focus()}
             onValueChange={state.setSearch}
             registerFocus={(focus) => {
               focusSearch = focus;

@@ -20,8 +20,11 @@ pub enum MemoryError {
     Forbidden,
     #[error("Nothing was generated")]
     NoGeneration,
-    #[error("memory rejected by judge: {0}")]
+    #[error("memory rejected by privacy review: {0}")]
     Rejected(String),
+    /// The privacy review could not run, so nothing was saved.
+    #[error("memory privacy review is unavailable; try again later")]
+    ReviewUnavailable,
     #[error("database error: {0}")]
     Db(rootcause::Report),
     #[error(transparent)]
@@ -88,7 +91,7 @@ pub trait MemoryService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Activity>>> + Send;
 }
 
-use super::models::{Activity, ExplicitMemory, MemoryEdit};
+use super::models::{Activity, ExplicitMemory, MemoryEdit, MemoryKind, Piece, StagedPieces};
 use chrono::NaiveDate;
 
 /// A consistent generation input; profile revision guards every generated write.
@@ -109,6 +112,25 @@ pub trait ComposedMemoryRepo: MemoryRepo {
         yesterday: NaiveDate,
     ) -> impl Future<Output = Result<Option<RefreshClaim>>> + Send;
     fn release_refresh(&self, claim: &RefreshClaim) -> impl Future<Output = Result<()>> + Send;
+    /// Give the claim back and keep the user out of claims for `after`.
+    fn retry_refresh(
+        &self,
+        claim: &RefreshClaim,
+        after: chrono::Duration,
+    ) -> impl Future<Output = Result<()>> + Send;
+    /// Reviewed pieces of `date`'s generation that a failed attempt left behind.
+    fn staged(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        date: NaiveDate,
+    ) -> impl Future<Output = Result<StagedPieces>> + Send;
+    /// Keep one reviewed piece of `date`'s generation until it is committed.
+    fn stage(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        date: NaiveDate,
+        piece: &Piece,
+    ) -> impl Future<Output = Result<()>> + Send;
     fn latest_activity(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -128,12 +150,14 @@ pub trait ComposedMemoryRepo: MemoryRepo {
         user: &MacroUserIdStr<'_>,
         since: NaiveDate,
     ) -> impl Future<Output = Result<MemorySnapshot>> + Send;
+    /// Commit `date` and drop its staged pieces. A `None` profile keeps the
+    /// current one; empty `activity` moves past the day without a report.
     fn save_generation(
         &self,
         user: &MacroUserIdStr<'_>,
         expected: i64,
         date: NaiveDate,
-        profile: &str,
+        profile: Option<&str>,
         activity: &[Activity],
         teams: &[Uuid],
     ) -> impl Future<Output = Result<()>> + Send;
@@ -156,6 +180,14 @@ pub trait MemoryTeams: Send + Sync {
     async fn members(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<(Uuid, Vec<String>)>>;
 }
 
+/// Whether the user did anything on a UTC day that a daily report could
+/// describe; viewing alone does not count. A day without it needs no research.
+/// Object-safe because hosts inject their configured activity store.
+#[async_trait::async_trait]
+pub trait MemoryActivity: Send + Sync {
+    async fn acted_on(&self, user: &MacroUserIdStr<'_>, date: NaiveDate) -> Result<bool>;
+}
+
 /// Model calls live in an outbound adapter. Research is limited to read tools.
 /// Object-safe so the service is independent of a host's tool context type.
 #[async_trait::async_trait]
@@ -167,7 +199,19 @@ pub trait MemoryGenerator: Send + Sync {
         instructions: &str,
         sources: &str,
     ) -> Result<String>;
-    async fn judge(&self, user: MacroUserIdStr<'static>, content: &str) -> Result<()>;
+}
+
+/// Privacy review of content before it is saved. It fails closed: content is
+/// saved only when the review returns `Ok`.
+/// Object-safe because hosts inject their configured classifier.
+#[async_trait::async_trait]
+pub trait MemoryJudge: Send + Sync {
+    async fn review(
+        &self,
+        user: MacroUserIdStr<'static>,
+        kind: MemoryKind,
+        content: &str,
+    ) -> Result<()>;
 }
 
 /// A bounded lease prevents replicas from generating the same user's day.
@@ -176,4 +220,6 @@ pub struct RefreshClaim {
     pub user: MacroUserIdStr<'static>,
     pub date: NaiveDate,
     pub token: Uuid,
+    /// Which claim of `date` this is, starting at 1.
+    pub attempt: u8,
 }

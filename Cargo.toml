@@ -6,7 +6,9 @@ exclude = ["vendor", "crates/password_import/fuzz"]
 
 members = [
   "crates/passwords",
+  "crates/password_events",
   "crates/password_import",
+  "crates/password_import_wasm",
   "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",
@@ -33,7 +35,6 @@ members = [
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
   "crates/ai_billing",
-  "crates/ai_projections",
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bot_id",

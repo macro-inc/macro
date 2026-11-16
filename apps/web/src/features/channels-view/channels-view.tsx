@@ -154,8 +154,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
     );
     return (favoritesData()?.favorites ?? [])
       .filter((favorite) => favorite.entityType === 'channel')
-      .flatMap((favorite) => channelsById.get(favorite.entityId) ?? [])
-      .slice(0, MAX_PINNED_CHANNELS);
+      .flatMap((favorite) => channelsById.get(favorite.entityId) ?? []);
   });
   return (
     <Show when={!sectionsLoading()}>
@@ -164,7 +163,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
         fallback={
           <ChannelsMobileView
             source={mobileSearchSource}
-            pinned={pinned()}
+            pinned={pinned().slice(0, MAX_PINNED_CHANNELS)}
             searchQuery={mobileSearchText()}
             onClearSearch={() => SearchState.setQuery('')}
             openPreview={mobileLayout() ? undefined : openPreview}

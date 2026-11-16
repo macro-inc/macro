@@ -1,4 +1,4 @@
-import { SearchBar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -9,7 +9,7 @@ import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
 function DesktopHomeHeader(props: { onNewChat: () => void }) {
-  const { state, setState } = useHomeView();
+  const { state, setState, focusList } = useHomeView();
   return (
     <SidebarCreateHeader
       title="Home"
@@ -18,11 +18,13 @@ function DesktopHomeHeader(props: { onNewChat: () => void }) {
       actions={<HomeFilterDropdown />}
       searchLabel="Search Home"
       search={() => (
-        <SearchBar
+        <ViewSidebar.Search
           label="Search Home"
-          placeholder="Search Home"
           value={state.search}
           onValueChange={(search) => setState('search', search)}
+          focusResults={() => {
+            focusList();
+          }}
         />
       )}
     />

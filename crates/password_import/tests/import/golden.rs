@@ -75,6 +75,18 @@ fn bitwarden_csv() {
 }
 
 #[test]
+fn bitwarden_zip() {
+    let bytes = super::support::bitwarden_zip();
+    assert_eq!(
+        detect(&bytes, &Limits::default()),
+        Ok(SourceFormat::BitwardenZip)
+    );
+
+    let export = parse(&bytes, SourceFormat::BitwardenZip, &Limits::default()).expect("parses");
+    insta::assert_json_snapshot!(snapshot(&export));
+}
+
+#[test]
 fn bitwarden_organization_csv_skips_every_row() {
     let bytes = fixture("bitwarden_organization.csv");
     assert_eq!(

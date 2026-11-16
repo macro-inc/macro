@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { webHostedUrl } from '@core/util/webHostedUrl';
 import agentsVideo from './assets/agents.mp4';
 import agentsPoster from './assets/agents-poster.jpg';
 import calendarVideo from './assets/calendar.mp4';
@@ -52,7 +53,9 @@ export type Tutorial = {
 /**
  * The tutorials that have a video. A block whose video isn't here yet renders
  * no tutorial entry. Vite emits each video as a hashed asset that loads only
- * when its dialog opens and the person presses play.
+ * when its dialog opens and the person presses play. The videos are left out
+ * of the native apps' bundles, which stream them from the web deploy
+ * (`webHostedUrl`); posters stay bundled.
  */
 export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
   mail: {
@@ -69,7 +72,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.mailLength');
     },
-    videoUrl: mailVideo,
+    videoUrl: webHostedUrl(mailVideo),
     posterUrl: mailPoster,
   },
   crm: {
@@ -86,7 +89,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.crmLength');
     },
-    videoUrl: crmVideo,
+    videoUrl: webHostedUrl(crmVideo),
     posterUrl: crmPoster,
   },
   github: {
@@ -103,7 +106,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.githubLength');
     },
-    videoUrl: githubVideo,
+    videoUrl: webHostedUrl(githubVideo),
     posterUrl: githubPoster,
   },
   docs: {
@@ -120,7 +123,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.docsLength');
     },
-    videoUrl: docsVideo,
+    videoUrl: webHostedUrl(docsVideo),
     posterUrl: docsPoster,
   },
   spreadsheets: {
@@ -137,7 +140,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.spreadsheetsLength');
     },
-    videoUrl: spreadsheetsVideo,
+    videoUrl: webHostedUrl(spreadsheetsVideo),
     posterUrl: spreadsheetsPoster,
   },
   databases: {
@@ -154,7 +157,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.databasesLength');
     },
-    videoUrl: databasesVideo,
+    videoUrl: webHostedUrl(databasesVideo),
     posterUrl: databasesPoster,
   },
   canvas: {
@@ -171,7 +174,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.canvasLength');
     },
-    videoUrl: canvasVideo,
+    videoUrl: webHostedUrl(canvasVideo),
     posterUrl: canvasPoster,
   },
   tasks: {
@@ -188,7 +191,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.tasksLength');
     },
-    videoUrl: tasksVideo,
+    videoUrl: webHostedUrl(tasksVideo),
     posterUrl: tasksPoster,
   },
   chat: {
@@ -205,7 +208,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.chatLength');
     },
-    videoUrl: chatVideo,
+    videoUrl: webHostedUrl(chatVideo),
     posterUrl: chatPoster,
   },
   calls: {
@@ -222,7 +225,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.callsLength');
     },
-    videoUrl: callsVideo,
+    videoUrl: webHostedUrl(callsVideo),
     posterUrl: callsPoster,
   },
   scheduling: {
@@ -239,7 +242,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.schedulingLength');
     },
-    videoUrl: schedulingVideo,
+    videoUrl: webHostedUrl(schedulingVideo),
     posterUrl: schedulingPoster,
   },
   calendar: {
@@ -256,7 +259,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.calendarLength');
     },
-    videoUrl: calendarVideo,
+    videoUrl: webHostedUrl(calendarVideo),
     posterUrl: calendarPoster,
   },
   home: {
@@ -273,7 +276,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.homeLength');
     },
-    videoUrl: homeVideo,
+    videoUrl: webHostedUrl(homeVideo),
     posterUrl: homePoster,
   },
   whatsapp: {
@@ -290,7 +293,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.whatsappLength');
     },
-    videoUrl: whatsappVideo,
+    videoUrl: webHostedUrl(whatsappVideo),
     posterUrl: whatsappPoster,
   },
   agents: {
@@ -307,7 +310,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.agentsLength');
     },
-    videoUrl: agentsVideo,
+    videoUrl: webHostedUrl(agentsVideo),
     posterUrl: agentsPoster,
   },
   macrod: {
@@ -324,7 +327,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.macrodLength');
     },
-    videoUrl: macrodVideo,
+    videoUrl: webHostedUrl(macrodVideo),
     posterUrl: macrodPoster,
   },
   drive: {
@@ -341,7 +344,7 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get length() {
       return t('tutorials.driveLength');
     },
-    videoUrl: driveVideo,
+    videoUrl: webHostedUrl(driveVideo),
     posterUrl: drivePoster,
   },
 };

@@ -83,6 +83,8 @@ type ChannelRailSearch = {
   close: () => void;
   setQuery: (query: string) => void;
   registerInput: (element: HTMLInputElement) => void;
+  /** Moves keyboard focus from the search field into the results. */
+  focusResults: () => void;
   retry: () => Promise<void>;
 };
 
@@ -133,16 +135,14 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           open ? props.search.open() : props.search.close()
         }
         search={() => (
-          <SearchBar
+          <ViewSidebar.Search
             ref={props.search.registerInput}
             label="Search channels and direct messages"
             placeholder="Search conversations"
             value={props.search.query()}
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
-            onEscape={() => {
-              if (!props.search.query()) props.search.close();
-            }}
+            focusResults={props.search.focusResults}
           />
         )}
       >

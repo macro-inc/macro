@@ -121,7 +121,7 @@ function TasksViewRoot() {
 
   const taskList = () => (
     <MobileListLayout header={<TasksMobileControls />}>
-      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+      <TasksHeader focusSearchResults={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
         <Show

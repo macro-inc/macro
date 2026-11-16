@@ -143,6 +143,9 @@ export function EmailList(props: EmailListProps) {
     filterByTag,
   } = useEmailView();
   usePending('email.list.items', () => source.isLoading());
+  // The wait is still a wait when the previous rows stay on screen for it.
+  const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
+  usePending('email.list.search_results', showsPreviousRows);
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -801,7 +804,9 @@ export function EmailList(props: EmailListProps) {
                     setViewport(element);
                     soupNavigationTouchHighlight(element);
                   }}
-                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
+                  aria-busy={showsPreviousRows()}
+                  classList={{ 'opacity-50': showsPreviousRows() }}
+                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none transition-opacity"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
                   <div ref={setTopSpacer}>

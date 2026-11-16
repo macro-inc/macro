@@ -46,6 +46,8 @@ distribution.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
   `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `ai_tools` reads `SubjectActivityPresence` so memory skips days without
+  activity.
 
 ## Recipes
 

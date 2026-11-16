@@ -82,13 +82,32 @@ Compose via the `Email` button (or `Create` → `Email E`). On a fresh local use
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface: both focus the list header's search field. When a thread or a new email has replaced the list, `/` returns to the list, as Back does, and focuses that field, and `Ctrl+F` is left to the browser's find. The Email sidebar has no search field.
 
+### Wide search (flagged)
+
+With `enable-email-wide-search` on (on in dev), opening search on desktop
+widens the field across the list header; Filters, the view actions and New are
+hidden until the search is closed (the X, `Escape` on an empty field, or
+`Escape` in the list). Results still update as you type. While a new query
+loads, the rows already on screen stay, dimmed, instead of a blank list and a
+spinner. With the field focused, up to five recent searches containing the
+typed text are listed above the results: `ArrowDown` walks them before it
+reaches the results, `Enter` or a click runs one and moves to its first
+result. A search is remembered when the field is left with it, at most eight
+per person, in this browser only and not per inbox. Check with a slow search
+that rows never blank between two queries, that switching tabs never shows
+the previous tab's rows, and that with the flag off the compact field and the
+spinner are unchanged.
+
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
 for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
 Archived, `a` All). These letters replace the app-wide `g` targets only inside
 Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
-list with nothing selected returns to Signal; in the reading pane it first
-hands the keyboard back to the list. `?` lists every shortcut for the focused
+list steps back one level: it clears a selection, then a search, and with
+neither returns to Signal; in the reading pane it first hands the keyboard back
+to the list. From the search field, `ArrowDown` or `Enter` moves to the first
+result and `Escape` leaves the field with the search kept (see
+[list search keys](navigation.md)). `?` lists every shortcut for the focused
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`

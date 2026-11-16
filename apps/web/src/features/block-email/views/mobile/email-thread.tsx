@@ -58,6 +58,7 @@ function MobileEmailThreadHeader(
           actions.share,
           actions.moveToFolder,
           actions.downloadEml,
+          actions.excludeFromCrm,
           actions.trash,
           actions.senderToSignal,
           actions.senderToNoise,

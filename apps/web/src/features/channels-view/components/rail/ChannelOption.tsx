@@ -263,9 +263,10 @@ export function ChannelOption(props: {
                   <ChannelMentionCount count={item().mentions} />
                 </Match>
                 <Match when={item().unread}>
+                  {/* `mx-1` centers the dot where a one-digit count sits. */}
                   <span
                     aria-label="Unread"
-                    class="size-2 shrink-0 rounded-full bg-accent"
+                    class="mx-1 size-2 shrink-0 rounded-full bg-accent"
                   />
                 </Match>
               </Switch>

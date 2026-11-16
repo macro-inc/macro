@@ -1471,6 +1471,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     registerInput: (element: HTMLInputElement) => {
       searchInput = element;
     },
+    focusResults: () => listRoot()?.focus({ preventScroll: true }),
     retry: retrySearch,
   };
 

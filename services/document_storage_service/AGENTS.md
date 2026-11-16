@@ -65,6 +65,9 @@ threads, pins, recents, notifications, folders, activity.
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/server.rs` also runs `bots::inbound::profile_consumer`, which pushes a
+  changed bot's current profile to the people who see it (see
+  `crates/bots/README.md`).
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -95,6 +98,9 @@ threads, pins, recents, notifications, folders, activity.
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
@@ -163,6 +169,9 @@ together. Partial configuration fails startup; absent configuration denies vault
 Human requests evaluate `enable-passwords-v1` for their authenticated user only;
 missing, disabled or failed evaluations fail closed. Local explicitly enables it.
 Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
+The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
+normalized import batches up to 4 MiB; its domain service reuses ordinary creation
+and TOTP enrollment and records counts-only batch activity.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

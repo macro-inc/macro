@@ -105,7 +105,6 @@ export const bootstrapResponses = new Map<
     'GET /notification/user_notifications/preferences',
     { body: { disabled_types: [] } },
   ],
-  ['POST /cognition/ai-projections', { body: {}, status: 403 }],
   ['GET /notification/unsubscribe', { body: [] }],
   ['POST /dss/items/soup', { body: { items: [], next_cursor: null } }],
   ['POST /dss/items/soup/ast', { body: { items: [], next_cursor: null } }],
