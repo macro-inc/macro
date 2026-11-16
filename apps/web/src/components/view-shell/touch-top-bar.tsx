@@ -36,11 +36,17 @@ const TouchTopBarInsetContext = createContext<TouchTopBarInset>();
 
 /** A pane frame's floating top bars, stacked in document order. */
 export function createTouchTopBarInset() {
-  const [heights, setHeights] = createStore<Record<string, number>>({});
+  // Solid deletes a store key set to undefined.
+  const [heights, setHeights] = createStore<Record<string, number | undefined>>(
+    {}
+  );
   // Elements only order the bars; their heights are the reactive part.
   const elements: Record<string, HTMLElement | undefined> = {};
   const height = () =>
-    Object.values(heights).reduce((total, next) => total + next, 0);
+    Object.values(heights).reduce<number>(
+      (total, next) => total + (next ?? 0),
+      0
+    );
   const precedes = (id: string, other: string) => {
     const element = elements[id];
     const otherElement = elements[other];
@@ -52,12 +58,20 @@ export function createTouchTopBarInset() {
   };
   const value: TouchTopBarInset = {
     report: (id, element, next) => {
+      // A bar that leaves removes its entry, so a long-lived pane's registry
+      // holds only the bars on screen.
+      if (!element) {
+        delete elements[id];
+        setHeights(id, undefined);
+        return;
+      }
       elements[id] = element;
       setHeights(id, next);
     },
     offset: (id) =>
-      Object.entries(heights).reduce(
-        (total, [other, next]) => (precedes(id, other) ? total + next : total),
+      Object.entries(heights).reduce<number>(
+        (total, [other, next]) =>
+          precedes(id, other) ? total + (next ?? 0) : total,
         0
       ),
   };
