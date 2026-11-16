@@ -470,9 +470,9 @@ describe('useSoupNavigationHotkeys', () => {
     dispose();
   });
 
-  it('shift+j selects across a group boundary without touching the header', () => {
+  it('shift+arrowdown selects across a group boundary without touching the header', () => {
     const { soup, dispose } = setupHotkeys();
-    const selectDown = handlerFor('shift+j');
+    const selectDown = handlerFor('shift+arrowdown');
     soup.focus.set('a2');
 
     // First press anchors the selection on the focused entity

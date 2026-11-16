@@ -293,6 +293,8 @@ where
 /// Persist the standard optional link-share update after domain authorization.
 /// Explicit null disables the link; resetting its level uses View while enabled.
 /// Team sharing uses the separate canonical `team_share` helpers.
+/// A scope that may not share changes no link
+/// (`entity_access_db_utils::scoped_grants`).
 pub async fn update_link_share<'e, E>(
     executor: E,
     id: &str,
@@ -301,6 +303,9 @@ pub async fn update_link_share<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
+    entity_access_db_utils::scoped_grants::refuse_grant(
+        update.link_share.is_some() || update.link_share_access_level.is_some(),
+    )?;
     let link = update.link_share.flatten().map(|link| link.to_string());
     let level = update.link_share_access_level.flatten();
     sqlx::query!(

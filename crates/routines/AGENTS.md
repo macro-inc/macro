@@ -21,10 +21,16 @@ persona/model to run later.
   step types (code and Ask AI) and a worked example, which a test parses and
   the harness's real-Deno test type-checks. Its code-step section is
   `routine_program`'s `code_steps.md`, appended at compile time and shared
-  with the scheduler's drafter; edit it there.
+  with the scheduler's drafter and the Compose Routines skill; edit it there.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
+
+The tools reach the scheduler with the internal key, not a session's
+credential, so a routine `CreateRoutine` makes is always top-level, and
+`ListRoutines` returns top-level routines only. Sub-routines come from
+`macro.routines.create` in a routine run's code step or agent session; see
+`crates/scheduled_action/AGENTS.md`.
 
 ## Scope
 

@@ -24,10 +24,12 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   createSignal,
   For,
@@ -246,6 +248,13 @@ export function BlockItemSplitLabel(props: {
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
+  const suppliedIcon = children(() => props.icon);
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -270,16 +279,17 @@ export function BlockItemSplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
                 targetType={targetType()}
+                appearance={appearance()}
                 size="xs"
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show
@@ -334,6 +344,7 @@ function SplitLabelContextMenu(props: ParentProps) {
   const hasActions = createMemo(() => sections().length > 0);
 
   const item = (action: SplitFileMenuAction) => {
+    if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
     const children = () => action.children?.filter(Boolean) ?? [];
 
     return (

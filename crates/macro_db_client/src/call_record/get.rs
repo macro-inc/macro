@@ -1,8 +1,17 @@
 #[cfg(test)]
 mod test;
 
+use std::sync::{Arc, LazyLock};
+
 use chrono::{DateTime, Utc};
+use single_flight::{DatabaseKey, SingleFlight};
 use uuid::Uuid;
+
+type AccessibleCallsKey = (DatabaseKey, String, Vec<String>);
+type AccessibleCalls = Result<Vec<Uuid>, Arc<sqlx::Error>>;
+
+static RUNNING_CALL_LOOKUPS: LazyLock<SingleFlight<AccessibleCallsKey, AccessibleCalls>> =
+    LazyLock::new(SingleFlight::new);
 
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchBackfill {
@@ -51,12 +60,44 @@ pub struct CallRecordSearchPayload {
 /// `status_filter` optionally narrows visible calls by viewer-relative status.
 /// Standalone calls are discoverable only through the caller's individual grant;
 /// team/channel grants and shared links do not add them to team memory.
-#[tracing::instrument(skip(db, status_filter))]
+///
+/// Nothing is cached, but callers asking at the same time for the same
+/// database, user and status filter share one run of the query. A failure
+/// reaches all of them as an `Arc<sqlx::Error>`.
+#[tracing::instrument(skip(db, status_filter), err, fields(coalesced = tracing::field::Empty))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     status_filter: &[String],
 ) -> anyhow::Result<Vec<Uuid>> {
+    let key = (
+        DatabaseKey::of(db),
+        user_id.to_string(),
+        status_filter.to_vec(),
+    );
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let status_filter = status_filter.to_vec();
+
+        async move {
+            query_accessible_call_ids(&db, &user_id, &status_filter)
+                .await
+                .map_err(Arc::new)
+        }
+    };
+
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_CALL_LOOKUPS.run(key, lookup)).await?)
+}
+
+async fn query_accessible_call_ids(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &str,
+    status_filter: &[String],
+) -> sqlx::Result<Vec<Uuid>> {
     sqlx::query_scalar!(
         r#"
         WITH user_source_ids AS (
@@ -125,7 +166,6 @@ pub async fn get_accessible_call_ids(
     )
     .fetch_all(db)
     .await
-    .map_err(Into::into)
 }
 
 /// Gets call records for search backfill.

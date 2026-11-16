@@ -115,7 +115,9 @@ export function useSavedViews(options: {
   return {
     items: () =>
       list.data?.viewerId === options.viewerId() ? list.data?.items : undefined,
-    loading: () => list.isPending || list.data?.viewerId !== options.viewerId(),
+    loading: () =>
+      !list.error &&
+      (list.isPending || list.data?.viewerId !== options.viewerId()),
     error: () => list.error,
     hasMore: () => list.hasNextPage,
     loadingMore: () => list.isFetchingNextPage,

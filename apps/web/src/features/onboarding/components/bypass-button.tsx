@@ -1,6 +1,6 @@
 import { Button } from '@ui';
 
-/** Staff-only escape hatch, pinned to the corner over every step. */
+/** Signup and onboarding escape hatch, pinned to the corner over each step. */
 export function BypassButton(props: {
   disabled: boolean;
   onBypass: () => void;

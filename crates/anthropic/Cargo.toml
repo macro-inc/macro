@@ -17,6 +17,7 @@ tokio = { workspace = true, features = ["test-util"] }
 
 [dependencies]
 ai_billing = { path = "../ai_billing", optional = true }
+genai_telemetry = { path = "../genai_telemetry" }
 tokio = { workspace = true, features = ["sync"]}
 async-stream = { workspace = true }
 futures = { workspace = true }

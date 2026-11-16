@@ -259,6 +259,21 @@ impl SessionGrant {
             .filter(|prompter| prompter.acting_user() != Some(&self.owner))
     }
 
+    /// The prompter a call to `tool` on `server_slug` waits on the owner
+    /// for: [`Self::held_prompter`] for every call spending their access,
+    /// and the owner's own turn too for a write they confirm
+    /// ([`owner_confirms`](crate::domain::approval::owner_confirms)).
+    pub fn approval_prompter(&self, server_slug: &str, tool: &str) -> Option<&TurnPrompter> {
+        use crate::domain::approval::{owner_confirms, spends_owner_access};
+        match self.held_prompter() {
+            Some(prompter) => spends_owner_access(server_slug, tool).then_some(prompter),
+            None => self
+                .prompter
+                .as_ref()
+                .filter(|_| owner_confirms(server_slug, tool)),
+        }
+    }
+
     /// What to call `slug` when speaking to the model: the agent's own name
     /// for it when the agent listed it, otherwise the slug made readable
     /// (`google_sheets` → `Google Sheets`).

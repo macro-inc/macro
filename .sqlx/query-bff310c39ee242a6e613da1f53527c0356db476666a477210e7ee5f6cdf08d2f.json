@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH scan AS MATERIALIZED (\n            SELECT team_id,item_id,key_id FROM password_totp_enrollments\n            WHERE state='active' AND (team_id,key_id)>(COALESCE($1,'00000000-0000-0000-0000-000000000000'::uuid),COALESCE($2,'00000000-0000-0000-0000-000000000000'::uuid))\n            ORDER BY team_id,key_id LIMIT 1000\n        ), queued AS (\n            INSERT INTO password_totp_cleanup_candidates(team_id,key_id)\n            SELECT scan.team_id,scan.key_id FROM scan CROSS JOIN LATERAL (\n                SELECT totp_key_id,deleting FROM password_item_entities WHERE team_id=scan.team_id AND id=scan.item_id OFFSET 0\n            ) item WHERE item.totp_key_id IS DISTINCT FROM scan.key_id OR item.deleting\n            ON CONFLICT(team_id,key_id) DO NOTHING RETURNING team_id\n        ) UPDATE password_totp_cleanup_cursor SET\n            team_id=(SELECT team_id FROM scan ORDER BY team_id DESC,key_id DESC LIMIT 1),\n            key_id=(SELECT key_id FROM scan ORDER BY team_id DESC,key_id DESC LIMIT 1)\n        WHERE singleton",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bff310c39ee242a6e613da1f53527c0356db476666a477210e7ee5f6cdf08d2f"
+}

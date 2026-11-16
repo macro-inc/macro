@@ -607,17 +607,32 @@ where
             Write::InsertRows {
                 table_id,
                 rows,
+                ids,
                 restored,
                 derivation,
             } => {
-                let minted = if restored.is_empty() {
-                    rows::append_rows(
+                let placed = if restored.is_empty() {
+                    let ids = if ids.is_empty() {
+                        rows.iter().map(|_| RowId::new()).collect()
+                    } else {
+                        ids.clone()
+                    };
+                    match rows::append_rows(
                         transaction,
                         *table_id,
                         writes.created_by.as_ref(),
-                        rows.len(),
+                        &ids,
                     )
                     .await?
+                    {
+                        rows::Placed::Taken(row) => {
+                            return refused(WritesOutcome::IdTaken {
+                                write: index,
+                                id: TakenId::Row(row),
+                            });
+                        }
+                        placed => placed,
+                    }
                 } else {
                     match rows::restore_rows(
                         transaction,
@@ -627,14 +642,13 @@ where
                     )
                     .await?
                     {
-                        rows::Restored::Applied(rows) => Some(rows),
-                        rows::Restored::TableGone => None,
-                        rows::Restored::Taken(row) => {
+                        rows::Placed::Taken(row) => {
                             return refused(WritesOutcome::RowTaken { write: index, row });
                         }
+                        placed => placed,
                     }
                 };
-                let Some(minted) = minted else {
+                let rows::Placed::Applied(minted) = placed else {
                     return refused(WritesOutcome::TableNotFound(*table_id));
                 };
                 let mut valued = Vec::new();

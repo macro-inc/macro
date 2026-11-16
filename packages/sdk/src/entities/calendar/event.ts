@@ -18,6 +18,7 @@ import type {
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import { Calendar } from './calendar';
 import { CalendarReplacement } from './replacement';
@@ -45,6 +46,11 @@ export interface UpdateEventOptions {
   /** Provider conference change; omit to retain it. Outlook removal requires a
    * separately confirmed replacement via prepareReplacement(). */
   conference?: ConferenceChange;
+  /** Switch the event to a Macro call in this update: create one, write its
+   * join link into the description and location, and remove any Google Meet or
+   * other conference. An event already holding a Macro call keeps it. Cannot be
+   * combined with `conference`. */
+  macroCall?: boolean;
   /** Replacement out-of-office properties, applied only to an event that is
    * already out-of-office. */
   outOfOffice?: OutOfOfficeProperties;
@@ -215,6 +221,10 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * copy and say which inbox you used. Without `inbox` the call is refused
    * with `copy_choice_required`, listing each copy and the question to ask.
    *
+   * To change a meeting's link to a Macro call pass `macroCall: true`; never
+   * delete and recreate the event for it. The Teams meeting of an Outlook event
+   * cannot be removed this way: use {@link CalendarEvent.prepareReplacement}.
+   *
    * @destructive
    * @openworld
    * @idempotent
@@ -379,12 +389,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * @idempotent
    */
   async shareWithChannel(channel: Channel): Promise<void> {
-    unwrap(
-      await this.client.storage.shareWithChannel({
-        path: { channel_id: channel.id },
-        body: { entityType: 'calendar_event', entityId: this.id },
-      }),
-    );
+    await shareWithChannel(this.client, channel, 'calendar_event', this.id);
   }
 
   /** The event as an iCalendar (`.ics`) document: its series, title,
@@ -435,6 +440,7 @@ function toUpdateBody(options: UpdateEventOptions): UpdateCalendarEventRequest {
     transparency: options.transparency,
     reminders: options.reminders,
     conference: options.conference,
+    macroCall: options.macroCall,
     outOfOffice: options.outOfOffice,
     guestPolicy: options.guestPolicy,
     scope: options.scope,

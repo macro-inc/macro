@@ -112,6 +112,59 @@ fn seed_scenario_accepts_instance_and_trailing_scenario_arguments() {
 }
 
 #[test]
+fn run_local_and_stack_up_parse_the_computers_flags() {
+    use crate::local::computers::Fleet;
+
+    let fleet = |argv: &[&str], default: Fleet| {
+        let cli = Cli::try_parse_from(argv).unwrap();
+        match cli.command {
+            Cmd::RunLocal(args) => args.run.computers.fleet(default),
+            Cmd::Stack(StackCmd::Up(args)) => args.run.computers.fleet(default),
+            Cmd::ValidateLocalCompose(args) => args.computers.fleet(default),
+            _ => panic!("unexpected command"),
+        }
+    };
+    assert_eq!(
+        fleet(&["cargo-x", "run-local"], Fleet::Docker),
+        Fleet::Docker
+    );
+    assert_eq!(
+        fleet(&["cargo-x", "run-local", "--no-computers"], Fleet::Docker),
+        Fleet::Off
+    );
+    assert_eq!(
+        fleet(
+            &["cargo-x", "run-local", "--computers-incus"],
+            Fleet::Docker
+        ),
+        Fleet::Incus
+    );
+    assert_eq!(
+        fleet(
+            &["cargo-x", "stack", "up", "--computers", "docker"],
+            Fleet::Off
+        ),
+        Fleet::Docker
+    );
+    assert_eq!(
+        fleet(
+            &["cargo-x", "validate-local-compose", "--computers-incus"],
+            Fleet::Docker
+        ),
+        Fleet::Incus
+    );
+    assert!(
+        Cli::try_parse_from([
+            "cargo-x",
+            "run-local",
+            "--no-computers",
+            "--computers-incus"
+        ])
+        .is_err()
+    );
+}
+
+#[test]
 fn run_local_takes_start_flags_or_a_subcommand_but_not_both() {
     let cli = Cli::try_parse_from([
         "cargo-x",

@@ -212,6 +212,7 @@ impl InMemAgentManager {
             mcp: Arc::clone(&self.mcp),
             mcp_tools: std::sync::Mutex::new(None),
             mcp_connect: std::sync::Mutex::new(None),
+            mcp_servers: std::sync::Mutex::new(Vec::new()),
             client_renders_forms: AtomicBool::new(false),
             enable_dev_commands: self.enable_dev_commands,
         });

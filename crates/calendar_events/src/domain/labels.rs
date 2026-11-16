@@ -9,7 +9,10 @@ use uuid::Uuid;
 
 use super::{
     capabilities::{EventAccess, GuestPolicy, ViewerCapabilities},
-    models::{ActorInboxes, CalendarAttendee, CalendarEvent, EventStatus, VisibleCalendar},
+    models::{
+        ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarEvent, EventStatus,
+        VisibleCalendar,
+    },
     ports::CalendarMutationService,
 };
 
@@ -108,6 +111,14 @@ impl CalendarLabels {
             .reduce(|left, right| left || right)
     }
 
+    /// Whether one calendar counts toward the user's busy time, when the user
+    /// can see it.
+    pub fn counts_toward_availability(&self, calendar_id: Uuid) -> Option<bool> {
+        self.by_calendar
+            .get(&calendar_id)
+            .map(|calendar| calendar.contributes_to_availability)
+    }
+
     /// Whether a calendar holding this event is on the user's schedule.
     pub fn event_on_schedule(&self, event: &CalendarEvent) -> Option<bool> {
         let copies = event.sources.iter().map(|copy| copy.calendar_id);
@@ -132,6 +143,32 @@ impl CalendarLabels {
             self.event_on_schedule(event),
         )
     }
+}
+
+/// Whether the user is in a meeting through one of their own rows (`is_own`)
+/// and has not declined it: invited to it, or organizing it with guests on a
+/// copy they can change. This is what keeps a meeting busy on a calendar the
+/// user turned off for availability. An event with no one else on it is an
+/// entry on that calendar, though Macro lists the inbox as its organizer on a
+/// primary calendar, and Microsoft Graph names the mailbox owner as organizer
+/// on every event of a read-only calendar, so neither counts. Nor does a
+/// snapshot, a copy of a shared event whose guest row is the calendar it was
+/// added to, not a seat.
+pub fn attends_meeting(
+    attendees: &[CalendarAttendee],
+    is_read_only: bool,
+    is_snapshot: bool,
+    is_own: impl Fn(&CalendarAttendee) -> bool,
+) -> bool {
+    if is_snapshot {
+        return false;
+    }
+    let has_guests = attendees.iter().any(|attendee| !is_own(attendee));
+    attendees.iter().any(|attendee| {
+        is_own(attendee)
+            && attendee.response_status != AttendeeResponseStatus::Declined
+            && (!attendee.is_organizer || (!is_read_only && has_guests))
+    })
 }
 
 /// Says in plain words that an event is not the user's. Models follow this

@@ -9,8 +9,8 @@
 //! `spawn` routes on the bot the command names. `resume` and `teardown` get
 //! only a session id, so they read the session's bot from the repo — the same
 //! key, recovered from the same durable row that spawn wrote it to. External
-//! sessions have no provider here: teardown is a no-op for them, and every
-//! other operation refuses.
+//! sessions have no provider here: preflight succeeds, teardown is a no-op,
+//! and operations requiring a managed runtime refuse.
 
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
@@ -71,7 +71,8 @@ where
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 self.sandbox.preflight(kind, owner).await
             }
-            AgentKind::External => Err(external_is_unroutable()),
+            // A paired runtime needs no managed provider or account setup.
+            AgentKind::External => Ok(None),
         }
     }
 

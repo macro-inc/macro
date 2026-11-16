@@ -4,6 +4,7 @@
 
 #![deny(missing_docs)]
 
+mod attached_exec;
 mod client;
 mod error;
 mod model;
@@ -17,10 +18,11 @@ mod tls;
 #[expect(missing_docs, reason = "generated code")]
 pub mod generated;
 
+pub use attached_exec::{AttachedExec, ExecCommand};
 pub use client::IncusClient;
 pub use error::IncusError;
 pub use model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageProtocol, ImageReference,
     ImageRemote, ImageSource, IncusEndpoint, IncusTimeouts, InstanceInfo, InstanceKind,
-    InstanceStatus, InstanceUsage, RootDisk, ServerAuth, ServerInfo,
+    InstanceStatus, InstanceUsage, RootDisk, ServerAuth, ServerInfo, VolumeCreation,
 };

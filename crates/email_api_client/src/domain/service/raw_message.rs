@@ -11,7 +11,7 @@ where
     L: ProviderRequestGate,
 {
     /// Downloads a provider message's original RFC 822 bytes.
-    #[tracing::instrument(skip(self), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    #[tracing::instrument(skip(self), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn get_raw_message(
         &self,
         link_id: Uuid,

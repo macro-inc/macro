@@ -1,5 +1,4 @@
 use crate::api::context::ApiContext;
-use crate::util;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::{
@@ -7,178 +6,59 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::mailbox::gmail_push::{GmailPushError, PushAuthenticationError};
 use model::response::ErrorResponse;
-use models_email::gmail::inbox_sync::{
-    GmailInboxSyncPayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
-    JwtVerificationError,
-};
-use models_email::service::link::UserProvider;
+use models_email::gmail::inbox_sync::GmailInboxSyncPayload;
 
 /// webhook that GCP hits when there are changes to a user's inbox. we authenticate the message then
 /// queue it onto our own sqs queue and handle it in pubsub/gmail/process.rs.
-pub async fn webhook_handler(
+pub(crate) async fn webhook_handler(
     State(ctx): State<ApiContext>,
     headers: HeaderMap,
     extract::Json(req): extract::Json<GmailInboxSyncPayload>,
 ) -> Result<Response, Response> {
-    // Validate the token in the headers sent from Google
-    if cfg!(feature = "gmail_webhook_auth") {
-        validate_google_token(&ctx, &headers).await?;
-    }
-
-    let email_address = &req.message.data.email_address;
-
-    let link = email_db_client::links::get::fetch_link_by_email(
-        &ctx.db,
-        email_address,
-        UserProvider::Gmail,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to enqueue gmail notification");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to enqueue gmail notification".into(),
-            }),
+    let authorization = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    ctx.gmail_push
+        .receive(
+            &req.message.data.email_address,
+            req.message.data.history_id,
+            authorization,
         )
-            .into_response()
-    })?;
-
-    if let Some(link) = link {
-        let message = InboxSyncPubsubMessage {
-            link_id: link.id,
-            operation: InboxSyncOperation::GmailMessage(GmailMessagePayload {
-                history_id: req.message.data.history_id,
-            }),
-        };
-
-        ctx.sqs_client
-            .enqueue_gmail_inbox_sync_notification(message)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to enqueue gmail notification");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to enqueue gmail notification".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-    }
+        .await
+        .map_err(error_response)?;
 
     Ok(Json(StatusCode::ACCEPTED).into_response())
 }
 
-/// Validates the bearer token from the request headers sent by google. see
-/// https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
-async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<(), Response> {
-    // Get public keys to validate with
-    let public_keys = util::gmail::auth::get_google_public_keys(
-        ctx.redis_client.clone(),
-        ctx.gmail_client.clone(),
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to get google public keys");
-        (
+fn error_response(error: GmailPushError) -> Response {
+    let (status, message) = match error {
+        GmailPushError::Authentication(PushAuthenticationError::PublicKeysUnavailable) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to get google public keys".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    // Extract bearer token
-    let bearer_token = extract_bearer_token(headers).ok_or_else(|| {
-        tracing::warn!("No bearer token provided in request headers");
-        (
+            "unable to get google public keys",
+        ),
+        GmailPushError::Authentication(PushAuthenticationError::MissingBearerToken) => (
             StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                message: "Missing Authorization bearer token".into(),
-            }),
-        )
-            .into_response()
-    })?;
-
-    // First attempt to verify the token with existing public keys
-    match ctx
-        .gmail_client
-        .verify_google_token(bearer_token, public_keys)
-    {
-        Ok(_) => Ok(()),
-        Err(first_error) => {
-            // Only retry if it's a KeyNotFound or InvalidSignature error
-            match first_error {
-                // These two error types likely indicate a key rotation issue
-                JwtVerificationError::KeyNotFound(_) | JwtVerificationError::InvalidSignature => {
-                    tracing::warn!(
-                        "Token verification failed due to possible key rotation, refreshing keys and retrying. Error: {:?}",
-                        first_error
-                    );
-
-                    // Fetch fresh public keys
-                    let fresh_public_keys =
-                        match util::gmail::auth::fetch_and_cache_google_public_keys(
-                            ctx.redis_client.clone(),
-                            ctx.gmail_client.clone(),
-                        )
-                        .await
-                        {
-                            Ok(keys) => keys,
-                            Err(e) => {
-                                tracing::error!(error=?e, "Failed to refresh Google public keys");
-                                return Err((
-                                StatusCode::UNAUTHORIZED,
-                                Json(ErrorResponse {
-                                    message: "Authentication failed and couldn't refresh verification keys".into(),
-                                }),
-                            ).into_response());
-                            }
-                        };
-
-                    // Retry verification with fresh keys
-                    ctx.gmail_client
-                        .verify_google_token(bearer_token, fresh_public_keys)
-                        .map_err(|second_error| {
-                            tracing::error!(
-                                first_error=?first_error,
-                                second_error=?second_error,
-                                "Token verification failed even with refreshed keys"
-                            );
-                            (
-                                StatusCode::UNAUTHORIZED,
-                                Json(ErrorResponse {
-                                    message: "Invalid authentication token".into(),
-                                }),
-                            )
-                                .into_response()
-                        })?;
-
-                    Ok(())
-                }
-                // For other error types, return error immediately without refreshing keys
-                _ => {
-                    tracing::error!(error=?first_error, "Token verification failed with non-key related error");
-                    Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(ErrorResponse {
-                            message: "Invalid authentication token".into(),
-                        }),
-                    )
-                        .into_response())
-                }
-            }
+            "Missing Authorization bearer token",
+        ),
+        GmailPushError::Authentication(PushAuthenticationError::RefreshFailed) => (
+            StatusCode::UNAUTHORIZED,
+            "Authentication failed and couldn't refresh verification keys",
+        ),
+        GmailPushError::Authentication(PushAuthenticationError::InvalidToken) => {
+            (StatusCode::UNAUTHORIZED, "Invalid authentication token")
         }
-    }
-}
-
-/// Extract the bearer token from the Authorization header
-fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
-    headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|auth_value| auth_value.strip_prefix("Bearer "))
+        GmailPushError::InboxLookupFailed | GmailPushError::EnqueueFailed => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to enqueue gmail notification",
+        ),
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }
