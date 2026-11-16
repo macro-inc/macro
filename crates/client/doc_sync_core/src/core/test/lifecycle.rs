@@ -516,11 +516,27 @@ fn s7_117_repeated_unauthorized_close_is_terminal() {
     let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
     h.close(1008);
     token(&mut h);
-    h.open();
+    let conn = h.core.connection.conn().unwrap();
+    h.send(SyncInput::Socket {
+        conn,
+        event: SocketEvent::Opened,
+    });
     h.close(1008);
     assert!(matches!(
         h.core.connection(),
         Connection::Closed(CloseReason::Unauthorized)
+    ));
+}
+#[test]
+fn an_unauthorized_close_after_a_reauthorized_sync_fetches_a_fresh_token() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.close(4401);
+    token(&mut h);
+    h.open();
+    h.close(4401);
+    assert!(matches!(
+        h.core.connection(),
+        Connection::Authorizing { .. }
     ));
 }
 #[test]

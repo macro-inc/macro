@@ -246,7 +246,7 @@ impl ConnectionMachine {
                 true
             }
             SocketEvent::Closed { code, .. } => {
-                if matches!(*code, 1008 | 4401) {
+                if matches!(*code, CLOSE_POLICY_VIOLATION | CLOSE_UNAUTHORIZED) {
                     if self.denied == Some(*code) {
                         self.state = Connection::Closed(CloseReason::Unauthorized);
                     } else {
@@ -295,6 +295,9 @@ impl ConnectionMachine {
 
     pub fn initial(&mut self, now: Now) -> bool {
         if let Some(conn) = self.conn().filter(|_| self.opened()) {
+            // A completed handshake proves the token was accepted, so a later
+            // refusal (such as its expiry) earns another fresh-token attempt.
+            self.denied = None;
             self.establish(conn, now);
             true
         } else {
