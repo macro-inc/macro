@@ -38,11 +38,25 @@ impl Scratch {
             cache: root.join(CACHE_DIR),
         };
 
-        match std::fs::remove_dir_all(root) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                return Err(e).with_context(|| format!("unable to empty {}", root.display()));
+        // The root is emptied rather than removed: a volume mounted there
+        // cannot be removed.
+        std::fs::create_dir_all(root)
+            .with_context(|| format!("unable to create {}", root.display()))?;
+        for entry in
+            std::fs::read_dir(root).with_context(|| format!("unable to list {}", root.display()))?
+        {
+            let entry = entry.with_context(|| format!("unable to list {}", root.display()))?;
+            let path = entry.path();
+            let is_dir = entry
+                .file_type()
+                .with_context(|| format!("unable to inspect {}", path.display()))?
+                .is_dir();
+            if is_dir {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
             }
-            _ => {}
+            .with_context(|| format!("unable to remove {}", path.display()))?;
         }
         for dir in [&scratch.jobs, &scratch.cache] {
             std::fs::create_dir_all(dir)

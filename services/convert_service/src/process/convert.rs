@@ -19,7 +19,7 @@ pub(super) fn is_docx_key(key: &str) -> bool {
 
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
-#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, converter, message), fields(message_id = message.message_id))]
+#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, converter, message), fields(message_id = message.message_id, job_id = tracing::field::Empty))]
 pub async fn process_message(
     worker: &sqs_worker::SQSWorker,
     s3_client: &s3_client::S3,
@@ -47,6 +47,8 @@ pub async fn process_message(
         anyhow::bail!("required message attributes not found");
     };
 
+    // The conversion's own errors are logged inside this span.
+    tracing::Span::current().record("job_id", job_id.as_str());
     tracing::info!(job_id=%job_id, "message attributes");
 
     let req = if let Some(body) = message.body.as_ref() {

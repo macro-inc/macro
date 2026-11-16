@@ -63,7 +63,9 @@ synchronously via HTTP or asynchronously via SQS.
 - The child is a fork of a multi-threaded process, so a lock another thread
   held at the fork is never released in it. In the child, never log (the
   parent logs the error the work returns) and set the environment with
-  `set_child_env`, never `std::env::set_var`.
+  `set_child_env`, never `std::env::set_var`. A panic in the child still runs
+  the process's panic hook, which logs; if that waits on a lock the child is
+  killed at its time limit.
 - `Converter` runs one conversion per CPU at a time, on blocking threads. On
   the async workers a conversion starves the health check; unbounded, a batch
   of messages starts a LibreOffice each.

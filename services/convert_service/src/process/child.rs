@@ -19,7 +19,7 @@ use nix::{
     libc::{_exit, setenv, unsetenv},
     sys::{
         resource::{Resource, setrlimit},
-        signal::{Signal, killpg},
+        signal::{Signal, kill, killpg},
         wait::{WaitPidFlag, WaitStatus, waitpid},
     },
     unistd::{ForkResult, Pid, fork, setpgid},
@@ -85,7 +85,7 @@ pub(crate) fn run_confined(
             let status = match confine(folder, cache).and_then(|()| work()) {
                 Ok(()) => 0,
                 Err(e) => {
-                    // The parent reports a missing file as a bare status.
+                    // The parent reports a missing or empty file as a bare status.
                     let _ = std::fs::write(folder.join(ERROR_FILE), format!("{e:#}"));
                     WORK_FAILED_STATUS
                 }
@@ -113,10 +113,16 @@ pub(crate) fn run_confined(
 
 /// Reads the error a child that exited with `status` left in `folder`.
 fn reported_failure(folder: &Path, status: i32) -> anyhow::Result<ChildExit> {
-    match std::fs::read_to_string(folder.join(ERROR_FILE)) {
-        Ok(error) => Ok(ChildExit::Failed(error)),
+    match std::fs::read(folder.join(ERROR_FILE)) {
+        // A full disk leaves the file empty, or cut short inside a character.
+        Ok(error) if error.is_empty() => Ok(ChildExit::Exited(status)),
+        Ok(error) => Ok(ChildExit::Failed(
+            String::from_utf8_lossy(&error).into_owned(),
+        )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ChildExit::Exited(status)),
-        Err(e) => Err(e).context("unable to read the child's error"),
+        Err(e) => Err(e).with_context(|| {
+            format!("unable to read the error of a child that exited with status {status}")
+        }),
     }
 }
 
@@ -193,9 +199,11 @@ fn supervise(child: Pid, max_wait: Duration) -> anyhow::Result<ChildExit> {
     }
 
     // The child has not been reaped, so its process group id still names it.
-    let killed = killpg(child, Signal::SIGKILL);
+    // The wait below never returns for a child left alive, so if the group
+    // cannot be killed the child alone still is.
+    let killed = killpg(child, Signal::SIGKILL).or_else(|_| kill(child, Signal::SIGKILL));
     waitpid(child, None).context("unable to reap killed child")?;
-    killed.context("unable to kill child process group")?;
+    killed.context("unable to kill child process")?;
 
     Ok(ChildExit::TimedOut)
 }

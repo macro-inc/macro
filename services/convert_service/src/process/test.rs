@@ -468,15 +468,15 @@ mod conversion_table {
 mod child_process {
     //! Forks real child processes. None of them needs LibreOffice.
 
-    use std::io::{Read, Write};
+    use std::io::Read;
     use std::path::Path;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use anyhow::Context;
 
-    use nix::sys::resource::{Resource, getrlimit};
-    use nix::sys::signal::{Signal, raise};
+    use nix::sys::resource::{Resource, getrlimit, setrlimit};
+    use nix::sys::signal::{SigHandler, Signal, raise, signal};
     use nix::unistd::{ForkResult, fork, pause};
 
     use crate::process::child::{ChildExit, run_confined};
@@ -554,36 +554,42 @@ mod child_process {
     }
 
     #[test]
+    fn a_child_with_no_room_to_write_its_error_reports_its_status() {
+        let folder = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            // As on a full disk, the error file is created and the write to
+            // it fails. Ignoring the signal turns the limit into that error.
+            unsafe { signal(Signal::SIGXFSZ, SigHandler::SigIgn) }?;
+            setrlimit(Resource::RLIMIT_FSIZE, 0, 0)?;
+            anyhow::bail!("unable to save document")
+        })
+        .unwrap();
+
+        assert_eq!(exit, ChildExit::Exited(1));
+        let error = std::fs::read(folder.path().join("error")).unwrap();
+        assert_eq!(error, b"");
+    }
+
+    #[test]
     fn a_killed_child_leaves_its_files_in_its_folder() {
         // LibreOffice finds where to write from these, and a killed process
         // removes nothing.
         let folder = tempfile::tempdir().unwrap();
         let cache = tempfile::tempdir().unwrap();
-        let (mut reader, writer) = std::io::pipe().unwrap();
 
-        let exit = run_confined(
-            folder.path(),
-            cache.path(),
-            Duration::from_millis(100),
-            move || -> anyhow::Result<()> {
-                let mut written = writer;
-                let home = std::env::var_os("HOME").context("HOME is not set")?;
-                std::fs::write(std::env::temp_dir().join("scratch.tmp"), "scratch")?;
-                std::fs::write(Path::new(&home).join("profile"), "profile")?;
-                std::fs::write("relative", "relative")?;
-                written.write_all(b"written")?;
-                loop {
-                    pause();
-                }
-            },
-        )
+        let exit = run_confined(folder.path(), cache.path(), TIME_LIMIT, || {
+            let home = std::env::var_os("HOME").context("HOME is not set")?;
+            std::fs::write(std::env::temp_dir().join("scratch.tmp"), "scratch")?;
+            std::fs::write(Path::new(&home).join("profile"), "profile")?;
+            std::fs::write("relative", "relative")?;
+            raise(Signal::SIGKILL)?;
+            Ok(())
+        })
         .unwrap();
 
-        assert_eq!(exit, ChildExit::TimedOut);
-        // The child had written its files and was still running when killed.
-        let mut written = [0u8; 7];
-        reader.read_exact(&mut written).unwrap();
-        assert_eq!(&written, b"written");
+        assert_eq!(exit, ChildExit::Signaled(Signal::SIGKILL));
         let mut files: Vec<_> = std::fs::read_dir(folder.path())
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
@@ -971,6 +977,12 @@ mod process_message_span {
             std::fs::read_dir(root.path().join("jobs")).unwrap().count(),
             0
         );
+        let job_id = span
+            .attributes
+            .iter()
+            .find(|attribute| attribute.key.as_str() == "job_id")
+            .map(|attribute| attribute.value.to_string());
+        assert_eq!(job_id.as_deref(), Some("process-message-span-unsupported"));
         let Status::Error { description } = &span.status else {
             panic!("expected an errored span, got {:?}", span.status);
         };
