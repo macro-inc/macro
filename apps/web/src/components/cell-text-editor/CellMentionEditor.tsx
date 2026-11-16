@@ -123,7 +123,16 @@ export function CellMentionEditor(
         onKeyDown={(event) => {
           event.stopPropagation();
           if (event.isComposing) return;
-          if (event.key === 'Enter' && event.altKey && !props.readonly) {
+          const shiftEnter =
+            event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            props.lineBreakOnShiftEnter;
+          if (
+            event.key === 'Enter' &&
+            (event.altKey || shiftEnter) &&
+            !props.readonly
+          ) {
             event.preventDefault();
             replace('\n');
             return;

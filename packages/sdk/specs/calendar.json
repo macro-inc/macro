@@ -349,7 +349,7 @@
             }
           },
           "503": {
-            "description": "Transient provider failure",
+            "description": "Transient provider failure, or the Macro call could not be created",
             "content": {
               "application/json": {
                 "schema": {
@@ -3653,6 +3653,10 @@
             "type": ["string", "null"],
             "description": "Replacement location; an empty string clears it."
           },
+          "macroCall": {
+            "type": "boolean",
+            "description": "Switch the event to a Macro call in this write: mint one, write its\njoin link into the description and location, and detach any provider\nconference. An event already holding a Macro call keeps it. Cannot be\ncombined with `conference`."
+          },
           "outOfOffice": {
             "oneOf": [
               {
@@ -3800,7 +3804,7 @@
           },
           "contributesToAvailability": {
             "type": "boolean",
-            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting in Settings → Calendar, on by default for every calendar.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",

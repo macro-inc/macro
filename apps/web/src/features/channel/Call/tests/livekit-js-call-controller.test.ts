@@ -63,6 +63,7 @@ function track() {
 function setup(state?: { connectionState: string; room?: Room }) {
   let room: Room | null = state?.room ?? null;
   const setInitialMediaState = vi.fn();
+  const playSound = vi.fn();
   const finishLocalMediaSetup = vi.fn(async () => undefined);
   const controller = createLivekitJsCallController({
     room: () => room,
@@ -91,8 +92,9 @@ function setup(state?: { connectionState: string; room?: Room }) {
     bumpTrackVersion: () => undefined,
     bumpSpeakerVersion: () => undefined,
     setScreenSharing: () => undefined,
+    playSound,
   });
-  return { controller, finishLocalMediaSetup, setInitialMediaState };
+  return { controller, finishLocalMediaSetup, setInitialMediaState, playSound };
 }
 
 describe('livekit call controller prejoin tracks', () => {
@@ -104,7 +106,7 @@ describe('livekit call controller prejoin tracks', () => {
   });
 
   it('carries selected devices and background into the connected room', async () => {
-    const { controller, setInitialMediaState } = setup();
+    const { controller, setInitialMediaState, playSound } = setup();
     const preferences = {
       microphoneDeviceId: 'mic-2',
       cameraDeviceId: 'camera-2',
@@ -120,6 +122,7 @@ describe('livekit call controller prejoin tracks', () => {
       })
     );
     expect(setInitialMediaState).toHaveBeenCalledWith(preferences);
+    expect(playSound).toHaveBeenCalledExactlyOnceWith('join');
   });
 
   it('hands prejoin tracks to media setup instead of stopping them', async () => {
@@ -156,14 +159,20 @@ describe('livekit call controller prejoin tracks', () => {
     );
   });
 
+  it('does not announce a recovery rejoin', async () => {
+    const { controller, playSound } = setup();
+    await controller.connect(token, { recovery: true });
+    expect(playSound).not.toHaveBeenCalled();
+  });
   it('stops prejoin tracks when the room fails to connect', async () => {
     connectRoom.mockRejectedValue(new Error('offline'));
-    const { controller, finishLocalMediaSetup } = setup();
+    const { controller, finishLocalMediaSetup, playSound } = setup();
     const localTracks = { microphone: track(), camera: track() };
     await expect(controller.connect(token, { localTracks })).rejects.toThrow(
       'offline'
     );
     expect(finishLocalMediaSetup).not.toHaveBeenCalled();
+    expect(playSound).not.toHaveBeenCalled();
     expect(localTracks.microphone.stop).toHaveBeenCalledOnce();
     expect(localTracks.camera.stop).toHaveBeenCalledOnce();
   });

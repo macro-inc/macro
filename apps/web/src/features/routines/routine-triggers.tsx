@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableRoutineConditions } from '@core/constant/featureFlags';
+import {
+  enableEventRoutines,
+  enableRoutineConditions,
+} from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { RoutineEventCondition } from './components/routine-event-condition';
@@ -60,6 +63,7 @@ export function RoutineTriggers(props: {
   routineId?: string;
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
+  const eventRoutines = useFeatureFlag(enableEventRoutines);
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
     () =>
@@ -102,6 +106,7 @@ export function RoutineTriggers(props: {
         triggers={props.triggers}
         onChange={props.onChange}
         layout={props.layout === 'add' ? 'add' : 'rows'}
+        offerEvents={eventRoutines().enabled}
         renderEventGroup={(group, options) => (
           <Show
             when={group !== 'GitHub' || github().linked !== false}

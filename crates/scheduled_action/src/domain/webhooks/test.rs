@@ -7,6 +7,7 @@ use model_owner::CreationPrincipal;
 use serde_json::json;
 
 use super::*;
+use crate::domain::event_runs::test_support::Rollout;
 use crate::domain::event_trigger::{EventSource, MAX_WEBHOOK_BODY_BYTES};
 use crate::domain::models::ActionConfiguration;
 use crate::domain::ports::ScheduledActionService;
@@ -83,7 +84,7 @@ impl WebhookAdmission for Admission {
     }
 }
 
-type TestWebhooks = RoutineWebhookService<FakeRepo, Webhooks, Admission>;
+type TestWebhooks = RoutineWebhookService<FakeRepo, Webhooks, Admission, Rollout>;
 
 struct Setup {
     service: TestWebhooks,
@@ -114,7 +115,7 @@ async fn setup(enabled: bool) -> Setup {
             stored_repo(&routines),
             Arc::clone(&webhooks),
             Arc::clone(&admission),
-            enabled,
+            Rollout(Some(enabled)),
         ),
         webhooks,
         admission,

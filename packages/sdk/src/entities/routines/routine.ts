@@ -13,6 +13,7 @@ import type {
   ScheduledActionResponse,
   TemplateVariable,
 } from '../../../generated/scheduled-action/types.gen';
+import type { EntityAppearance } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
@@ -111,7 +112,10 @@ interface RoutineCommonOptions {
   runVisibility?: RunVisibility;
 }
 
-/** A routine that hands each run to one model or agent. */
+/**
+ * A routine that hands each run to one model or agent: the older form, which
+ * runs as one Ask AI step. Write new routines as {@link StepsRoutineOptions}.
+ */
 export interface AgentRoutineOptions extends RoutineCommonOptions {
   /** Instructions delivered to the agent. */
   prompt: string;
@@ -150,7 +154,7 @@ export interface StepsRoutineOptions extends RoutineCommonOptions {
   agent?: never;
 }
 
-/** Configuration of a routine: one agent task, or code and Ask AI steps. */
+/** Configuration of a routine: code and Ask AI steps, or the older single agent task. */
 export type RoutineOptions = AgentRoutineOptions | StepsRoutineOptions;
 
 /** A scheduled or event-triggered agent task. */
@@ -190,6 +194,24 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
 
   /** Routine name. */
   readonly name = this.field('name');
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace shared appearance without rescheduling. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.scheduledAction.setScheduledActionAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** Configured triggers. */
   readonly trigger = this.field('trigger');

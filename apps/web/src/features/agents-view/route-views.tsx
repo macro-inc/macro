@@ -6,13 +6,10 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { AgentsViewSkeleton } from './agents-view-skeleton';
 import { parseAgentsRoute } from './core/route';
-
-const AgentsView = lazy(async () => ({
-  default: (await import('./views/AgentsView')).AgentsView,
-}));
+import { AgentsView } from './views/AgentsView';
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();

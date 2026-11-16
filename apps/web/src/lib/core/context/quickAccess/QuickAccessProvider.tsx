@@ -38,6 +38,7 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
       totalCount: () => sourceList()?.totalCount() ?? 0,
       hasMore: () => sourceList()?.hasMore() ?? false,
       isLoading: () => sourceList()?.isLoading() ?? false,
+      isSearching: () => sourceList()?.isSearching?.() ?? false,
       isLoadingMore: () => sourceList()?.isLoadingMore() ?? false,
       loadMore: async () => {
         await sourceList()?.loadMore();

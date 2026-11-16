@@ -4,4 +4,4 @@
 pub mod domain;
 pub mod outbound;
 
-pub use domain::{FeatureFlags, FlagSnapshot, FlagValue};
+pub use domain::{FeatureFlags, FlagSnapshot, FlagValue, ServiceContext, ServiceFeatureFlags};

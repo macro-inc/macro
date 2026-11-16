@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_sync_streams s SET position = NULL, initial_complete = false,\n                attachments_rechecked = s.attachments_rechecked AND NOT $5,\n                next_run_at = now(), fence = s.fence + 1, lease_id = NULL, lease_until = NULL\n            FROM email_mailbox_folders f\n            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'\n                AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NULL\n                AND (s.reader_revision IS NULL OR s.reader_revision < $3)\n                AND (f.role IN ('inbox','sent')) = $4\n            RETURNING s.scope_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scope_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int2",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "91c283cbaf580736c6d3176ffe1ad04841096bfe3856271a9e83f8d5f6b74eee"
+}

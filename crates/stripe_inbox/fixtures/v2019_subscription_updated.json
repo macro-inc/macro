@@ -1,0 +1,60 @@
+{
+  "id": "evt_1SubUpdated2019",
+  "object": "event",
+  "api_version": "2019-12-03",
+  "created": 1800000010,
+  "livemode": false,
+  "type": "customer.subscription.updated",
+  "data": {
+    "object": {
+      "id": "sub_1Personal",
+      "object": "subscription",
+      "customer": "cus_Personal",
+      "status": "active",
+      "created": 1790000000,
+      "currency": "usd",
+      "current_period_start": 1800000000,
+      "current_period_end": 1802678400,
+      "metadata": {
+        "ga_client_id": "GA1.2.3",
+        "fbp": "fb.1.2",
+        "macro_plan_change_at": "2027-01-15T08:00:10.123456Z"
+      },
+      "plan": {"id": "price_max", "object": "plan"},
+      "items": {
+        "object": "list",
+        "has_more": false,
+        "data": [
+          {
+            "id": "si_Seat",
+            "object": "subscription_item",
+            "quantity": 1,
+            "metadata": {},
+            "plan": {"id": "price_max", "object": "plan"},
+            "price": {
+              "id": "price_max",
+              "object": "price",
+              "product": "prod_Max",
+              "unit_amount": 20000,
+              "currency": "usd",
+              "type": "recurring",
+              "recurring": {"interval": "month", "interval_count": 1},
+              "metadata": {}
+            }
+          }
+        ]
+      }
+    },
+    "previous_attributes": {
+      "items": {
+        "data": [
+          {
+            "id": "si_Seat",
+            "price": {"id": "price_premium", "object": "price"}
+          }
+        ]
+      },
+      "metadata": {"macro_plan_change_at": null}
+    }
+  }
+}

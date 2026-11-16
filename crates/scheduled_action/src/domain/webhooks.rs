@@ -11,9 +11,10 @@ use rootcause::{Report, compat::IntoRootcause};
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use super::event_rollout::EventRoutineRollout;
 use super::event_runs::{CurrentOwnerAccess, EventRunRepository, admission::EventAdmissionService};
 use super::event_trigger::{EventId, EventReference, WebhookBodyError, WebhookDelivery};
-use super::models::ActionPolicyError;
+use super::models::{ActionPolicyError, ScheduledAction};
 use super::ports::ScheduledActionRepo;
 use super::service::granted_action;
 
@@ -145,31 +146,34 @@ pub trait RoutineWebhooks: Send + Sync + 'static {
     ) -> impl Future<Output = Result<EventId, RoutineWebhookError>> + Send;
 }
 
-pub struct RoutineWebhookService<Actions, Webhooks, Admission> {
+pub struct RoutineWebhookService<Actions, Webhooks, Admission, Rollout> {
     actions: Arc<Actions>,
     webhooks: Arc<Webhooks>,
     admission: Arc<Admission>,
-    /// Event routines are on: their worker runs deliveries.
-    enabled: bool,
+    /// Whether the routine's owner has event routines: only then do
+    /// deliveries run.
+    rollout: Rollout,
 }
 
-impl<Actions, Webhooks, Admission> RoutineWebhookService<Actions, Webhooks, Admission>
+impl<Actions, Webhooks, Admission, Rollout>
+    RoutineWebhookService<Actions, Webhooks, Admission, Rollout>
 where
     Actions: ScheduledActionRepo,
     Webhooks: RoutineWebhookRepo,
     Admission: WebhookAdmission,
+    Rollout: EventRoutineRollout,
 {
     pub fn new(
         actions: Arc<Actions>,
         webhooks: Arc<Webhooks>,
         admission: Arc<Admission>,
-        enabled: bool,
+        rollout: Rollout,
     ) -> Self {
         Self {
             actions,
             webhooks,
             admission,
-            enabled,
+            rollout,
         }
     }
 
@@ -177,35 +181,54 @@ where
     async fn owned_routine(
         &self,
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<Uuid, RoutineWebhookError> {
+    ) -> Result<(Uuid, ScheduledAction), RoutineWebhookError> {
         match granted_action(self.actions.as_ref(), receipt).await {
-            Ok(action) => action.id.ok_or_else(|| {
-                RoutineWebhookError::Internal(rootcause::report!("unsaved routine"))
-            }),
+            Ok(action) => match action.id {
+                Some(id) => Ok((id, action)),
+                None => Err(RoutineWebhookError::Internal(rootcause::report!(
+                    "unsaved routine"
+                ))),
+            },
             Err(error) => match error.downcast_ref::<ActionPolicyError>() {
                 Some(ActionPolicyError::NotFound) => Err(RoutineWebhookError::RoutineNotFound),
                 _ => Err(RoutineWebhookError::Internal(error.into_rootcause())),
             },
         }
     }
+
+    /// The routine's owner has event routines; a flag that cannot be read
+    /// counts as off, as when saving an event trigger.
+    async fn rolled_out(&self, routine: &ScheduledAction) -> bool {
+        let Ok(owner) = routine.owner_user() else {
+            return false;
+        };
+        self.rollout
+            .enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "feature flags unavailable; webhook stays off");
+            })
+            .unwrap_or(false)
+    }
 }
 
-impl<Actions, Webhooks, Admission> RoutineWebhooks
-    for RoutineWebhookService<Actions, Webhooks, Admission>
+impl<Actions, Webhooks, Admission, Rollout> RoutineWebhooks
+    for RoutineWebhookService<Actions, Webhooks, Admission, Rollout>
 where
     Actions: ScheduledActionRepo,
     Webhooks: RoutineWebhookRepo,
     Admission: WebhookAdmission,
+    Rollout: EventRoutineRollout,
 {
     #[tracing::instrument(name = "routine.webhook_create", skip_all, err, fields(action_id))]
     async fn create(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<CreatedRoutineWebhook, RoutineWebhookError> {
-        if !self.enabled {
+        let (routine_id, routine) = self.owned_routine(&receipt).await?;
+        if !self.rolled_out(&routine).await {
             return Err(RoutineWebhookError::Disabled);
         }
-        let routine_id = self.owned_routine(&receipt).await?;
         tracing::Span::current().record("action_id", tracing::field::display(routine_id));
         let token = WebhookToken::generate();
         let webhook = self
@@ -223,7 +246,7 @@ where
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<RoutineWebhook, RoutineWebhookError> {
-        let routine_id = self.owned_routine(&receipt).await?;
+        let (routine_id, _) = self.owned_routine(&receipt).await?;
         self.webhooks
             .get(routine_id)
             .await
@@ -235,7 +258,7 @@ where
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), RoutineWebhookError> {
-        let routine_id = self.owned_routine(&receipt).await?;
+        let (routine_id, _) = self.owned_routine(&receipt).await?;
         self.webhooks
             .delete(routine_id)
             .await
@@ -263,7 +286,13 @@ where
             .ok_or(RoutineWebhookError::UnknownUrl)?;
         let span = tracing::Span::current();
         span.record("action_id", tracing::field::display(routine_id));
-        if !self.enabled {
+        let routine = self
+            .actions
+            .get_action(&routine_id)
+            .await
+            .map_err(|error| RoutineWebhookError::Internal(error.into_rootcause()))?
+            .ok_or(RoutineWebhookError::UnknownUrl)?;
+        if !self.rolled_out(&routine).await {
             return Err(RoutineWebhookError::NotListening);
         }
         let delivery = WebhookDelivery::new(routine_id, body, content_type)?;

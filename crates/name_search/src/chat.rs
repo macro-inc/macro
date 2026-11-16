@@ -215,7 +215,7 @@ async fn owner_search<'a>(
 /// Searches over the user's chats by name. A non-empty `tag_option_ids`
 /// restricts results to chats holding any of those property option ids, or
 /// every one of them when `match_all_tags` is set.
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip(db, term), fields(term_len = term.len()), err)]
 #[cfg_attr(
     not(test),
     cached(

@@ -19,7 +19,7 @@ async fn get_company_returns_owned_visible_company_with_contacts(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let record = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company should be returned");
 
@@ -50,7 +50,7 @@ async fn get_company_returns_company_with_no_contacts(pool: PgPool) -> anyhow::R
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let record = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company should be returned");
 
@@ -66,7 +66,7 @@ async fn get_company_returns_none_for_unknown_id(pool: PgPool) -> anyhow::Result
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .get_company_for_team(&team_id, &Uuid::now_v7(), false)
+        .get_company_for_team(&team_id, &Uuid::now_v7(), false, true)
         .await?;
     assert!(result.is_none());
     Ok(())
@@ -83,12 +83,12 @@ async fn get_company_does_not_leak_across_teams(pool: PgPool) -> anyhow::Result<
     // Team B fetching team A's company must get None even as admin.
     let repo = CompaniesRepositoryImpl::new(pool);
     assert!(
-        repo.get_company_for_team(&team_b, &company_a, false)
+        repo.get_company_for_team(&team_b, &company_a, false, true)
             .await?
             .is_none()
     );
     assert!(
-        repo.get_company_for_team(&team_b, &company_a, true)
+        repo.get_company_for_team(&team_b, &company_a, true, true)
             .await?
             .is_none()
     );
@@ -107,7 +107,7 @@ async fn get_company_returns_none_for_hidden_company_member(pool: PgPool) -> any
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?;
     assert!(result.is_none());
     Ok(())
@@ -130,7 +130,7 @@ async fn get_company_admin_sees_hidden_company(pool: PgPool) -> anyhow::Result<(
 
     // Member: hidden → None.
     assert!(
-        repo.get_company_for_team(&team_id, &company_id, false)
+        repo.get_company_for_team(&team_id, &company_id, false, true)
             .await?
             .is_none()
     );
@@ -138,7 +138,7 @@ async fn get_company_admin_sees_hidden_company(pool: PgPool) -> anyhow::Result<(
     // Admin: reachable; response carries hidden = true so the UI can
     // render the right toggle state.
     let admin = repo
-        .get_company_for_team(&team_id, &company_id, true)
+        .get_company_for_team(&team_id, &company_id, true, true)
         .await?
         .expect("admin should see hidden company");
     assert!(admin.company.hidden);
@@ -165,14 +165,14 @@ async fn get_company_filters_hidden_contacts_for_member(pool: PgPool) -> anyhow:
     let repo = CompaniesRepositoryImpl::new(pool);
 
     let member = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company visible to member");
     let member_contacts: Vec<Uuid> = member.contacts.iter().map(|c| c.id).collect();
     assert_eq!(member_contacts, vec![visible]);
 
     let admin = repo
-        .get_company_for_team(&team_id, &company_id, true)
+        .get_company_for_team(&team_id, &company_id, true, true)
         .await?
         .expect("company visible to admin");
     let admin_contacts: Vec<Uuid> = admin.contacts.iter().map(|c| c.id).collect();
@@ -203,7 +203,7 @@ async fn get_company_hydrates_name_and_description_from_primary_domain(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let record = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company should be returned");
 
@@ -238,10 +238,31 @@ async fn get_company_returns_none_for_negative_cache_directory_row(
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let record = repo
-        .get_company_for_team(&team_id, &company_id, false)
+        .get_company_for_team(&team_id, &company_id, false, true)
         .await?
         .expect("company should be returned");
     assert_eq!(record.name, None);
     assert_eq!(record.description, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_company_without_contacts_skips_the_list(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@owner.test";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.test"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    insert_contact_with_source(&pool, company_id, "alice@acme.test", link_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let record = repo
+        .get_company_for_team(&team_id, &company_id, false, false)
+        .await?
+        .expect("company should be returned");
+
+    assert_eq!(record.company.id, company_id);
+    assert_eq!(record.company.domains.len(), 1);
+    assert!(record.contacts.is_empty());
     Ok(())
 }

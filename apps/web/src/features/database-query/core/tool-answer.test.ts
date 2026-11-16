@@ -50,6 +50,7 @@ describe('QueryDatabase tool results as answers', () => {
             kind: 'select',
             source: {
               markdown: false,
+              link: false,
               options: [{ id: 'option-yes', label: 'Yes', color: null }],
               tag: false,
               target: null,
@@ -61,6 +62,7 @@ describe('QueryDatabase tool results as answers', () => {
             kind: 'entity',
             source: {
               markdown: false,
+              link: false,
               options: [],
               tag: false,
               target: 'USER',
@@ -72,6 +74,7 @@ describe('QueryDatabase tool results as answers', () => {
             kind: 'entity',
             source: {
               markdown: false,
+              link: false,
               options: [],
               tag: false,
               target: 'DATABASE_ROW',

@@ -1,7 +1,14 @@
-import type { Client } from '@urql/core';
+import { type Client, createRequest, makeOperation } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerActivityRevalidator } from '../../queries/activity/push-registry';
-import { createActivityUpdatesHandler } from './graphql-activity-updates';
+import {
+  ActivityUpdatesDocument,
+  SoupUpdatesDocument,
+} from './graphql/generated/graphql';
+import {
+  createActivityUpdatesHandler,
+  isActivityUpdatesSubscription,
+} from './graphql-activity-updates';
 
 const cleanups: Array<() => void> = [];
 function setup() {
@@ -140,5 +147,19 @@ describe('activity connection revalidation', () => {
     await flush();
     expect(stale).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe('activity pushes and the cache', () => {
+  const subscription = (document: Parameters<typeof createRequest>[0]) =>
+    makeOperation('subscription', createRequest(document, {}), {} as never);
+
+  it('marks only the activity subscription as uncached', () => {
+    expect(
+      isActivityUpdatesSubscription(subscription(ActivityUpdatesDocument))
+    ).toBe(true);
+    expect(
+      isActivityUpdatesSubscription(subscription(SoupUpdatesDocument))
+    ).toBe(false);
   });
 });

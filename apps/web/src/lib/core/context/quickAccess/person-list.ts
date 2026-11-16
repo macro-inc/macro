@@ -10,6 +10,7 @@ import { hashKey } from '@tanstack/solid-query';
 import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
 import { contactUserItem } from './person-items';
 import type { EntityItem, QuickAccessList, UserItem } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 /** Appended pages stay bounded however far a list is scrolled. */
 const MAX_LISTED_PEOPLE = 500;
@@ -78,7 +79,10 @@ export function createPersonList(options: {
         shownFor === owner &&
         window.loading() &&
         !window.error();
-      return pending ? shown.filter(stillMatches(options.search())) : [];
+      return keepUnchangedRows(
+        shown,
+        pending ? shown.filter(stillMatches(options.search())) : []
+      );
     }
     shownFor = owner;
     const hints = new Map(
@@ -124,8 +128,11 @@ export function createPersonList(options: {
         later: listed.later.filter((item) => !first.has(item.id)),
       };
     }
-    return [...listed.first, ...listed.later].map(
-      (item, personOrder): UserItem => ({ ...item, personOrder })
+    return keepUnchangedRows(
+      shown,
+      [...listed.first, ...listed.later].map(
+        (item, personOrder): UserItem => ({ ...item, personOrder })
+      )
     );
   }, []);
   const hasNextPage = () =>

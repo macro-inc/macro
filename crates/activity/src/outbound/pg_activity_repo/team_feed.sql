@@ -98,6 +98,7 @@ scanned AS (
                        END AS entity_uuid
                 FROM activity_events e
                 WHERE e.subject_id = t.user_id
+                  AND e.action <> 'appearance_changed'
                   -- No cursor reads from the top. COALESCE, unlike an
                   -- `IS NULL OR` branch, keeps this an index condition in
                   -- generic plans.

@@ -1,4 +1,4 @@
-import { favoriteIconType } from '@app/util/favorites';
+import { favoriteIconType, useFavoriteAppearance } from '@app/util/favorites';
 import { ChannelIcon } from '@channel/channel-icon';
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { UserIconSize } from '@core/component/UserIcon';
@@ -38,7 +38,7 @@ export function FavoriteIcon(props: FavoriteIconProps) {
     if (props.favorite.entityType === 'channel_message')
       return props.favorite.channelId;
   };
-
+  const appearance = useFavoriteAppearance(props.favorite);
   return (
     <Show
       when={channelId()}
@@ -46,6 +46,7 @@ export function FavoriteIcon(props: FavoriteIconProps) {
         <EntityIcon
           size="xs"
           targetType={favoriteIconType(props.favorite)}
+          appearance={appearance()}
           class={props.class}
         />
       }
