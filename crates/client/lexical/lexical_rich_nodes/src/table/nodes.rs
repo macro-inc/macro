@@ -45,6 +45,10 @@ fn falsy_default<'de, D: Deserializer<'de>, T: DeserializeOwned + Default>(
         Ok(T::default())
     }
 }
+/// Largest imported column span; browsers clamp `colspan` to the same value.
+pub const MAX_COL_SPAN: u32 = 1000;
+/// Largest imported row span; browsers clamp `rowspan` to the same value.
+pub const MAX_ROW_SPAN: u32 = 65534;
 fn falsy_one<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
     let value = serde_json::Value::deserialize(d)?;
     if js_truthy(&value) {
@@ -52,6 +56,14 @@ fn falsy_one<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Err
     } else {
         Ok(1)
     }
+}
+// Document, Loro and clipboard JSON bypass the DOM clamp, and an unbounded span makes the
+// table map and integrity transform allocate per spanned slot.
+fn col_span<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
+    Ok(falsy_one(d)?.min(MAX_COL_SPAN))
+}
+fn row_span<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
+    Ok(falsy_one(d)?.min(MAX_ROW_SPAN))
 }
 fn header_masked<'de, D: Deserializer<'de>>(
     d: D,
@@ -246,14 +258,14 @@ pub struct TableCellNode {
     /// Background fill; empty input becomes null.
     #[serde(default, deserialize_with = "falsy_default")]
     pub background_color: Option<String>,
-    /// Horizontal span; falsy imported values become one.
-    #[serde(default = "one", deserialize_with = "falsy_one")]
+    /// Horizontal span; falsy imported values become one, larger ones `MAX_COL_SPAN`.
+    #[serde(default = "one", deserialize_with = "col_span")]
     pub col_span: u32,
     /// Imported header bits are masked to BOTH.
     #[serde(default, deserialize_with = "header_masked")]
     pub header_state: TableCellHeaderState,
-    /// Vertical span; falsy imported values become one.
-    #[serde(default = "one", deserialize_with = "falsy_one")]
+    /// Vertical span; falsy imported values become one, larger ones `MAX_ROW_SPAN`.
+    #[serde(default = "one", deserialize_with = "row_span")]
     pub row_span: u32,
     /// Optional width; falsy imported values are absent.
     #[serde(

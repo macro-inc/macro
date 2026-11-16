@@ -153,7 +153,9 @@ pub fn insert_table_row_at_node(
             tx.append(row, &[new.key()])?;
         } else {
             let span = v.row_span(tx.view());
-            tx.get_mut::<TableCellNode>(v.cell)?.row_span = span + 1;
+            tx.get_mut::<TableCellNode>(v.cell)?.row_span = span
+                .checked_add(1)
+                .ok_or(Error::Invariant("Invalid table span"))?;
         }
     }
     let target = tx
@@ -234,7 +236,9 @@ pub fn insert_table_column_at_node(
             }
         } else {
             let span = value.col_span(tx.view());
-            tx.get_mut::<TableCellNode>(value.cell)?.col_span = span + 1;
+            tx.get_mut::<TableCellNode>(value.cell)?.col_span = span
+                .checked_add(1)
+                .ok_or(Error::Invariant("Invalid table span"))?;
         }
         if prepend || append || create_after.is_some() {
             let new = cell_with_paragraph(tx, header, None)?;

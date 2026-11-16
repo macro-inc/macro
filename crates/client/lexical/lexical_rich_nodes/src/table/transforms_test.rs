@@ -225,3 +225,33 @@ fn cross_cell_text_replacement_uses_node_based_removal() -> Result<()> {
     assert_eq!(editor.state().text_content(text).as_ref(), "aa");
     Ok(())
 }
+// Hostile document spans: browsers clamp colspan to 1000 and rowspan to 65534, so imported
+// JSON is clamped the same way before the integrity transform pads rows to the table width.
+#[test]
+fn hostile_imported_spans_are_clamped_before_padding() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig::default(),
+    )
+    .build()
+    .expect("registry");
+    let (table, _) = editor.update(|tx| {
+        let table = tx.import_node(serde_json::json!({"type":"table","version":1,"children":[]}).as_object().expect("table"))?;
+        let row = tx.import_node(serde_json::json!({"type":"tablerow","version":1,"children":[]}).as_object().expect("row"))?;
+        let cell = tx.import_node(serde_json::json!({"type":"tablecell","version":1,"children":[],"colSpan":4_000_000_000u32,"rowSpan":4_294_967_295u32}).as_object().expect("cell"))?;
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(cell, &[paragraph.key()])?;
+        tx.append(row, &[cell])?;
+        tx.append(table, &[row])?;
+        tx.append(NodeKey::ROOT, &[table])?;
+        Ok(tx.view().cast::<TableNode>(table).expect("table"))
+    })?;
+    let state = editor.state();
+    let view = state.view();
+    let row = view.children(table.key()).next().expect("row");
+    let cell = view.children(row).next().expect("cell");
+    let data = view.get::<TableCellNode>(cell).expect("cell");
+    assert_eq!((data.col_span, data.row_span), (1000, 65534));
+    assert_eq!(TableNode::column_count(view, table), 1000);
+    Ok(())
+}

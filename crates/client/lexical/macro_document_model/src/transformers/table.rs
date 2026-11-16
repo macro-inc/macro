@@ -66,10 +66,10 @@ fn attr_number(text: &str) -> Option<f64> {
 fn positive(text: &str) -> Option<f64> {
     attr_number(text).filter(|n| *n > 0.0)
 }
-fn span(text: &str) -> Option<u32> {
+fn span(text: &str, cap: u32) -> Option<u32> {
     attr_number(text)
         .filter(|n| *n >= 2.0 && n.fract() == 0.0 && *n <= u32::MAX as f64)
-        .map(|n| n as u32)
+        .map(|n| (n as u32).min(cap))
 }
 fn matcher(tag: &str) -> Result<RegexMatcher> {
     Ok(RegexMatcher::new(
@@ -97,8 +97,14 @@ pub(super) fn import_internal(
         for cell_match in matcher("m-table-cell")?.find_all(row_match.get(2).unwrap_or("")) {
             let attrs = attrs(cell_match.get(1).unwrap_or(""))?;
             let data = TableCellNode {
-                col_span: attrs.get("colspan").and_then(|s| span(s)).unwrap_or(1),
-                row_span: attrs.get("rowspan").and_then(|s| span(s)).unwrap_or(1),
+                col_span: attrs
+                    .get("colspan")
+                    .and_then(|s| span(s, MAX_COL_SPAN))
+                    .unwrap_or(1),
+                row_span: attrs
+                    .get("rowspan")
+                    .and_then(|s| span(s, MAX_ROW_SPAN))
+                    .unwrap_or(1),
                 header_state: match attrs.get("header").map(String::as_str) {
                     Some("row") => TableCellHeaderState::ROW,
                     Some("col") => TableCellHeaderState::COLUMN,
