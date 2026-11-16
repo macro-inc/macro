@@ -148,6 +148,36 @@ tools — hexagonal, heavily feature-gated.
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
+- An owned All Mail page filtered to one positive OR-tree of addresses (Sales
+  Email and a CRM record's emails under Me, a sender or recipient search, Soup
+  hydration by id with an address template) is read in page order by `OwnedRead`
+  (`dynamic/query/owned_scope.rs`): a capped probe counts the address
+  superset, then either the sorted superset or each inbox's newest threads
+  stream into the preview pick until LIMIT. A page that the inbox stream's
+  first window (10 threads per row, at most 1,000) leaves short goes on below
+  the last walked thread in rounds: the next, four times larger window (at
+  most 16,000) while the last window found rows fast enough to fill the page
+  in it, else (and always after a window without rows) first a probe capped
+  by the walk the page still needs at that rate (`round_cap`, at most
+  800,000 rows) and the superset below once it fits. Judge by the last
+  window, not the page: a page that found most of its rows early would walk
+  on far below the last of them. Keep every statement
+  capped: a walked thread the addresses miss costs a read of each of its
+  messages, so a cold window of addresses gone quiet costs several times
+  their superset.
+  A filter with any other top-level message term (a subject, an address
+  under `NOT`) goes to the general builder: the pick could drop most of the
+  window and the read would end up slower. A domain or partial address lists
+  a thread only through the queried inboxes' own contacts, as
+  `matching_threads` requires, while the preview pick keeps its match on any
+  contact (`ContactScope`). Keep the `OFFSET 0`
+  fence and the stream's `ORDER BY`, or the planner joins the whole stream to
+  its facts. The read runs in one repeatable-read, read-only transaction (a
+  page's rounds see one snapshot, so their rows concatenate) and, like the
+  general builder's owned requests, has no `statement_timeout`.
+  `test/owned_address_read.rs` compares every tuning's pages with the general
+  builder; extend it when the read covers a new filter. A repeated inbox id
+  reads as one in every builder (`distinct_links`).
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -208,7 +238,10 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT. `ALLOWED` restates `crm_email_thread_allowed`
+  whole stream before the LIMIT, and keep the superset stream's lookup by id
+  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
+  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change

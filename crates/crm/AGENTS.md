@@ -70,6 +70,8 @@ tools/HTTP/GraphQL surfaces over them.
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
   `nix develop --command just prepare_db` from the repository root.
+- For member-access changes, also run `cargo test -p crm --all-features member_access`;
+  the HTTP, search and tool revocation test requires the `search` feature.
 - After tool input or description changes, regenerate frontend tool types and
   public MCP reference pages using the
   [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
@@ -79,9 +81,18 @@ tools/HTTP/GraphQL surfaces over them.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
-  column. Don't pass one to `referencing_rows`: its SQL reads primary cells as
-  reference arrays. Don't add `ON DELETE` actions touching the pipeline row: they
-  wait on the row lock the write guard holds, and the request hangs.
+  column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
+  actions touching the pipeline row: they wait on the row lock the write guard
+  holds, and the request hangs.
+- The Pipelines card (`entries`) starts from the records: `referencing_rows`
+  reaches primary cells through `idx_ep_database_row_references_gin` (keep its
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
+  covers every pipeline while `storage_tables_rows` reads their columns and
+  cells. Never start it from the viewer's pipelines or lock them one at a time:
+  that cost grew with every pipeline the viewer can see.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
@@ -146,7 +157,9 @@ tools/HTTP/GraphQL surfaces over them.
   Team preference writes remain disabled by the rollout gate until old removal
   writers have drained; that gate never weakens these read checks.
   `/crm/member-access` reads authority even for a denied viewer; storage's response
-  header lets an open client retire stale snapshots.
+  opt-in response hint lets an open client retire stale snapshots. Only that
+  hint has a three-second per-instance cache; receipts and the authority endpoint
+  stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
   Client retirement is shared by the browser/native cache owners in
   `soup_filter_cache_adapter::permissions`; preserve authored queue state while
   removing copied response content, including derived mail and property records.
@@ -177,6 +190,16 @@ tools/HTTP/GraphQL surfaces over them.
   visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
+
+- `POST /crm/previews` titles up to 100 companies and 100 contacts in one
+  read for web chips (`src/outbound/companies_repo/previews.rs`). It must
+  answer each record as `GET /crm/companies/{id}` and `GET /crm/contacts/{id}`
+  do (current membership and effective CRM access; members see no hidden company, hidden contact, or
+  contact under a hidden company; the name and first domain the read returns,
+  domains ordered by `created_at`, then id), and leave out any record the
+  reads refuse (401, for a missing record too). Change both together;
+  `companies_repo/test/previews.rs` compares them for every role and caller,
+  including revocation and regrant on the same session and contact-page route.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public

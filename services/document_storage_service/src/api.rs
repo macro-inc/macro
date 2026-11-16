@@ -72,6 +72,7 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                 .layer(
                     macro_cors::cors_layer_with_headers(vec![
                         axum::http::HeaderName::from_static("x-macro-passwords"),
+                        axum::http::HeaderName::from_static(middleware::crm_access::REQUEST_HEADER),
                         axum::http::HeaderName::from_static(
                             complete_graph::MAIL_CACHE_PROFILE_HEADER,
                         ),
@@ -461,7 +462,10 @@ fn api_router(state: ApiContext) -> Router {
             passwords::inbound::router::router(state.passwords_state.clone()),
         )
         .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
+            (
+                state.clone(),
+                middleware::crm_access::SignalCache::default(),
+            ),
             middleware::crm_access::handler,
         ))
         .with_state(state);

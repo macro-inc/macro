@@ -49,8 +49,9 @@ const variablesKey = (variables: unknown) => JSON.stringify(variables ?? {});
 
 /**
  * A urql client for an attention feed: queries stay pending until answered,
- * subscriptions are driven by the test, and mutations answer from
- * `mutationData` keyed by operation name. Its `host` stands in for the
+ * subscriptions are driven by the test, and mutations and one-shot reads
+ * (`client.query`) answer from `mutationData` keyed by operation name; a
+ * function there is called with the variables. Its `host` stands in for the
  * normalized cache: reads answer with each page's latest data, and a write
  * re-emits the page to its query the way a cache reread does.
  */
@@ -60,6 +61,7 @@ export function createFakeAttentionFeedClient(
   const queries: FakeQuery[] = [];
   const subscriptions: FakeSubscription[] = [];
   const mutations: FakeMutation[] = [];
+  const reads: FakeMutation[] = [];
   const writes: FakeCacheWrite[] = [];
   const cached = new Map<string, unknown>();
 
@@ -106,17 +108,27 @@ export function createFakeAttentionFeedClient(
     return subject.source;
   };
 
+  const answer = async (name: string, variables: Record<string, unknown>) => {
+    const data = mutationData[name];
+    return {
+      data: markSourceAuthority(
+        await (typeof data === 'function' ? data(variables) : data),
+        TEST_AUTHORITY_GENERATION
+      ),
+    };
+  };
+
   const mutation = (query: unknown, variables: Record<string, unknown>) => {
     const name = operationName(query);
     mutations.push({ name, variables });
-    return {
-      toPromise: async () => ({
-        data: markSourceAuthority(
-          await mutationData[name],
-          TEST_AUTHORITY_GENERATION
-        ),
-      }),
-    };
+    return { toPromise: () => answer(name, variables) };
+  };
+
+  // A one-shot read, apart from the paged queries a test answers by hand.
+  const query = (document: unknown, variables: Record<string, unknown>) => {
+    const name = operationName(document);
+    reads.push({ name, variables });
+    return { toPromise: () => answer(name, variables) };
   };
 
   const host = {
@@ -144,6 +156,11 @@ export function createFakeAttentionFeedClient(
     },
   } as unknown as Pick<CacheHost, 'readQuery' | 'writeQuery'>;
 
-  const client = { executeQuery, subscription, mutation } as unknown as Client;
-  return { client, host, queries, subscriptions, mutations, writes };
+  const client = {
+    executeQuery,
+    subscription,
+    mutation,
+    query,
+  } as unknown as Client;
+  return { client, host, queries, subscriptions, mutations, reads, writes };
 }

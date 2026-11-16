@@ -27,7 +27,7 @@ both membership rows and rejects denying an admin/owner or self-restoration by
 a denied member. Changing this flag never changes mailbox consent or exclusions.
 A denied member can still manage their contribution consent.
 
-Fresh primary-backed checks protect records, lists, CRM email/activity scope,
+Fresh primary-backed checks protect records, lists, batched record previews, CRM email/activity scope,
 search, references, discussion access, and the CRM-derived grant to other
 mailboxes' threads. Normal mailbox ownership and independent sharing grants
 remain valid. A team-shared pipeline no longer grants access; an individual or
@@ -36,19 +36,44 @@ and opaque company/contact references. CRM names, domains, email addresses, and
 record details resolve only with separate record access. Text copied into a
 pipeline cell remains pipeline content and may itself identify a record.
 
-`GET /crm/member-access` and the storage response header
-`x-macro-crm-access` expose current authority to clients. The server rechecks
-membership on each request. An optional header lookup failure omits the proof and
-leaves unrelated handlers available; protected operations still fail closed.
-The client checks fresh authority before protected local reads and observes
-storage response proofs before publishing results. A changed permission retires
-normalized records, derived search/projection rows, protected properties,
-persisted query lists, and mounted observer snapshots. Browser and native owners
-serialize this work behind a durable closed marker. Late responses, optimistic
-snapshots, and subscription frames keep their original generation and cannot
-restore retired content. Legacy database-row snapshots and unowned property snapshots have no reliable
-access provenance, so they are also quarantined and unavailable offline until a
-fresh authorized read restores them. Independently accessible mail and pipelines reload
+`GET /crm/member-access` reads current authority without caching. Storage adds
+`x-macro-crm-access` only when a client requests the retirement signal with
+`x-macro-crm-access-signal: 1`. Requests without that opt-in perform no signal
+authentication or CRM lookup. The hint uses a per-instance, 10,000-user LRU with
+a non-sliding three-second lifetime from lookup start; concurrent requests for
+the same resident user share a lookup. Failures and cancellations are memoized
+too. A new user gets no hint when admitting it would evict an active lookup;
+completed-entry eviction can cause an earlier cache miss. The primary
+lookup runs alongside the handler, with a 200 ms lookup-future budget and a 250 ms total
+signal budget including waits, after authentication extraction. Failure, timeout, or expiration before the
+handler finishes omits the header; clients treat a missing hint as unknown.
+A changed hint triggers a fresh authority read before the client changes its
+cache policy; a memoized hint cannot restore access after a newer denied proof.
+The timeout bounds waiting for the Rust future, not PostgreSQL execution: SQLx
+connection recovery can continue after cancellation. The unchanged query remains
+a unique-key membership lookup; this adds no database statement timeout.
+
+This relaxes only the cache-retirement signal, never server authorization. A
+revocation just after a cache fill can leave an allowed hint for less than three
+seconds. The first opted-in request after expiry obtains a fresh hint or no
+hint within the signal budget; receiving it also takes the authentication time, the handler's remaining
+time, network delivery, and client retirement work. An idle or offline client
+has no finite retirement deadline. Fresh authority reads and protected requests
+still enforce revocation immediately.
+
+The client opts into the hint on authenticated storage requests, except the fresh
+authority endpoint itself. A changed, missing, or invalid hint triggers a fresh
+authority read; it never changes the policy directly. The response keeps its
+pre-request generation even when that fresh read changes authority, so a late
+response cannot be relabeled and admitted after retirement. Protected local reads
+also require fresh authority. A changed permission retires normalized records,
+derived search/projection rows, protected properties, persisted query lists, and
+mounted observer snapshots. Browser and native owners serialize this work behind
+a durable closed marker. Late responses, optimistic snapshots, and subscription
+frames keep their original generation and cannot restore retired content. Legacy
+database-row snapshots and unowned property snapshots have no reliable access
+provenance, so they are also quarantined and unavailable offline until a fresh
+authorized read restores them. Independently accessible mail and pipelines reload
 through current server grants. Unrelated document/calendar data, authored draft
 content, queued command variables, UUIDs, leases, and identity bindings survive.
 

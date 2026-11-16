@@ -1,7 +1,7 @@
-/** Capture request guards before dispatch, including asynchronous owner reads. */
+/** Capture guards and annotate a dispatch-owned init before sending the request. */
 export type ResponseObserver = (
   input: RequestInfo | URL,
-  init?: RequestInit
+  init: RequestInit
 ) =>
   | ((response: Response) => Response | Promise<Response>)
   | undefined
@@ -13,7 +13,7 @@ export function registerResponseObserver(observer: ResponseObserver) {
 }
 export async function prepareResponseObservers(
   input: RequestInfo | URL,
-  init?: RequestInit
+  init: RequestInit = {}
 ) {
   const guards = await Promise.all(
     [...observers].map((observer) => observer(input, init))

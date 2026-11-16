@@ -1565,6 +1565,17 @@ describe('GraphQL Soup browser cache session gate', () => {
     );
   });
 
+  it('does not hand out a host that is already unusable', async () => {
+    const soup = await import('./graphql-soup');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
+  });
+
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');

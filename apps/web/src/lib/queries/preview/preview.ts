@@ -9,6 +9,7 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { ThrownResultError } from '@core/util/result';
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
@@ -132,7 +133,12 @@ export async function getItemPreview(
     }
     const fallback = await fetchRestPreviewBatch([item]);
     if (stale()) return noAccessPreview(item);
-    return defaultNameTransform(fallback.get(item.id) ?? noAccessPreview(item));
+    // A failed request throws, as the dataloader's read below does.
+    const errors = fallback.failed.get(item.id);
+    if (errors) throw new ThrownResultError(errors);
+    return defaultNameTransform(
+      fallback.previews.get(item.id) ?? noAccessPreview(item)
+    );
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));

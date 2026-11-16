@@ -149,7 +149,7 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
         .expect("start")
         .expect("on");
     let run_id = recorder.run_id().to_owned();
-    recorder.step_started("Running migrations");
+    recorder.step_started("Running migrations", None, None);
     recorder.record(
         Event::new("step")
             .with("step", "Running migrations")
@@ -235,14 +235,30 @@ fn killed_child() {
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("on");
-    recorder.step_started("Starting infra (docker compose up -d --wait)");
+    recorder.step_started(
+        "Starting infra (docker compose up -d --wait)",
+        Some("step/1"),
+        None,
+    );
     recorder.record(
         Event::new("step")
             .with("step", "Starting infra (docker compose up -d --wait)")
             .with("seconds", 41.0)
-            .with("outcome", "success"),
+            .with("outcome", "success")
+            .lasting("Starting infra", Duration::from_secs(41))
+            .span("step/1"),
     );
-    recorder.step_started("Building service binaries");
+    recorder.step_started("Rebuilding & reloading services", Some("step/2"), None);
+    recorder.step_started("Building service binaries", Some("step/3"), Some("step/2"));
+    recorder.record(
+        Event::new("step")
+            .with("step", "Building service binaries")
+            .with("seconds", 30.0)
+            .with("outcome", "success")
+            .lasting("Building service binaries", Duration::from_secs(30))
+            .span("step/3")
+            .under("step/2"),
+    );
     println!("RECORDED");
     // Block until killed: the parent reads the line above, then SIGKILLs us.
     let mut line = String::new();
@@ -288,20 +304,66 @@ fn a_killed_run_is_sent_by_the_next_one() {
                 || record.get("outcome") == Some(&json!("interrupted"))
         })
         .collect();
-    assert_eq!(killed.len(), 2);
+    let steps: Vec<(Value, Value)> = killed
+        .iter()
+        .map(|record| {
+            let field = |key: &str| record.get(key).cloned().unwrap_or(Value::Null);
+            (field("event"), field("step"))
+        })
+        .collect();
     assert_eq!(
-        killed[0]["step"],
-        json!("Starting infra (docker compose up -d --wait)")
+        steps,
+        vec![
+            (
+                json!("step"),
+                json!("Starting infra (docker compose up -d --wait)")
+            ),
+            (json!("step"), json!("Building service binaries")),
+            (json!("step"), json!("Rebuilding & reloading services")),
+            (json!("run"), Value::Null),
+        ]
     );
-    assert_eq!(killed[1]["event"], json!("run"));
-    assert_eq!(killed[1]["outcome"], json!("interrupted"));
-    assert_eq!(killed[1]["failed_step"], json!("Building service binaries"));
+    // The step it was in when killed closes as interrupted, and is the run's
+    // failed step.
+    assert_eq!(killed[2]["outcome"], json!("interrupted"));
+    assert_eq!(killed[3]["outcome"], json!("interrupted"));
+    assert_eq!(
+        killed[3]["failed_step"],
+        json!("Rebuilding & reloading services")
+    );
     assert!(
-        killed[1]["seconds"]
+        killed[3]["seconds"]
             .as_f64()
             .is_some_and(|seconds| seconds >= 0.0)
     );
-    assert_eq!(killed[0]["run_id"], killed[1]["run_id"]);
+    assert!(
+        killed
+            .iter()
+            .all(|record| record["run_id"] == killed[0]["run_id"])
+    );
+
+    // The step that finished inside it still has its parent span.
+    let spans: Vec<Value> = endpoint
+        .requests("/v1/traces")
+        .iter()
+        .flat_map(|request| {
+            gunzip(&request.body)["resourceSpans"][0]["scopeSpans"][0]["spans"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect();
+    let span = |name: &str| {
+        spans
+            .iter()
+            .find(|span| span["name"] == json!(name))
+            .cloned()
+            .unwrap_or_else(|| panic!("no span {name}"))
+    };
+    assert_eq!(
+        span("Building service binaries")["parentSpanId"],
+        span("Rebuilding & reloading services")["spanId"]
+    );
     assert!(buffered_files(&paths).is_empty());
 }
 
@@ -402,6 +464,45 @@ fn forwarding_runs_carry_the_readable_machine_name() {
     assert!(!forwarding.is_empty());
     for record in forwarding {
         assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+    }
+}
+
+/// A chosen `machine` names runs without forwarding; with neither, runs are
+/// grouped by the hashed host.
+#[test]
+fn every_run_names_its_machine() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = opt_in(dir.path(), &endpoint.server.uri());
+    let run = |paths: &Paths, common: BTreeMap<String, Value>| {
+        let recorder = Recorder::start(paths, SystemTime::now(), || common)
+            .expect("start")
+            .expect("on");
+        recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    };
+    let hashed = BTreeMap::from([("host".to_owned(), json!("9643b8d9287c"))]);
+
+    run(&paths, hashed.clone());
+    let plain = endpoint.log_records();
+    assert!(!plain.is_empty());
+    for record in &plain {
+        assert_eq!(fields(record).get("machine"), Some(&json!("9643b8d9287c")));
+    }
+
+    let settings = std::fs::read_to_string(&paths.config).expect("read");
+    std::fs::write(
+        &paths.config,
+        format!("{settings}machine = \"build-box\"\n"),
+    )
+    .expect("write");
+    paths.buffer_dir = dir.path().join("buffer-named");
+    run(&paths, hashed);
+    let records = endpoint.log_records();
+    let named = &records[plain.len()..];
+    assert!(!named.is_empty());
+    for record in named {
+        assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+        assert_eq!(fields(record).get("machine"), Some(&json!("build-box")));
     }
 }
 

@@ -19,6 +19,7 @@ import {
   platformFetch,
   webviewFetch,
 } from './platformFetch';
+import { registerResponseObserver } from './response-observers';
 
 beforeEach(() => {
   platform.native = true;
@@ -30,6 +31,28 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+it('sends observer annotations without changing the caller request options', async () => {
+  const headers = new Headers({ 'x-original': 'kept' });
+  const init = Object.freeze({ headers, method: 'POST' });
+  const sent = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'));
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver((_input, request) => {
+    const outgoing = new Headers(request.headers);
+    outgoing.set('x-retirement-signal', '1');
+    request.headers = outgoing;
+  });
+  try {
+    await platformFetch('https://gateway.example/storage', init);
+    const outgoing = new Headers(sent.mock.calls[0][1]?.headers);
+    expect(outgoing.get('x-original')).toBe('kept');
+    expect(outgoing.get('x-retirement-signal')).toBe('1');
+    expect(headers.has('x-retirement-signal')).toBe(false);
+    expect(sent.mock.calls[0][1]).not.toBe(init);
+  } finally {
+    stop();
+  }
+});
 
 it.each([
   'ipc://localhost/',

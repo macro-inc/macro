@@ -31,7 +31,7 @@ async function fetchProof(): Promise<string> {
   const result = await context.run(() =>
     dssFetch<{ team_id: string | null; allowed: boolean }>(
       '/crm/member-access',
-      { signal: AbortSignal.timeout(15_000) }
+      { cache: 'no-store', signal: AbortSignal.timeout(15_000) }
     )
   );
   if (result.isErr() || typeof result.value.allowed !== 'boolean')
@@ -140,6 +140,13 @@ function install() {
     if (!storage && !matches(SERVER_HOSTS['email-service']) && !agentActivity)
       return;
     if (storage && url.pathname.endsWith('/crm/member-access')) return;
+    if (storage) {
+      const headers = new Headers(
+        init.headers ?? (input instanceof Request ? input.headers : undefined)
+      );
+      headers.set('x-macro-crm-access-signal', '1');
+      init.headers = headers;
+    }
     const queuedMutation = isQueuedSettlementRequest(init);
     const captured = await crmAccessAuthority.prepare();
     return async (response) => {
@@ -147,12 +154,20 @@ function install() {
       let rejected: unknown;
       try {
         const policy = response.headers.get('x-macro-crm-access');
-        if (storage && isCrmPolicy(policy))
-          admitted = await crmAccessAuthority.accept(captured, policy);
-        else {
+        const current = await captured.owner.current();
+        if (storage && isCrmPolicy(policy) && policy === current.policy) {
+          try {
+            await crmAccessAuthority.assertCurrent(captured);
+          } catch {
+            // Recover from a prior unavailable proof without trusting the hint.
+            await crmAccessAuthority.refresh();
+          }
+        } else {
           await crmAccessAuthority.refresh();
-          await crmAccessAuthority.assertCurrent(captured);
         }
+        // Hints can be memoized or read after the handler. Only a fresh proof
+        // changes authority; the response always retains its original generation.
+        await crmAccessAuthority.assertCurrent(captured);
       } catch (error) {
         // Successful queued mutations still need their canonical identity to
         // settle. Their old token cannot publish response content or optimism.

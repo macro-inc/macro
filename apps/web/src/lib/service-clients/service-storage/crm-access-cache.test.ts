@@ -39,6 +39,27 @@ vi.mock('@core/constant/servers', () => ({
 import { crmAccessAuthority } from './crm-access-authority';
 import { installCrmCacheHost } from './crm-access-cache';
 
+const TEAM = '00000000-0000-4000-8000-000000000001';
+const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
+const responseWithHint = (allowed: boolean) =>
+  Response.json(
+    { data: { id: 'canonical', name: 'copied content' } },
+    {
+      headers: {
+        'x-macro-crm-access': `${TEAM}:${allowed ? 'allowed' : 'denied'}`,
+      },
+    }
+  );
+
+async function verifiedViewer(allowed = true) {
+  const current = owner('viewer');
+  crmAccessAuthority.setSession('viewer');
+  mocks.proof.mockResolvedValue(proof(allowed));
+  await crmAccessAuthority.refresh();
+  mocks.proof.mockClear();
+  return current;
+}
+
 function owner(account: string) {
   let state: CacheAuthority = {
     identity: 'profile',
@@ -95,6 +116,158 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it('opts in only for authenticated storage requests outside the proof endpoint', async () => {
+    owner('viewer');
+    crmAccessAuthority.setSession('viewer');
+    const original = new Headers({ authorization: 'Bearer placeholder' });
+    const init: RequestInit = { headers: original };
+    await prepareResponseObservers('http://localhost/dss/graphql', init);
+    expect(new Headers(init.headers).get('x-macro-crm-access-signal')).toBe(
+      '1'
+    );
+    expect(new Headers(init.headers).get('authorization')).toBe(
+      'Bearer placeholder'
+    );
+    expect(original.has('x-macro-crm-access-signal')).toBe(false);
+
+    for (const url of [
+      'http://localhost/dss/crm/member-access',
+      'http://localhost/email/threads',
+      'http://localhost/agent/agent-sessions/session/activity',
+      'http://localhost/dss-other/graphql',
+      'http://other.example/dss/graphql',
+    ]) {
+      const request = {};
+      await prepareResponseObservers(url, request);
+      expect(request).toEqual({});
+    }
+    crmAccessAuthority.setSession(undefined);
+    const loggedOut = {};
+    await prepareResponseObservers('http://localhost/dss/graphql', loggedOut);
+    expect(loggedOut).toEqual({});
+  });
+
+  it('preserves Request headers and lets explicit init headers override them', async () => {
+    owner('viewer');
+    crmAccessAuthority.setSession('viewer');
+    const input = new Request('http://localhost/dss/graphql', {
+      headers: { 'x-source': 'request' },
+    });
+    const inherited: RequestInit = {};
+    await prepareResponseObservers(input, inherited);
+    expect(new Headers(inherited.headers).get('x-source')).toBe('request');
+    expect(
+      new Headers(inherited.headers).get('x-macro-crm-access-signal')
+    ).toBe('1');
+    const override: RequestInit = { headers: { 'x-source': 'init' } };
+    await prepareResponseObservers(input, override);
+    expect(new Headers(override.headers).get('x-source')).toBe('init');
+    expect(input.headers.has('x-macro-crm-access-signal')).toBe(false);
+  });
+
+  it('admits an unchanged hint without another authority lookup', async () => {
+    const current = await verifiedViewer();
+    const generation = current.authority.snapshot()?.generation;
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/graphql'
+    );
+    const response = await observe(responseWithHint(true));
+    expect(await response.json()).toHaveProperty('data.id', 'canonical');
+    expect(responseAuthorityGeneration(response)).toBe(generation);
+    expect(mocks.proof).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'invalid'])(
+    'refreshes an unavailable hint (%s) with network-only proof',
+    async (hint) => {
+      await verifiedViewer();
+      const observe = await prepareResponseObservers(
+        'http://localhost/dss/graphql'
+      );
+      const response = Response.json(
+        {},
+        {
+          headers: hint ? { 'x-macro-crm-access': hint } : undefined,
+        }
+      );
+      await observe(response);
+      expect(mocks.proof).toHaveBeenCalledExactlyOnceWith(
+        '/crm/member-access',
+        expect.objectContaining({
+          cache: 'no-store',
+          signal: expect.any(AbortSignal),
+        })
+      );
+    }
+  );
+
+  it('does not restore access from an older allowed hint after a fresh denial', async () => {
+    const current = await verifiedViewer(false);
+    const generation = current.authority.snapshot()?.generation;
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/graphql'
+    );
+    const response = await observe(responseWithHint(true));
+    expect(mocks.proof).toHaveBeenCalledOnce();
+    expect(crmAccessAuthority.allowed()).toBe(false);
+    expect(current.authority.snapshot()?.policy).toBe(`${TEAM}:denied`);
+    expect(responseAuthorityGeneration(response)).toBe(generation);
+  });
+
+  it.each([true, false])(
+    'rejects an in-flight response when fresh access changes from %s',
+    async (allowed) => {
+      const current = await verifiedViewer(allowed);
+      const generation = current.authority.snapshot()?.generation;
+      const observe = await prepareResponseObservers(
+        'http://localhost/dss/graphql'
+      );
+      mocks.proof.mockResolvedValue(proof(!allowed));
+      await expect(observe(responseWithHint(!allowed))).rejects.toBeInstanceOf(
+        StaleCacheAuthorityError
+      );
+      expect(current.authority.snapshot()?.generation).not.toBe(generation);
+      expect(crmAccessAuthority.allowed()).toBe(!allowed);
+
+      const retry = await prepareResponseObservers(
+        'http://localhost/dss/graphql'
+      );
+      const response = await retry(responseWithHint(!allowed));
+      expect(await response.json()).toHaveProperty('data.id', 'canonical');
+      expect(responseAuthorityGeneration(response)).toBe(
+        current.authority.snapshot()?.generation
+      );
+    }
+  );
+
+  it('rejects a delayed allowed response that arrives after another request verified denial', async () => {
+    await verifiedViewer();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/graphql'
+    );
+    mocks.proof.mockResolvedValue(proof(false));
+    await crmAccessAuthority.refresh();
+    await expect(observe(responseWithHint(true))).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    expect(crmAccessAuthority.allowed()).toBe(false);
+  });
+
+  it('preserves queued identity settlement while rejecting content across a changed hint', async () => {
+    await verifiedViewer();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/graphql',
+      queuedSettlementRequest({ method: 'POST' })
+    );
+    mocks.proof.mockResolvedValue(proof(false));
+    const response = await observe(responseWithHint(false));
+    expect(await response.json()).toHaveProperty('data.id', 'canonical');
+    expect(responseAuthorityGeneration(response)).toBeUndefined();
+    await expect(assertResponseAuthority(response)).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+  });
+
   it('does not let a tab with restored old account state reset the current account cache', async () => {
     const current = owner('current-account');
     crmAccessAuthority.setSession('stale-account');

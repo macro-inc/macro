@@ -94,6 +94,7 @@ export function createPlatformFetch(
 
 // Native startup installs the transport explicitly; all callers share it.
 export const platformFetch: typeof fetch = async (input, init) => {
-  const observe = await prepareResponseObservers(input, init);
-  return observe(await globalThis.fetch(input, init));
+  const request = { ...init };
+  const observe = await prepareResponseObservers(input, request);
+  return observe(await globalThis.fetch(input, request));
 };

@@ -98,13 +98,19 @@ impl CompaniesRepositoryImpl {
             -- Contacts under a visible company.
             SELECT NULL, ct.id, NULL, address.email
             FROM crm_companies co
-            JOIN crm_contacts ct
-                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden
+            -- Fence contacts by company before applying team and visibility filters.
+            CROSS JOIN LATERAL (
+                SELECT ct.id, ct.team_id, ct.hidden
+                FROM crm_contacts ct
+                WHERE ct.company_id = co.id
+                OFFSET 0
+            ) ct
             LEFT JOIN LATERAL (
                 SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
             ) address ON TRUE
             WHERE NOT co.hidden
               AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+              AND ct.team_id = co.team_id AND NOT ct.hidden
             UNION ALL
             -- Contacts without a company.
             SELECT NULL, ct.id, NULL, address.email

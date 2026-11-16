@@ -16,10 +16,12 @@ mod domain_directory;
 mod email_privacy;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
+mod get_contact_detail_for_team;
 mod get_contact_for_team;
 mod has_depopulate_target;
 mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
+mod list_company_contacts_page;
 mod list_contacts_for_company;
 mod list_contacts_for_soup;
 #[cfg(all(feature = "axum", feature = "search", feature = "ai_tools"))]
@@ -27,6 +29,8 @@ mod member_access;
 mod personal_emails;
 mod populate_contact;
 mod population_locks;
+#[cfg(feature = "inbound")]
+mod previews;
 mod resolve_association;
 mod search_contacts_for_team;
 mod set_company_hidden;

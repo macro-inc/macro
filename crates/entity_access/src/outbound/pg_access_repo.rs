@@ -408,6 +408,7 @@ impl AccessRepository for PgAccessRepository {
         let sources =
             queries::pipeline_access::user_sources(&self.pool, user_id.map(|user| user.as_ref()))
                 .await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
     }
 
@@ -418,7 +419,23 @@ impl AccessRepository for PgAccessRepository {
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         let sources =
             queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(pipeline_count = span_count(ids.len()), source_id_count = tracing::field::Empty))]
+    async fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let sources =
+            queries::pipeline_access::user_sources(&self.pool, Some(user_id.as_ref())).await?;
+        record_source_ids(sources.0.len());
+        Ok(queries::pipeline_access::get_pipelines_access(&self.pool, ids, &sources).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]

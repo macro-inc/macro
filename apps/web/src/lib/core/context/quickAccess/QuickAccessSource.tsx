@@ -414,8 +414,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // The host getter reads PostHog imperatively; retry when the remote flag
     // arrives after mount, while leaving cache lifetime decisions to the getter.
     graphqlFlag();
-    const graphqlCacheHost = getGraphqlSoupCacheHost();
-    return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
+    return getGraphqlSoupCacheHost();
   });
   const localDrafts = createLocalDraftSource(() => graphqlFlag().enabled);
   const draftItems = createMemo(() =>
