@@ -215,6 +215,12 @@ async fn remove_user_from_team_open_seat_release_error_stays_generic() {
 }
 
 #[tokio::test]
+async fn crm_access_rollout_refusal_is_service_unavailable() {
+    let (status, _, _) = response_parts(TeamError::CrmAccessChangesUnavailable).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
 async fn remove_team_owner_validation_response_is_preserved() {
     let (status, body_text, _) = response_parts(RemoveUserFromTeamError::CannotRemoveOwner).await;
 

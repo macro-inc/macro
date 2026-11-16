@@ -3,7 +3,10 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
-import { isMutedItem } from '@entity/utils/notification';
+import {
+  isMutedItem,
+  notificationIsRead as railNotificationIsRead,
+} from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
@@ -244,6 +247,38 @@ export async function markNotificationsForEntityAsRead(
 
   await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
+  );
+}
+
+/**
+ * Marks every notification of the given channels as read. GraphQL mode writes
+ * by entity, so it never loads the notification feed to find them.
+ */
+export async function markChannelsAsRead(
+  notificationSource: NotificationSource,
+  channelIds: Iterable<string>,
+  isCurrent: () => boolean = () => true
+): Promise<void> {
+  const members = new Set(channelIds);
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    await updateNotificationsForEntities({
+      entities: [...members].map((id) => ({ type: 'channel', id })),
+      operation: 'MARK_SEEN',
+    });
+    return;
+  }
+
+  await ensureNotificationSourceLoaded(notificationSource);
+  if (!isCurrent()) return;
+  await notificationSource.bulkMarkAsRead(
+    notificationSource
+      .notifications()
+      .filter(
+        (notification) =>
+          notification.entity_type === 'channel' &&
+          members.has(notification.entity_id) &&
+          !railNotificationIsRead(notification)
+      )
   );
 }
 

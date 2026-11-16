@@ -775,3 +775,196 @@ async fn a_redial_restores_a_session_its_runtime_saw_active_recently() {
     assert_eq!((report.eager, report.lazy), (1, 1), "{report:?}");
     assert_eq!(loaded(&runtime.agent()), [worked_locally.to_string()]);
 }
+
+#[tokio::test]
+async fn a_dormant_listed_session_costs_the_dial_nothing() {
+    // The dormant session exists nowhere and no runtime is connected: any
+    // per-session lookup would fail it or abandon it instead of counting it.
+    let dormant = AgentSessionId::new();
+    let service = harness_sharing_repo_with_bindings(
+        InMemoryAgentSessionRepo::new(),
+        MirrorBindings {
+            dormant: vec![dormant],
+            ..MirrorBindings::default()
+        },
+    );
+
+    let report = service
+        .reattach_live_sessions(
+            harness_id::HarnessId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+            vec![ListedSession {
+                id: SessionId::new(dormant.to_string()),
+                updated_at: None,
+            }],
+            tracing::Span::none(),
+        )
+        .await;
+
+    assert_eq!(
+        report,
+        super::super::reattach::ReattachReport {
+            dormant: 1,
+            ..Default::default()
+        }
+    );
+}
+
+/// Answer every `session/load` the agent receives until `total` are
+/// answered.
+async fn answer_loads(agent: &FakeAgent, total: usize) {
+    let mut answered = Vec::new();
+    while answered.len() < total {
+        agent
+            .wait_for_method_requests("session/load", answered.len() + 1)
+            .await;
+        for frame in agent.received_frames() {
+            if let RawJsonRpcMessage::Request(request) = frame
+                && request.method.as_ref() == "session/load"
+                && !answered.contains(&request.id)
+            {
+                answered.push(request.id.clone());
+                agent.sends_reply(request.id, LoadSessionResponse::new());
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_redial_restores_only_the_most_recent_sessions_up_to_its_cap() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let cap = super::super::reattach::MAX_EAGER_PER_DIAL;
+    let total = cap + 10;
+    // All active in the last hour, the first most recently.
+    let mut sessions = Vec::new();
+    for minutes in 0..total {
+        let session = native_session(&service, &repo, bot_id).await;
+        repo.set_modified_at(
+            session,
+            chrono::Utc::now() - chrono::Duration::seconds(30 * i64::try_from(minutes).unwrap()),
+        );
+        sessions.push(session);
+    }
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    let drive = async {
+        initializes_loading(&runtime).await;
+        answer_loads(&runtime.agent(), cap).await;
+    };
+    let (report, ()) = tokio::join!(
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            sessions
+                .iter()
+                .map(|session| ListedSession {
+                    id: SessionId::new(session.to_string()),
+                    updated_at: None,
+                })
+                .collect(),
+            tracing::Span::none(),
+        ),
+        drive
+    );
+
+    assert_eq!(
+        (report.eager, report.lazy, report.capped, report.required),
+        (cap, 10, 10, 0),
+        "{report:?}"
+    );
+    let agent = runtime.agent();
+    let mut restored = loaded(&agent);
+    restored.sort();
+    let mut most_recent: Vec<String> = sessions[..cap].iter().map(ToString::to_string).collect();
+    most_recent.sort();
+    assert_eq!(
+        restored, most_recent,
+        "the most recent sessions are restored"
+    );
+
+    // The oldest one, left lazy by the cap, binds on its next prompt.
+    let oldest = sessions[total - 1];
+    let requests = agent.received_requests().len();
+    let drive = async {
+        agent.wait_for_requests(requests + 1).await;
+        agent.loads_session(LoadSessionResponse::new());
+        agent.wait_for_requests(requests + 2).await;
+    };
+    let (result, ()) = tokio::join!(prompt(&service, oldest, "pick this back up"), drive);
+    result.expect("the prompt restores the capped session");
+    assert_eq!(
+        loaded(&agent).last(),
+        Some(&oldest.to_string()),
+        "the prompt loads the capped session"
+    );
+    assert_eq!(
+        prompts(&agent),
+        [vec![ContentBlock::from("pick this back up")]]
+    );
+}
+
+#[tokio::test]
+async fn a_redial_restores_every_session_with_waiting_work_past_its_cap() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let cap = super::super::reattach::MAX_EAGER_PER_DIAL;
+    let days_ago = chrono::Utc::now() - chrono::Duration::days(2);
+    // Untouched for days, but each still holds a queued prompt.
+    let mut waiting = Vec::new();
+    for _ in 0..cap + 2 {
+        let session = native_session(&service, &repo, bot_id).await;
+        repo.set_modified_at(session, days_ago);
+        let entry = crate::domain::queue::QueuedEntry {
+            action_id: AgentActionId::mint(),
+            action: AgentAction::prompt("and now the docs"),
+            actor: Some(sender()),
+            announce: None,
+            context: None,
+            client: None,
+            announced: None,
+            created_at: chrono::Utc::now(),
+        };
+        repo.replace_queued_actions(session, &[entry.to_stored().unwrap()])
+            .await
+            .unwrap();
+        waiting.push(session);
+    }
+    // Active a minute ago, but the waiting work already fills the cap.
+    let recent = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    let drive = async {
+        initializes_loading(&runtime).await;
+        answer_loads(&runtime.agent(), waiting.len()).await;
+    };
+    let (report, ()) = tokio::join!(
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            waiting
+                .iter()
+                .chain([&recent])
+                .map(|session| ListedSession {
+                    id: SessionId::new(session.to_string()),
+                    updated_at: None,
+                })
+                .collect(),
+            tracing::Span::none(),
+        ),
+        drive
+    );
+
+    assert_eq!(
+        (report.eager, report.lazy, report.capped, report.required),
+        (cap + 2, 1, 1, cap + 2),
+        "{report:?}"
+    );
+    let mut loaded = loaded(&runtime.agent());
+    loaded.sort();
+    let mut expected: Vec<String> = waiting.iter().map(ToString::to_string).collect();
+    expected.sort();
+    assert_eq!(
+        loaded, expected,
+        "every session with waiting work is restored"
+    );
+}

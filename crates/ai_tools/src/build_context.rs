@@ -139,6 +139,9 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
 /// to the shared connector encryption key; hosts without it remain unwired.
 ///
+/// `TYPESAFE_API_KEY` enables the memory privacy judge; without it every memory
+/// save is refused.
+///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
 /// vars before environment defaults).

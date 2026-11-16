@@ -25,8 +25,8 @@ import { TasksControls } from './TasksControls';
 import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
-  /** Restores list focus when Escape leaves the search field. */
-  onSearchEscape?: () => void;
+  /** Moves the keyboard from the search field into the list. */
+  focusSearchResults?: () => void;
 };
 
 export function TaskViewBreadcrumbItem() {
@@ -111,7 +111,7 @@ export function TasksHeader(props: TasksHeaderProps) {
             label="Search tasks"
             value={state.search}
             onValueChange={(search) => setState('search', search)}
-            onEscape={props.onSearchEscape}
+            focusResults={props.focusSearchResults}
             registerFocus={(focus) => {
               focusSearch = focus;
             }}
