@@ -261,25 +261,55 @@ impl Transaction<'_> {
             if changed.is_collapsed()
                 && direction == EditDirection::Backward
                 && changed.anchor.offset() == 0
+                && self.collapse_at_start_from(changed.anchor.key(), slot)?
             {
-                let mut node = Some(changed.anchor.key());
-                while let Some(key) = node {
-                    if self.is_element(key) {
-                        if self.collapse_at_start(key, slot)? {
-                            return Ok(());
-                        }
-                        if self.is_root_or_shadow_root(key) {
-                            break;
-                        }
-                    }
-                    if self.prev_sibling(key).is_some() {
-                        break;
-                    }
-                    node = self.parent(key);
-                }
+                return Ok(());
             }
         }
-        self.remove_text_at(slot)
+        self.remove_text_at(slot)?;
+        // Upstream deleteCharacter: removing a backward range that leaves the caret in an
+        // empty first block of root lets that block collapse (an emptied heading becomes a
+        // paragraph).
+        let after = self.range_at(slot)?.clone();
+        if direction == EditDirection::Backward
+            && !range.is_collapsed()
+            && after.is_collapsed()
+            && let Point::Element {
+                key,
+                offset: ChildIndex(0),
+            } = after.anchor
+            && self.is_empty(key)
+            && self.parent(key) == Some(NodeKey::ROOT)
+            && self.prev_sibling(key).is_none()
+        {
+            self.collapse_at_start_from(key, slot)?;
+        }
+        Ok(())
+    }
+    /// Upstream `$collapseAtStart`: offer `collapse_at_start` to each element from `start`
+    /// up to the nearest root or shadow root, stopping at the first node with a previous
+    /// sibling.
+    fn collapse_at_start_from(
+        &mut self,
+        start: NodeKey,
+        slot: SelectionSlot,
+    ) -> Result<bool, Error> {
+        let mut node = Some(start);
+        while let Some(key) = node {
+            if self.is_element(key) {
+                if self.collapse_at_start(key, slot)? {
+                    return Ok(true);
+                }
+                if self.is_root_or_shadow_root(key) {
+                    break;
+                }
+            }
+            if self.prev_sibling(key).is_some() {
+                break;
+            }
+            node = self.parent(key);
+        }
+        Ok(false)
     }
     fn remove_segment_at(
         &mut self,

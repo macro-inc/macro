@@ -877,3 +877,28 @@ fn outdent_at_zero_does_not_create_history_boundary() -> crate::Result<()> {
     assert_eq!(commit.next.indent(paragraph), 0);
     Ok(())
 }
+
+// Upstream RangeSelection.deleteCharacter: a backward delete of a range that empties the
+// first block of root runs $collapseAtStart, so a fully selected heading becomes a paragraph.
+#[test]
+fn backspace_over_selected_first_heading_collapses_it_to_a_paragraph() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<crate::heading::HeadingNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let heading = tx.create(crate::heading::HeadingNode::default())?;
+    let title = tx.create_text("Title")?;
+    tx.append(heading, &[title.key()])?;
+    tx.append(NodeKey::ROOT, &[heading.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::text(title, Utf16Offset(0)),
+        Point::text(title, Utf16Offset(5)),
+    ))))?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    let first = tx.first_child(NodeKey::ROOT).expect("first block");
+    assert!(tx.view().is::<Paragraph>(first));
+    assert!(tx.is_empty(first));
+    assert_eq!(tx.children_size(NodeKey::ROOT), 1);
+    Ok(())
+}
