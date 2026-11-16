@@ -33,7 +33,7 @@ export function PptxHeader(props: PptxHeaderProps) {
       </SplitHeaderRight>
       <SplitHeaderRight>
         <div class="order-[999] flex items-center">
-          <HeaderActionGroup label="Presentation actions">
+          <HeaderActionGroup label={t('entityActions.presentationActions')}>
             <ChatWithAgentButton
               grouped
               label={t('entityActions.askMacro')}
