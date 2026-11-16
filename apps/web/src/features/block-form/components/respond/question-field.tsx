@@ -12,11 +12,11 @@ import {
   timeRangeFromInstants,
   timeRangeToInstants,
 } from '@app/features/database/core/cell-date-range';
+import { percentagePointsText } from '@app/features/database/core/column-inference';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import UploadSimple from '@icon/system/regular/upload-simple.svg';
 import X from '@icon/system/regular/x.svg';
-import { percentagePointsText } from '@app/features/database/core/column-inference';
 import { Button, Checkbox, cn, RadioGroup } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
