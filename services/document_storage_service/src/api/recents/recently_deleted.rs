@@ -2,7 +2,7 @@ use crate::api::context::AuthorizationService;
 use axum::extract::{Query, State};
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_db_client::recents::deleted::TrashPosition;
+use macro_db_client::recents::deleted::{MAX_TRASH_PAGE_SIZE, TrashPosition};
 use model::item::Item;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use models_pagination::{Base64Str, Cursor, CursorVal, CursorWithValAndFilter, DeletedAt};
@@ -10,7 +10,6 @@ use sqlx::PgPool;
 use utoipa::ToSchema;
 
 const DEFAULT_PAGE_SIZE: u16 = 100;
-const MAX_PAGE_SIZE: u16 = 500;
 
 #[derive(serde::Deserialize)]
 pub struct RecentlyDeletedParams {
@@ -57,7 +56,7 @@ pub async fn handler(
     let limit = params
         .limit
         .unwrap_or(DEFAULT_PAGE_SIZE)
-        .clamp(1, MAX_PAGE_SIZE);
+        .clamp(1, MAX_TRASH_PAGE_SIZE);
     let after = cursor.map(|cursor| TrashPosition {
         deleted_at: cursor.val.last_val,
         id: cursor.id,

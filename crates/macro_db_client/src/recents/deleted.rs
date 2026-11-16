@@ -9,6 +9,9 @@ use system_properties::{StatusOption, SystemPropertyKey};
 #[cfg(test)]
 mod test;
 
+/// The most items one trash page returns.
+pub const MAX_TRASH_PAGE_SIZE: u16 = 500;
+
 /// A point in the trash, newest first: pages continue after the item trashed
 /// at `deleted_at` with this `id`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,12 +32,13 @@ pub struct TrashPage {
 }
 
 /// Gets one page of the user's trashed documents, chats and folders, most
-/// recently trashed first, starting after `after`.
+/// recently trashed first, starting after `after`. `limit` is clamped to
+/// 1..=[`MAX_TRASH_PAGE_SIZE`].
 #[tracing::instrument(
     err,
     skip_all,
     fields(
-        limit = limit,
+        limit = tracing::field::Empty,
         has_cursor = after.is_some(),
         rows = tracing::field::Empty,
         has_more = tracing::field::Empty
@@ -46,6 +50,8 @@ pub async fn get_recently_deleted(
     after: Option<&TrashPosition>,
     limit: u16,
 ) -> anyhow::Result<TrashPage> {
+    let limit = limit.clamp(1, MAX_TRASH_PAGE_SIZE);
+    tracing::Span::current().record("limit", limit);
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
     let after_deleted_at = after.map(|position| position.deleted_at);
