@@ -16,8 +16,7 @@ use model::{
 };
 
 use crate::{
-    process::convert::{Conversion, convert_file},
-    utils::get_lok_filter_from_file_types,
+    disk::LOW_DISK_MESSAGE, process::convert::Conversion, utils::get_lok_filter_from_file_types,
 };
 
 use super::context::{ApiContext, AuthorizationService};
@@ -53,7 +52,7 @@ pub async fn handler(
         (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ErrorResponse {
-                message: "low disk space".into(),
+                message: LOW_DISK_MESSAGE.into(),
             }),
         )
             .into_response()
@@ -119,8 +118,10 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    let conversion = Conversion::new(&job_id, from_file_type, to_file_type, filter);
-    let output = convert_file(ctx.scratch.clone(), conversion, input)
+    let conversion = Conversion::new(from_file_type, to_file_type, filter);
+    let output = ctx
+        .converter
+        .convert(conversion, input)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "conversion failed");

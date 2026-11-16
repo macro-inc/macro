@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{disk::DiskGuard, process::convert, scratch::Scratch};
+use crate::{
+    disk::DiskGuard,
+    process::convert::{self, Converter},
+};
 
 /// How long the worker waits before checking a low disk again.
 const DISK_RECHECK_INTERVAL: Duration = Duration::from_secs(10);
@@ -31,7 +34,7 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     s3_client: s3_client::S3,
     lambda_client: lambda_client::Lambda,
-    scratch: Arc<Scratch>,
+    converter: Arc<Converter>,
     disk: DiskGuard,
 ) {
     loop {
@@ -39,7 +42,7 @@ pub async fn run_worker(
             let worker = worker.clone();
             let s3_client = s3_client.clone();
             let lambda_client = lambda_client.clone();
-            let scratch = scratch.clone();
+            let converter = converter.clone();
             let disk = disk.clone();
             async move {
                 tracing::info!("worker started");
@@ -56,14 +59,14 @@ pub async fn run_worker(
                                 let worker = worker.clone();
                                 let s3_client = s3_client.clone();
                                 let lambda_client = lambda_client.clone();
-                                let scratch = scratch.clone();
+                                let converter = converter.clone();
 
                                 tokio::spawn(async move {
                                     let result = convert::process_message(
                                         &worker,
                                         &s3_client,
                                         &lambda_client,
-                                        &scratch,
+                                        &converter,
                                         &message,
                                     )
                                     .await;

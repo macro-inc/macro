@@ -63,6 +63,7 @@ fn startup_removes_what_a_killed_process_left_behind() {
     let job = scratch.create_job().unwrap();
     std::fs::write(job.path().join("IN.docx"), b"input").unwrap();
     std::fs::write(scratch.cache().join("fonts"), b"cache").unwrap();
+    std::fs::write(root.path().join("stray"), b"stray").unwrap();
     // A killed process never drops its job folders.
     std::mem::forget(job);
     assert_eq!(entries(&root.path().join("jobs")).len(), 1);
@@ -71,6 +72,9 @@ fn startup_removes_what_a_killed_process_left_behind() {
 
     assert_eq!(entries(&root.path().join("jobs")), Vec::<String>::new());
     assert_eq!(entries(scratch.cache()), Vec::<String>::new());
+    let mut left = entries(root.path());
+    left.sort();
+    assert_eq!(left, ["cache", "jobs"]);
     scratch.create_job().unwrap();
 }
 

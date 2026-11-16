@@ -1,24 +1,26 @@
+use std::path::Path;
+
 use super::DiskGuard;
 
 const GIB: u64 = 1024 * 1024 * 1024;
 
-fn guard() -> DiskGuard {
-    DiskGuard::new(std::path::Path::new("/"), 2 * GIB, 50_000)
-}
-
 #[test]
 fn a_disk_with_room_passes() {
-    guard().check_free(15 * GIB, 1_000_000, 1_300_000).unwrap();
+    DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
+        .check_free(15 * GIB, 1_000_000, 1_300_000)
+        .unwrap();
 }
 
 #[test]
 fn a_disk_at_its_reserve_passes() {
-    guard().check_free(2 * GIB, 50_000, 1_300_000).unwrap();
+    DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
+        .check_free(2 * GIB, 50_000, 1_300_000)
+        .unwrap();
 }
 
 #[test]
 fn a_disk_short_on_space_fails() {
-    let error = guard()
+    let error = DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
         .check_free(2 * GIB - 1, 1_000_000, 1_300_000)
         .unwrap_err();
 
@@ -27,19 +29,27 @@ fn a_disk_short_on_space_fails() {
 
 #[test]
 fn a_full_disk_fails() {
-    assert!(guard().check_free(0, 1_000_000, 1_300_000).is_err());
+    assert!(
+        DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
+            .check_free(0, 1_000_000, 1_300_000)
+            .is_err()
+    );
 }
 
 #[test]
 fn a_disk_short_on_inodes_fails() {
-    let error = guard().check_free(15 * GIB, 49_999, 1_300_000).unwrap_err();
+    let error = DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
+        .check_free(15 * GIB, 49_999, 1_300_000)
+        .unwrap_err();
 
     assert!(error.to_string().contains("inodes free"), "{error}");
 }
 
 #[test]
 fn a_filesystem_that_does_not_count_inodes_passes() {
-    guard().check_free(15 * GIB, 0, 0).unwrap();
+    DiskGuard::new(Path::new("/"), 2 * GIB, 50_000)
+        .check_free(15 * GIB, 0, 0)
+        .unwrap();
 }
 
 #[test]

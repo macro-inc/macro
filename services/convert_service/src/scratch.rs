@@ -38,13 +38,13 @@ impl Scratch {
             cache: root.join(CACHE_DIR),
         };
 
-        for dir in [&scratch.jobs, &scratch.cache] {
-            match std::fs::remove_dir_all(dir) {
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                    return Err(e).with_context(|| format!("unable to empty {}", dir.display()));
-                }
-                _ => {}
+        match std::fs::remove_dir_all(root) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(e).with_context(|| format!("unable to empty {}", root.display()));
             }
+            _ => {}
+        }
+        for dir in [&scratch.jobs, &scratch.cache] {
             std::fs::create_dir_all(dir)
                 .with_context(|| format!("unable to create {}", dir.display()))?;
         }

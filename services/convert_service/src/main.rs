@@ -10,6 +10,7 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use process::{
     child::{ChildExit, run_confined, set_child_env},
+    convert::Converter,
     runner::run_worker,
 };
 use scratch::Scratch;
@@ -43,7 +44,6 @@ fn smoke_test_lok(lok_path: &str, scratch: &Scratch) -> anyhow::Result<()> {
             rs_libreoffice_bindings::Office::new(lok_path)
                 .map(drop)
                 .map_err(|e| anyhow::anyhow!(e))
-                .inspect_err(|e| tracing::error!(error=?e, "unable to initialize lok"))
         },
     )?;
 
@@ -67,6 +67,12 @@ async fn main() -> anyhow::Result<()> {
     let disk = DiskGuard::new(scratch.root(), MIN_FREE_BYTES, MIN_FREE_INODES);
 
     smoke_test_lok(&config.lok_path, &scratch)?;
+
+    // As many at once as when conversions ran on the async workers, one per CPU.
+    let max_conversions = std::thread::available_parallelism()
+        .context("unable to count the CPUs")?
+        .get();
+    let converter = Arc::new(Converter::new(scratch, max_conversions));
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
@@ -110,11 +116,11 @@ async fn main() -> anyhow::Result<()> {
         let s3_client = s3_client.clone();
         let lambda_client = lambda_client::Lambda::new(aws_sdk_lambda::Client::new(&aws_config));
 
-        let scratch = scratch.clone();
+        let converter = converter.clone();
         let disk = disk.clone();
 
         tokio::spawn(async move {
-            run_worker(sqs_worker, s3_client, lambda_client, scratch, disk).await
+            run_worker(sqs_worker, s3_client, lambda_client, converter, disk).await
         });
     }
 
@@ -124,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
         authorization_state,
         sqs_client: Arc::new(sqs_client),
         config: Arc::new(config),
-        scratch,
+        converter,
         disk,
     })
     .await?;

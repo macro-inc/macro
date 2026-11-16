@@ -34,12 +34,18 @@ const WORK_FAILED_STATUS: i32 = 1;
 /// Exit status of a child whose work panicked, the status Rust itself exits with.
 const WORK_PANICKED_STATUS: i32 = 101;
 
+/// The file in its folder where a child leaves the error its work returned.
+const ERROR_FILE: &str = "error";
+
 /// How a child process ended.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ChildExit {
     Succeeded,
-    /// The work returned an error or panicked; this is the exit status.
-    Failed(i32),
+    /// The work returned this error.
+    Failed(String),
+    /// The child exited with this status and left no error: its work
+    /// panicked, or the folder had no room for the error.
+    Exited(i32),
     /// The child crashed.
     Signaled(Signal),
     /// The child was still running after its time limit and was killed.
@@ -58,10 +64,14 @@ impl Drop for ExitOnUnwind {
 }
 
 /// Runs `work` in a child process confined to `folder`, killing it and
-/// everything it started once `max_wait` has passed. `work` logs its own
-/// error; the parent only sees that it failed.
+/// everything it started once `max_wait` has passed.
 ///
 /// `cache` holds caches the child may share with other jobs.
+///
+/// The child is a copy of one thread of a multi-threaded process. A lock
+/// another thread held at the fork is never released in it, so `work` must not
+/// log, and sets environment variables with [`set_child_env`]. The parent logs
+/// the error `work` returns.
 pub(crate) fn run_confined(
     folder: &Path,
     cache: &Path,
@@ -72,13 +82,13 @@ pub(crate) fn run_confined(
         ForkResult::Child => {
             let _exit_on_unwind = ExitOnUnwind;
 
-            let result = confine(folder, cache)
-                .inspect_err(|e| tracing::error!(error=?e, "unable to confine child process"))
-                .and_then(|()| work());
-            let status = if result.is_ok() {
-                0
-            } else {
-                WORK_FAILED_STATUS
+            let status = match confine(folder, cache).and_then(|()| work()) {
+                Ok(()) => 0,
+                Err(e) => {
+                    // The parent reports a missing file as a bare status.
+                    let _ = std::fs::write(folder.join(ERROR_FILE), format!("{e:#}"));
+                    WORK_FAILED_STATUS
+                }
             };
 
             // `_exit` skips exit handlers: LibreOffice's can hang or crash,
@@ -93,8 +103,20 @@ pub(crate) fn run_confined(
             // the child has already exited.
             let _ = setpgid(child, child);
 
-            supervise(child, max_wait)
+            match supervise(child, max_wait)? {
+                ChildExit::Exited(status) => reported_failure(folder, status),
+                exit => Ok(exit),
+            }
         }
+    }
+}
+
+/// Reads the error a child that exited with `status` left in `folder`.
+fn reported_failure(folder: &Path, status: i32) -> anyhow::Result<ChildExit> {
+    match std::fs::read_to_string(folder.join(ERROR_FILE)) {
+        Ok(error) => Ok(ChildExit::Failed(error)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ChildExit::Exited(status)),
+        Err(e) => Err(e).context("unable to read the child's error"),
     }
 }
 
@@ -158,7 +180,7 @@ fn supervise(child: Pid, max_wait: Duration) -> anyhow::Result<ChildExit> {
 
         match status {
             WaitStatus::Exited(_, 0) => return Ok(ChildExit::Succeeded),
-            WaitStatus::Exited(_, status) => return Ok(ChildExit::Failed(status)),
+            WaitStatus::Exited(_, status) => return Ok(ChildExit::Exited(status)),
             WaitStatus::Signaled(_, signal, _) => return Ok(ChildExit::Signaled(signal)),
             _ => {}
         }
@@ -171,8 +193,9 @@ fn supervise(child: Pid, max_wait: Duration) -> anyhow::Result<ChildExit> {
     }
 
     // The child has not been reaped, so its process group id still names it.
-    killpg(child, Signal::SIGKILL).context("unable to kill child process group")?;
+    let killed = killpg(child, Signal::SIGKILL);
     waitpid(child, None).context("unable to reap killed child")?;
+    killed.context("unable to kill child process group")?;
 
     Ok(ChildExit::TimedOut)
 }

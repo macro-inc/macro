@@ -7,7 +7,7 @@ use axum::{
 };
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::disk::DiskGuard;
+use crate::disk::{DiskGuard, LOW_DISK_MESSAGE};
 
 /// Health check
 ///
@@ -30,7 +30,7 @@ pub async fn health_handler(State(disk): State<DiskGuard>) -> Response {
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
-                    message: "low disk space".into(),
+                    message: LOW_DISK_MESSAGE.into(),
                 }),
             )
                 .into_response()

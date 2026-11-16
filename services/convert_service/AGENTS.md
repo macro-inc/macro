@@ -34,10 +34,13 @@ synchronously via HTTP or asynchronously via SQS.
 ## Checks
 
 - `cargo test -p convert_service` (`SQLX_OFFLINE` unset).
-- The tests that convert real documents are ignored unless LibreOffice is
-  installed: `LOK_PATH=/usr/lib/libreoffice/program cargo test -p
+- The tests that convert real documents are `#[ignore]`d and need LibreOffice
+  on the host: `LOK_PATH=/usr/lib/libreoffice/program cargo test -p
   convert_service -- --include-ignored`. Run them after changing
-  `src/process/`.
+  `src/process/`. A test binary built in the Nix shell does not search the
+  system's library directories; put LibreOffice's program directory and the
+  libraries it needs (not glibc) on the binary's `LD_LIBRARY_PATH` with
+  `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER='env LD_LIBRARY_PATH=...'`.
 
 ## Gotchas
 
@@ -54,12 +57,16 @@ synchronously via HTTP or asynchronously via SQS.
   startup empties the scratch root. Write a job's files nowhere else.
 - A killed LibreOffice cleans up nothing, so `run_confined` makes the job
   folder the child's working directory, `HOME` and `TMPDIR`, turns core dumps
-  off, and kills the child's process group at the time limit. Only the
-  fontconfig cache is shared between jobs (`XDG_CACHE_HOME`); rebuilding it
-  costs over a second per conversion.
+  off, and kills the child's process group at the time limit. Only caches are
+  shared between jobs (`XDG_CACHE_HOME`): rebuilding the font cache costs over
+  a second per conversion.
 - The child is a fork of a multi-threaded process, so a lock another thread
-  held at the fork is never released in it. Set its environment with
+  held at the fork is never released in it. In the child, never log (the
+  parent logs the error the work returns) and set the environment with
   `set_child_env`, never `std::env::set_var`.
+- `Converter` runs one conversion per CPU at a time, on blocking threads. On
+  the async workers a conversion starves the health check; unbounded, a batch
+  of messages starts a LibreOffice each.
 - Below `MIN_FREE_BYTES` or `MIN_FREE_INODES` (`src/disk.rs`), `/health`
   returns 503 so ECS replaces the task, the worker stops receiving, and
   `/internal/convert` returns 503. A full disk on a build without this looks

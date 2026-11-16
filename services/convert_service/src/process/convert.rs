@@ -3,6 +3,7 @@ use std::{borrow::Cow, ffi::OsStr, path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use model::{convert::ConvertQueueMessage, document::FileType};
+use tokio::sync::Semaphore;
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},
@@ -18,12 +19,12 @@ pub(super) fn is_docx_key(key: &str) -> bool {
 
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
-#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, scratch, message), fields(message_id = message.message_id))]
+#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, converter, message), fields(message_id = message.message_id))]
 pub async fn process_message(
     worker: &sqs_worker::SQSWorker,
     s3_client: &s3_client::S3,
     lambda_client: &lambda_client::Lambda,
-    scratch: &Arc<Scratch>,
+    converter: &Converter,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
     tracing::info!("processing message");
@@ -62,7 +63,7 @@ pub async fn process_message(
 
     tracing::info!(job_id=%job_id, message_body=?req, "message body");
 
-    let result = convert(&job_id, &req, s3_client, scratch).await;
+    let result = convert(&req, s3_client, converter).await;
 
     if let Some(update) = job_update(&job_id, &req, result.is_ok()) {
         tracing::trace!(status=%update.status, "sending job update to lambda");
@@ -128,10 +129,9 @@ pub(super) fn job_update<'a>(
 }
 
 pub async fn convert(
-    job_id: &str,
     req: &ConvertQueueMessage,
     s3_client: &s3_client::S3,
-    scratch: &Arc<Scratch>,
+    converter: &Converter,
 ) -> anyhow::Result<()> {
     let from_file_type = resolve_file_type(req.from_file_type, &req.from_key)?;
     let to_file_type = resolve_file_type(req.to_file_type, &req.to_key)?;
@@ -144,8 +144,8 @@ pub async fn convert(
         .await
         .context("unable to get object from S3")?;
 
-    let conversion = Conversion::new(job_id, from_file_type, to_file_type, filter);
-    let output = convert_file(scratch.clone(), conversion, input).await?;
+    let conversion = Conversion::new(from_file_type, to_file_type, filter);
+    let output = converter.convert(conversion, input).await?;
 
     s3_client
         .put(&req.to_bucket, &req.to_key, &output)
@@ -157,8 +157,6 @@ pub async fn convert(
 
 /// One conversion to run.
 pub(crate) struct Conversion {
-    /// Names the job in logs.
-    pub job_id: String,
     pub from: FileType,
     pub to: FileType,
     /// LibreOfficeKit filter options, see `get_lok_filter_from_file_types`.
@@ -168,9 +166,8 @@ pub(crate) struct Conversion {
 }
 
 impl Conversion {
-    pub(crate) fn new(job_id: &str, from: FileType, to: FileType, filter: String) -> Self {
+    pub(crate) fn new(from: FileType, to: FileType, filter: String) -> Self {
         Self {
-            job_id: job_id.to_string(),
             max_wait: conversion_timeout(&from, &to),
             from,
             to,
@@ -179,28 +176,69 @@ impl Conversion {
     }
 }
 
-/// Converts `input` and returns the converted file.
-///
-/// The conversion blocks until LibreOffice finishes, so it runs on a blocking
-/// thread: on the async workers it would starve the health check and every
-/// other request for as long as it ran.
-pub(crate) async fn convert_file(
+/// Runs conversions, a limited number at a time.
+#[derive(Debug)]
+pub struct Converter {
     scratch: Arc<Scratch>,
-    conversion: Conversion,
-    input: Vec<u8>,
-) -> anyhow::Result<Vec<u8>> {
-    let span = tracing::Span::current();
-    let task = tokio::task::spawn_blocking(move || {
-        let _entered = span.enter();
-        convert_in_job_folder(&scratch, &LOK_PATH, &conversion, &input)
-    });
+    /// A conversion keeps a CPU busy and a LibreOffice in memory, so the
+    /// messages of a batch take turns instead of all converting at once.
+    slots: Arc<Semaphore>,
+}
 
-    match task.await {
-        Ok(result) => result,
-        Err(e) => match e.try_into_panic() {
-            Ok(panic) => std::panic::resume_unwind(panic),
-            Err(e) => Err(e).context("conversion was cancelled"),
-        },
+impl Converter {
+    pub(crate) fn new(scratch: Arc<Scratch>, max_concurrent: usize) -> Self {
+        Self {
+            scratch,
+            slots: Arc::new(Semaphore::new(max_concurrent)),
+        }
+    }
+
+    /// Converts `input` and returns the converted file.
+    pub(crate) async fn convert(
+        &self,
+        conversion: Conversion,
+        input: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
+        let scratch = self.scratch.clone();
+        self.run(move || convert_in_job_folder(&scratch, &LOK_PATH, &conversion, &input))
+            .await?
+    }
+
+    /// Runs `work` once a slot is free.
+    ///
+    /// A conversion blocks until LibreOffice finishes, so `work` runs on a
+    /// blocking thread: on the async workers it would starve the health check
+    /// and every other request for as long as it ran. It keeps its slot until
+    /// it returns, even if the caller stops waiting for it.
+    pub(crate) async fn run<T: Send + 'static>(
+        &self,
+        work: impl FnOnce() -> T + Send + 'static,
+    ) -> anyhow::Result<T> {
+        let slot = self
+            .slots
+            .clone()
+            .acquire_owned()
+            .await
+            .context("conversion slots are closed")?;
+        let span = tracing::Span::current();
+        let task = tokio::task::spawn_blocking(move || {
+            let _slot = slot;
+            let _entered = span.enter();
+            work()
+        });
+
+        match task.await {
+            Ok(output) => Ok(output),
+            Err(e) => match e.try_into_panic() {
+                Ok(panic) => std::panic::resume_unwind(panic),
+                Err(e) => Err(e).context("conversion was cancelled"),
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn free_slots(&self) -> usize {
+        self.slots.available_permits()
     }
 }
 
@@ -247,7 +285,6 @@ pub(crate) fn run_lok_conversion(
     in_file_path: &Path,
     out_file_path: &Path,
 ) -> anyhow::Result<()> {
-    let job_id = conversion.job_id.as_str();
     let in_file_path = in_file_path
         .to_str()
         .context("input file path is not UTF-8")?;
@@ -256,36 +293,28 @@ pub(crate) fn run_lok_conversion(
         .context("output file path is not UTF-8")?;
 
     let exit = run_confined(folder, cache, conversion.max_wait, || {
-        tracing::info!(job_id=%job_id, "child process: initializing lok");
-        let result: anyhow::Result<()> = (|| {
-            set_child_env(c"SAL_LOG", OsStr::new(""))?;
-            let office = Office::new(office_path)
-                .map_err(|e| anyhow::anyhow!(e))
-                .context("unable to initialize lok")?;
-            tracing::trace!("office initialized");
+        set_child_env(c"SAL_LOG", OsStr::new(""))?;
+        let office = Office::new(office_path)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("unable to initialize lok")?;
 
-            let document = office
-                .load_document(in_file_path)
-                .map_err(|e| anyhow::anyhow!(e))
-                .context("unable to load document")?;
-            tracing::trace!("document loaded");
+        let document = office
+            .load_document(in_file_path)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("unable to load document")?;
 
-            document
-                .save_as(out_file_path, conversion.to.as_str(), &conversion.filter)
-                .map_err(|e| anyhow::anyhow!(e))
-                .context("unable to save document")?;
-            tracing::trace!("document saved");
+        document
+            .save_as(out_file_path, conversion.to.as_str(), &conversion.filter)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("unable to save document")?;
 
-            // The child exits right after this, so skip LibreOffice's
-            // teardown: Writer can crash while destroying a document it
-            // has already saved, which would fail a finished conversion.
-            std::mem::forget(document);
-            std::mem::forget(office);
+        // The child exits right after this, so skip LibreOffice's
+        // teardown: Writer can crash while destroying a document it
+        // has already saved, which would fail a finished conversion.
+        std::mem::forget(document);
+        std::mem::forget(office);
 
-            Ok(())
-        })();
-
-        result.inspect_err(|e| tracing::error!(job_id=%job_id, error=?e, "unable to convert"))
+        Ok(())
     })?;
 
     match exit {
@@ -293,7 +322,8 @@ pub(crate) fn run_lok_conversion(
         ChildExit::TimedOut => {
             anyhow::bail!("conversion timed out after {:?}", conversion.max_wait)
         }
-        ChildExit::Failed(status) => anyhow::bail!("conversion failed with status {status}"),
+        ChildExit::Failed(error) => anyhow::bail!("conversion failed: {error}"),
+        ChildExit::Exited(status) => anyhow::bail!("conversion failed with status {status}"),
         ChildExit::Signaled(signal) => anyhow::bail!("conversion crashed with {signal}"),
     }
 }

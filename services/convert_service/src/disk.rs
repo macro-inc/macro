@@ -21,6 +21,9 @@ pub const MIN_FREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// same way a full one does, and each LibreOffice profile is a few hundred files.
 pub const MIN_FREE_INODES: u64 = 50_000;
 
+/// What a request refused for lack of disk space is told.
+pub const LOW_DISK_MESSAGE: &str = "low disk space";
+
 /// Reports whether the filesystem holding `path` has room for more jobs.
 #[derive(Debug, Clone)]
 pub struct DiskGuard {
