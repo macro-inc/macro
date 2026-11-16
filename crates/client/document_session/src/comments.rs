@@ -148,6 +148,9 @@ impl EditorSurface {
                 .export(ExportMode::updates(&before))
                 .map_err(|_| CommentRefusal::StagingFailed);
         }
+        // As in a non-Edit editor, initial-hook changes (id assignment, repairs)
+        // stay local: the index attaches to the persisted base and only the mark
+        // change reaches the comment update.
         let initial = core.take_initial_output();
         let base = initial
             .as_ref()
@@ -155,16 +158,6 @@ impl EditorSurface {
             .map_or(core.state(), |commit| &commit.prev);
         let mut projection = lexical_loro::LoroProjection::attach(&fork, base, self.config.policy)
             .map_err(|_| CommentRefusal::StagingFailed)?;
-        if let Some(initial) = initial {
-            projection
-                .local_commit(
-                    &fork,
-                    &initial.commits,
-                    lexical_loro::LOCAL_ORIGIN,
-                    now.wall.0 / 1000,
-                )
-                .map_err(|_| CommentRefusal::StagingFailed)?;
-        }
         let (range, text) = match &request.action {
             CommentAction::Remove => (None, None),
             CommentAction::Add {

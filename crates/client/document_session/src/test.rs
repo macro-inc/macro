@@ -2156,3 +2156,60 @@ mod checklist_presentation;
 
 #[cfg(feature = "application")]
 mod database_commit;
+
+#[test]
+fn comment_only_publication_never_writes_initial_hook_repairs() {
+    let source = Editor::builder(EditorMode::Headless)
+        .initial_state(serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[
+            {"type":"paragraph","version":1,"$":{"id":"duplicate"},"children":[{"type":"text","version":1,"text":"one","$":{"id":"first"}}]},
+            {"type":"paragraph","version":1,"$":{"id":"duplicate"},"children":[{"type":"text","version":1,"text":"two","$":{"id":"second"}}]}
+        ]}})).unwrap()).build().unwrap();
+    let base = lexical_loro::new_doc(71).unwrap();
+    lexical_loro::LoroProjection::initialize(&base, source.state(), &lexical_loro::PlainPolicy, 0)
+        .unwrap();
+    let mut session = session_editor(
+        Access::CommentOnly,
+        TransportKind::Direct,
+        base.export(ExportMode::Snapshot).unwrap(),
+    );
+    connect(&mut session);
+    let key = text_key(&session);
+    session.handle(
+        time(4),
+        SessionInput::Editor(Input::SelectionFromView {
+            selection: ViewSelection::Range {
+                anchor: Point::text(key, Utf16Offset(0)),
+                focus: Point::text(key, Utf16Offset(3)),
+                resolution_dirty: false,
+            },
+            change: None,
+        }),
+    );
+    let cursors = session
+        .surface()
+        .selection_cursors()
+        .expect("selection cursors");
+    session.handle(
+        time(5),
+        SessionInput::Comment(CommentMarkRequest {
+            request: RequestId(81),
+            mark_id: "annotation-one".into(),
+            action: CommentAction::Add {
+                anchor: cursors.anchor,
+                focus: cursors.focus,
+                text: "one".into(),
+            },
+        }),
+    );
+    let comments = server_current(&mut session, 6);
+    assert_eq!(comments.len(), 1);
+    let server = lexical_loro::fork_doc(&base, 99).unwrap();
+    server.import(&comments[0].1).unwrap();
+    let state = lexical_loro::reconstruct_state(&server, &lexical_loro::PlainPolicy).unwrap();
+    assert_eq!(
+        state.root["children"][0]["children"][0]["type"],
+        json!("mark")
+    );
+    assert_eq!(state.root["children"][0]["$"]["id"], json!("duplicate"));
+    assert_eq!(state.root["children"][1]["$"]["id"], json!("duplicate"));
+}
