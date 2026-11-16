@@ -12,7 +12,7 @@ threads, pins, recents, notifications, folders, activity.
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
-- `src/api/middleware/crm_access.rs` reads current CRM membership on the primary and adds `x-macro-crm-access` to authenticated storage responses; record authorization remains in domain receipts. A failed optional header lookup is logged and omits the header without failing unrelated handlers; clients treat the missing proof as unknown, never as allowed. `GET /crm/member-access` supplies the same authority on session startup and cache recovery.
+- `src/api/middleware/crm_access.rs` adds the optional `x-macro-crm-access` retirement hint only for `x-macro-crm-access-signal: 1`; other requests skip signal authentication and lookup. A per-instance 10,000-user LRU coalesces each resident user's lookups and memoizes results/failures/cancellations for three non-sliding seconds from lookup start; admission omits the hint if it would evict an active lookup. The primary read runs concurrently with the handler (200 ms lookup-future budget, 250 ms total signal budget after authentication extraction); failed or expired hints are omitted. This cache never authorizes a record: domain receipts and `GET /crm/member-access` remain fresh. Clients treat a missing hint as unknown and verify changed hints through current authority before changing cache policy.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.

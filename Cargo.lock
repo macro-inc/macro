@@ -6843,6 +6843,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "lexical_client",
  "lexical_mention_extractor",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",

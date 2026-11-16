@@ -36,13 +36,32 @@ and opaque company/contact references. CRM names, domains, email addresses, and
 record details resolve only with separate record access. Text copied into a
 pipeline cell remains pipeline content and may itself identify a record.
 
-`GET /crm/member-access` and the storage response header
-`x-macro-crm-access` expose current authority to clients. The server rechecks
-membership on each request. An optional header lookup failure omits the proof and
-leaves unrelated handlers available; protected operations still fail closed.
-Settings controls and retirement of already-cached
-client content are a separate client change; this server API alone does not
-remove previously downloaded content from an older client.
+`GET /crm/member-access` reads current authority without caching. Storage adds
+`x-macro-crm-access` only when a client requests the retirement signal with
+`x-macro-crm-access-signal: 1`. Requests without that opt-in perform no signal
+authentication or CRM lookup. The hint uses a per-instance, 10,000-user LRU with
+a non-sliding three-second lifetime from lookup start; concurrent requests for
+the same resident user share a lookup. Failures and cancellations are memoized
+too. A new user gets no hint when admitting it would evict an active lookup;
+completed-entry eviction can cause an earlier cache miss. The primary
+lookup runs alongside the handler, with a 200 ms lookup-future budget and a 250 ms total
+signal budget including waits, after authentication extraction. Failure, timeout, or expiration before the
+handler finishes omits the header; clients treat a missing hint as unknown.
+A changed hint triggers a fresh authority read before the client changes its
+cache policy; a memoized hint cannot restore access after a newer denied proof.
+The timeout bounds waiting for the Rust future, not PostgreSQL execution: SQLx
+connection recovery can continue after cancellation. The unchanged query remains
+a unique-key membership lookup; this adds no database statement timeout.
+
+This relaxes only the cache-retirement signal, never server authorization. A
+revocation just after a cache fill can leave an allowed hint for less than three
+seconds. The first opted-in request after expiry obtains a fresh hint or no
+hint within the signal budget; receiving it also takes the authentication time, the handler's remaining
+time, network delivery, and client retirement work. An idle or offline client
+has no finite retirement deadline. Fresh authority reads and protected requests
+still enforce revocation immediately. Settings controls and retirement of
+already-cached client content are a separate client change; this server API alone
+does not remove previously downloaded content from an older client.
 
 Notifications follow the existing snapshot policy: a revoked member keeps
 already-delivered CRM comment text and may still receive a previously queued

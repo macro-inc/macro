@@ -157,7 +157,9 @@ tools/HTTP/GraphQL surfaces over them.
   Team preference writes remain disabled by the rollout gate until old removal
   writers have drained; that gate never weakens these read checks.
   `/crm/member-access` reads authority even for a denied viewer; storage's response
-  header lets an open client retire stale snapshots.
+  opt-in response hint lets an open client retire stale snapshots. Only that
+  hint has a three-second per-instance cache; receipts and the authority endpoint
+  stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
 - Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also

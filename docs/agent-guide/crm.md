@@ -718,8 +718,13 @@ change this setting, and admins and owners cannot be denied. Mailbox contributio
 consent stays unchanged. Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
 `GET /crm/member-access` reports current access even
-when record routes return access denied. Settings controls and retirement of
-already-cached client content follow separately.
+when record routes return access denied. Clients holding CRM caches may request
+the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
+server memoization never applies to record checks or this fresh endpoint. The
+next opted-in request after expiry observes the change (or a missing hint that
+requires a fresh proof); idle/offline clients have no fixed retirement deadline.
+Settings controls and retirement of already-cached client content follow
+separately.
 
 After denial, company/contact routes and contact pages, CRM lists, search, CRM
 activity, references, and CRM-derived email thread grants require current access
