@@ -25,3 +25,11 @@ fn builds_and_tests_in_the_package_nix_shell() {
     assert!(yaml.contains("nix-shell packages/sdk-ocaml/shell.nix"));
     assert!(yaml.contains("dune build && dune test"));
 }
+
+#[test]
+fn runs_the_wasm_transport_tests() {
+    let yaml = rendered_yaml();
+
+    assert!(yaml.contains("--profile wasm --build-dir _build_wasm @fetch/runtest"));
+    assert!(yaml.contains("packages/sdk/generated/*/sdk.gen.ts"));
+}

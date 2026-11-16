@@ -8,6 +8,9 @@ services), generated from the same OpenAPI specs as the TypeScript SDK
   operation returns a `Request.t` describing the call.
 - `macro_sdk_eio`: sends those requests over HTTP(S) with cohttp-eio
   (OCaml 5, direct style, no monad in your code).
+- `macro_sdk_fetch` (`fetch/`): sends them through JavaScript's `fetch`
+  from a program compiled to WebAssembly, for code mode. See
+  [WebAssembly transport](#webassembly-transport).
 
 ## Install
 
@@ -109,7 +112,7 @@ together; nothing was created.
 
 ## Errors
 
-`Macro_sdk_eio.call` returns `('reply, 'error Error.t) result`:
+`Macro_sdk_eio.call` (and `Macro_sdk_fetch.call`) returns `('reply, 'error Error.t) result`:
 
 - `Api { status; error; body }`: a status the operation declares, with its
   JSON error body decoded into `'error`. Operations that declare one error
@@ -121,6 +124,57 @@ together; nothing was created.
 - `Transport exn`: connection, TLS or protocol failure.
 
 `call_exn` raises `Error.Macro_error` instead.
+
+## WebAssembly transport
+
+`macro_sdk_fetch` has the same surface as `macro_sdk_eio` (`create`, `call`,
+`call_exn`, the same `Error.t`) for programs compiled with `wasm_of_ocaml`
+and run under Deno, as code mode will run OCaml programs. Each call is
+`Request.prepare`, one `globalThis.fetch`, then `Request.interpret`: a
+rejected `fetch` is a `Transport` error. The call stays direct style: with
+`--effects=jspi` a primitive (`fetch/await.wat`, `fetch/await.js`) suspends
+the WebAssembly stack until the promise settles, so call it from the
+program's own code, never from a JavaScript callback. `fetch/bigstringaf.wat`
+supplies the bigstringaf stubs `uri` needs, which the package ships only for
+js_of_ocaml.
+
+It builds only in the `wasm` profile, so plain `dune build` never needs
+js_of_ocaml or wasm_of_ocaml. Its own build directory keeps the native one
+warm:
+
+```sh
+nix-shell shell.nix --run "dune build --profile wasm --build-dir _build_wasm @fetch/runtest"
+```
+
+The tests (`fetch/test/`) run under Deno 2.9.6, the version code mode runs;
+`run.mjs` loads the program, serves a stand-in API and plays code mode's
+bootstrap.
+
+### What `fetch` is told
+
+Code mode's bootstrap wraps `globalThis.fetch` to gate a dry run's writes
+and add the `x-macro-sdk-verb` header (it will read the field below once it
+runs OCaml programs). The TypeScript SDK gives it each
+call's `{service, operation}` through `gateRequests` and `sendVerbHeaders`
+(`packages/sdk/src/utils/activity.ts`). This transport passes the same pair
+on the `fetch` call itself, as an extra `init` field a plain `fetch`
+ignores:
+
+```js
+fetch(url, {
+  method, headers: [[name, value], ...], body, // body: Uint8Array, if any
+  macroSdkOperation: { service: "contacts", operation: "getContacts" },
+});
+```
+
+`service` is the spec name and `operation` the TypeScript SDK's method name
+(`Macro_sdk_fetch.sdk_method`: the operationId in camelCase), so
+`` `${service}.${operation}` `` is the key of `sdkVerbs` and the code-mode
+operation catalog. The wrapper may answer with its own `Response` (a skip;
+it is decoded as the reply), reject (a refusal; `Error (Transport _)`), or
+send the request with headers added. One known gap: cognition declares
+`get_state_handler` twice (both reads); both map to `getStateHandler`, where
+the TypeScript SDK names the second `getStateHandler2`.
 
 ## How the spec maps to OCaml
 
@@ -181,7 +235,9 @@ nix-shell shell.nix --run "just generate && dune test"
 ```
 
 and commit `generated/`. CI runs `dune build && dune test` in this shell
-(`OCaml SDK Check`) whenever `packages/sdk/specs` or this package changes.
+(`OCaml SDK Check`), then the WebAssembly transport's tests, whenever
+`packages/sdk/specs`, the TypeScript SDK's generated methods or this
+package changes.
 `dune test` includes a drift check that regenerates
 into a temporary directory and fails if `generated/` differs, and a test that
 calls every operation with sample arguments and checks the request and every

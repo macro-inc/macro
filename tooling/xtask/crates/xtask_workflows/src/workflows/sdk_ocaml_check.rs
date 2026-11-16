@@ -1,6 +1,7 @@
 //! `OCaml SDK Check` — builds and tests `packages/sdk-ocaml` in its Nix shell,
 //! including the check that its committed `generated/` matches
-//! `packages/sdk/specs`. Generated into `sdk-ocaml-check.yml`.
+//! `packages/sdk/specs`, then builds the WebAssembly transport and runs its
+//! tests under Deno. Generated into `sdk-ocaml-check.yml`.
 
 use gh_workflow::{Event, Job, Level, Permissions, Push, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
@@ -12,11 +13,13 @@ mod test;
 
 /// Files whose change makes `PR CI` call this workflow, and that runs it on
 /// `main`. The specs and the TypeScript host table are inputs of the OCaml
-/// SDK's tests; `flake.lock` pins its toolchain.
+/// SDK's tests, and the Wasm transport's tests compare operation names with
+/// the TypeScript SDK's generated methods; `flake.lock` pins its toolchain.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk-ocaml/**"),
     xtask_paths::repo_glob!("packages/sdk/specs/**"),
     xtask_paths::repo_glob!("packages/sdk/src/config.ts"),
+    xtask_paths::repo_glob!("packages/sdk/generated/*/sdk.gen.ts"),
     xtask_paths::repo_glob!("flake.lock"),
     xtask_paths::repo_glob!(".github/workflows/sdk-ocaml-check.yml"),
 ];
@@ -52,6 +55,7 @@ fn check_ocaml_sdk() -> Job {
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(build_and_test())
+        .add_step(wasm_transport())
         .add_step(steps::teardown_nix())
 }
 
@@ -60,6 +64,17 @@ fn build_and_test() -> Step<Run> {
         .run(indoc::indoc! {r#"
             set -euo pipefail
             nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build && dune test"
+        "#})
+        .timeout_minutes(10u32)
+}
+
+/// `macro_sdk_fetch` builds only in the `wasm` profile, in its own build
+/// directory so it doesn't rebuild the native tree.
+fn wasm_transport() -> Step<Run> {
+    Step::new("Wasm transport: dune build --profile wasm @fetch/runtest (Deno)")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build --profile wasm --build-dir _build_wasm @fetch/runtest"
         "#})
         .timeout_minutes(10u32)
 }

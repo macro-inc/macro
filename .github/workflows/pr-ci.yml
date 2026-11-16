@@ -530,6 +530,7 @@ jobs:
             - 'packages/sdk-ocaml/**'
             - 'packages/sdk/specs/**'
             - 'packages/sdk/src/config.ts'
+            - 'packages/sdk/generated/*/sdk.gen.ts'
             - 'flake.lock'
             - '.github/workflows/sdk-ocaml-check.yml'
           observability_image:
