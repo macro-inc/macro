@@ -1,0 +1,21 @@
+packages/graphics/src/loro/backend.ts
+  s_934636a8e47d04::t_09c0c3a04fb233 156-164,166-167
+packages/graphics/tests/slide-transition.test.ts
+  s_934636a8e47d04::t_dc808849393094 313-359
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8264036f7b25100491b4fe415aa20cd92964afed",
+  "prompts": {},
+  "sessions": {
+    "s_934636a8e47d04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d87ebef5-3bea-40ed-a6de-d1faf318cb64",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
