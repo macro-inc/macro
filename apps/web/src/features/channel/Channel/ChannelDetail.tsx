@@ -51,13 +51,12 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
-import { Dropdown, Tabs } from '@ui';
+import { Tabs } from '@ui';
 import {
   type Accessor,
   children,
   createComputed,
   createSignal,
-  For,
   type JSX,
   Match,
   on,
@@ -324,24 +323,11 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
               class: 'min-w-0 max-w-full gap-2',
               'aria-label': 'Channel actions',
             }}
-            extraItems={
-              <>
-                <Dropdown.Separator />
-                <Dropdown.GroupLabel>View</Dropdown.GroupLabel>
-                <Dropdown.RadioGroup value={activeTab()}>
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <Dropdown.RadioItem
-                        value={tab.value}
-                        onSelect={() => setActiveTab(tab.value)}
-                      >
-                        {tab.label}
-                      </Dropdown.RadioItem>
-                    )}
-                  </For>
-                </Dropdown.RadioGroup>
-              </>
-            }
+            views={{
+              options: tabs(),
+              value: activeTab(),
+              onSelect: setActiveTab,
+            }}
           >
             <ChannelDetailTitle
               channelId={props.channelId}

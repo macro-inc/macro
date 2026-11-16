@@ -107,6 +107,7 @@ export default {
   projectActions: 'Project actions',
   propertyOption: '{{property}}: {{option}}',
   actions: 'Actions',
+  view: 'View',
   clear: 'Clear',
   selectedCount: { other: '{{count}} selected' },
   undo: 'Undo',
