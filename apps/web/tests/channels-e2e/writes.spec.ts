@@ -1,12 +1,6 @@
 import type { Api, SentMessage } from './harness/api';
 import { expectShown, type Named } from './harness/device';
-import {
-  expect,
-  failsSometimes,
-  knownDefect,
-  SOUP_BUILD,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
   blockWrites,
@@ -70,13 +64,9 @@ test('WRT-01 a message sent with no connection shows at once and reaches the oth
 
   await goOnline(bens.page.context());
   const after = ['one', 'two', 'three', 'written offline'];
-  // Defect, in some runs: the message is gone from the screen it was written
-  // on once the connection is back.
-  await failsSometimes(async () => {
-    await expectShown(adas, after);
-    await expectServer(channel, after);
-    await expectShown(bens, after);
-  });
+  await expectShown(adas, after);
+  await expectServer(channel, after);
+  await expectShown(bens, after);
 });
 
 // If this fails, an edit, a deletion or a reaction made offline is lost, or
@@ -123,17 +113,13 @@ test('WRT-03 several messages sent with no connection arrive once each, in the o
   const written = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'];
   for (const text of written) await bens.send(text);
   const after = ['one', 'two', 'three', ...written];
+  await expectShown(bens, after);
 
-  // Defect, in some runs: the first three show below the last three, before
-  // or after the connection is back.
-  await failsSometimes(async () => {
-    await expectShown(bens, after);
-    await goOnline(bens.page.context());
-    await expectServer(channel, after);
-    await expectShown(bens, after);
-    await bens.reload();
-    await expectShown(bens, after);
-  });
+  await goOnline(bens.page.context());
+  await expectServer(channel, after);
+  await expectShown(bens, after);
+  await bens.reload();
+  await expectShown(bens, after);
 });
 
 // If this fails, what a person wrote while the services could not be
@@ -154,9 +140,9 @@ test('WRT-04 messages that could not be sent are still there after a reload and 
   const after = ['one', 'two', 'three', 'kept one', 'kept two'];
   await expectShown(bens, after);
   await bens.reload();
-  // Defect, in most runs: the messages stay on screen through the reload but
+  // Defect, in some runs: the messages stay on screen through the reload but
   // are not at the services forty seconds after they can be reached again;
-  // on an earlier build they were gone from the screen after the reload.
+  // timed once, they arrived five minutes after.
   await failsSometimes(async () => {
     await expectShown(bens, after);
     await expectServer(channel, ['one', 'two', 'three']);
@@ -240,11 +226,8 @@ test('WRT-07 a message deleted before it could be sent is not shown to anyone on
   await expectShown(bens, ['one', 'two', 'three', 'kept']);
 
   await goOnline(bens.page.context());
-  // Defect, in some runs: the kept message is gone from the screen too.
-  await failsSometimes(async () => {
-    await expectShown(adas, ['one', 'two', 'three', 'kept']);
-    await expectShown(bens, ['one', 'two', 'three', 'kept']);
-  });
+  await expectShown(adas, ['one', 'two', 'three', 'kept']);
+  await expectShown(bens, ['one', 'two', 'three', 'kept']);
   await expect(adas.list.getByText('thought better of it')).toHaveCount(0);
 });
 
@@ -291,8 +274,7 @@ test('WRT-09 a message the services refuse is taken back off the screen and the 
   await expect(bens.page.getByText('Failed to send message')).toBeVisible({
     timeout: 30_000,
   });
-  // Defect, in some runs: the refused message stays on the screen.
-  await failsSometimes(() => expect(bens.message('too late')).toHaveCount(0));
+  await expect(bens.message('too late')).toHaveCount(0);
   await expectServer(channel, ['one', 'two', 'three']);
 });
 
@@ -325,8 +307,6 @@ test('WRT-11 a waiting message written right after another of the same person sa
   ada,
   ben,
 }) => {
-  // Defect: nothing marks the waiting message; it looks like a sent one.
-  knownDefect('on');
   const { channel } = await scene(ada, ben);
   const bens = new Conversation(await pageFor('ben'), channel.id);
   await bens.open();
@@ -371,14 +351,9 @@ test('WRT-12 a message written offline with the channel open in two windows is s
   await expect(two.message('from the second window')).toBeVisible();
 
   await goOnline(first.context());
-  // Defect, in some runs: the second window shows what the first wrote
-  // offline below its own message, not where the services hold it; in one
-  // run the first window's message did not reach the services.
-  await failsSometimes(async () => {
-    await expectServer(channel, after);
-    await expectShown(one, after);
-    await expectShown(two, after);
-  });
+  await expectServer(channel, after);
+  await expectShown(one, after);
+  await expectShown(two, after);
 });
 
 // If this fails, two devices of one person disagree about a channel after
@@ -402,6 +377,14 @@ test('WRT-13 two devices of one person, one of them offline, end up showing the 
   await laptop.action(laptop.messageById(messages[2].id), 'edit');
   await laptop.retype('three, edited on the laptop');
   await laptop.page.keyboard.press('Enter');
+  // Ada writes once the laptop's message is in the channel: the order of two
+  // messages sent at the same moment is not what this test is about.
+  await expectServer(channel, [
+    'one',
+    'two',
+    'three, edited on the laptop',
+    'from the laptop',
+  ]);
   await ada.post(channel.id, 'from ada');
   await expectShown(laptop, [
     'one',
@@ -420,15 +403,9 @@ test('WRT-13 two devices of one person, one of them offline, end up showing the 
     'from ada',
     'from the phone',
   ];
-  // Defect, in some runs: the phone keeps its own message where it was
-  // written, above the two that the services hold before it; in one run of
-  // ten what the phone wrote offline had not reached the services after a
-  // minute.
-  await failsSometimes(async () => {
-    await expectServer(channel, after, 60_000);
-    await expectShown(laptop, after);
-    await expectShown(phone, after);
-  });
+  await expectServer(channel, after);
+  await expectShown(laptop, after);
+  await expectShown(phone, after);
 });
 
 // If this fails, a person with the channel open in two windows sees what
@@ -438,8 +415,6 @@ test('WRT-14 a message written offline in one window shows in the other window o
   ada,
   ben,
 }) => {
-  // Defect: the other window does not show the message until it is sent.
-  knownDefect('on');
   const { channel } = await scene(ada, ben);
   const first = await pageFor('ben');
   const one = new Conversation(first, channel.id);

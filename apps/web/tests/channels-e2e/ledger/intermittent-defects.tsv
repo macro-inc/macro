@@ -10,17 +10,5 @@ CHN-02	A team channel someone else makes is sometimes missing from a teammate's 
 ACC-06	With VITE_ENABLE_GRAPHQL_SOUP, after a teammate joins a team channel found by name its row sometimes stays under "Not joined" with a Join button until reload; the join itself works (every run on one machine, none in CI)
 CHN-08	With VITE_ENABLE_GRAPHQL_SOUP a deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on the local-index branch); without it, always (known-defects.tsv)
 UNR-08	With VITE_ENABLE_GRAPHQL_SOUP a channel a person is added to is sometimes missing from the rows shown by "Search conversations" until the search is run again (3 of 4 whole-suite runs on a much-used stack, none in CI)
-OFF-01	A channel read and returned to says it cannot load when opened with no connection, under a notice that a new version is out (2 of 10 runs on a busy machine; 0 of 4 on a quiet one)
-OFF-04	A long history read back while connected does not open offline, or scrolling back offline jumps from the latest messages to the middle (5 of 10 runs on a busy machine; 0 of 4 on a quiet one)
-OFF-06	A long thread read while connected shows only its first three replies offline, with nothing saying there are more (10 of 10 runs on a busy machine; 3 of 6 on a quiet one)
-OFF-07	A long thread never opened shows three replies offline and no count of the rest (9 of 10 runs on a busy machine; 3 of 6 on a quiet one)
-OFF-09	A channel seen once and left at once is not on the device: opened with no connection it says it cannot load (5 of 10 runs on a busy machine; 10 of 10 on a quiet one)
-OFF-10	A message that arrived while the channel was open is missing when the channel opens with no connection (7 of 10 runs on a busy machine; 1 of 5 on a quiet one)
-OFF-11	Opening a held channel with no connection shows a notice that a new version is out and asks for a reload, or does not open (3 of 10 runs on a busy machine; 0 of 4 on a quiet one)
-SYN-05	A device that showed a channel caught up shows it without the last changes when it next opens it with no connection (4 of 10 runs on a busy machine; 0 of 1 on a quiet one)
-WRT-01	A message written offline is gone from the screen it was written on once the connection is back (1 of 10 runs)
-WRT-03	Six messages written offline show with the first three below the last three (1 of 10 runs), or not at all (1 of 10); in one whole-suite run the six showed out of order while still offline
-WRT-07	A message kept after deleting another offline is gone from the screen once the connection is back (1 of 10 runs)
-WRT-12	A window that wrote offline shows another window's earlier offline message below its own once both are sent (4 of 10 runs on a busy machine; 6 of 6 on a quiet one); in one whole-suite run the first window's message was not at the services after two minutes
-WRT-13	A device that was offline keeps its own queued message above messages the services hold before it (5 of 10 runs); in 1 of 10 what it wrote offline had not reached the services after a minute
-WRT-04	Messages blocked from being sent stay on screen through a reload but are not at the services forty seconds after they can be reached again (4 of 5 runs); on an earlier build they were gone after the reload, the first back in the composer and the second lost (13 of 14 runs)
+OFF-04	Scrolling back offline through a long history read while connected jumps from the latest messages to the middle (3 of 5 runs, 0 of 5 in another five)
+WRT-04	Messages blocked from being sent stay on screen through a reload but are not at the services forty seconds after they can be reached again (7 of 10 runs); timed once, they arrived five minutes after

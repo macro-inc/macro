@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts b/apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
+index 38cc5e2b1e..6c49c65740 100644
+--- a/apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
++++ b/apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
+@@ -809,6 +809,8 @@ export function createMutationQueueRunner(
+   }
+ 
+   async function drainQueue(): Promise<void> {
++    resolveLiveOperationsAsQueued();
++    return;
+     // A retired host stays disabled for good: stop polling instead of failing
+     // every 30 seconds against the no-op host.
+     if (host.disabled) {

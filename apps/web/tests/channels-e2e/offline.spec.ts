@@ -11,7 +11,13 @@ import {
 } from './harness/device';
 import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
-import { goOffline, goOnline, slowLink } from './harness/network';
+import {
+  codeFetched,
+  goOffline,
+  goOfflineAtOnce,
+  goOnline,
+  slowLink,
+} from './harness/network';
 
 // What a device shows of a channel with no connection, or with a very slow
 // one. Only a build that keeps channels on the device does any of this.
@@ -57,12 +63,9 @@ test('OFF-01 a channel the person has read opens whole with no connection', asyn
   await expectShown(view, WHOLE);
   await startAfresh(page, elsewhere);
 
-  await loseConnectionAt(page, channel);
-  // Defect, in some runs: the device says it cannot load the channel.
-  await failsSometimes(async () => {
-    const offline = await openFromList(page, channel);
-    await expectShown(offline, WHOLE);
-  });
+  const offline = await openOffline(page, channel);
+
+  await expectShown(offline, WHOLE);
 });
 
 // If this fails, a channel the device has never held shows something other
@@ -76,11 +79,14 @@ test('OFF-02 a channel the device has never held says it cannot load offline, an
   const { elsewhere } = await shortChannel(ada, ben);
   const page = await pageFor('ben');
   await new Conversation(page, elsewhere.id).open();
+  // Left alone, a device fetches a channel with something unread in it, so
+  // this one is made, and the connection lost, with no time between.
+  await codeFetched(page);
   const late = await ada.createChannel({ members: [ben.person] });
   await ada.post(late.id, 'made just now');
   await findRow(page, late);
 
-  await goOffline(page.context());
+  await goOfflineAtOnce(page.context());
   await page.getByText(late.name).first().click();
   await expect(couldNotLoad(page)).toBeVisible();
   await expect(page.getByText('made just now')).toHaveCount(0);
@@ -203,11 +209,7 @@ test('OFF-06 a thread read while connected shows its replies with no connection,
   const offline = await openOffline(page, channel);
   await offline.hiddenReplies(root.id).click();
 
-  // Defect, in some runs: only the first three replies show, and nothing
-  // says that there are more.
-  await failsSometimes(() =>
-    expect.poll(() => offline.replies(root.id)).toEqual(replies)
-  );
+  await expect.poll(() => offline.replies(root.id)).toEqual(replies);
 });
 
 // If this fails, a thread whose replies the device never fetched shows an
@@ -240,16 +242,13 @@ test('OFF-07 a long thread never opened, opened with no connection, shows every 
 
   // Every reply, or the replies it has and a count of the ones it has not.
   await expect(couldNotLoad(page)).toHaveCount(0);
-  // Defect, in some runs: three replies and no word of the rest.
-  await failsSometimes(() =>
-    expect
-      .poll(async () => {
-        const drawn = await offline.replies(root.id);
-        const more = await offline.hiddenReplies(root.id).isVisible();
-        return drawn.length === replies.length || (more && drawn.length > 0);
-      })
-      .toBe(true)
-  );
+  await expect
+    .poll(async () => {
+      const drawn = await offline.replies(root.id);
+      const more = await offline.hiddenReplies(root.id).isVisible();
+      return drawn.length === replies.length || (more && drawn.length > 0);
+    })
+    .toBe(true);
 });
 
 // If this fails, a team's owner loses the whole app, not just one channel,
@@ -288,12 +287,8 @@ test('OFF-09 a channel left as soon as its messages showed opens with no connect
   await goOffline(page.context());
   await page.getByText(channel.name).first().click();
 
-  // Defect, in most runs: the device does not hold the channel and says it
-  // cannot load it.
-  await failsSometimes(async () => {
-    await expect(couldNotLoad(page)).toHaveCount(0);
-    await expectShown(view, WHOLE);
-  });
+  await expectShown(view, WHOLE);
+  await expect(couldNotLoad(page)).toHaveCount(0);
 });
 
 // If this fails, a message a person watched arrive is missing from the
@@ -310,13 +305,9 @@ test('OFF-10 a message that arrived while the channel was open is there when the
   await expectShown(view, [...WHOLE, 'five']);
   await startAfresh(page, elsewhere);
 
-  await loseConnectionAt(page, channel);
-  // Defect, in most runs on a busy machine: the message that arrived is
-  // missing.
-  await failsSometimes(async () => {
-    const offline = await openFromList(page, channel);
-    await expectShown(offline, [...WHOLE, 'five']);
-  });
+  const offline = await openOffline(page, channel);
+
+  await expectShown(offline, [...WHOLE, 'five']);
 });
 
 // If this fails, a person offline is told that a new version of the app is
@@ -332,13 +323,10 @@ test('OFF-11 opening a held channel with no connection does not say that a new v
   await expectShown(view, WHOLE);
   await startAfresh(page, elsewhere);
 
-  await loseConnectionAt(page, channel);
-  // Defect, in some runs: the notice shows, with or without the channel.
-  await failsSometimes(async () => {
-    const offline = await openFromList(page, channel);
-    await expectShown(offline, WHOLE);
-    await offline.send('written offline');
-    await expectShown(offline, [...WHOLE, 'written offline']);
-    await expect(page.getByText('New version available')).toHaveCount(0);
-  });
+  const offline = await openOffline(page, channel);
+  await expectShown(offline, WHOLE);
+  await offline.send('written offline');
+  await expectShown(offline, [...WHOLE, 'written offline']);
+
+  await expect(page.getByText('New version available')).toHaveCount(0);
 });

@@ -2,13 +2,13 @@ import type { Api, SentMessage } from './harness/api';
 import {
   expectShown,
   findRow,
-  loseConnectionAt,
   type Named,
   openFromList,
+  openOffline,
   readAndReturn,
   startAfresh,
 } from './harness/device';
-import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, SOUP_BUILD, test } from './harness/fixtures';
 import { noAccess } from './harness/management';
 import { Conversation } from './harness/messages';
 import { goOffline, goOnline } from './harness/network';
@@ -218,13 +218,9 @@ test('SYN-05 what a device caught up on is what it shows the next time it opens 
   await expectShown(view, AFTER_EVERYTHING);
 
   await startAfresh(first, made.elsewhere);
-  await loseConnectionAt(first, made.channel);
-  // Defect, in some runs on a busy machine: the device shows the channel
-  // without the last changes it had caught up on.
-  await failsSometimes(async () => {
-    const offline = await openFromList(first, made.channel);
-    await expectShown(offline, AFTER_EVERYTHING);
-  });
+  const offline = await openOffline(first, made.channel);
+
+  await expectShown(offline, AFTER_EVERYTHING);
 });
 
 // If this fails, someone away from a busy channel for long enough comes

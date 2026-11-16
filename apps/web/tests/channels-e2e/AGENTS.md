@@ -59,9 +59,16 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   loads may not be sent on a build that queues writes on the device: a test
   that is not about that waits for the other person's page to show it before
   reloading.
-- A channel opened once and left at once is not on the device yet (OFF-09):
+- A channel opened once and left at once may not be on the device yet (OFF-09):
   a test about something else that needs it held offline gets it there with
   `readAndReturn` from `harness/device.ts`.
+- A page cut off in its first seconds is still fetching code: it then says a
+  new version is out (REC-04), may not open a held channel and can take the
+  keyboard from the composer. `goOffline` waits for the code first;
+  `goOfflineAtOnce` is only for a test of that moment.
+- Left alone for a few seconds, a device fetches a channel with something
+  unread in it (PRE-01): a test that needs a channel the device has never
+  held makes it and loses the connection with no wait between (OFF-02).
 - Typing in a window that is not in front goes nowhere: with two windows of
   one profile, `bringToFront()` the one about to be typed in.
 - `blockWrites` and `loseWriteAnswers` match the four message mutations by

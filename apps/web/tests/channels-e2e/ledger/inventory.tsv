@@ -18,6 +18,7 @@ threads	Replies show under their message in order for both people, live and afte
 thread-changes	Editing, deleting and reacting to a reply show to the other person without reload	THR-04,THR-05	
 reply-focus	Reply puts the keyboard in the reply box	THR-10	
 reconnect	After a lost connection or a hidden page, missed messages appear; a message written offline is neither lost nor doubled	REC-01,REC-02,REC-03	
+offline-just-after-open	Losing the connection in the first seconds after the app opened does not ask for a reload	REC-04	
 two-windows	What a person does in one window shows in their other window	TAB-01,TAB-02	
 drafts	A draft stays with its channel, survives reload, and is cleared by sending	CMP-01,CMP-02,CMP-03,CMP-13	
 composer	The send button is off when empty; the composer is ready again after sending and takes the cursor when a channel is chosen	CMP-04,KEY-10	

@@ -11,5 +11,4 @@ UNR-05	both	A mention of me shows only the plain unread mark on the channel's ro
 UNR-09	both	The first message in a new channel leaves the other member's row unmarked; the second marks it
 DM-06	off	New direct message offers nobody for a typed name (Options unavailable); only a whole email address is accepted
 UNR-10	on	A row shown while the list is being searched is not marked unread when a message arrives, until the search is closed
-WRT-11	on	A waiting message written right after another of the same person is never marked as not sent (10 of 10 runs)
-WRT-14	on	A message written offline in one window does not show in another window of the same device until it is sent (10 of 10 runs)
+REC-04	both	A connection lost in the first seconds after the app opened makes it say that a new version is out and offer a reload, which without a connection loses the app: the code it fetches then fails to load (5 of 5 runs on each build)
