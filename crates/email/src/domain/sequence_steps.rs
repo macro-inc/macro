@@ -187,14 +187,6 @@ pub trait SequenceStepStore: Send + Sync + 'static {
         message_id: Uuid,
     ) -> impl Future<Output = Result<StepState, Self::Err>> + Send;
 
-    /// The latest send time of the inbox's unsent sequence steps, up to `until`.
-    fn latest_send_until(
-        &self,
-        conn: &mut Self::Conn,
-        link_id: Uuid,
-        until: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
-
     /// An incoming message: `None` if missing, sent, or a draft.
     fn inbound_message(
         &self,

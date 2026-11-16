@@ -393,24 +393,6 @@ impl SequenceStepStore for PgSequenceSteps {
         .map_err(storage)
     }
 
-    async fn latest_send_until(
-        &self,
-        conn: &mut PgConnection,
-        link_id: Uuid,
-        until: DateTime<Utc>,
-    ) -> Result<Option<DateTime<Utc>>, EmailErr> {
-        // `email_scheduled_messages_pending_sequence_idx`
-        sqlx::query_scalar!(
-            r#"SELECT max(send_time) FROM email_scheduled_messages
-               WHERE link_id = $1 AND source IS NOT NULL AND NOT sent AND send_time <= $2"#,
-            link_id,
-            until,
-        )
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(storage)
-    }
-
     async fn inbound_message(
         &self,
         conn: &mut PgConnection,

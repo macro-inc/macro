@@ -847,6 +847,23 @@ impl SequenceRepo for PgSequenceRepo {
         Ok(())
     }
 
+    async fn latest_slot(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, PgSequenceError> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT max(h.scheduled_at) FROM email_sequence_steps h
+               JOIN email_sequence_enrollments e ON e.id = h.enrollment_id
+               WHERE e.link_id = $1 AND h.scheduled_at > $2"#,
+            link_id,
+            since,
+        )
+        .fetch_one(&mut **tx)
+        .await?)
+    }
+
     async fn has_live_enrollments(&self, link_id: Uuid) -> Result<bool, PgSequenceError> {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM email_sequence_enrollments

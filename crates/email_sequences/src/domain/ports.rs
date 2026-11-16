@@ -312,6 +312,14 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// The latest send time given to a step from the inbox after `since`,
+    /// sent or not. Call it under [`Self::lock_send_slot`].
+    fn latest_slot(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
     /// Whether the inbox has any live enrollment.
     fn has_live_enrollments(
         &self,

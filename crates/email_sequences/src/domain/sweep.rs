@@ -26,8 +26,9 @@ const PAGE: i64 = 100;
 /// The soonest a new step may send: its send time is in the future when
 /// committed, and a reply or unsubscribe in that minute can still withdraw it.
 const MIN_LEAD: Duration = Duration::seconds(60);
-/// Sends from one inbox are at least this far apart, so it never bursts.
-const SPACING: Duration = Duration::seconds(30);
+/// Sequence emails from one inbox are at least this far apart: 20 an hour, the
+/// pace of someone writing them by hand.
+const SPACING: Duration = Duration::minutes(3);
 /// A step is created only when its slot is this close; later ones wait.
 const MAX_LEAD: Duration = Duration::seconds(90);
 
@@ -36,9 +37,12 @@ const MAX_LEAD: Duration = Duration::seconds(90);
 pub(super) enum Creation {
     Created,
     Skipped,
-    /// Nothing can go from the inbox in this pass: its next slot isn't near,
-    /// it can't send, or its owner lost access. Its enrollments stay due.
+    /// Nothing can go from the inbox in this pass: its next slot isn't near or
+    /// it can't send. Its enrollments stay due.
     InboxWaits(Uuid),
+    /// The owner isn't in the enrollment's team now, or the team's Customers
+    /// is off. Their enrollments in that team stay due.
+    OwnerWaits,
 }
 
 /// What one sweep did.
@@ -274,10 +278,12 @@ where
     }
 
     async fn create_due(&self, report: &mut SweepReport) {
-        // An inbox that can't take a step now is skipped for the rest of the
-        // pass, so a backlog or outage costs one check, not one per enrollment,
-        // and doesn't hold up the others.
+        // An inbox that can't take a step now, or an owner without access to a
+        // team, is skipped for the rest of the pass, so a backlog or outage
+        // costs one check, not one per enrollment, and doesn't hold up the
+        // others.
         let mut waiting = std::collections::HashSet::new();
+        let mut locked_out = std::collections::HashSet::new();
         let mut after = None;
         loop {
             let skip: Vec<Uuid> = waiting.iter().copied().collect();
@@ -290,7 +296,8 @@ where
                 }
             };
             for due in &page {
-                if waiting.contains(&due.link_id) {
+                let owner = (due.owner_id.clone(), due.team_id);
+                if waiting.contains(&due.link_id) || locked_out.contains(&owner) {
                     continue;
                 }
                 match self.create_step(due).await {
@@ -298,6 +305,9 @@ where
                     Ok(Creation::Skipped) => {}
                     Ok(Creation::InboxWaits(link_id)) => {
                         waiting.insert(link_id);
+                    }
+                    Ok(Creation::OwnerWaits) => {
+                        locked_out.insert(owner);
                     }
                     Err(error) => {
                         tracing::warn!(enrollment_id = %due.id, error = ?error, "failed to create a sequence step");
@@ -325,7 +335,7 @@ where
                 .await
                 .map_err(internal)?;
         if !has_access {
-            return Ok(Creation::InboxWaits(due.link_id));
+            return Ok(Creation::OwnerWaits);
         }
         let mut tx = self.repo.begin().await.map_err(internal)?;
         let Some(inbox) = self
@@ -418,8 +428,8 @@ where
             .await
             .map_err(internal)?;
         let latest = self
-            .steps
-            .latest_send_until(R::conn(&mut tx), inbox.link_id, now + MAX_LEAD)
+            .repo
+            .latest_slot(&mut tx, inbox.link_id, now - SPACING)
             .await
             .map_err(internal)?;
         let slot = latest.map_or(now + MIN_LEAD, |latest| {
