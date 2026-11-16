@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import type { BlockTool } from '@components/app/block-tool';
@@ -69,7 +70,7 @@ export function useProjectHeaderTools() {
   );
 
   const chat: BlockTool = {
-    label: 'Chat',
+    label: () => t('entityActions.chatAboutProject'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent({ type: 'project', id, name: name() }),
     condition: () => !isSpecialProject,
@@ -84,7 +85,7 @@ export function useProjectHeaderTools() {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     condition: () => showShare(),

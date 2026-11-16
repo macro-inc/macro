@@ -2,6 +2,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useBlockId } from '@core/block';
@@ -42,7 +43,9 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
       ? [
           {
             group: 'file' as const,
-            label: 'Download',
+            get label() {
+              return t('entityActions.download');
+            },
             icon: DownloadSimple,
             action: () =>
               fireAndForget(
@@ -56,7 +59,7 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
   ];
 
   const askMacro: BlockTool = {
-    label: 'Ask Macro',
+    label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
       openChatWithAgent({
@@ -68,7 +71,7 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
   };
 
   const share: BlockTool = {
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     focusTarget: getShareDrawerRecipientInput,

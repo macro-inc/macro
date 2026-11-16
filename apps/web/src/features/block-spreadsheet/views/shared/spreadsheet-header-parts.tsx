@@ -2,6 +2,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
@@ -26,16 +27,22 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
     { op: 'moveToProject' },
     {
       group: 'file',
-      label: 'Download',
+      get label() {
+        return t('entityActions.download');
+      },
       icon: DownloadSimple,
       children: [
         {
-          label: 'Download as Excel (.xlsx)',
+          get label() {
+            return t('entityActions.downloadAsXlsx');
+          },
           icon: FileXls,
           action: () => props.download('xlsx'),
         },
         {
-          label: 'Download as CSV',
+          get label() {
+            return t('entityActions.downloadAsCsv');
+          },
           icon: FileCsv,
           action: () => props.download('csv'),
         },
@@ -45,7 +52,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
   ];
 
   const askMacro: BlockTool = {
-    label: 'Ask Macro',
+    label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
       openChatWithAgent({
@@ -58,7 +65,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,
     focusTarget: getShareDrawerRecipientInput,
