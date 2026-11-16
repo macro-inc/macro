@@ -996,8 +996,6 @@ fn block_ops_reach_the_source_doc_state() {
         };
         rows.push(format!("{class:<11} {}: {outcome}", entry.name));
     }
-    // The per-case table is the receipt; print it on success too (`--nocapture`).
-    eprintln!("block corpus outcomes:\n{}", rows.join("\n"));
     assert!(
         failed == 0,
         "{failed} of {} cases differ:\n{}",
@@ -1096,7 +1094,6 @@ fn selected_block_ids_match_source_for_table_selections() {
             ));
         }
     }
-    eprintln!("selection corpus outcomes:\n{}", rows.join("\n"));
     assert!(failed == 0, "{failed} cases differ:\n{}", rows.join("\n"));
 }
 

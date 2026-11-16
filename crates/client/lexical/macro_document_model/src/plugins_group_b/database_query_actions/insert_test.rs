@@ -73,10 +73,6 @@ fn inserts_full_source_paragraph_and_caret_at_current_or_root_end() -> Result<()
             .ok_or(Error::Invariant("Query caret missing"))?;
         let selection = json!({"kind":"range","anchor":point_snapshot(view,range.anchor)?,"focus":point_snapshot(view,range.focus)?,"format":range.format.bits(),"style":range.style.to_string()});
         assert_eq!(selection, oracle[mode]["selection"]);
-        println!(
-            "QUERY_INSERT_NATIVE {}",
-            json!({"mode":mode,"paragraph":paragraph_json,"selection":selection})
-        );
         assert_eq!(commit.tags, TagSet::default());
     }
     Ok(())

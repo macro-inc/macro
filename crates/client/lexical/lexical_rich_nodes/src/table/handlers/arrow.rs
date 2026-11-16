@@ -255,12 +255,10 @@ pub fn handle_arrow_key(
                     let mut node = sibling;
                     let mut offset = 0;
                     if up && tx.is_element(sibling) {
-                        offset = tx.children_size(sibling);
                         node = tx.last_child(sibling).unwrap_or(sibling);
                         offset = if tx.is_text(node) {
                             tx.text_content_size(node).0
                         } else {
-                            let _ = offset;
                             0
                         };
                     }
