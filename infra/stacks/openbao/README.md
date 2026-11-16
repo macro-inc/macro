@@ -28,14 +28,18 @@ nothing at startup. Pulumi builds it (`linux/amd64`) and pushes it to the
 change both digests in the Dockerfile and `KMS_AWS_PLUGIN_SHA256` in
 `server-config.ts`, from the same openbao/openbao-plugins release's
 checksummed `linux_amd64` asset. A wrong checksum leaves the vault sealed, and
-the deployment circuit breaker rolls back.
+the deployment circuit breaker rolls back. The plugin the server used to download is still
+in `plugins/` beside the Raft `data/` on EFS; nothing reads it, and it can be
+deleted.
 
 ## Logs
 
 Server and audit logs (JSON) go to the CloudWatch log group `openbao`, and the
-shared Firehose forwards them to Datadog. Datadog names a non-Lambda log group's
-source and service after the group, so search `service:openbao`; the Firehose
-adds no `env` tag. The task runs no Datadog agent or Grafana Alloy sidecar:
+shared Firehose forwards them to Datadog. Datadog's Firehose docs name a
+non-Lambda log group's source and service after the group, so they arrive as
+`service:openbao`; no other non-Lambda group uses this stream yet, so after the
+first deploy confirm with `@aws.awslogs.logGroup:openbao`. The Firehose adds no
+`env` tag. The task runs no Datadog agent or Grafana Alloy sidecar:
 there is no live container CPU/memory view in Datadog (CloudWatch ECS metrics
 remain, and the alarms below use CloudWatch), no copy of the logs in dev
 Grafana, and no traces (OpenBao never sent any). OpenBao telemetry was never

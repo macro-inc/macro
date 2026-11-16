@@ -445,7 +445,7 @@ const image = new EcrImage(`${BASE_NAME}-ecr-image`, {
 
 // Server and audit logs go to CloudWatch, then to Datadog through the shared
 // Firehose stream. Datadog names a non-Lambda log group's source and service
-// after the group, so this stays `service:openbao`.
+// after the group, so this stays `service:openbao` (README "Logs").
 const logGroup = new aws.cloudwatch.LogGroup(`${BASE_NAME}-logs`, {
   name: BASE_NAME,
   retentionInDays: 30,
