@@ -1,7 +1,10 @@
 use super::*;
 use crate::outbound::email_pg_repo::dynamic::resolve::{ResolvedFilters, resolve_filters};
 use chrono::{TimeZone, Utc};
-use item_filters::ast::email::Email;
+use item_filters::NotificationState;
+use item_filters::ast::date::DateLiteral;
+use item_filters::ast::email::{AttachmentKind, Email, SubjectQuery};
+use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use models_pagination::SimpleSortMethod;
@@ -162,7 +165,7 @@ fn thread_terms_and_cursor_are_stream_conditions() {
         .next()
         .and_then(|head| head.rsplit("FROM email_threads t").next())
         .unwrap();
-    assert!(stream.contains("t.id IN (SELECT thread_id FROM matching_threads)"));
+    assert!(stream.contains("t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads))"));
     assert!(stream.contains("t.is_signal"));
     assert!(stream.contains("t.link_id = $"));
     assert!(stream.contains("(COALESCE(t.latest_non_spam_message_ts, t.updated_at), t.id) < ($"));
@@ -253,6 +256,68 @@ fn record_without_contacts_in_the_inboxes_has_no_superset() {
     assert!(read.superset.branches.is_empty());
 }
 
+/// The record's addresses AND `term`.
+fn record_and(term: Expr<EmailLiteral>) -> Expr<EmailLiteral> {
+    Expr::And(Box::new(any_direction("example.test")), Box::new(term))
+}
+
+/// The page's checks (`push_checks`) see a streamed thread as its id and
+/// inbox alone, so they may read no other column of `t`. The pages of both
+/// streams, for each kind of thread and message term a team read takes
+/// beside the record, plain, negated and in a mixed OR, must plan.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn checks_read_only_the_threads_id_and_inbox(pool: sqlx::PgPool) -> anyhow::Result<()> {
+    let date = Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap();
+    let subject = || SubjectQuery::try_from("quarterly".to_owned());
+    let terms = [
+        EmailLiteral::Importance(true),
+        EmailLiteral::Read(false),
+        EmailLiteral::InboxVisible(true),
+        EmailLiteral::CalendarOnly(true),
+        EmailLiteral::Attachment(AttachmentKind::Pdf),
+        EmailLiteral::Subject(subject()?),
+        EmailLiteral::ThreadId(Uuid::from_u128(0xa1)),
+        EmailLiteral::ProjectId("project".to_owned()),
+        EmailLiteral::NotificationState(NotificationState::Unseen),
+        EmailLiteral::CreatedAt(DateLiteral::GreaterThan(date)),
+        EmailLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(date)),
+        EmailLiteral::Property(PropertiesLiteral {
+            property_definition_id: Uuid::from_u128(0xa2),
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(Uuid::from_u128(0xa3)),
+        }),
+        EmailLiteral::Owner(OWN),
+    ];
+    let mut filters = vec![
+        any_direction("example.test"),
+        signal_and_me(OWN),
+        record_and(Expr::Or(
+            Box::new(Expr::Literal(EmailLiteral::Subject(subject()?))),
+            Box::new(Expr::Literal(EmailLiteral::Read(true))),
+        )),
+    ];
+    for term in terms {
+        filters.push(record_and(Expr::Literal(term.clone())));
+        filters.push(record_and(Expr::Not(Box::new(Expr::Literal(term)))));
+    }
+
+    let view = all_mail();
+    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::CreatedAt] {
+        for filter in &filters {
+            let read = team_read(&view, filter, params(sort))
+                .ok_or_else(|| anyhow::anyhow!("no team read for {sort:?} {filter:?}"))?;
+            for stream in [Stream::Superset, Stream::Inboxes] {
+                read.build_page(stream)
+                    .build()
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{sort:?} {filter:?}: {e}"))?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Link `i` of the `email_crm_team_read` fixture.
 fn gamma_link(i: u128) -> Uuid {
     Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | i)
@@ -286,7 +351,8 @@ async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, 
     builder.push_bind(team);
     builder.push(", t.id) AS allowed, (TRUE");
     builder.push(ALLOWED);
-    builder.push(") AS inline FROM email_threads t) AS verdict");
+    // The page runs the rule over a thread's id and inbox alone.
+    builder.push(") AS inline FROM (SELECT id, link_id FROM email_threads) AS t) AS verdict");
     Ok(builder.build_query_as().fetch_one(pool).await?)
 }
 

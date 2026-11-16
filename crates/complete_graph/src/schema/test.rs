@@ -51,6 +51,7 @@ mod channel;
 mod channel_messages;
 mod channel_perf;
 mod contacts;
+mod crm_member_access;
 mod crm_record;
 mod database_activity;
 mod database_row;
@@ -1170,6 +1171,7 @@ struct CountingEntityAccessService {
     viewable_channels: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
+    viewable_crm_records: Arc<Mutex<std::collections::HashSet<(EntityType, String)>>>,
 }
 
 impl EntityAccessService for CountingEntityAccessService {
@@ -1215,6 +1217,12 @@ impl EntityAccessService for CountingEntityAccessService {
                     .contains(&thread_id)
                     .then_some(AccessLevel::View)
             }
+            (EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline, _) => self
+                .viewable_crm_records
+                .lock()
+                .unwrap()
+                .contains(&(entity_type, entity_id.to_owned()))
+                .then_some(AccessLevel::View),
             _ => return Err(AccessError::internal("test access failure")),
         };
         if let Some(access_level) = grant {
@@ -1229,7 +1237,13 @@ impl EntityAccessService for CountingEntityAccessService {
         }
         if matches!(
             entity_type,
-            EntityType::Database | EntityType::Form | EntityType::EmailThread | EntityType::Channel
+            EntityType::Database
+                | EntityType::Form
+                | EntityType::EmailThread
+                | EntityType::Channel
+                | EntityType::CrmCompany
+                | EntityType::CrmContact
+                | EntityType::CrmPipeline
         ) {
             return Err(AccessError::Unauthorized);
         }
@@ -2102,6 +2116,7 @@ async fn agent_session_activity_appended_routes_only_the_requested_session(pool:
         ))
         .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
         .data(loader)
+        .data(SchemaOnlyState)
         .data(subscriptions),
     );
     pin_mut!(responses);
@@ -2218,7 +2233,8 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
     let request = async_graphql::Request::new(
         "subscription { activityUpdates { __typename ... on GraphqlActivityEvent { id entityType entityId } } }",
     )
-    .data(user_id.clone());
+    .data(user_id.clone())
+    .data(SchemaOnlyState);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 

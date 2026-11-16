@@ -118,3 +118,5 @@ per-entity-type search plus a unified search across them — mounted into
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- CRM search authorization uses the primary pool (`crm_db`) so member revocation cannot be reversed by replica lag; denied viewers receive no CRM matches or enrichment.
