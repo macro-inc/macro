@@ -86,3 +86,30 @@ async fn reads_only_the_users_active_rows_of_the_requested_types_newest_first(po
     assert_eq!(first_two, vec![newest, seen]);
     assert!(sends.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_statement_timeout_maps_to_timed_out_and_other_errors_to_failed(pool: PgPool) {
+    let mut transaction = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL statement_timeout = '10ms'")
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    let timeout = sqlx::query!("SELECT pg_sleep(1)")
+        .execute(&mut *transaction)
+        .await
+        .unwrap_err();
+    drop(transaction);
+    let other = sqlx::query!("SELECT CAST($1::text AS integer) AS value", "not a number")
+        .fetch_one(&pool)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        storage_error(timeout),
+        ActiveNotificationIdStorageError::TimedOut
+    ));
+    assert!(matches!(
+        storage_error(other),
+        ActiveNotificationIdStorageError::Failed(_)
+    ));
+}

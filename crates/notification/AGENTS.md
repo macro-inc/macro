@@ -35,8 +35,10 @@ through the same service.
   the ids of a user's active notifications of known event types (default 100,
   at most 500), for clients that act on a type without reading their feed.
   The service takes the known types from its caller (`NotifEvent::EVENT_TYPES`).
-  No index leads with the event type, so a rare type scans the user's live
-  notifications under a 5 s statement timeout; the service span records
+  No index leads with the event type, so a rare type walks the user's active
+  (not done, not deleted) notifications, usually through
+  `idx_user_notification_user_pending` with a heap check of each row's event
+  type, under a 5 s statement timeout; the `notification.active_ids` span records
   `notification.id_count` and `db.statement_timed_out`, and logs a timeout
   once at warn.
 - `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one

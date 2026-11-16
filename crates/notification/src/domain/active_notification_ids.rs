@@ -73,6 +73,7 @@ impl<R: ActiveNotificationIdRepository> ActiveNotificationIdService<R> {
     /// first: at most `limit`, [`DEFAULT_LIMIT`] when none is given. A storage
     /// failure is logged here, once.
     #[tracing::instrument(
+        name = "notification.active_ids",
         skip_all,
         fields(
             event_type_count = event_types.len(),

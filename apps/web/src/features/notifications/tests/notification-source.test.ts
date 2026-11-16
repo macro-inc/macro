@@ -95,9 +95,19 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   useUnmuteItemMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => ({
+    userId: 'macro|viewer@example.com',
+    session: 1,
+  }),
+  isCurrentQueryAccount: () => true,
+  queryAccountSessionPending: () => false,
+}));
+
 vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: () => mocks.graphqlCacheEnabled,
   mapGraphqlNotification: (notification: UnifiedNotification) => notification,
+  subscribeGraphqlSoupReconnected: () => () => {},
 }));
 
 vi.mock('@service-storage/graphql-soup-websocket', () => ({

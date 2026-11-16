@@ -170,6 +170,11 @@ async fn records_the_count_and_a_timeout_on_the_span_and_warns_once() {
     provider.force_flush().unwrap();
     let spans = exporter.get_finished_spans().unwrap();
     assert_eq!(spans.len(), 2);
+    assert!(
+        spans
+            .iter()
+            .all(|span| span.name == "notification.active_ids")
+    );
     let (read, timed_out) = (&spans[0], &spans[1]);
     assert_eq!(
         attribute(read, "notification.id_count").map(|count| count.to_string()),

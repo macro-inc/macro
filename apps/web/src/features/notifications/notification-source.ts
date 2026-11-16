@@ -5,6 +5,12 @@ import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import { Telemetry } from '@macro-inc/observability';
 import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+  queryAccountSessionPending,
+} from '@queries/auth/account-scope';
+import {
   ActiveNotificationIdsTimeoutError,
   fetchActiveNotificationIds,
 } from '@queries/notification/graphql/active-notification-ids';
@@ -26,7 +32,10 @@ import type {
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
-import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import {
+  mapGraphqlNotification,
+  subscribeGraphqlSoupReconnected,
+} from '@service-storage/graphql-soup';
 import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { UseQueryResult } from '@tanstack/solid-query';
@@ -114,8 +123,22 @@ const NOTIFICATION_EVENT_TYPE = 'notification';
 const QUERY_LIMIT = 500;
 
 const DOCUMENT_MENTION = 'document_mention';
-// The server's maximum, so one read discards a session's whole backlog.
+// The server's maximum; mentions beyond it wait for the next pass.
 const DOCUMENT_MENTION_CLEANUP_LIMIT = 500;
+
+type DocumentMentionCleanupError =
+  | 'read_timeout'
+  | 'read_failed'
+  | 'mark_failed';
+
+function documentMentionCleanupError(
+  stage: 'read' | 'mark',
+  error: unknown
+): DocumentMentionCleanupError {
+  if (stage === 'mark') return 'mark_failed';
+  if (error instanceof ActiveNotificationIdsTimeoutError) return 'read_timeout';
+  return 'read_failed';
+}
 
 // Persistent overrides for the `done` flag that survive cache writes.
 // In-flight infinite-query page fetches can land after an optimistic cache
@@ -391,45 +414,62 @@ export function createNotificationSource(
       );
     });
 
-    // GraphQL mode never reads the feed for this. Each signed-in session
-    // reads the ids of every active mention once, which also reaches mentions
-    // outside the feed's window, and mentions delivered afterwards are
-    // discarded as they arrive. A read that lands after the session ended
-    // (sign-out, account switch, transport swap) is dropped. A failed read or
-    // mark skips the cleanup until the next session: it is logged once and
-    // sets no state, so nothing retries it.
-    let cleanupSession = 0;
-    const discardActiveDocumentMentions = (session: number) =>
+    // GraphQL mode never reads the feed for this. Each account session reads
+    // the ids of every active mention once, and again after the GraphQL
+    // websocket reconnects, which also reaches mentions outside the feed's
+    // window; mentions delivered while connected are discarded as they
+    // arrive. A read that lands for another account, or after sign-out or a
+    // transport swap, is dropped. A failed read or mark is logged once and
+    // skips the cleanup for the rest of that account session; nothing
+    // retries it.
+    let skippedAccount: QueryAccount | undefined;
+    const discardActiveDocumentMentions = (account: QueryAccount) =>
       Telemetry.span('notification.document_mention_cleanup', async (span) => {
+        let stage: 'read' | 'mark' = 'read';
         try {
           const ids = await fetchActiveNotificationIds(
             [DOCUMENT_MENTION],
             DOCUMENT_MENTION_CLEANUP_LIMIT
           );
-          span.setAttr('notification.count', ids.length);
-          const sessionEnded =
-            session !== cleanupSession || !enabled() || !usesGraphql();
-          if (ids.length === 0 || sessionEnded) return;
+          span.setAttr('notification.id_count', ids.length);
+          const current =
+            isCurrentQueryAccount(account) && enabled() && usesGraphql();
+          if (ids.length === 0 || !current) return;
+          stage = 'mark';
           await markNotificationsAsDoneMutation.mutateAsync({
             notificationIds: ids,
           });
         } catch (error) {
-          const timedOut = error instanceof ActiveNotificationIdsTimeoutError;
-          span.setAttr('error.type', timedOut ? 'timeout' : 'other');
+          const errorType = documentMentionCleanupError(stage, error);
+          span.setAttr('error.type', errorType);
+          span.error(errorType);
+          skippedAccount = account;
           console.warn(
             'Skipped document mention cleanup for this session',
             error
           );
         }
       });
+    const startDocumentMentionCleanup = () => {
+      const account = currentQueryAccount();
+      if (!account) return;
+      const skipped =
+        skippedAccount?.userId === account.userId &&
+        skippedAccount.session === account.session;
+      if (skipped) return;
+      fireAndForget(discardActiveDocumentMentions(account), 'notifications');
+    };
     createEffect(() => {
-      if (!enabled() || !usesGraphql()) return;
-      cleanupSession += 1;
-      const session = cleanupSession;
-      untrack(() =>
-        fireAndForget(discardActiveDocumentMentions(session), 'notifications')
-      );
+      // The account session also changes when a login replaces the session
+      // in place, without a sign-out: wait for the new identity, then run.
+      if (!enabled() || !usesGraphql() || queryAccountSessionPending()) return;
+      untrack(startDocumentMentionCleanup);
     });
+    onCleanup(
+      subscribeGraphqlSoupReconnected(() => {
+        if (enabled() && usesGraphql()) startDocumentMentionCleanup();
+      })
+    );
     subscriptions.add((notification) => {
       if (!usesGraphql()) return;
       if (notification.notification_event_type !== DOCUMENT_MENTION) return;

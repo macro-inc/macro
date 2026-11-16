@@ -21,14 +21,15 @@ impl ActiveNotificationIdRepository for PgActiveNotificationIdRepository {
         event_types: &[String],
         limit: u32,
     ) -> Result<Vec<Uuid>, ActiveNotificationIdStorageError> {
-        let failed = |error: sqlx::Error| ActiveNotificationIdStorageError::Failed(error.into());
         // No index leads with the event type, so a rare type walks the user's
-        // live notifications newest first until the limit fills; bound it.
-        let mut transaction = self.0.begin().await.map_err(failed)?;
+        // active (not done, not deleted) notifications newest first, usually
+        // through idx_user_notification_user_pending, checking each row's
+        // event type in the heap until the limit fills; bound it.
+        let mut transaction = self.0.begin().await.map_err(storage_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
             .execute(&mut *transaction)
             .await
-            .map_err(failed)?;
+            .map_err(storage_error)?;
         let ids = sqlx::query_scalar!(
             r#"
             SELECT notification_id
@@ -46,17 +47,19 @@ impl ActiveNotificationIdRepository for PgActiveNotificationIdRepository {
         )
         .fetch_all(&mut *transaction)
         .await
-        .map_err(|error| {
-            let code = error.as_database_error().and_then(|error| error.code());
-            if code.as_deref() == Some(QUERY_CANCELED) {
-                ActiveNotificationIdStorageError::TimedOut
-            } else {
-                failed(error)
-            }
-        })?;
-        transaction.commit().await.map_err(failed)?;
+        .map_err(storage_error)?;
+        transaction.commit().await.map_err(storage_error)?;
         Ok(ids)
     }
+}
+
+/// A statement cancelled by its timeout is `TimedOut`; any other error is `Failed`.
+fn storage_error(error: sqlx::Error) -> ActiveNotificationIdStorageError {
+    let code = error.as_database_error().and_then(|error| error.code());
+    if code.as_deref() == Some(QUERY_CANCELED) {
+        return ActiveNotificationIdStorageError::TimedOut;
+    }
+    ActiveNotificationIdStorageError::Failed(error.into())
 }
 
 #[cfg(test)]
