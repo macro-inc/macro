@@ -22,7 +22,8 @@ before changing a stack.
   `DopplerEcsEnvironment`, `EcrImage`, Fargate with the circuit breaker. Not
   per-service ALBs, raw `aws.sqs.Queue`, or `createServiceRole`.
   The one exception is a service that must never be reachable through the
-  gateway: the dev-only `openbao` stack has its own internal ALB.
+  gateway: the dev-only `openbao` stack has its own internal ALB, and its
+  replacement in the `macro-openbao` account an NLB behind PrivateLink.
 - `MacroConfig` sees only `APP_SECRETS_JSON` in ECS: values infra produces go
   into Doppler, not container `environment:`.
 - Secrets live in the service's Doppler project, nowhere else. Don't create

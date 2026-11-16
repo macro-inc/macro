@@ -189,7 +189,9 @@ build/deployment failure gates remain attempt-scoped.
   few others are manual.
 - `openbao` (dev only) is a deliberate exception to the gateway pattern: the
   vault API must never be gateway-reachable, so it has its own internal ALB.
-  Don't copy it for ordinary services.
+  Its replacement runs in the separate `macro-openbao` account behind an NLB
+  that DSS reaches through PrivateLink. Don't copy either for ordinary
+  services.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.
