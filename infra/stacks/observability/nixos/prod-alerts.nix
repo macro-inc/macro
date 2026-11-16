@@ -224,6 +224,21 @@ in
           runbook = "macrodb.md#load";
         }
         {
+          panelId = 15;
+          uid = "macrodb-io-credits";
+          title = "macro-db-prod instance I/O credits draining";
+          service = "macro-db-prod";
+          metric = rds "EBSIOBalance%" bothInstances "Minimum";
+          unit = "percent";
+          window = 900;
+          reducer = "mean";
+          firesWhen = "below";
+          warning = 70;
+          critical = 40;
+          description = "{{ $labels.DBInstanceIdentifier }} has {{ humanize $values.B.Value }}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above what its instance class sustains; at 0% the instance is held to that baseline, disk reads queue and a replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits.";
+          runbook = "macrodb.md#io-credits";
+        }
+        {
           panelId = 10;
           uid = "macrodb-free-storage";
           title = "macro-db-prod free storage low";

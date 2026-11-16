@@ -387,9 +387,17 @@ async fn run_server() -> anyhow::Result<()> {
     let bots_repo = PgBotsRepo::new(db.clone());
     // The agent API checks a newly selected MCP app against Pipedream's
     // directory, the same check the ConfigureAgent tool makes.
-    let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone()).with_mcp_apps(
-        ai_tools::PipedreamMcpAppCatalog::new(ai_tools::pipedream_client_from_env()?),
-    );
+    let bots_service = BotServiceImpl::new(
+        bots_repo,
+        macro_event_broker.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+        ),
+    )
+    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::new(
+        ai_tools::pipedream_client_from_env()?,
+    ));
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -404,8 +412,10 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
     )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
-    let harnesses_service =
-        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(db.clone()));
+    let harnesses_service = harnesses::domain::service::HarnessServiceImpl::new(
+        PgHarnessRepo::new(db.clone()),
+        hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+    );
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -1936,7 +1946,14 @@ async fn run_server() -> anyhow::Result<()> {
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
             )),
-            crm_service.clone(),
+            // The Sales views' activity edges probe every record of the scope;
+            // read them from the replica, like the rest of the list. Record
+            // and access reads stay on the primary.
+            crm::domain::service::CrmServiceImpl::new(
+                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
+                    .with_activity_edges_replica(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+                crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+            ),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
                 PgGithubPullRequestRepo::new(readonly_db.clone()),
@@ -2443,10 +2460,20 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
                 KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
             ),
+            // Clears are stored on the primary, with the notification state
+            // they change.
+            notification::outbound::bulk_action::PgBulkActions::new(db.clone()),
+            notification_inbox::outbound::gateway_clear_updates::GatewayClearUpdates::new(
+                conn_gateway_client.clone(),
+            ),
         ),
         feed_triggers,
         feed_viewers,
+        consumer_tracker.clone(),
+        consumer_cancellation_token.clone(),
     );
+    // Resumes clears a crashed or redeployed instance left partway.
+    consumer_tracker.spawn(graphql_notification_inbox_context.clone().recover_clears());
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;

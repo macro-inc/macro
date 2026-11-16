@@ -1,7 +1,9 @@
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
+import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { useCompanyContactsQuery } from './company-contacts';
 import { editContact } from './contact-edit';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -92,5 +94,122 @@ it('authoritatively refreshes a successful save when editable fields changed dur
   expect(read).toHaveBeenCalledOnce();
   expect(client.getQueryData(key)).toEqual(committed);
   unsubscribe();
+  client.clear();
+});
+
+it('refetches a searched Team list when a new primary address stops matching it', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const anna = {
+    ...before,
+    companyId: 'company-1',
+    name: null,
+    email: 'anna@example.com',
+  };
+  let stored: CrmContactResponse = anna;
+  const listCompanyContactsPage = vi.fn(async ({ query }: { query?: string }) =>
+    ok({
+      contacts: !query || stored.email?.includes(query) ? [stored] : [],
+      nextCursor: null,
+    })
+  );
+  const deps = {
+    client,
+    storage: {
+      listCompanyContactsPage,
+      getCompany: async () => ok({ id: 'company-1', name: 'Example' }),
+    },
+  } as unknown as CrmRecordDependencies;
+  const { source, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: 'anna',
+    })),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(source.contacts).toEqual([anna]));
+
+  const edited = { ...anna, email: 'bo@example.com', updatedAt: '2026-10-02' };
+  await editContact(deps, anna, 'email', async () => {
+    stored = edited;
+    return ok(edited);
+  });
+  expect(listCompanyContactsPage).toHaveBeenCalledTimes(2);
+  expect(source.contacts).toEqual([]);
+  dispose();
+  client.clear();
+});
+
+it("names the company from the detail's summary without reading the company", async () => {
+  const client = new QueryClient();
+  const key = crmKeys.contact(before.id).queryKey;
+  const detail = {
+    ...before,
+    companyId: 'company-1',
+    company: {
+      id: 'company-1',
+      name: 'Example company',
+      domain: 'example.com',
+      hidden: false,
+    },
+  };
+  client.setQueryData(key, detail);
+  const saved = {
+    ...before,
+    companyId: 'company-1',
+    email: 'second@example.com',
+    updatedAt: '2026-10-02',
+  };
+  const getCompany = vi.fn(async () => ok({ name: 'Read company' }));
+  const deps = {
+    client,
+    storage: { getCompany },
+  } as unknown as CrmRecordDependencies;
+  await editContact(deps, detail, 'email', async () => ok(saved));
+  expect(getCompany).not.toHaveBeenCalled();
+  expect(mocks.commit).toHaveBeenCalledExactlyOnceWith(
+    saved,
+    'Example company'
+  );
+  client.clear();
+});
+
+it("names the company from the primary read's summary when recovering", async () => {
+  const client = new QueryClient();
+  const key = crmKeys.contact(before.id).queryKey;
+  const company = {
+    id: 'company-1',
+    name: 'Example company',
+    domain: 'example.com',
+    hidden: false,
+  };
+  // A conflicting edit landed meanwhile, so the save recovers from a primary read.
+  client.setQueryData(key, {
+    ...before,
+    email: 'second@example.com',
+    updatedAt: '2026-10-03',
+  });
+  const committed = {
+    ...before,
+    companyId: 'company-1',
+    email: 'third@example.com',
+    updatedAt: '2026-10-02',
+  };
+  const getCompany = vi.fn(async () => ok({ name: 'Read company' }));
+  const deps = {
+    client,
+    storage: {
+      getContact: vi.fn(async () => ok({ ...committed, company })),
+      getCompany,
+    },
+  } as unknown as CrmRecordDependencies;
+  await editContact(deps, before, 'company', async () => ok(committed));
+  expect(getCompany).not.toHaveBeenCalled();
+  expect(mocks.commit).toHaveBeenCalledExactlyOnceWith(
+    { ...committed, company },
+    'Example company'
+  );
   client.clear();
 });

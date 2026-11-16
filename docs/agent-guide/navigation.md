@@ -248,6 +248,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -255,7 +256,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
 | `/app/external` | External: link a personal WhatsApp account and adopt independently shared WhatsApp groups (requires the `enable-whatsapp-linked` flag; see [External](external.md)) |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
-| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>`. `?tableId=…&viewId=…` opens that table and view |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/routines` | Routines list in the Agents workspace |
@@ -690,10 +691,12 @@ Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
-Each desktop sidebar puts its Search icon immediately left of the collapse
-control. Click it to reveal the view's search field between the title and New,
-at the same height as the New button; click again to hide it. The field focuses when opened. Existing list-toolbar
-search remains available and shares its query where the view filters a list.
+A desktop sidebar has a Search icon, immediately left of the collapse control,
+only where the sidebar is itself the list being searched: Home, Chat, and
+Agents. Click it to reveal the search field between the title and New, at the
+same height as the New button; click again to hide it. The field focuses when
+opened. Every other view searches from the expandable Search icon in its list
+header.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
@@ -814,7 +817,7 @@ Adding “about budget” searches for only “budget”.
 
 Editing **Search for** or changing the filter chips overrides subsequent
 predictions for those values. Sender-only message scopes and speaker-only call
-scopes keep their filters visible and request at least three search characters:
+scopes keep their filters visible and request search text:
 channel/call browsing cannot enforce those message-level filters. No unfiltered
 browse results appear while keywords are required. **Search Macro** or
 **Cmd/Ctrl+Enter** opens Global Search with the same query and complete filters,
@@ -1234,6 +1237,22 @@ was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
 with the list. Click a row to open it in the same
 pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
+
+Right-clicking a row (a long press on a tablet) opens its menu, and the row
+stays highlighted while it is open: **Open in new split** (disabled without
+room for another split) and **Open in new tab** (with desktop tabs); **Run
+now** (disabled while it runs or a run is starting; a toast says **Run
+started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
+(the routine page's copy: same steps, triggers, description, run visibility and
+on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
+toast whose **Open** opens the copy) and, on a sub-routine, **Keep as my
+routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
+**Share**; then **Delete**, which confirms first and names the sub-routines
+deleted with it. A routine someone else owns offers the open entries, **Copy
+Link** and **Copy ID**. On a phone a long press opens the same actions in a
+drawer under the routine's name, without the split and tab entries, in Agents
+and in **Settings → Routines** alike. Renaming and changing the icon stay on the
+routine's page.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's

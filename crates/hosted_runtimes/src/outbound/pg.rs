@@ -22,6 +22,7 @@ use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, Reser
 use crate::domain::size::{ComputerResources, ComputerSize};
 
 mod agents;
+pub use agents::PgComputerAgents;
 mod apply;
 mod records;
 mod reservations;
