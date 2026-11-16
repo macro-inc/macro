@@ -106,7 +106,8 @@ export function MobileSectionsView(props: {
   };
   const title = (key: MobileSectionTab) => {
     if (key === 'all') return t('mobile.all');
-    if (key === 'direct_messages') return t('channelSections.direct_messages');
+    if (key === 'direct_messages')
+      return t('channelSections.directMessagesPill');
     return labels().find((label) => `label:${label.id}` === key)?.name ?? '';
   };
   const choose = (value: string) => {

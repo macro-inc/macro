@@ -1112,7 +1112,7 @@ full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the
 same touch feed as narrow touch, docked on the left with inline conversation
 selection on the right. With sections disabled this is Recent with favorite pins;
-with sections enabled both widths show All, Direct messages, and custom section
+with sections enabled both widths show All, DMs, and custom section
 tabs with horizontally scrolling pins. Open conversations keep the
 floating touch title/menu, call, and invite islands inside the preview pane;
 messages scroll behind that header with the same safe-area gutter as list views.
@@ -1333,7 +1333,7 @@ Display remain personal.
 
 The phone list reuses Home rows and the existing large favorite circles with
 unread dots. Up to six loaded favorites retain their saved order in one sideways
-scrolling row. All is selected initially, followed by Direct messages and custom
+scrolling row. All is selected initially, followed by DMs and custom
 sections in personal display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
@@ -1434,7 +1434,7 @@ feed, iMessage style, and leave the feed below; tapping a pin opens it and a
 hold opens its action menu, where Unfavorite unpins it. There are no view tabs or reserved tab-header space;
 older saved tab selections and mobile-tab links cannot change the list. It loads
 more as the list approaches the end and supports pull to refresh. With sections
-enabled, both touch widths show All, Direct messages, and personal/shared section
+enabled, both touch widths show All, DMs, and personal/shared section
 tabs with horizontally scrolling favorite pins instead of the three-across grid.
 Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
