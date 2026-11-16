@@ -34,6 +34,7 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: toasts }));
 const composer = vi.hoisted(() => ({
   createPopoverSplit: vi.fn(),
   trackMention: vi.fn(),
+  untrackMention: vi.fn(async () => {}),
 }));
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({
@@ -42,7 +43,7 @@ vi.mock('@app/signal/splitLayout', () => ({
 }));
 vi.mock('@core/signal/mention', () => ({
   trackMention: composer.trackMention,
-  untrackMention: vi.fn(async () => {}),
+  untrackMention: composer.untrackMention,
 }));
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -71,6 +72,7 @@ beforeEach(() => {
   composer.createPopoverSplit.mockReset();
   composer.trackMention.mockReset();
   composer.trackMention.mockResolvedValue('uuid-1');
+  composer.untrackMention.mockClear();
 });
 
 function mount(titles: string[]) {
@@ -311,6 +313,57 @@ test('a read-only document opens the composer without linking back', async () =>
     slot(runtime, false).task.select?.(() => {});
     const params = composer.createPopoverSplit.mock.calls[0][0].content.params;
     expect(params.linkInSource).toBeUndefined();
+  } finally {
+    await runtime.close();
+  }
+});
+
+// A resync while the link is queued settles it cancelled: nothing is written,
+// the backlink is untracked with Source's failure toast, and the Create More
+// chain still links the next task.
+test('a resync while the link is queued cancels it and keeps later links working', async () => {
+  const runtime = mountParagraph('buy milk today.', 4, 8);
+  try {
+    const { task } = slot(runtime);
+    task.select?.(() => {});
+    const params = composer.createPopoverSplit.mock.calls[0][0].content.params;
+    const generation = runtime.view.mirror.keyGeneration;
+    if (generation === null) throw new Error('Missing view generation');
+    const port = runtime.view.port as unknown as {
+      inputSettledIfSessionEdit: (...args: unknown[]) => unknown;
+    };
+    const queue = port.inputSettledIfSessionEdit.bind(port);
+    let resynced = false;
+    const flip = vi
+      .spyOn(port, 'inputSettledIfSessionEdit')
+      .mockImplementationOnce((...args: unknown[]) => {
+        // The resync lands after the link captured its generation and
+        // requested admission, before the queued entry runs.
+        vi.spyOn(runtime.view.mirror, 'keyGeneration', 'get').mockReturnValue(
+          generation + 1
+        );
+        resynced = true;
+        return queue(...args);
+      });
+    params.linkInSource.insert({ documentId: 'task-1', title: 'One' });
+    await vi.waitFor(() => expect(resynced).toBe(true));
+    await vi.waitFor(() =>
+      expect(toasts.failure).toHaveBeenCalledWith(
+        'Could not link the task in this document'
+      )
+    );
+    expect(composer.untrackMention).toHaveBeenCalledWith(
+      'doc-1',
+      'uuid-1',
+      'document'
+    );
+    vi.restoreAllMocks();
+    flip.mockRestore();
+    expect(paragraphText(runtime)).toBe('buy milk today.');
+    params.linkInSource.insert({ documentId: 'task-2', title: 'Two' });
+    await vi.waitFor(() =>
+      expect(paragraphText(runtime)).toBe('buy milk [Two] today.')
+    );
   } finally {
     await runtime.close();
   }

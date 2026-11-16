@@ -66,7 +66,11 @@ async function insertNativeTaskMention(
         ...(mention.mentionUuid === undefined
           ? {}
           : { mentionUuid: mention.mentionUuid }),
-      })
+      }),
+      // A resync while queued cancels the write instead of failing it.
+      {
+        admit: () => view.isMounted && view.mirror.keyGeneration === generation,
+      }
     );
     if (settled.status === 'error') throw settled.error;
     return settled.status === 'success' && settled.handled ? next : null;
