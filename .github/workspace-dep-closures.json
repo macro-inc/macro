@@ -167,7 +167,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "agent": [
