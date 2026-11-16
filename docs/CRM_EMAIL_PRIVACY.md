@@ -83,6 +83,13 @@ cache fallback. Keep preference changes disabled until the client rollout is
 complete, including already-open older builds. The server API cannot erase
 content already downloaded by an older client.
 
+Deploy the server's authority endpoint and CORS allowance for
+`x-macro-crm-access-signal` before publishing this client. The client sends that
+header on authenticated storage requests even while preference changes are
+disabled. A server rollback must retain the header allowance and endpoint while
+opted-in clients remain active; otherwise browser preflights or fresh authority
+reads fail.
+
 Notifications follow the existing snapshot policy: a revoked member keeps
 already-delivered CRM comment text and may still receive a previously queued
 notification until delivery-time permission checks are added separately.
