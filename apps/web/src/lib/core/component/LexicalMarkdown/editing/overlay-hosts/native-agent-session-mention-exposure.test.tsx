@@ -164,7 +164,9 @@ vi.mock('@core/context/quickAccess', () => ({
           const on = enabled();
           quickAccessCalls.push({ list, buckets, enabled: on });
           if (!on) return [];
-          if (list === 'person') return quickAccessItems.person;
+          // Main's useUsersMention asks for the person bucket.
+          if (list === 'person' || buckets?.includes('person'))
+            return quickAccessItems.person;
           if (buckets?.includes('agent_session'))
             return quickAccessItems.agentSessions;
           if (buckets?.includes('document')) return quickAccessItems.documents;
@@ -282,6 +284,13 @@ vi.mock('@app/features/routines/routine-mentions', () => ({
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
+}));
+// HostedMentionsMenu reads main's contact-search kill switch through
+// PostHog, which the app always provides; this fixture has no provider, so
+// the switch reads as off, its production default.
+vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
 }));
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => null }));
 vi.mock(import('@core/block'), async (importOriginal) => ({
