@@ -134,7 +134,7 @@ const Block: Component = () => {
           <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
         <FolderDropZone folderId={isSpecialProject ? undefined : projectId}>
-          <SidePanel.Layout defaultOpen={false} floating>
+          <SidePanel.Layout defaultOpen={false} floating headerToggleSize="md">
             <Show when={!isSpecialProject}>
               <ProjectSidePanelSections />
             </Show>

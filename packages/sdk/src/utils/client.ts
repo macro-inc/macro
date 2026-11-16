@@ -287,6 +287,7 @@ export class MacroClient {
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
+      throwOnUnfilledPath(request);
       const headers = await requestAuthHeaders(
         this.authConfig,
         this.requestedAs,
@@ -299,6 +300,22 @@ export class MacroClient {
     });
     return c;
   }
+}
+
+/**
+ * The generated clients leave a path parameter they got no value for as its
+ * `{name}`, which the server then rejects as a bad id. Throw before sending,
+ * naming the parameter: it's always a caller passing the wrong field.
+ */
+function throwOnUnfilledPath(request: Request): void {
+  const path = decodeURIComponent(new URL(request.url).pathname);
+  const unfilled = [...path.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map(
+    ([, name]) => name,
+  );
+  if (unfilled.length > 0)
+    throw new Error(
+      `${request.method} ${path}: no value for ${unfilled.join(', ')}`,
+    );
 }
 
 function resolveEnv(opts: MacroOpts): Env {

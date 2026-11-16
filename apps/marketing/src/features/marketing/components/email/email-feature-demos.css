@@ -52,8 +52,7 @@
 .email-toolbar-secondary { color: var(--color-ink-extra-muted); }
 .email-feature-demo .mail-row { min-height: 40px; }
 .email-feature-demo .mail-row[aria-current='true'] { background: var(--color-active); }
-.email-feature-demo .mail-rows { padding: 16px 8px 24px; }
-.email-feature-demo .mail-date-group { padding-bottom: 8px; }
+.email-feature-demo .mail-rows { padding: 4px 8px 24px; }
 .email-feature-demo .mail-thread-body { width: 100%; max-width: 968px; margin: 0 auto; padding: 32px 24px; }
 
 .email-auto-tag-menu {
@@ -70,11 +69,11 @@
 }
 
 .email-auto-tag-menu-title { display: flex; align-items: center; justify-content: space-between; padding-left: 10px; font-size: 12px; color: var(--color-ink-muted); }
-.email-auto-tag-menu > button { display: flex; align-items: center; width: 100%; gap: 10px; padding: 9px 10px; border-radius: 6px; text-align: left; font: 400 14px Inter, sans-serif; }
+.email-auto-tag-menu > button { display: flex; align-items: center; width: 100%; gap: 10px; padding: 9px 10px; border-radius: 6px; text-align: left; font: 370 14px Inter, sans-serif; }
 .email-auto-tag-menu > button:hover, .email-auto-tag-menu > button[aria-pressed='true'] { background: var(--color-active); }
 .email-auto-tag-menu > button > svg { width: 16px; height: 16px; margin-left: auto; }
 .email-tag-dot { width: 8px; height: 8px; border-radius: 50%; }
-.email-tag-summary { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 24px; font: 400 12px Inter, sans-serif; color: var(--color-ink-muted); }
+.email-tag-summary { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 24px; font: 370 12px Inter, sans-serif; color: var(--color-ink-muted); }
 .email-tag-summary > svg { width: 16px; height: 16px; }
 .email-tag-summary > :last-child { margin-left: auto; white-space: nowrap; }
 
@@ -83,15 +82,15 @@
 .email-keyboard-content { flex: 1; min-height: 440px; }
 .email-keyboard-demo .mail-thread-body { padding-top: 28px; }
 .email-shortcut-dock { display: flex; align-items: center; gap: 8px; padding: 20px; background: var(--color-surface-0); border-top: 1px solid var(--color-edge-muted); }
-.email-shortcut-dock > button { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 6px; font: 400 12px Inter, sans-serif; color: var(--color-ink-muted); }
-.email-shortcut-dock kbd { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 5px; border: 1px solid var(--color-edge); border-radius: 6px; background: var(--color-surface-1); font: 400 12px Inter, sans-serif; box-shadow: 0 2px 0 #0008; }
+.email-shortcut-dock > button { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 6px; font: 370 12px Inter, sans-serif; color: var(--color-ink-muted); }
+.email-shortcut-dock kbd { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 5px; border: 1px solid var(--color-edge); border-radius: 6px; background: var(--color-surface-1); font: 370 12px Inter, sans-serif; box-shadow: 0 2px 0 #0008; }
 .email-shortcut-dock > button:hover, .email-shortcut-dock > button[data-active='true'] { background: var(--color-active); color: var(--color-ink); }
 .email-shortcut-dock > button[data-active='true'] kbd { color: var(--color-surface-0); background: var(--color-ink); }
 .email-shortcut-dock > button:disabled { opacity: .4; }
 .email-inbox-clear { display: flex; min-height: 380px; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--color-ink-muted); }
 .email-inbox-clear > svg { width: 32px; height: 32px; }
 .email-inbox-clear h3 { font: 500 22px Inter, sans-serif; }
-.email-inbox-clear p { font: 400 14px Inter, sans-serif; }
+.email-inbox-clear p { font: 370 14px Inter, sans-serif; }
 
 @media (max-width: 699px) {
   .email-feature-toolbar { padding-inline: 12px; }
@@ -122,7 +121,7 @@
   }
 }
 
-.email-feature-prose { width: min(920px, 100%); padding-inline: 24px; margin: 28px auto 0; color: #a3a3a3; font: 400 15px/1.85 'Inter Variable', Inter, sans-serif; text-align: left; }
+.email-feature-prose { width: min(920px, 100%); padding-inline: 24px; margin: 28px auto 0; color: #a3a3a3; font: 370 15px/1.85 'Inter Variable', Inter, sans-serif; text-align: left; }
 .email-feature-prose p + p { margin-top: 18px; }
 @media (max-width: 699px) { .email-feature-prose { padding-inline: 0; font-size: 14px; margin-top: 24px; } }
 

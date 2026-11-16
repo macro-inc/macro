@@ -91,6 +91,7 @@ describe('GraphQL item previews', () => {
   it('maps normalized document fields without the full Soup projection', () => {
     const record = {
       __typename: 'GraphqlSoupDocument',
+      appearance: null,
       id: 'doc-1',
       displayName: 'Roadmap',
       documentName: 'Roadmap',
@@ -110,12 +111,14 @@ describe('GraphQL item previews', () => {
       name: 'Roadmap',
       fileType: 'md',
       subType: { type: 'task', is_completed: true },
+      appearance: null,
     });
   });
 
   it('carries loaded-empty properties and permission on the preview', () => {
     const record = {
       __typename: 'GraphqlSoupDocument',
+      appearance: null,
       id: 'task-1',
       displayName: 'Task',
       documentName: 'Task',
@@ -169,6 +172,7 @@ describe('GraphQL item previews', () => {
       expect(options.variables.input.initial.limit).toBe(2);
       const records = ['one', 'two'].map((id) => ({
         __typename: 'GraphqlSoupDocument' as const,
+        appearance: null,
         id,
         displayName: id,
         documentName: id,
@@ -331,6 +335,7 @@ describe('GraphQL item previews', () => {
   it('maps an initiative record to a task project preview', () => {
     const record = {
       __typename: 'GraphqlSoupInitiative',
+      appearance: null,
       id: 'initiative-1',
       displayName: 'Roadmap',
     } satisfies ItemPreviewFieldsFragment;
@@ -342,6 +347,7 @@ describe('GraphQL item previews', () => {
       loading: false,
       rawName: 'Roadmap',
       name: 'Roadmap',
+      appearance: null,
     });
   });
 
@@ -561,6 +567,7 @@ describe('GraphQL item previews', () => {
               items: [
                 {
                   __typename: 'GraphqlSoupDocument',
+                  appearance: null,
                   id: 'missing-doc',
                   displayName: 'Now available',
                   documentName: 'Now available',

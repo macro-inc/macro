@@ -37,6 +37,7 @@ async fn only_prompts_typed_into_the_session_follow_it() {
                 action_id: None,
                 actor,
                 context,
+                client: None,
             },
         );
         let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
@@ -56,6 +57,7 @@ async fn only_prompts_typed_into_the_session_follow_it() {
                 action_id: None,
                 actor: Some(person),
                 context: None,
+                client: None,
             },
         );
         let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
@@ -63,4 +65,40 @@ async fn only_prompts_typed_into_the_session_follow_it() {
         turns.settled(id).await;
     }
     assert_eq!(repo.followers(id), vec![other_person(), sender()]);
+}
+
+/// The tab a person typed a prompt in is recorded on the turn it opens, so
+/// the turn can show them things there; the next turn's prompter replaces it.
+#[tokio::test]
+async fn a_typed_prompt_records_its_tab_on_the_turn() {
+    let ((service, repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+    turns.settled(id).await;
+    let tab = agent_session::domain::model::UiClientId::from_uuid(Uuid::from_u128(0xc1));
+
+    for client in [Some(tab), None] {
+        let prompted = service.control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("open the plan"),
+                action_id: None,
+                actor: Some(sender()),
+                context: None,
+                client,
+            },
+        );
+        let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+        result.expect("a direct prompt should deliver");
+        turns.settled(id).await;
+
+        let prompter = repo
+            .turn_prompter(id)
+            .await
+            .expect("the prompter is readable")
+            .expect("the turn recorded its prompter");
+        assert_eq!(prompter.client, client);
+    }
 }

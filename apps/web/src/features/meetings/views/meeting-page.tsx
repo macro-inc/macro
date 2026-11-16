@@ -18,6 +18,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CallLiveChip } from '../../channel/Call/components/CallLiveChip';
+import { PhoneAudioOutput } from '../../channel/Call/views/PhoneAudioOutput';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
 import {
@@ -49,6 +51,7 @@ export function MeetingPage(props: {
   startCall?: boolean;
   url?: string;
   onCopy: () => Promise<void>;
+  startedAt?: Accessor<string | undefined>;
   onRename?: (title: string) => Promise<void>;
   /** The host keeps the URL in sync without replacing this session owner. */
   onCallStateChange?: (connected: boolean) => void;
@@ -194,6 +197,8 @@ export function MeetingPage(props: {
             </Button>
           </HeaderIsland>
           <div class="flex items-center gap-2">
+            <PhoneAudioOutput />
+            <CallLiveChip bare hideWave startedAt={props.startedAt?.()} />
             <Show when={props.url}>
               {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
             </Show>

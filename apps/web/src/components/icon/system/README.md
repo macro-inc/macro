@@ -2,9 +2,11 @@
 
 Original SVG drawings for Macro's interface. The source of truth is the SVG
 files in this directory. These drawings were authored on a blank coordinate
-grid; no Apple, OpenAI, Linear, or Phosphor vector paths were imported or traced.
-SF Symbols and ChatGPT were visual references for optical balance and clarity,
-not asset sources. The icons have no platform font or native symbol dependency.
+grid, except `regular/speaker-slash.svg`, which retains Phosphor's regular
+geometry and MIT notice for the recording mute state. No Apple, OpenAI, or
+Linear vector paths were imported or traced. SF Symbols and ChatGPT were visual
+references for optical balance and clarity, not asset sources. The icons have
+no platform font or native symbol dependency.
 
 Apple's design guidance informs optical balance, not asset reuse. Do not import,
 trace, or modify SF Symbols exports or templates for this cross-platform set.
@@ -61,6 +63,12 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
+Question glyphs share one letterform, following Phosphor's proportions: a wide,
+flat bowl with a short left terminal and stem, set slightly low. As in Phosphor,
+`question` is circled: the mark at 57% inside the `info` ring, leaving about 2
+units above the mark. `question-fill` cuts the same mark out of
+a 9.4-unit disc like the other circle fills, and `question-mark` draws it alone
+at full size.
 Urgent priority uses `priority-urgent-fill`, a filled rounded square with rounded
 exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
 the theme's orange rather than warning or accent.

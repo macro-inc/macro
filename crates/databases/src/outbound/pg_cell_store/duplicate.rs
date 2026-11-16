@@ -33,6 +33,7 @@ where
             &database.name,
             &database.owner_id,
             Some(database.created_at),
+            database.appearance.as_ref(),
         )
         .await?;
         if !rows::lock_live_database(&mut transaction, writes.database_id).await? {

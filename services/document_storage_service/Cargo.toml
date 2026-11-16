@@ -44,6 +44,7 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+passwords = { path = "../../crates/passwords" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
@@ -176,6 +177,7 @@ graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound"] }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -225,7 +227,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
-notification_inbox = { path = "../../crates/notification_inbox" }
+notification_inbox = { path = "../../crates/notification_inbox", features = ["outbound"] }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }

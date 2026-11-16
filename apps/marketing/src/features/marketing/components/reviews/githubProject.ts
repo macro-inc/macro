@@ -14,7 +14,7 @@ export const githubHistory: WorkspaceComment[] = [
   },
   {
     id: 'screenshots',
-    person: 'valentina',
+    person: 'austin',
     time: '8:44 AM',
     body: 'new screenshots are in. refresh if you still see the old ones',
     replyTo: 'morning',

@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT computer_id, kind AS \"kind: TimerKind\", fire_at FROM hosted_runtime_timer\n            WHERE fire_at <= $1 AND computer_id = ANY($3)\n            ORDER BY fire_at\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind: TimerKind",
+        "type_info": {
+          "Custom": {
+            "name": "computer_timer_kind",
+            "kind": {
+              "Enum": [
+                "macrod_missing",
+                "restart_due",
+                "power_on_retry",
+                "capacity_changed",
+                "billing_ends",
+                "past_due_grace",
+                "retention_expired"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "fire_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "644bbc4168a401e0f31b9defe78fe9a4d13e48ffd27b01b767bf87d8eb3adc9d"
+}

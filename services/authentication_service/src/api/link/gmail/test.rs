@@ -76,12 +76,12 @@ fn every_other_consent_keeps_the_mailbox_scopes() {
 fn authorization_url_requests_incremental_calendar_access() {
     let scopes = gmail_authorization_scopes(true, ConsentScopes::Calendar);
     let url = google_authorization_url(
+        &Url::parse("https://accounts.google.com/o/oauth2/v2/auth").unwrap(),
         "client-id",
         "https://auth.example.com/oauth2/callback",
         &scopes,
         "state",
-    )
-    .unwrap();
+    );
     let params = url
         .query_pairs()
         .collect::<std::collections::HashMap<_, _>>();

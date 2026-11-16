@@ -20,6 +20,7 @@ mod sync_content;
 
 fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "doc-1".to_string(),
         document_version_id: 1,
         owner: Owner::from_principal_str("macro|user@user.com").unwrap(),
@@ -3911,4 +3912,131 @@ async fn a_document_without_dates_marks_its_folder_updated_now() {
     )
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn appearance_rejects_non_markdown_and_special_document_types() {
+    for (file_type, sub_type, deleted_at) in [
+        ("pdf", None, None),
+        ("md", Some(DocumentSubType::Task), None),
+        ("md", Some(DocumentSubType::Skill), None),
+        ("md", Some(DocumentSubType::InitiativeDescription), None),
+        ("md", None, Some(chrono::Utc::now())),
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.file_type = Some(file_type.into());
+        document.sub_type = sub_type;
+        document.deleted_at = deleted_at;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        let service = make_test_service(repo);
+        assert!(matches!(
+            service
+                .set_appearance(
+                    edit_receipt("doc-1"),
+                    model_entity::EntityAppearance::default()
+                )
+                .await,
+            Err(DocumentError::BadRequest(_))
+        ));
+    }
+}
+
+#[tokio::test]
+async fn appearance_validates_before_persistence() {
+    let service = make_test_service(make_mock_repo());
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "invalid-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service.set_appearance(edit_receipt("doc-1"), invalid).await,
+        Err(DocumentError::BadRequest(_))
+    ));
+}
+
+#[tokio::test]
+async fn appearance_emits_history_only_for_changes() {
+    for sub_type in [None, Some(DocumentSubType::Snippet)] {
+        for changed in [false, true] {
+            let mut repo = make_mock_repo();
+            let mut document = task_document_context("doc-1");
+            document.sub_type = sub_type;
+            repo.expect_get_basic_document()
+                .return_once(move |_| Box::pin(async { Ok(document) }));
+            repo.expect_set_appearance()
+                .withf(|id, update| {
+                    id == "doc-1"
+                        && update.appearance.color == Some(model_entity::AppearanceColor::Blue)
+                        && update.attribution.is_some()
+                })
+                .return_once(move |_, _| {
+                    Box::pin(
+                        async move { Ok(changed.then(model_entity::EntityAppearance::default)) },
+                    )
+                });
+            let (service, broker) = make_test_service_with_event_broker(repo);
+            let appearance = model_entity::EntityAppearance {
+                icon: None,
+                color: Some(model_entity::AppearanceColor::Blue),
+            };
+            assert_eq!(
+                service
+                    .set_appearance(edit_receipt("doc-1"), appearance.clone())
+                    .await
+                    .unwrap(),
+                appearance
+            );
+            let published = broker.published();
+            let events = published.lock().unwrap();
+            assert_eq!(events.len(), usize::from(changed));
+            if changed {
+                assert_eq!(
+                    events[0].payload["metadata"]["appearance_change"][1]["color"],
+                    "blue"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn appearance_records_team_and_channel_bot_attribution() {
+    for scope in [
+        bot_receipt_scope(),
+        BotReceiptScope::Channel {
+            channel_id: Uuid::now_v7(),
+        },
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.sub_type = None;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        repo.expect_set_appearance()
+            .withf(|_, update| {
+                update.attribution == Some(Attribution::direct(Actor::new_from_bot(bot_id())))
+            })
+            .return_once(|_, _| Box::pin(async { Ok(Some(Default::default())) }));
+        let service = make_test_service(repo);
+        let receipt = EntityAccessReceipt::dangerously_assert_bot(
+            bot_id().into_storage_id(),
+            scope,
+            "doc-1",
+            EntityType::Document,
+        );
+        service
+            .set_appearance(
+                receipt,
+                model_entity::EntityAppearance {
+                    icon: None,
+                    color: Some(model_entity::AppearanceColor::Blue),
+                },
+            )
+            .await
+            .unwrap();
+    }
 }

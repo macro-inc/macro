@@ -125,19 +125,21 @@ function hintsOf(where: string, node: ts.Node): Hints | undefined {
     [
       ['read', /@readonly\b/],
       ['write', /@write\b/],
+      ['send', /@send\b/],
       ['delete', /@destructive\b/],
     ] as const
   ).filter(([, tag]) => tag.test(text));
   const [only, ...more] = classes;
   if (!only || more.length) {
     errors.add(
-      `${where}: needs exactly one of @readonly, @write, @destructive (found ${classes.length})`
+      `${where}: needs exactly one of @readonly, @write, @send, @destructive (found ${classes.length})`
     );
     return undefined;
   }
   return {
     hint: only[0],
-    openWorld: /@openworld\b/.test(text),
+    // Sending leaves Macro by definition.
+    openWorld: only[0] === 'send' || /@openworld\b/.test(text),
     idempotent: only[0] === 'read' || /@idempotent\b/.test(text),
   };
 }

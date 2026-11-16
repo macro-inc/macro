@@ -6,6 +6,7 @@
  */
 
 import type { AccessLevel } from './accessLevel';
+import type { InitiativeDetailAppearance } from './initiativeDetailAppearance';
 import type { InitiativeId } from './initiativeId';
 import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SharePermissionV2 } from './sharePermissionV2';
@@ -14,6 +15,7 @@ import type { SharePermissionV2 } from './sharePermissionV2';
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export interface InitiativeDetail {
+  appearance?: InitiativeDetailAppearance;
   /** When the initiative was created. */
   createdAt: string;
   /** Opaque identifier. */

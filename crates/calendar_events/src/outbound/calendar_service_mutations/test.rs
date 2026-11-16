@@ -95,7 +95,8 @@ fn out_of_office_survives_the_update_wire_contract() {
         ..Default::default()
     };
     let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All)).unwrap();
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
+            .unwrap();
 
     assert_eq!(
         request
@@ -119,7 +120,8 @@ fn update_body_matches_the_router_request() {
         ..Default::default()
     };
     let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All)).unwrap();
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
+            .unwrap();
 
     assert_eq!(request.title.as_deref(), Some("Renamed"));
     assert_eq!(request.description.as_deref(), Some(""));
@@ -138,6 +140,24 @@ fn update_body_matches_the_router_request() {
 /// An occurrence-scoped update must arrive at the router still scoped — a
 /// body the router reads as scope-less would widen the write to the series.
 #[test]
+fn update_body_asks_the_router_for_a_macro_call() {
+    let patch = CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..CalendarEventPatch::default()
+    };
+
+    let request: UpdateCalendarEventRequest =
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, true)).unwrap();
+    assert!(request.macro_call);
+    assert_eq!(request.title.as_deref(), Some("Renamed"));
+
+    let request: UpdateCalendarEventRequest =
+        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
+            .unwrap();
+    assert!(!request.macro_call);
+}
+
+#[test]
 fn update_body_carries_the_occurrence_scope() {
     let patch = CalendarEventPatch {
         title: Some("Renamed".to_string()),
@@ -149,6 +169,7 @@ fn update_body_carries_the_occurrence_scope() {
         &CalendarUpdateScope::ThisEvent {
             recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
         },
+        false,
     ))
     .unwrap();
 
@@ -299,14 +320,14 @@ fn create_body_asks_for_a_macro_call_only_when_requested() {
 
 #[test]
 fn macro_call_failures_round_trip_to_the_meeting_link_error() {
-    let api_error = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+    let api_error = CalendarMutationApiError::from(MacroCallEventError::MeetingLink(
         MeetingLinkError::Failed("down".to_string()),
     ));
     let body = serde_json::to_string(&api_error).unwrap();
     let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, Some(body));
     assert!(matches!(
         parsed,
-        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(_))
+        MacroCallEventError::MeetingLink(MeetingLinkError::Failed(_))
     ));
 
     let api_error = CalendarMutationApiError::from(CalendarMutationError::NoWritableCalendar);
@@ -314,12 +335,12 @@ fn macro_call_failures_round_trip_to_the_meeting_link_error() {
     let parsed = macro_call_error_from_response(StatusCode::CONFLICT, Some(body));
     assert!(matches!(
         parsed,
-        CreateEventWithMacroCallError::Calendar(CalendarMutationError::NoWritableCalendar)
+        MacroCallEventError::Calendar(CalendarMutationError::NoWritableCalendar)
     ));
 
     let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, None);
     assert!(matches!(
         parsed,
-        CreateEventWithMacroCallError::Calendar(CalendarMutationError::Retryable(_))
+        MacroCallEventError::Calendar(CalendarMutationError::Retryable(_))
     ));
 }

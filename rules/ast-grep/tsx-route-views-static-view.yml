@@ -1,0 +1,19 @@
+id: tsx-route-views-static-view
+language: tsx
+severity: error
+message: A route file imports the view it renders statically; a view behind a second `lazy()` is never preloaded with its route.
+note: |-
+  Startup bundle rule in .agents/rules/web/startup-bundle.md. The router and
+  the idle warm-up preload a route's own chunk only, so a view behind a nested
+  `lazy()` stays cold and its first open shows the route skeleton however long
+  the app has been running. Import the view statically. Keep a `lazy()` only
+  for a view the route rarely picks, with an `ast-grep-ignore` comment that
+  says why.
+files:
+  - apps/web/src/**/route-views.tsx
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: ^(lazy|lazyNamed)$

@@ -33,6 +33,11 @@ const MIN_PREFIX_LEN: usize = 3;
 /// with many hits.
 const INNER_HITS_PER_TERM: u32 = 100;
 
+/// The message `_source` fields a `SearchHit` carries. Inner hits do not
+/// inherit the request-level `_source` filter, so without this every message
+/// comes back with its full `content`, which only the highlight needs.
+const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["chat_message_id", "role"];
+
 /// Cap on terms a `match_phrase_prefix` may expand the last word to.
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
@@ -159,6 +164,7 @@ impl ChatQueryBuilder {
             let inner_hits = InnerHits::new()
                 .name(format!("term_{idx}"))
                 .size(INNER_HITS_PER_TERM)
+                .source_fields(MESSAGE_SOURCE_FIELDS)
                 .highlight(inner_hits_content_highlight(&highlight_query));
             let has_child = HasChildQuery::new(CHILD_RELATION, inner_query).inner_hits(inner_hits);
             bool_query.must(has_child.into());

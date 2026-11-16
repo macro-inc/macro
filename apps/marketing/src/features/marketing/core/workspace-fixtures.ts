@@ -191,7 +191,7 @@ export function sampleCompanies(): SampleCompany[] {
         '18,000'
       ),
       contacts: [
-        { name: 'Valentina', email: 'valentina@coparse.com' },
+        { name: 'Austin Barron', email: 'austin@example.com' },
         { name: 'Alex', email: 'alex@coparse.com' },
         { name: 'Priya', email: 'priya@coparse.com' },
       ],
@@ -199,7 +199,7 @@ export function sampleCompanies(): SampleCompany[] {
         {
           id: 'meadow-pricing',
           person: 'julia',
-          body: 'Valentina asked about pricing for 12 seats now and the studio team in November. I quoted the annual team rate. @[Jacob](demo-mention:jacob) can we hold it through the end of the year?',
+          body: 'Austin Barron asked about pricing for 12 seats now and the studio team in November. I quoted the annual team rate. @[Jacob](demo-mention:jacob) can we hold it through the end of the year?',
           time: '8:47 AM',
         },
         {
@@ -237,7 +237,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-invite',
-          sender: 'Valentina',
+          sender: 'Austin Barron',
           subject: 'Invitation: The Meadow · Demo',
           snippet: 'Thursday, October 1 · 9:00 – 10:00 AM',
           time: 'Sep 26',
@@ -255,14 +255,15 @@ export function sampleCompanies(): SampleCompany[] {
           id: 'meadow-recap',
           sender: 'Jacob',
           subject: 'Recap from today',
-          snippet: 'Thanks for the time, Valentina. Here’s what we covered.',
+          snippet:
+            'Thanks for the time, Austin Barron. Here’s what we covered.',
           time: 'Sep 22',
           signal: true,
           mine: true,
         },
         {
           id: 'meadow-intro',
-          sender: 'Valentina',
+          sender: 'Austin Barron',
           subject: 'Intro from Sam',
           snippet:
             'Sam mentioned you’re building something for studios like ours.',
@@ -278,7 +279,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 28',
           duration: '18m 40s',
           people: ['jacob', 'julia'],
-          guests: ['Valentina', 'Alex'],
+          guests: ['Austin Barron', 'Alex'],
         },
         {
           id: 'meadow-pricing-call',
@@ -286,7 +287,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 25',
           duration: '12m 4s',
           people: ['julia'],
-          guests: ['Valentina'],
+          guests: ['Austin Barron'],
         },
         {
           id: 'meadow-design-review',
@@ -302,7 +303,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 22',
           duration: '31m 12s',
           people: ['jacob'],
-          guests: ['Valentina'],
+          guests: ['Austin Barron'],
         },
       ],
       files: [
@@ -398,7 +399,7 @@ export function sampleCompanies(): SampleCompany[] {
       'granite',
       'Granite Legal',
       'Negotiation',
-      'valentina',
+      'austin',
       'Sep 24',
       'Granite Legal is a 25-attorney firm focused on employment law and startup financings.',
       '14,400'
@@ -484,7 +485,7 @@ export function sampleEvents(): SampleEvent[] {
       start: 9,
       duration: 1,
       calendar: 'work',
-      description: 'Walk Valentina and the team through the new workspace.',
+      description: 'Walk Austin Barron and the team through the new workspace.',
     },
     {
       id: 'design-review',
@@ -493,7 +494,7 @@ export function sampleEvents(): SampleEvent[] {
       start: 15,
       duration: 1,
       calendar: 'work',
-      description: 'Review mobile layouts with Valentina.',
+      description: 'Review mobile layouts with Austin Barron.',
     },
     {
       id: 'lunch',

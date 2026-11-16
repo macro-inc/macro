@@ -7,16 +7,17 @@ import {
   captureElementScrollAnchor,
   captureScrollAnchor,
   holdScrollAnchor,
+  keepScrollAnchorOnResize,
   restoreScrollAnchor,
 } from './scrollAnchor';
 
-const rect = (top: number, bottom: number) =>
+const rect = (top: number, bottom: number, width = 0) =>
   ({
     top,
     bottom,
     left: 0,
-    right: 0,
-    width: 0,
+    right: width,
+    width,
     height: bottom - top,
   }) as DOMRect;
 
@@ -160,7 +161,8 @@ function stubResizeObserver() {
     }
   );
   const notify = () => {
-    for (const callback of callbacks) {
+    // Observers created during a notification wait for the next one.
+    for (const callback of [...callbacks]) {
       callback([], {} as ResizeObserver);
     }
   };
@@ -168,6 +170,20 @@ function stubResizeObserver() {
 }
 
 describe('element scroll anchor', () => {
+  it('measures from the scroll container, so moving the container is not a reflow', () => {
+    const { scroller, position, element } = setupScrolledElement(450);
+    const captured = captureElementScrollAnchor(element)!;
+    expect(captured.anchor.top).toBe(450);
+
+    // The split above closes: the container and its content move up together.
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(
+      rect(-300, 200)
+    );
+    position.top = 150;
+    restoreScrollAnchor(scroller, captured.anchor);
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
   it('anchors an element that is on screen in its scroll container', () => {
     const { scroller, position, element } = setupScrolledElement(450);
 
@@ -267,5 +283,103 @@ describe('element scroll anchor', () => {
     vi.advanceTimersByTime(1000);
 
     expect(scroller.style.overflowAnchor).toBe('auto');
+  });
+});
+
+describe('keeping the scroll anchor on resize', () => {
+  function setupResizable() {
+    vi.useFakeTimers();
+    const resize = stubResizeObserver();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(0), 16)
+    );
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    const { scroller, root, tops } = setup([-250, -150, -50, 50]);
+    const size = { width: 600 };
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() =>
+      rect(0, 500, size.width)
+    );
+    scroller.scrollTop = 1000;
+    const dispose = keepScrollAnchorOnResize(scroller, () =>
+      captureScrollAnchor(scroller, root)
+    );
+    const scrollTo = (top: number) => {
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(16);
+    };
+    return { scroller, tops, size, resize, scrollTo, dispose };
+  }
+
+  it('keeps the block the reader scrolled to when the width changes', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+
+    // A neighbouring split closes: the text rewraps under the same scrollTop.
+    size.width = 1200;
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(650);
+  });
+
+  it('leaves the scroll position alone when only the height changes', () => {
+    const { scroller, tops, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('ignores a hidden split and its return at the same width', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+
+    size.width = 0;
+    resize.notify();
+    size.width = 600;
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('takes the anchor again when the content changes height at the same width', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+
+    // An image above the reader loads and pushes the text down, without a
+    // scroll event.
+    tops[2] = 50;
+    resize.notify();
+    vi.advanceTimersByTime(16);
+
+    size.width = 1200;
+    tops[2] = -100;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(850);
+  });
+
+  it('leaves a hold that is already running in place', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+    // The clicked element when a new split opens, held where it is.
+    holdScrollAnchor(scroller, { top: 0, measure: () => 0 });
+
+    size.width = 1200;
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('stops following the scroller once disposed', () => {
+    const { scroller, tops, size, resize, scrollTo, dispose } =
+      setupResizable();
+    scrollTo(1000);
+    dispose();
+
+    size.width = 1200;
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(1000);
   });
 });
