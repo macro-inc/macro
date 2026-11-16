@@ -181,6 +181,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
     const [searchHasMore, setSearchHasMore] = createSignal(true);
     const [searchFetching, setSearchFetching] = createSignal(false);
     const [searchUnanswered, setSearchUnanswered] = createSignal(false);
+    const [searchPaging, setSearchPaging] = createSignal(false);
     const searchNext = vi.fn(async () => {
       setSearchHasMore(false);
     });
@@ -209,7 +210,9 @@ function mount(search = '', keepRowsWhileSearching = false) {
           get isFetching() {
             return discovery && searchFetching();
           },
-          isFetchingNextPage: false,
+          get isFetchingNextPage() {
+            return discovery && searchPaging();
+          },
           get hasNextPage() {
             return discovery && searchHasMore();
           },
@@ -303,6 +306,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
       setSearchHasMore,
       setSearchFetching,
       setSearchUnanswered,
+      setSearchPaging,
       setState,
       setEntities,
       setDiscoveryEntities,
@@ -349,6 +353,18 @@ describe('Email list query transitions', () => {
       root.setSearchUnanswered(false);
       expect(ids(root.source)).toEqual(['search']);
       expect(root.source.showsPreviousRows?.()).toBe(false);
+
+      // Loading a further page of the same search is not a new wait.
+      batch(() => {
+        root.setSearchPaging(true);
+        root.setSearchFetching(true);
+      });
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      batch(() => {
+        root.setSearchPaging(false);
+        root.setSearchFetching(false);
+      });
 
       // Another tab's rows are never shown under this one's name.
       root.setSearchFetching(true);

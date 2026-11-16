@@ -1,7 +1,11 @@
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
+import {
+  type EmailSearchSuggestions,
+  RECENT_SEARCHES_LIST_ID,
+  recentSearchOptionId,
+} from '../search/create-email-search-suggestions';
 
 /** Recent searches, listed above the results while the search field has focus. */
 export function EmailRecentSearches(props: {
@@ -12,6 +16,7 @@ export function EmailRecentSearches(props: {
   return (
     <Show when={props.suggestions.listed().length > 0}>
       <div
+        id={RECENT_SEARCHES_LIST_ID}
         role="listbox"
         aria-label="Recent searches"
         class="flex shrink-0 flex-col border-b border-edge-muted py-1"
@@ -19,6 +24,7 @@ export function EmailRecentSearches(props: {
         <For each={props.suggestions.listed()}>
           {(query, index) => (
             <div
+              id={recentSearchOptionId(index())}
               role="option"
               aria-selected={props.suggestions.active() === index()}
               class={cn(

@@ -1,5 +1,5 @@
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { z } from 'zod';
 
 /** Enough to cover a day's searches without turning the list into history. */
@@ -58,16 +58,22 @@ function read(userId: string | undefined): string[] {
 export function createRecentEmailSearches(
   userId: Accessor<string | undefined>
 ) {
-  const [recent, setRecent] = createSignal(read(userId()));
+  // Storage is read again for whoever is signed in, and after each write.
+  const [written, setWritten] = createSignal(0);
+  const recent = createMemo(() => {
+    written();
+    return read(userId());
+  });
 
   return {
     recent,
     add: (query: string) => {
       const id = userId();
+      if (!id) return;
+
       // Another tab may have searched since this one read the list.
-      const next = addRecentSearch(read(id), query);
-      setRecent(next);
-      if (id) STORAGE.write(id, JSON.stringify(next));
+      STORAGE.write(id, JSON.stringify(addRecentSearch(read(id), query)));
+      setWritten((count) => count + 1);
     },
   };
 }

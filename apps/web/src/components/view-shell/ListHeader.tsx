@@ -4,7 +4,15 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken } from '@core/hotkey/utils';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
-import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import {
   clearListSearch,
   hasListSearch,
@@ -39,6 +47,9 @@ export type ListSearchSuggestions = {
   active: () => number;
   setActive: (index: number) => void;
   pick: (index: number) => void;
+  /** The list's element id and its active row's, announced from the field. */
+  listId?: string;
+  activeId?: () => string | undefined;
 };
 
 /**
@@ -133,6 +144,25 @@ export function ListHeaderSearch(props: {
     // A view restored with a search starts with its field open.
     if (expanded()) props.onOpenChange?.(true);
   });
+  // The view keeps its own copy of these; a field that unmounts while open
+  // (a tab that cannot search, a thread over the list) must not leave it set.
+  onCleanup(() => {
+    props.onOpenChange?.(false);
+    props.onFocusChange?.(false);
+  });
+  // A wide field hides the header's other actions, so it closes as soon as
+  // the view clears its search from outside (a tab change) and nobody is
+  // typing in it.
+  createEffect(
+    on(
+      () => props.value,
+      (value) => {
+        if (!props.wide || value.trim()) return;
+        if (document.activeElement !== input) setExpanded(false);
+      },
+      { defer: true }
+    )
+  );
 
   // Returns whether a suggestion took the key instead of the results.
   const moveInSuggestions = (event: KeyboardEvent) => {
@@ -214,6 +244,8 @@ export function ListHeaderSearch(props: {
           onValueChange={props.onValueChange}
           // The browser's own history popup would take ArrowDown and Enter.
           autocomplete="off"
+          aria-controls={props.suggestions?.listId}
+          aria-activedescendant={props.suggestions?.activeId?.()}
           onClose={close}
           onKeyDown={(event) => {
             // A view without a keyboard list keeps the keys for the field.

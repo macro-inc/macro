@@ -5,6 +5,10 @@ import {
   matchRecentSearches,
 } from './recent-searches';
 
+export const RECENT_SEARCHES_LIST_ID = 'email-recent-searches';
+export const recentSearchOptionId = (index: number) =>
+  `${RECENT_SEARCHES_LIST_ID}-${index}`;
+
 /** A handful stays above the results without pushing them off screen. */
 const MAX_LISTED = 5;
 
@@ -57,6 +61,11 @@ export function createEmailSearchSuggestions(options: {
 
       setActive(-1);
       setFocusedState(next);
+    },
+    listId: RECENT_SEARCHES_LIST_ID,
+    activeId: () => {
+      const index = Math.min(active(), listed().length - 1);
+      return index < 0 ? undefined : recentSearchOptionId(index);
     },
     count: () => listed().length,
     // Typing can shorten the list under the active row.

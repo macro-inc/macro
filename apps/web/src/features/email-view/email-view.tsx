@@ -157,7 +157,6 @@ function EmailPanes(props: {
             onPick={(index) => {
               suggestions().pick(index);
               props.focusList();
-              list.navigate.toFirst();
             }}
           />
         )}

@@ -12,7 +12,7 @@ import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ListHeaderSearch } from './ListHeader';
 import { clearListSearch, hasListSearch } from './list-search-escape';
@@ -439,4 +439,43 @@ it('reports a wide field open, and closed once it is left empty', () => {
 
   expect(open()).toBe(false);
   expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('closes a wide field when the view clears its search from outside', () => {
+  const { view, field, setSearch, open } = setupSuggestions([]);
+  field.blur();
+  expect(open()).toBe(true);
+
+  // A tab change clears the search while the field is not focused.
+  setSearch('');
+
+  expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('reports closed and unfocused when it unmounts while open', () => {
+  const [shown, setShown] = createSignal(true);
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const view = render(() => (
+    <Show when={shown()}>
+      <ListHeaderSearch
+        label="Search email"
+        value="budget"
+        onValueChange={() => {}}
+        registerFocus={() => {}}
+        wide
+        onOpenChange={setOpen}
+        onFocusChange={setFocused}
+      />
+    </Show>
+  ));
+  view.getByRole('searchbox', { name: 'Search email' }).focus();
+  expect(open()).toBe(true);
+  expect(focused()).toBe(true);
+
+  setShown(false);
+
+  expect(open()).toBe(false);
+  expect(focused()).toBe(false);
 });

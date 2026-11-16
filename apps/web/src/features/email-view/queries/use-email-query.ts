@@ -62,6 +62,8 @@ export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
 type ShownEmailRows = {
   items: EmailDataSourceItem[];
   tab: EmailViewState['tab'];
+  /** The query the items were built for. */
+  scope: string;
   searching: boolean;
   /** The items belong to the query before the one now loading. */
   previous: boolean;
@@ -652,21 +654,30 @@ export function useEmailDataSource(
   // "Still loading" asks for the search's own answer, not for a request in
   // flight: between the debounce settling and the request starting nothing
   // is fetching yet, and the list would blank for that moment.
-  const searchAnswered = () => {
-    if (search.isSettling() || aliasSearchPending()) return false;
+  // `ownRows` says the rows on screen already belong to this search: its
+  // later pages and their membership reads are then not a new wait.
+  const searchAnswered = (ownRows: boolean) => {
+    if (search.isSettling()) return false;
+    if (!ownRows && aliasSearchPending()) return false;
     if (!usesServiceSearch()) return true;
 
     const answer = search.searchQuery;
-    if (answer.error) return true;
-    return answer.isSuccess && !answer.isPlaceholderData && !answer.isFetching;
+    // An error or an offline pause is an answer too: the list's own states
+    // take over instead of rows that would stay dimmed for good.
+    if (answer.error || answer.fetchStatus === 'paused') return true;
+    if (!answer.isSuccess || answer.isPlaceholderData) return false;
+    return !answer.isFetching || answer.isFetchingNextPage;
   };
   const shownRows = createMemo<ShownEmailRows>(
     (previous) => {
       const searching = search.isSearching();
-      const waits = searching ? !searchAnswered() : awaitsRows();
+      const current = scope();
+      const ownRows = !previous.previous && previous.scope === current;
+      const waits = searching ? !searchAnswered(ownRows) : awaitsRows();
       const keepsPrevious =
         (options.keepRowsWhileSearching?.() ?? false) &&
         waits &&
+        !ownRows &&
         previous.tab === state.tab &&
         previous.items.length > 0 &&
         (searching || previous.searching);
@@ -675,11 +686,12 @@ export function useEmailDataSource(
       return {
         items: builtItems(),
         tab: state.tab,
+        scope: current,
         searching,
         previous: false,
       };
     },
-    { items: [], tab: state.tab, searching: false, previous: false }
+    { items: [], tab: state.tab, scope: '', searching: false, previous: false }
   );
   const items = createSoupRowStore(() => shownRows().items);
   const isLoading = () => awaitsRows() && !shownRows().previous;
