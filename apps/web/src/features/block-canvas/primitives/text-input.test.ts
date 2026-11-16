@@ -76,6 +76,23 @@ it('does not interpret a move followed by a click as a label double-click', () =
   });
 });
 
+it('edits a label with the text tool on release, and not after a cancelled press', () => {
+  const { state, viewport, pointer } = setup();
+  state.chooseTool('text');
+
+  // A second finger landing to pinch cancels the first finger's press.
+  pointer(viewport, 'pointerdown', 100, 60);
+  expect(state.text.draft()).toBeUndefined();
+  pointer(window, 'pointercancel', 100, 60);
+  pointer(window, 'pointerup', 100, 60);
+  expect(state.text.draft()).toBeUndefined();
+
+  pointer(viewport, 'pointerdown', 100, 60);
+  pointer(window, 'pointerup', 100, 60);
+  expect(state.text.isLabel()).toBe(true);
+  expect(state.text.draft()?.id).toBe('box');
+});
+
 it('does not create canvas text when double-clicking a document or embed', () => {
   const { viewport, state, pointer } = setup();
   const card = document.createElement('div');

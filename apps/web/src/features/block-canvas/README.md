@@ -316,7 +316,9 @@ budget. Mixed-content performance and general spatial indexing remain later work
 ## Rich text checkpoint
 
 T chooses text. Click for auto width, or drag horizontally to choose a wrapping
-width. Double-click an existing text shape, or select it and press Enter, to edit.
+width. The text tool acts when the press is released, on new text and on existing
+text or labels alike, so a cancelled press (a second finger landing to pinch)
+opens no editor. Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
 

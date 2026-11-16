@@ -22,7 +22,11 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       : undefined;
     pendingTap = undefined;
   };
-  let origin: { x: number; y: number; id: number } | undefined;
+  // A Text tool press, waiting for its release. `target` is the text or
+  // labelled shape under it; without one the release starts new text.
+  let origin:
+    | { x: number; y: number; id: number; target: string | undefined }
+    | undefined;
   const canvas = () =>
     root.querySelector<HTMLElement>('[aria-label="Graphics canvas"]');
   const point = (x: number, y: number) => {
@@ -103,13 +107,17 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       return;
     event.preventDefault();
     event.stopPropagation();
-    const p = point(event.clientX, event.clientY),
-      id = textTargetAt(state.editor.document, p);
-    if (id) {
-      state.text.edit(id);
-      return;
-    }
-    origin = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    // Editing starts on release, never on the press: a press that is cancelled
+    // (a second finger landing to pinch or pan) must not open an editor.
+    origin = {
+      x: event.clientX,
+      y: event.clientY,
+      id: event.pointerId,
+      target: textTargetAt(
+        state.editor.document,
+        point(event.clientX, event.clientY)
+      ),
+    };
     window.addEventListener('pointerup', up, true);
     window.addEventListener('pointercancel', cancel, true);
   };
@@ -120,18 +128,23 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
   };
   const up = (event: PointerEvent) => {
     if (!origin || event.pointerId !== origin.id) return;
+    const { target } = origin;
     const start = point(origin.x, origin.y),
       end = point(event.clientX, event.clientY);
     const width =
       Math.abs(event.clientX - origin.x) > 3
         ? Math.max(40, Math.abs(end.x - start.x))
         : undefined;
+    cancel();
+    event.stopPropagation();
+    if (target) {
+      state.text.edit(target);
+      return;
+    }
     state.text.begin(
       { x: width ? Math.min(start.x, end.x) : start.x, y: start.y },
       width
     );
-    cancel();
-    event.stopPropagation();
   };
   const doubleClick = (event: MouseEvent) => {
     if (
