@@ -87,6 +87,12 @@ describe('createRetirableCacheHost', () => {
     const defer = vi.spyOn(inner, 'deferOptimisticWrite');
     const rollback = vi.spyOn(inner, 'rollbackOptimisticWrite');
     const host = createRetirableCacheHost(inner);
+    const remove = vi.spyOn(inner, 'deleteRecords');
+    await host.deleteRecords(['GraphqlSoupDocument:one'], 'source-generation');
+    expect(remove).toHaveBeenCalledWith(
+      ['GraphqlSoupDocument:one'],
+      'source-generation'
+    );
     const claim = { owner: 'runner', generation: '2' };
     await host.deferOptimisticWrite('1', claim, 100, 'server failed', true);
     expect(defer).toHaveBeenCalledWith('1', claim, 100, 'server failed', true);

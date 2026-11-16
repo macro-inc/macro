@@ -114,7 +114,8 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     rollbackOptimisticWrite: (transactionId, claim, error, errorCode) =>
       current.rollbackOptimisticWrite(transactionId, claim, error, errorCode),
     invalidate: (keys) => current.invalidate(keys),
-    deleteRecords: (keys) => current.deleteRecords(keys),
+    deleteRecords: (keys, authorityGeneration) =>
+      current.deleteRecords(keys, authorityGeneration),
     teardown: (opKey) => current.teardown(opKey),
     clear: () => current.clear(),
     onOpsAffected: (cb) =>

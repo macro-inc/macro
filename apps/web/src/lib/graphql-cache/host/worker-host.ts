@@ -1815,10 +1815,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as AffectedOperationsResult;
     },
 
-    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
+    async deleteRecords(
+      keys: string[],
+      authorityGeneration?: string
+    ): Promise<AffectedOperationsResult> {
       return (await initializedRequest({
         kind: 'delete-records',
         keys,
+        authority: { generation: authorityGeneration, requireProof: true },
       })) as AffectedOperationsResult;
     },
 

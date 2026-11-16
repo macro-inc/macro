@@ -57,12 +57,12 @@ describe('CRM response content scope', () => {
       ['Write', true, true],
       ['Document', false, false],
     ] as const) {
-      const request = new Request('http://localhost/graphql', {
+      const request = new Request('http://localhost/items/soup/graphql', {
         method: 'POST',
         body: JSON.stringify({ query, operationName }),
       });
       await expect(
-        crmResponseScope('storage', '/graphql', request, {})
+        crmResponseScope('storage', '/items/soup/graphql', request, {})
       ).resolves.toEqual({ protected: protectedContent, write });
       expect(request.bodyUsed).toBe(false);
     }

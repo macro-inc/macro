@@ -3138,6 +3138,7 @@ export const storageServiceClient = {
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
+      cache: 'no-store',
     });
   },
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {

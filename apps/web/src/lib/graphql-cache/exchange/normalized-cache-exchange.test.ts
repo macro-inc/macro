@@ -35,7 +35,8 @@ import {
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
-import { StaleCacheAuthorityError } from '../authority';
+import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
+import { testAuthority } from '../authority-fixture';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -505,6 +506,34 @@ function makeFakeHost(): FakeHost {
     dispose() {},
   };
   return host;
+}
+
+function installAuthority(host: CacheHost) {
+  let state = testAuthority('test-viewer');
+  const listeners = new Set<(next: CacheAuthority) => void>();
+  const authority = {
+    snapshot: () => state,
+    current: async () => state,
+    setReadGuard: () => {},
+    verifyRead: async () => {},
+    onChanged(callback: (next: CacheAuthority) => void) {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+      };
+    },
+    transition: async () => {
+      throw new Error('unused transition');
+    },
+  };
+  Object.defineProperty(host, 'authority', { value: authority });
+  return {
+    authority,
+    change() {
+      state = { ...state, generation: crypto.randomUUID() };
+      for (const listener of listeners) listener(state);
+    },
+  };
 }
 
 function makeOp(
@@ -1336,6 +1365,142 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
+  it.each(['response', 'owner'] as const)(
+    'reserves subscription order before the %s authority await',
+    async (phase) => {
+      const { authority } = installAuthority(host);
+      const generation = authority.snapshot().generation;
+      const waiting = Promise.withResolvers<void>();
+      const entered = Promise.withResolvers<void>();
+      if (phase === 'owner') {
+        vi.spyOn(authority, 'current').mockImplementationOnce(async () => {
+          entered.resolve();
+          await waiting.promise;
+          return authority.snapshot();
+        });
+      }
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      const subscription = makeSubscriptionOp(24);
+      ops.next(
+        makeOperation(
+          'subscription',
+          {
+            ...subscription,
+            query: gql`subscription Protected { user { emailThread { id } } }`,
+          },
+          subscription.context
+        )
+      );
+      const operation = forwarded[0]!;
+      const response = Response.json({});
+      rememberResponseAuthority(response, generation, async () => {
+        if (phase === 'response') {
+          entered.resolve();
+          await waiting.promise;
+        }
+      });
+      network.next(
+        queryResult(
+          makeOperation('subscription', operation, {
+            ...operation.context,
+            cacheAuthorityResponse: { response },
+          }),
+          {
+            soupUpdates: [
+              {
+                __typename: 'SoupUpdated',
+                item: {
+                  __typename: 'GraphqlSoupDocument',
+                  id: 'one',
+                  displayName: 'Earlier update',
+                },
+              },
+            ],
+          }
+        )
+      );
+      await entered.promise;
+      network.next(
+        queryResult(operation, {
+          soupUpdates: [
+            {
+              __typename: 'GraphqlCacheDeletion',
+              graphqlTypeName: 'GraphqlSoupDocument',
+              entityId: 'one',
+            },
+          ],
+        })
+      );
+      await tick();
+      expect(host.cacheActions).toEqual([]);
+      waiting.resolve();
+      await vi.waitFor(() => expect(host.cacheActions).toHaveLength(2));
+      expect(host.cacheActions.map((effect) => effect.kind)).toEqual([
+        'write',
+        'delete',
+      ]);
+    }
+  );
+
+  it('drops queued subscription deletion when authority changes behind an earlier write', async () => {
+    const { change } = installAuthority(host);
+    const first = deferred<WriteResult>();
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockImplementationOnce(() => first.promise);
+    const remove = vi.spyOn(host, 'deleteRecords');
+    const { ops, network, forwarded } = controlledQueryHarness(host);
+    ops.next(makeSubscriptionOp(24));
+    const operation = forwarded[0]!;
+    network.next(
+      queryResult(operation, { soupUpdates: [{ id: 'before-change' }] })
+    );
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'one',
+          },
+        ],
+      })
+    );
+    change();
+    first.resolve({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    await tick();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it.each(['cache-first', 'cache-only'] as const)(
+    'retries the initial %s read after an authority-only generation change',
+    async (policy) => {
+      const { change } = installAuthority(host);
+      const old = deferred<ReadResult>();
+      const fresh = { from: 'current-authority' };
+      const read = vi
+        .spyOn(host, 'readQuery')
+        .mockImplementationOnce(() => old.promise)
+        .mockResolvedValue({ kind: 'hit', data: fresh });
+      const { ops, results, forwarded } = controlledQueryHarness(host);
+      ops.next(makeOp(47, policy));
+      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+      change();
+      old.resolve({ kind: 'hit', data: { from: 'old-authority' } });
+      await vi.waitFor(() => expect(results).toHaveLength(1));
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(results[0]?.data).toEqual(fresh);
+      expect(forwarded).toHaveLength(0);
+    }
+  );
+
   it('serializes cache effects across separate subscription emissions', async () => {
     const operation = makeSubscriptionOp(24);
     const networkResults = makeSubject<OperationResult>();
@@ -1423,9 +1588,10 @@ describe('normalizedCacheExchange', () => {
     releaseWrite();
     await vi.waitFor(() => expect(results).toHaveLength(2));
 
-    expect(host.deleteRecords).toHaveBeenCalledWith([
-      'GraphqlSoupDocument:document-1',
-    ]);
+    expect(host.deleteRecords).toHaveBeenCalledWith(
+      ['GraphqlSoupDocument:document-1'],
+      undefined
+    );
     expect(cacheContainsDocument).toBe(false);
   });
 

@@ -1400,7 +1400,12 @@ export function normalizedCacheExchange(
                 data: effect.data,
               });
             } else {
-              await host.deleteRecords([effect.key]);
+              await host.deleteRecords(
+                [effect.key],
+                typeof op.context.cacheAuthorityGeneration === 'string'
+                  ? op.context.cacheAuthorityGeneration
+                  : undefined
+              );
             }
           } catch (error) {
             applied = false;
@@ -1552,14 +1557,57 @@ export function normalizedCacheExchange(
         if (result.error || result.hasNext || result.data == null) return;
         try {
           const keys = options.deletedRecordKeys?.(result) ?? [];
-          if (keys.length) return await host.deleteRecords(keys);
+          if (keys.length)
+            return await host.deleteRecords(
+              keys,
+              typeof op.context.cacheAuthorityGeneration === 'string'
+                ? op.context.cacheAuthorityGeneration
+                : undefined
+            );
         } catch (error) {
           options.onCacheError?.(error, op);
         }
       }
 
-      async function writeThrough(
+      function writeThrough(
         result: OperationResult
+      ): Promise<OperationResult | undefined> {
+        const op = result.operation;
+        if (op.kind !== 'subscription') return writeThroughInOrder(result);
+        // Reserve arrival order before any authority lookup can yield. Keep
+        // the original subscription and cache generation through every await.
+        const generation = subscriptionGenerations.get(op.key);
+        const cacheGenerationAtArrival = cacheGeneration;
+        const isCurrent = () =>
+          generation !== undefined &&
+          subscriptionGenerations.get(op.key) === generation &&
+          cacheGeneration === cacheGenerationAtArrival;
+        let output: OperationResult | undefined;
+        const effects = runSubscriptionCacheEffects(
+          result,
+          subscriptionEffectChains.get(op.key) ?? Promise.resolve(true),
+          async (span) => {
+            if (!isCurrent()) return false;
+            output = await writeThroughInOrder(result, isCurrent, span);
+            const metadata = output && normalizedCacheResultMetadata(output);
+            return metadata?.source === 'live-network'
+              ? (metadata.cacheEffectsApplied ?? true)
+              : output !== undefined;
+          }
+        );
+        subscriptionEffectChains.set(op.key, effects);
+        return effects
+          .then(() => output)
+          .finally(() => {
+            if (subscriptionEffectChains.get(op.key) === effects)
+              subscriptionEffectChains.delete(op.key);
+          });
+      }
+
+      async function writeThroughInOrder(
+        result: OperationResult,
+        isSubscriptionCurrent: () => boolean = () => true,
+        subscriptionSpan?: Span
       ): Promise<OperationResult | undefined> {
         const responseGeneration =
           responseAuthorityGeneration(operationResponse(result.operation)) ??
@@ -1632,38 +1680,16 @@ export function normalizedCacheExchange(
           result.data != null &&
           options.isUncachedSubscription?.(op) !== true
         ) {
-          // Serialize effects across every emission for this operation, as
-          // well as within buffered payloads, so a slower earlier write cannot
-          // overtake a later delete. Subscribers still receive each original
-          // result after its effects settle.
-          const previousEffects =
-            subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
-          const generation = subscriptionGenerations.get(op.key);
-          const effects = runSubscriptionCacheEffects(
-            result,
-            previousEffects,
-            (span) =>
-              applyOperationCacheEffects(
-                op,
-                operationCacheEffects(result.data),
-                () =>
-                  generation !== undefined &&
-                  subscriptionGenerations.get(op.key) === generation,
-                span
-              )
+          const cacheEffectsApplied = await applyOperationCacheEffects(
+            op,
+            operationCacheEffects(result.data),
+            isSubscriptionCurrent,
+            subscriptionSpan
           );
-          subscriptionEffectChains.set(op.key, effects);
-          try {
-            const cacheEffectsApplied = await effects;
-            return withResultMetadata(result, {
-              source: 'live-network',
-              cacheEffectsApplied,
-            });
-          } finally {
-            if (subscriptionEffectChains.get(op.key) === effects) {
-              subscriptionEffectChains.delete(op.key);
-            }
-          }
+          return withResultMetadata(result, {
+            source: 'live-network',
+            cacheEffectsApplied,
+          });
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
           if (
             predatesMutation(op) ||
@@ -1911,7 +1937,6 @@ export function normalizedCacheExchange(
             if (state.retainedReplacementFallback)
               state.retainedReplacementFallback.invalidated = true;
             state.retainedReplacementFallback = undefined;
-            state.cacheReadVersion += 1;
           }
         });
         // Includes BFCache restoration, even with no active query keys. The

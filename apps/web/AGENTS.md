@@ -46,6 +46,9 @@ guard the outcome by its login and admit cache effects only under the captured
 permission generation. Parse the selected GraphQL operation and classify REST
 POST contracts explicitly because POST also serves reads. Preserve queued
 identity settlement separately; never offer a duplicate retry for a committed write.
+Reserve subscription order before authority awaits, capture both subscription and cache generations at arrival, and carry the source generation through deletion commands and host wrappers.
+Fence visibility synchronously on retirement, wait for every overlapping cleanup to settle before reopening, and reject replaced-owner transition replies before they can retire the current owner.
+Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; skipped response admission must never turn a stale or missing cached list into a replacement write.
 Capture the generation before predicting optimistic results from authored
 arguments; caller-supplied copied updates must retain their original generation.
 Publish the shared client and host before installing authority callbacks, which

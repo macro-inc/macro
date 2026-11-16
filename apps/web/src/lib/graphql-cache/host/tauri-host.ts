@@ -1122,11 +1122,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return { ...result, revision: parseCacheRevision(result.revision) };
     },
 
-    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
+    async deleteRecords(
+      keys: string[],
+      authorityGeneration?: string
+    ): Promise<AffectedOperationsResult> {
       await ready;
       const result = await request<AffectedOperationsResult>(
         'graphql_cache_delete_records',
-        { keys }
+        { keys, authorityGeneration }
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },

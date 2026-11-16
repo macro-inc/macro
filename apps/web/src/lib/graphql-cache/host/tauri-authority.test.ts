@@ -136,6 +136,22 @@ it('preserves the owner generation when normalizing selected-record revisions', 
   expect(sourceAuthorityGeneration(result)).toBe(state.generation);
 });
 
+it('keeps a deletion source generation after authority advances before dispatch', async () => {
+  await host.authority!.current();
+  await host.authority!.transition(state.generation, 'none');
+  const original = state.generation;
+  await host.authority!.transition(state.generation, 'changed');
+  await expect(
+    host.deleteRecords(['GraphqlSoupDocument:one'], original)
+  ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+  expect(invoke).toHaveBeenCalledWith(
+    'graphql_cache_delete_records',
+    expect.objectContaining({
+      authority: { generation: original, requireProof: false },
+    })
+  );
+});
+
 it('retires the controller synchronously from an owner event while refresh is pending', async () => {
   const policy = '00000000-0000-4000-8000-000000000099:allowed';
   const retire = vi.fn(async () => {});

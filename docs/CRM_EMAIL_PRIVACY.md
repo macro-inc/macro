@@ -86,6 +86,16 @@ successful write instead of offering a retry that could create a duplicate.
 POST reads and GraphQL queries still require content admission, and a replaced
 login cannot receive an earlier login's write outcome.
 
+Subscription frames reserve their order before permission lookups and retain
+their arrival generation through queued writes and deletions. An authority-only
+change retries an initial cache read instead of leaving it pending. Visible
+retirement closes admission immediately and waits for all overlapping cleanup
+work to settle before reopening; a replaced owner's delayed reply cannot retire
+the current owner. Function-style team-view edits obtain a network-only settings
+baseline inside the serialized mutation and stop before PUT if that read fails.
+This adds one settings GET per such edit, not per view. Cross-client whole-list
+writes retain their existing last-write-wins behavior.
+
 Coordinator protocol 18 and the native permission commands must ship with this
 web bundle. Older native binaries require an app update; there is no unguarded
 cache fallback for the new bundle. New native binaries preserve the legacy cache

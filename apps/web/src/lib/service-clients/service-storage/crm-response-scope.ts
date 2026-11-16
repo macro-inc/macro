@@ -69,7 +69,10 @@ export async function crmResponseScope(
     init.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
   if (service === 'agent') return read;
-  if (service === 'storage' && path === '/graphql') {
+  if (
+    service === 'storage' &&
+    (path === '/items/soup/graphql' || path === '/graphql')
+  ) {
     try {
       const body =
         init.body ??

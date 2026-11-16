@@ -116,6 +116,31 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it.each(['unavailable', 'revoked'] as const)(
+    'returns a committed Soup mutation when the later proof is %s',
+    async (state) => {
+      await verifiedViewer();
+      const observe = await prepareResponseObservers(
+        'http://localhost/dss/items/soup/graphql',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            query:
+              'mutation Save { setEntityProperty(input: {entityType: CRM_COMPANY}) { id } }',
+          }),
+        }
+      );
+      mocks.proof.mockResolvedValue(
+        state === 'revoked' ? proof(false) : err(new Error('offline'))
+      );
+      const data = { data: { setEntityProperty: { id: 'property-1' } } };
+      const response = await observe(Response.json(data));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(data);
+      await expect(assertResponseAuthority(response)).rejects.toThrow();
+      expect(crmAccessAuthority.allowed()).toBe(false);
+    }
+  );
   it.each(['headers', 'body'] as const)(
     'rejects CRM-bearing document attachment references revoked before %s finish',
     async (phase) => {

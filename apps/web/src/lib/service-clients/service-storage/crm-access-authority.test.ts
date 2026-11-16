@@ -200,4 +200,56 @@ describe('CRM authority across cache clients', () => {
     expect(authority.allowed()).toBe(true);
     expect(retire).toHaveBeenCalledTimes(2);
   });
+
+  it('does not retire a verified replacement owner when an old transition returns', async () => {
+    const oldOwner = sharedOwner().port();
+    const { authority, retire } = client(oldOwner);
+    await authority.refresh();
+    const reply = Promise.withResolvers<void>();
+    const transitioned = Promise.withResolvers<void>();
+    const transition = oldOwner.transition.bind(oldOwner);
+    vi.spyOn(oldOwner, 'transition').mockImplementationOnce(async (...args) => {
+      const result = await transition(...args);
+      transitioned.resolve();
+      await reply.promise;
+      return result;
+    });
+    const oldAccept = authority.accept(
+      await authority.prepare(),
+      `${team}:denied`
+    );
+    const rejected = expect(oldAccept).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    await transitioned.promise;
+    authority.setHost(sharedOwner().port());
+    await authority.refresh();
+    retire.mockClear();
+    reply.resolve();
+    await rejected;
+    expect(authority.allowed()).toBe(true);
+    expect(retire).not.toHaveBeenCalled();
+  });
+
+  it('keeps admission closed until an earlier cleanup settles after a later cleanup fails', async () => {
+    const port = sharedOwner().port();
+    const { authority, retire } = client(port);
+    await authority.refresh();
+    const earlier = Promise.withResolvers<void>();
+    retire.mockImplementationOnce(() => earlier.promise);
+    retire.mockRejectedValueOnce(new Error('later cleanup failed'));
+    await port.transition((await port.current()).generation, `${team}:denied`);
+    await port.transition((await port.current()).generation, `${team}:allowed`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const refreshed = authority.refresh();
+    const settled = vi.fn();
+    void refreshed.then(settled, settled);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).not.toHaveBeenCalled();
+    expect(authority.allowed()).toBe(false);
+    earlier.resolve();
+    await expect(refreshed).rejects.toThrow('later cleanup failed');
+    await authority.refresh();
+    expect(authority.allowed()).toBe(true);
+  });
 });

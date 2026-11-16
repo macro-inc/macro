@@ -104,8 +104,10 @@ export function createCrmAccessAuthority(options: {
     const work = Telemetry.span('crm.access.visible_retirement', async () =>
       options.retire()
     );
-    retiring = Promise.all([previous, work])
-      .then(() => {})
+    retiring = Promise.allSettled([previous, work])
+      .then(([, result]) => {
+        if (result.status === 'rejected') throw result.reason;
+      })
       .catch((error: unknown) => {
         retirementFailed = true;
         throw error;
@@ -185,6 +187,8 @@ export function createCrmAccessAuthority(options: {
           'crm.access.owner_transition',
           async () => captured.owner.transition(captured.generation, policy)
         );
+        if (captured.session !== session || captured.owner !== owner)
+          throw new StaleCacheAuthorityError();
         span.setAttr('crm.access.changed', result.changed);
         span.run(() => retire(result.authority.generation));
         const admitted = {

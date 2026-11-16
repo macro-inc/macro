@@ -141,3 +141,20 @@ it('broadens unknown or stale pushes to rereads without delivering their field c
   push(state.generation);
   expect(affected.mock.calls).toEqual([[[7]], [[7]], [[7], fieldChanges]]);
 });
+
+it('keeps a deletion source generation after authority advances before dispatch', async () => {
+  await host.authority!.current();
+  await host.authority!.transition(state.generation, 'none');
+  const original = state.generation;
+  const post = vi.spyOn(adapter, 'postMessage');
+  await host.authority!.transition(state.generation, 'changed');
+  await expect(
+    host.deleteRecords(['GraphqlSoupDocument:one'], original)
+  ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+  expect(post).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'delete-records',
+      authority: { generation: original, requireProof: false },
+    })
+  );
+});
