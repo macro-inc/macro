@@ -360,6 +360,7 @@ export * from './soupPropertyValue';
 export * from './tagFilterMode';
 export * from './taskFilters';
 export * from './taskFiltersIncludeCbmAtmNc';
+export * from './termMatching';
 export * from './unifiedSearchParams';
 export * from './unifiedSearchRequest';
 export * from './unifiedSearchRequestCollapse';

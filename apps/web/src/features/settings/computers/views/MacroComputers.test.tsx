@@ -5,14 +5,35 @@
 import { ThrownResultError } from '@core/util/result';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { For } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import {
+  computerSetupRequest,
+  requestComputerSetup,
+} from '../primitives/setup-request';
+import { GetComputerEntry } from './get-computer-entry';
 import { MacroComputers } from './MacroComputers';
+
+/** Machines as Harness lays it out: Get a computer on top, the list below. */
+function Machines() {
+  const [buying, setBuying] = createSignal(false);
+  return (
+    <>
+      <GetComputerEntry onGet={() => setBuying(true)} />
+      <MacroComputers
+        harnesses={[]}
+        buying={buying()}
+        onBuyingChange={setBuying}
+      />
+    </>
+  );
+}
 
 const mocks = vi.hoisted(() => ({
   rollout: true,
   offers: [] as SizeOffer[],
   offersError: undefined as unknown,
+  offersPending: false,
   refetchOffers: vi.fn(),
   openSettings: vi.fn(),
   computers: [] as ComputerStatus[],
@@ -27,20 +48,26 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
-    isPending: false,
-    isFetching: false,
+    get isPending() {
+      return mocks.offersPending;
+    },
+    get isFetching() {
+      return mocks.offersPending;
+    },
     refetch: mocks.refetchOffers,
     get isError() {
-      return mocks.offersError !== undefined;
+      return !mocks.offersPending && mocks.offersError !== undefined;
     },
     get isSuccess() {
-      return mocks.offersError === undefined;
+      return !mocks.offersPending && mocks.offersError === undefined;
     },
     get error() {
       return mocks.offersError;
     },
     get data() {
-      return mocks.offersError === undefined ? mocks.offers : undefined;
+      return mocks.offersPending || mocks.offersError !== undefined
+        ? undefined
+        : mocks.offers;
     },
   }),
   usePurchaseComputerMutation: () => ({
@@ -78,7 +105,9 @@ vi.mock('@queries/computers/claude', () => ({
 }));
 
 vi.mock('./computer-setup-dialog', () => ({
-  ComputerSetupSteps: () => null,
+  ComputerSetupSteps: (props: { step: string; computer: { id: string } }) => (
+    <p data-testid="setup-step">{`${props.computer.id}:${props.step}`}</p>
+  ),
   StepHeader: () => null,
   computerConnected: () => false,
 }));
@@ -153,6 +182,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.rollout = true;
   mocks.offersError = undefined;
+  mocks.offersPending = false;
   mocks.computers = [];
   mocks.offers = [
     {
@@ -212,10 +242,10 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     )
     .mockResolvedValueOnce({ computerId: 'computer-1', state: 'confirming' });
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
-  await screen.findByText('Get a Macro computer', { selector: 'h2' });
+  await screen.findByRole('dialog');
   expect(screen.getByRole('radio', { name: 'XL' })).toHaveProperty(
     'disabled',
     true
@@ -273,7 +303,7 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   mocks.confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   mocks.restore.mockResolvedValueOnce({ ...kept, billing: 'active' });
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
   expect(
     screen.queryByRole('menuitem', { name: 'Cancel at period end' })
@@ -289,7 +319,7 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   expect(screen.getByRole('menuitem', { name: 'Release now' })).toBeTruthy();
 });
 
-it('offers Retry on a failed computer, and only there', async () => {
+it('says why a computer failed and offers Retry setup on its row, and only there', async () => {
   const failed: ComputerStatus = {
     id: 'computer-1',
     name: 'Build machine',
@@ -307,12 +337,23 @@ it('offers Retry on a failed computer, and only there', async () => {
     purchasedBy: 'viewer',
     createdAt: '2026-01-01T00:00:00Z',
   };
+  // The fail-fast state's reason, as the API sends it.
+  Reflect.set(failed, 'failureReason', 'The host ran out of disk.');
   mocks.computers = [failed, { ...failed, id: 'computer-2', status: 'ready' }];
   mocks.retry.mockResolvedValueOnce({ ...failed, status: 'setting_up' });
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
-  const retry = screen.getAllByRole('menuitem', { name: 'Retry' });
+  expect(
+    screen.getByText(/Setup failed: The host ran out of disk\./)
+  ).toBeTruthy();
+  // Only the ready computer, whose guided setup is not done, offers it.
+  expect(screen.getAllByRole('button', { name: 'Finish setup' })).toHaveLength(
+    1
+  );
+  // The row's action, not a second Retry in its menu.
+  expect(screen.queryByRole('menuitem', { name: 'Retry' })).toBeNull();
+  const retry = screen.getAllByRole('button', { name: 'Retry setup' });
   expect(retry).toHaveLength(1);
   fireEvent.click(retry[0]);
   await waitFor(() => expect(mocks.retry).toHaveBeenCalledWith('computer-1'));
@@ -341,7 +382,7 @@ it('offers no power, cancel or release while a purchase is being confirmed', () 
     },
   ];
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
   expect(screen.queryAllByRole('menuitem')).toEqual([]);
 });
@@ -367,7 +408,7 @@ it('keeps existing computers and release available with rollout off while hiding
       createdAt: '2026-01-01T00:00:00Z',
     },
   ];
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
   expect(screen.getByText('Build machine')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   expect(
@@ -379,7 +420,7 @@ it('keeps existing computers and release available with rollout off while hiding
 
 it('keeps a zero-price offer included through review and purchase', async () => {
   mocks.offers[0].quote.amount = 0;
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
   await screen.findByRole('radio', { name: 'Standard' });
   expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
@@ -431,7 +472,13 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
     setupCompletedAt: null,
   };
   mocks.computers = [computer];
-  const first = render(() => <MacroComputers harnesses={[harness]} />);
+  const first = render(() => (
+    <MacroComputers
+      harnesses={[harness]}
+      buying={false}
+      onBuyingChange={() => {}}
+    />
+  ));
   expect(screen.getByRole('button', { name: 'Finish setup' })).toBeTruthy();
   expect(
     screen.queryByRole('button', { name: 'Sign in with Claude' })
@@ -439,7 +486,13 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
   first.unmount();
 
   mocks.computers = [{ ...computer, setupCompletedAt: '2026-01-02T00:00:00Z' }];
-  const second = render(() => <MacroComputers harnesses={[harness]} />);
+  const second = render(() => (
+    <MacroComputers
+      harnesses={[harness]}
+      buying={false}
+      onBuyingChange={() => {}}
+    />
+  ));
   // Signed in with Claude and not expired: nothing to do.
   expect(
     screen.queryByRole('button', { name: 'Sign in with Claude' })
@@ -450,6 +503,8 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
   render(() => (
     <MacroComputers
       harnesses={[{ ...harness, claude_mode: 'macro_credits' }]}
+      buying={false}
+      onBuyingChange={() => {}}
     />
   ));
   expect(
@@ -467,16 +522,48 @@ it('tells a trialing team computers are for paid plans and links to Billing', as
         'Computers are available on paid plans. Your team is on a trial.',
     },
   ]);
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
   expect(
     await screen.findByText(
-      'Computers are available on paid plans. Your team is on a trial.'
+      'Computers can be added once your trial ends and your team is on a paid plan.'
     )
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
   expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('tells a team with no paid plan to subscribe, on the row and in the dialog', async () => {
+  // What the client makes of a 422 from /team/computers/offers.
+  mocks.offersError = new ThrownResultError([
+    { code: 'NO_PAID_PLAN', message: 'the team has no active subscription' },
+  ]);
+  render(() => <Machines />);
+
+  expect(
+    await screen.findByText(
+      'Computers need a paid Macro plan. Your team does not have one yet.'
+    )
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
+  expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('shows the sizes loading as a skeleton, never a bare spinner', async () => {
+  mocks.offersPending = true;
+  render(() => <Machines />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  expect(
+    await screen.findByRole('status', { name: 'Loading computer sizes' })
+  ).toBeTruthy();
+  expect(screen.queryByText('Loading...')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Buy' })).toHaveProperty(
+    'disabled',
+    true
+  );
 });
 
 it('says computers are unavailable when sizes fail with a 503, and retries on Retry', async () => {
@@ -487,14 +574,90 @@ it('says computers are unavailable when sizes fail with a 503, and retries on Re
       message: 'computers are not available',
     },
   ]);
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <Machines />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
   expect((await screen.findByRole('alert')).textContent).toBe(
     "Computers aren't available right now. Try again later."
   );
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+  expect(screen.queryByRole('radio')).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(mocks.refetchOffers).toHaveBeenCalledOnce();
+});
+
+it('offers an account outside the rollout nothing but Close', async () => {
+  mocks.offersError = new ThrownResultError([
+    { code: 'ROLLOUT_DISABLED', message: 'not enabled' },
+  ]);
+  render(() => <Machines />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "Computers aren't available for this account yet."
+  );
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Go to Billing' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+it("reopens a computer's setup at Bring your AI when a notification asks", async () => {
+  mocks.computers = [
+    {
+      id: 'computer-1',
+      name: 'Build machine',
+      size: 'standard',
+      vcpus: 4,
+      memoryGib: 8,
+      diskGib: 100,
+      catalogEntry: 'standard@2026-11',
+      status: 'ready',
+      billing: 'active',
+      poweredOn: true,
+      agentCount: 1,
+      canUndoCancel: false,
+      canRestore: false,
+      purchasedBy: 'viewer',
+      createdAt: '2026-01-01T00:00:00Z',
+      harnessId: 'harness-build',
+      setupCompletedAt: null,
+    },
+  ];
+  render(() => <Machines />);
+  expect(screen.queryByTestId('setup-step')).toBeNull();
+
+  requestComputerSetup('computer-1');
+
+  expect((await screen.findByTestId('setup-step')).textContent).toBe(
+    'computer-1:claude'
+  );
+  expect(computerSetupRequest()).toBeUndefined();
+});
+
+it('puts Get a Macro computer on top with its facts, or as one row when compact', () => {
+  const first = render(() => <Machines />);
+  expect(
+    screen.getByText('Get a Macro computer', { selector: 'h2' })
+  ).toBeTruthy();
+  expect(
+    screen.getByText("A hosted computer where your team's agents run.")
+  ).toBeTruthy();
+  expect(
+    screen.getAllByRole('listitem').map((item) => item.textContent)
+  ).toEqual([
+    'Always on, never sleeps',
+    'Runs on your Claude plan or Macro credits',
+    'From $40.00/month',
+  ]);
+  first.unmount();
+
+  render(() => <GetComputerEntry variant="compact" onGet={() => {}} />);
+  expect(
+    screen.queryByText('Get a Macro computer', { selector: 'h2' })
+  ).toBeNull();
+  expect(
+    screen.getByText('Hosted, always on · from $40.00/month')
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Get a computer' })).toBeTruthy();
 });

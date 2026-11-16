@@ -4,9 +4,8 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button,
-with `Search calls` immediately left of collapse. Search reveals its field above
-New. The sidebar also holds
+On desktop a collapsible sidebar starts with the shared outlined `New` button;
+`Search calls` is in the list header. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
 `External`; External means at least one guest without a Macro account joined),
 a `Channels` section listing channels seen in loaded calls, and `Tags`. Choosing
@@ -29,6 +28,25 @@ The channel/contact option opens the recipient picker. Starting a channel call
 connects the creator without waiting for recording, transcription, or recipient
 notification delivery. Verify that a second participant still receives the ring
 and can join, and that leaving immediately does not leave a recording running.
+Join actions target the selected live call ID. If that session ends, Join and
+recovery show an ended-call error instead of starting another session. Leaving
+while others remain and then joining keeps the same call history entry; after
+the last participant leaves, use Start call or Call again to start a new entry.
+Check a stale incoming notification and a disconnect during permission setup:
+neither may create or join a replacement call. These joins work for signed-in
+human sessions with `enable-programmatic-calls` off as well as on.
+
+Channel navigation carries `join_call=<callId>` for a selected call,
+`join_call=true` to look up a live session without creating one, and
+`join_call=start` only for an explicit new-call action. Each intent is consumed
+once. A retry retains the original call ID, including after a Start request
+allocated a session but media connection failed. If Start timed out before its
+response arrived, Retry waits for that request instead of sending another Start.
+If the response was lost, Retry only looks up and joins an existing call.
+Native token skipping also requires the selected session to match the native call.
+The `call.join` trace records the intent, source, session ID, and outcome.
+Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
+media connection also runs in that trace. No RTC tokens are recorded.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
@@ -207,10 +225,14 @@ Open call returns to the existing meeting/channel route. More offers
 only after explicit selection and reports success or failure. More stays available
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
-starts bottom-right, follows the speaker and gives screen sharing priority.
-Speaker changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen
-shares and participant departures update immediately. Reduced motion skips both
-the hold and the fade; outgoing controls stop accepting input during a transition.
+starts bottom-right and keeps the pinned participant or screen, regardless of
+Layout. A pinned participant keeps their camera/avatar even while sharing;
+your own camera pin survives other participants leaving the call.
+Unpinning or losing the pinned source immediately restores the default selection:
+screen share, speaker, camera, then first participant. Without a pin, speaker
+changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen shares
+and participant departures update immediately. Reduced motion skips both the hold
+and the fade; outgoing controls stop accepting input during a transition.
 Drag its header freely within the window. The nearest corner glows faintly within
 120px, strengthening until both edges reach the 24px snap range. This
 edge-anchored success gradient previews the snap, fading
@@ -849,3 +871,14 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+### Calling an agent teammate
+
+An agent teammate (`enable-agent-teammates`) joins calls from its own computer
+and speaks with the voice in its repository's `config/voice.json`: the one
+picked when it was invited, or set later from **Team → Members** (see
+[agent teammates](settings.md#agent-teammates)). A changed voice applies from
+the agent's next call. Its speech runs through Macro's speech gateway on the
+agent harness service (`/brain/inference/stt` and `/brain/inference/tts`, the
+agent's own key), so call audio and synthesized text are billed as the agent's
+AI usage.

@@ -272,7 +272,8 @@ impl MacroApiTokenSigner {
     }
 
     /// Mint an owner credential with signed agent attribution for SDK messages,
-    /// and the client label (`agent_via`) the agent's posts are shown under.
+    /// the client label (`agent_via`) the agent's posts are shown under, and
+    /// the code-mode correlation it acts for with that session's scope.
     #[tracing::instrument(skip_all, err, fields(?agent_id, ?agent_via))]
     pub async fn mint_for_agent(
         &self,
@@ -281,13 +282,14 @@ impl MacroApiTokenSigner {
         agent_id: Option<macro_uuid::Uuid>,
         agent_via: Option<String>,
         agent_session_id: Option<uuid::Uuid>,
-        agent_correlation_id: Option<uuid::Uuid>,
+        correlation: Option<SignedCorrelation>,
     ) -> Result<String, EgressError> {
         let claims = SignedClaims {
             agent_id,
             agent_via,
             agent_session_id,
-            agent_correlation_id,
+            agent_correlation_id: correlation.map(|correlation| correlation.id),
+            agent_scope: correlation.and_then(|correlation| correlation.scope),
             routine_id: None,
         };
         self.sign(owner, lifetime_seconds, claims).await
@@ -309,6 +311,7 @@ impl MacroApiTokenSigner {
             agent_via: None,
             agent_session_id: None,
             agent_correlation_id: None,
+            agent_scope: None,
             routine_id: Some(routine_id),
         };
         self.sign(owner, lifetime_seconds, claims).await
@@ -325,6 +328,7 @@ impl MacroApiTokenSigner {
             agent_via,
             agent_session_id,
             agent_correlation_id,
+            agent_scope,
             routine_id,
         } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
@@ -371,6 +375,7 @@ impl MacroApiTokenSigner {
             agent_id,
             agent_via,
             routine_id,
+            agent_scope: agent_scope.map(|scope| scope.as_str().to_owned()),
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
@@ -380,12 +385,23 @@ impl MacroApiTokenSigner {
     }
 }
 
+/// The code-mode correlation a credential acts for, and the narrower scope
+/// of its session, which every service accepting the credential enforces.
+#[derive(Clone, Copy, Debug)]
+pub struct SignedCorrelation {
+    /// The correlation's id (`agent_correlation_id`).
+    pub id: uuid::Uuid,
+    /// The session's scope (`agent_scope`), if narrower than its person's access.
+    pub scope: Option<agent_correlation::scope::SessionScope>,
+}
+
 /// The optional claims a minted token signs besides the owner.
 struct SignedClaims {
     agent_id: Option<macro_uuid::Uuid>,
     agent_via: Option<String>,
     agent_session_id: Option<uuid::Uuid>,
     agent_correlation_id: Option<uuid::Uuid>,
+    agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
 }
 

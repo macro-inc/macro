@@ -1,9 +1,13 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import { type Accessor, createEffect, on } from 'solid-js';
+import {
+  createUserScopedStorage,
+  userScopedStorageKey,
+} from '@core/util/userScopedStorage';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { z } from 'zod';
 
-const storage = createUserScopedStorage('folder-uploads:pending:v1');
+const STORAGE_KEY = 'folder-uploads:pending:v1';
+const storage = createUserScopedStorage(STORAGE_KEY);
 
 /**
  * A folder sent longer ago than this is dropped without asking the server:
@@ -75,16 +79,30 @@ export function forgetPendingFolderUpload(userId: string, requestId: string) {
 }
 
 /**
- * Picks folders sent before this page loaded back up, after a reload or a
- * crash, or from a tab opened while one is processing: each shows in the
- * upload indicator as Processing until the server says how it ended. A tab
- * that was already open when the folder was sent does not pick it up.
+ * Shows the account's folders that another page sent: those sent before this
+ * page loaded, after a reload or a crash, and those another open tab sends
+ * later. Each shows in the upload indicator as Processing until the server
+ * says how it ended.
  */
 export function useResumeFolderUploads(userId: Accessor<string | undefined>) {
   createEffect(
     on(userId, (id) => {
-      if (!id || readPendingFolderUploads(id).length === 0) return;
-      fireAndForget(resumeFolderUploads(id), 'file-upload');
+      if (!id) return;
+      const followPending = () => {
+        if (readPendingFolderUploads(id).length === 0) return;
+        fireAndForget(resumeFolderUploads(id), 'file-upload');
+      };
+      // Fired by another tab's write; a null key means it cleared storage.
+      const onStorage = (event: StorageEvent) => {
+        if (
+          event.key === null ||
+          event.key === userScopedStorageKey(STORAGE_KEY, id)
+        )
+          followPending();
+      };
+      window.addEventListener('storage', onStorage);
+      onCleanup(() => window.removeEventListener('storage', onStorage));
+      followPending();
     })
   );
 }

@@ -28,6 +28,7 @@ patterns in older code.
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
 | `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |
+| `packages/muppet/`, `packages/starter-agent/` | The hosted agent teammate runtime, in the root workspace: the muppet library and the template each agent's repository starts from (`docs/design/agent-teammates.md`). |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
 
@@ -70,7 +71,6 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding or changing SDK methods | [SDK rule](.agents/rules/sdk.md), `add-sdk-endpoint` skill |
 | SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
 | Adding a service, worker, or Pulumi stack | [New service guide](docs/guides/new-service.md) |
-| Running the Nix-declared local Kubernetes stack | [Kube-local skill](.agents/skills/kube-local/SKILL.md) |
 | Infrastructure, Pulumi, or deploys | [Infrastructure guide](docs/development/infrastructure.md) |
 
 ## Rules

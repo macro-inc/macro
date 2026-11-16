@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# bin/agent <command> [input]: the agent's command line (cli.ts).
+here=$(cd "$(dirname "$0")/.." && pwd)
+exec bun "$here/cli.ts" "$@"

@@ -11,7 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = { workspace = true }
 serde_json = { workspace = true }
 # Local/dev orchestration. These deps reuse the workspace-pinned versions so
 # the orchestrator builds against the same crate graph as the services it

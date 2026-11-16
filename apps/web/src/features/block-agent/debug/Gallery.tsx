@@ -49,9 +49,9 @@ import {
   TodoList,
   ToolCard,
   ToolErrorCard,
+  ToolGroup,
   ToolStatusTitle,
 } from '../ui';
-import { LiveToolGroup } from '../views/LiveToolGroup';
 
 /**
  * A Cursor-shaped catalog: long enough to scroll, with one grouped tail. Auto
@@ -1310,8 +1310,20 @@ export default function AgentUiGallery() {
             </ToolCard>
           </Item>
 
-          <Item label="ToolGroup (active / settled)">
-            <LiveToolGroup count={3} active={pulse()}>
+          <Item label="ToolGroup (live / settled)">
+            <ToolGroup
+              count={3}
+              live={pulse()}
+              steps={[
+                { id: 'read', label: 'Read fold.rs', status: 'completed' },
+                { id: 'edit', label: 'Edited model.rs', status: 'completed' },
+                {
+                  id: 'shell',
+                  label: 'Running cargo test -p agent_fold',
+                  status: 'running',
+                },
+              ]}
+            >
               <ToolCard
                 title="Read"
                 subtitle="crates/agent_fold/src/domain/fold.rs"
@@ -1327,16 +1339,16 @@ export default function AgentUiGallery() {
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
-            </LiveToolGroup>
-            <LiveToolGroup count={2} active={false} defaultOpen>
+            </ToolGroup>
+            <ToolGroup count={2} failed={1} defaultOpen>
               <ToolCard
                 title="Search"
                 subtitle="fold"
                 status="completed"
                 trailing="3 results"
               />
-              <ToolCard title="Read" status="completed" />
-            </LiveToolGroup>
+              <ToolCard title="Read" status="failed" />
+            </ToolGroup>
           </Item>
 
           <Item label="Thought (active / settled)">

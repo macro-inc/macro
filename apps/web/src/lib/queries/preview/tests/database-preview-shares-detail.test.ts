@@ -48,10 +48,8 @@ beforeEach(() => {
 
 it('previews an opened database from the read that opened it', async () => {
   (await loadDatabase('db'))._unsafeUnwrap();
-  const previews = await fetchRestPreviewBatch([
-    { type: 'database', id: 'db' },
-  ]);
-  expect(previews.get('db')).toMatchObject({
+  const batch = await fetchRestPreviewBatch([{ type: 'database', id: 'db' }]);
+  expect(batch.previews.get('db')).toMatchObject({
     access: 'access',
     name: 'Planning',
   });

@@ -13,6 +13,7 @@ use agent_session::domain::ports::{
     AgentSessionRepo, ExternalSessionRequester, RequestedExternalSession,
 };
 use agent_trigger::domain::broker_events::{AgentSessionMacroEvent, AgentSessionRequestedEvent};
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use macro_event_broker::MacroEventBroker;
 use model_owner::Owner;
 
@@ -26,12 +27,18 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub struct BrokerExternalSessionRequests<Broker, Sessions> {
     broker: Broker,
     sessions: Sessions,
+    harnesses: PgHarnessRepo,
 }
 
 impl<Broker, Sessions> BrokerExternalSessionRequests<Broker, Sessions> {
-    /// Publish through `broker`; watch `sessions` for the created row.
-    pub fn new(broker: Broker, sessions: Sessions) -> Self {
-        Self { broker, sessions }
+    /// Publish through `broker`; watch `sessions` for the created row;
+    /// address the request to the bot's runtime through `harnesses`.
+    pub fn new(broker: Broker, sessions: Sessions, harnesses: PgHarnessRepo) -> Self {
+        Self {
+            broker,
+            sessions,
+            harnesses,
+        }
     }
 }
 
@@ -53,6 +60,13 @@ where
             Err(AgentSessionError::NotFound(_)) => {}
             Err(error) => return Err(error),
         }
+        // The runtime's stream authenticates as its harness's owner, not as
+        // whichever teammate asked, so the request names both.
+        let runtime_user = self
+            .harnesses
+            .runtime_user_for_bot(request.bot_id)
+            .await
+            .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?;
         let event = AgentSessionMacroEvent::requested_event(AgentSessionRequestedEvent {
             bot_id: request.bot_id,
             repo_url: request.repo_url,
@@ -62,6 +76,7 @@ where
             // The requester's first prompt follows through the session's
             // control path once it exists; nothing composes it with this event.
             context: None,
+            runtime_user,
         });
         self.broker
             .send_event(&event)

@@ -16,3 +16,7 @@ pub mod redirect_uri;
 pub mod resource;
 /// Domain service for the MCP OAuth broker.
 pub mod service;
+
+/// Revocable user API key authentication for the MCP transport.
+#[cfg(feature = "inbound")]
+pub mod user_api_keys;
