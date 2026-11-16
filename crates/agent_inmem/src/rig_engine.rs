@@ -41,6 +41,8 @@ use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPo
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
+#[path = "outbound/rig_engine/macro_tools_only.rs"]
+mod macro_tools_only;
 #[path = "outbound/rig_engine/opener.rs"]
 mod opener;
 #[cfg(test)]
@@ -125,10 +127,9 @@ impl RigTurnEngine {
     }
 }
 
-/// Native tools never gated: asking the user something, and finding or
-/// loading a connected app's tools, or reading the rest of a result the
-/// turn already got, spend nobody's access.
-const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
+/// Native tools never gated: asking the user something, or reading the rest
+/// of a result the turn already got, spend nobody's access.
+const UNGATED_NATIVE_TOOLS: [&str; 2] = ["AskUser", "ReadToolResult"];
 
 /// A turn's tools, each call to one of Macro's own asked of the gate first.
 /// Remote MCP tools are left to the egress proxy, which gates them already.
@@ -756,6 +757,7 @@ async fn drive_turn(
         .with_speed(speed)?
         .with_genai_telemetry(false)
         .with_streamed_tool_calls()
+        .with_unknown_tool_hint(macro_tools_only::UNKNOWN_TOOL_HINT)
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
@@ -768,15 +770,19 @@ async fn drive_turn(
         None => usage_ctx,
     };
     // Native tools use the actor gate; remote MCP tools use the egress gate.
-    // Keep remote MCP tools alongside the native and AskUser tools.
+    // Of the remote MCP tools, a turn gets only Macro's own: programs reach
+    // connected apps through `macro.connectedApps`.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
         Some(mcp) if unseen => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, mcp)
-                .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
+            mcp_select::CombinedToolSet::new(
+                toolset,
+                macro_tools_only::MacroToolsOnly::new(mcp, EAGER_INTERNAL_MCP_TOOLS),
+            )
+            .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
         ),
         None => toolset,
     };

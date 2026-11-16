@@ -13,8 +13,20 @@ async fn remote(
     rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
     RemoteMcpToolSet,
 ) {
+    let (server, listed) = listed("macro_internal", names).await;
+    (server, RemoteMcpToolSet::from_listed(vec![listed], None))
+}
+
+/// One fixture MCP server named `server` listing `names`.
+async fn listed(
+    server: &str,
+    names: &[&str],
+) -> (
+    rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
+    ListedServer,
+) {
     let (server_io, client_io) = tokio::io::duplex(4096);
-    let (server, client) = tokio::join!(
+    let (running, client) = tokio::join!(
         StubServer.serve(server_io),
         mcp_toolset::client_info().serve(client_io),
     );
@@ -33,15 +45,14 @@ async fn remote(
             )
         })
         .collect();
-    let remote = RemoteMcpToolSet::from_listed(
-        vec![ListedServer {
-            name: "macro_internal".into(),
+    (
+        running.unwrap(),
+        ListedServer {
+            name: server.into(),
             client: Arc::new(client.unwrap()),
             tools,
-        }],
-        None,
-    );
-    (server.unwrap(), remote)
+        },
+    )
 }
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
@@ -152,4 +163,77 @@ async fn unseen_turns_get_only_code_mode() {
         Err(ai_toolset::ToolSetError::NotFound(_))
     ));
     server.cancel().await.unwrap();
+}
+
+/// A watched turn gets Macro's own MCP tools, eagerly, and none of a
+/// connected app's: programs reach those through `macro.connectedApps`, so
+/// nothing is left to search for or load, and a direct call is refused.
+#[tokio::test]
+async fn watched_turns_reach_connected_apps_only_from_code() {
+    let (internal, internal_tools) = listed(
+        "macro_internal",
+        &[
+            "ExecuteCode",
+            "DescribeCodeTools",
+            "ReadCodeDocs",
+            "PresentReview",
+            "link_task",
+        ],
+    )
+    .await;
+    let (linear, linear_tools) = listed("linear", &["create_issue"]).await;
+    let set = mcp_select::CombinedToolSet::new(
+        Arc::new(AsyncToolCollection::<()>::new()),
+        macro_tools_only::MacroToolsOnly::new(
+            RemoteMcpToolSet::from_listed(vec![internal_tools, linear_tools], None),
+            EAGER_INTERNAL_MCP_TOOLS,
+        ),
+    )
+    .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS);
+
+    let mut names: Vec<_> = AiToolSet::<()>::request_schemas(&set)
+        .unwrap()
+        .into_iter()
+        .map(|schema| schema.name)
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "mcp__macro_internal__DescribeCodeTools",
+            "mcp__macro_internal__ExecuteCode",
+            "mcp__macro_internal__PresentReview",
+            "mcp__macro_internal__ReadCodeDocs",
+        ]
+    );
+    assert!(AiToolSet::<()>::searchable_catalog(&set).is_empty());
+    assert!(AiToolSet::<()>::searchable_toolset_names(&set).is_empty());
+
+    for tool in [
+        "mcp__linear__create_issue",
+        "mcp__macro_internal__link_task",
+    ] {
+        let refused = AiToolSet::<()>::dispatch_tool_call(
+            &set,
+            (),
+            RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+            tool,
+            &serde_json::json!({}),
+        )
+        .await;
+        assert!(
+            matches!(refused, Err(ai_toolset::ToolSetError::NotFound(_))),
+            "{tool}"
+        );
+    }
+    internal.cancel().await.unwrap();
+    linear.cancel().await.unwrap();
+}
+
+/// The model told of an unknown tool is sent to `macro.connectedApps`, not
+/// to a `SearchTools` it does not have.
+#[test]
+fn unknown_tools_point_at_connected_apps_in_code() {
+    assert!(macro_tools_only::UNKNOWN_TOOL_HINT.contains("macro.connectedApps.searchTools"));
+    assert!(!macro_tools_only::UNKNOWN_TOOL_HINT.contains("SearchTools`"));
 }

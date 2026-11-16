@@ -90,6 +90,11 @@ Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
 MCP catalog lacks any `mcp__macro_internal__` code tool fails
 (`code_tools_listed` in `src/rig_engine.rs`). Summaries advertise no tools.
+A watched turn gets only Macro's own MCP tools, eagerly (`EAGER_INTERNAL_MCP_TOOLS`
+through `macro_tools_only::MacroToolsOnly`): no connected app's tool, and no
+`SearchTools` or `LoadTools`. Programs reach connected apps through
+`macro.connectedApps`, and an unknown tool call's retry feedback says so
+(`macro_tools_only::UNKNOWN_TOOL_HINT`).
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 

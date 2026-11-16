@@ -113,7 +113,7 @@ impl NativeToolGate for Open {
 /// A generation session's native tools are code mode's and finding tools
 /// only; any other session's go to the owner's gate as before.
 #[tokio::test]
-async fn a_generation_session_uses_only_code_and_finding_tools() {
+async fn a_generation_session_uses_only_code_tools() {
     let gate = |scope| ScopedToolGate {
         inner: Arc::new(Open),
         scopes: Arc::new(Scopes(scope)),
@@ -125,8 +125,7 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
         "ExecuteCode",
         "DescribeCodeTools",
         "ReadCodeDocs",
-        "SearchTools",
-        "LoadTools",
+        "ReadToolResult",
     ] {
         assert_eq!(
             generation.check(session, tool, &args).await,
@@ -140,6 +139,8 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
         "CreateMemory",
         "WebFetch",
         "Subagent",
+        "SearchTools",
+        "LoadTools",
     ] {
         assert!(
             matches!(

@@ -740,16 +740,12 @@ fn code_mode_sessions_get_only_the_tools_the_sdk_cannot_replace() {
         .keys()
         .map(String::as_str)
         .collect::<std::collections::BTreeSet<_>>();
-    let expected = [
-        "ImportFromJira",
-        "ImportFromLinear",
-        "ImportFromNotion",
-        "LoadTools",
-        "SearchTools",
-    ]
-    .into_iter()
-    .collect();
+    let expected = ["ImportFromJira", "ImportFromLinear", "ImportFromNotion"]
+        .into_iter()
+        .collect();
     assert_eq!(names, expected);
+    // Programs reach connected apps; nothing waits to be loaded.
+    assert!(code_mode.deferred.is_empty());
     // Saved reviews replace the user tools' review cards.
     assert!(code_mode.toolset.user_tools.is_empty());
     let prompt = code_mode.prompt.to_string();
