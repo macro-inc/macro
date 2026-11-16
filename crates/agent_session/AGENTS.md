@@ -30,8 +30,6 @@ consumer talks to.
   `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
   share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
-- `src/domain/scrub_log_credentials.rs` and `src/outbound/postgres/scrub_log_credentials.rs`:
-  bounded cleanup of stored protocol frames; the CLI is `src/bin/scrub_log_credentials.rs`.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
 
@@ -169,8 +167,7 @@ skips the turn before any model call; unset or unreadable, summaries run.
 
 - MCP credentials never enter the log. `Message`'s serialization applies
   `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
-  go through; `LiveSessionLogWriter` also redacts the frame it holds, and
-  `parse_message` redacts rows that predate this. The session's live server list
+  go through, and `LiveSessionLogWriter` also redacts the frame it holds. The session's live server list
   (`attached_mcp_servers`) and the frame sent to the runtime keep them. A new
   server-to-runtime method is stored without params until it is added to
   `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no

@@ -23,8 +23,6 @@ pub mod pull_request_links;
 pub mod read;
 pub mod retitle;
 mod sandbox_size;
-/// Bounded cleanup of stored protocol frames.
-pub mod scrub_log_credentials;
 pub mod search;
 pub mod service;
 pub mod session;

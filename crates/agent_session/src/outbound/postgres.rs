@@ -14,7 +14,6 @@ mod auto_archive;
 mod pull_request;
 mod queue;
 mod recovery;
-mod scrub_log_credentials;
 mod session_task;
 mod sharing;
 mod source;
@@ -41,7 +40,6 @@ use crate::domain::turn_state::moves_session_list;
 use crate::domain::updates::{CodingAgentUpdatesRepo, UpdateCandidate, UpdateTurnState};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
-use agent_fold::domain::log::redact_stored_frame;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
@@ -237,23 +235,16 @@ fn strip_json_nuls(value: &mut serde_json::Value) {
     }
 }
 
-/// Reverse of [`message_columns`]. Redacts again because rows written before
-/// redaction existed can still hold credentials.
-fn parse_message(direction: &str, mut content: serde_json::Value) -> anyhow::Result<Message> {
+/// Reverse of [`message_columns`].
+fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<Message> {
     match direction {
         "to_server" => Ok(Message::ToServer(
             serde_json::from_value::<ToServerMessage>(content)?,
         )),
-        "notification" => {
-            redact_stored_frame(&mut content);
-            Ok(Message::Notification(serde_json::from_value(content)?))
-        }
-        "to_runtime" => {
-            redact_stored_frame(&mut content);
-            Ok(Message::ToRuntime(serde_json::from_value::<
-                ToRuntimeMessage,
-            >(content)?))
-        }
+        "notification" => Ok(Message::Notification(serde_json::from_value(content)?)),
+        "to_runtime" => Ok(Message::ToRuntime(serde_json::from_value::<
+            ToRuntimeMessage,
+        >(content)?)),
         other => anyhow::bail!("unknown agent_session_log direction {other:?}"),
     }
 }
