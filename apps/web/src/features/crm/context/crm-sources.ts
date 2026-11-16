@@ -46,7 +46,35 @@ export type CrmMutation<Input, Output = unknown> = {
 export type CompanySource = {
   query: CrmQuery<unknown>;
   company: Accessor<CrmCompany | undefined>;
-  contacts: Accessor<CrmContact[]>;
+};
+/** Which of a company's contacts its Team list shows. */
+export type CompanyContactsFilter = {
+  companyId: string;
+  archived: boolean;
+  /** Trimmed search text; empty lists every contact. */
+  search: string;
+};
+/** A company's Team list, read a page at a time. */
+export type CompanyContactsSource = {
+  /** The loaded rows, in the server's order, each contact once. */
+  readonly contacts: CrmContact[];
+  /**
+   * The search the loaded rows answer; a placeholder's rows answer an
+   * earlier one. `undefined` while nothing is loaded.
+   */
+  readonly loadedSearch: string | undefined;
+  /** True until the first page of the filter is readable. */
+  readonly isPending: boolean;
+  /** Rows of the previous search stay on screen while this one loads. */
+  readonly isSearching: boolean;
+  /** The first page or a refetch failed; a failed continuation is not one. */
+  readonly isError: boolean;
+  readonly hasNextPage: boolean;
+  readonly isFetchingNextPage: boolean;
+  /** A continuation page failed; the loaded pages remain current. */
+  readonly isFetchNextPageError: boolean;
+  fetchNextPage(): Promise<unknown>;
+  refetch(): Promise<unknown>;
 };
 export type ContactSource = CrmQuery<CrmContact>;
 export type TeamSource = CrmQuery<{
