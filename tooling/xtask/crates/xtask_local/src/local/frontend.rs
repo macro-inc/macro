@@ -147,18 +147,11 @@ fn lock_build_in(dir: &Path, on_wait: impl FnOnce()) -> Result<File> {
 
 /// Build or restore the generated wasm packages the app imports. Builds share
 /// a machine-wide cache keyed by each package's sources (see
-/// `apps/web/scripts/cached-wasm-build.sh`), so a new checkout or instance
-/// copies packages another one already built instead of compiling them.
+/// `apps/web/scripts/wasm.ts`), so a new checkout or instance copies packages
+/// another one already built instead of compiling them.
 fn prepare_dependencies(stage: &Stage) -> Result<()> {
     let mut prepare = Command::new("bun");
     prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
-    if macro_env_var::maybe_read_env("WASM_PKG_CACHE_DIR").is_none() {
-        let home = macro_env_var::maybe_read_env("HOME").context("HOME is not set")?;
-        prepare.env(
-            "WASM_PKG_CACHE_DIR",
-            Path::new(&home).join(".cache/macro-local/wasm-pkgs"),
-        );
-    }
     stage.run("Preparing frontend dependencies", &mut prepare)
 }
 

@@ -6,7 +6,7 @@ authentication, document storage, or product routes: saves are kept in memory
 and exposed to tests. It verifies the editor and engine integration, not
 storage or permissions.
 
-From `apps/web` (build the engine first with `just ensure-pptx-engine-wasm`):
+From `apps/web` (build the engine first with `just ensure-wasm pptx-engine`):
 
 ```sh
 bunx vite --config src/features/block-pptx/browser-test/vite.config.ts

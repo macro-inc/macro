@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-agent-fold-wasm
+ *   just build-wasm agent-fold
  * which runs wasm-pack over crates/folds/agent_fold into
  * src/lib/core/agent-fold/wasm/ (gitignored).
  */

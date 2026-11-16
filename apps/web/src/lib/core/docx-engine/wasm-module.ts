@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-docx-engine-wasm
+ *   just build-wasm docx-engine
  * which runs wasm-pack over crates/docx_engine into
  * src/lib/core/docx-engine/wasm/ (gitignored).
  */
