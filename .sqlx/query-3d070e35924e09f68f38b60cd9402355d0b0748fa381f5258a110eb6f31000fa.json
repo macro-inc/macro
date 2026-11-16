@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH merged AS (\n            -- One row per correspondent, so the upsert never touches a row twice.\n            SELECT b.contact_email,\n                   (array_agg(b.contact_name) FILTER (WHERE b.contact_name IS NOT NULL))[1]\n                       AS contact_name,\n                   COALESCE(min(b.first_at) FILTER (WHERE b.is_sent), min(b.first_at)) AS first_at,\n                   max(b.last_at) AS last_at,\n                   bool_or(b.is_sent) AS is_sent\n            FROM unnest($2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[], $6::bool[])\n                AS b (contact_email, contact_name, first_at, last_at, is_sent)\n            WHERE EXISTS (\n                SELECT 1 FROM crm_email_consent c WHERE c.link_id = $1 AND c.enabled\n            )\n            GROUP BY b.contact_email\n        )\n        INSERT INTO crm_population_requests AS r\n            (link_id, contact_email, contact_name, first_at, last_at, is_sent, due_at, traceparent)\n        SELECT $1, m.contact_email, m.contact_name, m.first_at, m.last_at, m.is_sent,\n               now() + make_interval(secs => $7), $10\n        FROM merged m\n        -- Concurrent batches lock their shared rows in one order.\n        ORDER BY m.contact_email\n        ON CONFLICT (link_id, contact_email) DO UPDATE SET\n            contact_name = COALESCE(r.contact_name, EXCLUDED.contact_name),\n            -- The sent range anchors a first interaction; a received one never moves it.\n            first_at = CASE\n                WHEN EXCLUDED.is_sent AND NOT r.is_sent THEN EXCLUDED.first_at\n                WHEN r.is_sent AND NOT EXCLUDED.is_sent THEN r.first_at\n                ELSE LEAST(r.first_at, EXCLUDED.first_at)\n            END,\n            last_at = GREATEST(r.last_at, EXCLUDED.last_at),\n            is_sent = r.is_sent OR EXCLUDED.is_sent,\n            generation = r.generation + 1,\n            traceparent = COALESCE(EXCLUDED.traceparent, r.traceparent),\n            -- A request parked longer than the cooldown starts over.\n            parked_at = CASE\n                WHEN r.parked_at <= now() - make_interval(secs => $9) THEN NULL\n                ELSE r.parked_at\n            END,\n            attempts = CASE\n                WHEN r.parked_at <= now() - make_interval(secs => $9) THEN 0\n                ELSE r.attempts\n            END,\n            requested_at = CASE\n                WHEN r.parked_at <= now() - make_interval(secs => $9) THEN now()\n                ELSE r.requested_at\n            END,\n            -- Never earlier than a lease or a retry delay, and never\n            -- postponed past the bound by a stream of requests.\n            due_at = CASE\n                WHEN r.parked_at <= now() - make_interval(secs => $9) THEN EXCLUDED.due_at\n                ELSE GREATEST(\n                    r.due_at,\n                    LEAST(EXCLUDED.due_at, r.requested_at + make_interval(secs => $8))\n                )\n            END\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray",
+        "TimestamptzArray",
+        "BoolArray",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3d070e35924e09f68f38b60cd9402355d0b0748fa381f5258a110eb6f31000fa"
+}

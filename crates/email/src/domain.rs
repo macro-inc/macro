@@ -80,3 +80,7 @@ pub mod backfill_jobs;
 /// Nightly CRM candidate cleanup and delivery disposition.
 #[cfg(feature = "mailbox")]
 pub mod crm_cleanup;
+
+/// The CRM population ledger: requests, attempts, retries and mailbox pauses.
+#[cfg(feature = "mailbox")]
+pub mod crm_population;

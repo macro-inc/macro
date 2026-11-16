@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM crm_population_requests\n            WHERE link_id = $1 AND contact_email = $2 AND claimed_until = $3 AND generation = $4\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c431e4b1a3671b8a271c3f1ed152ec3f76070d34056d317bcee7818d678666c"
+}

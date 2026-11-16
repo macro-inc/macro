@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE budget AS (\n                -- Attempts in flight across every mailbox; the index holds\n                -- only claimed requests.\n                SELECT count(*) < $5::int AS free\n                FROM crm_population_requests\n                WHERE claimed_until > now()\n            ), hop AS (\n                -- Walks the mailboxes that have unparked requests, in id order\n                -- from the caller's position, one index probe each. It stops\n                -- at the first that may take work now, or after `$4` of them.\n                SELECT $1::uuid AS link_id, FALSE AS ready, 0 AS n\n                UNION ALL\n                SELECT next.link_id,\n                       next.due_at <= now()\n                       AND COALESCE(pause.paused_until <= now(), TRUE)\n                       AND (\n                           SELECT count(*)\n                           FROM crm_population_requests f\n                           WHERE f.link_id = next.link_id AND f.claimed_until > now()\n                       ) < CASE\n                           -- A failing mailbox probes with one attempt at a time.\n                           WHEN pause.paused_until IS NULL THEN $3::int\n                           ELSE 1\n                       END,\n                       h.n + 1\n                FROM hop h\n                CROSS JOIN LATERAL (\n                    -- The next mailbox and its earliest due time.\n                    SELECT r.link_id, r.due_at\n                    FROM crm_population_requests r\n                    WHERE r.parked_at IS NULL AND r.link_id > h.link_id\n                    ORDER BY r.link_id, r.due_at\n                    LIMIT 1\n                ) next\n                CROSS JOIN LATERAL (\n                    -- Null unless the mailbox is failing. A scalar lookup is\n                    -- one index probe however the planner sizes the table.\n                    SELECT (\n                        SELECT p.paused_until\n                        FROM crm_population_pauses p\n                        WHERE p.link_id = next.link_id\n                    ) AS paused_until\n                ) pause\n                WHERE NOT h.ready AND h.n < $4 AND (SELECT free FROM budget)\n            ), reached AS (\n                SELECT link_id, ready, n FROM hop ORDER BY n DESC LIMIT 1\n            ), picked AS (\n                SELECT r.link_id, r.contact_email\n                FROM crm_population_requests r\n                WHERE r.link_id = (SELECT link_id FROM reached WHERE ready)\n                  AND r.parked_at IS NULL\n                  AND r.due_at <= now()\n                ORDER BY r.due_at\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            ), claimed AS (\n                UPDATE crm_population_requests r\n                SET claimed_until = now() + make_interval(secs => $2),\n                    due_at = now() + make_interval(secs => $2),\n                    attempts = r.attempts + 1\n                FROM picked, email_links l\n                WHERE r.link_id = picked.link_id\n                  AND r.contact_email = picked.contact_email\n                  AND l.id = r.link_id\n                RETURNING r.link_id, l.macro_id AS owner, l.email_address AS mailbox,\n                          r.contact_email, r.contact_name, r.first_at, r.last_at, r.is_sent,\n                          r.generation, r.attempts, r.claimed_until AS lease, r.traceparent,\n                          COALESCE(\n                              (SELECT p.failures FROM crm_population_pauses p\n                               WHERE p.link_id = r.link_id),\n                              0\n                          ) AS mailbox_failures\n            )\n            SELECT NOT budget.free AS \"busy!\",\n                   CASE WHEN reached.ready OR reached.n >= $4 THEN reached.link_id END\n                       AS resume_after,\n                   claimed.link_id AS \"link_id?\", claimed.owner AS \"owner?\",\n                   claimed.mailbox AS \"mailbox?\", claimed.contact_email AS \"contact_email?\",\n                   claimed.contact_name, claimed.first_at AS \"first_at?\",\n                   claimed.last_at AS \"last_at?\", claimed.is_sent AS \"is_sent?\",\n                   claimed.generation AS \"generation?\", claimed.attempts AS \"attempts?\",\n                   claimed.lease AS \"lease?\", claimed.traceparent,\n                   claimed.mailbox_failures AS \"mailbox_failures?\"\n            FROM reached\n            CROSS JOIN budget\n            LEFT JOIN claimed ON TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "busy!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "resume_after",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mailbox?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "contact_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "contact_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "first_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_sent?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "generation?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "attempts?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "lease?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "traceparent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "mailbox_failures?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2f2e2bfb51c18264dfccb8245fe79bb7bb931e5a02240447cedc59139fdfedef"
+}
