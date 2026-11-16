@@ -131,3 +131,98 @@ async fn real_import_retries_preserve_provider_version_folder_grants_and_totp(po
     }
     panic!("disposable namespace purge acknowledgement did not complete");
 }
+
+/// 20261116193746 widens the format check NOT VALID for `bitwarden_zip`,
+/// 20261116193752 validates it.
+const WIDEN_FORMAT_CHECK: i64 = 20261116193746;
+
+async fn insert_activity(pool: &PgPool, team: Uuid, format: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO password_import_activity(team_id,id,import_id,user_id,format,created,already_present,failed,folders) VALUES($1,$2,$3,'macro|owner@example.com',$4,1,0,0,0)",
+        team, Uuid::now_v7(), Uuid::now_v7(), format,
+    )
+    .execute(pool)
+    .await
+    .map(|_| ())
+}
+
+async fn format_check_validated(pool: &PgPool) -> bool {
+    sqlx::query_scalar!(
+        "SELECT convalidated FROM pg_constraint WHERE conname='password_import_activity_format_check'"
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrations = false)]
+async fn format_check_widening_keeps_old_rows_valid_and_migrates_up_down_up(pool: PgPool) {
+    // sqlx::test owns this disposable database; templates may already be migrated.
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before_widening = sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(
+            MACRO_DB_MIGRATIONS
+                .iter()
+                .filter(|migration| migration.version < WIDEN_FORMAT_CHECK)
+                .cloned()
+                .collect(),
+        ),
+        ..sqlx::migrate::Migrator::DEFAULT
+    };
+    before_widening.run(&pool).await.unwrap();
+    let user = Uuid::now_v7();
+    sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'owner', 'owner@example.com', 'owner')", user)
+        .execute(&pool).await.unwrap();
+    sqlx::query!(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ('macro|owner@example.com', 'owner@example.com', $1)"#, user)
+        .execute(&pool).await.unwrap();
+    let team = Uuid::now_v7();
+    sqlx::query!("INSERT INTO team (id, name, owner_id) VALUES ($1, 'Import team', 'macro|owner@example.com')", team)
+        .execute(&pool).await.unwrap();
+
+    // A row the deployed code wrote before the migration.
+    insert_activity(&pool, team, "bitwarden_json")
+        .await
+        .unwrap();
+    assert!(insert_activity(&pool, team, "bitwarden_zip").await.is_err());
+
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    assert_eq!(format_check_validated(&pool).await, true);
+    insert_activity(&pool, team, "bitwarden_zip").await.unwrap();
+    insert_activity(&pool, team, "one_password_pux")
+        .await
+        .unwrap();
+    assert!(insert_activity(&pool, team, "lastpass").await.is_err());
+
+    // Down keeps the rows written meanwhile and checks only new ones.
+    MACRO_DB_MIGRATIONS
+        .undo(&pool, WIDEN_FORMAT_CHECK - 1)
+        .await
+        .unwrap();
+    assert_eq!(format_check_validated(&pool).await, false);
+    assert!(insert_activity(&pool, team, "bitwarden_zip").await.is_err());
+    insert_activity(&pool, team, "bitwarden_csv").await.unwrap();
+
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    assert_eq!(format_check_validated(&pool).await, true);
+    insert_activity(&pool, team, "bitwarden_zip").await.unwrap();
+    let formats = sqlx::query_scalar!(
+        "SELECT format FROM password_import_activity WHERE team_id=$1 ORDER BY id",
+        team
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        formats,
+        [
+            "bitwarden_json",
+            "bitwarden_zip",
+            "one_password_pux",
+            "bitwarden_csv",
+            "bitwarden_zip"
+        ]
+    );
+}
