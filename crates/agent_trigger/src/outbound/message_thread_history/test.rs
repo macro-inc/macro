@@ -140,6 +140,7 @@ async fn a_sender_known_only_by_email_is_left_unnamed() {
                 resolved: false,
                 deleted_at: None,
                 anchor: None,
+                visibility: Default::default(),
             },
             root: message(root(), false),
             replies: vec![],
