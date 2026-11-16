@@ -78,7 +78,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
 export function BetaBadge() {
   return (
     <Badge variant="outline" size="xs">
-      Beta
+      {t('entityActions.betaBadge')}
     </Badge>
   );
 }

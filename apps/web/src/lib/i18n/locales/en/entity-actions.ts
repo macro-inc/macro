@@ -296,6 +296,7 @@ export default {
   download: 'Download',
   print: 'Print',
   downloadAsDocx: 'Download DOCX',
+  betaBadge: 'Beta',
   folderActions: 'Folder actions',
   downloadAsXlsx: 'Download as Excel (.xlsx)',
   downloadAsCsv: 'Download as CSV',
