@@ -55,6 +55,32 @@ async fn selected_enabled(pool: &PgPool, team: Uuid) -> sqlx::Result<bool> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn address_targets_keep_the_existing_contact_byte_limit(pool: PgPool) -> anyhow::Result<()> {
+    let (team, _) = setup(&pool).await?;
+    let address = format!("{}@example.org", "x".repeat(308));
+    assert_eq!(address.len(), 320);
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_addresses (team_id, user_id, revision, address) VALUES ($1, $2, 1, $3)",
+        team, OWNER, address
+    ).execute(&pool).await?;
+    for oversized in [
+        format!("x{address}"),
+        format!("{}@example.org", "é".repeat(155)),
+    ] {
+        assert!(oversized.len() > 320);
+        let error = sqlx::query!(
+            "INSERT INTO crm_email_rule_addresses (team_id, user_id, revision, address) VALUES ($1, $2, 1, $3)",
+            team, OWNER, oversized
+        ).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            error.as_database_error().and_then(|e| e.code()).as_deref(),
+            Some("23514")
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rule_size_validation_agrees_with_the_storage_boundary(pool: PgPool) -> anyhow::Result<()> {
     let (team, link) = setup(&pool).await?;
     // Valid address lengths: 64-byte local + @ + 189-byte domain = 254.

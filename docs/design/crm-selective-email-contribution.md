@@ -78,7 +78,7 @@ consent and its active revision.
 | Selector | Meaning |
 | --- | --- |
 | Thread | Exact internal UUID in the contributor's primary mailbox. Reject provider IDs and another member's copy. |
-| Address | Trim and lowercase a validated address; match exactly without stripping plus tags/dots or inferring aliases. |
+| Address | Reuse contact normalization and its 320-byte limit; match exactly without stripping plus tags/dots or inferring aliases. |
 | Contact | Match every current `crm_contact_emails.email` for the referenced contact in this team, including secondary addresses. Resolve live on reads and ingestion. |
 | Domain | Normalize and validate a bare domain; match it and dot-boundary subdomains. Reject wildcards, public suffixes and personal-provider domains using maintained domain/provider classification. An individual address at a personal provider remains selectable. |
 | Company | Match its current `crm_domains` in this team. Resolve live; do not expand through unrelated personal addresses of its contacts. |
@@ -400,6 +400,8 @@ workers may acknowledge without population, so **every worker must be upgraded**
 before enablement. Once active, an old-binary rollback is fail-closed only and
 requires a later backfill repair; never roll back schema/guards or widen consent
 to preserve old-binary visibility. Keep stored restrictions enforced indefinitely.
+Initial rollout also requires private-thread mutations to be available to the
+same cohort, after both ingestion and the optimized Team reader are upgraded.
 
 **Alternatives rejected:** reusing `enabled=true` for selected leaks through old
 readers; deployment ordering without guards cannot protect rolling clients;
