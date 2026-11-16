@@ -5,7 +5,7 @@ workers. It loads no authentication, document storage, or product routes,
 so it verifies the editor and engine integration, not storage or
 permissions.
 
-From `apps/web` (build the engine first with `just ensure-ai-engine-wasm`):
+From `apps/web` (build the engine first with `just ensure-wasm ai-engine`):
 
 ```sh
 bunx vite --config src/features/block-ai/browser-test/vite.config.ts

@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
 const webDirectory = fileURLToPath(new URL('../../../../', import.meta.url));
 const port = process.env.TASK_PROPERTY_TEST_PORT ?? '3004';
 
-// Build the current WASM first: just build-cache-wasm (from apps/web).
+// Build the current WASM first: just build-wasm cache-wasm (from apps/web).
 export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
   testMatch: '*.browser.e2e.ts',

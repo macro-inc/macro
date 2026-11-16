@@ -1,6 +1,6 @@
 /**
  * Typed surface of the `password_import_wasm` package, loaded on first use in
- * the import worker. `just build-password-import-wasm` builds it into the
+ * the import worker. `just build-wasm password-import` builds it into the
  * gitignored `./wasm/`. The shapes are `crates/password_import_wasm/src/wire.rs`.
  */
 import type { DetectOutcome, ImportFormat, ParseOutcome } from './types';

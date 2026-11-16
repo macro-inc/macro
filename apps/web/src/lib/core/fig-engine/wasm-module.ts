@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-fig-engine-wasm
+ *   just build-wasm fig-engine
  * which runs wasm-pack over crates/fig_engine into
  * src/lib/core/fig-engine/wasm/ (gitignored).
  */

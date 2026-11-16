@@ -49,8 +49,7 @@ fi
 : >"${DEV_LOG}"
 \cd "${WORKSPACE_ROOT}"
 BACKEND_ROUTES="$(cargo x frontend-proxy-routes)"
-just apps/web/ensure-cache-wasm
-just apps/web/ensure-agent-fold-wasm
+just apps/web/ensure-wasm cache-wasm agent-fold
 \cd "${WORKSPACE_ROOT}/apps/web"
 setsid env \
   PORT="${FRONTEND_PORT}" \

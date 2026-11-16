@@ -252,7 +252,7 @@ const View = () => (
           document.body.dataset.copied = value;
         },
         displayName: (accountId) => getDisplayName(tryMacroId(accountId)),
-        // The real wasm parser in its worker (`just ensure-password-import-wasm`).
+        // The real wasm parser in its worker (`just ensure-wasm password-import`).
         parseExport: parseExportFile,
         importResume: createMemoryImportResume(),
       }}
