@@ -94,14 +94,15 @@ try {
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
-    if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
+    // Every request to an SDK origin, whatever credential it carries.
+    if (origins.has(new URL(request.url).origin)) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
-      // A dry run's backstop: an authenticated request that didn't come
+      // A dry run's backstop: a request to an SDK origin that didn't come
       // through the gate is sent only if a read matches its route.
       if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
         const path = new URL(request.url).pathname;
