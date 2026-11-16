@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
+import { registerExternalEditorRoot } from '@macro-inc/lexical-wasm-view/view/editor-roots';
 import { createRoot } from 'solid-js';
 import { expect, test, vi } from 'vitest';
 import { createMarkdownDocumentState } from '../../context/markdown-document-state';
@@ -608,6 +609,142 @@ test('a native table selection publishes its cell text as the body popup selecti
     });
     expect(controller?.bodyPopup.selectionText()).toBe('A1\tA2\nB1\tB2\n');
   } finally {
+    controller?.dispose();
+    links?.dispose();
+    dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+// Source popupPlugin hides and re-requests the popup on every SELECTION_CHANGE,
+// which Lexical dispatches only for a selection both of whose endpoints belong
+// to the editor. While a native drag owns a TableSelection, each such
+// selectionchange restarts the popup; a nested editor's caret does not, and
+// nothing does after disposal.
+test('an owned selectionchange during a native table drag restarts the body popup', async () => {
+  let controller:
+    | ReturnType<typeof createNativeDocumentFormattingHost>
+    | undefined;
+  let links: ReturnType<typeof createNativeDocumentLinkMenuHost> | undefined;
+  const runtime = mount([
+    {
+      published(view) {
+        controller?.observer.published(view);
+      },
+      unavailable(reason) {
+        controller?.observer.unavailable(reason);
+        links?.retire();
+      },
+      retired() {
+        controller?.observer.retired();
+        links?.retire();
+      },
+    },
+  ]);
+  let dispose = () => {};
+  const releaseNested: Array<() => void> = [];
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      links = createNativeDocumentLinkMenuHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+      });
+      controller = createNativeDocumentFormattingHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+        links,
+      });
+    });
+    const cell = (text: string) => ({
+      type: 'tablecell',
+      version: 1,
+      children: [
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text }],
+        },
+      ],
+    });
+    runtime.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'table',
+              version: 1,
+              children: [
+                {
+                  type: 'tablerow',
+                  version: 1,
+                  children: [cell('A1'), cell('A2')],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    const visible: boolean[] = [];
+    controller?.menu.registerPopup({
+      visible(value) {
+        visible.push(value);
+        return true;
+      },
+      selection() {},
+    });
+    runtime.root.dispatchEvent(new FocusEvent('focusin'));
+    const cells = [...runtime.root.querySelectorAll('td')];
+    const [first, second] = cells;
+    if (!first || !second) throw new Error('Missing native cells');
+    // jsdom has no PointerEvent; the observer reads only these fields.
+    const pointer = (target: Element, type: string, buttons: number) => {
+      const event = new MouseEvent(type, { bubbles: true, button: 0, buttons });
+      Object.defineProperties(event, {
+        pointerId: { value: 1 },
+        pointerType: { value: 'mouse' },
+      });
+      target.dispatchEvent(event);
+    };
+    pointer(first, 'pointerdown', 1);
+    pointer(second, 'pointermove', 1);
+    expect(runtime.view.selection().selection.kind).toBe('table');
+    const leaf = (cellElement: Element) => {
+      const text = document
+        .createTreeWalker(cellElement, NodeFilter.SHOW_TEXT)
+        .nextNode();
+      if (!text) throw new Error('Missing cell text');
+      return text;
+    };
+    const caretAt = (node: Node) => {
+      document.getSelection()?.setBaseAndExtent(node, 0, node, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+    };
+
+    visible.length = 0;
+    caretAt(leaf(second));
+    expect(runtime.view.selection().selection.kind).toBe('table');
+    expect(visible[0]).toBe(false);
+
+    const nested = document.createElement('div');
+    nested.contentEditable = 'true';
+    nested.textContent = 'nested';
+    first.append(nested);
+    releaseNested.push(registerExternalEditorRoot(nested, {}));
+    visible.length = 0;
+    caretAt(leaf(nested));
+    expect(visible).toEqual([]);
+
+    controller?.dispose();
+    visible.length = 0;
+    caretAt(leaf(second));
+    expect(visible).toEqual([]);
+  } finally {
+    for (const release of releaseNested) release();
     controller?.dispose();
     links?.dispose();
     dispose();
