@@ -1,0 +1,14 @@
+crates/agent_session/src/inbound/axum_router/test/log_credentials.rs
+  h_659b58cf3b37bf 196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "28da8cf5e8a98ad670db22cc1da7ce607f73f572",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
