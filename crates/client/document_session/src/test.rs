@@ -2013,9 +2013,16 @@ fn generic_comment_and_mismatched_surface_configs_fail_without_io() {
         }),
     );
     assert!(out.io.is_empty());
+    // The refusal is correlated so a host awaiting this request settles.
     assert!(matches!(
         out.view.as_slice(),
-        [ViewEffect::Error(SessionError::WrongSurface)]
+        [
+            ViewEffect::Reply {
+                request: RequestId(140),
+                reply: Reply::Comment(CommentReply::Refused(CommentRefusal::StagingFailed)),
+            },
+            ViewEffect::Error(SessionError::WrongSurface)
+        ]
     ));
 }
 

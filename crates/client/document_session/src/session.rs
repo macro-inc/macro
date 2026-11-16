@@ -410,7 +410,11 @@ impl<S: Surface> DocumentSession<S> {
                     self.sync.add_peer_ids(peers).map_err(SessionError::from)
                 }
             }
-            SessionInput::Comment(_) if !self.surface.supports_comments() => {
+            SessionInput::Comment(request) if !self.surface.supports_comments() => {
+                self.out.view.push(ViewEffect::Reply {
+                    request: request.request,
+                    reply: Reply::Comment(CommentReply::Refused(CommentRefusal::StagingFailed)),
+                });
                 Err(SessionError::WrongSurface)
             }
             SessionInput::Focus(focused) => self.surface.set_focus(focused),
