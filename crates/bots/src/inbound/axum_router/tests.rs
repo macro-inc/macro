@@ -39,6 +39,7 @@ use tower::ServiceExt;
 const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
 const INVALID_BEARER_TOKEN: &str = "invalid";
 const AGENT_BEARER_PREFIX: &str = "agent:";
+const ROUTINE_BEARER_PREFIX: &str = "routine:";
 
 #[derive(Clone, Copy)]
 enum TestBotMode {
@@ -443,17 +444,22 @@ impl JwtValidator for FakeJwtValidator {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        // `AGENT_BEARER_PREFIX` stands for a Macro API JWT that signs an agent.
+        // A prefix stands for a Macro API JWT signed for an agent or a
+        // routine run.
         let agent = jwt.strip_prefix(AGENT_BEARER_PREFIX);
+        let routine = jwt.strip_prefix(ROUTINE_BEARER_PREFIX);
+        let user_id = agent.or(routine).unwrap_or(jwt);
         Ok(macro_authorization::ValidatedCredential {
-            origin: match agent {
-                Some(_) => macro_authorization::CredentialOrigin::MacroApiJwt,
-                None => macro_authorization::CredentialOrigin::Session,
+            origin: if user_id == jwt {
+                macro_authorization::CredentialOrigin::Session
+            } else {
+                macro_authorization::CredentialOrigin::MacroApiJwt
             },
             identity: ValidatedIdentity {
                 agent_id: agent.map(|_| bot_id::MACRO_AI_BOT_ID),
                 agent_via: None,
-                user_id: agent.unwrap_or(jwt).to_string(),
+                routine_id: routine.map(|_| Uuid::nil()),
+                user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
                 permissions: None,
@@ -1387,33 +1393,25 @@ async fn an_agents_program_cannot_mint_a_bot_token() {
         macro_authorization::CODE_EXECUTION_HEADER,
         "1".parse().unwrap(),
     );
+    let routine_bearer = format!("{ROUTINE_BEARER_PREFIX}{DEFAULT_BEARER_TOKEN}");
     let runs = [
         (
             "an agent-attributed token",
             mint_request(bot_id, &agent_bearer),
-            None,
         ),
-        ("the code-mode runtime", code_mode, None),
+        ("the code-mode runtime", code_mode),
         (
             "an owner-identity routine run",
-            mint_request(bot_id, DEFAULT_BEARER_TOKEN),
-            Some(Uuid::new_v4()),
+            mint_request(bot_id, &routine_bearer),
         ),
     ];
-    for (run, request, routine_id) in runs {
+    for (run, request) in runs {
         let service = TestBotService::new(TestBotMode::Ok);
         let mints = service.mint_calls.clone();
-        let router = router_without_credentials(service, EntityParticipantRole::Owner);
-
-        let response = agent_correlation::context::scope_attribution(
-            agent_correlation::context::Attribution {
-                routine_id,
-                ..Default::default()
-            },
-            router.oneshot(request),
-        )
-        .await
-        .unwrap();
+        let response = router_without_credentials(service, EntityParticipantRole::Owner)
+            .oneshot(request)
+            .await
+            .unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{run}");
         let body = response_json(response).await;

@@ -27,9 +27,9 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    AccountHolderOrInternal, AnyPrincipal, BotOnly, MacroAuthorization,
+    AccountHolderOrInternal, AnyPrincipal, BotOnly, CredentialAttribution, MacroAuthorization,
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_program_minting,
+    UserOrInternal, is_program_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -599,10 +599,7 @@ pub async fn create_token_handler<
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
-    if refuses_program_mint(
-        authorization.authorization.user.agent_id.is_some(),
-        &headers,
-    ) {
+    if refuses_program_mint(authorization.authorization.user.attribution(), &headers) {
         return Err(BotsHandlerErr::Forbidden(PROGRAM_MINT_REFUSAL));
     }
     let token = state
@@ -621,18 +618,16 @@ pub async fn create_token_handler<
 pub(crate) const PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present execution.views.present({widgets: [{type: 'botCredential', botId}]}); the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
 
 /// Whether a request that would return a new bot token's secret must be
-/// refused because a program made it ([`is_program_minting`]); a person mints
-/// from the card or bot settings.
-pub(crate) fn refuses_program_mint(agent_attributed: bool, headers: &HeaderMap) -> bool {
-    let routine = agent_correlation::context::current_routine();
-    let refused = is_program_minting(agent_attributed, routine.is_some(), headers);
+/// refused because a program made it ([`is_program_run`]): its signed agent
+/// or routine claims, which re-minting an API token keeps, or the code-mode
+/// runtime's header. A person mints from the card or bot settings.
+pub(crate) fn refuses_program_mint(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> bool {
+    let refused = is_program_run(attribution, headers);
     if refused {
-        tracing::warn!(
-            agent_attributed,
-            routine_id = ?routine,
-            agent_session_id = ?agent_correlation::context::current_session(),
-            "refused a bot token mint from a program"
-        );
+        tracing::warn!(?attribution, "refused a bot token mint from a program");
     }
     refused
 }

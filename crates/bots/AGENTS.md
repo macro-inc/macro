@@ -34,8 +34,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
   `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
-  `connection_gateway_client` and `kafka_util` (`realtime`), `agent_correlation`
-  (inbound, for the routine claim).
+  `connection_gateway_client` and `kafka_util` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
 ## Recipes
@@ -69,7 +68,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   `macrod`⇔`harness_id` pairing is checked only for a runtime the request
   chooses; a patch that omits `harness` keeps an unbound agent editable.
 - `POST /bots/{id}/tokens` and `POST /channels/{id}/bots/scoped` refuse an agent's program
-  (`macro_authorization::is_program_minting`, 403): the response carries the
+  (`macro_authorization::is_program_run`, 403): the response carries the
   secret. Programs present a `botCredential` card instead, which mints from the
   user's own session.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`

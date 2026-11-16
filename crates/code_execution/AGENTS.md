@@ -30,10 +30,11 @@ must be listed in the generator's `postReads`, or dry runs skip it.
 The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
-Authenticated SDK requests carry `x-macro-code-execution: 1`. A program can
-drop it with a raw `fetch`, so a refusal that must hold also checks the
-token's signed claims: every code-mode credential signs an agent or a routine
-(`macro_authorization::is_program_minting`). APIs that ask a program to
+Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
+credential it carries. A program can drop it with a raw `fetch`, so a refusal
+that must hold reads the credential's signed claims too: every code-mode
+credential, public MCP's included, signs an agent or a routine
+(`macro_authorization::is_program_run`). APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse

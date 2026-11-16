@@ -24,15 +24,14 @@ whose hash lives in `account_manager_grants` rather than `"UserApiKey"`.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`, `macro_authorization` and `agent_correlation`
-  (feature `inbound`).
+- Depends on: `macro_user_id`, `macro_authorization` (feature `inbound`).
 - Used by: `services/document_storage_service`,
   `services/authentication_service` (agent setup).
 
 ## Gotchas
 
 - `POST /user-api-keys` refuses an agent's program
-  (`macro_authorization::is_program_minting`, 403): the key would reach the
+  (`macro_authorization::is_program_run`, 403): the key would reach the
   model, and is a credential without the program's agent claims.
 
 ## Checks

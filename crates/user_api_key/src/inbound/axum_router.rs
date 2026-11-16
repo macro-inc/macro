@@ -11,7 +11,7 @@ use axum::{
 };
 use macro_authorization::{
     AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, is_program_minting,
+    MacroAuthorizationState, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -128,15 +128,9 @@ where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
 {
-    let routine = agent_correlation::context::current_routine();
-    let agent_attributed = user.authorization.user.agent_id.is_some();
-    if is_program_minting(agent_attributed, routine.is_some(), &headers) {
-        tracing::warn!(
-            agent_attributed,
-            routine_id = ?routine,
-            agent_session_id = ?agent_correlation::context::current_session(),
-            "refused an API key from a program"
-        );
+    let attribution = user.authorization.user.attribution();
+    if is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused an API key from a program");
         return Err(UserApiKeyError::Forbidden(PROGRAM_KEY_REFUSAL));
     }
     let created = state

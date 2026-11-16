@@ -26,9 +26,9 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    AnyPrincipal, BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorization,
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    AnyPrincipal, BOT_TOKEN_HEADER, BotAuthentication, BotOnly, CredentialAttribution,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
@@ -208,8 +208,8 @@ fn caller_from_receipt(
 pub async fn create_channel_scoped_bot_handler<BotSvc, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
-    // The channel receipt drops the token's agent attribution, which the
-    // mint refusal needs.
+    // The channel receipt drops the credential's attribution, which the mint
+    // refusal needs.
     authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     headers: HeaderMap,
     Path(path): Path<ChannelPath>,
@@ -220,11 +220,11 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let agent_attributed = matches!(
-        &authorization.authorization,
-        MacroAuthorization::User(user) if user.agent_id.is_some()
-    );
-    if super::axum_router::refuses_program_mint(agent_attributed, &headers) {
+    let attribution = match &authorization.authorization {
+        MacroAuthorization::User(user) => user.attribution(),
+        _ => CredentialAttribution::Person,
+    };
+    if super::axum_router::refuses_program_mint(attribution, &headers) {
         return Err(ChannelBotWebhookHandlerErr::Forbidden(
             super::axum_router::PROGRAM_MINT_REFUSAL,
         ));

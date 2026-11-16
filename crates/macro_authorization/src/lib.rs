@@ -64,11 +64,11 @@ pub use domain::{
     harness_authorizer::HarnessAuthorizerService,
     models::{
         AccountManagerCredential, AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication,
-        BotAuthorizationOwner, BotScope, BotTokenAuthorization, CredentialOrigin,
-        HarnessAuthentication, HarnessAuthorizationOwner, HarnessTokenAuthorization,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
-        MacroUserAuthentication, ResolvedApiKeyUser, ResolvedBotActingUser, ValidatedCredential,
-        ValidatedIdentity,
+        BotAuthorizationOwner, BotScope, BotTokenAuthorization, CredentialAttribution,
+        CredentialOrigin, HarnessAuthentication, HarnessAuthorizationOwner,
+        HarnessTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
+        MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
+        ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, HarnessAuthorizationRepo, HarnessAuthorizer,
@@ -94,7 +94,7 @@ pub use inbound::{
     USER_API_KEY_HEADER, UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity,
     UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
     UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization, is_agent_run, is_program_minting,
+    UserOrInternalServiceAuthorization, is_agent_run, is_program_run,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
