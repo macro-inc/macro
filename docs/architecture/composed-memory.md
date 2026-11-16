@@ -79,6 +79,7 @@ removes access on the next read. The latest persisted report of each granularity
 remains available if generation is delayed, with its actual dates in the context.
 
 The scheduler's closure API is internal and does not expose arbitrary executable
-code or AWS Lambda targets through routine configuration. No new deployment or
-provider credentials are required. Local scheduled generation is disabled; use the
+code or AWS Lambda targets through routine configuration. The privacy judge needs
+`TYPESAFE_API_KEY` on every host that saves memory; a host without it refuses every
+save (503 for explicit edits). Local scheduled generation is disabled; use the
 awaited CLI when testing model behavior intentionally.
