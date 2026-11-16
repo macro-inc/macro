@@ -5,6 +5,7 @@ use std::str::FromStr;
 use super::*;
 use uuid::Uuid;
 
+mod prepare_images;
 mod wire;
 
 const COMPUTER_ID: ComputerId =

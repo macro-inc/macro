@@ -15,16 +15,22 @@
 //!
 //! Verbs check the instance's status first so a retried effect is a no-op
 //! instead of an Incus "already running" error.
+//!
+//! On its first use Incus unpacks an image into a cached volume on the pool
+//! (~30 s for macro-box); every root disk after that is a copy-on-write clone
+//! of it. [`Fleet::prepare_images`] does that first use with an instance that
+//! never starts, so no buyer waits for it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
-    AttachedExec, ExecCommand, ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError,
-    InstanceInfo, InstanceKind, InstanceName, InvalidName, ProfileName, StoragePoolName,
-    StorageVolumeName,
+    AttachedExec, CreateInstance, ExecCommand, ImageReference, ImageSource, IncusClient,
+    IncusEndpoint, IncusError, InstanceInfo, InstanceKind, InstanceName, InvalidName, ProfileName,
+    RootDisk, StoragePoolName, StorageVolumeName,
 };
 
 use crate::domain::enrollment::{EnrollmentGeneration, EnrollmentIssueError, INCUS_ENROLLMENT_KEY};
@@ -47,6 +53,8 @@ const GENERATION_KEY: &str = "user.macro.enrollment_generation";
 const PAIRING_KEY: &str = "user.macro.pairing_id";
 /// The image the instance was created from.
 const IMAGE_KEY: &str = "user.macro.image";
+/// Marks the instance [`Fleet::prepare_images`] unpacks an image with.
+const IMAGE_WARMUP_KEY: &str = "user.macro.image_warmup";
 /// Disk device of the data volume; the guest finds it by this name.
 const DATA_DEVICE: &str = "data";
 
@@ -142,6 +150,8 @@ pub struct IncusFleet {
     client: IncusClient,
     config: Box<IncusFleetConfig>,
     images: GuestImages<IncusImage>,
+    /// Fingerprints whose pool volume this process has seen or made.
+    warmed: Arc<Mutex<HashSet<String>>>,
 }
 
 /// An image to create instances from, and the name recorded for it.
@@ -180,7 +190,71 @@ impl IncusFleet {
             client,
             config: Box::new(config),
             images,
+            warmed: Arc::default(),
         })
+    }
+
+    /// The fingerprint of a local image; `None` for a remote one, which Incus
+    /// downloads and caches on its first use.
+    async fn local_fingerprint(
+        &self,
+        image: &IncusImage,
+    ) -> Result<Option<String>, IncusFleetError> {
+        if image.source.remote.is_some() {
+            return Ok(None);
+        }
+        match &image.source.reference {
+            ImageReference::Fingerprint(fingerprint) => Ok(Some(fingerprint.clone())),
+            ImageReference::Alias(alias) => Ok(Some(
+                self.client.image_alias(alias).await?.target_fingerprint,
+            )),
+        }
+    }
+
+    /// Get the image's volume onto the pool: unless it is there already,
+    /// create a stopped instance from the image, which unpacks it, then
+    /// delete the instance. The volume stays.
+    #[tracing::instrument(name = "incus_fleet.warm_image", skip(self), fields(unpacked), err)]
+    async fn warm_image(&self, fingerprint: &str) -> Result<(), IncusFleetError> {
+        let name = warm_instance_name(fingerprint)?;
+
+        // A warm-up stopped between its create and its delete left this.
+        match self.client.instance(&name).await {
+            Ok(_) => self.client.delete(&name).await?,
+            Err(IncusError::NotFound { .. }) => {}
+            Err(error) => return Err(error.into()),
+        }
+
+        let cached = self
+            .client
+            .image_volume_exists(&self.config.storage_pool, fingerprint)
+            .await?;
+        tracing::Span::current().record("unpacked", !cached);
+        if cached {
+            return Ok(());
+        }
+
+        self.client
+            .create_instance(CreateInstance {
+                name: name.clone(),
+                image: ImageSource {
+                    reference: ImageReference::Fingerprint(fingerprint.to_owned()),
+                    remote: None,
+                },
+                kind: InstanceKind::VirtualMachine,
+                profiles: vec![self.config.profile.clone()],
+                config: BTreeMap::from([
+                    (IMAGE_WARMUP_KEY.to_owned(), fingerprint.to_owned()),
+                    ("migration.stateful".to_owned(), "false".to_owned()),
+                ]),
+                root_disk: Some(RootDisk {
+                    pool: self.config.storage_pool.clone(),
+                    size: format!("{ROOT_DISK_GIB}GiB"),
+                }),
+            })
+            .await?;
+        self.client.delete(&name).await?;
+        Ok(())
     }
 
     /// The instance, `None` when it does not exist.
@@ -514,6 +588,34 @@ impl Fleet for IncusFleet {
         })
     }
 
+    #[tracing::instrument(name = "incus_fleet.prepare_images", skip(self), err)]
+    async fn prepare_images(&self) -> Result<(), IncusFleetError> {
+        // Resolved on every pass, so a repointed alias is warmed too.
+        let mut fingerprints = BTreeSet::new();
+        for image in [&self.images.regular, &self.images.agent] {
+            if let Some(fingerprint) = self.local_fingerprint(image).await? {
+                fingerprints.insert(fingerprint);
+            }
+        }
+
+        for fingerprint in fingerprints {
+            let warmed = self
+                .warmed
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains(&fingerprint);
+            if warmed {
+                continue;
+            }
+            self.warm_image(&fingerprint).await?;
+            self.warmed
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(fingerprint);
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(name = "incus_fleet.exec", skip(self, argv), err)]
     async fn exec(
         &self,
@@ -569,6 +671,15 @@ fn exec_command(argv: &[&str]) -> ExecCommand {
 /// Incus names are hostname labels: a leading letter, at most 63 characters.
 pub fn instance_name(computer_id: ComputerId) -> InstanceName {
     InstanceName::from_uuid(computer_id.as_uuid())
+}
+
+/// The instance that unpacks the image `fingerprint`: `mc-` and the first 32
+/// hex digits, the only instance name form Incus names here allow.
+fn warm_instance_name(fingerprint: &str) -> Result<InstanceName, InvalidName> {
+    InstanceName::try_new(&format!(
+        "mc-{}",
+        fingerprint.get(..32).unwrap_or(fingerprint)
+    ))
 }
 
 /// The computer's data volume.

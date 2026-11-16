@@ -509,7 +509,8 @@ where
     /// Compare the fleet with the rows: a missing or stopped instance of an
     /// awake computer is a crash; a missing stopped or failed guest is recreated.
     /// Only owned orphans older than the grace period are removed. Each pass
-    /// also gauges the fleet's allocation (`computer.capacity.*`).
+    /// also gauges the fleet's allocation (`computer.capacity.*`), then
+    /// prepares the fleet's images; the first pass runs at startup.
     // Not `err`: the pass reports failures, and skips unavailable storage quietly.
     #[tracing::instrument(skip(self))]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
@@ -608,6 +609,12 @@ where
                 tracing::warn!(computer_id = %orphan, control_plane_id = self.fleet.control_plane_id().as_str(), "destroying an instance with no computer");
                 self.fleet.destroy(*orphan).await.map_err(internal)?;
             }
+        }
+
+        // Last, so a slow first unpack never holds up drift handling; the
+        // next pass retries a failure.
+        if let Err(error) = self.fleet.prepare_images().await {
+            tracing::warn!(error = ?error, "could not prepare computer images");
         }
         Ok(())
     }

@@ -1,6 +1,7 @@
 use std::str::FromStr;
 mod agent;
 mod data_disk;
+mod prepare_images;
 mod redeploy;
 mod setup_notice;
 
@@ -65,6 +66,10 @@ struct FakeFleet {
     /// Each guest's data disk, named by the generation that created it.
     volumes: Mutex<HashMap<ComputerId, String>>,
     instances: Mutex<Vec<FleetInstance>>,
+    /// `prepare_images` calls so far.
+    prepares: AtomicU32,
+    /// `prepare_images` fails as if the host were unreachable.
+    prepare_fails: bool,
 }
 
 const BASE_IMAGE: &str = "macro-box/2026-11-01";
@@ -196,6 +201,14 @@ impl Fleet for FakeFleet {
             reserve_gb: 7,
             oversell_factor: 3,
         })
+    }
+
+    async fn prepare_images(&self) -> Result<(), FakeFleetError> {
+        self.prepares.fetch_add(1, Ordering::SeqCst);
+        if self.prepare_fails {
+            return Err(FakeFleetError::Unavailable);
+        }
+        Ok(())
     }
 
     async fn exec(

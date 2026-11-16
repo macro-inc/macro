@@ -547,6 +547,10 @@ pub trait Fleet: Send + Sync + 'static {
     /// The host this fleet drives, for registration.
     fn host(&self) -> impl Future<Output = Result<HostRegistration, Self::Err>> + Send;
 
+    /// Get every image new computers are created from ready on the host, so
+    /// no create pays an image's first-use cost. Cheap to repeat.
+    fn prepare_images(&self) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Run `argv` in the guest as its [`GUEST_USER`], without a TTY. Resolves
     /// once the program started; a missing guest is [`FleetError::is_missing`].
     fn exec(

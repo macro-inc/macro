@@ -428,6 +428,11 @@ impl Fleet for DockerFleet {
         })
     }
 
+    /// Nothing to do: `docker run` starts from the local image store as is.
+    async fn prepare_images(&self) -> Result<(), DockerFleetError> {
+        Ok(())
+    }
+
     #[tracing::instrument(name = "docker_fleet.exec", skip(self, argv), err)]
     async fn exec(
         &self,

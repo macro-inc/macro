@@ -135,6 +135,13 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
+    async fn prepare_images(&self) -> Result<(), Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.prepare_images().await?),
+            Self::Docker(fleet) => Ok(fleet.prepare_images().await?),
+        }
+    }
+
     async fn exec(
         &self,
         computer_id: ComputerId,

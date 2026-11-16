@@ -199,13 +199,13 @@ nix build .#macro-box-incus
 scp -L result/metadata.tar.xz result/disk.qcow2 root@runtime-dev-1:/tmp/
 ssh root@runtime-dev-1 \
   'incus image import /tmp/metadata.tar.xz /tmp/disk.qcow2 --alias macro-box/<date> && rm /tmp/metadata.tar.xz /tmp/disk.qcow2'
-ssh root@runtime-dev-1 \
-  'incus init macro-box/<date> warm-<date> --vm --profile macro-box --storage default -c migration.stateful=false && incus delete warm-<date>'
 ```
 
-The second command warms the image: Incus unpacks a new image into a cached
-volume on the pool (~30s) on first use, so no customer's computer waits for it.
-Use `init`, never `launch`, so the throwaway never boots or enrolls.
+No manual warm-up: Incus unpacks a new image into a cached volume on the pool
+(~30s) on first use, and the operator does that first use itself on its next
+reconcile pass (at startup, then every minute) with an instance that never
+starts, so no customer's computer waits for it. See Image warm-up in
+`docs/architecture/macro-computers.md`.
 
 Smoke test: `incus storage volume create default t-data --type=block size=10GiB`,
 `incus init macro-box/<date> t --vm --profile macro-box`,
