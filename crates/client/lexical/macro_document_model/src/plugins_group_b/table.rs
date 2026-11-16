@@ -154,6 +154,9 @@ impl Plugin for Tables {
             }
             for table in tables {
                 if delete_cell(tx, table)? != DeleteOutcome::NotHandled {
+                    // Upstream preventDefault()s before clearing the cells, so
+                    // the browser's own deletion never follows.
+                    tx.prevent_default();
                     return Ok(Handled::Yes);
                 }
             }

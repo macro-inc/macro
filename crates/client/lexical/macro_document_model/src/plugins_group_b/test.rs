@@ -516,7 +516,7 @@ fn backspace_widens_a_range_leaving_a_table_to_the_block_before_it() -> Result<(
             tx.set_selection(Some(Selection::Range(range)))?;
             Ok((above.key(), after.key()))
         })?;
-        let (handled, _) = editor.dispatch(&Command::Key {
+        let (handled, commit) = editor.dispatch(&Command::Key {
             command: KeyCommand::Backspace,
             event: Some(KeyEvent {
                 key: "Backspace".into(),
@@ -524,6 +524,7 @@ fn backspace_widens_a_range_leaving_a_table_to_the_block_before_it() -> Result<(
             }),
         })?;
         assert_eq!(handled, Handled::No, "text anchor: {text_anchor}");
+        assert!(!commit.default_prevented, "text anchor: {text_anchor}");
         assert_eq!(
             editor
                 .state()
@@ -587,7 +588,7 @@ fn backspace_widens_a_range_between_two_tables_around_both() -> Result<(), Error
         tx.set_selection(Some(Selection::Range(range)))?;
         Ok((above.key(), below.key()))
     })?;
-    let (handled, _) = editor.dispatch(&Command::Key {
+    let (handled, commit) = editor.dispatch(&Command::Key {
         command: KeyCommand::Backspace,
         event: Some(KeyEvent {
             key: "Backspace".into(),
@@ -595,6 +596,7 @@ fn backspace_widens_a_range_between_two_tables_around_both() -> Result<(), Error
         }),
     })?;
     assert_eq!(handled, Handled::No);
+    assert!(!commit.default_prevented);
     assert_eq!(
         editor
             .state()
@@ -634,7 +636,7 @@ fn backspace_on_a_table_selection_clears_cells_and_keeps_the_table() -> Result<(
         select_cells(tx, table, left, middle)?;
         Ok((table.key(), row))
     })?;
-    let (handled, _) = editor.dispatch(&Command::Key {
+    let (handled, commit) = editor.dispatch(&Command::Key {
         command: KeyCommand::Backspace,
         event: Some(KeyEvent {
             key: "Backspace".into(),
@@ -642,6 +644,7 @@ fn backspace_on_a_table_selection_clears_cells_and_keeps_the_table() -> Result<(
         }),
     })?;
     assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
     let state = editor.state().view();
     assert!(state.is_attached(table));
     assert_eq!(
@@ -676,7 +679,7 @@ fn backspace_inside_one_cell_is_left_to_the_default() -> Result<(), Error> {
         tx.set_selection(Some(Selection::Range(range.clone())))?;
         Ok(range)
     })?;
-    let (handled, _) = editor.dispatch(&Command::Key {
+    let (handled, commit) = editor.dispatch(&Command::Key {
         command: KeyCommand::Backspace,
         event: Some(KeyEvent {
             key: "Backspace".into(),
@@ -684,6 +687,7 @@ fn backspace_inside_one_cell_is_left_to_the_default() -> Result<(), Error> {
         }),
     })?;
     assert_eq!(handled, Handled::No);
+    assert!(!commit.default_prevented);
     assert_eq!(
         editor
             .state()
