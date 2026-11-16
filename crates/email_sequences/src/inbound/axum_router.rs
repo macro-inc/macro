@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, FromRef, Path, State},
-    http::StatusCode,
+    extract::{DefaultBodyLimit, FromRef, FromRequestParts, Path, State},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
     routing::{get, patch, post},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    is_agent_run,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -109,6 +110,9 @@ pub enum SequenceErrorCode {
     ActionUnavailable,
     /// The caller isn't in a team with CRM on.
     CrmUnavailable,
+    /// An agent's program tried to change a sequence; a person does that in
+    /// the app.
+    PersonRequired,
     /// Something else failed.
     Internal,
 }
@@ -181,6 +185,43 @@ impl IntoResponse for SequenceError {
 
 type Caller<Auth> = MacroAuthorizationExtractor<Auth, UserOnly>;
 
+/// Why an agent's program may not change a sequence.
+const AGENT_REFUSAL: &str = "An agent's program cannot create, change or add people to a sequence: an active sequence emails people with no further review. Ask the user to do it in Customers > Sequences.";
+
+/// The caller of a route that changes a sequence: a person in the app. An
+/// agent's program (see [`is_agent_run`]) is refused, because a sequence sends
+/// email nobody reviews again. Reads take a [`Caller`].
+pub struct Person<Auth>(Caller<Auth>);
+
+impl<S, Auth> FromRequestParts<S> for Person<Auth>
+where
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Response> {
+        let caller = Caller::<Auth>::from_request_parts(parts, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        if is_agent_run(caller.authorization.agent_id.is_some(), &parts.headers) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(SequenceErrorResponse {
+                    code: SequenceErrorCode::PersonRequired,
+                    message: AGENT_REFUSAL.to_owned(),
+                    problem: None,
+                    position: None,
+                    tokens: Vec::new(),
+                }),
+            )
+                .into_response());
+        }
+        Ok(Self(caller))
+    }
+}
+
 /// Largest request body: a full sequence at the step limits, in any script.
 const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 
@@ -236,7 +277,7 @@ pub async fn list_sequences<Api: SequencesApi, Auth: MacroAuthorizationService>(
               (status = 403, body = SequenceErrorResponse)))]
 pub async fn create_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>(
     State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
+    Person(caller): Person<Auth>,
     Json(input): Json<NewSequence>,
 ) -> Result<Json<Sequence>, SequenceError> {
     Ok(Json(state.service.create(user_id(&caller), input).await?))
@@ -265,7 +306,7 @@ pub async fn get_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>(
               (status = 404, body = SequenceErrorResponse), (status = 409, body = SequenceErrorResponse)))]
 pub async fn update_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>(
     State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
+    Person(caller): Person<Auth>,
     Path(id): Path<Uuid>,
     Json(patch): Json<SequencePatch>,
 ) -> Result<Json<Sequence>, SequenceError> {
@@ -280,7 +321,7 @@ pub async fn update_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>
     responses((status = 204), (status = 404, body = SequenceErrorResponse)))]
 pub async fn delete_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>(
     State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
+    Person(caller): Person<Auth>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, SequenceError> {
     state.service.delete(user_id(&caller), id).await?;
@@ -294,7 +335,7 @@ pub async fn delete_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>
               (status = 404, body = SequenceErrorResponse), (status = 409, body = SequenceErrorResponse)))]
 pub async fn enroll_contacts<Api: SequencesApi, Auth: MacroAuthorizationService>(
     State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
+    Person(caller): Person<Auth>,
     Path(id): Path<Uuid>,
     Json(request): Json<EnrollRequest>,
 ) -> Result<Json<EnrollResponse>, SequenceError> {
@@ -310,7 +351,7 @@ pub async fn enroll_contacts<Api: SequencesApi, Auth: MacroAuthorizationService>
               (status = 409, body = SequenceErrorResponse)))]
 pub async fn update_enrollment<Api: SequencesApi, Auth: MacroAuthorizationService>(
     State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
+    Person(caller): Person<Auth>,
     Path(id): Path<Uuid>,
     Json(request): Json<EnrollmentActionRequest>,
 ) -> Result<Json<EnrollmentSummary>, SequenceError> {
@@ -338,3 +379,6 @@ pub async fn contact_enrollments<Api: SequencesApi, Auth: MacroAuthorizationServ
             .await?,
     }))
 }
+
+#[cfg(test)]
+mod test;
