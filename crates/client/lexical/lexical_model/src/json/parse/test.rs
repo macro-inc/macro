@@ -102,8 +102,6 @@ fn malformed_inputs_keep_error_classes_and_key_consumption() {
         r#"{"root":{"type":"root","children":[3]}}"#,
         r#"{"root":{"type":"root","children":[{"type":"unknown"}]}}"#,
         r#"{"root":{"type":"root","children":[{"type":"paragraph","direction":3}]}}"#,
-        r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","mode":5}]}]}}"#,
-        r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","mode":"unknown"}]}]}}"#,
         r#"{"root":{"type":"root"},"root":{"type":"root"}}"#,
         r#"{"root":{"type":"root"}} trailing"#,
     ] {

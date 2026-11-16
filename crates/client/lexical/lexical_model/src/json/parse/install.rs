@@ -92,25 +92,17 @@ impl ParsedNode<'_> {
                 || TextFormat::from_bits_retain(self.number("format")),
                 TextFormatType::flag,
             );
-            // Source TextNode.updateFromJSON: setMode(null) stores
-            // TEXT_MODE_TO_TYPE[null] (undefined), so exportJSON omits mode; that is
+            // Source TextNode.updateFromJSON: setMode(mode) stores TEXT_MODE_TO_TYPE[mode],
+            // undefined for null or any unknown value, so exportJSON omits mode; that is
             // native's absent mode (Lexical 0.45 dist 449d061d).
-            let mode_is_null = matches!(
-                self.fields.get("mode"),
-                Some(FieldValue::Other(Value::Null))
-            );
-            let mode = match self.string("mode") {
-                Some("normal") => TextMode::Normal,
-                Some("token") => TextMode::Token,
-                Some("segmented") => TextMode::Segmented,
-                _ if mode_is_null => TextMode::default(),
-                _ => self
-                    .fields
-                    .get("mode")
-                    .map(|value| serde_json::from_value(value.serialized()))
-                    .transpose()?
-                    .unwrap_or_default(),
+            let known_mode = match self.string("mode") {
+                Some("normal") => Some(TextMode::Normal),
+                Some("token") => Some(TextMode::Token),
+                Some("segmented") => Some(TextMode::Segmented),
+                _ => None,
             };
+            let mode_is_null = self.fields.contains_key("mode") && known_mode.is_none();
+            let mode = known_mode.unwrap_or_default();
             let mut absent = self.absent(&["text", "format", "detail", "mode", "style"]);
             if format_type.is_some() && parsed_format.is_none() {
                 absent.insert(AbsentKeys::FORMAT);

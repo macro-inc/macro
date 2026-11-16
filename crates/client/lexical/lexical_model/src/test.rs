@@ -479,6 +479,37 @@ fn null_text_mode_imports_as_absent_mode_on_both_import_paths() -> Result<(), Er
 }
 
 #[test]
+fn unknown_text_modes_import_as_absent_mode_on_both_import_paths() -> Result<(), Error> {
+    // Source setMode(serializedNode.mode) stores TEXT_MODE_TO_TYPE[mode], which is
+    // undefined for any value but "normal", "token" and "segmented", exactly as for null.
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    for mode in [serde_json::json!("unknown"), serde_json::json!(5)] {
+        editor.update(|tx| {
+            let text = tx.create_text("old")?;
+            let imported = serde_json::json!({"type":"text","version":1,"text":"hi","mode":mode});
+            tx.update_from_json(text, imported.as_object().expect("object"))?;
+            assert!(!tx.export_json(text)?.contains_key("mode"));
+            assert!(!tx.is_simple_text(text));
+            Ok(())
+        })?;
+        let text = serde_json::json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"hi","mode":mode}]}]}}).to_string();
+        let state = editor.parse_editor_state_str(&text)?;
+        assert_eq!(
+            serde_json::Value::Object(
+                state.to_json()?.root["children"][0]["children"][0]
+                    .as_object()
+                    .cloned()
+                    .expect("text")
+            ),
+            serde_json::json!({"text":"hi","type":"text","version":1})
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn null_mode_text_is_not_simple_for_normalization_until_mode_is_set() -> Result<(), Error> {
     // Source $normalizeTextNode merges and removes only isSimpleText nodes
     // (__mode === 0). Observed on Source (scratch probe): a null-mode text beside a
