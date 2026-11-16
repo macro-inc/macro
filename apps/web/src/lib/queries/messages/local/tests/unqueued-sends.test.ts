@@ -81,6 +81,22 @@ it('sends again what a page that is gone noted and never saw stored', async () =
   expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
 });
 
+it('sends again in the order the messages were written', async () => {
+  const { deps, host, resend } = world(['new-page']);
+  // Storage holds the later message first.
+  noteUnqueuedSend(send('m2'), '2026-01-01T00:00:01.000Z', deps('old-page'));
+  noteUnqueuedSend(send('m3'), '2026-01-01T00:00:01.000Z', deps('old-page'));
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  await resendUnqueuedSends(host, SENDER, resend, deps('new-page'));
+
+  expect(resend.mock.calls.map(([sent]) => sent.id)).toEqual([
+    'm1',
+    'm2',
+    'm3',
+  ]);
+});
+
 it('leaves alone a send whose page still runs, and one the queue stored', async () => {
   const { storage, deps, host, resend } = world(['other-tab', 'new-page']);
   noteUnqueuedSend(send('m1'), CREATED_AT, deps('other-tab'));
