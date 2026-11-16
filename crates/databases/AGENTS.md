@@ -71,7 +71,9 @@ service with Axum, agent-tool and Postgres adapters.
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").
 - Column type changes must convert every value or refuse with the misfit count;
-  never silently drop data outside an explicit delete.
+  never silently drop data outside an explicit delete. Percentage is Number
+  storage plus placement config; Number↔Percentage does not convert or rescale
+  cells.
 - Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
   only; the repository swaps the folder-inherited `entity_access` rows in the
   same transaction (`entity_access_db_utils::project_grants`), after

@@ -19,7 +19,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
   (`database_row.rs`, `calendar_event.rs`, `agent_session.rs`, `initiative.rs`,
-  `harness.rs`,
+  `harness.rs`, `team.rs`,
   `attention.rs`, `notified.rs`, `touched.rs`) and by shape
   (`expanded/` hydrated, `unexpanded/` id-only).
 - `src/inbound/axum_router.rs` + `src/inbound/toolset/list_entities.rs`: the
@@ -56,8 +56,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
   `keying.rs`.
-- Give a kind with no list of its own (runtimes) inbox rows: an
-  attention-only kind like `pg_soup_repo/harness.rs`, a gate in
+- Give a kind with no list of its own (runtimes, teams) inbox rows: an
+  attention-only kind like `pg_soup_repo/harness.rs` or `team.rs`, a gate in
   `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
   `requested_types` (as CRM records are).
 
@@ -145,6 +145,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Keep flat timestamp top clauses lightweight; bind the caller's source ids, then document-ID arrays, after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
 - The dynamic query's document, chat, and project arms match `entity_access.source_id = ANY(<bound source ids>)`, not a join to the `user_source_ids` CTE: Postgres costs a CTE join at the average source's grant count and probed the item table once per grant for callers holding hundreds of thousands. The query runs in a transaction that raises `parallel_setup_cost`, because parallel plans made callers with a few thousand grants twice as slow.
 - A document arm whose filter admits only ids it names, at most `MAX_NAMED_CANDIDATES` of them (`named_document_bound`: CRM Tasks, Notes, References) checks access after its own filters (`DocumentArmAccess::AfterFilters`): the candidates and their sub-type, file-type and property filters sit behind an `OFFSET 0` fence, the `properties_filter` `EXISTS` run once per candidate (`PropertyProbe::PerCandidate`) instead of as a bitmap over every row the property holds (a `DocumentLiteral::Property` inside the document filter keeps `PropertyProbe::Planned`), and each survivor probes `entity_access` by uuid over its two partial unique indexes, in page order and past the cursor so a flat timestamp page stops at its `LIMIT`. Broad arms and longer lists keep the semi-join. An id OR'ed with any other literal does not bound the arm.
+- OR'ed select options of one definition and entity type render as one `EXISTS` over `?| ARRAY[...]` (`option_membership_predicate`), always fenced with `PER_CANDIDATE` whatever the `PropertyProbe`: unfenced, Postgres pulls that single `EXISTS` up into a semi-join and drives a broad list (the Tasks view, every task by status) from the property index's matches across every entity, about ten times slower warm and a full read of every matching task cold.
 - Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
 - Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
@@ -190,3 +191,5 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Skill: `database-core`, `cloud-storage-hexagonal-architecture` · Rules:
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
+
+- CRM list, association, and attention visibility includes effective per-member CRM access; team membership alone is insufficient. Current primary-backed gates also protect cached-source reads.

@@ -55,6 +55,7 @@ import {
  * | a row of another table in the database | relation |
  * | a status, stage or category | select; `select[]` or tag for several |
  * | money, counts, scores | number |
+ * | a share, rate, or ratio shown as percent | percentage |
  * | dates | date |
  * | yes/no | boolean |
  * | URLs | link |

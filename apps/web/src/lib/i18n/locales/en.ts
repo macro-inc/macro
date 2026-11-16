@@ -20,6 +20,7 @@ import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
+import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
@@ -69,6 +70,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  importJobs,
   suggestions,
   localRuntime,
   markdownEditor,

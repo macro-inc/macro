@@ -1,0 +1,19 @@
+{
+  "scenario": "view-parity-files",
+  "description": "One person with a file of each type the file block headers split covers, for the view parity harness.",
+  "users": {
+    "pat": {
+      "email": "pat@seed.macro.local",
+      "first_name": "Pat",
+      "roles": ["professional_subscriber"]
+    }
+  },
+  "documents": {
+    "image": { "owner": "pat", "name": "Parity image", "file": "parity-image.png" },
+    "video": { "owner": "pat", "name": "Parity video", "file": "parity-video.mp4" },
+    "code": { "owner": "pat", "name": "Parity code", "file": "parity-code.ts" },
+    "archive": { "owner": "pat", "name": "Parity archive", "file": "parity-archive.zip" },
+    "pdf": { "owner": "pat", "name": "Parity PDF", "file": "pdf.pdf" },
+    "canvas": { "owner": "pat", "name": "Parity canvas", "file": "canvas.canvas" }
+  }
+}

@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import {
   type Client,
@@ -17,6 +17,7 @@ import {
 } from 'solid-js';
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { filter, fromPromise, mergeMap, pipe } from 'wonka';
+import type { EntityData } from '../entity/types/entity';
 
 const mocks = vi.hoisted(() => ({
   enabled: (): boolean => false,
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   graphql: undefined as Client | undefined,
   get: vi.fn(),
+  changeIcon: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => createMemo(() => ({ enabled: mocks.enabled() })),
@@ -57,6 +59,12 @@ vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
 vi.mock('../entity-appearance/entity-appearance', () => ({
   useChangeEntityIcon: () => vi.fn(),
+  EntityAppearanceTrigger: (props: { entity: EntityData }) => (
+    <button
+      aria-label="Change icon"
+      onClick={() => mocks.changeIcon(props.entity)}
+    />
+  ),
 }));
 vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
   TasksCreateAction: () => null,
@@ -268,10 +276,20 @@ it("names a route's project without the project's full read", async () => {
     />
   ));
   await vi.waitFor(() =>
-    expect(view.getByRole('button').textContent).toBe('Launch')
+    expect(view.getByRole('button', { name: 'Launch' }).textContent).toBe(
+      'Launch'
+    )
   );
   expect(callsFor('Initiative')).toHaveLength(0);
   expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+  fireEvent.click(view.getByRole('button', { name: 'Change icon' }));
+  expect(mocks.changeIcon).toHaveBeenCalledWith({
+    type: 'initiative',
+    id: 'launch',
+    name: 'Launch',
+    ownerId: 'viewer',
+    appearance: null,
+  });
 });
 
 it('keeps standalone source adapters enabled when no rollout gate is injected', async () => {
@@ -319,6 +337,7 @@ it('reads chip identity without the fields that check every task', async () => {
     expect(query.data).toEqual({
       id: 'launch',
       name: 'Launch',
+      ownerId: 'viewer',
       access: 'owner',
       appearance: null,
     })

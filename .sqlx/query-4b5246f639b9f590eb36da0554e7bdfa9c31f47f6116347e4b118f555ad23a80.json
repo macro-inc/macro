@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT tu.user_id\n                FROM crm_companies c\n                JOIN team_user tu ON tu.team_id = c.team_id\n                WHERE c.id = $1\n                  AND (tu.crm_access OR tu.team_role <> 'member')\n                  AND (NOT c.hidden OR tu.team_role <> 'member')\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4b5246f639b9f590eb36da0554e7bdfa9c31f47f6116347e4b118f555ad23a80"
+}

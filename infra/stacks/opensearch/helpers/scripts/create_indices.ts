@@ -504,6 +504,13 @@ const DOCUMENT_BODY = {
         index: true,
         doc_values: true,
       },
+      // True on a document linked to an email attachment (`document_email`).
+      // Only attachments carry it; a document without it is not one.
+      is_email_attachment: {
+        type: 'boolean',
+        index: true,
+        doc_values: true,
+      },
       updated_at_seconds: {
         type: 'date',
         format: 'epoch_second',

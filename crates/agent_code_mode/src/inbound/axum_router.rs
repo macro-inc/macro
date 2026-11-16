@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
     body::Bytes,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -22,7 +22,7 @@ use entity_access::{
 };
 use macro_authorization::{
     ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOnly,
+    UserOnly, is_agent_run,
 };
 use macro_uuid::Uuid;
 use std::sync::Arc;
@@ -275,16 +275,31 @@ pub async fn list_reviews<Access: EntityAccessService, Auth: MacroAuthorizationS
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
+
+/// Only a person decides a review: an agent's program (see [`is_agent_run`])
+/// is refused, or it could approve the draft it presented itself.
+fn decode_user_decision(
+    agent_attributed: bool,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<ReviewDecision, CodeExecutionApiError> {
+    if is_agent_run(agent_attributed, headers) {
+        return Err(CodeExecutionApiError(CodeModeError::Forbidden));
+    }
+    decode(body).map_err(CodeExecutionApiError)
+}
+
 #[utoipa::path(post, path = "/agent-sessions/{session_id}/reviews/{review_id}", tag = "agent-sessions", operation_id = "decide_session_review", params(("session_id" = Uuid, Path), ("review_id" = Uuid, Path)), request_body = ReviewDecision, responses((status = 200, body = ReviewRecord), (status = 403), (status = 409)))]
 /// Save edits or atomically claim the exact draft revision the user submitted.
 pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, id)): Path<(Uuid, Uuid)>,
     body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
-    let decision: ReviewDecision = decode(&body).map_err(CodeExecutionApiError)?;
+    let decision = decode_user_decision(caller.authorization.agent_id.is_some(), &headers, &body)?;
     state
         .reviews
         .decide(
