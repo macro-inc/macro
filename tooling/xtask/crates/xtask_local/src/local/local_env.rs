@@ -716,7 +716,6 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
-        env.insert("COMMENT_GATE_MODE".into(), "http".into());
         // DSS requires a project key at boot; real flag evaluation needs Doppler.
         env.insert("POSTHOG_API_KEY".into(), "local-posthog-project-key".into());
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
