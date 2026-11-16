@@ -266,3 +266,36 @@ async fn cursor_probe_obeys_the_service_timeout() {
         Err(DiscoverAgentCapabilitiesError::Timeout)
     ));
 }
+
+fn credential_rejected() -> Result<RawCapabilityProbe, CapabilityProbeError> {
+    Err(CapabilityProbeError::CredentialRejected(
+        "reconnect".to_owned(),
+    ))
+}
+
+#[tokio::test]
+async fn a_rejected_cursor_credential_is_not_a_probe_failure() {
+    let service = AgentCapabilitiesServiceImpl::new(
+        Access(true),
+        Probe::new(unsupported),
+        Probe::new(credential_rejected),
+        Probe::new(unsupported),
+        Duration::from_secs(1),
+    );
+
+    let result = service
+        .load(
+            caller(),
+            DiscoverAgentCapabilities {
+                harness: CapabilityHarness::Cursor,
+                harness_id: None,
+                model: Some("fast".to_owned()),
+            },
+        )
+        .await;
+
+    assert!(
+        matches!(&result, Err(DiscoverAgentCapabilitiesError::CredentialRejected(message)) if message == "reconnect"),
+        "got {result:?}"
+    );
+}

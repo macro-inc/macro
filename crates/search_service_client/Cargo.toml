@@ -9,6 +9,7 @@ test = false
 
 [dependencies]
 anyhow = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
 models_search = { path = "../models_search" }
 reqwest = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
