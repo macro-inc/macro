@@ -15,6 +15,9 @@
  * IV: equal IVs only ever encrypt equal plaintexts).
  */
 
+import { Buffer } from 'node:buffer';
+import { replaceAll } from './replace-all';
+
 /** `macro|` user id prefix, kept in the token's form rather than its body. */
 const USER_ID_PREFIX = 'macro|';
 
@@ -39,30 +42,17 @@ export class PersonTokenError extends Error {
   }
 }
 
-function toBase64Url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
+/** Base64url (unpadded) of `bytes`, by the runtime's Buffer (nodejs_compat). */
+const toBase64Url = (bytes: Uint8Array) =>
+  Buffer.from(bytes).toString('base64url');
 
-function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
+const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> =>
+  new Uint8Array(Buffer.from(text, 'base64url'));
 
 /** The secret's bytes: base64, at least 32 bytes. */
 export function keyBytes(secret: string): Uint8Array<ArrayBuffer> | undefined {
-  try {
-    const bytes = fromBase64Url(secret.trim());
-    return bytes.length >= 32 ? bytes : undefined;
-  } catch {
-    return undefined;
-  }
+  const bytes = new Uint8Array(Buffer.from(secret.trim(), 'base64'));
+  return bytes.length >= 32 ? bytes : undefined;
 }
 
 type Keys = { encrypt: CryptoKey; iv: CryptoKey };
@@ -167,24 +157,6 @@ export function personTokenKey(secret: Uint8Array<ArrayBuffer>) {
       if (!match?.[1] || !match[2]) throw new PersonTokenError(token);
       const email = await openBody(token, match[2]);
       return match[1] === 'u' ? `${USER_ID_PREFIX}${email}` : email;
-    }
-
-    /** Replace each match of `pattern` in `text` with what `replace` resolves. */
-    async function replaceAll(
-      text: string,
-      pattern: RegExp,
-      replace: (match: RegExpExecArray) => Promise<string>
-    ): Promise<string> {
-      const matches = [...text.matchAll(pattern)];
-      if (!matches.length) return text;
-      const replacements = await Promise.all(matches.map(replace));
-      let out = '';
-      let at = 0;
-      matches.forEach((match, i) => {
-        out += text.slice(at, match.index) + replacements[i];
-        at = match.index + match[0].length;
-      });
-      return out + text.slice(at);
     }
 
     const sealed = new Map<string, Promise<string>>();
