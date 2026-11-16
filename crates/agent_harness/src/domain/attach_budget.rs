@@ -122,7 +122,7 @@ impl AttachBudget {
             agent.session.id = %session,
             agent.runtime.attach_path = <&'static str>::from(path),
             agent.runtime.attach_wait_ms = tracing::field::Empty,
-            agent.runtime.attach_permit_timed_out = false,
+            agent.runtime.attach_permit_timed_out = tracing::field::Empty,
         );
         #[cfg(test)]
         self.requested.send_modify(|requested| *requested += 1);
@@ -220,9 +220,9 @@ impl AttachPermit<'_> {
         Restored: Future,
     {
         let outcome = tokio::time::timeout(self.budget.hold, restored).await.ok();
+        self.span
+            .record("agent.runtime.attach_permit_timed_out", outcome.is_none());
         if outcome.is_none() {
-            self.span
-                .record("agent.runtime.attach_permit_timed_out", true);
             tracing::warn!(parent: &self.span, "an attach held its permit past the limit; releasing it");
         }
         outcome

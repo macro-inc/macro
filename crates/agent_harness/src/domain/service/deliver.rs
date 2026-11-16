@@ -188,10 +188,6 @@ where
         dial: Option<DialTicket>,
     ) -> Result<AttachPermit<'_>> {
         let disconnected = || HarnessError::Session(AgentSessionError::Disconnected(session.id));
-        let stale = || {
-            tracing::Span::current().record("agent.runtime.reattach_stale", true);
-            disconnected()
-        };
         let harness = self
             .runtimes
             .bound_harness(session.bot_id)
@@ -202,14 +198,16 @@ where
         let Some(dial) = dial else {
             return acquire.await.map_err(|_| disconnected());
         };
-        let Some(ended) = self.current_dial(dial) else {
-            return Err(stale());
+        let permit = match self.current_dial(dial) {
+            None => None,
+            Some(ended) => tokio::select! {
+                biased;
+                () = ended.cancelled() => None,
+                permit = acquire => Some(permit),
+            },
         };
-        tokio::select! {
-            biased;
-            () = ended.cancelled() => Err(stale()),
-            permit = acquire => permit.map_err(|_| disconnected()),
-        }
+        tracing::Span::current().record("agent.runtime.reattach_stale", permit.is_none());
+        permit.ok_or_else(disconnected)?.map_err(|_| disconnected())
     }
 
     /// The cancellation of `dial` while it is this harness's current dial
@@ -244,7 +242,7 @@ where
             agent.session.id = %session_id,
             harness = %dial.harness,
             agent.session.reattached = tracing::field::Empty,
-            agent.runtime.reattach_stale = false,
+            agent.runtime.reattach_stale = tracing::field::Empty,
         )
     )]
     pub(super) async fn reattach(
