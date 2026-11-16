@@ -216,7 +216,7 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
 
 /// A session nobody watches reads its own short prompt, not the
 /// conversation's preamble and tool guidance, and no pointer to a
-/// ContentSearch it does not have; the rest of its part and its turn's
+/// history search it does not need; the rest of its part and its turn's
 /// documentation stay.
 #[test]
 fn an_unseen_turn_reads_its_own_short_prompt() {
