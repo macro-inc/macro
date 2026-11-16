@@ -340,7 +340,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// The native tools an agent session's code-mode turn gets beside
 /// `ExecuteCode`: only what a program cannot do through the Macro SDK.
 ///
-/// - `RenderCanvas`: an `ExecuteCode` result cannot carry the image it renders.
 /// - `IssueBotCredential`: its card mints the secret without the model
 ///   reading it.
 /// - `ListCompanies`: `macro.crm.searchCompanies()` has no stage or owner
@@ -352,7 +351,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
-        .add_tool::<documents::inbound::toolset::RenderCanvas, ToolDocumentToolContext>()
         .add_tool::<bots::inbound::toolset::IssueBotCredential, ToolBotToolContext>()
         .add_tool::<crm::inbound::toolset::ListCompanies, ToolCrmToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
@@ -417,6 +415,12 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         .merge(&schemas::subagent::subagent())
         .merge(&schemas::read_activity::read_activity())
         .merge(&schemas::discover_connectors::discover_connectors())
+        // Agent sessions render through `canvas.render()` in code now; saved
+        // RenderCanvas calls still need the schema whichever host keeps it.
+        .merge(
+            &AsyncToolCollection::new()
+                .add_tool::<documents::inbound::toolset::RenderCanvas, ToolDocumentToolContext>(),
+        )
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }
