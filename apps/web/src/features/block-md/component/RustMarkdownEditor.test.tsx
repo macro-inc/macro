@@ -28,6 +28,9 @@ const control = vi.hoisted(() => ({
   decorators: vi.fn(),
   bookingDispose: vi.fn(),
   bookingView: () => null,
+  resolveAppLink: vi.fn(),
+  textPaste: vi.fn(),
+  textPasteRelease: vi.fn(),
 }));
 vi.mock('@app/observability/flow', () => ({
   useFlow: () => ({
@@ -79,6 +82,15 @@ vi.mock(
     }),
   })
 );
+vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
+  useMacroMentionLinkResolver: () => control.resolveAppLink,
+}));
+vi.mock('@core/component/LexicalMarkdown/plugins/text-paste/native', () => ({
+  registerNativeTextPaste: (...args: unknown[]) => {
+    control.textPaste(...args);
+    return control.textPasteRelease;
+  },
+}));
 vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
   // The inline-ai-editing flag (RustMarkdownEditor's AI edit slot). This shell
@@ -804,6 +816,22 @@ it('registers the booking-link mention view so documents containing one open', a
   );
   rendered.unmount();
   expect(control.bookingDispose).toHaveBeenCalledOnce();
+});
+
+it('resolves pasted Macro and PR links through the app resolver until unmount', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.textPaste).toHaveBeenCalledOnce());
+  expect(control.textPaste).toHaveBeenCalledWith(
+    mounted.view,
+    control.resolveAppLink
+  );
+  expect(control.textPasteRelease).not.toHaveBeenCalled();
+  rendered.unmount();
+  expect(control.textPasteRelease).toHaveBeenCalledOnce();
 });
 
 it('reports an attach error that arrives before the async mount returns without publishing or waiting forever', async () => {

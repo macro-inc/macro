@@ -3,6 +3,7 @@ import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
 import { NodeAccessoryLayer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
@@ -87,6 +88,7 @@ import {
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
+import { registerNativeTextPaste } from '@core/component/LexicalMarkdown/plugins/text-paste/native';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
@@ -154,6 +156,7 @@ export default function RustMarkdownEditor(props: {
   const flow = useFlow();
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const userId = useUserId();
+  const resolveAppLink = useMacroMentionLinkResolver();
   const authenticated = useIsAuthenticated();
   const { commentId } = useUrlParams(URL_PARAMS);
   const owner = getOwner() ?? undefined;
@@ -176,7 +179,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
-  const bookingLinkMentionContext = createNativeBookingLinkMentionContext(theme);
+  const bookingLinkMentionContext =
+    createNativeBookingLinkMentionContext(theme);
   overlayLifecycle.add(() => bookingLinkMentionContext.dispose());
   const tagMentionContext = createNativeTagMentionContext(theme);
   overlayLifecycle.add(() => tagMentionContext.dispose());
@@ -562,6 +566,9 @@ export default function RustMarkdownEditor(props: {
             }
             setRuntime(mounted);
             bindLocationAndBlame(mounted);
+            overlayLifecycle.add(
+              registerNativeTextPaste(mounted.view, resolveAppLink)
+            );
             overlayLifecycle.add(
               registerNativeTitleHandoffKeys(mounted.view, {
                 titleEditor: () => state.editor.md.titleEditor,
