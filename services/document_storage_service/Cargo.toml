@@ -186,6 +186,7 @@ initiative = { path = "../../crates/initiative", features = ["inbound", "postgre
 jsonwebtoken = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
@@ -320,6 +321,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 bebop = { workspace = true }
 sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
 tokio-tungstenite = { workspace = true }

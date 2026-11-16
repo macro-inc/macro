@@ -162,7 +162,7 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
-- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
+- Keep the human-session-only Passwords vault endpoints, including batch import and name matching, in coverage exclusions;
   normal human-session authorization and secret disclosure are outside v1 agent capabilities.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
@@ -316,3 +316,5 @@ the existing gateway prefixes.
 - Keep LiveKit and OpenTelemetry external in the calls build so room objects and
   tracing use the consumer's runtime instances. Do not re-export calls helpers
   or their runtime types from `src/macro.ts`.
+
+- `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.

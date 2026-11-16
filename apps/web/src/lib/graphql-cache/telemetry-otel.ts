@@ -28,6 +28,12 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.errorCode !== undefined) {
           span.setAttr('cache.error_code', event.errorCode);
         }
+        if (event.errorName !== undefined) {
+          span.setAttr('cache.error_name', event.errorName);
+        }
+        if (event.errorDetail !== undefined) {
+          span.setAttr('cache.error_detail', event.errorDetail);
+        }
         if (event.resetReason !== undefined) {
           span.setAttr('cache.reset_reason', event.resetReason);
         }

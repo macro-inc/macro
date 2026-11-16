@@ -486,6 +486,9 @@ pub struct CrmTeamSettingsPatch {
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
+    /// The caller's team membership does not permit CRM access.
+    #[error("CRM access is not enabled for this team member")]
+    AccessDenied,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
@@ -507,6 +510,9 @@ pub enum CrmError {
     /// is below admin/owner.
     #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// The thread-exclusion rollout is disabled or its flag could not be loaded.
+    #[error("thread exclusions are not available")]
+    ThreadExclusionsUnavailable,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),

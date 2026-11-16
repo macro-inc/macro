@@ -1551,8 +1551,8 @@ export type PatchTeamCrmSettingsRequest = {
 };
 
 /**
- * Compatibility response for `PATCH /team/crm`. CRM records are always
- * available; this endpoint does not enroll mailboxes or backfill emails.
+ * Compatibility response for `PATCH /team/crm`. Record access follows member
+ * permissions; this endpoint does not enroll mailboxes or backfill emails.
  */
 export type PatchTeamCrmSettingsResponse = {
     /**
@@ -1574,6 +1574,20 @@ export type PatchTeamCrmSettingsResponse = {
 };
 
 /**
+ * An administrator's change to one member's CRM access.
+ */
+export type PatchTeamMemberCrmAccess = {
+    /**
+     * Whether the member may use CRM records and team-shared pipelines.
+     */
+    enabled: boolean;
+    /**
+     * The current member to update.
+     */
+    user_id: string;
+};
+
+/**
  * Request body for `PATCH /team/members/{member_user_id}/plan`.
  */
 export type PatchTeamMemberPlanRequest = {
@@ -1589,6 +1603,7 @@ export type PatchTeamMemberPlanRequest = {
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
     language?: null | Language;
+    member_crm_access?: null | PatchTeamMemberCrmAccess;
     /**
      * The new name for the team
      */
@@ -2522,6 +2537,12 @@ export type TeamRole = 'member' | 'admin' | 'owner';
  * A team with its members
  */
 export type TeamWithMembers = {
+    /**
+     * Current effective CRM access for each member, independent of mailbox consent.
+     */
+    crm_member_access: {
+        [key: string]: boolean;
+    };
     /**
      * The members of the team
      */
@@ -4470,6 +4491,7 @@ export type PatchTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type PatchTeamError = PatchTeamErrors[keyof PatchTeamErrors];
