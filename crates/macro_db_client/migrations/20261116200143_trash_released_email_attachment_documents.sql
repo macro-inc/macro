@@ -45,7 +45,9 @@ $$
         -- here and not queued. The transition table has no statistics.
         -- Without the OFFSET fence a statement releasing many links under
         -- stale statistics on "Document" hashed the whole table; fenced, the
-        -- check is a probe per id.
+        -- check is a probe per id. Rows go in id order: DO UPDATE locks the
+        -- queue rows it touches, and two statements touching them in different
+        -- orders could deadlock.
         INSERT INTO released_email_attachment_documents (document_id)
         SELECT DISTINCT released.document_id
         FROM released_links released
@@ -55,6 +57,7 @@ $$
                 WHERE d.id = released.document_id
                 OFFSET 0
             )
+        ORDER BY released.document_id
         ON CONFLICT (document_id) DO UPDATE SET released_at = EXCLUDED.released_at;
 
         IF FOUND THEN

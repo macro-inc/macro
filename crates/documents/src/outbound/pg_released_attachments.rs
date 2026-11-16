@@ -61,6 +61,12 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *transaction)
             .await?;
+        // Under the deadlock detector's 1 s, so in a lock cycle with a user's
+        // transaction the batch gives up first; its rows go back to the queue
+        // and the next round retries them.
+        sqlx::query!("SET LOCAL lock_timeout = '500ms'")
+            .execute(&mut *transaction)
+            .await?;
 
         // Every claimed row leaves the queue, whatever the batch decides. The
         // claimed ids are matched as an array so a generic plan, which cannot
