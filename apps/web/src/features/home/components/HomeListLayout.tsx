@@ -1,8 +1,4 @@
-import {
-  SearchBar,
-  useViewShell,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { SearchBar } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -42,7 +38,6 @@ export function HomeListLayout(
     footer?: JSX.Element;
   }>
 ) {
-  const shell = useViewShell();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
@@ -58,21 +53,7 @@ export function HomeListLayout(
           </>
         }
       >
-        <MobileListLayout
-          header={
-            <div class="flex min-w-0 flex-col gap-2">
-              <Show when={!shell.breakpoints.narrow?.()}>
-                <div class="flex h-10 min-w-0 items-center justify-between gap-2">
-                  <ViewSidebar.Title caret={false}>
-                    Notifications
-                  </ViewSidebar.Title>
-                  <ViewSidebar.Toggle action="collapse" />
-                </div>
-              </Show>
-              {props.tabs}
-            </div>
-          }
-        >
+        <MobileListLayout header={props.tabs}>
           {props.children}
         </MobileListLayout>
       </Show>

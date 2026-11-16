@@ -1,8 +1,4 @@
-import {
-  useViewShell,
-  ViewShell,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { useViewShell } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
@@ -141,13 +137,6 @@ function HomeViewRoot() {
                 <SplitRouter.Outlet
                   fallback={() => (
                     <Show when={isTouchDevice()} fallback={<HomeChatStart />}>
-                      <ViewShell.TopBar class="touch:flex">
-                        <ViewShell.TopBarTitle>
-                          <ViewSidebar.Title caret={false}>
-                            Notifications
-                          </ViewSidebar.Title>
-                        </ViewShell.TopBarTitle>
-                      </ViewShell.TopBar>
                       <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-ink-muted">
                         Select a notification to open it here.
                       </div>

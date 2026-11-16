@@ -1,21 +1,17 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import type { ParentProps } from 'solid-js';
 
-/** The phone conversation feed, docked beside a preview on wide touch panes. */
+/**
+ * The phone conversation feed, docked beside a preview on wide touch panes.
+ * Like the phone feed, it has no header: the feed starts below the safe area.
+ */
 export function ChannelsTouchSidebar(props: ParentProps) {
   return (
-    <ViewSidebar.Root aria-label="Chat navigation">
-      <MobileListLayout
-        header={
-          <div class="flex h-10 min-w-0 items-center justify-between gap-2">
-            <ViewSidebar.Title caret={false}>Chat</ViewSidebar.Title>
-            <ViewSidebar.Toggle action="collapse" />
-          </div>
-        }
-      >
-        {props.children}
-      </MobileListLayout>
+    <ViewSidebar.Root
+      aria-label="Chat navigation"
+      style={{ '--mobile-content-inset-top': 'var(--safe-top, 0px)' }}
+    >
+      {props.children}
     </ViewSidebar.Root>
   );
 }

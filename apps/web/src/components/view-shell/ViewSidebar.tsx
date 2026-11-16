@@ -57,6 +57,11 @@ function Header(
     'onSearchOpenChange',
     'collapseControl',
   ]);
+  const ws = useContext(ViewShellContext);
+  // A sidebar docked beside touch content is that view's list, as on a phone,
+  // which has no header; sheets and overlays keep theirs.
+  const dockedOnTouch = () =>
+    isTouchDevice() && !!ws && !ws.aside.isSheet() && !ws.aside.isOverlay();
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
@@ -72,7 +77,10 @@ function Header(
       );
   };
   return (
-    <>
+    <Show
+      when={!dockedOnTouch()}
+      fallback={<div aria-hidden="true" class="h-(--safe-top) shrink-0" />}
+    >
       <SplitHeaderContextMenu>
         <div
           {...rest}
@@ -108,7 +116,7 @@ function Header(
           {local.search?.()}
         </div>
       </Show>
-    </>
+    </Show>
   );
 }
 
