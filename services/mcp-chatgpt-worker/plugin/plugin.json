@@ -47,7 +47,7 @@
         "commerce": false
       },
       "publication": {
-        "release_notes": "Search, read, and create in your Macro workspace. Tool results show people as private tokens instead of user ids or email addresses; people_read returns a person's name and email when the user asks. Only the tools this plugin needs are offered."
+        "release_notes": "Search, read, and create in your Macro workspace. Tool results show people as private tokens instead of user ids or email addresses; people_read returns a person's name and email when the user asks. Every Macro tool is offered again, with clearer names and descriptions."
       }
     }
   }

@@ -21,8 +21,7 @@ with sample data, no MFA or email codes).
   `crates/macro_service_urls`.
 - `tools_triggered` names real tools from
   `packages/sdk-mcp/src/__snapshots__/tools.entity.json`; renaming a tool
-  there means updating the review cases here. Every tool it names must
-  also be in prod's `TOOLS` in `../wrangler.jsonc`, the set ChatGPT is offered.
+  there means updating the review cases here.
 - Icons are Macro's black-and-white mark: `assets/logo.png` is
   `apps/marketing/public/logo.png` (macro.com/logo.png); `icon.png` and
   `icon-dark.png` are that mark in black and in white on transparent.
