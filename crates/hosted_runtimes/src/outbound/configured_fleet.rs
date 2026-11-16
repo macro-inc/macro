@@ -36,6 +36,13 @@ impl FleetError for ConfiguredFleetError {
             Self::Docker(error) => error.is_missing(),
         }
     }
+
+    fn is_permanent(&self) -> bool {
+        match self {
+            Self::Incus(error) => error.is_permanent(),
+            Self::Docker(error) => error.is_permanent(),
+        }
+    }
 }
 
 impl Fleet for ConfiguredFleet {

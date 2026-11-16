@@ -1,5 +1,6 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -198,20 +199,23 @@ function SpreadsheetBlockContent(props: { share?: string }) {
               <>
                 <SplitHeaderRight>
                   <div class="order-[999] flex items-center">
-                    <ChatWithAgentButton
-                      label="Ask Macro"
-                      disabled={!store.ready()}
-                      entity={{
-                        type: 'document',
-                        id: documentId,
-                        name: name(),
-                        fileType: 'spreadsheet',
-                        blockParams: spreadsheetChatContext(
-                          store.activeSheet(),
-                          store.selection()
-                        ),
-                      }}
-                    />
+                    <HeaderActionGroup label="Spreadsheet actions">
+                      <ChatWithAgentButton
+                        grouped
+                        label="Ask Macro"
+                        disabled={!store.ready()}
+                        entity={{
+                          type: 'document',
+                          id: documentId,
+                          name: name(),
+                          fileType: 'spreadsheet',
+                          blockParams: spreadsheetChatContext(
+                            store.activeSheet(),
+                            store.selection()
+                          ),
+                        }}
+                      />
+                    </HeaderActionGroup>
                   </div>
                 </SplitHeaderRight>
                 <SpreadsheetComments documentId={documentId} store={store}>

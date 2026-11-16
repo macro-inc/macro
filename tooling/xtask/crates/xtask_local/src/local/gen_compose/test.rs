@@ -169,22 +169,24 @@ fn incus_computers_need_no_relay_sidecars() {
 }
 
 #[test]
-fn disabled_control_plane_is_explicit_only_in_the_harness() {
+fn no_fleet_leaves_the_harness_without_computer_settings() {
     let instance = Instance::derive(Some("computers-off"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Off, &instance);
     let mut services = IndexMap::from([(
         EGRESS_SERVICE.to_owned(),
         Some(dct::Service {
-            environment: kv(&[("PORT", "8080")]),
+            environment: kv(&[
+                ("PORT", "8080"),
+                ("COMPUTERS_FLEET", "docker"),
+                ("COMPUTERS_IMAGE", "macro-box:latest"),
+            ]),
             ..Default::default()
         }),
     )]);
     add_computers(&mut services, &computers).unwrap();
     let value = serde_yaml::to_value(&services).unwrap();
-    assert_eq!(
-        value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"],
-        "disabled"
-    );
+    let environment = value[EGRESS_SERVICE]["environment"].as_mapping().unwrap();
+    assert_eq!(environment.len(), 1);
     assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
 }
 

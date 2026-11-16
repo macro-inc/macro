@@ -349,7 +349,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                 style={{
                   ...bodyText,
                   color: 'var(--c1)',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 How you can help:
@@ -402,7 +402,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                     display: 'flex',
                     'font-family': "'Inter', body",
                     'font-size': '11px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     gap: '8px',
                     'letter-spacing': '0.1em',
                     'text-transform': 'uppercase',
@@ -462,7 +462,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                 display: 'inline-flex',
                 'font-family': 'body',
                 'font-size': '13px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '7px',
                 height: '30px',
                 'justify-content': 'center',

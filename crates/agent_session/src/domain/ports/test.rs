@@ -62,6 +62,7 @@ fn managed_facts(selected_channels: bool) -> BotFacts {
         owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
         owner_team_id: None,
         harness_id: None,
+        on_team_agent_computer: false,
         managed_profile: Some(super::ManagedAgentProfile {
             model: "persona-model".to_owned(),
             harness: "in-memory".to_owned(),
@@ -279,4 +280,23 @@ async fn an_unmanaged_system_bot_selects_nothing() {
         .await
         .expect_err("a system bot this deployment does not run is misconfigured");
     assert!(matches!(error, ManagedPersonaError::UnmanagedSystemBot));
+}
+
+/// An agent teammate is a member people message: not even its own team may
+/// start a session on its computer.
+#[tokio::test]
+async fn no_one_starts_a_session_on_an_agent_teammates_computer() {
+    let mut facts = external_facts(false);
+    facts.harness_id = Some(harness_id::HarnessId::TEST_A);
+    facts.on_team_agent_computer = true;
+    let directory = Directory {
+        facts,
+        team_members: Vec::new(),
+        channel_members: Vec::new(),
+    };
+
+    let error = persona_for_owner(&directory, BotId::TEST_A, &owner(OWNER))
+        .await
+        .expect_err("an agent teammate's computer runs only the agent");
+    assert!(matches!(error, ManagedPersonaError::TeamAgentComputer));
 }

@@ -54,7 +54,10 @@ vi.mock('@entity', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import {
+  useCachedChannelsByIds,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
 import {
   fetchChannelGroupIds,
   resolveReferencedChannels,
@@ -241,6 +244,30 @@ describe('channel list query selection', () => {
 });
 
 describe('channels resolved by id', () => {
+  it('compiles each by-ID batch once until its membership changes', () => {
+    useSoupAstItemsQuery.mockClear();
+    const { dispose, setIds, reads } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(
+        Array.from({ length: 500 }, (_, index) => `channel-${index}`)
+      );
+      const reads = vi.fn(ids);
+      useChannelsByIdsQuery(reads);
+      return { dispose, setIds, reads };
+    });
+    try {
+      const [args] = useSoupAstItemsQuery.mock.calls[0];
+      const initial = args();
+      for (let read = 0; read < 20; read += 1) args();
+      expect(reads).toHaveBeenCalledTimes(1);
+      setIds(['replacement']);
+      expect(args()).not.toBe(initial);
+      expect(args().params.limit).toBe(1);
+      expect(reads).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+
   const resolved = [channelEntity('design'), channelEntity('support')];
   const settled = {
     isEnabled: true,

@@ -29,7 +29,7 @@ export type ComposerContext = {
   codeSteps: boolean;
 };
 
-const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
+export const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
 const TOO_LARGE =
   'This routine is too large for AI to draft. Shorten it and try again.';
 const TIMED_OUT =
@@ -37,9 +37,9 @@ const TIMED_OUT =
 const CONNECTION_LOST =
   'Lost the connection while drafting. Check your connection and try again.';
 /** How long to wait before sending a draft again after its request went unanswered. */
-const RETRY_DELAY_MS = 1_000;
+export const RETRY_DELAY_MS = 1_000;
 
-function draftContext(context: ComposerContext): DraftContext {
+export function draftContext(context: ComposerContext): DraftContext {
   return {
     timezone: context.timezone,
     agentModel: context.defaultModel,
@@ -53,7 +53,7 @@ function draftContext(context: ComposerContext): DraftContext {
  * reports that as a network error; other browsers and the desktop app's
  * native transport as an unknown one.
  */
-function unanswered(errors: ResultError<string>[]): boolean {
+export function unanswered(errors: ResultError<string>[]): boolean {
   return (
     errors.length > 0 &&
     errors.every(
@@ -64,7 +64,7 @@ function unanswered(errors: ResultError<string>[]): boolean {
 }
 
 /** Why a draft request failed, for the dialog; `failure` when it's no known reason. */
-function requestFailure(
+export function requestFailure(
   errors: ResultError<string>[],
   failure: string
 ): string {

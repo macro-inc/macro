@@ -321,7 +321,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['shift+arrowdown', 'shift+j'],
+    hotkey: ['shift+arrowdown'],
     scopeId: options.scopeId,
     description: 'Extend selection down',
     condition: () => canHandle(options.conditions?.extendSelection),
@@ -333,7 +333,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['shift+arrowup', 'shift+k'],
+    hotkey: ['shift+arrowup'],
     scopeId: options.scopeId,
     description: 'Extend selection up',
     condition: () => canHandle(options.conditions?.extendSelection),

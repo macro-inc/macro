@@ -337,6 +337,7 @@ export async function safeFetch<
 
         if (
           contentType.includes('application/octet-stream') ||
+          contentType.startsWith('audio/') ||
           contentType.startsWith('image/') ||
           contentType.includes('text/calendar') ||
           contentType.includes('message/rfc822')
