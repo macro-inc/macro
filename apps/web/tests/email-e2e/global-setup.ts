@@ -7,6 +7,7 @@ import { rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import type { FullConfig } from '@playwright/test';
 import {
   checkStandIns,
   LocalStack,
@@ -17,9 +18,9 @@ import { currentRun, runPaths, runReports } from './ledger/paths';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
-export default async function globalSetup(): Promise<
-  (() => Promise<void>) | undefined
-> {
+export default async function globalSetup(
+  config: FullConfig
+): Promise<(() => Promise<void>) | undefined> {
   // What an earlier run recorded is not this run's evidence, and neither is
   // its report: a run that ends before it writes its own would be read with
   // the results of the one before.
@@ -52,7 +53,13 @@ export default async function globalSetup(): Promise<
   const server = spawn(binary, [], {
     stdio: ['ignore', 'pipe', 'inherit'],
     // The services it starts are built beside it.
-    env: { EMAIL_E2E_BIN_DIR: dirname(binary), ...process.env },
+    // A started stack for each worker (the server's `pool`): a test takes
+    // one and the next is started while the test runs.
+    env: {
+      EMAIL_E2E_BIN_DIR: dirname(binary),
+      EMAIL_E2E_STACK_POOL: String(config.workers),
+      ...process.env,
+    },
   });
   // Listened for from the start: the server may end before the run does,
   // and an exit that has happened is not told again.

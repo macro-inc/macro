@@ -3,11 +3,15 @@
 //! then talks to the stack's services and emulators directly.
 //!
 //! Every stack serves the GraphQL API, which the web app reads mail through.
+//! With `EMAIL_E2E_STACK_POOL` set, that many stacks are kept started ahead
+//! of the tests (`pool`).
+
+mod pool;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::extract::{DefaultBodyLimit, FromRef, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
@@ -21,8 +25,9 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};
-use crate::stack::{Stack, StackOptions};
+use crate::stack::Stack;
 use crate::user::User;
+use pool::Pool;
 
 /// One stack and the users created in it, by address.
 struct Running {
@@ -32,6 +37,20 @@ struct Running {
 }
 
 type Stacks = Arc<Mutex<HashMap<String, Arc<Mutex<Running>>>>>;
+
+/// What the routes share: the stacks tests hold, and those kept started
+/// for the tests to come.
+#[derive(Clone)]
+struct Server {
+    stacks: Stacks,
+    pool: Arc<Pool>,
+}
+
+impl FromRef<Server> for Stacks {
+    fn from_ref(server: &Server) -> Self {
+        server.stacks.clone()
+    }
+}
 
 /// The largest request: a message with attachments of some megabytes, in
 /// base64, and room for a seed of several.
@@ -55,7 +74,8 @@ impl IntoResponse for Failed {
 /// Serves the stack routes on `listener` until the process is stopped.
 ///
 /// - `POST /stacks` (`{"env": {..}}`) starts a stack and answers
-///   its id and where its services and emulators listen.
+///   its id and where its services and emulators listen. A stack without an
+///   environment of its own comes from the pool when one is ready there.
 /// - `POST /stacks/{id}/users` (`{"email": ..}`) creates a Macro user.
 /// - `POST /stacks/{id}/inboxes` (`{"user": .., "provider": "GMAIL" |
 ///   "OUTLOOK", "address": ..}`) links a mailbox and waits for its first sync.
@@ -82,6 +102,11 @@ impl IntoResponse for Failed {
 ///   panicked.
 pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
     let stacks = Stacks::default();
+    let pool = Arc::new(Pool::start(pool::size_from_env()));
+    let server = Server {
+        stacks: stacks.clone(),
+        pool: pool.clone(),
+    };
     let app = Router::new()
         .route("/stacks", post(start))
         .route("/stacks/{id}", delete(finish))
@@ -100,11 +125,15 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
         .route("/stacks/{id}/scheduled-sweep", post(scheduled_sweep))
         // Mail is delivered and seeded with its attachments in the JSON.
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
-        .with_state(stacks.clone());
+        .with_state(server);
     axum::serve(listener, app)
         .with_graceful_shutdown(stopped())
         .await
         .context("the stack server stopped")?;
+    // The router is gone, and its state with it.
+    if let Some(pool) = Arc::into_inner(pool) {
+        pool.finish().await;
+    }
     // Stacks of tests that died before finishing theirs: without this their
     // services, databases and queues would outlive the run.
     let left: Vec<_> = stacks.lock().await.drain().collect();
@@ -120,10 +149,10 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
 }
 
 async fn start(
-    State(stacks): State<Stacks>,
+    State(Server { stacks, pool }): State<Server>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, Failed> {
-    let env = body["env"]
+    let env: Vec<(String, String)> = body["env"]
         .as_object()
         .map(|env| {
             env.iter()
@@ -131,17 +160,26 @@ async fn start(
                 .collect()
         })
         .unwrap_or_default();
-    let stack = on_thread(move || async move {
-        // Two steps, so that a field added to the options later takes its
-        // default here and neither step names every field.
-        let web_app = StackOptions {
-            document_storage: true,
-            ..StackOptions::default()
-        };
-        let options = StackOptions { env, ..web_app };
-        Ok(Stack::start_with(options).await?)
+    // The pool's stacks have the services' own environment.
+    let poolable = env.is_empty();
+    let kept = if poolable { pool.take() } else { None };
+    let (stack, from_pool) = on_thread(move || async move {
+        if let Some(mut stack) = kept {
+            match stack.ensure_running() {
+                Ok(()) => return Ok((stack, true)),
+                Err(error) => {
+                    eprintln!("email_e2e: a stack died while it waited for a test: {error}");
+                    // Its failed finish says the same, with the logs.
+                    let _ = stack.finish().await;
+                }
+            }
+        }
+        Ok((Stack::start_with(pool::options(env)).await?, false))
     })
     .await?;
+    if poolable && !from_pool {
+        pool.started_outside();
+    }
 
     let id = Uuid::now_v7().simple().to_string();
     let graphql_url = stack.graphql_url().unwrap_or_default();
