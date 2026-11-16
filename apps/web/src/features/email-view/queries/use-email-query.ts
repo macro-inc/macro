@@ -64,6 +64,8 @@ type ShownEmailRows = {
   tab: EmailViewState['tab'];
   /** The query the items were built for. */
   scope: string;
+  /** The account that built the items. */
+  viewer: string | undefined;
   searching: boolean;
   /** The items belong to the query before the one now loading. */
   previous: boolean;
@@ -672,6 +674,7 @@ export function useEmailDataSource(
     (previous) => {
       const searching = search.isSearching();
       const current = scope();
+      const viewer = userId();
       const ownRows = !previous.previous && previous.scope === current;
       const waits = searching ? !searchAnswered(ownRows) : awaitsRows();
       const keepsPrevious =
@@ -679,6 +682,8 @@ export function useEmailDataSource(
         waits &&
         !ownRows &&
         previous.tab === state.tab &&
+        // Another account's rows are never shown, even dimmed.
+        previous.viewer === viewer &&
         previous.items.length > 0 &&
         (searching || previous.searching);
       if (keepsPrevious) return { ...previous, searching, previous: true };
@@ -687,11 +692,19 @@ export function useEmailDataSource(
         items: builtItems(),
         tab: state.tab,
         scope: current,
+        viewer,
         searching,
         previous: false,
       };
     },
-    { items: [], tab: state.tab, scope: '', searching: false, previous: false }
+    {
+      items: [],
+      tab: state.tab,
+      scope: '',
+      viewer: undefined,
+      searching: false,
+      previous: false,
+    }
   );
   const items = createSoupRowStore(() => shownRows().items);
   const isLoading = () => awaitsRows() && !shownRows().previous;

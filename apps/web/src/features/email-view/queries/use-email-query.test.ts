@@ -59,7 +59,13 @@ vi.mock('@queries/soup/search', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'alice' }));
+// A test can swap in a signal to change the signed-in account.
+const viewer = vi.hoisted(() => ({
+  current: (): string | undefined => 'alice',
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => viewer.current(),
+}));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
 vi.mock('./use-scheduled-email-source', () => ({
   useScheduledEmailSource: () => ({
@@ -372,6 +378,29 @@ describe('Email list query transitions', () => {
       expect(ids(root.source)).toEqual([]);
       expect(root.source.isLoading()).toBe(true);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never keeps rows from another account while a search loads', () => {
+    vi.useFakeTimers();
+    const [account, setAccount] = createSignal<string | undefined>('alice');
+    viewer.current = account;
+    try {
+      const root = mount('', true);
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      setAccount('bob');
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      viewer.current = () => 'alice';
       vi.useRealTimers();
     }
   });

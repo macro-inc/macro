@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
@@ -18,7 +19,7 @@ export function EmailRecentSearches(props: {
       <div
         id={RECENT_SEARCHES_LIST_ID}
         role="listbox"
-        aria-label="Recent searches"
+        aria-label={t('emailViews.recentSearches')}
         class="flex shrink-0 flex-col border-b border-edge-muted py-1"
       >
         <For each={props.suggestions.listed()}>
