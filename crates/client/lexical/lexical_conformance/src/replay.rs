@@ -114,6 +114,10 @@ pub struct Replayer {
     pub(crate) pending_install: Option<Commit>,
     pub(crate) pending_command: bool,
     pub(crate) microtasks: std::collections::VecDeque<Value>,
+    /// Text of ephemeral clones by handle identity: upstream's
+    /// `$cloneWithPropertiesEphemeral` results, which share their source key but never
+    /// enter the editor state.
+    pub(crate) ephemeral_text: HashMap<u64, (NodeKey, String)>,
 }
 impl Replayer {
     pub(crate) fn saved_state(&self, id: usize) -> Result<EditorState> {
@@ -961,6 +965,21 @@ impl Replayer {
         let (version, identity) = self.record_ids.identify(editor, key, record, version)?;
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"editor":editor,"type":node.type_name()}),
+        )
+    }
+    /// A handle for an ephemeral text clone of `key` holding `text`, with its own identity.
+    pub(crate) fn ephemeral_text_node(
+        &mut self,
+        view: StateRef<'_>,
+        key: NodeKey,
+        text: String,
+    ) -> Result<Value> {
+        let type_name = view.node_or_err(key)?.type_name();
+        let editor = self.record_editor.unwrap_or(self.editor_id);
+        let identity = self.record_ids.fresh()?;
+        self.ephemeral_text.insert(identity, (key, text));
+        Ok(
+            json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":self.version,"editor":editor,"type":type_name}),
         )
     }
     pub(crate) fn selection_slot(

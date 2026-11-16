@@ -10,6 +10,11 @@ pub(crate) fn call(
     a: &[Value],
 ) -> Result<Value> {
     let key = node_key(receiver)?;
+    if let Some(identity) = receiver.get("identity").and_then(Value::as_u64)
+        && r.ephemeral_text.contains_key(&identity)
+    {
+        return ephemeral_text(r, receiver, identity, key, method, a);
+    }
     if let Some(value) = super::macro_edit::call(r, tx, key, method, a)? {
         return Ok(value);
     }
@@ -649,3 +654,32 @@ fn copy_destination(value: &Value) -> Result<CopyDestination> {
 
 #[cfg(test)]
 mod test;
+
+/// The text methods an ephemeral clone answers from its own text; the editor state is
+/// never read or written.
+fn ephemeral_text(
+    r: &mut Replayer,
+    receiver: &Value,
+    identity: u64,
+    key: NodeKey,
+    method: &str,
+    a: &[Value],
+) -> Result<Value> {
+    let text = &mut r
+        .ephemeral_text
+        .get_mut(&identity)
+        .ok_or_else(|| fail("ephemeral clone"))?
+        .1;
+    match method {
+        "getKey" => Ok(key_value(key)),
+        "getTextContent" => Ok(json!(text)),
+        "getTextContentSize" => Ok(json!(text.encode_utf16().count())),
+        "setTextContent" => {
+            *text = str_arg(a, 0)?.to_owned();
+            Ok(receiver.clone())
+        }
+        _ => Err(fail(format!(
+            "unmapped ephemeral text clone method: {method}"
+        ))),
+    }
+}

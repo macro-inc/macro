@@ -80,6 +80,32 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     }
     match name {
         "@lexical/html.$generateHtmlFromNodes" => super::html::generate(r, tx, a),
+        "@lexical/selection.$sliceSelectedTextNodeContent" => {
+            let slot = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
+            let selection = tx
+                .selection_at(slot)?
+                .cloned()
+                .ok_or_else(|| fail("slice selection"))?;
+            let key = node_key(a.get(1).ok_or_else(|| fail("slice node"))?)?;
+            let snapshot = r.read_state.clone();
+            let view = snapshot
+                .as_ref()
+                .map(EditorState::view)
+                .unwrap_or(tx.view());
+            let sliced = lexical_rich_nodes::selection::slice_selected_text_node_content(
+                view, &selection, key,
+            )?;
+            // Upstream replaces the text only when the slice differs, cloning first in clone mode.
+            if sliced == view.text_content(key).as_ref() {
+                return r.node(view, key);
+            }
+            match a.get(2).and_then(Value::as_str) {
+                Some("clone") => r.ephemeral_text_node(view, key, sliced),
+                _ => Err(fail(
+                    "$sliceSelectedTextNodeContent self mode writes __text directly",
+                )),
+            }
+        }
         "lexical.$parseSerializedNode" => {
             let json = a
                 .first()

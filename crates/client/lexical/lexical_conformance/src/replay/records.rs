@@ -41,6 +41,20 @@ impl RecordIdentities {
         Ok(record)
     }
 
+    /// An identity no record owns, from the same sequence as record identities.
+    pub fn fresh(&self) -> Result<u64> {
+        let mut records = self
+            .0
+            .lock()
+            .map_err(|_| fail("record identity store poisoned"))?;
+        let identity = records.next;
+        records.next = records
+            .next
+            .checked_add(1)
+            .ok_or_else(|| fail("record identity overflow"))?;
+        Ok(identity)
+    }
+
     pub fn retain(
         &self,
         live: &std::collections::HashSet<(NodeKey, ForeignRecordIdentity)>,
