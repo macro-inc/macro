@@ -23,6 +23,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Align wide desktop group-header glyphs with the first row control; keep caret containers square and preserve each header's caret-to-content gap and value-icon slot across widths without changing padding, the 44px touch target, or the layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
 - Pin the current list group header within its scroller until the next header replaces it; retain the real virtual row, mobile chrome clearance, collapse controls, and unobscured keyboard targets.
+- Embed task rows in a host page with `scrollContainer`, `scrollStart`, and `stickyInset`; keep the host's summary and pinned heading outside virtual rows and preserve the default internal scroller elsewhere.
 - Keep desktop and tablet task rows on the shared column grid at every pane width with `ListColumnHeader` cells; use the headerless `NarrowRowGrid` layout only on phones.
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.

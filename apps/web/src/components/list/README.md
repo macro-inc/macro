@@ -74,6 +74,9 @@ The exposed scroll handle keeps keyboard targets below the destination header;
 `stickyInset` reserves persistent chrome separately from `startMargin`.
 `ListViewport.start` scrolls above the rows (a block's tutorial row) and
 becomes their `startMargin`, so list focus and sticky headers skip it.
+For a one-page host, pass `scrollContainer`, the measured `scrollStart` before
+rows, and `stickyInset` for its pinned heading. The list does not add a nested
+scroller; paging and focused-row navigation use the host viewport.
 
 ### Boundary pagination
 

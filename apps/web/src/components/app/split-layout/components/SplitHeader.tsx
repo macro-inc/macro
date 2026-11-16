@@ -46,6 +46,7 @@ import type { SplitContent } from '../layoutManager';
 import {
   projectBackFallback,
   projectLocation,
+  runProjectBack,
 } from '../project-back-navigation';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
@@ -140,6 +141,13 @@ function SplitBackButton() {
         runSplitBack({
           canGoBack,
           goBack: () => {
+            if (
+              isMobile() &&
+              projectLocation(context.handle.content())?.kind === 'detail'
+            ) {
+              runProjectBack(context.handle);
+              return;
+            }
             if (!context.handle.canGoBack()) {
               const next = fallback();
               if (next) context.handle.replace({ next, mergeHistory: true });

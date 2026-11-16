@@ -2,8 +2,8 @@ import {
   ProjectBreadcrumb,
   ProjectDetail,
 } from '@app/features/projects/project-detail';
+import { ProjectTasksProvider } from '@app/features/projects/project-tasks-provider';
 import { Projects } from '@app/features/projects/projects';
-import { ProjectTasksProvider } from '@app/features/projects/views/project-tasks-list';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   createSearchParams,

@@ -1,7 +1,7 @@
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { isRecord } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
-import type { SplitContent } from './layoutManager';
+import type { SplitContent, SplitHandle } from './layoutManager';
 
 /** Project routes share the Tasks split identity; inspect the route, not its id. */
 export function projectLocation(content: SplitContent | null) {
@@ -28,23 +28,17 @@ export function projectLocation(content: SplitContent | null) {
   return { kind: 'detail' as const, projectId, section };
 }
 
-/** Direct links still have a parent: Tasks → Overview → Projects. */
+/** A phone project is one page; direct links return to the Projects list. */
 export function projectBackFallback(
   content: SplitContent
 ): SplitContent | undefined {
   const location = projectLocation(content);
   if (location?.kind !== 'detail') return;
   const parent = { id: 'view-tasks', params: {} };
-  const route =
-    location.section === 'tasks'
-      ? paneRoute(parent, {
-          id: 'tasks-project',
-          params: { projectId: location.projectId, section: 'overview' },
-        })
-      : paneRoute(parent, {
-          id: 'tasks-projects',
-          params: { projectsTab: 'projects' },
-        });
+  const route = paneRoute(parent, {
+    id: 'tasks-projects',
+    params: { projectsTab: 'projects' },
+  });
   return {
     type: 'component',
     id: 'tasks',
@@ -55,4 +49,21 @@ export function projectBackFallback(
       }),
     },
   };
+}
+
+/** Former section entries are the same phone page, not a Back destination. */
+export function runProjectBack(
+  handle: Pick<SplitHandle, 'content' | 'goBackTo' | 'replace'>
+) {
+  const current = projectLocation(handle.content());
+  if (current?.kind !== 'detail') return;
+  const navigated = handle.goBackTo((content) => {
+    const previous = projectLocation(content);
+    return (
+      previous?.kind !== 'detail' || previous.projectId !== current.projectId
+    );
+  });
+  if (navigated) return;
+  const next = projectBackFallback(handle.content());
+  if (next) handle.replace({ next, mergeHistory: true });
 }

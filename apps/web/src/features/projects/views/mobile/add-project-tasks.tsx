@@ -15,22 +15,24 @@ export function MobileAddProjectTasks(props: AddProjectTasksViewProps) {
         when={props.inline}
         fallback={
           <FloatRegion region="accessory">
-            <div class="flex justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
-              <MobileCreateMenu
-                label="Task"
-                items={[
-                  {
-                    label: 'New task',
-                    icon: PlusIcon,
-                    onSelect: props.createTask,
-                  },
-                  {
-                    label: 'Add existing tasks',
-                    icon: ListPlusIcon,
-                    onSelect: props.openExisting,
-                  },
-                ]}
-              />
+            <div class="flex h-(--mobile-chrome-button-size) justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
+              <Show when={!props.hidden}>
+                <MobileCreateMenu
+                  label="Task"
+                  items={[
+                    {
+                      label: 'New task',
+                      icon: PlusIcon,
+                      onSelect: props.createTask,
+                    },
+                    {
+                      label: 'Add existing tasks',
+                      icon: ListPlusIcon,
+                      onSelect: props.openExisting,
+                    },
+                  ]}
+                />
+              </Show>
             </div>
           </FloatRegion>
         }

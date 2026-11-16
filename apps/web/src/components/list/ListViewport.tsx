@@ -11,6 +11,10 @@ export function ListViewport<T>(props: {
   viewportRef?: (element: HTMLDivElement) => void;
   onScroll?: () => void;
   isSticky?: (item: T) => boolean;
+  /** A host scroller can place its own summary and pinned chrome before the rows. */
+  scrollContainer?: HTMLElement;
+  scrollStart?: number;
+  stickyInset?: number;
   /** Scrolls above the rows, outside them, so list focus skips it. */
   start?: JSX.Element;
   children: (item: T) => JSX.Element;
@@ -22,9 +26,13 @@ export function ListViewport<T>(props: {
     <div
       ref={(element) => {
         setViewport(element);
-        props.viewportRef?.(element);
+        if (!props.scrollContainer) props.viewportRef?.(element);
       }}
-      class="min-h-0 flex-1 overflow-auto overscroll-none"
+      class={
+        props.scrollContainer
+          ? 'min-w-0'
+          : 'min-h-0 flex-1 overflow-auto overscroll-none'
+      }
     >
       <div ref={setStart}>{props.start}</div>
       <Suspense>
@@ -32,8 +40,9 @@ export function ListViewport<T>(props: {
           ref={props.ref}
           data={props.items}
           isSticky={props.isSticky}
-          scrollRef={viewport()}
-          startMargin={startSize.height ?? 0}
+          scrollRef={props.scrollContainer ?? viewport()}
+          startMargin={(props.scrollStart ?? 0) + (startSize.height ?? 0)}
+          stickyInset={props.stickyInset}
           bufferSize={240}
           itemSize={44}
           keepMounted={

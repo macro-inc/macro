@@ -1184,9 +1184,9 @@ set only on tasks. Setting it needs edit access to the task and the project;
 removing it needs edit access to the task. The project's Tasks tab lists the
 tasks whose Project property names the project.
 
-The project's Tasks tab starts with task search, controls, and the selected List or
-Board layout; the project title and property pills appear only on Overview.
-Use the same **Task layout** group to choose a layout. Both layouts
+On desktop and tablet, the project's Tasks tab starts with task search, controls,
+and the selected List or Board layout; the project title and property pills appear
+only on Overview. Use the same **Task layout** group to choose a layout. Both layouts
 show only tasks linked to the current project and use the same filters and editors.
 Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.sort`,
 `projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent
@@ -1196,23 +1196,17 @@ when URL parameters are absent. Use
 its Project set to this project (change or clear it like any property), and the
 create request carries it, so there is no separate assignment step. The new row
 appears once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. Desktop and tablet section tabs stay unchanged. On phone Overview,
-the header shows Back, the truncating project title, a Tasks island with the
-project's completion ring, then Details. Share stays in the title drawer and
-appears before Details in the phone Tasks header. Tap Tasks to push the project's
-Tasks view; the header caret and hardware/browser Back return to Overview.
-No floating creation button appears on phone Overview. It remains available on
-the Projects list and project Tasks view; switching sections or using Back updates
-it immediately. The empty Overview slot keeps the same floating inset, so hiding
-the action does not shift the page.
-From Overview, the same caret-only Back island returns to the previous Projects
-list, retaining its selected view and filters. Direct links also show the caret:
-it returns from Tasks to Overview, then to Projects without reopening the direct
-link. Phones have no Overview/Tasks tabs. The title island opens the standard
-actions-only drawer, without a View group. Check both sections at 390px with
-a long project name: all controls stay visible, the title truncates, and the
-ring uses the same completed/total counts as the project list. Also check
-Back, Forward, Share, Details, and opening a title action from either section.
+disabled. Desktop and tablet section tabs stay unchanged. Phones show one page:
+title and property pills, a description clamped to three lines with Show more /
+Show less, a Discussion entry, then Tasks. More opens the existing Details panel.
+The header has caret-only Back, the truncating project title, Share, and Details;
+there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
+beneath the header and shows the progress ring, completed/total count, and Filters.
+Once the summary scrolls out and tasks fill the viewport, the floating Task menu
+appears; its reserved height prevents a layout jump. Empty projects keep an inline
+Add task action. Back returns to the previous destination or Projects for a direct
+link, skipping obsolete same-project section entries. Check 390px with a long name,
+expanded description, grouped task scrolling, Back/Forward, Share, and Details.
 
 Choose `Add existing tasks` from Add task on desktop, or from the floating Task
 control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.
@@ -1225,9 +1219,9 @@ When the authorized project has no task IDs, all layouts show the centered,
 borderless tasks empty state immediately, even while a filtered layout query is
 pending. It says “No tasks yet” and “Add tasks to plan and track this project's
 work.” Editors get a filled Add task menu; everyone gets Documentation with a
-book icon, opening https://docs.macro.com/product/projects in a new tab. The phone
-floating Task control remains available. If linked tasks exist but search, filters,
-or hidden completed tasks remove them from the view, keep the filtered-empty
+book icon, opening https://docs.macro.com/product/projects in a new tab. On phones,
+use its inline Add task action while the summary is visible. If linked tasks exist
+but search, filters, or hidden completed tasks remove them from the view, keep the filtered-empty
 message instead; no project-empty illustration is shown.
 
 ### Saved project views
@@ -1258,10 +1252,16 @@ value there to remove the task from its project. `Add to project…` in the
 title's actions menu does the same. Tasks show Project even before it's set,
 and the `Add property` picker doesn't list it.
 
-Discussion at the bottom of Overview uses the new discussions system. Comments
-appear from oldest to newest, with the comment input below them. The Discussion
-heading collapses the section, and `Load earlier comments` loads older comments
-at the top. Comments, replies, and reactions stay attached to the project identity.
+Desktop Discussion at the bottom of Overview uses the shared conversations system.
+Comments appear oldest to newest, with the comment input below them. The heading
+collapses the section, and Load earlier comments adds older comments at the top.
+On phones, the newest root appears in a two-line card above a commenter avatar
+group and comment count. Empty discussions show Add a comment. Tap to open the
+full-height Discussion sheet; Add a comment also raises the keyboard. The sheet
+stays fixed while only the pinned composer rises above the keyboard and the thread
+shrinks. The send action appears with text. Closing/reopening retains the draft.
+Counts show a plus suffix while unloaded timeline pages remain. Comments, replies,
+and reactions stay attached to the project identity.
 Notification links open Overview at the relevant discussion. Existing `activity`
 URLs also open Overview and preserve the target discussion. Project history is
 not included in this discussion section.

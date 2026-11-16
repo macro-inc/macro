@@ -8,10 +8,8 @@ import {
   ProjectsProvider,
 } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
-import {
-  ProjectTaskActions,
-  ProjectTasksEmptyState,
-} from '../views/project-task-actions';
+import { ProjectTaskActions } from '../views/project-task-actions';
+import { ProjectTasksEmptyState } from '../views/shared/project-tasks-empty-state';
 
 import { CollectionFixture } from './collection-fixture';
 

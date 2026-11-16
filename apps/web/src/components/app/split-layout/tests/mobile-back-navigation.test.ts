@@ -42,6 +42,16 @@ function setup(
         options.previous === undefined
           ? projectContent('overview')
           : options.previous,
+      goBackTo: (predicate) => {
+        const previous =
+          options.previous === undefined
+            ? { type: 'component' as const, id: 'home' }
+            : options.previous;
+        if (!previous || options.rawBack === false || !predicate(previous))
+          return false;
+        routeBack();
+        return true;
+      },
       canGoBack: () => options.rawBack ?? true,
       goBack: routeBack,
       replace,
@@ -69,7 +79,7 @@ function setup(
 
 describe('native phone project Back', () => {
   it.each([true, false])(
-    'returns to Overview before closing a pane (stack available: %s)',
+    'preserves existing history before closing a pane (stack available: %s)',
     (stackBack) => {
       const test = setup({ stackBack });
       expect(test.back.canGoBack()).toBe(true);
@@ -113,8 +123,8 @@ describe('native phone project Back', () => {
   it.each([
     ['overview', 'tasks-projects', false],
     ['overview', 'tasks-projects', true],
-    ['tasks', 'tasks-project', false],
-    ['tasks', 'tasks-project', true],
+    ['tasks', 'tasks-projects', false],
+    ['tasks', 'tasks-projects', true],
   ] as const)(
     'provides a Back destination for a direct %s link (pane behind: %s)',
     (section, routeId, stackBack) => {
@@ -143,6 +153,28 @@ describe('native phone project Back', () => {
       expect(test.stackBack).not.toHaveBeenCalled();
     }
   );
+
+  it('skips an obsolete same-project section instead of returning to Overview', () => {
+    const test = setup({
+      current: projectContent('tasks'),
+      previous: projectContent('overview'),
+    });
+    test.back.goBack();
+    expect(test.routeBack).not.toHaveBeenCalled();
+    expect(test.replace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        next: expect.objectContaining({
+          entryMetadata: expect.objectContaining({
+            route: expect.objectContaining({
+              matches: expect.arrayContaining([
+                expect.objectContaining({ id: 'tasks-projects' }),
+              ]),
+            }),
+          }),
+        }),
+      })
+    );
+  });
 
   it('uses the same back operation for the caret and hardware Back', () => {
     const test = setup();

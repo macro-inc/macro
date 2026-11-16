@@ -45,8 +45,8 @@ vi.mock('../context/projects-context', () => ({
 vi.mock('../queries/project-tasks', () => ({
   createProjectTasksDataSource: () => ({}),
 }));
-vi.mock('./project-task-actions', () => ({
-  ProjectTaskActions: () => null,
+vi.mock('./project-task-actions', () => ({ ProjectTaskActions: () => null }));
+vi.mock('./shared/project-tasks-empty-state', () => ({
   ProjectTasksEmptyState: (props: { onCreateTask?: () => void }) => (
     <div data-testid="empty-project">
       <h2>No tasks yet</h2>

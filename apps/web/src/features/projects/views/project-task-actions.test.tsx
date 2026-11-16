@@ -2,10 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ProjectDetail } from '../core/project';
-import {
-  ProjectTaskActions,
-  ProjectTasksEmptyState,
-} from './project-task-actions';
+import { ProjectTaskActions } from './project-task-actions';
+import { ProjectTasksEmptyState } from './shared/project-tasks-empty-state';
 
 const mock = vi.hoisted(() => ({ assignTasks: vi.fn(), mobile: false }));
 vi.mock('@ui', async () => ({

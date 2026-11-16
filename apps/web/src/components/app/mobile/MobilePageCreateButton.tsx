@@ -137,12 +137,12 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
-  const isProjectOverview = () => {
+  const isProjectDetail = () => {
     if (!isMobile()) return false;
-    // Project sections share a view id; read the live route, including on Back.
+    // The project page owns its Task action once the list fills the viewport.
     const content = globalSplitManager()?.activeSplit()?.content() ?? null;
     const location = projectLocation(content);
-    return location?.kind === 'detail' && location.section === 'overview';
+    return location?.kind === 'detail';
   };
 
   return (
@@ -156,8 +156,8 @@ export function MobilePageCreateButton() {
           />
         }
       >
-        <Match when={isProjectOverview()}>
-          {/* Keep the floating inset stable when switching sections or going Back. */}
+        <Match when={isProjectDetail()}>
+          {/* Reserve the same chrome clearance as the page-owned Task action. */}
           <div aria-hidden="true" class="h-(--mobile-chrome-button-size)" />
         </Match>
         <Match when={foregroundView() === 'home'}>

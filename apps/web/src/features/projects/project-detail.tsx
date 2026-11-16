@@ -1,3 +1,4 @@
+import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useNavigate } from '@app/lib/split-router';
@@ -13,9 +14,11 @@ import {
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Match, Show, Suspense, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { ProjectContentSkeleton } from './components/project-skeletons';
 import {
@@ -35,6 +38,7 @@ import { useProjectShareModal } from './project-share';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { MobileProjectDetailHeader } from './views/mobile/project-detail-header';
+import { MobileProjectWorkspace } from './views/mobile/project-workspace';
 import { ProjectDetailHeader } from './views/project-detail-header';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -137,7 +141,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         initialProjectId: projectId,
         initialDueDate: options?.dueDate,
         composerContext: options?.composerContext,
-        onSuccess: () => section('tasks'),
+        onSuccess: () => {
+          if (!isMobile()) section('tasks');
+        },
       },
     });
   };
@@ -175,7 +181,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             </Match>
             <Match when={source.project()}>
               {(project) => (
-                <ProjectWorkspace
+                <Dynamic
+                  component={
+                    isMobile() ? MobileProjectWorkspace : ProjectWorkspace
+                  }
                   project={project()}
                   source={source}
                   commands={commands}
@@ -223,6 +232,22 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                       canWrite={canDiscussProject(project())}
                       targetId={props.route.discussionId}
                       targetRequestKey={props.navigationRequest}
+                      children={
+                        isMobile()
+                          ? (conversation) => (
+                              <MobileDiscussion
+                                conversation={conversation}
+                                parent={{
+                                  type: 'initiative',
+                                  id: project().id,
+                                }}
+                                canWrite={canDiscussProject(project())}
+                                targetId={props.route.discussionId}
+                                targetRequestKey={props.navigationRequest}
+                              />
+                            )
+                          : undefined
+                      }
                     />
                   }
                 />

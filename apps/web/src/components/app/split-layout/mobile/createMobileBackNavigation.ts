@@ -1,15 +1,9 @@
 import type { Accessor } from 'solid-js';
 import type { SplitHandle, SplitId } from '../layoutManager';
-import {
-  projectBackFallback,
-  projectLocation,
-} from '../project-back-navigation';
+import { projectLocation, runProjectBack } from '../project-back-navigation';
 import type { MobilePaneStack } from './createMobilePaneStack';
 
-type BackHandle = Pick<
-  SplitHandle,
-  'content' | 'canGoBack' | 'goBack' | 'replace'
->;
+type BackHandle = Pick<SplitHandle, 'content' | 'goBackTo' | 'replace'>;
 
 /** Route Back within a project before falling back to closing its native pane. */
 export function createMobileBackNavigation(options: {
@@ -39,13 +33,7 @@ export function createMobileBackNavigation(options: {
         options.stack.goBack();
         return;
       }
-      // Preserve real history first, even when another native pane is behind.
-      if (handle.canGoBack()) {
-        handle.goBack();
-        return;
-      }
-      const next = projectBackFallback(handle.content());
-      if (next) handle.replace({ next, mergeHistory: true });
+      runProjectBack(handle);
     },
   };
 }

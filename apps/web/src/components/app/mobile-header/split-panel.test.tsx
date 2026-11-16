@@ -251,7 +251,11 @@ it('mounts header contributions when chrome appears and follows its replacement 
     isLast: () => true,
     activate: () => {},
     goBack,
-    goBackTo: () => false,
+    goBackTo: () => {
+      if (!canGoBack()) return false;
+      goBack();
+      return true;
+    },
     close: () => {},
     reset: () => {},
     previousContent: () => null,

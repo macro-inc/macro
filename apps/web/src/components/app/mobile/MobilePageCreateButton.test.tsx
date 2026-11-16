@@ -155,7 +155,7 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
-  it('hides New on a phone project Overview and reacts to Tasks and Projects routes', () => {
+  it('leaves phone project creation to the page and restores the Projects action', () => {
     const projectId = '00000000-0000-4000-8000-000000000001';
     const project = (section: 'overview' | 'tasks'): SplitContent => ({
       type: 'component',
@@ -181,7 +181,7 @@ describe('mobile create availability', () => {
 
     expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
     setContent(project('tasks'));
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
     setContent(project('overview'));
     expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
     setContent({
@@ -244,6 +244,16 @@ describe('mobile create availability', () => {
         content: () => sources.content()!,
         canGoBack: () => router.canGo(pane, -1),
         goBack: () => router.navigatePane(pane, -1),
+        goBackTo: (predicate) => {
+          const result = router.goBackTo(pane, (entry) =>
+            predicate({
+              type: 'component',
+              id: 'tasks',
+              entryMetadata: entry.location,
+            })
+          );
+          return result instanceof Promise ? true : result;
+        },
         replace,
       }),
       stack: {
@@ -261,11 +271,8 @@ describe('mobile create availability', () => {
     await router.navigatePane(pane, `/tasks/projects/${projectId}/overview`);
     expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
     await router.navigatePane(pane, `/tasks/projects/${projectId}/tasks`);
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
-
-    back.goBack();
-    await router.settled();
     expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
+
     back.goBack();
     await router.settled();
     expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();

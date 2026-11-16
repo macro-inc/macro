@@ -1,9 +1,7 @@
-import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isMobile } from '@core/mobile/isMobile';
 import { Show } from 'solid-js';
-import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectDetailHeaderProps } from '../../project-detail';
 import { ProjectTitleMenu } from '../../project-title-menu';
 import { ProjectSectionTabs } from '../shared/project-section-tabs';
@@ -14,13 +12,7 @@ export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {
       <MobileHeader
         trailing={
           <>
-            <Show
-              when={
-                isMobile() &&
-                props.section === 'tasks' &&
-                props.source.project()
-              }
-            >
+            <Show when={isMobile() && props.source.project()}>
               {(project) => (
                 <MobileHeader.Island class="size-10 justify-center !px-0">
                   <ShareTrigger
@@ -48,18 +40,6 @@ export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {
                 onShare={props.onShare}
                 onDelete={props.onDelete}
               />
-              <Show when={isMobile() && props.section === 'overview'}>
-                <MobileHeader.Island class="!px-0">
-                  <button
-                    type="button"
-                    class="flex h-full items-center gap-1 px-3 text-sm font-semibold"
-                    onClick={() => props.onSectionChange('tasks')}
-                  >
-                    <ProjectProgress project={project()} tabIndex={-1} />
-                    {t('nav.tasks')}
-                  </button>
-                </MobileHeader.Island>
-              </Show>
             </>
           )}
         </Show>

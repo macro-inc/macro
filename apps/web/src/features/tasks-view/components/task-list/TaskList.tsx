@@ -93,6 +93,10 @@ export type TaskListProps = {
   referencePropertyIds?: readonly string[];
   /** Pinned above the rows, such as the main Tasks list's tutorial row. */
   listStart?: JSX.Element;
+  /** Compose rows in a host page without introducing a nested scroller. */
+  scrollContainer?: HTMLDivElement;
+  scrollStart?: number;
+  stickyInset?: number;
 };
 
 export function TaskList(props: TaskListProps) {
@@ -368,6 +372,11 @@ export function TaskList(props: TaskListProps) {
     restoredScroll = true;
   }
 
+  createEffect(() => {
+    const scroller = props.scrollContainer;
+    if (scroller) setViewport(scroller);
+  });
+
   let activeTab = state.tab;
   createEffect(() => {
     const nextTab = state.tab;
@@ -460,7 +469,11 @@ export function TaskList(props: TaskListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pb-2 pt-1 outline-none"
+        class="soup-list @container/u-list relative flex min-h-0 min-w-0 flex-col pb-2 pt-1 outline-none"
+        classList={{
+          'size-full': !props.scrollContainer,
+          'overflow-hidden': !props.scrollContainer,
+        }}
         style={{
           '--task-updated-header-width':
             timestampHeaderWidth() === undefined
@@ -468,7 +481,10 @@ export function TaskList(props: TaskListProps) {
               : `${timestampHeaderWidth()}px`,
         }}
       >
-        <div class="flex size-full min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1">
+        <div
+          class="flex min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1"
+          classList={{ 'size-full': !props.scrollContainer }}
+        >
           <ListLayoutProvider ref={grid}>
             <Show when={!isMobile()}>
               <TaskListHeader
@@ -556,6 +572,9 @@ export function TaskList(props: TaskListProps) {
                     isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
                     start={props.listStart}
+                    scrollContainer={props.scrollContainer}
+                    scrollStart={props.scrollStart}
+                    stickyInset={props.stickyInset}
                     onScroll={() => {
                       recordScrollAnchor();
                       checkNearEnd();

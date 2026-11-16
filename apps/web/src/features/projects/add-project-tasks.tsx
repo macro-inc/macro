@@ -23,6 +23,8 @@ export function AddProjectTasks(props: {
   project: ProjectDetail;
   onCreateTask?: () => void;
   inline?: boolean;
+  /** Keep the floating region's height while the host summary is visible. */
+  hidden?: boolean;
 }) {
   const commands = useProjectsContext().createCommands();
   const [state, setState] = createStore<AddState>({
@@ -179,6 +181,9 @@ export function AddProjectTasks(props: {
     get inline() {
       return Boolean(props.inline);
     },
+    get hidden() {
+      return Boolean(props.hidden);
+    },
     onOpenChange: setOpen,
     close,
     createTask,
@@ -200,6 +205,7 @@ export type AddProjectTasksViewProps = {
   mode: 'choices' | 'existing';
   canCreate: boolean;
   inline: boolean;
+  hidden: boolean;
   onOpenChange(open: boolean): void;
   close(): void;
   createTask(): void;

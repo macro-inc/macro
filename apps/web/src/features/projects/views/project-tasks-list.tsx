@@ -1,25 +1,15 @@
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
-import {
-  TasksViewProvider,
-  type TasksViewProviderProps,
-  useTasksView,
-} from '@app/features/tasks-view/tasks-view-context';
-import { type ParentProps, Show } from 'solid-js';
+import { useTasksView } from '@app/features/tasks-view/tasks-view-context';
+import { Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
-import { useProjectsContext } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
-import { createProjectTasksDataSource } from '../queries/project-tasks';
 import {
-  ProjectTaskActions,
-  ProjectTasksEmptyState,
-} from './project-task-actions';
-
-export type ProjectTasksProviderProps = ParentProps<{
-  projectId: string;
-  onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
-  onCreateTask?: TasksViewProviderProps['onCreateTask'];
-}>;
+  ProjectTasksProvider,
+  type ProjectTasksProviderProps,
+} from '../project-tasks-provider';
+import { ProjectTaskActions } from './project-task-actions';
+import { ProjectTasksEmptyState } from './shared/project-tasks-empty-state';
 
 export type ProjectTasksListProps = Omit<
   ProjectTasksProviderProps,
@@ -27,37 +17,6 @@ export type ProjectTasksListProps = Omit<
 > & {
   project: ProjectDetail;
 };
-
-/** Embeds Tasks layouts with project-scoped data, controllers, menus and editors. */
-export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
-  const context = useProjectsContext();
-  return (
-    <Show when={props.projectId} keyed>
-      {(projectId) => (
-        <TasksViewProvider
-          initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
-          restoreEntryState
-          scopeKey={`initiative:${projectId}:tasks`}
-          searchNamespace="projectTasks"
-          onOpenTask={props.onOpenTask}
-          onCreateTask={props.onCreateTask}
-          onCloseTask={() => {}}
-          hideTaskProject
-          sourceFactory={(state, options) =>
-            createProjectTasksDataSource(
-              projectId,
-              context.createProjectSource(() => projectId),
-              state,
-              options
-            )
-          }
-        >
-          {props.children}
-        </TasksViewProvider>
-      )}
-    </Show>
-  );
-}
 
 export function ProjectTasksList(props: ProjectTasksListProps) {
   return (

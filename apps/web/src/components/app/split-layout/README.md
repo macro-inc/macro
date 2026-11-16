@@ -48,14 +48,13 @@ the owner leaves without remounting the view.
 ## Native phone Back
 
 `MobileSplitContainer` shares `createMobileBackNavigation` between the header,
-Android system Back, and edge-swipe completion. Project details return to the
-previous Projects collection entry through route history, preserving its scope,
-filters, and saved view. Tasks also returns to the same project's Overview before
-closing a pane. Direct links without Back history replace the current entry with
-Overview from Tasks, or Projects from Overview. The browser phone header uses the
-same fallback. Detect project detail from route metadata, not the shared `tasks`
-component id, so the list-only rule does not hide its caret island. Other entries
-and tablets retain pane-stack navigation. Route swipes keep the current pane still
+Android system Back, and edge-swipe completion. Phone project details are one
+page: Back skips obsolete same-project Overview/Tasks entries and returns to the
+previous destination, preserving its scope, filters, and saved view. Direct links
+without another destination replace the current entry with Projects. The browser
+phone header uses the same operation. Detect project detail from route metadata,
+not the shared `tasks` component id, so the list-only rule does not hide its caret.
+Other entries and tablets retain pane-stack navigation. Route swipes keep the current pane still
 until completion because there is no second pane to reveal. Clear the swipe
 transform before route Back, even when the route changes during a pane drag.
 
