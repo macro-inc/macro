@@ -1,6 +1,7 @@
 import { TasksFilterDrawer } from '@app/features/tasks-view/components/TasksFilterDrawer';
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import { t } from '@app/lib/i18n';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Show } from 'solid-js';
 import { AddProjectTasks } from '../../add-project-tasks';
@@ -18,8 +19,29 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [summary, setSummary] = createSignal<HTMLDivElement>();
   const [heading, setHeading] = createSignal<HTMLDivElement>();
+  const [description, setDescription] = createSignal<HTMLDivElement>();
+  const viewportSize = createElementSize(scroller);
+  const descriptionSize = createElementSize(description);
   const summarySize = createElementSize(summary);
   const headingSize = createElementSize(heading);
+  const descriptionHeight = () => {
+    const viewport = viewportSize.height;
+    const summary = summarySize.height;
+    const description = descriptionSize.height;
+    const heading = headingSize.height;
+    if (!viewport || summary == null || description == null || heading == null)
+      return undefined;
+    // Remove the description from the measured summary, then reserve chrome,
+    // the Tasks heading, and 24px of the first row before choosing a line limit.
+    return (
+      viewport -
+      (summary - description) -
+      heading -
+      FloatRegions.hostHeight() -
+      16 -
+      24
+    );
+  };
   return (
     <ProjectWorkspaceLayout {...props}>
       <ProjectTasksProvider
@@ -39,7 +61,10 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               {...props}
               propertyAction={<ProjectDetailsAction />}
             >
-              <MobileProjectDescription>
+              <MobileProjectDescription
+                ref={setDescription}
+                availableHeight={descriptionHeight()}
+              >
                 {props.description}
               </MobileProjectDescription>
               {props.discussion}

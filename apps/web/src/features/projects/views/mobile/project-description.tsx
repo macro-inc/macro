@@ -10,7 +10,12 @@ import {
 import { createDescriptionClamp } from '../../primitives/create-description-clamp';
 
 /** The editor stays mounted so disclosure never drops a collaborative edit. */
-export function MobileProjectDescription(props: ParentProps) {
+export function MobileProjectDescription(
+  props: ParentProps<{
+    availableHeight?: number;
+    ref?: (element: HTMLDivElement) => void;
+  }>
+) {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const clamp = createDescriptionClamp();
   const measure = () => {
@@ -20,7 +25,10 @@ export function MobileProjectDescription(props: ParentProps) {
     const editor = current.querySelector<HTMLElement>('[role="textbox"]');
     clamp.measure(
       Math.max(current.scrollHeight, editor?.scrollHeight ?? 0),
-      lineHeight * 3
+      lineHeight,
+      props.availableHeight === undefined
+        ? undefined
+        : props.availableHeight - 24
     );
   };
   // Collaboration can change text without resizing a clamped viewport.
@@ -37,15 +45,17 @@ export function MobileProjectDescription(props: ParentProps) {
     });
     onCleanup(() => observer.disconnect());
   });
-  createEffect(() => {
-    if (!clamp.expanded()) measure();
-  });
+  createEffect(measure);
   return (
-    <div class="mb-6">
+    <div
+      ref={props.ref}
+      class="mb-6"
+      style={{ '--description-lines': clamp.lines() }}
+    >
       <div
         onFocusIn={clamp.expand}
         classList={{
-          'max-h-[3lh] overflow-hidden [&_[role=textbox]]:line-clamp-3':
+          'max-h-[calc(var(--description-lines)*1lh)] overflow-hidden [&_[role=textbox]]:line-clamp-[var(--description-lines)]':
             !clamp.expanded(),
         }}
         class="text-base leading-relaxed"
