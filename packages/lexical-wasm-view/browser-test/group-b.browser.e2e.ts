@@ -577,6 +577,92 @@ test('a mouse drag across cells keeps a native TableSelection over both cells', 
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+// A paragraph above the table, as in the app: when the TableSelection clears the
+// DOM range, Chromium re-seeds its text drag at the editable root's first caret
+// position, which is then text outside the table instead of the table wrapper.
+const paragraphAboveTableState = JSON.stringify({
+  root: {
+    ...tableDocument.root,
+    children: [
+      {
+        type: 'paragraph',
+        version: 1,
+        children: [{ type: 'text', version: 1, text: 'Hello world' }],
+      },
+      ...tableDocument.root.children,
+    ],
+  },
+});
+
+// The real-app gesture from a failing run: a caret in the paragraph above, then a press
+// mid-cell in A, 12 steps to the middle of D, release. Source selects all four cells,
+// and commits the pointerdown caret in A before its TableSelection, so a peer's caret
+// first lands in A.
+test('a mouse drag from mid-cell to the diagonal cell selects the whole rectangle', async ({
+  page,
+}) => {
+  await page.evaluate(
+    (state) => window.groupB.first.set(state),
+    paragraphAboveTableState
+  );
+  const hello = await page
+    .locator('#first p')
+    .filter({ hasText: 'Hello world' })
+    .boundingBox();
+  if (!hello) throw new Error('Missing paragraph geometry');
+  await page.mouse.click(hello.x + 20, hello.y + hello.height / 2);
+  const helloKey = await page.evaluate(
+    () =>
+      window.groupB.first.nodes().find((node) => node.text === 'Hello world')
+        ?.key ?? null
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const selection = window.groupB.first.selection();
+        return selection.kind === 'range' ? selection.anchor.key : null;
+      })
+    )
+    .toBe(helloKey);
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(3).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  const textKey = await page.evaluate(
+    () =>
+      window.groupB.first.nodes().find((node) => node.text === 'A')?.key ?? null
+  );
+  await page.evaluate(() => window.groupB.first.resetCommittedSelections());
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 12,
+  });
+  await page.mouse.up();
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(4);
+  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
+    'table'
+  );
+  const committed = await page.evaluate(() =>
+    window.groupB.first.committedSelections()
+  );
+  const firstTable = committed.findIndex(
+    (selection) => (selection as { kind: string }).kind === 'table'
+  );
+  expect(firstTable).toBeGreaterThan(0);
+  expect(
+    committed
+      .slice(0, firstTable)
+      .some(
+        (selection) =>
+          (selection as { kind: string; anchor?: { key: number } }).kind ===
+            'range' &&
+          (selection as { anchor: { key: number } }).anchor.key === textKey
+      )
+  ).toBe(true);
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
 // Coverage, not a regression proof: in this fixture Chromium does not extend
 // its text drag from a strip outside the editor, so this passes without the
 // elementsFromPoint fix. observer.test.ts pins that fix deterministically.

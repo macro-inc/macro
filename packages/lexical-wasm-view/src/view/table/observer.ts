@@ -404,10 +404,31 @@ export class TableObserver {
     // Chromium can re-anchor a cleared native text drag on the editable root
     // or on the table's scrollable wrapper between them.
     if (this.isRootCaret(dom)) return true;
-    if (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
+    // Or at the editable root's first caret position, in a block above the
+    // table, and extend from there.
+    if (
+      !this.isDocumentStartCaret(dom) &&
+      (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
+    )
       return false;
     dom.removeAllRanges();
     return true;
+  }
+  /** A collapsed caret with no text before it in the editor. */
+  private isDocumentStartCaret(dom: Selection): boolean {
+    const root = this.view.root;
+    const node = dom.anchorNode;
+    if (!dom.isCollapsed || !node || !root.contains(node)) return false;
+    const doc = root.ownerDocument;
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let first = walker.nextNode();
+    while (first && first.textContent === '') first = walker.nextNode();
+    if (!first) return true;
+    const caret = doc.createRange();
+    caret.setStart(node, dom.anchorOffset);
+    const start = doc.createRange();
+    start.setStart(first, 0);
+    return caret.compareBoundaryPoints(Range.START_TO_START, start) <= 0;
   }
   /** A collapsed caret on the root or an element that holds this table inside it. */
   private isRootCaret(dom: Selection): boolean {

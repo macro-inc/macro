@@ -67,6 +67,8 @@ function mount(id: string) {
   );
   let view: EditorView | undefined;
   let admissions = 0;
+  // The model selection after each view commit, in order.
+  const committedSelections: unknown[] = [];
   let queries = 0;
   let nodeQueries = 0;
   const query = session.query.bind(session);
@@ -123,6 +125,9 @@ function mount(id: string) {
     },
   });
   const mounted = view;
+  mounted.onCommit(() =>
+    committedSelections.push(mounted.selection().selection)
+  );
   executor.run(() =>
     session.input(SessionInputMsg.encode(emptyInput(0)), 1, 1)
   );
@@ -230,6 +235,12 @@ function mount(id: string) {
         anchorCell: anchor,
         focusCell: focus,
       });
+    },
+    committedSelections() {
+      return committedSelections;
+    },
+    resetCommittedSelections() {
+      committedSelections.length = 0;
     },
     selection() {
       return mounted.selection().selection;
