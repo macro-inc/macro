@@ -190,6 +190,9 @@ export default {
     other: 'Unmuted {{succeeded}} of {{count}} items; {{failed}} failed',
   },
   toastUnmuteFailed: 'Failed to unmute notifications',
+  toastMentionsOnly: 'Notifying you for @mentions only',
+  toastAllMessages: 'Notifying you for all messages',
+  toastNotificationLevelFailed: 'Failed to update notifications',
   toastMarkedDone: 'Marked as done',
   toastMarkedDoneCount: {
     one: 'Marked {{count}} item as done',

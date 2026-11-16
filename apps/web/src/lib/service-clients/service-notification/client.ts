@@ -302,10 +302,15 @@ export const notificationServiceClient = {
       body: JSON.stringify(body),
     });
   },
-  async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
-    const query = args.snoozed_until
-      ? `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`
-      : '';
+  async unsubscribeItem(
+    args: WithItem & { snoozed_until?: string | null; mentions_only?: boolean }
+  ) {
+    let query = '';
+    if (args.mentions_only) {
+      query = '?mentions_only=true';
+    } else if (args.snoozed_until) {
+      query = `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`;
+    }
     return notificationFetch<{}>(
       `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {

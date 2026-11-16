@@ -1333,6 +1333,17 @@ the same durations under **Mute notifications**, with a muted bell for Mute and
 an ordinary bell for Unmute. Preset end dates and times align with the menu's right
 content edge.
 
+For a channel or group chat (not a one-to-one direct message) the same submenu
+starts with **Only @mentions**, on desktop and in the phone drill-in page. It
+silences every notification from that channel, web and push, except a message
+that @mentions the viewer directly; replies in a thread they took part in,
+reactions and document mentions stay silent, and the channel shows no unread
+dot for them. The option shows a check while on, and choosing it again returns
+the channel to notifying for every message. The rail row and Home row show an
+`@` in place of the muted bell, and Settings → Notifications lists the channel
+under **Mentions only** with **Notify for all**. Mute, snooze and mentions-only
+replace each other; a snooze that expires returns the channel to all messages.
+
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove
 them. Explicit assignments remain exclusive within each scope; personal and
