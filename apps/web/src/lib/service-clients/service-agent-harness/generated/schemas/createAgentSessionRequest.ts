@@ -71,9 +71,11 @@ for the bot's own sessions. With no claim, a team bot owns the session
 itself only while non-user owners are enabled. Every other bot still
 needs an owner. */
   owner?: CreateAgentSessionRequestOwner;
-  /** First prompt to deliver once the session is running. Managed sessions
-only - an external runtime sends its own first prompt through the
-control endpoint. Omitted, the session opens idle. */
+  /** First prompt to deliver once the session is running. The managed shape
+only: a persona its operator runs gets it through the session's control
+path once its runtime opens the session, while a runtime opening its
+own (the `workspace` shape) sends its first prompt through the control
+endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
   promptActionId?: CreateAgentSessionRequestPromptActionId;
   /** Files `prompt` refers to, in the order the user attached them.

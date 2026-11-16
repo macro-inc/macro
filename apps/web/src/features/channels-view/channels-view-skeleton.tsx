@@ -5,7 +5,7 @@ import { For } from 'solid-js';
 export function ChannelsViewSkeleton() {
   return (
     <ViewSkeleton.Root asidePreferenceKey="channels">
-      <ViewSkeleton.Sidebar title="Chat" createLabel="New">
+      <ViewSkeleton.Sidebar title="Chat" createLabel="New" search>
         <div class="flex gap-1.5 px-(--sidebar-gutter) pt-2 touch:hidden">
           <For each={['All', 'Recent', 'Threads']}>
             {(tab) => <ViewSkeleton.Control control={tab} class="flex-1" />}

@@ -1,7 +1,7 @@
 import ClockIcon from '@icon/system/regular/clock.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer } from '@ui';
-import type { Accessor, JSX } from 'solid-js';
+import { type Accessor, children, type JSX, Show } from 'solid-js';
 import { RoutineStart } from '../components/routine-start';
 import type { ScheduleDraft } from '../core/draft';
 import { clampDescription } from '../core/routine-draft';
@@ -32,6 +32,8 @@ export function RoutineCreatorView(props: {
     current: Accessor<ScheduleDraft>,
     initialDescription: string | undefined
   ) => JSX.Element;
+  /** A draft under way, shown in place of the describe box and templates. */
+  drafting?: JSX.Element;
   onStart(draft: ScheduleDraft): void;
   onClose(): void;
 }) {
@@ -49,6 +51,7 @@ export function RoutineCreatorView(props: {
     );
   const startFrom = (template: RoutineTemplate) =>
     props.onStart(newRoutineDraft(template, context()));
+  const drafting = children(() => props.drafting);
   return (
     <EntityComposer.Root class="w-full h-auto max-h-[80vh]">
       <EntityComposer.Header class="items-start">
@@ -78,15 +81,22 @@ export function RoutineCreatorView(props: {
         </Button>
       </EntityComposer.Header>
       <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-2">
-        <RoutineStart
-          describe={props.renderComposer?.(drafted, blank, undefined)}
-          templates={
-            props.templatesEnabled
-              ? availableTemplates(props.catalog, props.decisionsEnabled)
-              : []
+        <Show
+          when={drafting()}
+          fallback={
+            <RoutineStart
+              describe={props.renderComposer?.(drafted, blank, undefined)}
+              templates={
+                props.templatesEnabled
+                  ? availableTemplates(props.catalog, props.decisionsEnabled)
+                  : []
+              }
+              onTemplate={startFrom}
+            />
           }
-          onTemplate={startFrom}
-        />
+        >
+          <div class="grid min-w-0 pb-4">{drafting()}</div>
+        </Show>
       </div>
     </EntityComposer.Root>
   );

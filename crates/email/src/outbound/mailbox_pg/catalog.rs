@@ -102,11 +102,12 @@ impl PgMailboxSync {
         .map_err(db_error)?;
         for folder in folders {
             sqlx::query!(r#"
-                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation)
-                VALUES ($1,$2,$3,$4,$5,$6)
+                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation,total_item_count)
+                VALUES ($1,$2,$3,$4,$5,$6,$7)
                 ON CONFLICT (link_id,provider_id) DO UPDATE SET parent_id = EXCLUDED.parent_id,
-                    display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL
-            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence)
+                    display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL,
+                    total_item_count = EXCLUDED.total_item_count
+            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence,folder.total_items.map(i64::from))
                 .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
                 r#"

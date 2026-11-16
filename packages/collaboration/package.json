@@ -41,9 +41,9 @@
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
     "typescript-native": "npm:typescript@7.0.2",
-    "vite-plugin-solid": "^2.11.8",
+    "vite-plugin-solid": "2.11.16",
     "vite-plugin-wasm": "^3.5.0",
-    "vitest": "5.0.1",
+    "vitest": "5.1.0",
     "ws": "^8.18.0"
   }
 }

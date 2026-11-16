@@ -137,13 +137,50 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
         .create_action(child_of(&parent, "child", None))
         .await
         .unwrap();
+    let appearance = EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".to_string(),
+        }),
+        color: None,
+    };
     let kept = repo
-        .create_action(child_of(&parent, "kept", Some("kept")))
+        .create_action(ScheduledAction {
+            appearance: appearance.clone(),
+            ..child_of(&parent, "kept", Some("kept"))
+        })
         .await
         .unwrap();
+    let key = SubRoutineKey::new("kept").unwrap();
+    let keyed = repo
+        .child_by_key(&parent.id.unwrap(), &key)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(keyed.appearance, appearance);
+    let children = repo.children(&parent.id.unwrap()).await.unwrap();
+    assert_eq!(
+        children
+            .iter()
+            .find(|child| child.id == kept.id)
+            .unwrap()
+            .appearance,
+        appearance
+    );
+    let active = repo.active_children(&[parent.id.unwrap()]).await.unwrap();
+    assert_eq!(
+        active
+            .iter()
+            .find(|child| child.id == kept.id)
+            .unwrap()
+            .appearance,
+        appearance
+    );
 
     let detached = repo.detach(&kept.id.unwrap()).await.unwrap().unwrap();
     assert_eq!(detached.sub_routine, None);
+    assert_eq!(detached.appearance, appearance);
+    let top_level = repo.top_level_by_ids(&[kept.id.unwrap()]).await.unwrap();
+    assert_eq!(top_level[0].appearance, appearance);
     assert_eq!(
         repo.detach(&kept.id.unwrap()).await.unwrap().map(|a| a.id),
         None

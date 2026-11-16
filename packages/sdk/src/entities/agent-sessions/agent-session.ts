@@ -19,6 +19,8 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Agent } from '../agents/agent';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import { EntityAccess } from '../sharing/access';
 import {
@@ -209,6 +211,18 @@ export type CreateManagedSessionOptions = {
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'agent_session', this);
+
+  /**
+   * Share this agent session with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * agent session; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'agent_session', this.id);
+  }
 
   /**
    * Construct an approval handle scoped to this session.

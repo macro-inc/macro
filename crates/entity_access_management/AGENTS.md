@@ -19,6 +19,9 @@ events — adding/removing an entity from a project, and moving a project.
 - Owns: propagating project-membership changes into `entity_access` rows.
 - Acquire the shared transaction guard before reading project sources or
   descendants, so propagation cannot recreate a concurrently revoked grant.
+- `move_project` calls `project_grants::refuse_filing` before it removes the
+  old grants, so a scoped agent session can't move a folder, or its contents,
+  under one whose grants would reach someone new.
 - Not here: checking access levels → `crates/entity_access`; the raw insert/
   delete helpers it calls → `crates/entity_access_db_utils`.
 

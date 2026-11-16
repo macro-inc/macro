@@ -29,7 +29,20 @@ interface PropertyRootProps
   onSave?: PropertySaveFn;
   onEdit?: PropertyEditFn;
   /** A function receives the property as shown, including a pick still saving. */
-  children?: JSX.Element | ((property: Accessor<Property>) => JSX.Element);
+  children?: JSX.Element | PropertyRenderProp;
+}
+
+type PropertyRenderProp = (property: Accessor<Property>) => JSX.Element;
+
+/**
+ * A render prop takes the property. A child component that returns `<Show>`
+ * or `<Switch>` also reads as a function, but one without parameters, and
+ * must reach the DOM as it is to stay reactive.
+ */
+function isRenderProp(
+  content: JSX.Element | PropertyRenderProp
+): content is PropertyRenderProp {
+  return typeof content === 'function' && content.length > 0;
 }
 
 /**
@@ -184,9 +197,7 @@ export function Root(props: PropertyRootProps) {
 
   const children = () => {
     const content = local.children;
-    return typeof content === 'function'
-      ? untrack(() => content(property))
-      : content;
+    return isRenderProp(content) ? untrack(() => content(property)) : content;
   };
 
   const handleOpenChange = (open: boolean) => {

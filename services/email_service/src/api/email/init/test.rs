@@ -1,4 +1,13 @@
 use super::*;
+use crate::outbound::inbox_connection::grants::has_unrecorded_google_grant;
+use email::domain::mailbox::connection::{CompletedGoogleGrant, GoogleConnectionAttempt};
+
+mod ports;
+
+fn classify_provider_init_error(error: EmailApiError) -> ConnectionError {
+    email::domain::mailbox::connection::classify_provider_init_error(error)
+}
+
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
@@ -71,7 +80,7 @@ async fn missing_email_link_is_not_unrecorded(pool: PgPool) {
 
 #[tokio::test]
 async fn no_gmail_grant_is_a_coded_400() {
-    let response = InitError::NoGmailGrant.into_response();
+    let response = InitError::from(ConnectionError::NoGmailGrant).into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_json(response).await;
     assert_eq!(body["code"], NO_GMAIL_GRANT_CODE);
@@ -79,7 +88,7 @@ async fn no_gmail_grant_is_a_coded_400() {
 
 #[tokio::test]
 async fn already_initialized_is_a_coded_400() {
-    let response = InitError::AlreadyInitialized.into_response();
+    let response = InitError::from(ConnectionError::AlreadyInitialized).into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_json(response).await;
     assert_eq!(body["code"], ALREADY_INITIALIZED_CODE);
@@ -90,7 +99,7 @@ fn unusable_provider_grants_classify_as_no_gmail_grant() {
     for error in [EmailApiError::AuthRequired, EmailApiError::Forbidden] {
         assert!(matches!(
             classify_provider_init_error(error),
-            InitError::NoGmailGrant
+            ConnectionError::NoGmailGrant
         ));
     }
 }
@@ -101,15 +110,18 @@ fn rate_limiting_classifies_as_http_429() {
         retry_after: None,
         origin: email_api_client::domain::models::RateLimitOrigin::Provider { concurrency: false },
     });
-    assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        InitError::from(error).status_code(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
 }
 
 #[test]
 fn a_rate_limited_init_tells_the_client_when_to_retry() {
-    let response = InitError::ProviderError(EmailApiError::RateLimited {
+    let response = InitError::from(ConnectionError::ProviderError(EmailApiError::RateLimited {
         retry_after: Some(std::time::Duration::from_millis(1_200)),
         origin: email_api_client::domain::models::RateLimitOrigin::Local,
-    })
+    }))
     .into_response();
 
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -124,9 +136,9 @@ fn a_rate_limited_init_tells_the_client_when_to_retry() {
 
 #[tokio::test]
 async fn provider_diagnostics_are_not_returned_to_clients() {
-    let response = InitError::ProviderError(EmailApiError::Permanent {
+    let response = InitError::from(ConnectionError::ProviderError(EmailApiError::Permanent {
         message: "sanitized provider body".to_string(),
-    })
+    }))
     .into_response();
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -136,6 +148,8 @@ async fn provider_diagnostics_are_not_returned_to_clients() {
 
 #[test]
 fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
+    use email::domain::mailbox::connection::ConnectionError as InitError;
+    let should_clean_up_in_progress_link = |error: &InitError| error.should_cleanup_attempt();
     // SharedInboxConflict is held open for the force_share retry, so its row must be kept;
     // every other terminal failure must clean up the row so it stops counting toward the
     // /link/gmail start cap. The delete itself is covered by macro_db_client's own tests.
@@ -152,7 +166,7 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
         InitError::AlreadyInitialized,
         InitError::NoGmailGrant,
         InitError::EnqueueError,
-        InitError::BadRequest("bad".to_string()),
+        InitError::InvalidUserIdentity,
         InitError::ProviderError(EmailApiError::AuthRequired),
     ] {
         assert!(
@@ -168,27 +182,67 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
 /// the request asked for decides.
 #[test]
 fn calendar_intent_follows_the_consent_request_not_the_grant() {
+    use calendar_events::domain::models::CalendarGrantIntent;
     let calendar_scopes = calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES
         .map(str::to_owned)
         .to_vec();
     let gmail_scope = "https://www.googleapis.com/auth/gmail.modify".to_owned();
-    let in_progress = |requested: Vec<String>| InProgressUserLink {
-        email_provider: "GMAIL".into(),
-        macro_user_id: Uuid::now_v7(),
-        linked_email: None,
-        requested_google_scopes: requested,
-        granted_google_scopes: [vec![gmail_scope.clone()], calendar_scopes.clone()].concat(),
+    let in_progress = |requested: Vec<String>| GoogleConnectionAttempt {
+        provider: "GMAIL".into(),
+        owner: Uuid::now_v7(),
+        email: None,
+        requested_scopes: requested,
+        granted_scopes: [vec![gmail_scope.clone()], calendar_scopes.clone()].concat(),
     };
 
     assert!(matches!(
-        CompletedGoogleGrant::from_in_progress(&in_progress(vec![gmail_scope.clone()])).intent,
+        CompletedGoogleGrant::from_attempt(&in_progress(vec![gmail_scope.clone()])).intent,
         CalendarGrantIntent::Incidental
     ));
     assert!(matches!(
-        CompletedGoogleGrant::from_in_progress(&in_progress(
+        CompletedGoogleGrant::from_attempt(&in_progress(
             [vec![gmail_scope.clone()], calendar_scopes.clone()].concat()
         ))
         .intent,
         CalendarGrantIntent::CalendarRequested
     ));
+}
+
+#[tokio::test]
+async fn typed_refusals_keep_the_legacy_payload_status_and_body() {
+    for (refusal, message) in [
+        (
+            ConnectionError::InvalidUserIdentity,
+            "invalid user identity",
+        ),
+        (
+            ConnectionError::InvalidAttemptProvider,
+            "invalid mailbox linking attempt",
+        ),
+        (
+            ConnectionError::AttemptOwnerMismatch,
+            "link_id does not belong to the requesting user",
+        ),
+        (
+            ConnectionError::AttemptAuthenticationIncomplete,
+            "link has not completed authentication yet",
+        ),
+        (
+            ConnectionError::LoginEmailUnavailable,
+            "Failed to extract email",
+        ),
+    ] {
+        let error = InitError::from(refusal);
+        assert_eq!(error.status_code(), StatusCode::BAD_REQUEST);
+        assert!(matches!(&error.kind, InitErrorKind::BadRequest(actual) if actual == message));
+        assert_eq!(format!("{error:?}"), format!("BadRequest({message:?})"));
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+            "Bad request"
+        );
+    }
 }

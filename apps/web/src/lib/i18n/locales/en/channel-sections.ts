@@ -139,6 +139,11 @@ export default {
   customOrder: 'Custom order',
   reorderFavoritesFailed: 'Could not reorder favorites. Please try again.',
   unreadOnly: 'Unread only',
+  unreadMentions: {
+    one: '{{count}} unread mention',
+    other: '{{count}} unread mentions',
+  },
+  manyUnreadMentions: { other: 'More than {{count}} unread mentions' },
   noUnreadConversations: 'No unread conversations',
   addChannels: 'Add channels',
   addChannelsTo: 'Add channels to “{{name}}”',

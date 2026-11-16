@@ -116,7 +116,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
                     updated_at AS "updated_at!", next_run_at, enabled AS "enabled!",
                     trigger_type AS "trigger_type!", event_filters,
                     configuration_revision AS "configuration_revision!", event_activated_at,
-                    trigger_config, run_visibility AS "run_visibility!", template_id,
+                    trigger_config, run_visibility AS "run_visibility!", template_id, appearance AS "appearance: _",
                     suggestion_id, description AS "description!", parent_id,
                     created_by_run_id, child_key, paused_by_parent AS "paused_by_parent!"
              FROM scheduled_action
@@ -126,7 +126,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
             (SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                     updated_at, next_run_at, enabled, trigger_type, event_filters,
                     configuration_revision, event_activated_at, trigger_config, run_visibility,
-                    template_id, suggestion_id, description, parent_id, created_by_run_id,
+                    template_id, appearance, suggestion_id, description, parent_id, created_by_run_id,
                     child_key, paused_by_parent
              FROM scheduled_action
              WHERE parent_id = $1 AND trigger_type = 'once' AND next_run_at IS NULL
@@ -156,7 +156,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE parent_id = ANY($1) AND parent_id IS NOT NULL
@@ -176,7 +176,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE id = ANY($1) AND parent_id IS NULL
@@ -198,7 +198,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE parent_id = $1 AND child_key = $2
@@ -222,7 +222,7 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
             WHERE id = $1 AND parent_id IS NOT NULL
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                       description, parent_id, created_by_run_id, child_key, paused_by_parent
             "#,
             *id,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM hosted_runtime_effect WHERE id = $1 AND worker = 'fleet' RETURNING computer_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b972cf2ab9fc805f3885084dc3a663b7c9d0968e5e8b9f26367a961be53c1073"
+}

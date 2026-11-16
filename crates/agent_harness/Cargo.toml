@@ -110,6 +110,7 @@ dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 model_user = { path = "../model_user" }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }

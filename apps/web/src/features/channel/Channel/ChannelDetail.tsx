@@ -13,7 +13,7 @@ import {
   DmWorkProvider,
   DmWorkToggle,
 } from '@app/features/agent-work/views/dm-work';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { TeamAgentDmStatusChip } from '@app/features/settings/views/team-agent-dm-status';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -23,6 +23,7 @@ import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import type { CallJoinIntent } from '@channel/Call/call-lifecycle';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
@@ -76,8 +77,8 @@ import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
-  isJoinCallRequested,
   isOpenCallTabRequested,
+  parseCallJoinIntent,
   toChannelTargetRequest,
   URL_PARAMS,
 } from './link';
@@ -164,7 +165,7 @@ export function ChannelDetailTabs(props: {
   return (
     <Tabs
       aria-label="Channel sections"
-      size="md"
+      size="sm"
       touch="inset"
       class="shrink-0"
       options={isCollapsed() ? withChannelTabIcons(tabs()) : tabs()}
@@ -182,20 +183,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
-
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.agent-status">
+          <TeamAgentDmStatusChip channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <Show when={activeTab() !== 'call'}>
         <DmWorkToggle />
       </Show>
@@ -224,17 +218,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           <DebugSuspense name="ChannelDetail.call-button">
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
-        </Show>
-        <Show when={activeTab() !== 'call' && askMacroEntity()}>
-          {(entity) => (
-            <DebugSuspense name="ChannelDetail.ask-macro">
-              <ChatWithAgentButton
-                grouped
-                entity={entity()}
-                label="Ask Macro"
-              />
-            </DebugSuspense>
-          )}
         </Show>
       </HeaderActionGroup>
       <Show when={channelType() === ChannelType.direct_message}>
@@ -395,7 +378,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
   });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
+  const [pendingJoinCall, setPendingJoinCall] = createSignal<CallJoinIntent>();
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -425,9 +408,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
           return;
         }
 
-        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+        const intent = parseCallJoinIntent(params[URL_PARAMS.joinCall]);
+        if (intent) {
           setActiveTab(getCallJoinTab());
-          setPendingJoinCall(true);
+          setPendingJoinCall(intent);
         }
       },
       goToLatest: async () => {
@@ -459,7 +443,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
             canCall={canCall}
             channelId={channelId}
             pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
+            onHandled={() => setPendingJoinCall(undefined)}
           />
         </DebugSuspense>
         <DmWorkProvider
@@ -532,7 +516,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                     <TraceFlow name="channel.call.view">
                       <ChannelCallTab
                         channelId={channelId}
-                        pendingJoin={pendingJoinCall}
+                        pendingJoin={() => !!pendingJoinCall()}
                       />
                     </TraceFlow>
                   </DebugSuspense>

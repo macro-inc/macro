@@ -9,6 +9,7 @@
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            i.appearance as "appearance",
             i.created_at::timestamptz as "created_at",
             i.updated_at::timestamptz as "updated_at",
             NULL::text as "project_id",
@@ -31,7 +32,8 @@
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
         FROM GroupedItems gi
-        INNER JOIN initiative i ON i.id::text = gi.id
+        -- Keep the indexed UUID column bare. Other Soup kinds can have legacy text ids.
+        INNER JOIN initiative i ON i.id = (CASE WHEN gi.item_type = 'initiative' THEN gi.id END)::uuid
         LEFT JOIN "UserHistory" uh
             ON uh."itemId" = i.id::text
             AND uh."itemType" = 'initiative'

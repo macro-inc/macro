@@ -4,6 +4,7 @@ mod access;
 mod events;
 mod initial_properties;
 mod reads;
+mod telemetry;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -54,6 +55,7 @@ fn share_permission() -> SharePermissionV2 {
 
 fn detail(member_ids: Vec<MacroUserIdStr<'static>>) -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: initiative_id(),
         name: "Launch".to_string(),
         owner_id: user(OWNER),
@@ -538,6 +540,7 @@ async fn get_and_list_call_the_repo() {
     repo.expect_get_basic().return_once(|_| {
         Box::pin(async {
             Ok(Some(InitiativeBasic {
+                appearance: None,
                 id: initiative_id(),
                 name: "Launch".into(),
                 owner_id: user(OWNER),
@@ -550,6 +553,7 @@ async fn get_and_list_call_the_repo() {
         Box::pin(async {
             Ok(InitiativeList {
                 initiatives: vec![InitiativeSummary {
+                    appearance: None,
                     id: initiative_id(),
                     name: "Launch".into(),
                     updated_at: now(),
