@@ -186,15 +186,60 @@ describe('retaining recent builds', () => {
         objects: [
           'app/index.html',
           'app/app-archive.zip',
-          'app/assets/cache_wasm_bg-hash.wasm',
           'app/assets/orphan-hash.js',
         ],
       },
       1
     );
 
-    // The archive is its own resource and the cache WASM has its own prune.
+    // The archive is its own resource.
     expect(deleted).toEqual(['app/assets/orphan-hash.js']);
+  });
+
+  it('keeps the cache WASM as long as a retained build refers to it', () => {
+    const { deleted } = run(
+      {
+        'bundle-manifest.json': manifest(300),
+        'index.html': '',
+        'cache.engine-worker-new.js': '',
+        'assets/cache_wasm_bg-new.wasm': '',
+        'assets/cache_wasm_bg-new.wasm.br': '',
+      },
+      {
+        records: {
+          '100': [
+            'app/cache.engine-worker-ancient.js',
+            'app/assets/cache_wasm_bg-ancient.wasm',
+          ],
+          '200': [
+            'app/cache.engine-worker-previous.js',
+            'app/assets/cache_wasm_bg-previous.wasm',
+            'app/assets/cache_wasm_bg-previous.wasm.br',
+          ],
+        },
+        objects: [
+          'app/index.html',
+          'app/cache.engine-worker-ancient.js',
+          'app/assets/cache_wasm_bg-ancient.wasm',
+          'app/cache.engine-worker-previous.js',
+          'app/assets/cache_wasm_bg-previous.wasm',
+          'app/cache.engine-worker-new.js',
+          'app/assets/cache_wasm_bg-new.wasm',
+        ],
+      },
+      2
+    );
+
+    // A retained build's engine worker and its WASM leave together, so the
+    // worker can never outlive the binary it downloads on every start.
+    expect(deleted).toEqual(
+      expect.arrayContaining([
+        'app/cache.engine-worker-ancient.js',
+        'app/assets/cache_wasm_bg-ancient.wasm',
+      ])
+    );
+    expect(deleted).not.toContain('app/assets/cache_wasm_bg-previous.wasm');
+    expect(deleted).not.toContain('app/assets/cache_wasm_bg-new.wasm');
   });
 
   it('retires records beyond the retention window with their assets', () => {

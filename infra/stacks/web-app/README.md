@@ -16,7 +16,7 @@ HTML, manifests, version files, and service-worker retirement script
               ↓
 routing Lambda with the new HTML
               ↓
-old WASM pruning → retained-build pruning
+retained-build pruning
 ```
 
 `apps/web/scripts/publish-web-assets.sh` owns the two S3 publishing phases:
@@ -33,6 +33,15 @@ The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
 response, including preview failures, uses `no-store`. Pruning waits for the
 Lambda too; a failed publication must leave the previous build reachable.
+
+`apps/web/scripts/retain-recent-builds.sh` keeps every key the last 10 builds
+published, the cache WASM included, and deletes the rest. Do not retire any
+hashed asset on another schedule: an open tab keeps running its build, and its
+engine worker downloads the cache WASM each time it starts an engine, so a
+WASM deleted before its build's JavaScript returns 403 to that tab. Missing S3
+keys return 403 because CloudFront cannot list the bucket. Previews still use
+`prune-old-brotli-from-s3.sh`, since `aws s3 sync --delete` retires their
+other assets on every deploy.
 
 The existing `sync-assets-command` and `index-html-object-metadata-command`
 resource identities are retained even though publication now copies entrypoint

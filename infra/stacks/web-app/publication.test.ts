@@ -114,6 +114,18 @@ describe('web publication resource ordering', () => {
     ).toBe(true);
   });
 
+  test('the cache WASM is retired only with the builds that fetch it', () => {
+    const creates = resources.map((resource) =>
+      String(resource.inputs.create ?? '')
+    );
+    expect(
+      creates.some((create) => create.includes('prune-old-brotli-from-s3.sh'))
+    ).toBe(false);
+    expect(
+      creates.some((create) => create.includes('retain-recent-builds.sh'))
+    ).toBe(true);
+  });
+
   test('the stable archive URL is not cached as an immutable asset', () => {
     expect(
       resources.find((resource) => resource.name === 'app-archive')?.inputs

@@ -118,15 +118,14 @@ aws "${list_args[@]}" |
 
 # Keys nothing retained refers to. `index.html` is republished every deploy so
 # it is always retained; the exclusions below are for objects this script does
-# not own - the records themselves, the archive uploaded as its own resource,
-# and the cache WASM, which `prune-old-brotli-from-s3.sh` retires on its own
-# schedule because the generic sync never uploads it.
+# not own - the records themselves and the archive uploaded as its own
+# resource. The cache WASM is uploaded separately but at the key the build
+# records, so it stays exactly as long as the engine workers that fetch it.
 while IFS= read -r key; do
   [ -n "$key" ] || continue
   case "$key" in
   "$records_prefix"/*) continue ;;
   *app-archive.zip | app-archive/*) continue ;;
-  *cache_wasm_bg*) continue ;;
   *index.html) continue ;;
   esac
   aws s3 rm "s3://$bucket/$key" >/dev/null

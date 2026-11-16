@@ -68,7 +68,6 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 // only, so their archive copy removes the sidecar before FileArchive snapshots it.
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
-const cacheWasmRetentionDays = 7;
 // How many builds of content-hashed assets stay published. A tab keeps
 // running the build it loaded until it is reloaded, and the client defers
 // that while someone is using the app, so a deploy must not be able to pull
@@ -193,18 +192,9 @@ const appRouteLambda = new aws.lambda.Function(
 
 // Prune only after every entrypoint, including Lambda-rendered HTML, has
 // published successfully. Failure must leave the preceding build reachable.
-const pruneOldCacheWasmCommand = new command.local.Command(
-  'prune-old-cache-wasm-command',
-  {
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
-    triggers: [Date.now()],
-  },
-  {
-    dependsOn: [publishEntrypointsCommand, appRouteLambda],
-    replaceOnChanges: ['*'],
-  }
-);
-
+// The cache WASM is retained by build like every other hashed asset: a
+// retained build's engine worker fetches it whenever it starts an engine.
+// Retiring it on another schedule would leave that build's cache unopenable.
 new command.local.Command(
   'retain-recent-builds-command',
   {
@@ -212,7 +202,7 @@ new command.local.Command(
     triggers: [Date.now()],
   },
   {
-    dependsOn: [pruneOldCacheWasmCommand],
+    dependsOn: [publishEntrypointsCommand, appRouteLambda],
     replaceOnChanges: ['*'],
   }
 );
