@@ -8,7 +8,6 @@ export type Bindings = {
   RESOURCE_URL?: string;
   AUTHORIZATION_SERVER_URL?: string;
   TOOL_GROUPING?: string;
-  TOOLS?: string;
   MACRO_HOSTS?: string;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
   DD_API_KEY?: string;
@@ -28,22 +27,6 @@ const CONFIG = z
     AUTHORIZATION_SERVER_URL: z.url(),
     /** `entity` tools (`documents_read`) or one tool per operation. */
     TOOL_GROUPING: z.enum(['entity', 'method']),
-    /**
-     * The tools this server offers, by name, comma-separated; unset offers
-     * every tool. ChatGPT's listing promises a few things, and OpenAI's review
-     * reads every tool offered, so each deployed env names its set.
-     */
-    TOOLS: z
-      .string()
-      .optional()
-      .transform((names) =>
-        names
-          ? names
-              .split(',')
-              .map((name) => name.trim())
-              .filter(Boolean)
-          : undefined
-      ),
     /** Local only: service hosts of a named local stack, as JSON. */
     MACRO_HOSTS: z
       .string()

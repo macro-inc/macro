@@ -38,9 +38,6 @@ own permission checks and agent attribution apply.
 
 - `TOOL_GROUPING` switches between entity tools and one tool per operation;
   both lists are snapshotted in `packages/sdk-mcp`.
-- `TOOLS` (comma-separated tool names) is what each deployed env offers:
-  the ChatGPT listing's promises, since OpenAI's review reads every tool
-  offered. Unset offers everything (local). A name no tool has fails at boot.
 - ChatGPT never sees a user id or email: every `macro|<email>` and email
   in a result becomes a person token (`person_u_…` / `person_e_…`,
   `src/person-tokens.ts`), and a token anywhere in a call's arguments turns
