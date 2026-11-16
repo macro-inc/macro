@@ -77,7 +77,7 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     .unwrap();
 
     let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
-    crate::computers::harness_service(&pool)
+    crate::computers::harness_service(pool)
         .create_hosted_pairing(CreateHostedPairing {
             team_id,
             name: "Ada".to_owned(),

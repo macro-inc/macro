@@ -19,6 +19,8 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/cognition/structured-completion"),
         ("POST", "/search"),
         ("POST", "/crm/pipelines/01a1/rows"),
+        ("POST", "/crm/previews"),
+        ("POST", "/dss/crm/previews"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
     }
@@ -36,6 +38,8 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/notes/search-and-delete"),
         ("POST", "/suggestionsx"),
         ("POST", "/web/search"),
+        ("POST", "/crm/previews/01a1"),
+        ("PUT", "/crm/previews"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }

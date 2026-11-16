@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT el.id,\n                   (el.deleting_at IS NULL AND EXISTS (\n                       SELECT 1 FROM crm_email_consent consent\n                       WHERE consent.team_id = $1\n                         AND consent.user_id = el.macro_id\n                         AND consent.link_id = el.id\n                         AND consent.enabled\n                   )) AS \"contributing!\"\n            FROM email_links el\n            JOIN team_user tu ON tu.user_id = el.macro_id\n            WHERE tu.team_id = $1 AND el.is_primary\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contributing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "ff9a034f5d6707ae8bd67d6fa99c06c677c02a86d01143acc355c3144645544e"
+}
