@@ -88,6 +88,19 @@ that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.
 
+On a phone (and any touch device) the same flag adds a search pill at the start
+of Email's pill row, before Filters. Tapping it opens Email's search page: the
+field and **Cancel** replace the pills in the header, the keyboard comes up in
+the tap, recent searches are listed while the field has focus, and the list
+below shows the results as ordinary email rows, updating as you type and
+keeping the previous rows dimmed while a new query loads. The keyboard's Search
+key drops the keyboard to show the results; the field's X clears the text and
+keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+the mailbox. Opening a result and coming back returns to the search page with
+its results. The dock's app-wide search is unchanged. Check at 390px with touch
+emulation: the pill row scrolls, so the search pill can start off screen on a
+tab far to the right.
+
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
 for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`

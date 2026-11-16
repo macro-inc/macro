@@ -12,6 +12,10 @@ the Soup-backed thread list, and saved email views (flag
   `mail.savedView` URL id, and saved-view selection.
 - `queries/email-query.ts`: each tab's or saved view's Soup `ef` filter.
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
+- `views/mobile/email-search.tsx`: the phone search page's header (field and
+  Cancel, composed with `MobileHeader`) and recent searches; the mobile layout
+  in `email-view.tsx` opens it from the search pill and keeps the list mounted
+  below it.
 - `search/`: recent searches (`recent-searches.ts`, per person in browser
   storage) and the suggestions the header's search field lists
   (`create-email-search-suggestions.ts`), behind `enable-email-wide-search`.

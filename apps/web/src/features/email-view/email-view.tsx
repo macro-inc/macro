@@ -9,9 +9,14 @@ import {
 } from '@app/features/saved-views/queries/saved-views';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import {
+  PillButton,
+  type PillTabItem,
+  PillTabs,
+} from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -21,8 +26,11 @@ import {
   enableEmailWideSearch,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { triggerFocusInput } from '@core/directive/focusInput';
+import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createEffect,
@@ -62,6 +70,7 @@ import {
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
+import { EmailMobileSearch } from './views/mobile/email-search';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -249,36 +258,103 @@ const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { state, setState, setTab, savedViewActive } = useEmailView();
+  const userId = useUserId();
+  const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
+  const suggestions = createEmailSearchSuggestions({
+    userId,
+    search: () => state.search,
+    setSearch: (query) => setState('search', query),
+  });
+  let searchInput: HTMLInputElement | undefined;
+  // A view restored with a search opens on its results.
+  const [searchOpen, setSearchOpen] = createSignal(state.search.trim() !== '');
+  const searching = () =>
+    wideSearchFlag().enabled && searchOpen() && canSearchEmailTab(state.tab);
+
+  const openSearch = () => {
+    setSearchOpen(true);
+    // iOS raises the keyboard only for a focus inside the tap, and the field
+    // mounts after it.
+    triggerFocusInput(() => searchInput);
+  };
+  const closeSearch = () => {
+    setState('search', '');
+    setSearchOpen(false);
+  };
+  useAndroidBackNavigation(() => {
+    if (!searching()) return false;
+
+    closeSearch();
+    return true;
+  });
+
+  // Recent searches sit below the header, so the list then does not reserve
+  // the header's height again.
+  const listsRecent = () => searching() && suggestions.listed().length > 0;
 
   return (
     <>
-      <SplitHeaderLeft>
-        <div class="flex h-full w-full min-w-0 flex-1 items-center">
-          <PillTabs
-            scrollable
-            class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
-            contentClass="px-(--mobile-chrome-gutter)"
-            leading={
-              <>
-                <EmailFilterDrawer />
-                <EmailSavedViewsPicker />
-              </>
-            }
-            items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
-            value={savedViewActive() ? undefined : state.tab}
-            onChange={setTab}
-          />
-        </div>
-      </SplitHeaderLeft>
+      <Show when={!searching()}>
+        <SplitHeaderLeft>
+          <div class="flex h-full w-full min-w-0 flex-1 items-center">
+            <PillTabs
+              scrollable
+              class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
+              contentClass="px-(--mobile-chrome-gutter)"
+              leading={
+                <>
+                  <Show
+                    when={
+                      wideSearchFlag().enabled && canSearchEmailTab(state.tab)
+                    }
+                  >
+                    <PillButton
+                      active={false}
+                      iconOnly
+                      aria-label={t('emailViews.searchEmail')}
+                      onClick={openSearch}
+                    >
+                      <SearchIcon class="size-5" />
+                    </PillButton>
+                  </Show>
+                  <EmailFilterDrawer />
+                  <EmailSavedViewsPicker />
+                </>
+              }
+              items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
+              value={savedViewActive() ? undefined : state.tab}
+              onChange={setTab}
+            />
+          </div>
+        </SplitHeaderLeft>
+      </Show>
       <main
-        class="size-full min-h-0 min-w-0"
+        class="flex size-full min-h-0 min-w-0 flex-col"
         style={{
           // Match Inbox: 0.5rem above the 2.5rem pills, then a 0.75rem gap.
           '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
         }}
       >
-        {props.children}
+        <Show when={searching()}>
+          <EmailMobileSearch
+            ref={(input) => {
+              searchInput = input;
+            }}
+            search={state.search}
+            setSearch={(search) => setState('search', search)}
+            suggestions={suggestions}
+            onCancel={closeSearch}
+          />
+        </Show>
+        <div
+          class="min-h-0 flex-1"
+          style={
+            listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
+          }
+        >
+          {props.children}
+        </div>
       </main>
     </>
   );
