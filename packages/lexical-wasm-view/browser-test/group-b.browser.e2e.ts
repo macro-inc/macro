@@ -549,6 +549,9 @@ test('a mouse drag across cells keeps a native TableSelection over both cells', 
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+// Coverage, not a regression proof: in this fixture Chromium does not extend
+// its text drag from a strip outside the editor, so this passes without the
+// elementsFromPoint fix. observer.test.ts pins that fix deterministically.
 test('a mouse drag across an overlay above the cell border keeps a native TableSelection', async ({
   page,
 }) => {
