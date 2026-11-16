@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     domain::service::CrmServiceImpl,
-    inbound::axum_router::{CrmRouterState, email_privacy},
+    inbound::axum_router::{CrmRouterState, email_privacy, get_company, team_settings},
     outbound::no_op_resolver::NoOpCompanyMetadataResolver,
 };
 use axum::{
@@ -64,8 +64,17 @@ impl JwtValidator for FixtureCredential {
 }
 
 async fn request(app: &Router, user: &str, body: Option<Value>) -> (StatusCode, Value) {
+    request_path(app, user, "/crm/email-privacy", body).await
+}
+
+async fn request_path(
+    app: &Router,
+    user: &str,
+    path: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let mut builder = Request::builder()
-        .uri("/crm/email-privacy")
+        .uri(path)
         .header("authorization", format!("Bearer {user}"));
     let payload = if let Some(body) = body {
         builder = builder
@@ -149,6 +158,14 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
         .route(
             "/crm/email-privacy/threads",
             get(email_privacy::excluded_threads_handler::<_, (), _, _>),
+        )
+        .route(
+            "/crm/companies/{company_id}",
+            get(get_company::handler::<_, (), _, _>),
+        )
+        .route(
+            "/crm/settings",
+            get(team_settings::get_handler::<_, (), _, _>),
         )
         .with_state(state);
     assert_eq!(
@@ -351,6 +368,94 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
     );
     assert!(!allowed(&pool, team, thread).await?);
     assert_eq!(request(&app, "owner", None).await.1["enabled"], false);
+
+    let member_link = insert_email_link(&pool, MEMBER, "member@example.com").await?;
+    let member_thread =
+        insert_interaction(&pool, member_link, "contact@example.org", Utc::now(), true).await?;
+    let record_paths = [format!("/crm/companies/{company}"), "/crm/settings".into()];
+    for path in &record_paths {
+        assert_eq!(
+            request_path(&app, "member", path, None).await.0,
+            StatusCode::OK
+        );
+    }
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = false WHERE team_id = $1 AND user_id = $2",
+        team,
+        MEMBER
+    )
+    .execute(&pool)
+    .await?;
+    for path in &record_paths {
+        assert!(matches!(
+            request_path(&app, "member", path, None).await.0,
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND
+        ));
+    }
+    let (status, settings) = request(&app, "member", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(settings["mailbox_link_id"], member_link.to_string());
+    assert_eq!(settings["enabled"], false);
+    assert_eq!(
+        request(
+            &app,
+            "member",
+            Some(json!({"action":"set_consent","enabled":true,"link_id":member_link}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert!(allowed(&pool, team, member_thread).await?);
+    for excluded in [true, false] {
+        assert_eq!(
+            request(
+                &app,
+                "member",
+                Some(json!({"action":"set_thread_exclusion","thread_id":member_thread,"excluded":excluded}))
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        assert_eq!(allowed(&pool, team, member_thread).await?, !excluded);
+        let (status, exceptions) =
+            request_path(&app, "member", "/crm/email-privacy/threads", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            exceptions["threads"].as_array().unwrap().len(),
+            usize::from(excluded)
+        );
+        if excluded {
+            assert_eq!(
+                exceptions["threads"][0]["thread_id"],
+                member_thread.to_string()
+            );
+        }
+        assert_eq!(
+            request(
+                &app,
+                "member",
+                Some(
+                    json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":excluded})
+                )
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        request(
+            &app,
+            "member",
+            Some(json!({"action":"set_consent","enabled":false,"link_id":member_link}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert!(!allowed(&pool, team, member_thread).await?);
     assert_eq!(count_contacts(&pool, company).await?, 1);
     assert!(
         fetch_company_for_domain(&pool, team, "acme.example.com")

@@ -6302,6 +6302,20 @@ export type CrmDomainResponse = {
 };
 
 /**
+ * Current authority for the authenticated viewer; contribution consent is separate.
+ */
+export type CrmMemberAccessResponse = {
+    /**
+     * Whether the viewer may access that team's CRM.
+     */
+    allowed: boolean;
+    /**
+     * The viewer's current team, if any.
+     */
+    team_id?: string | null;
+};
+
+/**
  * Minimum team role required for a CRM governance capability. Members
  * can edit visible CRM records (e.g. company properties), but the
  * governance capabilities these settings gate stay restricted to
@@ -27822,6 +27836,19 @@ export type ListCrmExcludedEmailThreadsResponses = {
 };
 
 export type ListCrmExcludedEmailThreadsResponse = ListCrmExcludedEmailThreadsResponses[keyof ListCrmExcludedEmailThreadsResponses];
+
+export type GetCrmMemberAccessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/member-access';
+};
+
+export type GetCrmMemberAccessResponses = {
+    200: CrmMemberAccessResponse;
+};
+
+export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;

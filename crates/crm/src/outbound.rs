@@ -7,6 +7,8 @@ pub mod companies_repo;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;
+#[cfg(any(feature = "outbound", feature = "search"))]
+mod member_access;
 /// Resolver stub for binaries that don't populate the CRM
 #[cfg(feature = "outbound")]
 pub mod no_op_resolver;

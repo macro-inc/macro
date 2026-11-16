@@ -76,6 +76,7 @@ dependencies = [
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "entity_access",
  "futures",
  "kafka_util",
  "macro_authorization",
@@ -6843,6 +6844,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "lexical_client",
  "lexical_mention_extractor",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -9380,6 +9382,7 @@ dependencies = [
  "activity",
  "async-graphql",
  "async-stream",
+ "axum",
  "chrono",
  "chrono-tz",
  "entity_access",
@@ -15399,6 +15402,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
+]
+
+[[package]]
+name = "password_import"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "csv",
+ "csv-core",
+ "insta",
+ "nom 8.0.0",
+ "password_import",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "url",
+ "zeroize",
+ "zip",
 ]
 
 [[package]]

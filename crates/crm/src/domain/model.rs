@@ -486,6 +486,9 @@ pub struct CrmTeamSettingsPatch {
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
+    /// The caller's team membership does not permit CRM access.
+    #[error("CRM access is not enabled for this team member")]
+    AccessDenied,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

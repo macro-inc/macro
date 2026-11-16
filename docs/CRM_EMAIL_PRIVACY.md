@@ -1,10 +1,75 @@
 # CRM email contribution
 
-CRM records and email contribution are separate permissions. Every team member
-can use company and contact records before contributing a mailbox. Existing CRM
+CRM access and email contribution are separate permissions. Existing and new
+members start with CRM access. Admins and owners can deny or restore a plain
+member through the team member-access API; admins and owners always retain access. A member
+can use company and contact records without contributing a mailbox. Existing CRM
 feature flags still control optional product surfaces such as pipelines.
 Existing record hiding remains a separate admin action; blocking email never
 hides or deletes a company or contact.
+
+## Member access
+
+Preference changes are rollout-gated by `enable-crm-member-access-changes`,
+evaluated for service context `team-crm-member-access`. It starts off: missing
+configuration, missing/disabled flags, or evaluation failure returns 503 without
+updating the team. Enable it only after every old membership-removal writer has
+drained and all access consumers are upgraded. Older removal compensation omits
+the preference and would restore the default. Existing denial enforcement never
+depends on this flag. Before rollback, disable writes and drain already-admitted
+preference changes, including those waiting for database locks. Previously denied
+memberships still require a compatibility decision before introducing older
+writers or access consumers; disabling writes does not erase them.
+
+`team_user.crm_access` defaults to true. Effective access is that flag or an
+admin/owner role. Only a current admin/owner may change it; the mutation locks
+both membership rows and rejects denying an admin/owner or self-restoration by
+a denied member. Changing this flag never changes mailbox consent or exclusions.
+A denied member can still manage their contribution consent and list, set or
+clear their own thread exceptions. The thread-exclusion rollout gate still
+applies; CRM viewing permission is not required for these contribution controls.
+
+Fresh primary-backed checks protect records, lists, batched record previews, CRM email/activity scope,
+search, references, discussion access, and the CRM-derived grant to other
+mailboxes' threads. Normal mailbox ownership and independent sharing grants
+remain valid. A team-shared pipeline no longer grants access; an individual or
+channel grant still can. Such a pipeline exposes its own fields, row values,
+and opaque company/contact references. CRM names, domains, email addresses, and
+record details resolve only with separate record access. Text copied into a
+pipeline cell remains pipeline content and may itself identify a record.
+
+`GET /crm/member-access` reads current authority without caching. Storage adds
+`x-macro-crm-access` only when a client requests the retirement signal with
+`x-macro-crm-access-signal: 1`. Requests without that opt-in perform no signal
+authentication or CRM lookup. The hint uses a per-instance, 10,000-user LRU with
+a non-sliding three-second lifetime from lookup start; concurrent requests for
+the same resident user share a lookup. Failures and cancellations are memoized
+too. A new user gets no hint when admitting it would evict an active lookup;
+completed-entry eviction can cause an earlier cache miss. The primary
+lookup runs alongside the handler, with a 200 ms lookup-future budget and a 250 ms total
+signal budget including waits, after authentication extraction. Failure, timeout, or expiration before the
+handler finishes omits the header; clients treat a missing hint as unknown.
+A changed hint triggers a fresh authority read before the client changes its
+cache policy; a memoized hint cannot restore access after a newer denied proof.
+The timeout bounds waiting for the Rust future, not PostgreSQL execution: SQLx
+connection recovery can continue after cancellation. The unchanged query remains
+a unique-key membership lookup; this adds no database statement timeout.
+
+This relaxes only the cache-retirement signal, never server authorization. A
+revocation just after a cache fill can leave an allowed hint for less than three
+seconds. The first opted-in request after expiry obtains a fresh hint or no
+hint within the signal budget; receiving it also takes the authentication time, the handler's remaining
+time, network delivery, and client retirement work. An idle or offline client
+has no finite retirement deadline. Fresh authority reads and protected requests
+still enforce revocation immediately. Settings controls and retirement of
+already-cached client content are a separate client change; this server API alone
+does not remove previously downloaded content from an older client.
+
+Notifications follow the existing snapshot policy: a revoked member keeps
+already-delivered CRM comment text and may still receive a previously queued
+notification until delivery-time permission checks are added separately.
+Opening its record always requires current access. Already copied text in
+messages, documents, or agent transcripts is not retroactively redacted.
 
 ## Consent and exclusions
 

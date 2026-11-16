@@ -13,8 +13,10 @@ v1. A small review and confirmation surface is required even without a builder.
 
 Contribution controls what a mailbox shares, not who can use CRM. Restricting
 some team members from CRM or databases is a separate authorization project.
-Today every team member can use CRM records without contributing mail. This
-proposal must not imply that selected consent provides a restricted member role.
+Members with CRM access can use records without contributing mail. Admins and
+owners can manage that access through the member-access API; client controls
+follow separately. This proposal must not imply that selected consent provides
+a restricted member role.
 
 ## Current behavior and constraints
 

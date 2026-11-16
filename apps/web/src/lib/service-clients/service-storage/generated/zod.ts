@@ -9238,6 +9238,23 @@ export const listCrmExcludedEmailThreadsResponse = zod
   );
 
 /**
+ * @summary Read fresh authority without requiring CRM access.
+ */
+export const getCrmMemberAccessResponse = zod
+  .object({
+    allowed: zod
+      .boolean()
+      .describe("Whether the viewer may access that team's CRM."),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe("The viewer's current team, if any."),
+  })
+  .describe(
+    'Current authority for the authenticated viewer; contribution consent is separate.'
+  );
+
+/**
  * @summary List the caller's live pipelines in their CRM.
  */
 export const listCrmPipelinesResponseItem = zod
