@@ -29,6 +29,15 @@ const control = vi.hoisted(() => ({
   bookingDispose: vi.fn(),
   bookingView: () => null,
   resolveAppLink: vi.fn(),
+  md: {} as Record<string, unknown>,
+  setMd: vi.fn(),
+  findAndReplace: {
+    searchIsOpen: false,
+    searchInputText: '',
+    listOffset: [],
+    styles: [],
+    currentMatch: -1,
+  },
   textPaste: vi.fn(),
   textPasteRelease: vi.fn(),
 }));
@@ -125,7 +134,17 @@ vi.mock('../context/markdown-document-context', () => ({
     permissions: { canEdit: () => control.canEdit() },
     state: {
       session: { setStatus: control.status },
-      editor: { error: () => false, setMd() {} },
+      editor: {
+        error: () => false,
+        md: control.md,
+        setMd: (key: string, value: unknown) => {
+          control.md[key] = value;
+          control.setMd(key, value);
+        },
+        findAndReplace: control.findAndReplace,
+        setFindAndReplace: vi.fn(),
+        setFindListOffset: vi.fn(),
+      },
       generation: {
         isGenerating: () => false,
         generatedAndWaiting: () => false,
@@ -753,6 +772,7 @@ function session() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const key of Object.keys(control.md)) delete control.md[key];
   control.platform = '';
   control.userAgent = '';
   control.ios = false;
@@ -832,6 +852,26 @@ it('resolves pasted Macro and PR links through the app resolver until unmount', 
   expect(control.textPasteRelease).not.toHaveBeenCalled();
   rendered.unmount();
   expect(control.textPasteRelease).toHaveBeenCalledOnce();
+});
+
+it('publishes the native find engine to the find bar until unmount', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() =>
+    expect(control.setMd).toHaveBeenCalledWith(
+      'documentFind',
+      expect.objectContaining({
+        search: expect.any(Function),
+        replaceAll: expect.any(Function),
+        replaceOnce: expect.any(Function),
+      })
+    )
+  );
+  rendered.unmount();
+  expect(control.md.documentFind).toBeUndefined();
 });
 
 it('reports an attach error that arrives before the async mount returns without publishing or waiting forever', async () => {

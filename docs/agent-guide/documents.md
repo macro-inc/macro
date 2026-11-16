@@ -2763,7 +2763,10 @@ visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and every inline mention chip (people, groups, tasks, docs, channels,
-skills, dates, tags, …) by the title shown on the chip.
+skills, dates, tags, …) by the title shown on the chip. Both editor engines,
+including the native `rust-editor-model` editor, behave the same here:
+Replace All is a single undo step, and Escape or Ctrl/Cmd+F in the focused
+field closes the bar.
 
 On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
 available actions) appears above the floating header, comment input, and bottom

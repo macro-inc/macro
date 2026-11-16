@@ -49,10 +49,10 @@ import {
   DO_SEARCH_COMMAND,
   FloatingSearchHighlight,
   findAndReplacePlugin,
-  type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
 import { createHeadingFolds } from '@core/component/LexicalMarkdown/plugins/heading-folds';
+import { createLexicalDocumentFind } from '@core/component/LexicalMarkdown/plugins/find-and-replace/documentFindEngine';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,
@@ -161,6 +161,7 @@ export function MarkdownEditor(props: {
     setError: setEditorError,
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
+    setFindListOffset: onSetListOffset,
   } = documentState.editor;
   const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
@@ -246,6 +247,7 @@ export function MarkdownEditor(props: {
   const [state, setState] = createSignal<EditorState>(editor.getEditorState());
 
   setMdStore('editor', editor);
+  setMdStore('documentFind', createLexicalDocumentFind(editor));
   setMdStore('mapping', lexicalWrapper.mapping);
   setMdStore('plugins', plugins);
 
@@ -253,13 +255,6 @@ export function MarkdownEditor(props: {
   autoRegister(editorFocusSignal(editor, setEditorFocus));
 
   const tagsMenuOperations = createMenuOperations();
-
-  const onSetListOffset = (listOffset: NodekeyOffset[]) => {
-    setFindAndReplaceStore('listOffset', listOffset);
-    if (findAndReplaceStore.currentMatch >= listOffset.length) {
-      setFindAndReplaceStore('currentMatch', 0);
-    }
-  };
 
   const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
   const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<

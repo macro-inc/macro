@@ -172,7 +172,10 @@ function pairKeysWithNonTextNodes(items: NodekeyOffset[]): Set<number> {
   return skip;
 }
 
-function areListOffsetsEqual(left: NodekeyOffset[], right: NodekeyOffset[]) {
+export function areListOffsetsEqual(
+  left: NodekeyOffset[],
+  right: NodekeyOffset[]
+) {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i += 1) {
     const leftItem = left[i];

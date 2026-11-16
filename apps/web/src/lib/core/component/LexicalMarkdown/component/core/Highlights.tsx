@@ -293,18 +293,26 @@ export function HighlightLayer(props: {
   );
   return (
     <Show when={editorRootParent()}>
-      {(parent) => (
-        <Portal mount={parent()}>
-          <div
-            class="__highlight-layer absolute top-0 left-0 opacity-35"
-            ref={props.ref}
-            style={{
-              'z-index': MarkdownStackingContext.Highlights,
-            }}
-          />
-        </Portal>
-      )}
+      {(parent) => <HighlightLayerMount parent={parent()} ref={props.ref} />}
     </Show>
+  );
+}
+
+/** The highlight layer portaled into an editor root's parent, for either engine. */
+export function HighlightLayerMount(props: {
+  parent: HTMLElement;
+  ref: (el: HTMLElement) => void;
+}) {
+  return (
+    <Portal mount={props.parent}>
+      <div
+        class="__highlight-layer absolute top-0 left-0 opacity-35"
+        ref={props.ref}
+        style={{
+          'z-index': MarkdownStackingContext.Highlights,
+        }}
+      />
+    </Portal>
   );
 }
 

@@ -4,6 +4,7 @@ import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { HighlightLayerMount } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
 import { NodeAccessoryLayer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
@@ -79,6 +80,9 @@ import {
   type NativeCodeAccessories,
 } from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
 import { installNativeCodeChrome } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
+import { FloatingSearchHighlight } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import { createNativeDocumentFind } from '@core/component/LexicalMarkdown/plugins/find-and-replace/native';
+import { NativeSearchHighlight } from '@core/component/LexicalMarkdown/plugins/find-and-replace/nativeSearchHighlight';
 import {
   type PersistentLocation,
   parsePersistentLocation,
@@ -283,6 +287,16 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => diffInsertContext.dispose());
   const [codeAccessories, setCodeAccessories] =
     createSignal<NativeCodeAccessories>();
+  const findAndReplace = state.editor.findAndReplace;
+  const documentFind = createNativeDocumentFind({
+    getListOffset: () => findAndReplace.listOffset,
+    setListOffset: state.editor.setFindListOffset,
+    refreshQuery: () =>
+      findAndReplace.searchIsOpen && findAndReplace.searchInputText
+        ? findAndReplace.searchInputText
+        : undefined,
+  });
+  const [highlightLayer, setHighlightLayer] = createSignal<HTMLElement>();
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -321,6 +335,8 @@ export default function RustMarkdownEditor(props: {
       overlayLifecycle.dispose();
     } finally {
       state.session.setStatus(undefined);
+      if (state.editor.md.documentFind === documentFind.engine)
+        state.editor.setMd('documentFind', undefined);
       rejectReady?.(new Error('Editor open cancelled'));
       releaseCommit?.();
       releaseEmpty?.();
@@ -421,7 +437,11 @@ export default function RustMarkdownEditor(props: {
                 provider: codeTokens.createNativeCodeTokenProvider(),
                 profile: codeTokens.NATIVE_CODE_TOKEN_PROFILE,
               },
-              latestPublished: [formatting.observer, checklist.observer],
+              latestPublished: [
+                formatting.observer,
+                checklist.observer,
+                documentFind.observer,
+              ],
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry(), {
                   svgPreview: ENABLE_SVG_PREVIEW,
@@ -588,6 +608,7 @@ export default function RustMarkdownEditor(props: {
                 codeHighlighting: mounted.codeHighlighting,
               })
             );
+            state.editor.setMd('documentFind', documentFind.engine);
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
@@ -768,6 +789,38 @@ export default function RustMarkdownEditor(props: {
                 parent={parent()}
                 store={accessories().store}
               />
+            )}
+          </Show>
+        )}
+      </Show>
+      <Show when={documentFind.view()?.root.parentElement}>
+        {(parent) => (
+          <HighlightLayerMount parent={parent()} ref={setHighlightLayer} />
+        )}
+      </Show>
+      <Show when={findAndReplace.searchIsOpen && documentFind.view()}>
+        {(view) => (
+          <Show when={highlightLayer()}>
+            {(anchor) => (
+              <>
+                <NativeSearchHighlight
+                  view={view()}
+                  anchorElem={anchor()}
+                  listOffset={findAndReplace.listOffset}
+                  contentRevision={documentFind.contentRevision()}
+                  onStylesChange={(styles) =>
+                    state.editor.setFindAndReplace('styles', styles)
+                  }
+                  onMatchesChange={(matches) =>
+                    state.editor.setFindAndReplace('matches', matches)
+                  }
+                />
+                <FloatingSearchHighlight
+                  anchorElem={anchor()}
+                  styles={findAndReplace.styles}
+                  currentMatch={findAndReplace.currentMatch}
+                />
+              </>
             )}
           </Show>
         )}
