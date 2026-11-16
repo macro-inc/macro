@@ -183,7 +183,10 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> Result<Edi
             "autolink" => builder.node::<lexical_rich_nodes::link::AutoLinkNode>(),
             "list" => builder.node::<lexical_rich_nodes::list::ListNode>(),
             "listitem" => builder.node::<lexical_rich_nodes::list::ListItemNode>(),
-            "table" => builder.node::<lexical_rich_nodes::table::TableNode>(),
+            // TableSelection methods belong to the table package, not its plugin.
+            "table" => builder
+                .node::<lexical_rich_nodes::table::TableNode>()
+                .table_selection_hooks(lexical_rich_nodes::table::TableSelectionHooksImpl),
             "tablerow" => builder.node::<lexical_rich_nodes::table::TableRowNode>(),
             "tablecell" => builder.node::<lexical_rich_nodes::table::TableCellNode>(),
             "heading" => builder.node::<lexical_rich_nodes::heading::HeadingNode>(),

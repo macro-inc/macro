@@ -1007,11 +1007,7 @@ impl Replayer {
         let Some(selection) = tx.selection_at(slot)? else {
             return Ok(Value::Null);
         };
-        let kind = if selection.is_range() {
-            "range"
-        } else {
-            "node"
-        };
+        let kind = selection_kind(selection);
         let id = match self.selections.find(&identity)? {
             Some(id) => {
                 self.selections.set_slot(id, slot)?;
@@ -1029,6 +1025,11 @@ impl Replayer {
         }
         Ok(json!({"$selection":id,"kind":kind}))
     }
+}
+/// Recorded handle kind: the recorder classifies selections with anchor/focus
+/// points, including table selections, as "range".
+pub(crate) fn selection_kind(selection: &Selection) -> &'static str {
+    if selection.is_node() { "node" } else { "range" }
 }
 pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
     Ok(NodeKey::from_parts(KeyParts {

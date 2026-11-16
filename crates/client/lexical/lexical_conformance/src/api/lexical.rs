@@ -349,6 +349,85 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 .key();
             r.node(tx.view(), key)
         }
+        "@lexical/table.$computeTableMapSkipCellCheck" => {
+            use lexical_rich_nodes::table::{TableCellNode, TableMapValue, TableNode};
+            let table = view
+                .cast::<TableNode>(node_key(a.first().ok_or_else(|| fail("table node"))?)?)
+                .ok_or_else(|| fail("table node"))?;
+            let cell = |value: Option<&Value>| -> Result<Option<Id<TableCellNode>>> {
+                value
+                    .filter(|value| value.get("$node").is_some())
+                    .map(|value| {
+                        view.cast::<TableCellNode>(node_key(value)?)
+                            .ok_or_else(|| fail("table cell node"))
+                    })
+                    .transpose()
+            };
+            let (map, first, second) =
+                lexical_rich_nodes::table::compute_table_map_skip_cell_check(
+                    view,
+                    table,
+                    cell(a.get(1))?,
+                    cell(a.get(2))?,
+                )?;
+            let mut encode = |value: &TableMapValue| -> Result<Value> {
+                Ok(json!({
+                    "cell": r.node(view, value.cell.key())?,
+                    "startColumn": value.start_column,
+                    "startRow": value.start_row,
+                }))
+            };
+            let mut rows = Vec::with_capacity(map.rows.len());
+            for row in &map.rows {
+                let slots = row
+                    .iter()
+                    .map(|slot| slot.as_ref().map_or_else(|| Ok(undefined()), &mut encode))
+                    .collect::<Result<Vec<_>>>()?;
+                rows.push(Value::Array(slots));
+            }
+            let first = first.as_ref().map(&mut encode).transpose()?;
+            let second = second.as_ref().map(&mut encode).transpose()?;
+            Ok(json!([rows, first, second]))
+        }
+        "@lexical/table.$createTableSelectionFrom" => {
+            use lexical_rich_nodes::table::{TableCellNode, TableNode};
+            let table = tx
+                .cast::<TableNode>(node_key(a.first().ok_or_else(|| fail("table node"))?)?)
+                .ok_or_else(|| fail("table node"))?;
+            let cell = |index: usize| -> Result<Id<TableCellNode>> {
+                tx.cast::<TableCellNode>(node_key(
+                    a.get(index).ok_or_else(|| fail("table cell node"))?,
+                )?)
+                .ok_or_else(|| fail("table cell node"))
+            };
+            let (anchor, focus) = (cell(1)?, cell(2)?);
+            let selection =
+                lexical_rich_nodes::table::create_table_selection_from(tx, table, anchor, focus)?;
+            super::selection::detached(r, tx, Selection::Table(selection))
+        }
+        "@lexical/table.$deleteTableRowAtSelection" => {
+            lexical_rich_nodes::table::delete_table_row_at_selection(tx)?;
+            Ok(undefined())
+        }
+        "@lexical/selection.$patchStyleText" => {
+            use lexical_rich_nodes::selection::{StylePatch, StylePatchValue};
+            let slot = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
+            let patch = a
+                .get(1)
+                .and_then(Value::as_object)
+                .ok_or_else(|| fail("style patch must be an object"))?
+                .iter()
+                .map(|(property, value)| match value {
+                    Value::String(value) => {
+                        Ok((property.clone(), StylePatchValue::Set(value.clone())))
+                    }
+                    Value::Null => Ok((property.clone(), StylePatchValue::Remove)),
+                    _ => Err(fail(format!("unmapped style patch value: {value}"))),
+                })
+                .collect::<Result<StylePatch>>()?;
+            lexical_rich_nodes::selection::patch_style_text(tx, slot, &patch)?;
+            Ok(undefined())
+        }
         "@lexical/list.$createListNode" => {
             let kind = match a.first().and_then(Value::as_str).unwrap_or("number") {
                 "number" | "ol" => lexical_rich_nodes::list::ListType::Number,
@@ -456,14 +535,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             } else {
                 Selection::Node(NodeSelection::new())
             };
-            let slot = tx.detach_selection(selection);
-            let identity = tx
-                .foreign_selection_identity(slot)
-                .ok_or_else(|| fail("selection identity"))?;
-            let id = r.selections.push(slot, identity)?;
-            Ok(
-                json!({"$selection":id,"kind":if short == "$createRangeSelection" {"range"} else {"node"}}),
-            )
+            super::selection::detached(r, tx, selection)
         }
         "lexical.$setSelection" => {
             super::selection::activate(
@@ -473,26 +545,24 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             )?;
             Ok(undefined())
         }
-        "lexical.$isRangeSelection" => Ok(json!(
-            a.first()
-                .and_then(|v| v.get("$selection"))
-                .and_then(Value::as_u64)
-                .map(|id| r.selections.resolve(tx, id as usize))
-                .transpose()?
-                .flatten()
-                .and_then(|slot| tx.selection_at(slot).ok().flatten())
-                .is_some_and(Selection::is_range)
-        )),
-        "lexical.$isNodeSelection" => Ok(json!(
-            a.first()
-                .and_then(|v| v.get("$selection"))
-                .and_then(Value::as_u64)
-                .map(|id| r.selections.resolve(tx, id as usize))
-                .transpose()?
-                .flatten()
-                .and_then(|slot| tx.selection_at(slot).ok().flatten())
-                .is_some_and(Selection::is_node)
-        )),
+        "lexical.$isRangeSelection" => Ok(json!(super::selection::argument_is(
+            r,
+            tx,
+            a.first(),
+            Selection::is_range
+        )?)),
+        "lexical.$isNodeSelection" => Ok(json!(super::selection::argument_is(
+            r,
+            tx,
+            a.first(),
+            Selection::is_node
+        )?)),
+        "@lexical/table.$isTableSelection" => Ok(json!(super::selection::argument_is(
+            r,
+            tx,
+            a.first(),
+            |selection| lexical_rich_nodes::table::is_table_selection(Some(selection))
+        )?)),
         "lexical.$createTextNode" | "lexical/nodes/LexicalTextNode.$createTextNode" => {
             let text = match a.first() {
                 None => String::new(),

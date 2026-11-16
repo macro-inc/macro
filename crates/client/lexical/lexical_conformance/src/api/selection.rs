@@ -16,6 +16,36 @@ pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value
     r.selections.set_active(Some(id))?;
     Ok(())
 }
+/// Detach a new selection object and encode its fresh handle.
+pub(crate) fn detached(
+    r: &mut Replayer,
+    tx: &mut Transaction<'_>,
+    selection: Selection,
+) -> Result<Value> {
+    let kind = selection_kind(&selection);
+    let slot = tx.detach_selection(selection);
+    let identity = tx
+        .foreign_selection_identity(slot)
+        .ok_or_else(|| fail("selection identity"))?;
+    let id = r.selections.push(slot, identity)?;
+    Ok(json!({"$selection":id,"kind":kind}))
+}
+/// Whether a selection-handle argument resolves to a selection matching `predicate`.
+pub(crate) fn argument_is(
+    r: &Replayer,
+    tx: &mut Transaction<'_>,
+    argument: Option<&Value>,
+    predicate: impl FnOnce(&Selection) -> bool,
+) -> Result<bool> {
+    Ok(argument
+        .and_then(|value| value.get("$selection"))
+        .and_then(Value::as_u64)
+        .map(|id| r.selections.resolve(tx, id as usize))
+        .transpose()?
+        .flatten()
+        .and_then(|slot| tx.selection_at(slot).ok().flatten())
+        .is_some_and(predicate))
+}
 pub(crate) fn call(
     r: &mut Replayer,
     tx: &mut Transaction<'_>,
@@ -200,18 +230,14 @@ pub(crate) fn call(
                 range.clear_direction_cache();
             }
 
-            let kind = if selection.is_range() {
-                "range"
-            } else {
-                "node"
-            };
-            let slot = tx.detach_selection(selection);
-            let identity = tx
-                .foreign_selection_identity(slot)
-                .ok_or_else(|| fail("selection identity"))?;
-            let new_id = r.selections.push(slot, identity)?;
-            Ok(json!({"$selection":new_id,"kind":kind}))
+            detached(r, tx, selection)
         }
+        "isValid" => Ok(json!(
+            selection
+                .as_table()
+                .ok_or_else(|| fail("table selection required"))?
+                .is_valid(tx.view())
+        )),
         _ => Err(fail(format!("unmapped API: RangeSelection.{method}"))),
     }
 }
