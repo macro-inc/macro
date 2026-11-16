@@ -176,7 +176,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `EACH_CANDIDATE_LIMIT` candidates are read behind an `OFFSET 0` fence and
   each checks its own grants; above it, the arm keeps the caller's access and
   Postgres joins the two sets. Either way the whole filter runs on every
-  document left. Without the candidates it walked the attachment chain for
+  document left. Such an arm never checks access after its filters
+  (`AfterFilters` needs every document named by id), so it keeps the planned
+  property probes. Without the candidates it walked the attachment chain for
   every document the caller can open. The projection is a superset kept by
   triggers on every write that can complete a chain, each taking row locks
   that make a racing link and participant write wait for each other; never
