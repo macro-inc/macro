@@ -79,6 +79,8 @@ export function createVault() {
     reconcile: 'id',
   }));
   const loadedItems = () => (items.isPending ? [] : (items.data ?? []));
+  /** The vault list, or undefined while it loads or after it failed without data. */
+  const availableItems = () => (items.isPending ? undefined : items.data);
   const loadedFolders = () => (folders.isPending ? [] : (folders.data ?? []));
 
   const [selection, setSelection] = createSignal<VaultSelection>();
@@ -650,6 +652,7 @@ export function createVault() {
     items,
     folders,
     loadedItems,
+    availableItems,
     loadedFolders,
     selection,
     selected,

@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import {
   ContextMenuContent,
+  CopyMenuItem,
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
@@ -97,10 +98,11 @@ export function SplitHeaderContextMenu(props: ParentProps) {
           2
         )
       );
-      toast.success(t('splitMenu.toastDebugInfoCopied'));
+      return true;
     } catch (error) {
       console.error('Failed to copy split debug info', error);
       toast.failure(t('splitMenu.toastCopyDebugInfoFailed'));
+      return false;
     }
   };
 
@@ -203,10 +205,10 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             onClick={() => layout.manager.resetSizes()}
           />
           <MenuSeparator />
-          <MenuItem
+          <CopyMenuItem
             icon={CopyIcon}
             text={t('splitMenu.copyDebugInfo')}
-            onClick={copyDebugInfo}
+            onCopy={copyDebugInfo}
           />
         </ContextMenuContent>
       </ContextMenu.Portal>

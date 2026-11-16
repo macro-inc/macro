@@ -92,8 +92,6 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   design system, preserving its shell, typography, controls, and spacing.
 - Treat an approved UI proposal followed by a PR request as a request to
   implement it; keep standalone prototypes outside the repository unless asked.
-- Share standalone designs as discussion artifacts; a merged design document
-  does not approve its product choices or authorize implementation.
 - Be brief. No justification essays, no time estimates.
 
 **Environment**

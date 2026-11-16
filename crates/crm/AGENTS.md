@@ -69,7 +69,8 @@ tools/HTTP/GraphQL surfaces over them.
 
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
-  `nix develop --command just prepare_db` from the repository root.
+  `just sqlx::prepare_db "$DATABASE_URL"` from the repository root inside Nix,
+  using the same isolated database as the tests.
 - For member-access changes, also run `cargo test -p crm --all-features member_access`;
   the HTTP, search and tool revocation test requires the `search` feature.
 - After tool input or description changes, regenerate frontend tool types and
@@ -191,6 +192,16 @@ tools/HTTP/GraphQL surfaces over them.
   connections needed by the holder's work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
+- Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
+  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  Keep these contribution controls available to members denied CRM viewing,
+  like mailbox consent; use membership authority without `check_access`.
+  Require `enable-crm-thread-exclusions` in the domain before set/clear, failing
+  closed when unavailable; keep rollout off until ingestion and Team email readers
+  understand exceptions. Keep `crm_email_thread_excluded`, the Team reader's
+  `ALLOWED` rule and the set-based interaction scan in parity.
+  Another contributor's copy remains eligible. Restore queues backfill; exclusion
+  preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for

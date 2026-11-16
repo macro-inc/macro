@@ -580,6 +580,9 @@ export type ColumnKind =
       type: 'number';
     }
   | {
+      type: 'percentage';
+    }
+  | {
       type: 'boolean';
     }
   | {
@@ -1188,13 +1191,14 @@ export type ToolGrant = 'view' | 'comment' | 'edit' | 'owner';
 /**
  * The value type of a column, as the model names it.
  *
- * A deliberate mirror of [`DataType`] rather than a re-export: the property
- * system's names are internal, and the tool vocabulary has to stay stable
- * independently of them.
+ * Mirrors [`DataType`] plus `percentage`, a number displayed as a percent.
+ * The property system's names are internal, and the tool vocabulary has to
+ * stay stable independently of them.
  */
 export type ColumnType =
   | 'text'
   | 'number'
+  | 'percentage'
   | 'boolean'
   | 'date'
   | 'date_range'
@@ -1204,7 +1208,7 @@ export type ColumnType =
   | 'tag'
   | 'entity';
 /**
- * A column type as SQL spells it: text, number, boolean, date, link, select, select_number, tag, date_range, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
+ * A column type as SQL spells it: text, number, percentage, boolean, date, link, select, select_number, tag, date_range, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
  */
 export type SpelledColumnType = string;
 /**
@@ -4921,6 +4925,14 @@ export type ExecutionStatus =
  * A dispatch result; unfinished work is never reported as success.
  */
 export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+/**
+ * The kind of model media; only images.
+ */
+export type ModelMediaType = 'image';
+/**
+ * The media type of a model image; only PNG.
+ */
+export type ModelImageMediaType = 'image/png';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -13184,7 +13196,7 @@ export interface OpenDirectMessageResponse {
  * - **Relations hold the row ids of another table.** Write a list of row ids (`"Guests" = ['<row id>']`), test with `HAS '<row id>'`, and join with `ON i."Guest" = g.row_id`: `SELECT p."Name" AS party, COUNT(*) AS invites FROM "Invites" i JOIN "Parties" p ON i."Party" = p.row_id GROUP BY p."Name"`. Never compare a relation to a name.
  * - **Person and other entity columns hold Macro ids,** never names: `'macro|sam@example.com'` for a person, a list for a multi-valued column. Respect each column's `specificEntityType`.
  * - **People:** `macro.people` is everyone the user knows (contacts and teammates) with `id`, `name` and `email`, the viewer included: “me” is the row whose email is the signed-in user's. It is read-only. Find people there, then write their ids: `SELECT id, name, email FROM macro.people WHERE name LIKE '%julia%' OR email LIKE '%julia%'`, then `UPDATE "Parties" SET "Host" = 'macro|julia@example.com' WHERE row_id = '<id>'`. Join to read names or emails: `JOIN macro.people p ON t."Owner" = p.id`. Use it, not ListTeamMembers, to find people for a database. Never invent a person or an id; when a name matches several people or none, ask.
- * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, date_range, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
+ * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, percentage, boolean, date, date_range, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Percentage stores a fraction (0.25 is 25%) and compares as a number; write the fraction in SQL. Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column. A formula number column can become percentage (or back) without changing its formula.
  * - **Schema commands** (one statement per call; edit access required):
  *   - `CREATE DATABASE "Sales CRM"` creates its starter table with a Name column. Call DescribeDatabase using the returned database ID before editing it; reuse that starter table.
  *   - `ALTER DATABASE "Sales CRM" RENAME TO "Sales"` and `ALTER DATABASE "Sales" REORDER TABLES (Deals, Companies)`.
@@ -16646,7 +16658,7 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. Optional images: up to 2 PNGs from the SDK, e.g. images: [await canvas.render()]; you see their pixels with the result, so return a render to look at a canvas. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
@@ -16704,6 +16716,10 @@ export interface ExecutionReceipt {
    * Safe failure text, when execution did not succeed.
    */
   error?: string | null;
+  /**
+   * Pixels of the images `main` returned in `images`, for the model.
+   */
+  modelMedia?: ModelImage[];
 }
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -16718,6 +16734,17 @@ export interface ExecutionActivity {
    */
   label: string;
   status: RecordedCallStatus;
+}
+/**
+ * Base64 PNG pixels the model sees as an image block, never a URL.
+ */
+export interface ModelImage {
+  type: ModelMediaType;
+  mediaType: ModelImageMediaType;
+  /**
+   * Base64 PNG bytes.
+   */
+  data: string;
 }
 /**
  * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way.

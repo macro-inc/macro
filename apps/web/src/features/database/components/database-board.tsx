@@ -554,6 +554,7 @@ function LaneIcon(props: { group: BoardGroup; column: DatabaseViewColumn }) {
             <PropertyIcon
               type={props.column.dataType}
               entityType={props.column.specificEntityType}
+              percentage={!!props.column.percentage}
               class="size-4 text-ink-muted"
             />
           }
