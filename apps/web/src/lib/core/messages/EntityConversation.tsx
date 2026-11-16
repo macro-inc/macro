@@ -18,7 +18,11 @@ import {
 } from '@queries/messages/mutations';
 import { useMessageTimelineQuery } from '@queries/messages/timeline';
 import { timelineMessages } from '@queries/messages/timeline-entries';
-import type { MessageListItem, MessageParent } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageParent,
+  MessageTimelinePage,
+} from '@service-storage/messages';
 import {
   type Accessor,
   createMemo,
@@ -107,6 +111,16 @@ export type ConversationPresentation = {
   content: () => JSX.Element;
 };
 
+function conversationRoots(pages: MessageTimelinePage[] | undefined) {
+  return (
+    pages
+      ?.flatMap(timelineMessages)
+      .filter(
+        (message) => !message.state.deleted_at && message.state.anchor === null
+      )
+      .toReversed() ?? []
+  );
+}
 export function EntityConversation(props: EntityConversationProps) {
   const [expanded, setExpanded] = createSignal(true);
   const target = useMessageLink(
@@ -130,15 +144,7 @@ export function EntityConversation(props: EntityConversationProps) {
   // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
     target.resolved() && !query.isPending && !unavailable()
-      ? (query.data?.pages
-          .flatMap(timelineMessages)
-          // Only known unanchored roots belong in Discussion. Live roots have
-          // undefined anchors until their thread metadata is fetched.
-          .filter(
-            (message) =>
-              !message.state.deleted_at && message.state.anchor === null
-          )
-          .toReversed() ?? [])
+      ? conversationRoots(query.data?.pages)
       : [];
   const messagesById = createMemo(
     () => new Map(messages().map((message) => [message.id, message]))
@@ -207,19 +213,6 @@ export function EntityConversation(props: EntityConversationProps) {
       </Show>
     </StaticMarkdownContext>
   );
-  const presentation: ConversationPresentation = {
-    messages,
-    targetId: () => props.targetId,
-    targetRequestKey: () => props.targetRequestKey,
-    pending: () => !target.resolved() || query.isPending,
-    unavailable,
-    failed: () => query.isError,
-    retry: () => {
-      fireAndForget(query.refetch(), 'entity-conversation');
-    },
-    hasEarlier: () => Boolean(query.hasNextPage || query.hasPreviousPage),
-    content,
-  };
   return (
     <Show
       when={props.children}
@@ -257,7 +250,41 @@ export function EntityConversation(props: EntityConversationProps) {
         </Show>
       }
     >
-      {(render) => render()(presentation)}
+      {(render) => {
+        // A phone entry stays on the latest root while its sheet follows an
+        // older link. Ordinary inline conversations need no second observer.
+        const separatePreview = () => Boolean(props.targetId);
+        const latest = useMessageTimelineQuery(
+          () => props.parent,
+          () => null,
+          separatePreview
+        );
+        const previewQuery = () => (separatePreview() ? latest : query);
+        const previewUnavailable = () =>
+          unavailable() ||
+          ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
+            thrownResultErrorHasCode(previewQuery().error, code)
+          );
+        return render()({
+          messages: () =>
+            !previewQuery().isPending && !previewUnavailable()
+              ? conversationRoots(previewQuery().data?.pages)
+              : [],
+          targetId: () => props.targetId,
+          targetRequestKey: () => props.targetRequestKey,
+          pending: () => previewQuery().isPending,
+          unavailable: previewUnavailable,
+          failed: () => previewQuery().isError,
+          retry: () => {
+            fireAndForget(previewQuery().refetch(), 'entity-conversation');
+          },
+          hasEarlier: () =>
+            Boolean(
+              previewQuery().hasNextPage || previewQuery().hasPreviousPage
+            ),
+          content: () => <Show when={!previewUnavailable()}>{content()}</Show>,
+        });
+      }}
     </Show>
   );
 }

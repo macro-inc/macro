@@ -272,6 +272,43 @@ function discussion(
 }
 
 describe('EntityConversation placement', () => {
+  it('keeps the entry on the latest root while the sheet follows an older link', () => {
+    mocks.timeline.mockImplementation((_parent, around) => ({
+      isSuccess: true,
+      data: {
+        pages: [
+          {
+            entries: [
+              {
+                type: 'message',
+                message: thread(
+                  around() ? 'Linked older root' : 'Newest root',
+                  null
+                ),
+              },
+            ],
+          },
+        ],
+      },
+    }));
+    const view = render(() => (
+      <EntityConversation
+        parent={{ type: 'initiative', id: 'project' }}
+        canWrite={false}
+        targetId="old-reply"
+      >
+        {(conversation) => (
+          <>
+            <p>{conversation.messages().at(-1)?.content}</p>
+            {conversation.content()}
+          </>
+        )}
+      </EntityConversation>
+    ));
+    expect(view.getByText('Newest root')).toBeTruthy();
+    expect(view.getByRole('article').textContent).toBe('Linked older root');
+    mocks.timeline.mockReset();
+  });
   it('keeps spreadsheet range threads out of the workbook discussion', () => {
     const view = discussion(
       [
