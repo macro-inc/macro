@@ -148,10 +148,12 @@ async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec
 }
 
 /// Callers holding at most this many document grants get their documents
-/// looked up one granted id at a time. About a tenth of a second of lookups
-/// when the pages are cached; above it, one scan of the live documents can be
-/// cheaper than that many random reads, so the planner chooses.
-const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 20_000;
+/// looked up one granted id at a time: about a third of a second of lookups
+/// at the limit when the pages are cached. Above it, one scan of the live
+/// documents can be cheaper than that many random reads, so the planner
+/// chooses. The limit sits above what callers with hundreds of sources hold,
+/// the callers the planner's estimate is most wrong for.
+const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
 
 /// The planner cannot be left to choose for every caller. It estimates each
 /// source it has no statistics for at the table's average grant count, so a
