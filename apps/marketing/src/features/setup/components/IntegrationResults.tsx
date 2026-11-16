@@ -1,5 +1,5 @@
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { createMediaQuery } from '@solid-primitives/media';
 import {
   createEffect,

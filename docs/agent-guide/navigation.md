@@ -24,21 +24,30 @@ they had. Background tabs are hidden, inert, and skip
 rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
-Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
+Home; the `X` or a middle click closes one (the last tab cannot close).
+`Cmd+W` (File > Close Tab) closes the active tab, or the window when it is
+the only tab, as in a browser; `Shift+Cmd+W` also closes the active tab but
+never the window. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
 `Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text);
 `Cmd+1`–`Cmd+8` jump to that tab and `Cmd+9` to the last. The AI and PSD editors
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
-a background tab; adding Shift also switches to it. Tabs are not draggable.
-Tabs persist per user and restore on launch. In the browser and on other
+a background tab; adding Shift also switches to it. Every menu that offers
+**Open in new split** (sidebar and favorite rows, list row actions, Chat rail,
+project rows, Reviews) also offers **Open in new tab**, which opens the item in
+a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
+selected item. Tabs are not draggable.
+Tabs persist per user and restore on launch. Call pages (`/app/meet/...`) keep
+the strip although they hide the rest of the app chrome; switching tabs there
+leaves the call running in the background. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
 background tab shows opens it in the current tab, with no toast and no switch,
 and each tab keeps its own instance, scroll, and history. Within one tab an
-entity still has one split: opening it again focuses that split.
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -239,6 +248,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -246,7 +256,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
 | `/app/external` | External: link a personal WhatsApp account and adopt independently shared WhatsApp groups (requires the `enable-whatsapp-linked` flag; see [External](external.md)) |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
-| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>`. `?tableId=…&viewId=…` opens that table and view |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/routines` | Routines list in the Agents workspace |
@@ -558,6 +568,10 @@ External (plug icon, `g x`) appears on the rail only with the
   split (Shift-click for a new split); there is no account menu. Log out lives
   on **Settings → Account**, and the command menu is `Ctrl K`.
 
+Above Settings, the question-mark **Help** button opens a menu: **Message
+support** opens your support channel (hidden when you have none), **Book a call**
+opens the booking page, and **Email** starts an email to support.
+
 The rail highlights the workspace shown by the **active split**, not every app
 named in the multi-split URL. Nested details keep their owning workspace selected
 (for example, a thread under Email or a document under Home). Selection changes
@@ -677,10 +691,12 @@ Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
-Each desktop sidebar puts its Search icon immediately left of the collapse
-control. Click it to reveal the view's search field between the title and New,
-at the same height as the New button; click again to hide it. The field focuses when opened. Existing list-toolbar
-search remains available and shares its query where the view filters a list.
+A desktop sidebar has a Search icon, immediately left of the collapse control,
+only where the sidebar is itself the list being searched: Home, Chat, and
+Agents. Click it to reveal the search field between the title and New, at the
+same height as the New button; click again to hide it. The field focuses when
+opened. Every other view searches from the expandable Search icon in its list
+header.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
@@ -723,8 +739,8 @@ undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
 
-Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
-inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+Email, Tasks, and Agents use the same sidebar rows for inboxes, favorites,
+and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
 Entity rows and navigation use Phosphor icons. Entity icons share one mapping
@@ -801,7 +817,7 @@ Adding “about budget” searches for only “budget”.
 
 Editing **Search for** or changing the filter chips overrides subsequent
 predictions for those values. Sender-only message scopes and speaker-only call
-scopes keep their filters visible and request at least three search characters:
+scopes keep their filters visible and request search text:
 channel/call browsing cannot enforce those message-level filters. No unfiltered
 browse results appear while keywords are required. **Search Macro** or
 **Cmd/Ctrl+Enter** opens Global Search with the same query and complete filters,
@@ -1163,6 +1179,25 @@ entry moves to **Settings → Routines** (on phones **More views → Settings �
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
+A routine one of another routine's runs created (from a code step or the
+Ask AI step's session, while that run was in progress) is its **sub-routine**
+and is not a row of its own. On desktop the creating routine's row shows a
+caret and **N sub-routines**; the caret expands the active ones under it,
+indented, each with its own switch (a paused-with-parent one's tooltip reads
+**Paused with the routine that created it**). A search that matches only a
+sub-routine shows its parent, expanded. Touch devices list top-level routines
+only. The creating routine's page has a **Created by this routine** section
+after its settings: the active sub-routines (name, trigger, **Active** /
+**Paused** / **Running**), then **Finished: N** with **Show finished** for the
+one-time ones that have run (the newest 200), each row opening that routine,
+whose **Runs** tab has its run. A sub-routine's page reads **Created by
+<name>** under its title (a link to the creator) and its **Routine actions**
+menu has **Keep as my routine**, which moves it to the main list and stops it
+pausing or being deleted with its creator. Switching a creator off pauses its
+sub-routines and switching it on resumes only those; deleting it deletes them,
+and the delete dialog says **The N routines it created will be deleted too.**
+In a run's details, **Created** lists the sub-routines that run created.
+
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
@@ -1175,13 +1210,15 @@ template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, at Discover's size (as many as fit, three at most desktop
-widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+of Discover's cards, as many as fit, and after them a narrow **N more · In
+Discover** column, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
-the templates no suggestion already offers, four cards to a row (the knob
-sentence in two lines, the chain and the action; **On** once turned on), with
+the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
-**picked for you, then Macro's templates**. The list's search narrows Discover
+**picked for you, then Macro's templates**. Every suggestion card, in the row,
+on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
+(narrower only in a pane too small for one) and as tall as the tallest card in
+its row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
 in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
@@ -1200,6 +1237,22 @@ was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
 with the list. Click a row to open it in the same
 pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
+
+Right-clicking a row (a long press on a tablet) opens its menu, and the row
+stays highlighted while it is open: **Open in new split** (disabled without
+room for another split) and **Open in new tab** (with desktop tabs); **Run
+now** (disabled while it runs or a run is starting; a toast says **Run
+started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
+(the routine page's copy: same steps, triggers, description, run visibility and
+on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
+toast whose **Open** opens the copy) and, on a sub-routine, **Keep as my
+routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
+**Share**; then **Delete**, which confirms first and names the sub-routines
+deleted with it. A routine someone else owns offers the open entries, **Copy
+Link** and **Copy ID**. On a phone a long press opens the same actions in a
+drawer under the routine's name, without the split and tab entries, in Agents
+and in **Settings → Routines** alike. Renaming and changing the icon stay on the
+routine's page.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's
@@ -1302,7 +1355,9 @@ connector: **✦ Only if | question | ×** for an AI check, or **+ Filter** to a
 one. Triggers are separated by **or**. **Add trigger** sits in the tray under
 the card (on its own before there are triggers).
 
-The event menu groups Macro activity triggers by surface:
+Event triggers appear only for users with the `enable-event-routines` PostHog
+flag; without it, **Add trigger** offers schedules only. The event menu groups
+Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
@@ -1312,8 +1367,9 @@ The event menu groups Macro activity triggers by surface:
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
-same panel to choose any accessible item or specific channels/documents/tasks. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
+same panel to choose any accessible item or specific channels/documents/tasks.
+Specific-item pickers use Next options/PageDown to append later loaded pages.
+Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
@@ -1695,9 +1751,12 @@ Background history or channel refetches alone must not blank a settled empty
 category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
-then catch up with one coalesced refresh. Verify with cache reads slower than the
-250 ms update throttle, starting from an empty cache: entities appear without
-waiting for background updates to stop. Changing the query/category or closing
+then catch up with one coalesced refresh. A change after a quiet interval
+refreshes at once, and refreshes never start closer together than that
+interval: 2 s for the channel index and menu searches (rebuilt for the whole
+account), 250 ms for history. Verify
+with cache reads slower than that throttle, starting from an empty cache:
+entities appear without waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal
@@ -1735,7 +1794,12 @@ restart rules still apply.
   see `email.md`); `g h` still goes Home.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
-- Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
+- Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and
+  `Shift+Arrow` move focus to the split on that side, by where the splits tile:
+  to the one level with the focused split's centre (the upper or left one on a
+  tie), or back to the split you came from when it borders that side; past the
+  edge they wrap. In a list `Shift+Up`/`Down` extend the selection instead;
+  sliders, the database grid, and the slide stage and rail keep `Shift+Arrow`.
 - Desktop app only: `Ctrl/Cmd` with `+`, `-`, and `0` zoom the page and reset it,
   through the same stops a browser uses. The level persists across relaunches,
   and the commands appear in the command menu as Zoom in / Zoom out / Actual
@@ -1839,8 +1903,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 
@@ -1860,6 +1928,43 @@ Partial deletes keep the dialog open, report confirmed successes, and leave only
 failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
+
+With two or more rows selected, Share in the row context menu (long-press on
+touch), `Share items` in the selection toolbar's `Actions` menu, or `Share
+items` in the command menu opens `Share N items`. Touch devices have no command
+menu, so there `Actions` does nothing; use the long-press menu. One item still
+opens the full Share dialog. `Share N items` takes the Share dialog's place,
+size, and form: an 800px card near the top of the window with the selected
+items under its title, then the To row, the optional message, and Cancel and
+Share. On phones (touch, under 640px wide) it is the Share drawer instead.
+Phone-width rows have no select control, so to see the drawer, select and open
+the share at tablet width and then narrow the window. In the drawer, the title
+row ends in Share, the selected items sit under it, and the To box wraps its
+chips, followed by `Send As Group Message`, an `Access:` row, and the message.
+Focus starts in `To: Email or group`, which lists people and channels with more
+than two members. With two or more people and no channel,
+`Send As Group Message` is on and sends one group message; turned off, each
+person gets their own message. The access selector at the end of the To row
+(the `Access:` row on phones) sets the access level for items you own. It
+starts at the lowest default among them: Edit for markdown documents, Comment
+for PDFs, and View for anything else. A selection that includes a form or an
+email thread offers no Comment level. Each recipient gets a message with the optional
+text above the item chips, and the items also appear under the channel's
+Attachments tab. Sharing sends real messages.
+
+The first Share locks the form. If a message fails, the dialog stays open and
+names what each recipient missed, such as `jacob did not get Q3 launch plan and
+Pricing notes`. `Retry` (Cmd/Ctrl+Enter) repeats only what failed and reuses
+the same message IDs, so no recipient gets a duplicate. `Close` after a partial
+share also clears the selection, because someone already has the items. A share
+to one channel ends with a `Shared with <channel>` toast and `View in channel`;
+several recipients get `Shared with N recipients`. Finishing clears the
+selection and returns focus to the row. `Cancel` keeps the selection. Before
+the first Share, Escape cancels too, but not while focus is in the To field or
+the message, as in the Share dialog; press Tab in the To field first. The phone
+drawer has no Cancel or Close: dismissing it cancels, or finishes after a
+partial share. Its title-row button reads Retry while something can be retried
+and Done once nothing can.
 
 Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows

@@ -1,0 +1,127 @@
+import { expect, type Locator, type Page } from '@playwright/test';
+
+/** A view the two builds must render the same, with the states to compare. */
+export type ParityView = {
+  id: string;
+  /** Path under `/app` the view opens at. */
+  path: `/${string}`;
+  /** Resolves once the view shows its content. */
+  ready: (page: Page) => Promise<void>;
+  /** States captured after the first, each compared too. */
+  states: ParityState[];
+};
+
+export type ParityState = {
+  name: string;
+  /** Set for a step only a touch device can take, such as tapping the title. */
+  only?: 'touch';
+  go: (page: Page) => Promise<void>;
+};
+
+/** Presses as the device would: a tap on touch, a click otherwise. */
+async function press(page: Page, target: Locator) {
+  const touch = await page.evaluate(
+    () => matchMedia('(pointer: coarse)').matches
+  );
+  if (touch) await target.tap();
+  else await target.click();
+}
+
+const firstRow = (page: Page) =>
+  page.locator('[data-entity-id]').filter({ visible: true }).first();
+
+/** A list row by its visible name, from the seeded persona's starter content. */
+const rowNamed = (page: Page, name: string) =>
+  page
+    .locator('[data-entity-id]')
+    .filter({ hasText: name })
+    .filter({ visible: true })
+    .first();
+
+/** Opens a document or task from its list and waits for its editor. */
+const openDocument = (name: string) => async (page: Page) => {
+  // The name, not the row's centre, where a phone row has a tag or a date.
+  await press(page, rowNamed(page, name).getByText(name, { exact: true }));
+  // Any value: a document the person can only read has an editor that is off.
+  await expect(
+    page.locator('[contenteditable]').filter({ visible: true }).first()
+  ).toBeVisible();
+};
+
+/** Opens the title menu the way a touch header does: a tap on the title. */
+const openTitleMenu = (name: string) => async (page: Page) => {
+  const title = page.locator('[data-header-island]').filter({ hasText: name });
+  await press(page, title.first());
+  await expect(
+    page.getByRole('dialog').filter({ visible: true }).first()
+  ).toBeVisible();
+};
+
+/**
+ * Add a view here when you split it. Steps use what a person would press, so
+ * they run unchanged against the build before the split.
+ */
+export const PARITY_VIEWS: ParityView[] = [
+  {
+    id: 'mail',
+    path: '/mail',
+    ready: async (page) => {
+      await expect(firstRow(page)).toBeVisible();
+    },
+    states: [
+      {
+        // Desktop opens the thread in the Mail view; touch opens its block.
+        name: 'thread',
+        go: async (page) => {
+          await press(page, firstRow(page));
+          await expect(page).toHaveURL(/\/(mail|email)\/[0-9a-f-]{36}/);
+          await expect(
+            page
+              .getByText(/^Reply/)
+              .filter({ visible: true })
+              .first()
+          ).toBeVisible();
+        },
+      },
+    ],
+  },
+  {
+    // Desktop opens the document in the Drive view; touch opens its block.
+    id: 'document',
+    path: '/drive',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Macro how to guide')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Macro how to guide') },
+      { name: 'menu', only: 'touch', go: openTitleMenu('Macro how to guide') },
+    ],
+  },
+  {
+    id: 'task',
+    path: '/tasks',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Intro to tasks')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Intro to tasks') },
+      { name: 'menu', only: 'touch', go: openTitleMenu('Intro to tasks') },
+    ],
+  },
+  {
+    // Another person's task, so the header carries the access badge.
+    id: 'shared-task',
+    path: '/tasks',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Fix the perms edge case')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Fix the perms edge case') },
+      {
+        name: 'menu',
+        only: 'touch',
+        go: openTitleMenu('Fix the perms edge case'),
+      },
+    ],
+  },
+];

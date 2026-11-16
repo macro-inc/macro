@@ -8,6 +8,7 @@ version = "0.1.0"
 base64 = { workspace = true }
 httpdate = { workspace = true }
 jsonwebtoken = { workspace = true }
+macro_service_urls = { path = "../macro_service_urls" }
 models_email = { path = "../models_email" }
 regex = { workspace = true }
 reqwest = { workspace = true }

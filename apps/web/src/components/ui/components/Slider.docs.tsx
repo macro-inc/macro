@@ -58,6 +58,31 @@ function RangeDemo() {
 }
 // #endregion
 
+// #region demo:vertical
+function VerticalDemo() {
+  const [value, setValue] = createSignal([75]);
+  return (
+    <Slider
+      orientation="vertical"
+      value={value()}
+      onChange={setValue}
+      class="w-16 items-center"
+    >
+      <Slider.Label>Volume</Slider.Label>
+      <div class="h-32">
+        <Slider.Track>
+          <Slider.Fill />
+          <Slider.Thumb appearance="switch">
+            <Slider.Input />
+          </Slider.Thumb>
+        </Slider.Track>
+      </div>
+      <Slider.ValueLabel />
+    </Slider>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Slider',
   category: 'Inputs',
@@ -75,5 +100,6 @@ export default defineDoc({
   demos: [
     { id: 'single', title: 'Single value', render: SingleDemo },
     { id: 'range', title: 'Multiple thumbs', render: RangeDemo },
+    { id: 'vertical', title: 'Vertical volume', render: VerticalDemo },
   ],
 });

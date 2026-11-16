@@ -1,16 +1,20 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Check from '@phosphor/check.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { emailPageInbox } from '../../core/email-demo-story';
 import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough';
-import { EmailRows } from './frozen/EmailRows';
+import { EmailRows, newestFirst } from './frozen/EmailRows';
 import { EmailShell } from './frozen/EmailShell';
 import { EmailThread } from './frozen/EmailThread';
+import { EmailViewBar } from './frozen/EmailViewBar';
 import './email-feature-demos.css';
 import './email-keyboard-stage.css';
 
-const inbox = emailPageInbox.filter((email) => !email.noise).slice(0, 14);
+// In the order the rows draw them, so J and K move down and up the list.
+const inbox = newestFirst(
+  emailPageInbox.filter((email) => !email.noise).slice(0, 14)
+);
 type Shortcut = 'j' | 'k' | 'e' | 'Enter' | 'Escape';
 
 export function EmailKeyboardDemo() {
@@ -118,8 +122,8 @@ export function EmailKeyboardDemo() {
     >
       <div class="email-keyboard-stage">
         <EmailShell label="Keyboard email demo" showRail={false}>
-          <header class="email-feature-toolbar">
-            <Show when={opened()} fallback={<span>Signal</span>}>
+          <Show when={opened()} fallback={<EmailViewBar tab="signal" />}>
+            <header class="email-feature-toolbar">
               <Button
                 variant="plain"
                 size="icon-sm"
@@ -128,17 +132,9 @@ export function EmailKeyboardDemo() {
               >
                 <ArrowLeft />
               </Button>
-              <span class="truncate">
-                Signal{' '}
-                <span class="email-toolbar-secondary">
-                  / {selected()?.subject}
-                </span>
-              </span>
-            </Show>
-            <span class="email-toolbar-secondary">
-              {emails().length} emails
-            </span>
-          </header>
+              <span class="truncate">{selected()?.subject}</span>
+            </header>
+          </Show>
           <div class="email-keyboard-content">
             <Show
               when={selected()}

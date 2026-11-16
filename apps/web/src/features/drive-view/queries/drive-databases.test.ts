@@ -60,6 +60,21 @@ const listed: ListedDatabase[] = [
 const none: ReadonlySet<string> = new Set();
 
 describe('Drive database listing', () => {
+  it('keeps appearance-only changes in both list and sidebar projections', () => {
+    const appearance = {
+      icon: { kind: 'emoji' as const, value: '🚀' },
+      color: null,
+    };
+    const updated = listed.map((item) => ({
+      ...item,
+      database: { ...item.database, appearance },
+    }));
+    const rows = selectDriveDatabases(updated, selection, 'me', none);
+    const sidebar = selectSidebarDatabases(updated, none);
+    expect(rows[0]).toMatchObject({ id: 'mine', grant: 'owner', appearance });
+    expect(sidebar.map((item) => item.id)).toEqual(['shared', 'mine']);
+    expect(sidebar.every((item) => item.appearance === appearance)).toBe(true);
+  });
   it('separates owned and shared databases and excludes trash', () => {
     expect(
       selectDriveDatabases(listed, selection, 'me', none).map(

@@ -23,6 +23,7 @@ import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
+import { ImportNamespace } from './entities/imports/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
@@ -35,6 +36,7 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskTemplateNamespace } from './entities/task-templates/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
@@ -49,6 +51,11 @@ import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
+export type {
+  AppearanceColor,
+  AppearanceIcon,
+  EntityAppearance,
+} from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
 export type {
   ActivityAction,
@@ -84,6 +91,7 @@ export {
   type ChangeColumnTypeOptions,
   type ColumnType,
   type ConvertIntoNewColumnOptions,
+  type CreateDatabaseOptions,
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
@@ -138,6 +146,9 @@ export type { RequestActivity } from './utils/activity';
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
+
+  /** suggestions resources and operations. */
+  readonly suggestions: SuggestionNamespace;
 
   /** unfurls resources and operations. */
   readonly unfurls: UnfurlNamespace;
@@ -209,6 +220,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** The import ledger: external items proposed for, or copied into, Macro. */
+  readonly imports: ImportNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
 
@@ -266,6 +279,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     const client = new MacroClient(opts);
     this._client = client;
     this.routines = new RoutineNamespace(client);
+    this.suggestions = new SuggestionNamespace(client);
     this.unfurls = new UnfurlNamespace(client);
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
@@ -295,6 +309,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.imports = new ImportNamespace(client);
     this.web = new WebNamespace(client);
     this.memory = new MemoryNamespace(client);
     this.activity = new ActivityNamespace(client);
@@ -408,6 +423,11 @@ export {
 } from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
+export type {
+  MessageContext,
+  MessageContextOptions,
+  ReplyContext,
+} from './entities/channels/message';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
@@ -544,6 +564,7 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export { RoutineSuggestion } from './entities/routines/suggestion';
 export {
   SavedView,
   type SavedViewConfig,
@@ -569,6 +590,16 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export type {
+  SuggestionInput,
+  SuggestionsReview,
+} from './entities/suggestions/namespace';
+export {
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export {
   type CreateTaskTemplateOptions,
   TaskTemplate,

@@ -4,10 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupChannelAllOfAgentDm } from './soupChannelAllOfAgentDm';
 import type { SoupChannelAllOfInteractedAt } from './soupChannelAllOfInteractedAt';
 import type { SoupChannelAllOfViewedAt } from './soupChannelAllOfViewedAt';
 
 export type SoupChannelAllOf = {
+  agent_dm?: SoupChannelAllOfAgentDm;
   /** Timestamp when the requesting user last interacted with this channel. */
   interacted_at?: SoupChannelAllOfInteractedAt;
   /** Timestamp when the requesting user last viewed this channel. */

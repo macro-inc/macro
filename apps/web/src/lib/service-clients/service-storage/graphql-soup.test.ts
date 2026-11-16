@@ -151,6 +151,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
   expect(
     mapGraphqlSoupItem({
       __typename: 'GraphqlSoupInitiative',
+      appearance: null,
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
@@ -560,7 +561,7 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-it('maps the unread alias without pretending it is the full notification edge', async () => {
+it('maps the unread and mention aliases without pretending either is the full notification edge', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
@@ -586,6 +587,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
+    unreadMentions: [{ id: 'mention', state: 'UNSEEN' }],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({
     tag: 'channel',
@@ -594,6 +596,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
       ],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
     },
   });
 });
@@ -774,6 +777,7 @@ describe('GraphQL Soup document sub types', () => {
       const { mapGraphqlSoupItem } = await import('./graphql-soup');
       const item = {
         __typename: 'GraphqlSoupDocument',
+        appearance: null,
         id: 'doc-sub-type',
         entityType: 'DOCUMENT' as GraphqlSoupEntityType,
         displayName: 'Plan',
@@ -1229,6 +1233,31 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it('keeps activity pushes out of the cache and other subscriptions in it', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const subscription = (text: string): Operation => ({
+      kind: 'subscription',
+      key: 43,
+      query: parse(text),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    });
+    const uncached =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.isUncachedSubscription;
+
+    expect(
+      uncached?.(
+        subscription('subscription ActivityUpdates { activityUpdates { id } }')
+      )
+    ).toBe(true);
+    expect(
+      uncached?.(
+        subscription('subscription SoupUpdates { soupUpdates { __typename } }')
+      )
+    ).toBe(false);
+  });
+
   it.each(['query', 'mutation', 'subscription'] as const)(
     'reports handled cache-disposed failures for %s without exporting operation payloads',
     async (kind) => {
@@ -1499,6 +1528,17 @@ describe('GraphQL Soup browser cache session gate', () => {
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
     );
+  });
+
+  it('does not hand out a host that is already unusable', async () => {
+    const soup = await import('./graphql-soup');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
   });
 
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {

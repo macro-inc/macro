@@ -1,53 +1,32 @@
-use crate::pubsub::context::PubSubContext;
+use crate::pubsub::inbox_sync::worker::InboxSyncContext;
+use email::domain::mailbox::inbox_sync::{InboxSyncFailureLog, record_retryable_error};
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_email::service::pubsub::DetailedError;
 use sqs_worker::cleanup_message;
 
-/// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
-#[tracing::instrument(skip(ctx, message))]
-pub async fn handle_non_retryable_error(
-    ctx: &PubSubContext,
+#[cfg(test)]
+mod test;
+
+/// Log the domain-selected failure and perform its terminal acknowledgement.
+#[tracing::instrument(skip(ctx, message, log))]
+pub(crate) async fn handle_non_retryable_error(
+    ctx: &InboxSyncContext,
     message: &aws_sdk_sqs::types::Message,
     data: &InboxSyncPubsubMessage,
     e: &DetailedError,
+    log: InboxSyncFailureLog,
 ) -> anyhow::Result<()> {
-    // A rate-limited operation is only non-retryable here once it has been
-    // re-enqueued to the retry queue, so deleting it loses nothing.
-    if e.reason == FailureReason::GmailApiRateLimited {
-        tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Rate-limited inbox sync message deferred. The message will be deleted.");
-    } else {
-        tracing::error!(error = %e, payload = format!("{:?}", data.operation), "Non-retryable error processing inbox sync message. The message will be deleted.");
-    }
-
+    log.record(data, e);
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())
 }
 
-/// Handles retryable errors by updating status to InProgress and adding the error message
+/// Retain a retryable delivery after recording its existing error event.
 #[tracing::instrument]
-pub async fn handle_retryable_error(
+pub(crate) async fn handle_retryable_error(
     data: &InboxSyncPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Retryable error processing inbox sync message.");
-
+    record_retryable_error(data, e);
     Ok(())
-}
-
-/// Adds an operation name prefix to a ProcessingError's source field
-pub fn prefix_error_source(error: ProcessingError, operation_name: &str) -> ProcessingError {
-    match error {
-        ProcessingError::Retryable(DetailedError { reason, source }) => {
-            ProcessingError::Retryable(DetailedError {
-                reason,
-                source: anyhow::anyhow!("{}: {}", operation_name, source),
-            })
-        }
-        ProcessingError::NonRetryable(DetailedError { reason, source }) => {
-            ProcessingError::NonRetryable(DetailedError {
-                reason,
-                source: anyhow::anyhow!("{}: {}", operation_name, source),
-            })
-        }
-    }
 }

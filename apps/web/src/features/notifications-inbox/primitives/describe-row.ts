@@ -1,3 +1,4 @@
+import { groupChatName } from '@channel/group-chat-name';
 import {
   getNotificationAction,
   getNotificationContent,
@@ -70,9 +71,42 @@ type ChannelContent = { channelType?: string; channelName?: string };
 /** Where a channel event happened; a DM says nothing, a channel names itself. */
 const channelPlace = (content: ChannelContent) => {
   if (content.channelType === 'directMessage' || !content.channelName) return;
+  if (content.channelType === 'private') {
+    return groupChatName(content.channelName);
+  }
   return content.channelType === 'public' || content.channelType === 'team'
     ? `#${content.channelName}`
     : content.channelName;
+};
+
+/**
+ * Whether a row is messages in a group chat: a private channel, named or not.
+ * Its card speaks for the chat, not for the people who wrote in it. A reaction
+ * or an invite is still about the person who made it.
+ */
+export function isGroupChatRow(row: NotificationInboxRow) {
+  if (row.type !== 'channel_messages') return false;
+  const metadata = row.content.notifications[0]?.notification_metadata;
+  if (metadata?.tag !== 'channel_message_send') return false;
+  return metadata.content.channelType === 'private';
+}
+
+/** The channel a group chat row is for, which it shows instead of a sender. */
+export function groupChatId(row: NotificationInboxRow) {
+  const entity = row.content.entity;
+  return isGroupChatRow(row) && entity.type === 'channel'
+    ? entity.id
+    : undefined;
+}
+
+/**
+ * The name a group chat row shows. The row's channel is named for the reader;
+ * the notification's copy is named for its sender, so it lists the reader too.
+ */
+const groupChatRowName = (row: NotificationInboxRow, place: string) => {
+  const entity = row.content.entity;
+  const name = entity.type === 'channel' && entity.name ? entity.name : place;
+  return groupChatName(name);
 };
 
 /** Channel verbs drop their preposition in a DM, which needs no place. */
@@ -367,6 +401,13 @@ export function describeInboxCard(
         : { who: inPlace(channelDeed()), body }
     )
     .with('channel_messages', () => {
+      // A group chat leads with itself, and its newest line says who wrote it.
+      if (isGroupChatRow(row)) {
+        return {
+          who: groupChatRowName(row, place ?? entityName),
+          body: spoken && sender ? `${sender}: ${spoken}` : spoken,
+        };
+      }
       if (isStack) {
         return place ? { who, what: place, body } : { who, body };
       }

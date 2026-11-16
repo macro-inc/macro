@@ -7,6 +7,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { Thread } from '../channels/thread';
 import { FavoritableEntity } from '../entity';
 import { Meeting } from '../meetings/meeting';
@@ -210,6 +211,18 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   /** Favorites identify call records as `call`. */
   readonly entityType = 'call';
+
+  /**
+   * Share this call record with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * call record; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'call', this.id);
+  }
 
   protected async fetch(): Promise<CallRecordDetail> {
     return unwrap(

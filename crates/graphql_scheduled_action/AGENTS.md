@@ -8,7 +8,7 @@ adapter for listing `ScheduledAction` records. Read-only: no mutations.
 ## Start here
 
 - `src/query.rs`: `resolve_scheduled_actions`.
-- `src/objects.rs`: `GraphqlScheduledAction`.
+- `src/objects.rs`: `GraphqlScheduledAction`, including nullable entity-owned appearance.
 - `src/context.rs`: `ScheduledActionGraphqlContext`.
 - `src/lib.rs` `unavailable`: wraps a `rootcause::Report` into a generic
   `INTERNAL_SERVER_ERROR` GraphQL error without leaking details.
@@ -21,9 +21,7 @@ adapter for listing `ScheduledAction` records. Read-only: no mutations.
 
 ## Boundaries
 
-- Depends on: `scheduled_action` (the service crate, not a ports-only domain
-  crate — note this is the one `graphql_*` crate reaching into a `services/`
-  path).
+- Depends on: `scheduled_action` (the routine domain service in `crates/scheduled_action`).
 - Used by: `complete_graph` (schema composition).
 
 ## Recipes

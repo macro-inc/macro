@@ -46,6 +46,51 @@ impl PgInitiativeRepo {
 impl InitiativeRepo for PgInitiativeRepo {
     type Err = InitiativeError;
 
+    #[tracing::instrument(skip_all, fields(initiative_id = %id), err)]
+    async fn set_appearance(
+        &self,
+        id: InitiativeId,
+        update: &activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+        let mut transaction = self.pool.begin().await.map_err(classify_sqlx)?;
+        let row = sqlx::query!(
+            "SELECT appearance FROM initiative WHERE id = $1 FOR UPDATE",
+            id.as_uuid()
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(classify_sqlx)?
+        .ok_or(InitiativeError::NotFound)?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| classify_sqlx(sqlx::Error::Decode(Box::new(error))))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            "UPDATE initiative SET appearance = $2 WHERE id = $1",
+            id.as_uuid(),
+            sqlx::types::Json(&update.appearance) as _
+        )
+        .execute(&mut *transaction)
+        .await
+        .map_err(classify_sqlx)?;
+        if let Some(activity) = update.activity(
+            model_entity::EntityType::Initiative,
+            id.to_string(),
+            &previous,
+        ) {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *transaction, &[activity])
+                .await
+                .map_err(classify_sqlx)?;
+        }
+        transaction.commit().await.map_err(classify_sqlx)?;
+        Ok(Some(previous))
+    }
+
     #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn create(
         &self,
@@ -76,7 +121,7 @@ impl InitiativeRepo for PgInitiativeRepo {
             .transpose()
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn list_accessible(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -94,7 +139,7 @@ impl InitiativeRepo for PgInitiativeRepo {
         share::get_team_share_facts(&self.pool, id).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_team_default_link_share(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -144,6 +189,7 @@ impl GrantTargets {
 }
 
 struct InitiativeRecord {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: uuid::Uuid,
     name: String,
     owner_user_id: String,
@@ -160,6 +206,7 @@ struct InitiativeRecord {
 impl InitiativeRecord {
     fn into_basic(self) -> Result<InitiativeBasic, InitiativeError> {
         Ok(InitiativeBasic {
+            appearance: self.appearance.map(|value| value.0),
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
             owner_id: parse_owner(&self.owner_user_id)?,
@@ -170,6 +217,7 @@ impl InitiativeRecord {
         let share_permission = share_permission_from_record(&self)?;
         let owner_id = parse_owner(&self.owner_user_id)?;
         Ok(InitiativeDetail {
+            appearance: self.appearance.map(|value| value.0),
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
             owner_id,
@@ -291,6 +339,7 @@ async fn load_record(
         r#"
         SELECT
             i.id,
+            i.appearance AS "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
             i.name,
             i.owner_user_id,
             i.created_at,
@@ -335,6 +384,7 @@ async fn load_record(
     .await?;
 
     Ok(row.map(|row| InitiativeRecord {
+        appearance: row.appearance,
         id: row.id,
         name: row.name,
         owner_user_id: row.owner_user_id,

@@ -72,6 +72,60 @@ async fn personal_sync_preserves_the_manually_selected_company(pool: PgPool) -> 
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_sync_finds_a_contact_by_any_of_its_addresses(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let_personal_emails_in(&repo, team).await;
+    let company = insert_company(&pool, team, true, &["client.test"]).await?;
+    let contact = repo
+        .create_contact_for_company(
+            &team,
+            &company,
+            Some("jane@client.test"),
+            "Jane",
+            Utc::now(),
+            false,
+        )
+        .await?;
+    let second_address = personal("jane");
+    sqlx::query!(
+        "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2)",
+        contact.id,
+        second_address
+    )
+    .execute(&pool)
+    .await?;
+
+    populate(&pool, &service, team, link, &second_address, true).await;
+
+    assert_eq!(
+        unfiled_contacts(&pool, team).await?,
+        Vec::new(),
+        "mail to the second address must not file a separate contact"
+    );
+    let sources = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1 AND link_id = $2",
+        contact.id,
+        link
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(sources, Some(1));
+    let found = repo
+        .get_contact_by_email_for_team(&team, &second_address, false)
+        .await?
+        .unwrap();
+    assert_eq!(found.id, contact.id);
+    assert_eq!(found.email.as_deref(), Some("jane@client.test"));
+    Ok(())
+}
+
 fn personal(local: &str) -> String {
     format!("{local}@{PERSONAL_DOMAIN}")
 }

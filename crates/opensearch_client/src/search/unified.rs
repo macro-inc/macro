@@ -20,7 +20,7 @@ use crate::{
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchMode, PropertyFilterArg,
+            DocumentSearchMode, DocumentTermMatching, PropertyFilterArg,
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
@@ -94,6 +94,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
             match_all_tags: args.document_search_args.match_all_tags,
+            term_matching: args.document_search_args.term_matching,
         }
     }
 }
@@ -239,6 +240,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub term_matching: DocumentTermMatching,
 }
 
 #[derive(Debug, Default, Clone)]

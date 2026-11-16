@@ -10,7 +10,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 - `core/template.ts`: fill-blank application and reusable-default capture.
 - `components/template-picker.tsx`: searchable desktop dropdown and touch picker sheet.
-- `views/task-template-controls.tsx`: composer wiring, template identity, and scoped confirmation dialogs.
+- `views/task-template-controls.tsx` and `views/mobile/task-template-controls.tsx`: desktop dropdown and touch picker composition.
+- `views/shared/task-template-controls.tsx`: scoped selection, query, and confirmation lifetimes.
+- `views/shared/task-template-name-strip.tsx`: template identity and visibility editing.
 - `primitives/template-controls.ts`: selection, permission checks, deletion, and dialog lifetimes.
 - `../task-composer/primitives/template-workflow.ts`: isolated editing, durable creation identities, and field-only updates.
 - Keep composer and workflow state in typed stores; replace immutable snapshots with root patches and unwrap reads for cloning.

@@ -17,12 +17,14 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showNotifications: true,
+  showForYou: false,
   showCalendar: true,
   showScheduling: true,
   showCustomers: true,
   showCalls: true,
   showReviews: true,
   showActivity: true,
+  showPasswords: false,
   showExternal: true,
   prefs: defaultPrefs(),
   ...overrides,
@@ -65,6 +67,7 @@ describe('sidebar visibility preferences', () => {
 
     const gates = defaultGates({
       showActivity: false,
+      showPasswords: false,
       prefs: defaultPrefs({ hidden: new Set() }),
     });
     for (const items of [
@@ -189,11 +192,72 @@ describe('orderNavItems', () => {
       'documents',
     ]);
 
-    expect(ordered.map((item) => item.id).slice(0, 4)).toEqual([
+    expect(ordered.map((item) => item.id).slice(0, 5)).toEqual([
       'home',
+      'for-you',
       'tasks',
       'mail',
       'documents',
     ]);
+  });
+
+  it('keeps For you where the person put it', () => {
+    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, ['tasks', 'for-you']);
+
+    expect(ordered.map((item) => item.id).slice(0, 3)).toEqual([
+      'home',
+      'tasks',
+      'for-you',
+    ]);
+  });
+});
+
+it('lists For you only when suggestions are on', () => {
+  const hidden = visibleNavItems(defaultGates());
+  const shown = visibleNavItems(defaultGates({ showForYou: true }));
+
+  expect(hidden.some((item) => item.id === 'for-you')).toBe(false);
+  expect(shown.map((item) => item.id).slice(0, 2)).toEqual(['home', 'for-you']);
+});
+
+describe('Passwords on the rail', () => {
+  it('is absent for accounts without a team and sits between Calendar and Agents by default', () => {
+    expect(
+      visibleNavItems(defaultGates({ showPasswords: false })).map(
+        (item) => item.id
+      )
+    ).not.toContain('passwords');
+    const ids = visibleNavItems(defaultGates({ showPasswords: true })).map(
+      (item) => item.id
+    );
+    expect(
+      ids.slice(ids.indexOf('calendar'), ids.indexOf('calendar') + 3)
+    ).toEqual(['calendar', 'passwords', 'agents']);
+  });
+
+  it('joins a saved order right after Calendar and keeps every other position', () => {
+    const order = ['home', 'agents', 'mail', 'calendar', 'tasks', 'documents'];
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
+    // For you keeps its place under Home in an order saved before it existed.
+    expect(ids.slice(0, 8)).toEqual([
+      'home',
+      'for-you',
+      'agents',
+      'mail',
+      'calendar',
+      'passwords',
+      'tasks',
+      'documents',
+    ]);
+  });
+
+  it('keeps a saved position the user chose for it', () => {
+    const order = ['home', 'passwords', 'mail', 'calendar', 'agents'];
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
+    expect(ids.filter((id) => id !== 'for-you').slice(0, 5)).toEqual(order);
   });
 });

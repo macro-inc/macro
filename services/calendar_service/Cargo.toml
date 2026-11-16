@@ -73,6 +73,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-opentelemetry = { workspace = true }

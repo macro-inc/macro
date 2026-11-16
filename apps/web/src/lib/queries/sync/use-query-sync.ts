@@ -1,4 +1,5 @@
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { publishSessionActivity } from '@core/agent-session/session-activity';
 import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
   enableGraphqlSoup,
@@ -9,11 +10,13 @@ import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionPreview } from '@queries/agent-session/preview';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
+  AGENT_SESSION_ACTIVITY_EVENT,
   AGENT_SESSION_CHANGES_EVENT,
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
   AGENT_SESSION_UPDATED_EVENT,
+  type AgentSessionActivityEvent,
   type AgentSessionChangesEvent,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
@@ -57,6 +60,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
+import '@app/features/routines/queries/draft-jobs-sync';
 import '@app/features/routines/queries/sync';
 import { handleUserPictureChanged } from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -174,6 +178,13 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleAgentSessionUpdated
+        );
+      })
+      .with({ type: AGENT_SESSION_ACTIVITY_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionActivityEvent>(
+          data.type,
+          data.data,
+          (event) => publishSessionActivity(event.agentSessionId, event.text)
         );
       })
       .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {

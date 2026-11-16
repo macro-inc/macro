@@ -1,7 +1,9 @@
 /* Shortcut hints belong below the app, not inside its inbox chrome. */
 .email-keyboard-stage { position: relative; }
-.email-keyboard-stage .mail-app { height: 560px; min-height: 0; }
-.email-keyboard-stage .email-keyboard-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+/* Tall enough for seven rows; the list scrolls for the rest. */
+.email-keyboard-stage .mail-app { height: 372px; min-height: 0; }
+.email-keyboard-stage .email-keyboard-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.email-keyboard-stage .email-keyboard-content::-webkit-scrollbar { display: none; }
 .email-keyboard-stage .email-shortcut-dock {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 16px;
   padding: 20px 0 0; border: 0; background: transparent;

@@ -92,15 +92,21 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
-    read: 'getScheduledAction getScheduledActionTemplate',
-    created: 'createScheduledAction',
+    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
+    created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
-    edited: 'updateScheduledAction',
+    edited:
+      'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
+    archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
+    approved: 'acceptSuggestion',
+    rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -133,7 +139,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills',
+    listed: 'listSkills listImportEntities',
+    added: 'trackImportEntity',
+    rejected: 'declineImportEntity',
+    imported: 'importNotionPage',
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
@@ -152,7 +161,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { listed: 'getContacts' },
+  contacts: { searched: 'searchPeople' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
@@ -236,7 +245,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
-      listCompanyContacts listCrmPipelines getCrmPipelineRows listDatabases listDatabaseColumnCasts
+      listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
       listAccessibleForms getGithubPullRequestFacets getGithubPullRequestTasks listHarnesses
@@ -263,7 +272,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
-      createCrmTeamContact createCrmPipeline createDatabase createDatabaseWebhook createDocument
+      createCrmTeamContact createCrmPipelineWithFields createDatabase createDatabaseWebhook createDocument
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
@@ -281,7 +290,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
       updateTaskTemplate
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
@@ -345,6 +355,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createEntityMention
       setCrmContactCompany
     `,
+    unlinked: 'unlinkCrmContactCompany',
     reordered: `
       reorderFavorites reorderPinsHandler
       reorderSavedViewDefinitions

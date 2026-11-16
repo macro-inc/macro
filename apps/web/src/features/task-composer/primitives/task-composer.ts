@@ -142,7 +142,10 @@ type TaskComposerDraftState = {
   templateBaseline: TaskTemplateContents | undefined;
 };
 
-/** Draft, property, and submission state shared by desktop and mobile composers. */
+/**
+ * Draft, property, and submission state for one task composer, shared by the
+ * desktop and mobile views through `TaskComposerParts`.
+ */
 export function createTaskComposer(
   props: ComposeTaskProps,
   host: TaskComposerHost

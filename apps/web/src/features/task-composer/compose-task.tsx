@@ -7,6 +7,7 @@ import {
   useCreateTaskTemplate,
   useUpdateTaskTemplate,
 } from '@app/features/task-templates/queries/templates';
+import { MobileTaskTemplateControls } from '@app/features/task-templates/views/mobile/task-template-controls';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -24,7 +25,7 @@ import {
   type TaskComposerHost,
 } from './primitives/task-composer';
 import { DesktopTaskComposer } from './views/desktop-task-composer';
-import { MobileTaskComposer } from './views/mobile-task-composer';
+import { MobileTaskComposer } from './views/mobile/task-composer';
 
 function createSplitTaskComposerHost(): TaskComposerHost {
   const splitPanel = useSplitPanelOrThrow();
@@ -155,7 +156,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       when={isTouchDevice() && composer.isPopover()}
       fallback={<DesktopTaskComposer composer={composer} />}
     >
-      <MobileTaskComposer composer={composer} />
+      <MobileTaskComposer
+        composer={composer}
+        templateControls={MobileTaskTemplateControls}
+      />
     </Show>
   );
 }

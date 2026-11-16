@@ -5,14 +5,14 @@ import {
 import { EntityComposer } from '@ui';
 import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
-import { TaskComposer } from './task-composer-parts';
+import { TaskComposerParts } from './shared/task-composer-parts';
 
 /** The task composer in a split or the desktop dialog. */
 export function DesktopTaskComposer(props: {
   composer: TaskComposerController;
 }) {
   return (
-    <TaskComposer.Root composer={props.composer}>
+    <TaskComposerParts.Root composer={props.composer}>
       <EntityComposer.Header>
         <Show
           when={props.composer.templatesEnabled()}
@@ -20,39 +20,39 @@ export function DesktopTaskComposer(props: {
         >
           <TaskTemplateControls composer={props.composer} />
         </Show>
-        <TaskComposer.ClearDraft />
-        <TaskComposer.ContinueInSplit />
-        <TaskComposer.Close />
+        <TaskComposerParts.ClearDraft />
+        <TaskComposerParts.ContinueInSplit />
+        <TaskComposerParts.Close />
       </EntityComposer.Header>
-      <TaskComposer.Recovery />
+      <TaskComposerParts.Recovery />
       <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
         <Show when={props.composer.templatesEnabled()}>
           <TaskTemplateNameStrip composer={props.composer} />
         </Show>
-        <TaskComposer.Title />
-        <TaskComposer.Body />
+        <TaskComposerParts.Title />
+        <TaskComposerParts.Body />
         <Show when={!props.composer.isTemplateMode()}>
           <div class="shrink-0 flex items-center py-2">
-            <TaskComposer.Attach />
+            <TaskComposerParts.Attach />
           </div>
         </Show>
-        <TaskComposer.Properties />
+        <TaskComposerParts.Properties />
       </EntityComposer.Main>
-      <TaskComposer.ErrorMessage />
+      <TaskComposerParts.ErrorMessage />
       {/* The team switch, Create More and Create Task need about 400px; a
           narrow split wraps the actions to their own row. */}
       <EntityComposer.Footer class="flex-wrap items-center">
-        <TaskComposer.ShareToggle />
+        <TaskComposerParts.ShareToggle />
         <div class="min-w-0 ml-auto flex flex-wrap items-center justify-end gap-3">
-          <TaskComposer.LinkInSourceToggle />
-          <TaskComposer.CreateMoreToggle />
-          <TaskComposer.CancelTemplate />
-          <TaskComposer.Submit />
+          <TaskComposerParts.LinkInSourceToggle />
+          <TaskComposerParts.CreateMoreToggle />
+          <TaskComposerParts.CancelTemplate />
+          <TaskComposerParts.Submit />
         </div>
       </EntityComposer.Footer>
       <Show when={!props.composer.isTemplateMode()}>
-        <TaskComposer.SimilarTasks />
+        <TaskComposerParts.SimilarTasks />
       </Show>
-    </TaskComposer.Root>
+    </TaskComposerParts.Root>
   );
 }
