@@ -5,7 +5,6 @@ import type { CalendarEventEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
@@ -20,15 +19,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
 }));
-vi.mock('@macro-inc/collaboration/websocket', () => ({
-  createSocketEffect: vi.fn(),
-}));
 vi.mock('@queries/notification/user-notifications', () => ({
-  optimisticInsertNotification: vi.fn(),
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.seen }),
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
-    transport: 'graphql',
     isLoading: false,
     get data() {
       return mocks.feed();
@@ -101,7 +95,7 @@ describe('opening calendar notifications', () => {
       .mockImplementation(() => reported.resolve());
     mocks.entitySeen.mockRejectedValueOnce(error);
     const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      source: createNotificationSource(),
       dispose,
     }));
     try {
@@ -122,7 +116,7 @@ describe('opening calendar notifications', () => {
       const pending = Promise.withResolvers<void>();
       mocks.seen.mockReturnValueOnce(pending.promise);
       const { source, dispose } = createRoot((dispose) => ({
-        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        source: createNotificationSource(),
         dispose,
       }));
       const attached = [
@@ -162,7 +156,7 @@ describe('opening calendar notifications', () => {
     vi.spyOn(Telemetry, 'error').mockImplementation(() => reported.resolve());
     mocks.seen.mockReturnValueOnce(pending.promise);
     const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      source: createNotificationSource(),
       dispose,
     }));
     const row = withEntityNotifications(

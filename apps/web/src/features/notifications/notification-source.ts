@@ -2,25 +2,18 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { muteItemForRef } from '@entity/utils/notification';
-import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import { updateSoupForNotification } from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
 import {
-  optimisticInsertNotification,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
   useUserNotificationsQuery,
 } from '@queries/notification/user-notifications';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
-import type {
-  ConnGatewayNotificationPayload,
-  NotifEvent,
-  UserUnsubscribe,
-} from '@service-notification/generated/schemas';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas';
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -36,7 +29,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { fromZodError } from 'zod-validation-error';
 import { nextNotificationState } from './notification-state';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
@@ -44,7 +36,6 @@ import {
   compositeEntity,
   notificationEntity,
   type UnifiedNotification,
-  unifiedNotificationSchema,
 } from './types';
 
 export const CHANNEL_EVENT_TYPES = [
@@ -102,14 +93,13 @@ export type NotificationSource = {
   subscribe: (subscribe: SubscribeFn) => UnsubscribeFn;
 };
 
-const NOTIFICATION_EVENT_TYPE = 'notification';
-
 const QUERY_LIMIT = 500;
 
 // Persistent overrides for the `done` flag that survive cache writes.
 // In-flight infinite-query page fetches can land after an optimistic cache
 // flip and overwrite it with stale server data; this map keeps the UI
-// consistent regardless of what the cache says.
+// consistent regardless of what the cache says. Overrides are never pruned from
+// the feed: an id leaving it says nothing about still-mounted Soup edges.
 type DoneOverride = { done: boolean; reopened: boolean };
 const [doneOverrides, setDoneOverrides] = createRoot(() =>
   createSignal<ReadonlyMap<string, DoneOverride>>(new Map())
@@ -164,9 +154,8 @@ export function setDoneOverride(
 // snapshot may present the notification as unread: a full refetch reads its
 // pages over several seconds and a page read before the mark's POST commits
 // resurrects pre-write state when it lands. Entries are removed on mutation
-// failure (that rollback is deliberate). REST-only overrides can be pruned
-// once the feed confirms the seen state at a quiet moment; GraphQL Soup edges
-// can still hold older snapshots independently of that feed.
+// failure (that rollback is deliberate). They are never pruned from the feed:
+// Soup edges can still hold older snapshots independently of it.
 type SeenOverride = { viewedAt: string; token: symbol };
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
   createStore<Record<string, SeenOverride | undefined>>({})
@@ -236,7 +225,6 @@ function withNotificationOverrides(
 }
 
 export function createNotificationSource(
-  ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void,
   enabled: Accessor<boolean> = () => true
 ): NotificationSource {
@@ -246,7 +234,6 @@ export function createNotificationSource(
     () => ({ limit: QUERY_LIMIT }),
     () => ({ enabled: enabled() })
   );
-  const usesGraphql = () => notificationsQuery.transport === 'graphql';
   const mutedEntitiesQuery = createMutedEntitiesQuery(
     { limit: QUERY_LIMIT },
     enabled
@@ -275,47 +262,6 @@ export function createNotificationSource(
     return raw.map(withNotificationOverrides);
   });
 
-  // Only the REST feed owns all notification readers. In GraphQL mode an id
-  // leaving (or being confirmed by) this feed says nothing about still-mounted
-  // Soup edges. Keep their intent until explicitly cleared, replaced, or rolled
-  // back rather than letting pagination resurrect stale edge state.
-  createEffect(() => {
-    if (!enabled() || usesGraphql()) return;
-    const raw = notificationsQuery.data;
-    if (!raw) return;
-    const presentIds = new Set(raw.map((n) => n.id));
-    const overrides = doneOverrides();
-    if (overrides.size === 0) return;
-    const toPrune: string[] = [];
-    for (const id of overrides.keys()) {
-      if (!presentIds.has(id)) toPrune.push(id);
-    }
-    if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
-  });
-
-  // Prune seen overrides once they stop being load-bearing: the id left the
-  // cache, or the cache row itself is seen at a quiet moment. Quiet matters —
-  // while a mark is in flight the seen cache row is the optimistic write, and
-  // a fetch that is still running may hold a pre-write snapshot that will
-  // land later; in both cases the override must survive.
-  createEffect(() => {
-    if (!enabled() || usesGraphql()) return;
-    const raw = notificationsQuery.data;
-    if (!raw) return;
-    const seenIds = Object.keys(seenOverrides);
-    if (seenIds.length === 0) return;
-    const quiet =
-      !notificationsQuery.isFetching &&
-      !markNotificationsAsSeenMutation.isPending;
-    const byId = new Map(raw.map((n) => [n.id, n]));
-    const toPrune: string[] = [];
-    for (const id of seenIds) {
-      const row = byId.get(id);
-      if (!row || (row.state !== 'unseen' && quiet)) toPrune.push(id);
-    }
-    if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
-  });
-
   const notificationsByEntity = createLazyMemo(() => {
     const data = notifications();
     const grouped: NotificationsByEntity = {};
@@ -327,22 +273,6 @@ export function createNotificationSource(
     }
 
     return grouped;
-  });
-
-  createEffect(() => {
-    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
-    // REST notification source is retired. GraphQL consumers should use Soup
-    // notification edges or dedicated notification queries instead.
-    if (!enabled() || usesGraphql()) return;
-    if (!notificationsQuery.data) return;
-    // A failed page keeps the loaded pages and the next cursor, so fetching
-    // again here would repeat the failed request in a tight loop (for example,
-    // a 401 after the session expired). The next successful fetch clears the
-    // error and resumes pagination.
-    if (notificationsQuery.error) return;
-    if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
-      fireAndForget(notificationsQuery.fetchNextPage(), 'notifications');
-    }
   });
 
   const isLoading = () => {
@@ -429,7 +359,7 @@ export function createNotificationSource(
 
   const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
     (patch) => {
-      if (!enabled() || !usesGraphql()) return;
+      if (!enabled()) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
       const notification = mapGraphqlNotification(patch.notification);
@@ -440,55 +370,6 @@ export function createNotificationSource(
   onCleanup(() => {
     graphqlSubscriptionDisposed = true;
     unsubscribeFromGraphql();
-  });
-
-  const mapWebsocketNotification = (
-    raw: ConnGatewayNotificationPayload
-  ): UnifiedNotification => {
-    return {
-      ...raw,
-      id: raw.notification_id,
-      notification_metadata: raw.notification_metadata as NotifEvent,
-    };
-  };
-
-  createSocketEffect(ws, (wsData) => {
-    if (
-      !enabled() ||
-      wsData.type !== NOTIFICATION_EVENT_TYPE ||
-      usesGraphql()
-    ) {
-      return;
-    }
-    let parsedNotification: UnifiedNotification;
-    try {
-      const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
-      const unsafeMapped = mapWebsocketNotification(raw);
-      // Metadata fallback must never admit a missing or invalid lifecycle state.
-      if (!['unseen', 'seen', 'done'].includes(unsafeMapped.state)) {
-        throw new Error('Invalid notification state');
-      }
-      const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
-      if (!parseResult.success) {
-        console.warn(
-          'Failed to parse notification',
-          wsData.data,
-          fromZodError(parseResult.error)
-        );
-        parsedNotification = unsafeMapped;
-      } else {
-        parsedNotification = parseResult.data;
-      }
-    } catch (e) {
-      console.error('Failed to parse notification', wsData.data, e);
-      return;
-    }
-    // Apply optimistic Soup writes before callbacks start list revalidation;
-    // otherwise those writes cancel the refetch triggered by this delivery.
-    if (notificationsQuery.transport === 'rest') {
-      optimisticInsertNotification(parsedNotification);
-    }
-    dispatchIncomingNotification(parsedNotification);
   });
 
   // Skip empty batches: entity-level read markers fire on mount regardless
@@ -566,11 +447,7 @@ export function createNotificationSource(
     muteEntity,
     unmuteEntity,
     subscribe,
-    get withLocalOverrides() {
-      return usesGraphql() ? withNotificationOverrides : undefined;
-    },
-    get withLocalState() {
-      return usesGraphql() ? notificationStateWithLocalOverrides : undefined;
-    },
+    withLocalOverrides: withNotificationOverrides,
+    withLocalState: notificationStateWithLocalOverrides,
   };
 }

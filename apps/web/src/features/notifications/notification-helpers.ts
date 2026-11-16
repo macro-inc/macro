@@ -1,11 +1,9 @@
 import type { Entity, EntityType } from '@core/types';
 import { isMutedItem } from '@entity/utils/notification';
-import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
@@ -187,7 +185,7 @@ export async function markNotificationForEntityIdAsRead(
 }
 
 /** Cold imperative actions must load the full feed rather than act on an empty snapshot. */
-export async function ensureNotificationSourceLoaded(
+async function ensureNotificationSourceLoaded(
   notificationSource: NotificationSource
 ): Promise<void> {
   const query = notificationSource._notificationsQuery;
@@ -300,11 +298,6 @@ export async function executeMarkNotificationsDone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 
@@ -322,11 +315,6 @@ export async function executeMarkNotificationsUndone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 

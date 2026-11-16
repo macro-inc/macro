@@ -40,7 +40,6 @@ import {
   useRefreshTrackedEntitiesOnFocus,
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
-import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { useResumeFolderUploads } from '@service-storage/util/pendingFolderUploads';
 import { ImperativeDialogHost } from '@ui';
 import type { ParentProps } from 'solid-js';
@@ -93,7 +92,6 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     }
   }
   const notificationSource = createNotificationSource(
-    connectionGatewayWebsocket,
     (notification) =>
       fireAndForget(deliverNotification(notification), 'notifications'),
     () => authenticated() === true

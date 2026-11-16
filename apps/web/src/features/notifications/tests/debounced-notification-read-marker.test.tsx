@@ -19,19 +19,15 @@ import type { NotificationSource } from '../notification-source';
 const mocks = vi.hoisted(() => ({
   markInBackground: vi.fn(async () => {}),
   markThread: vi.fn(),
-  load: vi.fn(async () => {}),
 }));
 vi.mock('../notification-helpers', () => ({
   markNotificationsForEntityAsReadInBackground: mocks.markInBackground,
-  ensureNotificationSourceLoaded: mocks.load,
 }));
 vi.mock('@queries/email/thread', () => ({
   useMarkThreadAsSeenMutation: () => ({ mutate: mocks.markThread }),
 }));
 
-const source = {
-  _notificationsQuery: { transport: 'graphql' },
-} as NotificationSource;
+const source = {} as NotificationSource;
 let dispose: (() => void) | undefined;
 beforeEach(() => {
   vi.useFakeTimers();
@@ -39,6 +35,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   dispose?.();
+  dispose = undefined;
   vi.useRealTimers();
 });
 
@@ -70,28 +67,18 @@ describe('background notification read markers', () => {
     expect(mocks.markThread).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])(
-    'waits for a cold REST feed, respecting disposal=%s',
-    async (leave) => {
-      const loaded = Promise.withResolvers<void>();
-      mocks.load.mockReturnValueOnce(loaded.promise);
-      const restSource = {
-        _notificationsQuery: { transport: 'rest' },
-      } as NotificationSource;
-      const view = render(() => (
-        <NotificationReadMarker
-          notificationSource={restSource}
-          entity={{ type: 'document', id: 'doc' }}
-        />
-      ));
-      dispose = view.unmount;
-      expect(mocks.markInBackground).not.toHaveBeenCalled();
-      if (leave) view.unmount();
-      loaded.resolve();
-      await loaded.promise;
-      expect(mocks.markInBackground).toHaveBeenCalledTimes(leave ? 0 : 1);
-    }
-  );
+  it('does not mark a delayed read once the marker unmounts', async () => {
+    const view = render(() => (
+      <NotificationReadMarker
+        notificationSource={source}
+        entity={{ type: 'channel', id: 'channel' }}
+        debounceTime={10}
+      />
+    ));
+    view.unmount();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(mocks.markInBackground).not.toHaveBeenCalled();
+  });
 
   it('routes automatic entity reads through the rejection-handling helper', async () => {
     const view = render(() => (

@@ -3,11 +3,8 @@ import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
-import { onCleanup, onMount, Show } from 'solid-js';
-import {
-  ensureNotificationSourceLoaded,
-  markNotificationsForEntityAsReadInBackground,
-} from '../notification-helpers';
+import { onMount, Show } from 'solid-js';
+import { markNotificationsForEntityAsReadInBackground } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
@@ -68,30 +65,18 @@ function ReadMarkerOnMount(props: NotificationReadMarkerProps) {
     );
   }
 
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-  const markRead = async () => {
-    const entity = props.entity;
-    if (props.notificationSource._notificationsQuery.transport === 'rest') {
-      await ensureNotificationSourceLoaded(props.notificationSource);
-    }
-    if (
-      disposed ||
-      props.entity.id !== entity.id ||
-      props.entity.type !== entity.type
-    )
-      return;
-    await markNotificationsForEntityAsReadInBackground(
-      props.notificationSource,
-      entity
-    );
-  };
   return (
     <DebouncedMarker
       debounceTime={props.debounceTime ?? 0}
-      debouncedFn={() => fireAndForget(markRead(), 'notification-read')}
+      debouncedFn={() =>
+        fireAndForget(
+          markNotificationsForEntityAsReadInBackground(
+            props.notificationSource,
+            props.entity
+          ),
+          'notification-read'
+        )
+      }
     />
   );
 }
