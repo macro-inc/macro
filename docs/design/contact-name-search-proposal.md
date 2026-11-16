@@ -168,8 +168,10 @@ array. A naive longest-token seed was inferior to a more selective posting range
 - Bound per-name index derivation and input work. Long/malformed names and short or
   punctuation-only input need explicit behavior, not dropped membership or a
   directory-sized fallback buffer.
-- Keep interactive suggestions local-only. Server access supplies authorized
-  synchronization/removal evidence, not a fallback search request. Preserve deployed
+- Keep interactive suggestions local whenever the tab has a usable cache. Server
+  access otherwise supplies authorized synchronization/removal evidence; only a tab
+  with no usable cache (unsupported browser, or a cache taken over by a newer build)
+  reads bounded server pages while online. Preserve deployed
   SDK/backend search compatibility independently.
 - Benchmark the complete browser/OPFS path, realistic activity distributions and
   adversarial name/rank correlation before claiming the prototype gain. Measure
