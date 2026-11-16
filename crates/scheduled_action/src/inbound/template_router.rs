@@ -77,6 +77,9 @@ where
             "/scheduled-actions/{id}/template/activate",
             post(activate_template::<T, Svc, Auth>),
         )
+        .layer(axum::middleware::from_fn(
+            super::axum_router::refuse_channel_mention_writes,
+        ))
         .with_state(state)
 }
 
