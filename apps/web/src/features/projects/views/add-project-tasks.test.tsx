@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { Accessor } from 'solid-js';
+import type { Accessor, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AddProjectTasks } from '../add-project-tasks';
 import type { ProjectDetail } from '../core/project';
@@ -14,6 +14,9 @@ vi.mock('@ui', async () => ({
   Hotkey: () => null,
 }));
 
+vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
+  FloatRegion: (props: ParentProps) => props.children,
+}));
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));
@@ -157,11 +160,14 @@ it('keeps phone picker actions reachable and confirms the draft selection', asyn
   mock.assignTasks.mockResolvedValue([{ taskId: 'one' }, { taskId: 'two' }]);
   const style = document.createElement('style');
   style.textContent =
-    '[data-corvu-drawer-content] { transition-duration: 0s; animation-name: none; }';
+    '[data-corvu-drawer-content], .mobile-create-menu, .mobile-create-menu-overlay { transition-duration: 0s; animation-name: none !important; }';
   document.head.append(style);
   render(() => <AddProjectTasks project={project} inline />);
-  fireEvent.click(screen.getByRole('button', { name: /Add task/ }));
-  const sheet = await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add existing tasks' }));
+  const sheet = await screen.findByRole('dialog', {
+    name: 'Add existing tasks',
+  });
   sheet.scrollTo = vi.fn();
   const add = screen.getByRole('button', { name: 'Add 0 tasks' });
   expect(add).toHaveProperty('disabled', true);

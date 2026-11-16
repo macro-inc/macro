@@ -1,7 +1,7 @@
 import type { ProjectWorkspaceProps } from '@app/features/projects/context/project-workspace';
 import type { ProjectDetail } from '@app/features/projects/core/project';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createEffect, createSignal, type ParentProps, Show } from 'solid-js';
+import { createEffect, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MobileProjectWorkspace } from './project-workspace';
 
@@ -51,14 +51,8 @@ vi.mock('@app/features/tasks-view/tasks-content', () => ({
   TasksContent: () => <p>Existing task</p>,
 }));
 vi.mock('../../add-project-tasks', () => ({
-  AddProjectTasks: (props: {
-    inline?: boolean;
-    hidden?: boolean;
-    onCreateTask?: () => void;
-  }) => (
-    <Show when={props.inline || !props.hidden}>
-      <button onClick={props.onCreateTask}>Add task</button>
-    </Show>
+  AddProjectTasks: (props: { onCreateTask?: () => void }) => (
+    <button onClick={props.onCreateTask}>Add task</button>
   ),
 }));
 
@@ -105,7 +99,7 @@ it('keeps Add task available when the task area cannot fill the viewport', () =>
   expect(createTask).toHaveBeenCalledOnce();
 });
 
-it('shows the floating action only past the summary when tasks fill the viewport', () => {
+it('keeps one floating action at rest and after scrolling or resizing', () => {
   setGeometry({ viewport: 640, tasks: 900 });
   render(() => (
     <MobileProjectWorkspace
@@ -120,7 +114,7 @@ it('shows the floating action only past the summary when tasks fill the viewport
     />
   ));
 
-  expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Add task' })).toHaveLength(1);
   const scroller = screen.getByRole('region', { name: 'Tasks' }).parentElement!;
   fireEvent.scroll(scroller, { target: { scrollTop: 360 } });
   expect(screen.getAllByRole('button', { name: 'Add task' })).toHaveLength(1);
@@ -130,5 +124,25 @@ it('shows the floating action only past the summary when tasks fill the viewport
   expect(screen.getAllByRole('button', { name: 'Add task' })).toHaveLength(1);
 
   setGeometry({ viewport: 640, tasks: 900 });
-  expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Add task' })).toHaveLength(1);
+});
+
+it('keeps one floating action and documentation when the project is empty', () => {
+  render(() => (
+    <MobileProjectWorkspace
+      project={{ ...project, taskIds: [] }}
+      source={source}
+      commands={{} as ProjectWorkspaceProps['commands']}
+      section="overview"
+      onOpenTask={() => true}
+      onCreateTask={() => {}}
+      description={null}
+      discussion={null}
+    />
+  ));
+  expect(screen.getAllByRole('button', { name: 'Add task' })).toHaveLength(1);
+  expect(
+    screen.getByText("Add tasks to plan and track this project's work.")
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Documentation' })).toBeTruthy();
 });

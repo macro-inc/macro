@@ -139,7 +139,7 @@ export function MobilePageCreateButton() {
 
   const isProjectDetail = () => {
     if (!isMobile()) return false;
-    // The project page owns its Task action once the list fills the viewport.
+    // The project page owns its always-visible Task action.
     const content = globalSplitManager()?.activeSplit()?.content() ?? null;
     const location = projectLocation(content);
     return location?.kind === 'detail';
