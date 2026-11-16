@@ -33,6 +33,7 @@ import {
   type PasswordListViewEntry,
 } from '../persistence';
 import { passwordKeys } from '../queries/keys';
+import { isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -196,6 +197,20 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     setSelection(item ? { kind: 'item', id: item.id } : undefined);
     if (item?.kind !== 'note' && item)
       fireAndForget(loadUsername(item), 'passwords');
+  }
+  /**
+   * No answer from Macro: the last request for the selected item, or the
+   * latest list reload. The list on screen may be out of date until it answers.
+   */
+  const unreachable = () =>
+    failure() === 'unreachable' ||
+    (items.isError && isUnreachable(items.error));
+  /** Ask again: reload the list and folders, and the selected item's username. */
+  function retryConnection() {
+    fireAndForget(items.refetch(), 'passwords');
+    fireAndForget(folders.refetch(), 'passwords');
+    const current = selection();
+    if (current?.kind === 'item') select(selected());
   }
   function selectDraft(key: string) {
     resetDetail();
@@ -711,6 +726,8 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     usernameLoading,
     usernameCopied,
     failure,
+    unreachable,
+    retryConnection,
     reveal,
     copy: copyPassword,
     copyUsername,

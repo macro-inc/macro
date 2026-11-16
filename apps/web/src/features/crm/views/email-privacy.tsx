@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableCrmThreadExclusions } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -107,7 +109,108 @@ function DomainBlocklist(props: {
   );
 }
 
+function ThreadExclusions(props: { source: PrivacySource }) {
+  const [after, setAfter] = createSignal<string>();
+  const query = props.source.createExcludedThreads(after);
+  return (
+    <SettingsSection title={t('crm.privacyThreadsTitle')}>
+      <p class="text-sm text-ink-muted">{t('crm.privacyThreadsDescription')}</p>
+      <Show
+        when={!query.isPending && query.data}
+        fallback={
+          <p class="text-sm text-ink-muted" role="status">
+            {query.isError
+              ? t('crm.privacyLoadFailed')
+              : t('crm.privacyLoading')}
+            <Show when={query.isError}>
+              <Button
+                variant="ghost"
+                onClick={() => fireAndForget(query.refetch(), 'crm')}
+              >
+                {t('crm.privacyRetry')}
+              </Button>
+            </Show>
+          </p>
+        }
+      >
+        <Show when={query.isError}>
+          <p class="text-sm text-ink-muted" role="status">
+            {t('crm.privacyLoadFailed')}
+            <Button
+              variant="ghost"
+              onClick={() => fireAndForget(query.refetch(), 'crm')}
+            >
+              {t('crm.privacyRetry')}
+            </Button>
+          </p>
+        </Show>
+        <SettingsCard>
+          <For
+            each={query.data?.threads}
+            fallback={
+              <p class="px-6 py-3 text-sm text-ink-muted">
+                {t('crm.privacyNoThreads')}
+              </p>
+            }
+          >
+            {(thread) => (
+              <SettingsRow
+                label={
+                  <span class="break-words">
+                    {thread.subject || t('crm.privacyThreadNoSubject')}
+                  </span>
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={props.source.update.isPending}
+                  aria-label={t('crm.privacyRestoreThreadLabel', {
+                    subject: thread.subject || t('crm.privacyThreadNoSubject'),
+                  })}
+                  onClick={() =>
+                    props.source.update.mutate({
+                      action: 'set_thread_exclusion',
+                      thread_id: thread.threadId,
+                      excluded: false,
+                    })
+                  }
+                >
+                  {t('crm.privacyRestoreThread')}
+                </Button>
+              </SettingsRow>
+            )}
+          </For>
+        </SettingsCard>
+        <div class="flex justify-end gap-2">
+          <Show when={after()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAfter(undefined)}
+            >
+              {t('crm.privacyThreadsFirst')}
+            </Button>
+          </Show>
+          <Show when={query.data?.nextCursor}>
+            {(cursor) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAfter(cursor())}
+              >
+                {t('crm.privacyThreadsNext')}
+              </Button>
+            )}
+          </Show>
+        </div>
+      </Show>
+    </SettingsSection>
+  );
+}
+
 export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
+  const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
   const source = useCrmContext().createEmailPrivacy();
   const settings = () =>
     source.query.isSuccess ? source.query.data : undefined;
@@ -152,6 +255,9 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       </SettingsSection>
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
+      <Show when={threadExclusions().enabled}>
+        <ThreadExclusions source={source} />
+      </Show>
       <div class="flex justify-end">
         <Button
           variant={settings()?.enabled ? 'secondary' : 'primary'}

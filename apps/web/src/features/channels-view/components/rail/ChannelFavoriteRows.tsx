@@ -82,7 +82,8 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
           <ChannelMentionCount count={item().mentions} />
         </Match>
         <Match when={item().unread}>
-          <UnreadIndicator active />
+          {/* `mx-1` centers the dot where a one-digit count sits. */}
+          <UnreadIndicator active class="mx-1" />
         </Match>
       </Switch>
     </ViewSidebar.Item>

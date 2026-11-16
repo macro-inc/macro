@@ -181,3 +181,6 @@ export function folderPath(
   }
   return path;
 }
+
+/** A reviewer's answer to an agent's access request. */
+export type AgentRequestDecision = 'view' | 'edit' | 'deny';

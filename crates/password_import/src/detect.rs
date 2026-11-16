@@ -3,7 +3,8 @@ use crate::error::ImportError;
 use crate::model::{Limits, SourceFormat};
 use crate::{bitwarden_csv, csv_table, one_password_csv, zip_archive};
 
-/// Sniff the format: a zip holding `export.data`, a Bitwarden JSON export, or
+/// Sniff the format: a zip holding `export.data` (1Password) or `data.json`
+/// (Bitwarden), a Bitwarden JSON export, or
 /// a CSV with a known header. Checks the same file-level limits as [`crate::parse`]
 /// with the same `limits`, without inflating or parsing items.
 pub fn detect(bytes: &[u8], limits: &Limits) -> Result<SourceFormat, ImportError> {
@@ -12,8 +13,7 @@ pub fn detect(bytes: &[u8], limits: &Limits) -> Result<SourceFormat, ImportError
     }
 
     if bytes.starts_with(zip_archive::ZIP_MAGIC) {
-        zip_archive::open_checked(bytes, limits)?;
-        return Ok(SourceFormat::OnePasswordPux);
+        return zip_archive::detect(bytes, limits);
     }
 
     let text = crate::strip_byte_order_mark(bytes);

@@ -5,6 +5,10 @@ pub mod model;
 #[cfg(feature = "ports")]
 pub mod email_privacy;
 
+/// Bounded rule definitions and audit vocabulary for selected contribution.
+#[cfg(feature = "ports")]
+pub mod email_rules;
+
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]
