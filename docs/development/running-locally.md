@@ -513,6 +513,11 @@ never finish loading Vite's thousands of modules). Then pick up frontend edits w
 A failed `rebuild` leaves the old build running: the phase stays `ready`, and `job`
 records the failure. Run state and logs live in `infra/local/generated/<instance>/run`.
 
+Bring-up fails at **Checking frontend through HTTPS proxy** when the proxy cannot
+reach Vite within 300 seconds. A 502 that lasts that long usually means the host
+firewall drops Docker-to-host traffic on Vite's port. On a machine that is just
+slow, set `MACRO_LOCAL_FRONTEND_READY_SECS` to wait longer.
+
 ## Run More than One Stack
 
 Use named instances for several local stacks at once. This helps across worktrees:

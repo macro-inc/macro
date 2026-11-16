@@ -22,6 +22,29 @@ use super::{Mode, proxy, repo_root, stage::Stage};
 /// before it launches.
 pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
 
+/// How long the proxy check waits for Vite's first `/app/` answer by default.
+/// A cold dev server optimizes its dependencies on that request, which can
+/// take minutes on a loaded machine.
+const PROXY_READY_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Overrides [`PROXY_READY_TIMEOUT`], in whole seconds.
+const PROXY_READY_TIMEOUT_ENV: &str = "MACRO_LOCAL_FRONTEND_READY_SECS";
+
+/// The proxy check's deadline: [`PROXY_READY_TIMEOUT_ENV`] when set, else the
+/// default. A value that is not a positive whole number is an error, not a
+/// silent default.
+fn proxy_ready_timeout(raw: Option<&str>) -> Result<Duration> {
+    let Some(raw) = raw else {
+        return Ok(PROXY_READY_TIMEOUT);
+    };
+    match raw.trim().parse::<u64>() {
+        Ok(secs) if secs > 0 => Ok(Duration::from_secs(secs)),
+        _ => {
+            anyhow::bail!("{PROXY_READY_TIMEOUT_ENV}={raw:?} must be a positive number of seconds")
+        }
+    }
+}
+
 /// Vite's output, kept across the whole dev server's life for `run_local logs`.
 pub fn log_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("run/frontend.log")
@@ -364,18 +387,22 @@ pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
 /// A listening Vite port does not prove the containerized proxy can reach it.
 /// Verify the browser's route before announcing that the stack is ready.
 fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+    let timeout =
+        proxy_ready_timeout(macro_env_var::maybe_read_env(PROXY_READY_TIMEOUT_ENV).as_deref())?;
+    let secs = timeout.as_secs().to_string();
     let mut cmd = Command::new("curl");
     cmd.args([
         "--fail",
         "--silent",
         "--show-error",
+        // Retry every 2 s until the deadline; the count only has to outlast it.
         "--retry",
-        "8",
+        &secs,
         "--retry-connrefused",
         "--retry-delay",
-        "1",
+        "2",
         "--retry-max-time",
-        "45",
+        &secs,
         "--max-time",
         "5",
         "--output",
@@ -388,9 +415,11 @@ fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
         .run("Checking frontend through HTTPS proxy", &mut cmd)
         .with_context(|| {
             format!(
-                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
-                 firewall access to host.docker.internal:{} (Vite's port). \
+                "HTTPS proxy could not serve the frontend within {}s. Check proxy logs and \
+                 Docker-to-host firewall access to host.docker.internal:{} (Vite's port); a \
+                 slow machine can wait longer with {PROXY_READY_TIMEOUT_ENV}=<seconds>. \
                  Direct Vite URL: {}",
+                timeout.as_secs(),
                 instance.port(Port::Frontend),
                 url(instance)
             )
