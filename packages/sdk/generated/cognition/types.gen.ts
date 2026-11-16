@@ -4053,6 +4053,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
