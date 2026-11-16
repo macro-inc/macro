@@ -1,0 +1,86 @@
+crates/agent_monitor_tui/Cargo.toml
+  s_564ae7a9b7392a::t_7acbabd920e7b6 20
+  s_564ae7a9b7392a::t_17e9ee58d3b1b2 22
+  s_564ae7a9b7392a::t_6544e065c9ef47 17,35
+crates/agent_monitor_tui/src/body/mesh/creator.rs
+  s_564ae7a9b7392a::t_41faa6af2ae334 186
+  s_564ae7a9b7392a::t_ed806534704557 41,49,85,114-116,169,190
+  s_564ae7a9b7392a::t_e166d9b8185598 98
+  s_564ae7a9b7392a::t_8bb88a86f6fa12 175
+  s_564ae7a9b7392a::t_da8a718928eba3 1-40,42-48,50-84,86-97,99-113,117-168,170-174,176-185,187-189,191-220
+crates/agent_monitor_tui/src/ui.rs
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 186-188,209,230-231,233
+  s_564ae7a9b7392a::t_b020fa713000a9 232
+crates/mesh_man/Cargo.toml
+  s_564ae7a9b7392a::t_7acbabd920e7b6 10
+crates/agent_monitor_tui/src/ui/panes.rs
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 871-874,884-888
+crates/agent_monitor_tui/src/body.rs
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 58-73
+crates/agent_monitor_tui/src/app.rs
+  s_564ae7a9b7392a::t_ed806534704557 249
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 194-200,246-248,250-254
+  s_564ae7a9b7392a::t_1773ec2433a938 13
+crates/agent_monitor_tui/src/keys.rs
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 318-319,326-334,336-368,485-487
+  s_564ae7a9b7392a::t_65e647e8ff0d9c 335
+crates/mesh_man/src/lib.rs
+  s_564ae7a9b7392a::t_7acbabd920e7b6 30,73-74,139-140,219-249,337-339
+crates/agent_monitor_tui/src/body/mesh.rs
+  s_564ae7a9b7392a::t_e17c3ff7b96cae 5,8-12,27,29,37,39-42,59-77,96-101,103,107,109,136-138,151-153,162-166,178-216,219-221
+  s_564ae7a9b7392a::t_582b54a68796ac 102
+crates/agent_monitor_tui/AGENTS.md
+  s_564ae7a9b7392a::t_678d2246a9342f 42-43,98-103
+crates/mesh_man/src/character/test.rs
+  s_564ae7a9b7392a::t_b154384ccc8629 26
+  s_564ae7a9b7392a::t_3ee7ab178a101b 1-25,27-76
+crates/mesh_man/AGENTS.md
+  s_564ae7a9b7392a::t_678d2246a9342f 29-33,78-79
+crates/agent_monitor_tui/src/body/mesh/creator/test.rs
+  s_564ae7a9b7392a::t_ed806534704557 4,52,54,65-76,78-83
+  s_564ae7a9b7392a::t_80a4a3b02bf246 8-42
+  s_564ae7a9b7392a::t_fc0bce089d66b8 1-3
+  s_564ae7a9b7392a::t_9e01095a01a329 5-7
+  s_564ae7a9b7392a::t_17724b14cb1827 43-45,49-51
+  s_564ae7a9b7392a::t_efce3ee9ed5b6a 53
+  s_564ae7a9b7392a::t_57dd4389e82378 55-57,62-64
+  s_564ae7a9b7392a::t_a540a21381fcb2 77
+  s_564ae7a9b7392a::t_3f84d581e58d86 46-48,58-61
+crates/mesh_man/src/character.rs
+  s_564ae7a9b7392a::t_7acbabd920e7b6 1-35,37-52,57-95,97-170,172-249,251-253,255-268,270-278,280-292,294-308,310-320,322-335,337-347,349-370
+  s_564ae7a9b7392a::t_8bb88a86f6fa12 53-56
+  s_564ae7a9b7392a::t_65e647e8ff0d9c 250,254
+  s_564ae7a9b7392a::t_314a392256f804 36,96,171,269,279,293,309,321,336,348
+crates/mesh_man/src/figure.rs
+  s_564ae7a9b7392a::t_7acbabd920e7b6 205
+crates/coding_agent_worker/README.md
+  s_564ae7a9b7392a::t_678d2246a9342f 247-253
+crates/agent_monitor_tui/src/app/test.rs
+  s_564ae7a9b7392a::t_b68a1f86aea7f5 284-304
+Cargo.lock
+  s_d3946303223a7d::t_55a06e86804dec 945,948,950,13493
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b5e0ef1ebcb054a5fe246012aac86193d659a851",
+  "prompts": {},
+  "sessions": {
+    "s_564ae7a9b7392a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e266-9e70-7091-9ea4-3b7a56db33fe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_d3946303223a7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e26b-6fc6-74b3-893f-39503575b4f7",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
