@@ -293,9 +293,11 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
 pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        EntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            EntityAccessService,
+        >,
     >,
 >;
 
@@ -1093,6 +1095,7 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
+            crm_db: ctx.db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),

@@ -843,6 +843,8 @@ export * from './crmContactResponseCompanyId';
 export * from './crmContactResponseEmail';
 export * from './crmContactResponseName';
 export * from './crmDomainResponse';
+export * from './crmMemberAccessResponse';
+export * from './crmMemberAccessResponseTeamId';
 export * from './crmPermissionRole';
 export * from './crmPreviews';
 export * from './crmPreviewsRequest';

@@ -20959,6 +20959,15 @@ export const ExecutionReceipt = z.object({
     .optional(),
   result: z.any().optional(),
   error: z.union([z.string(), z.null()]).optional(),
+  modelMedia: z
+    .array(
+      z.object({
+        type: z.literal('image'),
+        mediaType: z.literal('image/png'),
+        data: z.string(),
+      })
+    )
+    .optional(),
 });
 
 export const ReadCodeDocs = z.object({ symbols: z.array(z.string()) }).strict();
