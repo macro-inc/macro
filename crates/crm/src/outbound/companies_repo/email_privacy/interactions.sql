@@ -41,6 +41,11 @@ WITH matching_messages AS (
     SELECT tl.*, cm.owner
     FROM thread_links tl
     JOIN contributing_mailboxes cm ON cm.link_id = tl.link_id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM crm_email_thread_exclusions e
+        WHERE e.team_id = $1 AND e.user_id = cm.owner
+          AND e.thread_id = tl.thread_id AND e.link_id = tl.link_id
+    )
 ), thread_messages AS MATERIALIZED (
     SELECT ct.thread_id, ct.owner, m.id, m.from_contact_id
     FROM contributed_threads ct
