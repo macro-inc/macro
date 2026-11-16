@@ -5,7 +5,7 @@ import {
   initializeNativeSurfaceTests,
   nativeSurface,
 } from '@macro-inc/lexical-wasm-view/view/test/native-surface';
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import type { NodekeyOffset } from './findAndReplacePlugin';
 import { createNativeDocumentFind } from './native';
 
@@ -124,6 +124,38 @@ test('one undo reverts a whole Replace All across blocks', () => {
       'ONE plum',
     ]);
   } finally {
+    fixture.close();
+  }
+});
+
+test('a replace after a key-generation change sends nothing for the stale pieces', () => {
+  // The bar is closed (no refresh query): the spy generation cannot be queried.
+  const { fixture, find, offsets } = setup('');
+  try {
+    find.engine.search('one');
+    const stale = offsets();
+    const generation = fixture.view.mirror.keyGeneration;
+    if (generation === null) throw new Error('Missing key generation');
+    // Synthetic stand-in for a mirror re-initialize, the only path that
+    // replaces the key generation (a reset or resync rebinds the view).
+    vi.spyOn(fixture.view.mirror, 'keyGeneration', 'get').mockReturnValue(
+      generation + 1
+    );
+    const input = vi.spyOn(fixture.view.port, 'input');
+    find.engine.replaceAll({ replaceString: 'six', nodeKeyOffsetList: stale });
+    find.engine.replaceOnce({
+      replaceString: 'six',
+      nodeKeyOffsetList: stale.filter((piece) => piece.pairKey === 1),
+    });
+    expect(input).not.toHaveBeenCalled();
+    // Stale pieces have no rendered element to highlight or scroll to.
+    expect(find.engine.getElementByKey(stale[0].key)).toBeNull();
+    expect(paragraphs(fixture.root)).toEqual([
+      'One apple, one pear.',
+      'ONE plum',
+    ]);
+  } finally {
+    vi.restoreAllMocks();
     fixture.close();
   }
 });

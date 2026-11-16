@@ -49,8 +49,16 @@ export function createNativeDocumentFind(props: NativeDocumentFindProps) {
   const [contentRevision, setContentRevision] = createSignal(0);
   const [publishedView, setPublishedView] = createSignal<EditorView>();
 
+  // The pieces are bare key indexes, valid only in the generation they were
+  // found in; a mirror re-initialize may reuse those indexes for other nodes.
+  let searchGeneration: number | null = null;
+  const current = (mounted: EditorView) =>
+    searchGeneration !== null &&
+    mounted.mirror.keyGeneration === searchGeneration;
+
   const search = (query: string) => {
     if (!view?.isMounted) return;
+    searchGeneration = view.mirror.keyGeneration;
     const reply = PIECES.parse(
       queryApplication(view, 'group-b.document-find', { search: query })
     );
@@ -69,6 +77,12 @@ export function createNativeDocumentFind(props: NativeDocumentFindProps) {
 
   const replace = (payload: DocumentFindReplace, once: boolean) => {
     if (!view?.isMounted) return;
+    if (!current(view)) {
+      // Stale pieces never reach the model; find again in the current tree.
+      const query = props.refreshQuery();
+      if (query) search(query);
+      return;
+    }
     dispatchApplicationCommand(view, 'group-b.document-replace', {
       replaceString: payload.replaceString,
       once,
@@ -96,13 +110,15 @@ export function createNativeDocumentFind(props: NativeDocumentFindProps) {
     search,
     replaceAll: (payload) => replace(payload, false),
     replaceOnce: (payload) => replace(payload, true),
-    getElementByKey: (key) => view?.getElementByKey(Number(key)) ?? null,
+    getElementByKey: (key) =>
+      view && current(view) ? view.getElementByKey(Number(key)) : null,
     // Native documents have no heading folds, so every match is already visible.
     reveal: () => {},
   };
 
   const retire = () => {
     view = undefined;
+    searchGeneration = null;
     documentRevision = undefined;
     setPublishedView(undefined);
   };
