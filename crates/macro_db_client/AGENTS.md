@@ -87,6 +87,13 @@ data checks and explicit vault purge. It does not depend on a successful item.
 
 ## Gotchas
 
+- `document_email` has a statement-level `AFTER DELETE` trigger
+  (`document_email_release`, migration `20261116200143`) that queues each live
+  document whose last email link a statement removed in
+  `released_email_attachment_documents` and notifies
+  `email_attachment_documents_released`; document storage drains it. It fires
+  once per outer statement, cascades included. Write a moved link before
+  deleting the old one. `tests/released_email_attachment_documents.rs` covers it.
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
