@@ -4,7 +4,7 @@
 
 use crate::domain::{models::MemoryKind, ports::*};
 use ai_usage::{AiFeature, UsageContext};
-use jev::domain::{YesNoClassifier, YesNoQuestion};
+use jev::domain::{JevError, YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use strum::{EnumIter, IntoEnumIterator, IntoStaticStr};
@@ -15,7 +15,8 @@ mod eval;
 mod test;
 
 /// One privacy rule from `prompt::privacy`, asked as a yes/no question whose
-/// "yes" means the content breaks the rule.
+/// "yes" means the content breaks the rule. Change `privacy.md` and these
+/// questions together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum Rule {
@@ -198,9 +199,25 @@ impl<C: YesNoClassifier> JevMemoryJudge<C> {
             )
             .await
             .map_err(|error| {
-                tracing::warn!(error = ?error, "memory privacy review failed");
+                // A refused request (bad key, input it cannot evaluate) will not
+                // recover on retry, so it needs someone to look at it.
+                match error {
+                    JevError::Rejected => {
+                        tracing::error!(error = ?error, "memory privacy review was refused")
+                    }
+                    _ => tracing::warn!(error = ?error, "memory privacy review failed"),
+                }
                 MemoryError::ReviewUnavailable
             })?;
+        // A rule without an answer was never checked, so the piece cannot pass.
+        if probabilities.len() != rules.len() {
+            tracing::error!(
+                rules = rules.len(),
+                answers = probabilities.len(),
+                "memory privacy review answered the wrong number of questions"
+            );
+            return Err(MemoryError::ReviewUnavailable);
+        }
         Ok(rules
             .into_iter()
             .zip(

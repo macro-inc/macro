@@ -127,7 +127,11 @@ async fn explicit_memory_is_never_judged_on_shared_report_rules() {
 
 #[tokio::test]
 async fn a_failed_classification_saves_nothing() {
-    for error in [JevError::Unavailable, JevError::InvalidResponse] {
+    for error in [
+        JevError::Unavailable,
+        JevError::Rejected,
+        JevError::InvalidResponse,
+    ] {
         let judge = JevMemoryJudge::new(FakeClassifier::new(Err(error)));
         assert!(matches!(
             judge
@@ -143,6 +147,34 @@ async fn an_unconfigured_host_saves_nothing() {
     assert!(matches!(
         UnconfiguredJudge
             .review(user(), MemoryKind::Explicit, "Prefers short answers.")
+            .await,
+        Err(MemoryError::ReviewUnavailable)
+    ));
+}
+
+/// Answers all but one question, each with "no".
+struct ShortClassifier;
+
+impl YesNoClassifier for ShortClassifier {
+    async fn classify(
+        &self,
+        _: UsageContext,
+        _: &Value,
+        questions: &[YesNoQuestion],
+    ) -> std::result::Result<Vec<Probability>, JevError> {
+        Ok(questions
+            .iter()
+            .skip(1)
+            .map(|_| Probability::new(0.0).unwrap())
+            .collect())
+    }
+}
+
+#[tokio::test]
+async fn a_rule_left_unanswered_saves_nothing() {
+    assert!(matches!(
+        JevMemoryJudge::new(ShortClassifier)
+            .review(user(), MemoryKind::Activity, "Shipped the search index.")
             .await,
         Err(MemoryError::ReviewUnavailable)
     ));
