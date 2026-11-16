@@ -68,6 +68,12 @@ read it before changing behaviour.
   keep their attempts. Never count it as an effect failure.
 - A billing removal keeps one idempotency key across retries; see
   `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
+- Reconcile ends with `Fleet::prepare_images` (Incus: unpack a new image
+  fingerprint with a never-started `mc-<fingerprint prefix>` instance); a
+  failure only warns, so drift handling never waits on it.
+- The outbox insert `pg_notify`s `hosted_runtime_effect_queued` with the
+  worker; `PgEffectSignals` wakes agent_harness_service's fleet pass. Keep the
+  tick: retries that come due and notifications lost on reconnect rely on it.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - `NotifySetup` tells the buyer how first setup ended through the

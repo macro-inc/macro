@@ -25,6 +25,9 @@ mounted by authentication_service.
   host): it paged, and `OperatorRetry` restarts it.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
+  Inserting an effect sends `pg_notify('hosted_runtime_effect_queued', worker)`
+  on commit; agent_harness_service's `PgEffectSignals` runs the fleet pass on
+  it at once, and the 2 s tick remains for retries and lost notifications.
   A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
   a `FleetError::is_permanent` one (Incus refused the request as invalid), which
   fails the computer at once (`EffectFailed`, shown to the team as Failed).
@@ -334,6 +337,21 @@ attempt, so a busy database never fails a computer or abandons a removal.
   from (`Fleet::create` returns it, stamped as `user.macro.image` /
   `macro.image` on the guest). Updating running computers to a new image is
   not built yet; it will be a fleet-wide rollout, not a per-computer API.
+- **Image warm-up**: Incus unpacks an image into a cached volume on the pool
+  on its first use (~30 s for macro-box on ZFS); every root disk after that
+  is a copy-on-write clone of it. Each reconcile pass, the first at startup,
+  calls `Fleet::prepare_images`, which resolves both aliases and, for a
+  fingerprint whose `image` volume is not on the pool, creates and deletes a
+  never-started instance `mc-<first 32 digits of the fingerprint>`
+  (`user.macro.image_warmup`), so a new or repointed image is unpacked before a
+  buyer's Create needs it (span `incus_fleet.warm_image`, `unpacked`). Docker has nothing to prepare.
+- **No memory snapshots**: restoring computers from a stateful snapshot of a
+  booted guest was measured on Incus 7.0.1 and dropped. Incus restores a
+  stateful snapshot only into the instance it was taken from (a copy keeps
+  the snapshot without its memory, and `incus copy vm/snap new` refuses a
+  stateful copy under a new name); `migration.stateful=true` refuses the data
+  disk from a local pool; and an in-place restore (18–19 s) was no faster than
+  a cold boot of the same guest (~20 s).
 - **Enrollment**: `Enrollment { computer_id, generation, pairing_id, device_secret, name, deployment, traceparent }`
   is the one-time `user.macro.enrollment` JSON or Docker file. `deployment`
   (agent harness, document storage, app and egress URLs) comes from the
