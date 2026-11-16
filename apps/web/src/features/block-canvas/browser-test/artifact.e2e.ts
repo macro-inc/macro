@@ -236,6 +236,8 @@ async function expectSettledOn(page: Page, id: string) {
 test('plays every transition kind forward and back to the right slide', async ({
   page,
 }) => {
+  // Two steps per kind at the shortest duration still take about 20s.
+  test.setTimeout(60_000);
   const counter = await presentDeck(page);
   await setTransitions(page, { kind: 'none' });
   await page.keyboard.press('ArrowRight');
@@ -243,7 +245,7 @@ test('plays every transition kind forward and back to the right slide', async ({
 
   // Slides 2 and 3 are joined by the connector, so path follows it both ways.
   for (const kind of KINDS) {
-    await setTransitions(page, { kind, durationMs: 300 });
+    await setTransitions(page, { kind, durationMs: 100 });
     for (const [key, slide] of [
       ['ArrowRight', '3'],
       ['ArrowLeft', '2'],
