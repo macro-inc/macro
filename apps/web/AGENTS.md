@@ -820,6 +820,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1013,6 +1022,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Keep flag-off mobile Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
+  Show all loaded channel favorites in saved order in the sectioned phone layout's horizontal scroller; apply the six-pin limit only to the legacy three-column grid.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
@@ -1030,7 +1040,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. It registers the
+  row with no code in the view. `wide` lets the open field take the rest of
+  the header (the view hides its other actions from `onOpenChange`), and
+  `suggestions` lists rows under the field that the arrows walk before the
+  results; Email's wide search uses both. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
@@ -1412,6 +1425,18 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+## Videos stay out of native bundles
+
+Vite writes imported videos (`.mp4`, `.webm`, `.mov`) to `dist/web-hosted/`,
+which the web deploy publishes and every native bundle deletes: `build-tauri`,
+`build-tauri-dev`, the OTA archive (`infra/stacks/web-app`) and the desktop
+derivation (`nix/tauri-desktop.nix`). Pass a video import's URL through
+`webHostedUrl` (`@core/util/webHostedUrl`) so the apps load the web deploy's
+copy; a bare import 404s in a native build. Retained-build pruning keeps
+`web-hosted/` for apps stuck on old bundles. `scripts/web-hosted.test.ts`
+checks the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
+to each app binary and OTA download.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,
@@ -1545,6 +1570,10 @@ stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
+Desktop shows every import run in the corner's import tray
+(`features/import-jobs`, in `ToastRegion`), independent of the import dialog
+and never on phones. Its backend-free check is
+`bunx playwright test --config src/features/import-jobs/browser-test/playwright.config.ts`.
 
 ### Agent backend hosting
 
@@ -1789,6 +1818,12 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
 ### Passwords
+
+Keep agent-request loading and read failures inside the item pane using shared
+skeletons and local Retry; after a stale decision, hide cached actions until a
+successful refresh. Team inbox groups are notification-only: show only valid
+password requests for the current team while Passwords is enabled, and open
+the request's vault target without a generic Team preview or fallback page.
 
 The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
 source; the rail and phone dock show it only for team members (flag and team).

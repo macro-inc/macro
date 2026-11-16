@@ -8,5 +8,6 @@ pub mod docx_export;
 pub mod entity_mutation;
 pub mod event_stream;
 pub mod filed_items;
+pub mod passwords_access;
 pub mod saved_view_changes;
 pub mod stream_contacts;

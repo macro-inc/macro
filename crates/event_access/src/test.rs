@@ -24,6 +24,7 @@ fn public_entity_types_use_entity_wire_names() {
         PublicEntityType::GithubInstallation.as_str(),
         "github_installation"
     );
+    assert_eq!(PublicEntityType::PasswordItem.as_str(), "password_item");
 }
 
 #[test]

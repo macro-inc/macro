@@ -10,6 +10,10 @@
 
 use std::fmt;
 
+/// The in-VPC self-hosted runner with network access to the databases. Stays
+/// off Namespace deliberately — migrations need to reach RDS.
+pub const DB_MIGRATOR: &str = "db-migrator";
+
 /// A Namespace runner profile. The set of profiles we're allowed to target is
 /// closed; `Display` renders the `runs-on` label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

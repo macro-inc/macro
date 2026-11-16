@@ -157,6 +157,8 @@ pub enum PublicEntityType {
     Property,
     /// A GitHub App installation.
     GithubInstallation,
+    /// A team vault (password) item.
+    PasswordItem,
 }
 
 const BOT_ENTITY_TYPE: &str = "bot";
@@ -166,6 +168,7 @@ const EMAIL_LINK_ENTITY_TYPE: &str = "email_link";
 const NOTIFICATION_ENTITY_TYPE: &str = "notification";
 const PROPERTY_ENTITY_TYPE: &str = "property";
 const GITHUB_INSTALLATION_ENTITY_TYPE: &str = "github_installation";
+const PASSWORD_ITEM_ENTITY_TYPE: &str = "password_item";
 
 impl PublicEntityType {
     /// The wire name, such as `document` or `bot`.
@@ -179,6 +182,7 @@ impl PublicEntityType {
             Self::Notification => NOTIFICATION_ENTITY_TYPE,
             Self::Property => PROPERTY_ENTITY_TYPE,
             Self::GithubInstallation => GITHUB_INSTALLATION_ENTITY_TYPE,
+            Self::PasswordItem => PASSWORD_ITEM_ENTITY_TYPE,
         }
     }
 }
