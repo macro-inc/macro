@@ -275,3 +275,15 @@ fn the_count_query_counts_titled_items() {
     .expect("routed count");
     assert_eq!(count, json!(2));
 }
+
+// JS trim and \s include NBSP and U+FEFF (Rust char::is_whitespace omits U+FEFF).
+#[test]
+fn titles_collapse_js_whitespace() {
+    let mut editor = editor();
+    checklist(
+        &mut editor,
+        &["\u{a0}Wrapped\u{feff}\u{a0} title\u{feff}"],
+        ListType::Check,
+    );
+    assert_eq!(selected(&editor)[0]["title"], "Wrapped title");
+}
