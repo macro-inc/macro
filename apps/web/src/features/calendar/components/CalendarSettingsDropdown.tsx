@@ -14,7 +14,7 @@ import MinusIcon from '@icon/system/regular/minus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type CalendarAccount,
@@ -399,8 +399,7 @@ function MobileCalendarVisibility(props: {
 
           return (
             <MobileDrawer.Section class="flex shrink-0 flex-col">
-              {/* The selection fills the whole header, caret included, while
-                  the two buttons inside it keep their own press feedback. */}
+              {/* The selection fills the whole header, caret included. */}
               <div
                 class="flex min-w-0 items-center rounded-[20px]"
                 classList={{ 'bg-ink/8': shown() }}
@@ -483,6 +482,8 @@ function MobileCalendarSettings(props: {
   const controls = props.controls;
   const calendarView = controls.calendarView;
   const [open, setOpen] = createSignal(false);
+  const weekStartLabelId = createUniqueId();
+  const timeFormatLabelId = createUniqueId();
 
   return (
     <MobileDrawer
@@ -534,8 +535,14 @@ function MobileCalendarSettings(props: {
               </MobileFilterDrawer.Option>
             </MobileDrawer.Section>
 
-            <MobileDrawer.Label class="pt-4">Week starts on</MobileDrawer.Label>
-            <MobileDrawer.Section class="flex shrink-0 flex-col">
+            <MobileDrawer.Label id={weekStartLabelId} class="pt-4">
+              Week starts on
+            </MobileDrawer.Label>
+            <MobileDrawer.Section
+              role="radiogroup"
+              aria-labelledby={weekStartLabelId}
+              class="flex shrink-0 flex-col"
+            >
               <For each={WEEK_START_OPTIONS}>
                 {(option) => (
                   <MobileFilterDrawer.Option
@@ -551,8 +558,14 @@ function MobileCalendarSettings(props: {
               </For>
             </MobileDrawer.Section>
 
-            <MobileDrawer.Label class="pt-4">Time format</MobileDrawer.Label>
-            <MobileDrawer.Section class="flex shrink-0 flex-col">
+            <MobileDrawer.Label id={timeFormatLabelId} class="pt-4">
+              Time format
+            </MobileDrawer.Label>
+            <MobileDrawer.Section
+              role="radiogroup"
+              aria-labelledby={timeFormatLabelId}
+              class="flex shrink-0 flex-col"
+            >
               <For each={TIME_FORMAT_OPTIONS}>
                 {(option) => (
                   <MobileFilterDrawer.Option

@@ -12,7 +12,7 @@ import {
   Hotkey,
   Calendar as MiniCalendar,
 } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CalendarPeriodView } from '../types';
 import { calendarPeriodLabel } from '../utils/calendar-label';
@@ -205,11 +205,16 @@ export function PeriodSelector(props: {
 /** Period controls embedded in the mobile settings drawer. */
 export function MobilePeriodControls(props: { onSelect: () => void }) {
   const controls = createCalendarPeriodControls(props.onSelect);
+  const labelId = createUniqueId();
 
   return (
     <>
-      <MobileDrawer.Label>Period</MobileDrawer.Label>
-      <MobileDrawer.Section class="flex shrink-0 flex-col">
+      <MobileDrawer.Label id={labelId}>Period</MobileDrawer.Label>
+      <MobileDrawer.Section
+        role="radiogroup"
+        aria-labelledby={labelId}
+        class="flex shrink-0 flex-col"
+      >
         <For each={CALENDAR_VIEWS}>
           {(view) => (
             <MobileFilterDrawer.Option
