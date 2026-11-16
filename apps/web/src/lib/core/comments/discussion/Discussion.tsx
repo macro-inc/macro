@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta';
 import type { InputSnapshot } from '@channel/Input/types';
 import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
@@ -130,7 +131,7 @@ export function Discussion(props: {
           ) : (
             <CaretRight class="size-3" />
           )}
-          <span class="text-xs">Discussion</span>
+          <span class="text-xs">{t('common.discussion')}</span>
         </button>
         <div class="flex-1 border-t border-edge-muted" />
       </div>
@@ -191,7 +192,7 @@ export function DiscussionComposer(props: {
   return (
     <Show when={source.canEdit()}>
       <DiscussionInput
-        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        input={{ mode: 'channel', placeholder: t('common.addToDiscussion') }}
         collapsible={props.collapsible}
         blurOnSend={props.blurOnSend}
         onSend={handleCreateThread}

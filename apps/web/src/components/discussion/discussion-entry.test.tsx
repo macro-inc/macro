@@ -13,12 +13,12 @@ vi.mock('@core/user', () => ({
 }));
 afterEach(cleanup);
 
-it('opens the empty discussion to add a comment', () => {
+it('starts an empty discussion', () => {
   const open = vi.fn();
   render(() => (
     <DiscussionEntry preview={discussionPreview([])} onOpen={open} />
   ));
-  fireEvent.click(screen.getByRole('button', { name: /Add a comment/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Start a discussion/ }));
   expect(open).toHaveBeenCalledOnce();
   expect(screen.queryByText('M')).toBeNull();
   expect(screen.queryByText('View discussion')).toBeNull();
@@ -93,7 +93,7 @@ it('keeps surviving replies reachable when their root is deleted', () => {
 
   setMessage({ ...root, deleted_at: '2026-10-02T12:00:00Z' });
   expect(screen.queryByText('Root comment')).toBeNull();
-  expect(screen.queryByText('Add a comment')).toBeNull();
+  expect(screen.queryByText('Start a discussion')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'View discussion' }));
   expect(open).toHaveBeenCalledOnce();
 
@@ -101,6 +101,6 @@ it('keeps surviving replies reachable when their root is deleted', () => {
     ...message(),
     state: { ...root.state, deleted_at: '2026-10-02T12:00:00Z' },
   });
-  expect(screen.getByText('Add a comment')).toBeTruthy();
+  expect(screen.getByText('Start a discussion')).toBeTruthy();
   expect(screen.queryByText('View discussion')).toBeNull();
 });

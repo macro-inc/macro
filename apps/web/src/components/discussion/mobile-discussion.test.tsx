@@ -121,7 +121,7 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
     content: () => (
       <>
         <button onClick={() => setMessages([older, newest])}>
-          Load earlier comments
+          Load earlier messages
         </button>
         <For each={messages()}>
           {(message) => <p data-message-id={message.id}>{message.content}</p>}
@@ -145,7 +145,7 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   thread.scrollTop = 240;
 
   fireEvent.click(
-    screen.getByRole('button', { name: 'Load earlier comments' })
+    screen.getByRole('button', { name: 'Load earlier messages' })
   );
   await Promise.resolve();
   for (const observer of resizeObservers) observer.deliver(thread);

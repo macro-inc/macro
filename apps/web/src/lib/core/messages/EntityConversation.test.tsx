@@ -34,10 +34,16 @@ vi.mock('@channel/Input', () => ({
   ChannelInput: (props: {
     parent?: { type: string; id: string };
     bots?: Accessor<{ id: string }[]>;
+    input: { placeholder: string };
   }) => {
     mocks.capturedParent = props.parent;
     mocks.bots = props.bots;
-    return <textarea aria-label="Leave a comment..." />;
+    return (
+      <textarea
+        aria-label={props.input.placeholder}
+        placeholder={props.input.placeholder}
+      />
+    );
   },
 }));
 vi.mock('@channel/Input/message-payload', () => ({}));
@@ -161,7 +167,7 @@ describe('EntityDiscussion target ownership', () => {
     expect(around()).toBeNull();
     expect(enabled()).toBe(true);
     expect(view.getByText('Latest workbook topic')).toBeTruthy();
-    expect(view.queryByText('Loading comments...')).toBeNull();
+    expect(view.queryByText('Loading conversation')).toBeNull();
     expect(mocks.scroll).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole('button', { name: 'Discussion' }));
     expect(view.queryByText('Latest workbook topic')).toBeNull();
@@ -279,6 +285,10 @@ function discussion(
 }
 
 describe('EntityConversation placement', () => {
+  it('uses discussion wording for the root message composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(view.getByPlaceholderText('Add to the discussion…')).toBeTruthy();
+  });
   it('keeps the entry on the latest root while the sheet follows an older link', () => {
     mocks.timeline.mockImplementation((_parent, around) => ({
       isSuccess: true,
@@ -387,7 +397,7 @@ describe('EntityConversation placement', () => {
     mocks.linkResolved = false;
     const view = discussion([[thread('new discussion', null)]], 'reply');
     expect(view.queryAllByRole('article')).toEqual([]);
-    expect(view.getByText('Loading comments...')).toBeTruthy();
+    expect(view.getByText('Loading conversation')).toBeTruthy();
     const [, , enabled] = mocks.timeline.mock.calls.at(-1)!;
     expect(enabled()).toBe(false);
   });
@@ -530,7 +540,7 @@ it('retains loaded comments on a pagination failure and removes them immediately
       canWrite
     />
   ));
-  const load = view.getByRole('button', { name: 'Load earlier comments' });
+  const load = view.getByRole('button', { name: 'Load earlier messages' });
   expect(load.hasAttribute('disabled')).toBe(true);
   fireEvent.click(load);
   expect(loadMore).not.toHaveBeenCalled();
@@ -547,7 +557,7 @@ it('retains loaded comments on a pagination failure and removes them immediately
   expect(view.queryAllByRole('article')).toHaveLength(0);
   expect(view.queryByRole('textbox')).toBeNull();
   expect(
-    view.queryByRole('button', { name: 'Load earlier comments' })
+    view.queryByRole('button', { name: 'Load earlier messages' })
   ).toBeNull();
 });
 
@@ -601,7 +611,7 @@ it.each([false, true])(
       />
     ));
     expect(view.getByRole('alert').textContent).toBe(
-      'Comments are unavailable for this item.'
+      'Discussion is unavailable for this item.'
     );
     expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(view.queryByRole('textbox')).toBeNull();

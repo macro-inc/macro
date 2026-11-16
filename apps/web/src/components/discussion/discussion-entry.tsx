@@ -60,7 +60,7 @@ export function DiscussionEntry(props: {
         fallback={
           <span class="flex min-h-6 items-center gap-3 text-sm text-ink-muted">
             <ChatCircleIcon class="size-4" />
-            {t('common.addComment')}
+            {t('common.startDiscussion')}
             <CaretRightIcon class="ml-auto size-4" />
           </span>
         }

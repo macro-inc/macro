@@ -1261,21 +1261,21 @@ title's actions menu does the same. Tasks show Project even before it's set,
 and the `Add property` picker doesn't list it.
 
 Desktop Discussion at the bottom of Overview uses the shared conversations system.
-Comments appear oldest to newest, with the comment input below them. The heading
-collapses the section, and Load earlier comments adds older comments at the top.
-On phones, the newest root appears in a two-line card above a commenter avatar
-group, View discussion, and a caret. Avatars come from loaded comments; neither
-the entry nor the Discussion sheet heading shows an overall comment count.
-Empty discussions show Add a comment without avatars. Tap to open the full-height
-Discussion sheet; Add a comment also raises the keyboard. The sheet stays fixed
-while only the pinned composer rises above the keyboard and the thread shrinks.
-The send action appears with text. Closing/reopening retains the draft.
-Comments, replies, and reactions stay attached to the project identity.
+Messages appear oldest to newest, with the message input below them. The heading
+collapses the section, and Load earlier messages adds older messages at the top.
+On phones, the newest root appears in a two-line card above an avatar group,
+View discussion, and a caret. Avatars come from loaded messages; neither the entry
+nor the Discussion sheet heading shows an overall count. Empty discussions show
+Start a discussion without avatars. Tap to open the full-height Discussion sheet;
+Start a discussion also raises the keyboard. The sheet stays fixed while only the
+pinned Add to the discussion… composer rises above the keyboard and the thread
+shrinks. The send action appears with text. Closing/reopening retains the draft.
+Messages, replies, and reactions stay attached to the project identity.
 Notification links open Overview at the relevant discussion. Existing `activity`
 URLs also open Overview and preserve the target discussion. Project history is
 not included in this discussion section.
-Click or tap the linked comment to clear its highlight; the loaded discussion
-and expanded replies stay in place. Following another comment link highlights
+Click or tap the linked message to clear its highlight; the loaded discussion
+and expanded replies stay in place. Following another message link highlights
 its target again.
 
 ## Bulk delete

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import {
   ChannelInput,
   type InputHandle,
@@ -59,7 +60,7 @@ export function EntityConversationComposer(props: {
       <ChannelInput
         parent={props.parent}
         bots={bots}
-        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        input={{ mode: 'channel', placeholder: t('common.addToDiscussion') }}
         autofocus={false}
         collapsible={props.collapsible}
         onChange={props.onChange}
@@ -158,7 +159,7 @@ export function EntityConversation(props: EntityConversationProps) {
   const content = () => (
     <StaticMarkdownContext>
       <Show when={!target.resolved() || query.isPending}>
-        <p class="text-xs text-ink-muted">Loading comments...</p>
+        <p class="text-xs text-ink-muted">{t('common.loadingConversation')}</p>
       </Show>
       <Show when={query.isError || unavailable()}>
         <MessageLoadError
@@ -174,8 +175,8 @@ export function EntityConversation(props: EntityConversationProps) {
           }
         >
           {missingParent()
-            ? 'Comments are unavailable for this item.'
-            : 'Could not load comments.'}
+            ? t('common.discussionUnavailable')
+            : t('common.discussionLoadError')}
         </MessageLoadError>
       </Show>
       <Show when={!unavailable() && query.hasNextPage}>
@@ -186,7 +187,7 @@ export function EntityConversation(props: EntityConversationProps) {
             fireAndForget(query.fetchNextPage(), 'entity-conversation')
           }
         >
-          Load earlier comments
+          {t('common.loadEarlierMessages')}
         </button>
       </Show>
       <For each={[...messagesById().keys()]}>
@@ -214,7 +215,7 @@ export function EntityConversation(props: EntityConversationProps) {
             fireAndForget(query.fetchPreviousPage(), 'entity-conversation')
           }
         >
-          Load newer comments
+          {t('common.loadNewerMessages')}
         </button>
       </Show>
     </StaticMarkdownContext>
@@ -240,7 +241,9 @@ export function EntityConversation(props: EntityConversationProps) {
               <Show when={expanded()} fallback={<CaretRight class="size-3" />}>
                 <CaretDown class="size-3" />
               </Show>
-              <span class="text-xs">{props.label ?? 'Discussion'}</span>
+              <span class="text-xs">
+                {props.label ?? t('common.discussion')}
+              </span>
             </button>
             <Show when={expanded() || props.targetId}>
               {content()}
