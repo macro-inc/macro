@@ -460,6 +460,17 @@ fn typed_snippet_resolution_reuses_application_services_and_real_history() {
     let FfiQueryReply::State { root } = session.query(FfiQuery::State).unwrap() else {
         panic!("redo")
     };
+    // After the redo, Source's Loro-driven reconcile imports every node, so each
+    // storage-null key the untouched paragraph and text hold absent reads back as its
+    // stored null (probe log 8803f2b1); the typed snippet's text keeps its values.
+    let mut expected = expected;
+    expected["children"][0]["direction"] = serde_json::Value::Null;
+    expected["children"][0]["indent"] = serde_json::Value::Null;
+    expected["children"][0]["textFormat"] = serde_json::Value::Null;
+    expected["children"][0]["textStyle"] = serde_json::Value::Null;
+    expected["children"][0]["children"][0]["detail"] = serde_json::Value::Null;
+    expected["children"][0]["children"][0]["format"] = serde_json::Value::Null;
+    expected["children"][0]["children"][0]["style"] = serde_json::Value::Null;
     assert_eq!(root, expected);
     let FfiQueryReply::ViewDiff {
         selection:
