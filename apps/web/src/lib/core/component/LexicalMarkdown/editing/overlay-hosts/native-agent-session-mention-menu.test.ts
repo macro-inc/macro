@@ -529,14 +529,15 @@ function rejectionMessage(reason: unknown): string {
  */
 function rowSink(name: string) {
   const output = process.env.AGENT_SESSION_MENU_OUT;
-  if (!output) throw new Error('AGENT_SESSION_MENU_OUT is required');
   const slug = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
-  return (engine: 'source' | 'native', phase: string, data: object) =>
+  return (engine: 'source' | 'native', phase: string, data: object) => {
+    if (!output) return;
     writeFileSync(
       `${output}/${slug}--${engine}--${phase}.json`,
       `${JSON.stringify({ row: name, engine, phase, ...data }, null, 1)}\n`,
       { flag: 'wx' }
     );
+  };
 }
 
 function rawOutcome(outcome: Outcome, failure: Error) {

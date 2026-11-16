@@ -35,7 +35,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));
 vi.mock('@app/lib/analytics/analytics', () => ({
-  analytics: { track: vi.fn() },
+  analytics: { track: vi.fn(), posthog: { isFeatureEnabled: () => false } },
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => USER }));
 vi.mock('@app/signal/splitLayout', () => ({

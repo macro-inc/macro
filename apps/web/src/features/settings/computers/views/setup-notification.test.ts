@@ -15,7 +15,9 @@ import { openNotification } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/lib/analytics', () => ({
+  analytics: { track: vi.fn(), posthog: { isFeatureEnabled: () => false } },
+}));
 
 const notice = (
   outcome: { kind: 'ready' } | { kind: 'failed'; failureReason: string }
