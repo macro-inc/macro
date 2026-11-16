@@ -1,0 +1,11 @@
+{
+  "name": "@macro-internal/native-editor-bridge-codegen",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "bun scripts/generate-bridge.ts"
+  },
+  "devDependencies": {
+    "quicktype-core": "24.0.0"
+  }
+}
