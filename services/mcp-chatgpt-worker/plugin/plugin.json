@@ -12,10 +12,10 @@
       "interface": {
         "displayName": "Macro",
         "shortDescription": "Your Macro workspace",
-        "longDescription": "Macro is one workspace for documents, chat, email, tasks, and agents. Connect it to ChatGPT to search across your workspace, read documents and channel conversations, and create documents and tasks without leaving the chat. You sign in with your own Macro account, and ChatGPT sees only what that account can see.",
+        "longDescription": "Macro is one workspace for documents, chat, email, tasks, and agents. Connect it to ChatGPT to search across your workspace, read documents and channel conversations, and create documents and tasks without leaving the chat. You sign in with your own Macro account, and ChatGPT sees only what that account can see. People in results appear as private tokens rather than email addresses; ChatGPT looks up a person's name and email only when you ask for their contact details.",
         "developerName": "Coparse, Inc. dba Macro",
         "category": "Productivity",
-        "capabilities": ["Search your workspace", "Read documents and channels", "Create documents and tasks"],
+        "capabilities": ["Search your workspace", "Read documents and channels", "Create documents and tasks", "Look up a teammate's contact details"],
         "websiteURL": "https://macro.com",
         "supportURL": "https://docs.macro.com/support",
         "privacyPolicyURL": "https://macro.com/privacy",
@@ -32,10 +32,10 @@
         "test_cases": {
           "positive": [
             { "description": "Search the workspace", "prompt": "Search Macro for how tasks work.", "tools_triggered": "search_read", "expected_behavior": "Returns matching items from the demo account, including the Intro to tasks document, with links." },
-            { "description": "List recent documents", "prompt": "List my recent Macro documents.", "tools_triggered": "documents_read", "expected_behavior": "Lists the demo account's recently opened documents with links." },
             { "description": "Read and summarize a document", "prompt": "Find the Macro document Advanced task features and summarize it.", "tools_triggered": "search_read, documents_read", "expected_behavior": "Finds the document, reads it, and summarizes its real contents with a link." },
             { "description": "Create a document", "prompt": "Create a Macro document titled Meeting notes that says we ship Friday.", "tools_triggered": "documents_write", "expected_behavior": "Creates a document titled Meeting notes saying we ship Friday in the demo account; it opens in Macro with that title and text." },
-            { "description": "Create a task", "prompt": "Create a Macro task called Review the launch notes.", "tools_triggered": "tasks_write", "expected_behavior": "Creates a task called Review the launch notes in the demo account; it shows in Macro with that name." }
+            { "description": "Create a task", "prompt": "Create a Macro task called Review the launch notes.", "tools_triggered": "tasks_write", "expected_behavior": "Creates a task called Review the launch notes in the demo account; it shows in Macro with that name." },
+            { "description": "Look up who owns a document", "prompt": "Who owns the Macro document Intro to tasks, and what's their email?", "tools_triggered": "search_read, people_read", "expected_behavior": "Finds the document; its owner comes back as a person token, which people_read exchanges for the demo account's name and email because the user asked for them." }
           ],
           "negative": [
             { "description": "Weather has nothing to do with Macro", "prompt": "What's the weather in Brooklyn today?" },
@@ -47,7 +47,7 @@
         "commerce": false
       },
       "publication": {
-        "release_notes": "Search, read, and create in your Macro workspace. Tool results no longer include people's user ids or email addresses, and only the tools this plugin needs are offered."
+        "release_notes": "Search, read, and create in your Macro workspace. Tool results show people as private tokens instead of user ids or email addresses; people_read returns a person's name and email when the user asks. Only the tools this plugin needs are offered."
       }
     }
   }

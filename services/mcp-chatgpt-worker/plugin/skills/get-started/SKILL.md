@@ -21,7 +21,11 @@ Each tool lists its operations; pass one as `op` with its inputs.
 4. Ask before changing anything. Before a `documents_write` or
    `tasks_write` call, say what will change and wait for the user to agree.
 5. Items are referenced by id or by their Macro URL.
+6. People are tokens. Results show each person as `person_u_…` (a Macro
+   user) or `person_e_…` (an email address), never their address. Pass a
+   token back as it is wherever a tool takes a person: assigning a task,
+   mentioning someone, filtering by owner. Call `people_read` for a name or
+   email only when the user asks for that person's contact details.
 
 Only the signed-in user's own workspace is reachable: what they can see in
-Macro is what these tools can see. Results leave out people's user ids and
-email addresses.
+Macro is what these tools can see.
