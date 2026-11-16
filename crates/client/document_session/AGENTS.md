@@ -145,7 +145,7 @@ Pin application ROOT nested-state order against literal Source exports through b
 Keep ordinary host listener registration behind the specialized EditorSurface session forwarders, and rebind from actual presence after core replacement. Associate reported typed errors with their exact view-effect push through the optional metadata observer; caught nested callback failures are not reported outer errors.
 
 For browser MarkdownSync history, clear selection in the historic content update and skip the DOM write. Restore only current resolvable awareness in a separate selection update and let actual browser selection changes settle unresolved carets.
-A table selection leaves the local awareness (and presence) at its previous cursor, as Source's localCursorUpdate converts no table selection.
+Replace the local awareness (and presence) cursor only when the selection converts, as Source's localCursorUpdate does: a table, node or null selection, or a range point outside Loro, keeps the previous cursor.
 
 Preserve filtered importer state in the initial stored comparison while keeping ordinary Source import omissions; readonly initialization must not repair persisted slots merely to attach. Keep qualified imported null indentation in that exact stored comparison and through unrelated projection edits.
 

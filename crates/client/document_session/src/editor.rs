@@ -627,15 +627,20 @@ impl EditorSurface {
         Ok(changed)
     }
     fn refresh_cursor(&mut self, doc: &LoroDoc) {
+        // Source's localCursorUpdate is the only local awareness writer and
+        // returns when there is no selection or no cursor for it: a table, node
+        // or null selection, or a range point outside Loro (cursor.ts:84,
+        // CollabProvider.tsx:291, :303). Awareness and presence keep the
+        // previous value then. Native converts tables, so they are skipped here.
         let selection = self.core.state().selection();
-        // Source's localCursorUpdate converts no table selection
-        // (cursor.ts:84), so its awareness and presence keep the previous value.
         if selection.is_some_and(Selection::is_table) {
             return;
         }
-        self.cursor = self.projection.as_ref().and_then(|p| {
+        if let Some(cursor) = self.projection.as_ref().and_then(|p| {
             selection.and_then(|selection| p.cursor(doc, self.core.state(), selection))
-        });
+        }) {
+            self.cursor = Some(cursor);
+        }
     }
     fn output(
         output: Output,

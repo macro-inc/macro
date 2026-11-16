@@ -1300,3 +1300,285 @@ fn a_table_selection_keeps_the_previous_awareness_through_undo()
     assert_eq!(view_selection(surface.state().selection()), caret_selection);
     Ok(())
 }
+
+/// Source's localCursorUpdate returns before converting a null selection
+/// (CollabProvider.tsx:291), so the local awareness, and with it presence, keeps
+/// the previous caret.
+#[test]
+fn a_null_selection_keeps_the_previous_awareness() -> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::application::application_editor_config(
+        EditorConfig {
+            view_host: ViewHost {
+                engine: ViewEngine::Chromium,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0))?;
+    let doc = lexical_loro::new_doc(7)?;
+    let mut view = Vec::new();
+    surface.init(&doc, now(0), Access::Edit, &mut view)?;
+    surface.apply(
+        &doc,
+        Input::SetState {
+            state: serde_json::from_str(include_str!(
+                "../../../lexical/macro_document_model/src/plugins_group_b/table/actions/fixtures/before.json"
+            ))?,
+            tags: TagSet::default(),
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    surface.apply(
+        &doc,
+        Input::Command {
+            command: Command::ClearHistory,
+            selection: ViewSelection::KeepModel,
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    let state = surface.state().view();
+    let table = state.first_child(NodeKey::ROOT).expect("loaded table");
+    let rows = state.children_keys(table)?;
+    let first_row = state.children_keys(rows[0])?;
+    let text = state
+        .all_text_nodes(first_row[0])
+        .next()
+        .expect("first cell text");
+    let caret = Point::text(text, Utf16Offset(2));
+    let caret_selection = ViewSelection::Range {
+        anchor: caret,
+        focus: caret,
+        resolution_dirty: false,
+    };
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: caret_selection.clone(),
+            change: None,
+        },
+        now(10),
+        Access::Edit,
+        &mut view,
+    )?;
+    let caret_awareness = surface.selection_cursors();
+    assert!(caret_awareness.is_some());
+
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::None,
+            change: None,
+        },
+        now(20),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert_eq!(surface.state().selection(), None);
+    // Presence publishes these cursors: peers keep seeing the earlier caret.
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+
+    Ok(())
+}
+
+/// Source's node-selection conversion (cursor.ts:114) never yields cursors: a
+/// node's container is its LoroMap, neither LoroText nor LoroMovableList, so
+/// localCursorUpdate keeps the previous awareness (and presence), and browser
+/// history restores that caret after undo.
+#[test]
+fn a_node_selection_keeps_the_previous_awareness_through_undo()
+-> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::application::application_editor_config(
+        EditorConfig {
+            view_host: ViewHost {
+                engine: ViewEngine::Chromium,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0))?;
+    let doc = lexical_loro::new_doc(7)?;
+    let mut view = Vec::new();
+    surface.init(&doc, now(0), Access::Edit, &mut view)?;
+    surface.apply(
+        &doc,
+        Input::SetState {
+            state: serde_json::from_str(include_str!(
+                "../../../lexical/macro_document_model/src/plugins_group_b/table/actions/fixtures/before.json"
+            ))?,
+            tags: TagSet::default(),
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    surface.apply(
+        &doc,
+        Input::Command {
+            command: Command::ClearHistory,
+            selection: ViewSelection::KeepModel,
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    let state = surface.state().view();
+    let table = state.first_child(NodeKey::ROOT).expect("loaded table");
+    let rows = state.children_keys(table)?;
+    let first_row = state.children_keys(rows[0])?;
+    let text = state
+        .all_text_nodes(first_row[0])
+        .next()
+        .expect("first cell text");
+    let caret = Point::text(text, Utf16Offset(2));
+    let caret_selection = ViewSelection::Range {
+        anchor: caret,
+        focus: caret,
+        resolution_dirty: false,
+    };
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: caret_selection.clone(),
+            change: None,
+        },
+        now(10),
+        Access::Edit,
+        &mut view,
+    )?;
+    let caret_awareness = surface.selection_cursors();
+    assert!(caret_awareness.is_some());
+
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::Node(vec![table]),
+            change: None,
+        },
+        now(20),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert!(surface.state().selection().is_some_and(Selection::is_node));
+    // Presence publishes these cursors: peers keep seeing the earlier caret.
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+
+    // A resize leaves the node selection in place, so the awareness the undo
+    // restores is still the caret from before the node selection.
+    let command = macro_document_model::surface::decode_command(
+        "group-b.table",
+        &json!({"action":"resize-column","table":table.index(),"column":0,"baseWidths":[160,160,160],"delta":40.0,"merge":false}).to_string(),
+        table.generation(),
+        None,
+    )?
+    .expect("registered resize action");
+    surface.apply(
+        &doc,
+        Input::Command {
+            command,
+            selection: ViewSelection::KeepModel,
+        },
+        now(1_000),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert!(surface.state().selection().is_some_and(Selection::is_node));
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+
+    let resized = surface.state().to_json()?;
+    surface.apply(&doc, Input::Undo, now(2_000), Access::Edit, &mut view)?;
+    assert_ne!(surface.state().to_json()?, resized);
+    assert_eq!(view_selection(surface.state().selection()), caret_selection);
+    Ok(())
+}
+
+/// Source's localCursorUpdate also returns when a range point has no Loro
+/// cursor (CollabProvider.tsx:303; cursor.ts:101). A point on a completion,
+/// which never reaches Loro, keeps the previous awareness and presence.
+#[test]
+fn an_unconvertible_range_keeps_the_previous_awareness() -> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::application::application_editor_config(
+        EditorConfig {
+            view_host: ViewHost {
+                engine: ViewEngine::Chromium,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0))?;
+    let doc = lexical_loro::new_doc(7)?;
+    let mut view = Vec::new();
+    surface.init(&doc, now(0), Access::Edit, &mut view)?;
+    surface.apply(
+        &doc,
+        Input::SetState {
+            state: serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[
+                {"type":"paragraph","version":1,"children":[
+                    {"type":"text","version":1,"text":"abc"},
+                    {"type":"completion","version":1,"text":"local completion"}
+                ]}
+            ]}}))?,
+            tags: TagSet::default(),
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    let state = surface.state().view();
+    let paragraph = state.first_child(NodeKey::ROOT).expect("paragraph");
+    let children = state.children_keys(paragraph)?;
+    let caret = Point::text(children[0], Utf16Offset(2));
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::Range {
+                anchor: caret,
+                focus: caret,
+                resolution_dirty: false,
+            },
+            change: None,
+        },
+        now(10),
+        Access::Edit,
+        &mut view,
+    )?;
+    let caret_awareness = surface.selection_cursors();
+    assert!(caret_awareness.is_some());
+
+    let completion = Point::element(children[1], lexical_model::ChildIndex(0));
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::Range {
+                anchor: completion,
+                focus: completion,
+                resolution_dirty: false,
+            },
+            change: None,
+        },
+        now(20),
+        Access::Edit,
+        &mut view,
+    )?;
+    let range = surface
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range on the completion");
+    assert_eq!((range.anchor, range.focus), (completion, completion));
+    // Presence publishes these cursors: peers keep seeing the earlier caret.
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+    Ok(())
+}
