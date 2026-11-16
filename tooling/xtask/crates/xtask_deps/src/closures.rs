@@ -11,7 +11,7 @@
 //! loudly inside the nix sandbox.
 //!
 //! The file also holds `wasm_closures` for the crates apps/web builds for the
-//! browser ([`WASM_PACKAGES`]): only the workspace crates a wasm32 build of the
+//! browser ([`wasm_packages`]): only the workspace crates a wasm32 build of the
 //! package can compile. `apps/web/scripts/wasm-cache-key.ts` hashes them to
 //! decide whether a wasm package must be rebuilt. The plain closure also
 //! follows links that are off on wasm32 or behind features that build never
@@ -32,20 +32,33 @@ mod test;
 
 const OUTPUT_REL: &str = ".github/workspace-dep-closures.json";
 
-/// The packages `apps/web/justfile` passes to `scripts/cached-wasm-build.sh`,
-/// whose key script refuses a package missing here.
-pub(crate) const WASM_PACKAGES: &[&str] = &[
-    "agent_fold",
-    "ai_engine",
-    "cache-wasm",
-    "database_sql",
-    "docx_engine",
-    "fig_engine",
-    "natural_time",
-    "password_import_wasm",
-    "pptx_engine",
-    "psd_engine",
-];
+/// apps/web's list of browser wasm modules; each `package` there gets a
+/// `wasm_closures` entry, which its cache key script requires.
+const WASM_MANIFEST_REL: &str = "apps/web/wasm-modules.json";
+
+#[derive(serde::Deserialize)]
+struct WasmManifest {
+    modules: Vec<WasmModule>,
+}
+
+#[derive(serde::Deserialize)]
+struct WasmModule {
+    package: String,
+}
+
+/// The cargo packages of the modules in [`WASM_MANIFEST_REL`].
+pub(crate) fn wasm_packages(repo_root: &std::path::Path) -> Result<BTreeSet<String>> {
+    let path = repo_root.join(WASM_MANIFEST_REL);
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let manifest: WasmManifest =
+        serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(manifest
+        .modules
+        .into_iter()
+        .map(|module| module.package)
+        .collect())
+}
 
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
@@ -61,9 +74,12 @@ pub fn run(graph: &PackageGraph, check: bool, drift: &mut Vec<String>) -> Result
         closures.insert(member.name().to_owned(), closure(graph, member)?);
     }
 
-    let wasm_closures = WASM_PACKAGES
-        .iter()
-        .map(|name| Ok(((*name).to_owned(), wasm_closure(graph, name)?)))
+    let wasm_closures = wasm_packages(repo_root.as_std_path())?
+        .into_iter()
+        .map(|name| {
+            let closure = wasm_closure(graph, &name)?;
+            Ok((name, closure))
+        })
         .collect::<Result<BTreeMap<_, _>>>()?;
 
     let doc = serde_json::json!({

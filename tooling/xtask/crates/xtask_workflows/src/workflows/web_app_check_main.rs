@@ -687,7 +687,7 @@ fn run_collaboration_biome() -> Step<Run> {
 fn build_agent_fold_for_tests() -> Step<Run> {
     with_wasm_pkg_cache(
         Step::new("Build agent-fold WASM for tests")
-            .run("just build-agent-fold-wasm")
+            .run("just build-wasm agent-fold")
             .working_directory(xtask_paths::repo_dir!("apps/web"))
             .timeout_minutes(15u32),
     )
@@ -696,7 +696,7 @@ fn build_agent_fold_for_tests() -> Step<Run> {
 fn build_natural_time_for_tests() -> Step<Run> {
     with_wasm_pkg_cache(
         Step::new("Build natural-time WASM for tests")
-            .run("just build-natural-time-wasm")
+            .run("just build-wasm natural-time")
             .working_directory(xtask_paths::repo_dir!("apps/web"))
             .timeout_minutes(15u32),
     )

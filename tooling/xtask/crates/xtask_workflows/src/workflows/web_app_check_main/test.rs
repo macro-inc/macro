@@ -439,7 +439,7 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let vitest = test_job
         .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
-    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+    for build in ["just build-wasm agent-fold", "just build-wasm natural-time"] {
         let wasm = test_job
             .find(build)
             .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
@@ -474,7 +474,7 @@ fn browser_suites_build_the_wasm_they_load_first() {
 
     let browser = browser_job(&yaml);
     let wasm = browser
-        .find("just build-agent-fold-wasm")
+        .find("just build-wasm agent-fold")
         .expect("agent-fold package");
     for suite in [
         "just test-signup-browser",

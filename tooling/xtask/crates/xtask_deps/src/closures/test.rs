@@ -2,7 +2,7 @@ use guppy::graph::{DependencyReq, PackageGraph, PackageMetadata};
 use guppy::platform::PlatformStatus;
 use std::collections::BTreeSet;
 
-use super::{WASM_PACKAGES, closure, wasm_closure};
+use super::{closure, wasm_closure, wasm_packages};
 
 fn graph() -> PackageGraph {
     xtask_graph::build_graph(false).expect("cargo metadata for the workspace")
@@ -18,7 +18,8 @@ fn member<'g>(graph: &'g PackageGraph, name: &str) -> PackageMetadata<'g> {
 #[test]
 fn wasm_closures_hold_their_package_and_stay_inside_the_plain_closures() {
     let graph = graph();
-    for name in WASM_PACKAGES {
+    for name in wasm_packages(graph.workspace().root().as_std_path()).expect("wasm manifest") {
+        let name = name.as_str();
         let package = member(&graph, name);
         let wasm = wasm_closure(&graph, name).expect("wasm closure");
         let plain = closure(&graph, package).expect("closure");
@@ -170,8 +171,8 @@ fn undecided_links(graph: &PackageGraph, scope: &BTreeSet<String>) -> Vec<String
 fn workspace_links_a_wasm_package_can_reach_gate_only_on_the_triple() {
     let graph = graph();
     let mut reachable = BTreeSet::new();
-    for name in WASM_PACKAGES {
-        reachable.extend(closure(&graph, member(&graph, name)).expect("closure"));
+    for name in wasm_packages(graph.workspace().root().as_std_path()).expect("wasm manifest") {
+        reachable.extend(closure(&graph, member(&graph, &name)).expect("closure"));
     }
     let undecided = undecided_links(&graph, &reachable);
     assert!(
