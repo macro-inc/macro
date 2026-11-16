@@ -21,6 +21,7 @@ import { COMMENT_LINK_PARAM } from './comment-link';
 import {
   EntityConversation,
   EntityConversationComposer,
+  type EntityConversationProps,
 } from './EntityConversation';
 import {
   scrollToRenderedTarget,
@@ -67,6 +68,7 @@ export function EntityDiscussion(props: {
    */
   floatingComposerOnTouch?: boolean;
   editorHasFocus?: boolean;
+  children?: EntityConversationProps['children'];
 }) {
   const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
   const commentId = () =>
@@ -145,6 +147,7 @@ export function EntityDiscussion(props: {
           targetCleared={targetCleared()}
           onClearTarget={() => setClearedKey(scrollRequest()?.key)}
           label={props.label}
+          children={props.children}
           buildLink={(message) =>
             buildSimpleEntityUrl(props.link, {
               [COMMENT_LINK_PARAM]: message.id,

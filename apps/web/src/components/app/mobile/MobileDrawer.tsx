@@ -115,6 +115,73 @@ function MobileDrawerContent(
   );
 }
 
+/**
+ * Opt-in sheet whose height stays anchored to the layout viewport while the
+ * keyboard opens. The keyboard occupies space inside the sheet instead of
+ * moving or shrinking the sheet itself. Put a flexing, min-h-0 thread above
+ * KeyboardFooter so only the thread gives up space to the keyboard.
+ */
+function MobileDrawerFixedContent(
+  props: ComponentProps<typeof Drawer.Content> & {
+    /** Maximum height as a percentage of the layout viewport. Defaults to 80. */
+    maxHeight?: number;
+    /** Fixed height as a percentage of the layout viewport. Defaults to 80. */
+    targetHeight?: number;
+    opaque?: boolean;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'maxHeight',
+    'targetHeight',
+    'opaque',
+  ]);
+  const targetHeight = () => Math.min(100, local.targetHeight ?? 80);
+  const maxHeight = () =>
+    Math.min(100, local.maxHeight ?? Math.max(80, targetHeight()));
+
+  onCleanup(() => {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  });
+
+  return (
+    <Layer depth={0}>
+      <Drawer.Content
+        onFocusIn={(e: FocusEvent) => scrollToFocusedInput(e)}
+        style={{
+          '--drawer-h': `${targetHeight()}dvh`,
+          '--drawer-max-h': `${maxHeight()}dvh`,
+          // Native sets both variables, but Safari only squishes --dvh.
+          // 100dvh remains the layout viewport while the keyboard is open.
+          '--drawer-keyboard-inset': virtualKeyboardVisible()
+            ? 'max(var(--virtual-keyboard-height,0px),calc(100dvh - var(--dvh,1dvh)*100))'
+            : '0px',
+        }}
+        class={cn(
+          'portal-scope',
+          'fixed! inset-x-2 bottom-2 z-modal mobile-sheet glass flex flex-col h-(--drawer-h) max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-16px))] min-h-0 overflow-hidden data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          virtualKeyboardVisible()
+            ? 'pb-(--drawer-keyboard-inset)'
+            : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]',
+          '[&_[data-drawer-scroll-body]]:pb-0',
+          local.opaque
+            ? 'bg-menu [--color-dialog:var(--color-menu)]'
+            : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
+          local.class
+        )}
+        {...rest}
+      />
+    </Layer>
+  );
+}
+
+/** Place after a min-h-0 flexing thread inside FixedContent. */
+function MobileDrawerKeyboardFooter(props: ComponentProps<'div'>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return <div class={cn('shrink-0', local.class)} {...rest} />;
+}
+
 function MobileDrawerOverlay(props: ComponentProps<typeof Drawer.Overlay>) {
   const [local, rest] = splitProps(props, ['class']);
   return (
@@ -394,6 +461,8 @@ export const MobileDrawer = Object.assign(
     Portal: Drawer.Portal,
     Overlay: MobileDrawerOverlay,
     Content: MobileDrawerContent,
+    FixedContent: MobileDrawerFixedContent,
+    KeyboardFooter: MobileDrawerKeyboardFooter,
     Close: Drawer.Close,
     Title: Drawer.Label,
     Description: Drawer.Description,
