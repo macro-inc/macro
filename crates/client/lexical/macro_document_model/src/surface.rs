@@ -16,7 +16,7 @@ pub fn preset_builder_with_mode_and_tokens(
     let highlighting = mode == EditorMode::ViewAttached && tokens.is_active();
     let builder = crate::preset_builder_with_mode(ty, mode).extension_state(tokens);
 
-    // WP-58 Group B: structure, lists, tables, media, paste and links.
+    // Group B: structure, lists, tables, media, paste and links.
     let builder = crate::plugins_group_b::register(builder, ty);
     // Source installs code highlighting only with a view (codePlugin). Natively it stays dormant
     // until the code-highlighting activation installs a session tokenizer; until then a view-attached
@@ -33,7 +33,7 @@ pub fn preset_builder_with_mode_and_tokens(
         builder
     };
 
-    // WP-58 Group A: input shortcuts and native menu policy.
+    // Group A: input shortcuts and native menu policy.
     let builder = crate::plugins_group_a::register(builder, ty);
 
     // Group C: AI-edit operations.
@@ -55,7 +55,7 @@ pub fn decode_command(
         Option<&lexical_model::KeyEvent>,
     ) -> crate::ModelResult<Option<lexical_model::Command>>;
     let decoders: &[Decoder] = &[
-        // WP-58 Group B application commands.
+        // Group B application commands.
         crate::plugins_group_b::decode_command,
         // Group A source menu insertion policy.
         |name, json, generation, _event| {
@@ -80,7 +80,7 @@ pub fn event_payload(
 ) -> crate::ModelResult<Option<serde_json::Value>> {
     type Encoder = fn(&lexical_model::PluginEvent) -> crate::ModelResult<Option<serde_json::Value>>;
     let encoders: &[Encoder] = &[
-        // WP-58 Group B host requests.
+        // Group B host requests.
         crate::plugins_group_b::event_payload,
         crate::plugins_group_a::menu::event_payload,
         crate::plugins_group_a::menu::search::event_payload,
@@ -109,7 +109,7 @@ pub fn query(
         &lexical_model::EditorState,
     ) -> crate::ModelResult<Option<serde_json::Value>>;
     let queries: &[Query] = &[
-        // WP-58 Group B bulk reads.
+        // Group B bulk reads.
         crate::plugins_group_b::query,
         crate::plugins_group_a::menu::action_dependencies::query,
         // Group C AI-edit reads.

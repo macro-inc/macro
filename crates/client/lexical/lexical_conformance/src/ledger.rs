@@ -4,7 +4,7 @@ use crate::{
     replay::{Result, fail},
 };
 use serde::Deserialize;
-/// Tier A ledger, pinned to the same upstream as fixtures.
+/// Expected-failure ledger for fixture replay, pinned to the same upstream as fixtures.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Ledger {
@@ -27,7 +27,7 @@ pub struct Entry {
     pub test: String,
     /// Must fail until the missing capability lands.
     pub status: Status,
-    /// Closed reason from S4 §2.6.
+    /// Closed set of allowed failure reasons.
     pub reason: Reason,
     /// Review provenance.
     pub reviewed_by: String,

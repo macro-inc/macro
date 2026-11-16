@@ -93,7 +93,7 @@ impl Editor {
         EditorBuilder::new(mode)
     }
     /// Create an empty dev-only peer sharing this registry and key allocator.
-    /// Tier C keeps a separate attached view, like the upstream DOM oracle.
+    /// The differential harness keeps a separate attached view, like the upstream DOM oracle.
     #[cfg(feature = "foreign-nodes")]
     pub fn create_conformance_peer(&self, mode: EditorMode) -> Result<Self, Error> {
         Self::new(

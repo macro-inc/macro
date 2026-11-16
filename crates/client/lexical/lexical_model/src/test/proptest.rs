@@ -1,4 +1,4 @@
-//! S4 §4. Generated scripts supplement the explicit upstream behavior tests.
+//! Property tests. Generated scripts supplement the explicit upstream behavior tests.
 use super::{Inline, performance::Opaque};
 use crate::*;
 use proptest::prelude::*;
@@ -205,7 +205,7 @@ fn check_state(state: &EditorState) {
 
 // Compare tree shape, runtime payload, serializable base fields and generated
 // NodeState directly, without using the JSON exporter as the structural oracle.
-// Element cached typing defaults are excluded: S1 §8.6 deliberately leaves new
+// Element cached typing defaults are excluded: the model deliberately leaves new
 // nodes unsynced, and Paragraph export substitutes its direct text child's defaults.
 fn structural_tree(state: &EditorState, key: NodeKey) -> serde_json::Value {
     let view = state.view();

@@ -1,4 +1,4 @@
-//! Versioned flat word/string layout, S1 §11.3.
+//! Versioned flat word/string layout of the view diff.
 use super::*;
 /// Current flat diff format.
 pub const DIFF_FORMAT_VERSION: u32 = 1;

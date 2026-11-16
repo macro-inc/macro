@@ -447,7 +447,7 @@ fn commit_transform_failure_rolls_back_writes_and_invalidates_only_pending_handl
         "discarded"
     );
     // A completed normalize-only flush needs a new write before commit runs
-    // the default pipeline again (S1 §7.1).
+    // the default pipeline again.
     host.call(set, json!(["changed again"]), Some(writable.clone()))?;
     assert!(matches!(
         host.commit(),

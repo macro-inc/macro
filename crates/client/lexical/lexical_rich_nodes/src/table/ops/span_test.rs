@@ -1,6 +1,6 @@
 use super::*;
 
-// S3 §1b.0: retain repeated per-slot writes for cells writable at map time.
+// Retain repeated per-slot writes for cells writable at map time.
 #[test]
 fn row_insert_frozen_span_is_3() -> Result<()> {
     let mut editor = Editor::builder(EditorMode::Headless)

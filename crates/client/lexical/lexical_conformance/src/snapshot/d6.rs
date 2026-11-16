@@ -1,4 +1,4 @@
-//! S4 §1.7 / D6: Prism's highlight records are view-only identities.
+//! Prism's highlight records are view-only identities: the model never tokenizes code.
 use super::*;
 use std::collections::HashSet;
 

@@ -1,5 +1,5 @@
 //! Development-only raw-model facades for core and rich differential conformance.
-//! WP-14 adds EditorCore and the session codec; WP-54 adds the foreign-node shim.
+//! `EditorHandle` (in `host`) adds EditorCore dispatch and JS-hosted foreign nodes.
 #![deny(missing_docs)]
 use lexical_model::*;
 use serde::Deserialize;

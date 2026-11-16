@@ -203,8 +203,8 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
             format: TextFormat::empty(),
             style: "".into(),
         })))?;
-        // Complete sibling-span removal uses the structural primitive; the range-editing
-        // remove_text convenience API belongs to WP-10.
+        // Complete sibling-span removal uses the structural primitive; range-editing
+        // remove_text is tested with selection.
         tx.splice(p, ChildIndex(0), 2, &[])?;
         assert!(!tx.is_attached(leading));
         assert!(!tx.is_attached(token));

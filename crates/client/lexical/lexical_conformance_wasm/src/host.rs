@@ -244,7 +244,7 @@ impl EditorHandle {
             .set_mask(mask, self.started.get())
             .map_err(debug::error)
     }
-    /// Stable IDs from the same dispatch table as the Tier A replayer.
+    /// Stable IDs from the same dispatch table as the fixture replayer.
     pub fn api_index() -> Vec<String> {
         api::index()
             .iter()
