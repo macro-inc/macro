@@ -22,9 +22,10 @@ and the traps. To add a whole service, follow the
 | `infra/packages/service` | `EcrImage`, least-privilege DynamoDB, cluster stack reference. |
 | `infra/packages/lambda` | `Lambda` component and `WorkerTrigger`. |
 | `infra/packages/vpc` | IDs of the one VPC everything runs in (`get_coparse_api_vpc()`). |
+| `infra/stacks/vpc-network` | What Pulumi owns of that VPC's routing: gateway endpoints today. Prod stack only; dev runs in the same VPC. |
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
-(`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
+(`monitoring`, `doppler-projects`, `vpc-network`) or dev-only (`github-runners`,
 `web-app-preview`, `openbao`). The project name is usually the directory name. It matters:
 Doppler, `services-config.json`, and the nix `serviceName` all key on it.
 
@@ -185,8 +186,8 @@ Both deploy-all and single-service workflows use this helper. Download paths and
 build/deployment failure gates remain attempt-scoped.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao` and a
-  few others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao`,
+  `vpc-network` and a few others are manual.
 - `openbao` (dev only) is a deliberate exception to the gateway pattern: the
   vault API must never be gateway-reachable, so it has its own internal ALB.
   Don't copy it for ordinary services.

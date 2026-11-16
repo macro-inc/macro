@@ -1,0 +1,3 @@
+# Dev and prod run in the same VPC, so this project has only a prod stack.
+config:
+  aws:region: us-east-1
