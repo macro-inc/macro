@@ -56,4 +56,11 @@ export default {
   modifyEvent: 'Modify event',
   inviteOthers: 'Invite others',
   seeGuestList: 'See guest list',
+  conferencing: 'Video conferencing',
+  addMeetingLink: 'Add meeting link',
+  addNotification: 'Add notification',
+  add: 'Add',
+  removeNotification: 'Remove {{offset}} notification',
+  otherNotificationsPreserved:
+    '{{count}} other notification methods are preserved.',
 };
