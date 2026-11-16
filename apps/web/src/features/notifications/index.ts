@@ -94,7 +94,6 @@ export {
   getThreadId,
   stackNotifications,
 } from './notification-stacking';
-export { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 export { createMutedEntitiesQuery } from './queries/muted-entities-query';
 export type {
   CompositeEntity,

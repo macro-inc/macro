@@ -1,0 +1,249 @@
+---
+source: crates/password_import/tests/import/golden.rs
+expression: snapshot(&export)
+---
+{
+  "summary": {
+    "itemsByKind": {
+      "login": 3,
+      "card": 1,
+      "note": 1
+    },
+    "folders": 5,
+    "skippedByReason": {
+      "archived": 1
+    },
+    "droppedByPart": {
+      "attachment": 3,
+      "extra_field": 2,
+      "empty_field": 2,
+      "reprompt": 2,
+      "uri_match_type": 4
+    }
+  },
+  "export": {
+    "format": "bitwarden_zip",
+    "folders": [
+      [
+        "A"
+      ],
+      [
+        "A",
+        "B"
+      ],
+      [
+        "Personal"
+      ],
+      [
+        "Slash at end"
+      ],
+      [
+        "Work"
+      ]
+    ],
+    "items": [
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000001",
+        "kind": "login",
+        "name": "Health – work 1",
+        "url": "https://192.0.2.10:8443/",
+        "username": "sdummyfield",
+        "password": "synthetic-password-1",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Website 2",
+            "value": "^https://(www\\.)?health26\\.example\\.org/.*$",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": [
+          "Slash at end"
+        ],
+        "favorite": false
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000002",
+        "kind": "card",
+        "name": "Visa card 1",
+        "url": null,
+        "username": "Alex Ñandú",
+        "password": "4111111111111111",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Expires",
+            "value": "02/2033",
+            "concealed": false
+          },
+          {
+            "label": "Security code",
+            "value": "000",
+            "concealed": true
+          },
+          {
+            "label": "Brand",
+            "value": "Visa",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": null,
+        "favorite": true
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000004",
+        "kind": "login",
+        "name": "All custom field types",
+        "url": "https://all.example.net/login",
+        "username": "user4730@example.org",
+        "password": "synthetic-password-4",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Text field",
+            "value": "plain text value",
+            "concealed": false
+          },
+          {
+            "label": "Hidden field",
+            "value": "synthetic-hidden-4-3",
+            "concealed": true
+          },
+          {
+            "label": "Boolean true",
+            "value": "true",
+            "concealed": false
+          },
+          {
+            "label": "Boolean false",
+            "value": "false",
+            "concealed": false
+          },
+          {
+            "label": "Duplicate field name",
+            "value": "first",
+            "concealed": false
+          },
+          {
+            "label": "Duplicate field name",
+            "value": "second",
+            "concealed": false
+          },
+          {
+            "label": "Field",
+            "value": "field with empty name",
+            "concealed": false
+          },
+          {
+            "label": "Multiline value",
+            "value": "line one\nline two\nline three",
+            "concealed": false
+          },
+          {
+            "label": "Emoji 🔑 field",
+            "value": "värde ✓ 値",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": [
+          "Work"
+        ],
+        "favorite": false
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000005",
+        "kind": "login",
+        "name": "Photos – test 62",
+        "url": "https://192.0.2.10:8443/",
+        "username": "user4267@example.com",
+        "password": "synthetic-password-5",
+        "notes": "",
+        "fields": [
+          {
+            "label": "Website 2",
+            "value": "photos42.example.com",
+            "concealed": false
+          }
+        ],
+        "totp": null,
+        "folder": [
+          "A",
+          "B"
+        ],
+        "favorite": true
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000006",
+        "kind": "note",
+        "name": "Markdown note",
+        "url": null,
+        "username": "",
+        "password": "",
+        "notes": "<238 bytes of '#'>",
+        "fields": [],
+        "totp": null,
+        "folder": [
+          "Personal"
+        ],
+        "favorite": true
+      }
+    ],
+    "skipped": [
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000003",
+        "name": "Gym – old 5",
+        "reason": "archived"
+      }
+    ],
+    "dropped": [
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000001",
+        "what": "uri_match_type",
+        "count": 2
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000001",
+        "what": "attachment",
+        "count": 1
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000002",
+        "what": "reprompt",
+        "count": 1
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000002",
+        "what": "attachment",
+        "count": 1
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000004",
+        "what": "empty_field",
+        "count": 2
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000004",
+        "what": "extra_field",
+        "count": 2
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000005",
+        "what": "uri_match_type",
+        "count": 2
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000005",
+        "what": "reprompt",
+        "count": 1
+      },
+      {
+        "sourceKey": "b1000000-0000-4000-8000-000000000006",
+        "what": "attachment",
+        "count": 1
+      }
+    ]
+  }
+}

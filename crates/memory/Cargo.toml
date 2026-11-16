@@ -15,6 +15,7 @@ strum = { workspace = true }
 ai_billing = { path = "../ai_billing" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
+feature_flags = { path = "../feature_flags" }
 ai_usage = { path = "../ai_usage" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
