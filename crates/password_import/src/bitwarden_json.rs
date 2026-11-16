@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use serde::Deserialize;
-use serde::de::{Deserializer, Error, IgnoredAny, SeqAccess, Visitor};
+use serde::de::{Deserializer, Error, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::value::RawValue;
 
 use crate::bounded::{Bounded, Count};
@@ -112,7 +112,8 @@ struct Item {
     name: Option<String>,
     notes: Option<Secret>,
     favorite: Option<bool>,
-    reprompt: Option<u8>,
+    #[serde(default)]
+    reprompt: Code,
     #[serde(default)]
     fields: Bounded<Field>,
     login: Option<Login>,
@@ -126,6 +127,63 @@ struct Item {
     attachments: Option<Vec<IgnoredAny>>,
     deleted_date: Option<IgnoredAny>,
     archived_date: Option<IgnoredAny>,
+}
+
+/// A small integer code (`reprompt`, a URL's `match`) that only adds a
+/// dropped part. Anything else, such as a bool, a string or a negative number,
+/// reads as `None` instead of making the whole item malformed; lists and
+/// objects are skipped without being kept.
+#[derive(Default)]
+struct Code(Option<u8>);
+
+impl<'de> Deserialize<'de> for Code {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CodeVisitor)
+    }
+}
+
+struct CodeVisitor;
+
+impl<'de> Visitor<'de> for CodeVisitor {
+    type Value = Code;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("any value")
+    }
+
+    fn visit_u64<E: Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(Code(u8::try_from(value).ok()))
+    }
+
+    fn visit_i64<E: Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_f64<E: Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_bool<E: Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_str<E: Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<IgnoredAny>()?.is_some() {}
+        Ok(Code(None))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(Code(None))
+    }
 }
 
 /// Whether `collectionIds` names any collection. Bitwarden's import docs
@@ -187,8 +245,8 @@ struct Login {
 #[derive(Deserialize)]
 struct Uri {
     uri: Option<String>,
-    #[serde(rename = "match")]
-    match_type: Option<u8>,
+    #[serde(rename = "match", default)]
+    match_type: Code,
 }
 
 /// Bitwarden's domain match, which is also what a URL without a rule uses
@@ -453,7 +511,7 @@ fn add_item(
         draft.add_field(label, value, concealed);
     }
 
-    if item.reprompt.is_some_and(|reprompt| reprompt != 0) {
+    if item.reprompt.0.is_some_and(|reprompt| reprompt != 0) {
         draft.drop_part(DroppedPart::Reprompt, 1);
     }
 
@@ -477,6 +535,7 @@ fn add_login(draft: &mut Draft, login: Login) {
     for uri in login.uris.entries {
         if uri
             .match_type
+            .0
             .is_some_and(|match_type| match_type != DOMAIN_MATCH)
         {
             draft.drop_part(DroppedPart::UriMatchType, 1);

@@ -394,3 +394,24 @@ fn bitwarden_csv_null_fields_are_dropped_and_reported() {
         ]
     );
 }
+
+#[test]
+fn an_unreadable_reprompt_or_match_rule_still_imports_the_item() {
+    let json = r#"{"encrypted":false,"folders":[],"items":[
+        {"id":"b2000000-0000-4000-8000-000000000001","type":1,"name":"Odd codes","reprompt":true,
+         "login":{"username":"user@example.com","password":"synthetic-password",
+                  "uris":[{"uri":"https://one.example.com","match":"0"},
+                          {"uri":"https://two.example.com","match":-1},
+                          {"uri":"https://three.example.com","match":[1,2]}]}}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    let item = export.items.first().expect("imported");
+    assert_eq!(item.password.expose_secret(), "synthetic-password");
+    assert_eq!(dropped(&export), vec![]);
+}
