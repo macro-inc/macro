@@ -157,3 +157,21 @@ fn insert_text_adds_an_unformatted_node_at_the_caret() -> Result<(), Error> {
     assert_eq!(view.text(emoji).expect("text").format, TextFormat::empty());
     Ok(())
 }
+
+// The view's listener metadata cache rejects a table with two rows for one
+// command, so each command name has one registering plugin.
+#[test]
+fn every_application_command_name_is_registered_once() {
+    let editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let mut seen = std::collections::HashSet::new();
+    let duplicates: Vec<String> = editor
+        .listener_table()
+        .iter()
+        .map(|(kind, _)| format!("{kind:?}"))
+        .filter(|name| !seen.insert(name.clone()))
+        .collect();
+    assert_eq!(duplicates, Vec::<String>::new());
+}

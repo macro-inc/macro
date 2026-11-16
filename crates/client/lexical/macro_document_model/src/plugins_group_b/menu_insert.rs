@@ -1,10 +1,8 @@
-//! Source menu insertions INSERT_TEXT_COMMAND and INSERT_GROUP/AGENT_SESSION/
-//! BOOKING_LINK_MENTION_COMMAND: `$insertNodes` at the selection, wrap a
-//! root-level node in a paragraph, then `selectEnd`.
-use crate::nodes::{
-    AgentSessionMentionNode, BookingLinkMentionNode, GroupMentionNode, Maybe,
-    create_booking_link_mention_node,
-};
+//! Source menu insertions INSERT_TEXT_COMMAND and INSERT_GROUP_MENTION_COMMAND:
+//! `$insertNodes` at the selection, wrap a root-level node in a paragraph, then
+//! `selectEnd`. Agent-session and booking-link inserts are owned by
+//! decorator_content_actions.
+use crate::nodes::{GroupMentionNode, Maybe};
 use lexical_model::*;
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -19,27 +17,6 @@ struct GroupInput {
     group_alias: String,
 }
 
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct AgentSessionInput {
-    id: String,
-    #[serde(default)]
-    label: Option<String>,
-    #[serde(default)]
-    mention_uuid: Option<String>,
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct BookingLinkInput {
-    profile_id: String,
-    #[serde(default)]
-    slug: Option<String>,
-    #[serde(default)]
-    label: Option<String>,
-    url: String,
-}
-
 #[derive(Clone, Debug)]
 struct Insert<Input> {
     input: Input,
@@ -48,12 +25,8 @@ struct Insert<Input> {
 
 static TEXT: CommandKey<Insert<TextInput>> = CommandKey::new("group-b.insert-text");
 static GROUP: CommandKey<Insert<GroupInput>> = CommandKey::new("group-b.insert-group-mention");
-static AGENT_SESSION: CommandKey<Insert<AgentSessionInput>> =
-    CommandKey::new("group-b.insert-agent-session-mention");
-static BOOKING_LINK: CommandKey<Insert<BookingLinkInput>> =
-    CommandKey::new("group-b.insert-booking-link-mention");
 
-static COMMANDS: [CommandRegistration; 4] = [
+static COMMANDS: [CommandRegistration; 2] = [
     CommandRegistration {
         command: CommandKind::Extension(&TEXT),
         priority: CommandPriority::Normal,
@@ -61,16 +34,6 @@ static COMMANDS: [CommandRegistration; 4] = [
     },
     CommandRegistration {
         command: CommandKind::Extension(&GROUP),
-        priority: CommandPriority::Normal,
-        placement: Placement::After,
-    },
-    CommandRegistration {
-        command: CommandKind::Extension(&AGENT_SESSION),
-        priority: CommandPriority::Normal,
-        placement: Placement::After,
-    },
-    CommandRegistration {
-        command: CommandKind::Extension(&BOOKING_LINK),
         priority: CommandPriority::Normal,
         placement: Placement::After,
     },
@@ -97,10 +60,6 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
         extension(&TEXT, json, generation)
     } else if name == GROUP.name() {
         extension(&GROUP, json, generation)
-    } else if name == AGENT_SESSION.name() {
-        extension(&AGENT_SESSION, json, generation)
-    } else if name == BOOKING_LINK.name() {
-        extension(&BOOKING_LINK, json, generation)
     } else {
         Ok(None)
     }
@@ -108,10 +67,6 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(MenuInsertion)
-}
-
-fn optional(value: &Option<String>) -> Maybe<String> {
-    value.clone().map_or(Maybe::Missing, Maybe::Value)
 }
 
 fn current<Input>(tx: &Transaction<'_>, command: &Insert<Input>) -> bool {
@@ -164,36 +119,6 @@ impl Plugin for MenuInsertion {
             let mention = tx.create(GroupMentionNode {
                 group_alias: Maybe::Value(command.input.group_alias.clone()),
             })?;
-            return place(tx, mention.key());
-        }
-        if let Some(command) = extension.payload(&AGENT_SESSION) {
-            if !current(tx, command) {
-                return Ok(Handled::No);
-            }
-            let input = &command.input;
-            let mention = tx.create(AgentSessionMentionNode {
-                id: Maybe::Value(input.id.clone()),
-                label: optional(&input.label),
-                mention_uuid: optional(&input.mention_uuid),
-                expanded: false,
-            })?;
-            return place(tx, mention.key());
-        }
-        if let Some(command) = extension.payload(&BOOKING_LINK) {
-            if !current(tx, command) {
-                return Ok(Handled::No);
-            }
-            let input = &command.input;
-            let mention = create_booking_link_mention_node(
-                tx,
-                BookingLinkMentionNode {
-                    profile_id: Maybe::Value(input.profile_id.clone()),
-                    slug: optional(&input.slug),
-                    label: optional(&input.label),
-                    url: input.url.clone(),
-                    host: None,
-                },
-            )?;
             return place(tx, mention.key());
         }
         Ok(Handled::No)
