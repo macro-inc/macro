@@ -138,6 +138,10 @@ impl BundleRoot {
     }
 }
 
+/// The newest bundle manifest schema this updater reads, sent with each check
+/// so the server never offers desktop a schema it would reject.
+pub const SUPPORTED_MANIFEST_SCHEMA: u64 = 3;
+
 /// Metadata generated with each JavaScript bundle build.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +178,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), Target::Android) => Some(builds.android),
             (3, Some(builds), Target::Ios) => Some(builds.ios),
+            (3, Some(_), Target::Darwin | Target::Linux | Target::Windows) => {
+                Some(self.min_native_build)
+            }
             _ => None,
         }
     }

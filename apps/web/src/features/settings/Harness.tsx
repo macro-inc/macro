@@ -3,7 +3,7 @@ import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -13,22 +13,35 @@ import {
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
 import {
+  invalidateHarnesses,
   useDeleteHarnessMutation,
   useHarnessesQuery,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
+import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
-import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
+import {
+  ConnectedRuntimesSection,
+  MachineSection,
+} from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
+import { useTeamComputers } from './computers/primitives/team-computers';
+import { GetComputerEntry } from './computers/views/get-computer-entry';
+import { MacroComputers } from './computers/views/MacroComputers';
 import {
   CURSOR_KEY_FORMAT_ERROR,
   CURSOR_KEY_PREFIX,
@@ -58,6 +71,14 @@ export function Harness(
   const cursorRegistered = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
+  const harnesses = () => (harnessesQuery.isSuccess ? harnessesQuery.data : []);
+  const teamComputers = useTeamComputers();
+  const computerHarnessIds = () =>
+    new Set(
+      teamComputers
+        .computers()
+        .flatMap((computer) => (computer.harnessId ? [computer.harnessId] : []))
+    );
   const isTeamOwner = useIsTeamOwner();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<
@@ -78,6 +99,7 @@ export function Harness(
   // The runtime the page points out, and the one whose Share menu is open.
   const [highlight, setHighlight] = createSignal<{ target: string }>();
   const [sharing, setSharing] = createSignal<string>();
+  const [buyingComputer, setBuyingComputer] = createSignal(false);
   // Opened from an access-request notification: point out that runtime and,
   // for a request, open its Share menu, where the request waits.
   createEffect(
@@ -95,18 +117,37 @@ export function Harness(
       setPairingDialog({ initialCode: pair });
       setSearchParams({ pair: undefined }, { replace: true });
     }
+    // A computer setup notification's link, opened cold.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) {
+      requestComputerSetup(computerId);
+      setSearchParams({ [COMPUTER_SETUP_PARAM]: undefined }, { replace: true });
+    }
   });
 
+  // Set synchronously, before the mutation's own pending state renders, so a
+  // second click cannot send a second DELETE for a row that is already gone.
+  const [removing, setRemoving] = createSignal(false);
   const removeHarness = async () => {
     const current = removingHarness();
-    if (!current) return;
-
+    if (!current || removing()) return;
+    setRemoving(true);
     try {
       await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
       setRemovingHarness(undefined);
       toast.success('Machine removed');
     } catch (error) {
+      if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+        // Already gone, e.g. removed elsewhere: the list just needs to catch up.
+        setRemovingHarness(undefined);
+        fireAndForget(invalidateHarnesses(), 'harness-settings');
+        return;
+      }
       toast.failure(failureMessage(error, 'Failed to remove machine'));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -169,12 +210,24 @@ export function Harness(
               </Button>
             }
           >
+            <GetComputerEntry onGet={() => setBuyingComputer(true)} />
             <PendingRequestsSection />
             <ConnectedRuntimesSection
               harnesses={
                 harnessesQuery.isSuccess
                   ? harnessesQuery.data.filter(
-                      (harness) => harness.access === 'owner'
+                      // A Macro computer is listed once, under Macro computers;
+                      // with that section off it stays an ordinary machine.
+                      // An agent teammate's computer is never one: people
+                      // message the agent instead.
+                      (harness) =>
+                        harness.access === 'owner' &&
+                        !isTeamAgentComputer(harness) &&
+                        !(
+                          teamComputers.enabled() &&
+                          (harness.computer_id ||
+                            computerHarnessIds().has(harness.id))
+                        )
                     )
                   : []
               }
@@ -188,13 +241,18 @@ export function Harness(
               canRemoveShared={isTeamOwner()}
               onRemove={setRemovingHarness}
             />
+            <MacroComputers
+              harnesses={harnesses()}
+              buying={buyingComputer()}
+              onBuyingChange={setBuyingComputer}
+            />
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
                 Built-in machines
               </h2>
-              <SettingsCard>
-                <section class="flex gap-4 px-6 py-5">
+              <SettingsCard inset="wide">
+                <MachineSection>
                   <HarnessIcon>
                     <HardDrivesIcon />
                   </HarnessIcon>
@@ -212,9 +270,9 @@ export function Harness(
                       Macro tools and MCPs to get the job done.
                     </p>
                   </div>
-                </section>
+                </MachineSection>
 
-                <section class="flex gap-4 px-6 py-5">
+                <MachineSection>
                   <HarnessIcon>
                     <CursorIcon />
                   </HarnessIcon>
@@ -325,7 +383,7 @@ export function Harness(
                       </Show>
                     </Show>
                   </div>
-                </section>
+                </MachineSection>
 
                 <Show when={canUseCodex()}>
                   <CodexHarness />
@@ -356,7 +414,7 @@ export function Harness(
         {(harness) => (
           <HarnessRemoveDialog
             harnessName={harness.name}
-            pending={deleteHarnessMutation.isPending}
+            pending={removing() || deleteHarnessMutation.isPending}
             onClose={() => setRemovingHarness(undefined)}
             onConfirm={() => fireAndForget(removeHarness(), 'harness-settings')}
           />

@@ -19,6 +19,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
+import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
@@ -31,6 +33,10 @@ import {
 } from '../component/MarkdownDocument';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { markdownHeaderMenu } from '../views/markdown-header';
+import { mobileMarkdownHeaderMenu } from '../views/mobile/markdown-header';
+
+const PARAMS = new URLSearchParams(location.search);
 
 const MARKDOWN = `These notes came over from another workspace, where most pages were read at full width. Long paragraphs like this one wrap at the reading column in the standard layout, and run across the whole pane in wide mode, so a reader scrolls less to get through the same page.
 
@@ -62,7 +68,7 @@ export function summarize(rows: { area: string; status: string }[]): string {
  * lays out its margin comment column.
  */
 function SeedComment() {
-  if (!new URLSearchParams(location.search).has('comments')) return null;
+  if (!PARAMS.has('comments')) return null;
   const { state } = useMarkdownDocument();
   state.setCommentState('comments', 'fixture-comment', {
     id: 'fixture-comment',
@@ -80,7 +86,11 @@ function SeedComment() {
 }
 
 function Menu() {
-  const { menuTools } = useMarkdownDocumentTools();
+  const { actions } = useMarkdownDocumentTools();
+  // The rows the real header for this platform offers.
+  const menuTools = isTouchDevice()
+    ? mobileMarkdownHeaderMenu(actions)
+    : markdownHeaderMenu(actions);
   return (
     <nav
       class="absolute right-3 top-3 z-10 flex gap-2"
@@ -177,6 +187,18 @@ const client = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
 
+// With `?discussion` the viewer is signed in, so the document shows its
+// Discussion; the test answers its message requests. No session exists, so
+// nothing here reaches a real account. `EntityProvider` hands everything below
+// it the app's query client, so that is the one that holds the identity.
+if (PARAMS.has('discussion')) {
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    authenticated: true,
+    id: 'macro|reader@example.com',
+    permissions: [],
+  } as unknown as UserInfoData);
+}
+
 function Providers(props: ParentProps) {
   return (
     <AnalyticsContextProvider>
@@ -201,7 +223,7 @@ function Providers(props: ParentProps) {
   );
 }
 
-applyTheme('Macro Light');
+applyTheme(PARAMS.get('theme') === 'dark' ? 'Macro Dark' : 'Macro Light');
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 render(

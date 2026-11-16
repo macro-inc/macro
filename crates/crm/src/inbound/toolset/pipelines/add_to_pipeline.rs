@@ -31,7 +31,7 @@ pub struct ToolNewEntry {
     pub email: Option<String>,
     /// Fields to fill in.
     #[schemars(
-        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. In a generic pipeline, e.g. [{\"field\": \"Name\", \"value\": \"Launch site\"}]."
+        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. In a pipeline that tracks a record, Outcome is Open, Won or Lost independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{\"field\": \"Name\", \"value\": \"Launch site\"}]."
     )]
     #[serde(default)]
     pub set: Vec<ToolFieldValue>,

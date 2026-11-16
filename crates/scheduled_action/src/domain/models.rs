@@ -5,6 +5,7 @@ use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -279,6 +280,8 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("{0}")]
+    InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]
     NotSuggesting,
     #[error(
@@ -484,6 +487,9 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// Optional presentation overrides; absent values use routine defaults.
+    #[serde(default)]
+    pub appearance: EntityAppearance,
     /// The routine suggestion it was saved from, if any: a plain pointer
     /// that stays after the suggestion is replaced.
     #[serde(default)]

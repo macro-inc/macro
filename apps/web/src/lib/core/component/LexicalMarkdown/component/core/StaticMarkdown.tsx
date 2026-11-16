@@ -3,6 +3,7 @@
  * the markdown features that are supported by our LexicalEngine.
  */
 
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
 import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
@@ -24,6 +25,8 @@ import {
   type DatabaseQueryNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
+  type DetailsNode,
+  type DetailsSummaryNode,
   type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
@@ -37,7 +40,7 @@ import {
   type PullRequestMentionNode,
   type ReplyTargetNode,
   type SnapshotNode,
-  SupportedNodeTypes,
+  StaticRenderNodeTypes,
   type TagMentionNode,
   type ThemeMentionNode,
   type UnknownMentionNode,
@@ -226,7 +229,7 @@ function newStaticRenderingEditor(props: {
     parentEditor: props.parentEditor,
     theme: props.theme,
     namespace: 'static-renderer',
-    nodes: SupportedNodeTypes,
+    nodes: StaticRenderNodeTypes,
     onError: console.error,
   });
   return editor;
@@ -811,6 +814,37 @@ const Quote: TypedRenderableElement<QuoteNode> = {
   ),
 };
 
+/**
+ * GitHub's collapsible section, drawn with the native element so it opens
+ * and closes without state. The first child is its summary line.
+ */
+const Details: TypedRenderableElement<DetailsNode> = {
+  guard: (node: LexicalNode): node is DetailsNode => node.__type === 'details',
+  render: (props) => {
+    const [summary, ...body] = [props.children].flat();
+    return (
+      <details class="group my-2" open={props.node.__open}>
+        {summary}
+        <div class="pl-5">{body}</div>
+      </details>
+    );
+  },
+};
+
+const DetailsSummary: TypedRenderableElement<DetailsSummaryNode> = {
+  guard: (node: LexicalNode): node is DetailsSummaryNode =>
+    node.__type === 'details-summary',
+  render: (props) => (
+    <summary class="flex items-baseline gap-1 list-none select-none touch:min-h-[44px] touch:items-center [&::-webkit-details-marker]:hidden">
+      <CaretRight
+        aria-hidden="true"
+        class="size-4 shrink-0 self-center text-ink-muted transition-transform group-open:rotate-90"
+      />
+      <span class="min-w-0">{props.children}</span>
+    </summary>
+  ),
+};
+
 const Code: TypedRenderableElement<CodeNode> = {
   guard: (node: LexicalNode): node is CodeNode => node.__type === 'code',
   render: (props) => {
@@ -1080,6 +1114,8 @@ const Elements: RenderableElement[] = [
   eraseRenderableElement(List),
   eraseRenderableElement(ListItem),
   eraseRenderableElement(Quote),
+  eraseRenderableElement(Details),
+  eraseRenderableElement(DetailsSummary),
   eraseRenderableElement(Code),
   eraseRenderableElement(Link),
   eraseRenderableElement(Mark),

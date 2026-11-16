@@ -190,6 +190,7 @@ fn document(id: Uuid) -> SoupItem<()> {
 /// Build a document Soup item with an explicit name.
 fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str("macro|owner@example.com").expect("valid owner"),

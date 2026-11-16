@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                company_id,\n                email,\n                name,\n                hidden,\n                first_interaction,\n                last_interaction,\n                created_at,\n                updated_at,\n                ARRAY(\n                    SELECT ce.email FROM crm_contact_emails ce\n                    WHERE ce.contact_id = ct.id\n                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email\n                ) AS \"emails!\",\n                ARRAY(\n                    SELECT ce.email FROM crm_contact_emails ce\n                    WHERE ce.contact_id = ct.id\n                      AND EXISTS (\n                          SELECT 1 FROM crm_domains d\n                          WHERE d.team_id = ct.team_id\n                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)\n                            AND d.company_id = ct.company_id\n                      )\n                    ORDER BY ce.created_at, ce.email\n                ) AS \"company_domain_emails!\"\n            FROM crm_contacts ct\n            WHERE company_id = $1\n              AND ($2 OR hidden = FALSE)\n            ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "emails!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "company_domain_emails!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "4fe8008258aa015619aaa74dd6452467c1a7e391050199c5ea846ce9e21a0252"
+}

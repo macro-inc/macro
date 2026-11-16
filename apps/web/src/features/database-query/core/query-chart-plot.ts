@@ -9,8 +9,12 @@ import type {
   RuleYOptions,
   ScaleOptions,
 } from '@observablehq/plot';
-import { formatDate } from '@property/utils/formatting';
 import { match } from 'ts-pattern';
+import {
+  formatAnswerDate,
+  formatAnswerDayInYear,
+  formatAnswerNumber,
+} from './answer-format';
 import { formatQueryValue } from './query';
 import type { QueryChartData, QueryChartPoint } from './query-chart';
 
@@ -80,12 +84,13 @@ function valueFormat(points: readonly QueryChartPoint[]) {
     0,
     ...points.map((point) => Math.abs(point.value ?? 0))
   );
-  const compact = new Intl.NumberFormat(undefined, {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  });
   return (value: number) =>
-    largest >= COMPACT_FROM ? compact.format(value) : formatQueryValue(value);
+    largest >= COMPACT_FROM
+      ? formatAnswerNumber(value, {
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        })
+      : formatQueryValue(value);
 }
 
 /**
@@ -100,8 +105,8 @@ function dateFormat(points: readonly QueryChartPoint[]) {
   );
   return (date: Date) =>
     years.size === 1 && years.has(date.getFullYear())
-      ? formatDate(date).replace(/, \d{4}$/, '')
-      : formatDate(date);
+      ? formatAnswerDayInYear(date)
+      : formatAnswerDate(date);
 }
 
 export function plotChart(

@@ -1,10 +1,9 @@
 use crate::api::context::ApiContext;
-use crate::util::process_pre_insert::sfs_map;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email_utils::sanitize_html_fragment;
+use email::domain::signature_settings::SettingsPatchError;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::{api, service};
@@ -78,47 +77,20 @@ pub async fn patch_settings_handler(
     link: Extension<Link>,
     Json(api_settings): Json<PatchSettingsRequest>,
 ) -> Result<Json<PatchSettingsResponse>, PatchSettingsError> {
-    // The signature is user-supplied HTML; sanitize at this trust boundary
-    // before it is persisted (and later rendered into compose bodies).
-    let mut settings = api_settings.settings;
-    settings.signature = settings.signature.map(|html| sanitize_html_fragment(&html));
-
-    // Move externally-hosted signature images onto SFS so they render durably
-    // for recipients. If any image can't be fetched (e.g. Gmail/Outlook embedded
-    // URLs that need that account's session, or dead links), it would render
-    // broken for recipients — so reject the whole patch atomically (before any
-    // write) and report the count, so the client can have the user re-add them.
-    // A rehost *error* (vs. an unresolved image) never blocks the save.
-    if let Some(signature) = settings.signature.clone() {
-        match sfs_map::rehost_html_images(
-            &ctx.db,
-            &ctx.sfs_client,
-            &signature,
-            &sfs_map::PublicImages,
-        )
-        .await
-        {
-            Ok((rehosted, unresolved)) => {
-                if unresolved > 0 {
-                    return Err(PatchSettingsError::UnresolvedSignatureImages(
-                        unresolved as u32,
-                    ));
+    let patch = service::settings::SettingsPatch::new(api_settings.settings, link.id);
+    let updated_settings =
+        ctx.signature_settings
+            .patch(patch)
+            .await
+            .map_err(|error| match error {
+                SettingsPatchError::Database(error) => {
+                    PatchSettingsError::DatabaseError(error.into_inner())
                 }
-                settings.signature = Some(rehosted);
-            }
-            Err(e) => {
-                tracing::warn!(error = ?e, "signature image rehost failed; persisting signature unchanged");
-            }
-        }
-    }
-
-    let patch = service::settings::SettingsPatch::new(settings, link.id);
-
-    let updated_settings = email_db_client::settings::patch_settings(&ctx.db, patch).await?;
-
-    let response_settings = api::settings::Settings::from(updated_settings);
-
+                SettingsPatchError::UnresolvedImages(count) => {
+                    PatchSettingsError::UnresolvedSignatureImages(count)
+                }
+            })?;
     Ok(Json(PatchSettingsResponse {
-        settings: response_settings,
+        settings: api::settings::Settings::from(updated_settings),
     }))
 }

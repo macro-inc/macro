@@ -117,6 +117,17 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.inner
+            .reopen_notifications(user_id, notification_ids, unseen)
+            .await
+    }
+
     async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,

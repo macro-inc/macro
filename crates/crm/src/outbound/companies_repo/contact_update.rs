@@ -23,27 +23,22 @@ impl CompaniesRepositoryImpl {
         // Serialize it with privacy changes and population before domain/row locks;
         // taking this lock never enrolls a mailbox or requires consent.
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
-        let before = sqlx::query!(
-            "SELECT company_id, email FROM crm_contacts WHERE id = $1 AND team_id = $2",
-            contact_id,
-            team_id,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?
-        .ok_or(CrmError::ContactNotFoundForTeam)?;
+        let before = Self::read_contact(&mut *tx, team_id, contact_id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
 
-        let company_id = match update {
-            ContactFieldUpdate::Company(id) => Some(*id),
-            ContactFieldUpdate::Email(_) => before.company_id,
-        };
-        let email = match update {
-            ContactFieldUpdate::Email(email) => Some(email.as_str()),
-            ContactFieldUpdate::Company(_) => before.email.as_deref(),
-        };
-        let mut company_ids: Vec<Uuid> = before.company_id.into_iter().chain(company_id).collect();
+        let mut company_ids: Vec<Uuid> = before.company_id.into_iter().collect();
+        if let ContactFieldUpdate::Company(destination) = update {
+            company_ids.push(*destination);
+        }
         company_ids.sort_unstable();
         company_ids.dedup();
+        let edited_address = match update {
+            ContactFieldUpdate::Email(email)
+            | ContactFieldUpdate::AddEmail(email)
+            | ContactFieldUpdate::RemoveEmail(email) => Some(email),
+            ContactFieldUpdate::Company(_) | ContactFieldUpdate::NoCompany => None,
+        };
 
         // Sync teardown takes domain locks before touching companies/contacts.
         // Gather every lock before taking any row lock; never invert that order.
@@ -55,7 +50,7 @@ impl CompaniesRepositoryImpl {
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        for address in [before.email.as_deref(), email].into_iter().flatten() {
+        for address in before.emails.iter().chain(edited_address) {
             if let Some((_, domain)) = address.split_once('@') {
                 domains.push(domain.to_ascii_lowercase());
             }
@@ -76,11 +71,11 @@ impl CompaniesRepositoryImpl {
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let current = sqlx::query_as!(
-            CrmContact,
-            r#"SELECT id, company_id, email, name, hidden, first_interaction,
-                      last_interaction, created_at, updated_at
-               FROM crm_contacts WHERE id = $1 AND team_id = $2 FOR UPDATE"#,
+
+        // The contact row lock also covers its address rows: only this path
+        // and the primary-address trigger write them, both under that lock.
+        sqlx::query!(
+            "SELECT id FROM crm_contacts WHERE id = $1 AND team_id = $2 FOR UPDATE",
             contact_id,
             team_id,
         )
@@ -88,75 +83,105 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         .ok_or(CrmError::ContactNotFoundForTeam)?;
-        if (current.company_id != before.company_id || current.email != before.email)
-            && !(current.company_id == company_id && current.email.as_deref() == email)
-        {
-            return Err(CrmError::InvalidRequest(
-                "contact changed; reload and try again".into(),
-            ));
-        }
+        let current = Self::read_contact(&mut *tx, team_id, contact_id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
+
         let parent_hidden = companies
             .iter()
             .any(|company| Some(company.id) == current.company_id && company.hidden);
         if !include_hidden && (current.hidden || parent_hidden) {
             return Err(CrmError::ContactNotFoundForTeam);
         }
-        update.validate(&current)?;
-        if let ContactFieldUpdate::Company(_) = update {
-            if parent_hidden && !current.hidden && company_id != current.company_id {
-                return Err(CrmError::CompanyHidden);
-            }
-            if let Some(destination) = company_id {
-                let company = companies
-                    .iter()
-                    .find(|company| company.id == destination)
-                    .ok_or(CrmError::CompanyNotFoundForTeam)?;
-                if company.hidden && Some(destination) != current.company_id {
-                    return Err(CrmError::CompanyHidden);
-                }
-            }
-        }
-        if current.email.as_deref() == email && current.company_id == company_id {
+        // The locks above were chosen from the first read. A contact that
+        // moved or changed addresses since may need others, so only an edit
+        // it already satisfies is answered.
+        let moved = current.company_id != before.company_id || current.emails != before.emails;
+        let change = update.resolve(&current)?;
+        if change.changes_nothing(&current) {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Ok(current);
         }
-        // Every email writer takes its domain lock before rows. Count across the
-        // whole team, including archived records, without exposing restricted ones.
-        let duplicates = sqlx::query!(
-            r#"SELECT ct.hidden OR COALESCE(co.hidden, FALSE) AS "hidden!"
-               FROM crm_contact_emails ce
-               JOIN crm_contacts ct ON ct.id = ce.contact_id
-               LEFT JOIN crm_companies co ON co.id = ct.company_id
-               WHERE ce.email = LOWER(BTRIM($2)) AND ct.team_id = $1 AND ct.id <> $3"#,
-            team_id,
-            email,
-            contact_id,
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        if !duplicates.is_empty() {
-            if !include_hidden && duplicates.iter().any(|row| row.hidden) {
-                return Err(CrmError::InvalidRequest(
-                    "contact change unavailable".into(),
-                ));
-            }
-            return Err(CrmError::ContactAlreadyExistsForTeam);
+        if moved {
+            return Err(CrmError::InvalidRequest(
+                "contact changed; reload and try again".into(),
+            ));
         }
-        let contact = sqlx::query_as!(
-            CrmContact,
-            r#"UPDATE crm_contacts SET email = $3, company_id = $4, manually_created = TRUE
-               WHERE id = $1 AND team_id = $2
-               RETURNING id, company_id, email, name, hidden, first_interaction,
-                         last_interaction, created_at, updated_at"#,
+
+        if change.company_id != current.company_id {
+            if parent_hidden && !current.hidden {
+                return Err(CrmError::CompanyHidden);
+            }
+            if let Some(destination) = change.company_id {
+                let company = companies
+                    .iter()
+                    .find(|company| company.id == destination)
+                    .ok_or(CrmError::CompanyNotFoundForTeam)?;
+                if company.hidden {
+                    return Err(CrmError::CompanyHidden);
+                }
+            }
+        }
+
+        // A new address must be free across the team; a contact that moves
+        // must not share any of its addresses. Every email writer takes its
+        // domain lock before rows. Count archived records too, without
+        // exposing restricted ones.
+        let must_be_free: Vec<String> = if change.company_id != current.company_id {
+            current
+                .emails
+                .iter()
+                .cloned()
+                .chain(change.added.clone())
+                .collect()
+        } else {
+            change.added.iter().cloned().collect()
+        };
+        if !must_be_free.is_empty() {
+            let duplicates = sqlx::query!(
+                r#"SELECT COUNT(*) AS "count!",
+                          COALESCE(BOOL_OR(ct.hidden OR COALESCE(co.hidden, FALSE)), FALSE) AS "hidden!"
+                   FROM crm_contact_emails ce
+                   JOIN crm_contacts ct ON ct.id = ce.contact_id
+                   LEFT JOIN crm_companies co ON co.id = ct.company_id
+                   WHERE ce.email = ANY($2) AND ct.team_id = $1 AND ct.id <> $3"#,
+                team_id,
+                &must_be_free,
+                contact_id,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            if duplicates.count > 0 {
+                if !include_hidden && duplicates.hidden {
+                    return Err(CrmError::InvalidRequest(
+                        "contact change unavailable".into(),
+                    ));
+                }
+                return Err(CrmError::ContactAlreadyExistsForTeam);
+            }
+        }
+
+        if let Some(added) = &change.added {
+            sqlx::query!(
+                "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2) ON CONFLICT (contact_id, email) DO NOTHING",
+                contact_id,
+                added,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+        sqlx::query!(
+            "UPDATE crm_contacts SET email = $3, company_id = $4, manually_created = TRUE WHERE id = $1 AND team_id = $2",
             contact_id,
             team_id,
-            email,
-            company_id,
+            change.primary,
+            change.company_id,
         )
-        .fetch_one(&mut *tx)
+        .execute(&mut *tx)
         .await
         .map_err(|error| {
             if error
@@ -168,6 +193,23 @@ impl CompaniesRepositoryImpl {
                 CrmError::StorageLayerError(error.into())
             }
         })?;
+        // Nothing else is deleted: the contact stops matching this address,
+        // so its mail no longer shows on the contact and sync no longer
+        // routes it here.
+        if let Some(removed) = &change.removed {
+            sqlx::query!(
+                "DELETE FROM crm_contact_emails WHERE contact_id = $1 AND email = $2",
+                contact_id,
+                removed,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+
+        let contact = Self::read_contact(&mut *tx, team_id, contact_id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;

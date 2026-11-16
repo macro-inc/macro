@@ -319,10 +319,12 @@ pane widens and matches the standard column below 896px. It is the viewer's own
 setting, saved in this browser, and applies to every Markdown document they
 open, including documents open side by side; it changes nothing for
 collaborators. Images keep their own size. With margin comments showing, the
-comments stay in their own column beside the text. Toggling keeps the reader's
-place in the document. Version history keeps the standard column. The menu item
-then reads **Turn off wide mode**. The
-backend-free desktop/phone regression mounts the real document view:
+comments stay in their own column beside the text. The Discussion under the
+document keeps the standard column, centered under the text, so it looks the
+same with wide mode on or off. Toggling keeps the reader's place in the
+document. Version history keeps the standard column. The menu item then reads
+**Turn off wide mode**. The backend-free desktop/phone regression mounts the
+real document view, including a signed-in Discussion with a thread:
 `bunx playwright test --config src/features/block-md/browser-test/playwright.config.ts`.
 
 On a local HTTPS stack, document and image downloads use `/local-storage/`

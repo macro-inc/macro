@@ -52,8 +52,7 @@
 .email-toolbar-secondary { color: var(--color-ink-extra-muted); }
 .email-feature-demo .mail-row { min-height: 40px; }
 .email-feature-demo .mail-row[aria-current='true'] { background: var(--color-active); }
-.email-feature-demo .mail-rows { padding: 16px 8px 24px; }
-.email-feature-demo .mail-date-group { padding-bottom: 8px; }
+.email-feature-demo .mail-rows { padding: 4px 8px 24px; }
 .email-feature-demo .mail-thread-body { width: 100%; max-width: 968px; margin: 0 auto; padding: 32px 24px; }
 
 .email-auto-tag-menu {
