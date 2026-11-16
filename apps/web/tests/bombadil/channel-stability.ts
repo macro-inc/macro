@@ -54,8 +54,11 @@ const probe = extract((state): ProbeReport => {
     // as loading older messages, is not excused: it must keep the reader's
     // place. Typing and window resizes may resize the timeline a little later.
     // Bombadil acts every 60 ms or so, so a longer motion grace would excuse
-    // nearly every frame.
+    // nearly every frame. On a busy machine the scroll a wheel or key causes
+    // can land later than that, so the first scroll after such input is the
+    // input's own, up to a second later.
     const MOTION_GRACE_MS = 150;
+    const INPUT_SCROLL_DELAY_MS = 1000;
     const LAYOUT_GRACE_MS = 800;
     const TOLERANCE_PX = 1;
     const report: ProbeReport = {
@@ -69,8 +72,10 @@ const probe = extract((state): ProbeReport => {
     let lastInputAt = 0;
     let lastScrollAt = 0;
     let lastResizeAt = 0;
-    const onInput = () => {
+    let scrollInputPending = false;
+    const onInput = (event: Event) => {
       lastInputAt = performance.now();
+      if (event.type !== 'beforeinput') scrollInputPending = true;
     };
     for (const type of [
       'wheel',
@@ -89,9 +94,15 @@ const probe = extract((state): ProbeReport => {
       'scroll',
       () => {
         const now = performance.now();
-        if (now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS) {
+        const answersInput =
+          scrollInputPending && now - lastInputAt < INPUT_SCROLL_DELAY_MS;
+        if (
+          answersInput ||
+          now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS
+        ) {
           lastScrollAt = now;
         }
+        scrollInputPending = false;
       },
       { capture: true, passive: true }
     );
