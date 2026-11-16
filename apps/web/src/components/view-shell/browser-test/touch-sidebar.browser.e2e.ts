@@ -530,9 +530,11 @@ for (const edge of ['bottom', 'right']) {
           function check() {
             const pane = main.getBoundingClientRect();
             const floating = chrome.getBoundingClientRect();
+            // Wait for the pane to settle: mid-slide the chrome trails it by
+            // a frame, within a pixel but not yet where the assertions hold.
             if (
-              Math.abs(pane.left - floating.left) < 1 &&
-              Math.abs(pane.width - floating.width) < 1
+              Math.abs(pane.left - floating.left) < 0.005 &&
+              Math.abs(pane.width - floating.width) < 0.005
             ) {
               resized.disconnect();
               moved.disconnect();
