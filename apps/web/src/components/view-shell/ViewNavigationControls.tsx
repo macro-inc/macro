@@ -5,6 +5,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ListIcon from '@icon/system/regular/list.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
@@ -94,7 +95,10 @@ export function ViewSidebarToggle(props: {
           );
         }}
       >
-        <SidebarIcon class="size-4" />
+        {/* Touch opens navigation as a sheet, behind the familiar menu icon. */}
+        <Show when={isTouchDevice()} fallback={<SidebarIcon class="size-4" />}>
+          <ListIcon class="size-4" />
+        </Show>
       </Button>
     </Show>
   );
