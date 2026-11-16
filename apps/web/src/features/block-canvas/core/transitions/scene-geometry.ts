@@ -24,13 +24,15 @@ export function slideContentRect(
   document: GraphicsDocument,
   slide: ArtifactItem
 ): Bounds {
+  // Size and pose come from the same item: the document's when it has the slide.
+  const placed = document.items[slide.id];
+  const item = placed?.type === 'artifact' ? placed : slide;
+  const { geometry } = item;
   const fitted = artifactContentRect(
-    { x: 0, y: 0, width: slide.geometry.width, height: slide.geometry.height },
-    { width: slide.geometry.designWidth, height: slide.geometry.designHeight }
+    { x: 0, y: 0, width: geometry.width, height: geometry.height },
+    { width: geometry.designWidth, height: geometry.designHeight }
   );
-  const transform = document.items[slide.id]
-    ? worldMatrix(document, slide.id)
-    : IDENTITY;
+  const transform = placed ? worldMatrix(document, slide.id) : IDENTITY;
   return enclosing(
     corners(fitted).map((point) => transformPoint(transform, point))
   );

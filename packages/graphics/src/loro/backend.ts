@@ -153,10 +153,10 @@ function graphicsBackend(
     ) {
       const validated = freezeDocument(next);
       local('local', () => {
-        // Loro cannot roll back staged writes, so everything that can reject
-        // the batch runs before the first one: the scene is computed, and the
-        // presentation edit validates before it stages. The library edits and
-        // the mirror's own commit then share one update.
+        // Loro cannot roll back staged writes, so the checks that reject a
+        // batch run before the first one: the scene is computed (the document
+        // was validated above), and the presentation edit validates before it
+        // stages. The library edits and the mirror's commit share one update.
         const scene = writeScene(
           mirror.getState().scene,
           projection.document,
