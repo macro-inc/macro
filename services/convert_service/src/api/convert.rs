@@ -103,6 +103,19 @@ pub async fn handler(
             .into_response()
     })?;
 
+    // Taken before the input is fetched, so the inputs held in memory are
+    // those of running conversions and not of every request waiting its turn.
+    let slot = ctx.converter.reserve().await.map_err(|e| {
+        tracing::error!(error=?e, job_id=%job_id, "conversion failed");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "conversion failed".into(),
+            }),
+        )
+            .into_response()
+    })?;
+
     let input = ctx
         .s3_client
         .get(&req.from_bucket, &req.from_key)
@@ -121,7 +134,7 @@ pub async fn handler(
     let conversion = Conversion::new(from_file_type, to_file_type, filter);
     let output = ctx
         .converter
-        .convert(conversion, input)
+        .convert(slot, conversion, input)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "conversion failed");

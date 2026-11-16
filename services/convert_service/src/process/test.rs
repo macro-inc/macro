@@ -758,6 +758,20 @@ mod conversion_slots {
     use crate::scratch::Scratch;
 
     #[tokio::test]
+    async fn a_job_that_gives_up_its_slot_lets_the_next_job_in() {
+        let root = tempfile::tempdir().unwrap();
+        let converter = Converter::new(Arc::new(Scratch::reset(root.path()).unwrap()), 1);
+
+        let first = converter.reserve().await.unwrap();
+        let mut second = std::pin::pin!(converter.reserve());
+        assert!(futures::poll!(second.as_mut()).is_pending());
+
+        // A job whose input cannot be fetched never converts.
+        drop(first);
+        second.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn a_conversion_holds_its_slot_until_it_ends() {
         let root = tempfile::tempdir().unwrap();
         let converter = Arc::new(Converter::new(
@@ -770,13 +784,13 @@ mod conversion_slots {
         let running = tokio::spawn({
             let converter = converter.clone();
             async move {
-                converter
-                    .run(move || {
-                        started.send(()).unwrap();
-                        may_finish.recv().unwrap();
-                        "converted"
-                    })
-                    .await
+                let slot = converter.reserve().await.unwrap();
+                slot.run(move || {
+                    started.send(()).unwrap();
+                    may_finish.recv().unwrap();
+                    "converted"
+                })
+                .await
             }
         });
         has_started.await.unwrap();
@@ -801,12 +815,12 @@ mod conversion_slots {
         let caller = tokio::spawn({
             let converter = converter.clone();
             async move {
-                converter
-                    .run(move || {
-                        started.send(()).unwrap();
-                        may_finish.recv().unwrap();
-                    })
-                    .await
+                let slot = converter.reserve().await.unwrap();
+                slot.run(move || {
+                    started.send(()).unwrap();
+                    may_finish.recv().unwrap();
+                })
+                .await
             }
         });
         has_started.await.unwrap();
@@ -816,7 +830,8 @@ mod conversion_slots {
 
         finish.send(()).unwrap();
         // The next conversion gets the slot only once the abandoned one ends.
-        converter.run(|| ()).await.unwrap();
+        let slot = converter.reserve().await.unwrap();
+        slot.run(|| ()).await.unwrap();
         assert_eq!(converter.free_slots(), 1);
     }
 
@@ -830,7 +845,10 @@ mod conversion_slots {
 
         let panicked = tokio::spawn({
             let converter = converter.clone();
-            async move { converter.run(|| panic!("conversion panicked")).await }
+            async move {
+                let slot = converter.reserve().await.unwrap();
+                slot.run(|| panic!("conversion panicked")).await
+            }
         });
 
         assert!(panicked.await.unwrap_err().is_panic());

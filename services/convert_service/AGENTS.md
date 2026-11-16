@@ -68,7 +68,8 @@ synchronously via HTTP or asynchronously via SQS.
   killed at its time limit.
 - `Converter` runs one conversion per CPU at a time, on blocking threads. On
   the async workers a conversion starves the health check; unbounded, a batch
-  of messages starts a LibreOffice each.
+  of messages starts a LibreOffice each. Reserve the slot before fetching the
+  input, so only running conversions hold an input in memory.
 - Below `MIN_FREE_BYTES` or `MIN_FREE_INODES` (`src/disk.rs`), `/health`
   returns 503 so ECS replaces the task, the worker stops receiving, and
   `/internal/convert` returns 503. A full disk on a build without this looks

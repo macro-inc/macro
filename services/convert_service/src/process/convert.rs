@@ -3,7 +3,7 @@ use std::{borrow::Cow, ffi::OsStr, path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use model::{convert::ConvertQueueMessage, document::FileType};
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},
@@ -141,13 +141,16 @@ pub async fn convert(
     let filter = get_lok_filter_from_file_types(&from_file_type, &to_file_type)
         .context("unable to get lok filter")?;
 
+    // Taken before the input is fetched, so the inputs held in memory are
+    // those of running conversions and not of every job waiting its turn.
+    let slot = converter.reserve().await?;
     let input = s3_client
         .get(&req.from_bucket, &req.from_key)
         .await
         .context("unable to get object from S3")?;
 
     let conversion = Conversion::new(from_file_type, to_file_type, filter);
-    let output = converter.convert(conversion, input).await?;
+    let output = converter.convert(slot, conversion, input).await?;
 
     s3_client
         .put(&req.to_bucket, &req.to_key, &output)
@@ -195,36 +198,57 @@ impl Converter {
         }
     }
 
-    /// Converts `input` and returns the converted file.
-    pub(crate) async fn convert(
-        &self,
-        conversion: Conversion,
-        input: Vec<u8>,
-    ) -> anyhow::Result<Vec<u8>> {
-        let scratch = self.scratch.clone();
-        self.run(move || convert_in_job_folder(&scratch, &LOK_PATH, &conversion, &input))
-            .await?
-    }
-
-    /// Runs `work` once a slot is free.
-    ///
-    /// A conversion blocks until LibreOffice finishes, so `work` runs on a
-    /// blocking thread: on the async workers it would starve the health check
-    /// and every other request for as long as it ran. It keeps its slot until
-    /// it returns, even if the caller stops waiting for it.
-    pub(crate) async fn run<T: Send + 'static>(
-        &self,
-        work: impl FnOnce() -> T + Send + 'static,
-    ) -> anyhow::Result<T> {
-        let slot = self
+    /// Waits for a conversion's turn.
+    pub(crate) async fn reserve(&self) -> anyhow::Result<Slot> {
+        let _permit = self
             .slots
             .clone()
             .acquire_owned()
             .await
             .context("conversion slots are closed")?;
+
+        Ok(Slot { _permit })
+    }
+
+    /// Converts `input` and returns the converted file.
+    pub(crate) async fn convert(
+        &self,
+        slot: Slot,
+        conversion: Conversion,
+        input: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
+        let scratch = self.scratch.clone();
+        slot.run(move || convert_in_job_folder(&scratch, &LOK_PATH, &conversion, &input))
+            .await?
+    }
+
+    #[cfg(test)]
+    pub(crate) fn free_slots(&self) -> usize {
+        self.slots.available_permits()
+    }
+}
+
+/// A conversion's turn, held from before its input is fetched until the
+/// conversion ends.
+#[derive(Debug)]
+pub(crate) struct Slot {
+    _permit: OwnedSemaphorePermit,
+}
+
+impl Slot {
+    /// Runs `work` and gives the slot up once it returns.
+    ///
+    /// A conversion blocks until LibreOffice finishes, so `work` runs on a
+    /// blocking thread: on the async workers it would starve the health check
+    /// and every other request for as long as it ran. It keeps the slot until
+    /// it returns, even if the caller stops waiting for it.
+    pub(crate) async fn run<T: Send + 'static>(
+        self,
+        work: impl FnOnce() -> T + Send + 'static,
+    ) -> anyhow::Result<T> {
         let span = tracing::Span::current();
         let task = tokio::task::spawn_blocking(move || {
-            let _slot = slot;
+            let _slot = self;
             let _entered = span.enter();
             work()
         });
@@ -236,11 +260,6 @@ impl Converter {
                 Err(e) => Err(e).context("conversion was cancelled"),
             },
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn free_slots(&self) -> usize {
-        self.slots.available_permits()
     }
 }
 
