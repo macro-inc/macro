@@ -74,6 +74,18 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools.
 
+A background session (`AgentSession::is_background`) whose opener gave it
+instructions (`PrepareRoutineSession::instructions`), such as a routine draft,
+runs on `ReplyDelivery::Unseen` (the harness's `reply_delivery`); an accepted
+suggestion's run, opened without any, still streams. An unseen turn reads
+`outbound/rig_engine/unseen.md` as its shared prompt, followed by those
+instructions, so every session of its kind reads them back from the prompt
+cache. It gets no picked documentation (`routes_documentation`), opener,
+skills or `<agent_session>` block, runs at low effort where its model takes
+one (`unseen_effort`), and has only code mode's three tools plus
+`ReadToolResult` (`unseen::CodeModeOnly`), `ExecuteCode` without its reviews
+and views.
+
 Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
 MCP catalog lacks any `mcp__macro_internal__` code tool fails

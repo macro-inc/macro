@@ -46,6 +46,9 @@ Sources checked September 21, 2026:
 
 - `POST /agent-capabilities/discover` accepts a selected model for Cursor and
   in-memory. The existing `/agent-models/load` API remains available.
+  Both answer a non-retryable Cursor 401/403 (the caller's key refused) as a
+  409 JSON `provider_credential_rejected` body with a reconnect message, not a
+  502; other provider failures stay 502.
 - Preflight capability cache identity includes the harness and model. A selection
   from another target is discarded. External harnesses expose controls after
   opening a session; model-specific preflight is not guessed.

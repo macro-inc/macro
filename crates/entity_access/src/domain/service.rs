@@ -943,6 +943,14 @@ impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_pipeline_access(user_id).await
     }
+
+    async fn pipelines_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        self.repo.get_pipelines_access(ids, user_id).await
+    }
 }
 
 /// Kinds whose users, as [`EntityAccessService::get_users_by_entity`] resolves
