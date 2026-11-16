@@ -139,6 +139,13 @@ createConnectionWebsocketEffect((data) => {
   queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.list.queryKey,
   });
+  // The run may have created sub-routines, or been one finishing.
+  queryClient.invalidateQueries({
+    queryKey: scheduledActionKeys.subRoutines.queryKey,
+  });
+  queryClient.invalidateQueries({
+    queryKey: scheduledActionKeys.children._def,
+  });
   // stopped: drop the synthetic pending row immediately so the UI stops
   // showing it as running, then invalidate to refetch the server-persisted
   // record (with end_time, is_success, and a real id).

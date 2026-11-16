@@ -41,6 +41,8 @@ const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const API_KEY_USER_ID: &str = "macro|api-key@example.com";
 const VALID_USER_API_KEY: &str = "mak_valid";
 const MANAGER_API_KEY: &str = "mak_manager";
+/// A Macro API token that signs an agent session's scope.
+const SCOPED_JWT: &str = "scoped";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthorizationCall {
@@ -93,6 +95,12 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<crate::ValidatedCredential, Report<MacroAuthorizationError>> {
+        if jwt == SCOPED_JWT {
+            let mut credential =
+                crate::ValidatedCredential::session(user_context(VALID_USER_ID, None));
+            credential.origin = crate::CredentialOrigin::ScopedMacroApiJwt;
+            return Ok(credential);
+        }
         self.authorize(jwt)
             .await
             .map(crate::ValidatedCredential::session)
@@ -205,6 +213,7 @@ fn bot_authentication(bot_scope: BotScope, acting_user_id: Option<&str>) -> BotA
             origin: crate::CredentialOrigin::Bot,
             agent_id: None,
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from(user_id.to_owned())
                 .expect("valid bot acting user id"),
             user_context: user_context(user_id, Some(42)),
@@ -1423,6 +1432,22 @@ async fn a_manager_credential_is_refused_only_where_the_account_holder_is_requir
 }
 
 #[tokio::test]
+async fn a_scoped_agent_run_is_refused_only_where_the_account_holder_is_required() {
+    let (router, _) = test_router();
+    let scoped = |path: &str| {
+        empty_body(request(path).header("authorization", format!("Bearer {SCOPED_JWT}")))
+    };
+
+    let (status, body) = send(&router, scoped("/required/account-holder")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    let (status, body) = send(&router, scoped("/required/user-or-internal")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["acting_entity"], VALID_USER_ID);
+}
+
+#[tokio::test]
 async fn user_api_key_is_forbidden_for_bot_and_internal_only_policies() {
     let (router, service) = test_router();
 
@@ -2276,6 +2301,7 @@ fn macro_user_authentication(user_id: &str) -> MacroUserAuthentication {
         origin: crate::CredentialOrigin::Session,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_owned()).expect("valid Macro user ID"),
         user_context: user_context(user_id, None),
     }

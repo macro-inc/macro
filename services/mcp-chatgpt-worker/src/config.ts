@@ -10,6 +10,7 @@ export type Bindings = {
   MACRO_HOSTS?: string;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
   DD_API_KEY?: string;
+  OPENAI_APPS_CHALLENGE?: string;
 };
 
 const CONFIG = z.object({
@@ -30,6 +31,12 @@ const CONFIG = z.object({
     .transform((hosts) =>
       hosts ? z.record(z.string(), z.url()).parse(JSON.parse(hosts)) : undefined
     ),
+  /**
+   * The domain verification token OpenAI's app dashboard issues for this
+   * host, served at `/.well-known/openai-apps-challenge`. A secret in each
+   * deployed env; unset, the path is a 404.
+   */
+  OPENAI_APPS_CHALLENGE: z.string().min(1).optional(),
 });
 
 export type Config = z.output<typeof CONFIG>;

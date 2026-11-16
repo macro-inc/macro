@@ -27,6 +27,10 @@ function ConfiguredSoupEntityActionDrawer() {
   const drawerState = useSoupEntityActionDrawer();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => drawerState?.entry()?.markDoneDelegate?.(),
+    selectedEntities: () => {
+      const entry = drawerState?.isOpen() ? drawerState.entry() : undefined;
+      return entry ? [entry.entity] : [];
+    },
   });
   const [projectTasks, setProjectTasks] = createSignal<string[]>();
 

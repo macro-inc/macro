@@ -67,6 +67,22 @@ describe('buildTools', () => {
         expect(`${operation.group}_${operation.hint}`).toBe(tool.name);
   });
 
+  test('sending email is its own open-world tool, apart from deleting', () => {
+    const tools = buildTools(catalog, 'entity');
+    const send = tools.find((tool) => tool.name === 'email_send');
+    const remove = tools.find((tool) => tool.name === 'email_delete');
+
+    expect(send?.annotations).toEqual({
+      title: 'email: send',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
+    expect([...(send?.operations.keys() ?? [])]).toContain('email.send');
+    expect([...(remove?.operations.keys() ?? [])]).not.toContain('email.send');
+  });
+
   test('both groupings offer every operation exactly once', () => {
     for (const grouping of ['entity', 'method'] satisfies ToolGrouping[]) {
       const offered = buildTools(catalog, grouping).flatMap((tool) => [

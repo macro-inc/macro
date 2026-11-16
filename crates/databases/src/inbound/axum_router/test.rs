@@ -37,6 +37,7 @@ fn a_column_cast_reads_as_the_type_menu_expects() {
         is_multi_select: false,
         specific_entity_type: None,
         relation: false,
+        percentage: false,
         cast: crate::domain::models::CastVerdict::Checked,
         reason: None,
         failures: 3,
@@ -50,6 +51,7 @@ fn a_column_cast_reads_as_the_type_menu_expects() {
             "is_multi_select": false,
             "specific_entity_type": null,
             "relation": false,
+            "percentage": false,
             "cast": "checked",
             "reason": null,
             "failures": 3,
@@ -123,6 +125,7 @@ fn an_ops_body_reads_every_op_kind() {
                         column: ColumnId::from_uuid(column),
                         value: CellValue::Text("Sam".into()),
                     }]],
+                    ids: None,
                 },
             },
             DatabaseOp::Rows {
@@ -989,6 +992,8 @@ async fn a_conversion_request_reaches_the_service_and_answers_the_converted_cell
         )]
     );
 }
+
+mod appearance;
 
 #[tokio::test]
 async fn view_access_duplicates_a_database_for_the_caller() {

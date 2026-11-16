@@ -216,6 +216,9 @@ pub struct MockContainerManager {
     released_signal: Arc<tokio::sync::Notify>,
     /// Sessions whose state a release would lose.
     kept: Arc<Mutex<Vec<AgentSessionId>>>,
+    /// Sessions asked whether their release is lossless, once per ask.
+    lossless_checks: Arc<Mutex<Vec<AgentSessionId>>>,
+    lossless_checked: Arc<tokio::sync::Notify>,
 }
 
 impl MockContainerManager {
@@ -317,6 +320,40 @@ impl MockContainerManager {
             .lock()
             .expect("kept lock should not be poisoned")
             .push(session);
+    }
+
+    /// From now on, releasing `session` loses nothing.
+    pub fn allow_release(&self, session: AgentSessionId) {
+        self.kept
+            .lock()
+            .expect("kept lock should not be poisoned")
+            .retain(|kept| *kept != session);
+    }
+
+    /// How many times the harness asked whether releasing `session` is
+    /// lossless.
+    #[must_use]
+    pub fn lossless_checks(&self, session: AgentSessionId) -> usize {
+        self.lossless_checks
+            .lock()
+            .expect("lossless check lock should not be poisoned")
+            .iter()
+            .filter(|checked| **checked == session)
+            .count()
+    }
+
+    /// Wait until the harness has asked about `session`'s release `count`
+    /// times.
+    pub async fn wait_for_lossless_checks(&self, session: AgentSessionId, count: usize) {
+        loop {
+            let waited = self.lossless_checked.notified();
+            tokio::pin!(waited);
+            waited.as_mut().enable();
+            if self.lossless_checks(session) >= count {
+                return;
+            }
+            waited.await;
+        }
     }
 
     /// Sessions the harness released as idle, in order.
@@ -501,6 +538,11 @@ impl ContainerManager for MockContainerManager {
         &self,
         session: AgentSessionId,
     ) -> Result<bool, HarnessError> {
+        self.lossless_checks
+            .lock()
+            .expect("lossless check lock should not be poisoned")
+            .push(session);
+        self.lossless_checked.notify_waiters();
         Ok(!self
             .kept
             .lock()

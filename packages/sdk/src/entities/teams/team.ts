@@ -15,6 +15,8 @@ export interface TeamMembership {
   user: User;
   /** Their role on the team. */
   role: TeamRole;
+  /** Whether this member may use the team CRM; mailbox consent is separate. */
+  crmAccess: boolean;
 }
 
 /**
@@ -76,7 +78,26 @@ export class Team extends MacroEntity<TeamRecord> {
     return res.members.map((m) => ({
       user: User.byId(this.client, m.user_id),
       role: m.role,
+      crmAccess:
+        m.role !== 'member' || res.crm_member_access?.[m.user_id] !== false,
     }));
+  }
+
+  /**
+   * Allow or deny a member's CRM access. Only a team admin or owner may change
+   * it; admins and owners always retain access. Mailbox contribution consent
+   * is unchanged. Individually shared pipelines remain accessible.
+   *
+   * @write
+   * @idempotent
+   */
+  async setMemberCrmAccess(member: User, enabled: boolean): Promise<void> {
+    await this.requireCurrent('CRM access controls');
+    unwrap(
+      await this.client.auth.patchTeam({
+        body: { member_crm_access: { user_id: member.id, enabled } },
+      }),
+    );
   }
 
   /**

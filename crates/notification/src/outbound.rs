@@ -3,6 +3,8 @@
 //! These modules contain implementations of the domain ports that connect
 //! to external services like Redis, PostgreSQL, WebSocket gateways, etc.
 
+/// PostgreSQL storage for bulk actions and their ledgers.
+pub mod bulk_action;
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;

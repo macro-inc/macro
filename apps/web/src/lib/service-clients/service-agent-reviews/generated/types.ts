@@ -756,13 +756,15 @@ export type SendEmail = {
   /**  The subject line of the email. */
   subject: string;
   /**
-   *  The address of the inbox to send from, when the user has more than one
-   *  connected and this email belongs to a particular one. Use the exact
-   *  `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   *  `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   *  you know which inbox is right: a reply then goes out from the inbox
-   *  that received the message it answers, and a new email from the user's
-   *  primary inbox. The user can change it in the composer either way.
+   *  The address to send from, when the user has more than one and this
+   *  email belongs to a particular one: the exact `emailAddress` of a
+   *  connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   *  `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   *  which then sends from that inbox under the alias's display name. Omit
+   *  it unless you know which address is right: a reply then goes out from
+   *  the inbox that received the message it answers, and a new email from
+   *  the user's primary inbox. The user can change it in the composer
+   *  either way.
    */
   from?: string | null;
   /**
@@ -853,8 +855,8 @@ export type ToolCalendarEvent = {
   /**  Conference join URL, when a conference is attached. */
   conferenceUrl: string | null;
   /**
-   *  Join URL of the Macro call created with the event, when
-   *  CreateCalendarEvent was asked for one.
+   *  Join URL of the event's Macro call, when CreateCalendarEvent or
+   *  UpdateCalendarEvent was asked for one.
    */
   macroCallUrl: string | null;
   /**  Whether the user's calendar prohibits modifying this event. */

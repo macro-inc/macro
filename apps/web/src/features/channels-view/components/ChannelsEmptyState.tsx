@@ -8,7 +8,6 @@ import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
 import BookOpenIcon from '@icon/system/regular/book-open.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { type EmptyStateAction, EmptyStatePanel } from '@ui';
-import type { JSX } from 'solid-js';
 import type { ChannelsQueryScope } from '../types';
 
 type ChannelsEmptyStateContent = {
@@ -58,8 +57,6 @@ function emptyStateContent(
 export function ChannelsEmptyState(props: {
   scope: ChannelsQueryScope;
   topAligned?: boolean;
-  /** Below the actions, such as the phone list's tutorial pill. */
-  children?: JSX.Element;
 }) {
   const isCreatableEnabled = useCreatableEnabled();
   const content = () => emptyStateContent(props.scope);
@@ -83,8 +80,6 @@ export function ChannelsEmptyState(props: {
           ? 'px-4 pt-4 @4xl:px-4 [&>div:first-child]:basis-0'
           : 'px-4 @4xl:px-4'
       }
-    >
-      {props.children}
-    </EmptyStatePanel>
+    />
   );
 }

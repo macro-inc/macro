@@ -9,7 +9,7 @@ use crate::{
         },
         properties::build_tag_filter,
         query::Keys,
-        utils::millis_to_datetime,
+        utils::{millis_to_datetime, split_inner_hits_budget},
     },
 };
 
@@ -28,10 +28,16 @@ const CHILD_RELATION: &str = "segment";
 /// the documents/chats threshold.
 const MIN_PREFIX_LEN: usize = 3;
 
-/// Cap on segments returned per `has_child` clause inside `inner_hits`.
-/// OpenSearch's default is 3 which would silently drop matches on calls
-/// with many matching segments.
-const INNER_HITS_PER_TERM: u32 = 100;
+/// The segment `_source` fields a `SearchHit` carries. Inner hits do not
+/// inherit the request-level `_source` filter, so without this every segment
+/// comes back with its full `content`, which only the highlight needs.
+const SEGMENT_SOURCE_FIELDS: [&str; 5] = [
+    "transcript_id",
+    "speaker_id",
+    "sequence_num",
+    "started_at_millis",
+    "ended_at_millis",
+];
 
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
@@ -209,8 +215,10 @@ impl CallRecordQueryBuilder {
         Ok(bool_query)
     }
 
-    /// One `has_child` clause per term, each carrying its own `inner_hits` so
-    /// segment-level highlights come back alongside the parent. The shared
+    /// One `has_child` clause per term. The clauses split
+    /// `INNER_HITS_PER_RESULT` between their `inner_hits`, which bring
+    /// segment-level highlights back alongside the parent, so a call returns
+    /// at most that many segments however many terms the query has. The shared
     /// highlight_query tags every search term on a returned segment regardless
     /// of which clause produced it.
     ///
@@ -222,6 +230,8 @@ impl CallRecordQueryBuilder {
     fn build_content_has_child_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
         let highlight_query =
             build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        let budget = split_inner_hits_budget(self.inner.terms.len());
+
         self.inner
             .terms
             .iter()
@@ -236,13 +246,17 @@ impl CallRecordQueryBuilder {
                     combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
                     combined.build().into()
                 };
+                let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+                let Some(size) = budget.size_for_clause(idx) else {
+                    return has_child.into();
+                };
+
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
-                    .size(INNER_HITS_PER_TERM)
+                    .size(size)
+                    .source_fields(SEGMENT_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
-                HasChildQuery::new(CHILD_RELATION, inner_query)
-                    .inner_hits(inner_hits)
-                    .into()
+                has_child.inner_hits(inner_hits).into()
             })
             .collect()
     }
@@ -429,3 +443,6 @@ pub(crate) fn expand_inner_hits_to_search_hits(
     }
     out
 }
+
+#[cfg(test)]
+mod test;

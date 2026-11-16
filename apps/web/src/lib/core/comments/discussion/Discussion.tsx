@@ -239,13 +239,15 @@ export function DiscussionThreadView(props: {
   const makeCopyLink = (comment: DiscussionComment) => {
     const build = source.buildCommentLink;
     if (!build) return undefined;
-    return async () => {
+    return async ({ silent }: { silent?: boolean }) => {
       try {
         const url = build(comment);
         await navigator.clipboard.writeText(url);
-        toast.success('Link copied to clipboard');
+        if (!silent) toast.success('Link copied to clipboard');
+        return true;
       } catch {
         toast.failure('Could not copy link');
+        return false;
       }
     };
   };

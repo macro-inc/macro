@@ -21,7 +21,10 @@ const MODULE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  * (the `test` script) turns on for every project. Cached transforms embed
  * resolved import paths, so entries live under a key of the lockfile and
  * tsconfig; key directories unused for a week are deleted. CI points
- * `VITEST_MODULE_CACHE_DIR` at a cache volume that persists across jobs.
+ * `VITEST_MODULE_CACHE_DIR` at a cache volume that persists across jobs and
+ * branches. Sharing it needs Vitest 5.1 or later, which never caches a module
+ * with `import.meta.glob` and retransforms one whose cached imports no longer
+ * resolve to the same files.
  */
 function moduleCachePath(): string {
   const root =

@@ -44,7 +44,7 @@ describe('sample workspace commands', () => {
     w.sendEmail(
       'Re: Next steps',
       'Scheduled reply',
-      'Valentina',
+      'Austin Barron',
       'dana',
       'Tomorrow at 9 AM',
       { cc: 'julia@example.com' }
@@ -52,19 +52,26 @@ describe('sample workspace commands', () => {
     expect(w.data.emails[0]).toMatchObject({
       folder: 'scheduled',
       scheduled: 'Tomorrow at 9 AM',
-      to: 'Valentina',
+      to: 'Austin Barron',
       cc: 'julia@example.com',
     });
     expect(original.replies).toHaveLength(replies);
-    w.sendEmail('Re: Next steps', 'Ready now', 'Valentina', 'dana', undefined, {
-      cc: 'julia@example.com',
-      bcc: 'teo@example.com',
-    });
+    w.sendEmail(
+      'Re: Next steps',
+      'Ready now',
+      'Austin Barron',
+      'dana',
+      undefined,
+      {
+        cc: 'julia@example.com',
+        bcc: 'teo@example.com',
+      }
+    );
     expect(
       w.data.emails.find((email) => email.id === 'dana')!.replies.at(-1)
     ).toMatchObject({
       body: 'Ready now',
-      to: 'Valentina',
+      to: 'Austin Barron',
       cc: 'julia@example.com',
       bcc: 'teo@example.com',
     });
@@ -121,7 +128,7 @@ describe('sample workspace commands', () => {
   it('records replies in their thread and Sent, rejecting blank sends', () => {
     const w = setup();
     const count = w.data.emails.length;
-    w.sendEmail('Re: Next steps', 'See you Thursday.', 'Valentina', 'dana');
+    w.sendEmail('Re: Next steps', 'See you Thursday.', 'Austin Barron', 'dana');
     expect(w.data.emails).toHaveLength(count + 1);
     expect(w.data.emails[0]).toMatchObject({
       folder: 'sent',
@@ -131,7 +138,7 @@ describe('sample workspace commands', () => {
       w.data.emails.find((item) => item.id === 'dana')?.replies.at(-1)?.body
     ).toBe('See you Thursday.');
     expect(w.selected()).toBe('dana');
-    w.sendEmail('', 'No subject', 'Valentina');
+    w.sendEmail('', 'No subject', 'Austin Barron');
     expect(w.data.emails).toHaveLength(count + 1);
   });
 

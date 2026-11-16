@@ -3,7 +3,6 @@ use sqlx::{Executor, PgPool, Postgres};
 
 /// Deletes a label from multiple messages at once
 /// Returns the number of message-label associations that were deleted
-#[tracing::instrument(skip(executor), err)]
 pub async fn delete_message_labels_batch<'e, E>(
     executor: E,
     message_ids: &Vec<Uuid>,
@@ -13,14 +12,6 @@ pub async fn delete_message_labels_batch<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    if message_ids.is_empty() {
-        return Ok(0);
-    }
-
-    if provider_label_id.is_empty() {
-        anyhow::bail!("Provider label ID cannot be empty");
-    }
-
     let result = sqlx::query!(
         r#"
         DELETE FROM email_message_labels
@@ -63,17 +54,12 @@ where
 }
 
 /// delete one or more message labels
-#[tracing::instrument(skip(tx), err)]
 pub async fn delete_db_message_labels(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
     provider_label_ids: &[String],
     link_id: Uuid,
 ) -> anyhow::Result<()> {
-    if provider_label_ids.is_empty() {
-        return Ok(());
-    }
-
     sqlx::query!(
         r#"
         DELETE FROM email_message_labels
@@ -93,17 +79,11 @@ pub async fn delete_db_message_labels(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), err)]
-pub async fn delete_labels_by_provider_ids(
+pub async fn delete_label_relations_by_provider_ids(
     pool: &PgPool,
     link_id: Uuid,
     provider_label_ids: Vec<String>,
 ) -> anyhow::Result<u64> {
-    if provider_label_ids.is_empty() {
-        return Ok(0);
-    }
-
-    // First, delete any message_labels entries that reference these labels to avoid foreign key issues
     let deleted_message_labels = sqlx::query!(
         r#"
         DELETE FROM email_message_labels
@@ -118,14 +98,15 @@ pub async fn delete_labels_by_provider_ids(
     .execute(pool)
     .await?;
 
-    tracing::debug!(
-        link_id = %link_id,
-        provider_label_count = provider_label_ids.len(),
-        deleted_message_labels_count = deleted_message_labels.rows_affected(),
-        "Deleted message_labels entries that referenced the labels"
-    );
+    Ok(deleted_message_labels.rows_affected())
+}
 
-    // Now delete the labels themselves
+/// Delete catalog rows for the supplied provider ids.
+pub async fn delete_labels_by_provider_ids(
+    pool: &PgPool,
+    link_id: Uuid,
+    provider_label_ids: Vec<String>,
+) -> anyhow::Result<u64> {
     let result = sqlx::query!(
         r#"
         DELETE FROM email_labels

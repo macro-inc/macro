@@ -67,7 +67,8 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://dev-gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
-  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]: 'https://mcp-chatgpt.dev.macro.com',
+  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
+    'https://mcp-chatgpt-worker-dev.macroverse.workers.dev',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect-dev.macro.com',
 };
 
@@ -98,7 +99,8 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
-  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]: 'https://mcp-chatgpt.macro.com',
+  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
+    'https://mcp-chatgpt-worker.macroverse.workers.dev',
   [ServiceUrl.CONNECT_API_URL]: 'https://connect.macro.com',
 };
 

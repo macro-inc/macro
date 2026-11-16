@@ -1,3 +1,16 @@
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFileMacro from '@icon/system/regular/file.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconChannelMacro from '@icon/system/regular/hash-straight.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconTaskMacro from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createSignal,
@@ -7,20 +20,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import IconChannelMacro from '../../../assets/icons/wide-channel.svg';
-import IconFileMacro from '../../../assets/icons/wide-file-md.svg';
-import IconTaskMacro from '../../../assets/icons/wide-task.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
@@ -83,7 +83,7 @@ function _ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '42px' : '36px',
         'justify-content': 'center',
@@ -166,7 +166,7 @@ function _GithubStarButton() {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '14px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '9px',
         height: mobile() ? '40px' : '38px',
         'justify-content': 'center',
@@ -208,7 +208,7 @@ function _GithubStarButton() {
                 display: 'inline-flex',
                 'font-family': 'Inter, body',
                 'font-size': mobile() ? '15px' : '16px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '5px',
                 'letter-spacing': '0.02em',
               }}
@@ -303,7 +303,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         overflow: 'hidden',
         'place-items': 'center',
@@ -664,7 +664,7 @@ function ReactionPill(props: {
         display: 'inline-flex',
         'font-family': appFont,
         'font-size': '12px',
-        'font-weight': '600',
+        'font-weight': '500',
         gap: '5px',
         'line-height': 1,
         padding: '4px 9px',
@@ -735,7 +735,7 @@ export function HeroChannelWindow() {
     color: 'var(--c1)',
     'font-family': appFont,
     'font-size': compact() ? '13px' : '13.5px',
-    'font-weight': '600',
+    'font-weight': '500',
   };
   // Right-aligned timestamp column, but inset from the edge so it reads closer
   // to the message text rather than pinned to the far right.
@@ -761,7 +761,7 @@ export function HeroChannelWindow() {
       meta: 'Gabriel Birman · Jun 12 · 2.4 MB',
     },
     { name: 'posthog-flags.png', meta: 'Rahul · 4:38 PM · 184 KB' },
-    { name: 'deploy-logs.txt', meta: 'Valentina · 4:41 PM · 12 KB' },
+    { name: 'deploy-logs.txt', meta: 'Austin Barron · 4:41 PM · 12 KB' },
   ];
   const participants: {
     name: string;
@@ -776,11 +776,11 @@ export function HeroChannelWindow() {
       initials: 'GB',
       color: 'var(--b3)',
     },
-    { name: 'Rahul', role: 'Member', initials: 'R', color: 'var(--b4)' },
+    { name: 'Rahul Batra', role: 'Member', initials: 'R', color: 'var(--b4)' },
     {
-      name: 'Valentina',
+      name: 'Austin Barron',
       role: 'Member',
-      initials: 'V',
+      initials: 'AB',
       color: 'var(--b3)',
     },
     {
@@ -978,7 +978,7 @@ export function HeroChannelWindow() {
                         gap: '8px',
                       }}
                     >
-                      <span style={nameStyle}>Rahul</span>
+                      <span style={nameStyle}>Rahul Batra</span>
                       <span style={timeStyle}>4:20 PM</span>
                     </div>
                     <p style={msgText}>which ones</p>
@@ -1056,7 +1056,7 @@ export function HeroChannelWindow() {
                         color: 'var(--a0)',
                         'font-family': appFont,
                         'font-size': '12px',
-                        'font-weight': '600',
+                        'font-weight': '500',
                       }}
                     >
                       12 more replies
@@ -1152,7 +1152,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Rahul</span>
+                  <span style={nameStyle}>Rahul Batra</span>
                   <span style={timeStyle}>4:38 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1187,7 +1187,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Valentina</span>
+                  <span style={nameStyle}>Austin Barron</span>
                   <span style={timeStyle}>4:41 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1409,7 +1409,7 @@ export function HeroChannelWindow() {
                     color: 'var(--c4)',
                     'font-family': appFont,
                     'font-size': '14px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Aa
@@ -1746,7 +1746,7 @@ function ChatHeroEmailCard(props: { compact: boolean }) {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
               overflow: 'hidden',
               'text-overflow': 'ellipsis',
               'white-space': 'nowrap',
@@ -1764,7 +1764,7 @@ function ChatHeroEmailCard(props: { compact: boolean }) {
               'white-space': 'nowrap',
             }}
           >
-            Email thread · Valentina · 6 messages
+            Email thread · Austin Barron · 6 messages
           </span>
         </div>
       </div>
@@ -1874,7 +1874,7 @@ function ChatHeroMessage(props: {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': props.compact ? '13px' : '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
               'white-space': 'nowrap',
             }}
           >
@@ -1889,7 +1889,7 @@ function ChatHeroMessage(props: {
                 color: 'var(--a0)',
                 'font-family': 'Inter, body',
                 'font-size': '10px',
-                'font-weight': '700',
+                'font-weight': '500',
                 'letter-spacing': '0.06em',
                 padding: '2px 6px 1px',
                 'text-transform': 'uppercase',
@@ -2157,7 +2157,7 @@ function ChatHeroChannelWindow(props: { compact: boolean }) {
                   color: 'var(--c4)',
                   'font-family': appFont,
                   'font-size': '14px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Aa
@@ -2213,7 +2213,7 @@ function ChatHeroDmPanel(props: { compact: boolean }) {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': '13.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             'white-space': 'nowrap',
           }}
         >
@@ -2337,7 +2337,7 @@ function ChatHeroDmPanel(props: { compact: boolean }) {
                 color: 'var(--c4)',
                 'font-family': appFont,
                 'font-size': '13.5px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Aa
@@ -2409,7 +2409,7 @@ export function InlineThreadsGraphic() {
     color: 'var(--c1)',
     'font-family': appFont,
     'font-size': '13px',
-    'font-weight': '600',
+    'font-weight': '500',
   };
   const timeStyle: JSX.CSSProperties = {
     color: 'var(--c4)',
@@ -2418,7 +2418,7 @@ export function InlineThreadsGraphic() {
     'margin-left': 'auto',
   };
   const replies = [
-    { who: 'Rahul', initials: 'R', time: '4:20 PM', text: 'which ones' },
+    { who: 'Rahul Batra', initials: 'R', time: '4:20 PM', text: 'which ones' },
     {
       who: 'Gabriel Birman',
       initials: 'GB',
@@ -2463,7 +2463,7 @@ export function InlineThreadsGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             bug-reports
@@ -2567,7 +2567,7 @@ export function InlineThreadsGraphic() {
                     color: 'var(--a0)',
                     'font-family': appFont,
                     'font-size': '12px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   12 more replies
@@ -2685,7 +2685,7 @@ export function SharingGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '14px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               go-to-market
@@ -2711,7 +2711,7 @@ export function SharingGraphic() {
                     color: 'var(--c1)',
                     'font-family': appFont,
                     'font-size': '14px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Jacob
@@ -2800,7 +2800,7 @@ export function SharingGraphic() {
               }}
             >
               Auto-shared with everyone in{' '}
-              <span style={{ color: 'var(--c2)', 'font-weight': '600' }}>
+              <span style={{ color: 'var(--c2)', 'font-weight': '500' }}>
                 #go-to-market
               </span>
             </span>
@@ -2864,7 +2864,7 @@ export function MentionsGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             bug-reports
@@ -2930,7 +2930,7 @@ export function MentionsGraphic() {
               color: 'var(--c4)',
               'font-family': appFont,
               'font-size': '11px',
-              'font-weight': '600',
+              'font-weight': '500',
               padding: '9px 12px 5px',
             }}
           >
@@ -3036,7 +3036,7 @@ export function InboxGraphic() {
     if (kind === 'channel') return <HashGlyph size={15} />;
     if (kind === 'email') return <MacroNavIcon name="email" size={15} />;
     if (kind === 'task') return <TaskListGlyph size={15} />;
-    return <span style={{ color: 'var(--a0)', 'font-weight': '700' }}>@</span>;
+    return <span style={{ color: 'var(--a0)', 'font-weight': '500' }}>@</span>;
   };
   return (
     <div
@@ -3075,7 +3075,7 @@ export function InboxGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Inbox
@@ -3090,7 +3090,7 @@ export function InboxGraphic() {
               display: 'inline-flex',
               'font-family': 'Inter, body',
               'font-size': '11px',
-              'font-weight': '700',
+              'font-weight': '500',
               'letter-spacing': '0.06em',
               'margin-left': 'auto',
               padding: '3px 7px 2px',
@@ -3137,7 +3137,7 @@ export function InboxGraphic() {
                     color: 'var(--c1)',
                     'font-family': appFont,
                     'font-size': compact() ? '13px' : '14px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     overflow: 'hidden',
                     'text-overflow': 'ellipsis',
                     'white-space': 'nowrap',
@@ -3167,7 +3167,7 @@ export function InboxGraphic() {
                   flex: 'none',
                   'font-family': "'Inter', body",
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   'letter-spacing': '0.06em',
                   'margin-left': 'auto',
                   padding: '3px 6px 2px',
@@ -3234,7 +3234,7 @@ export function AgentGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             bug-reports
@@ -3270,7 +3270,7 @@ export function AgentGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Jacob
@@ -3334,7 +3334,7 @@ export function AgentGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Macro
@@ -3535,7 +3535,7 @@ function CohesionDocPane(props: { compact: boolean }) {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': props.compact ? '13.5px' : '14.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             overflow: 'hidden',
             'text-overflow': 'ellipsis',
             'white-space': 'nowrap',
@@ -3572,7 +3572,7 @@ function CohesionDocPane(props: { compact: boolean }) {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': props.compact ? '18px' : '21px',
-            'font-weight': '600',
+            'font-weight': '500',
             'letter-spacing': '-0.01em',
             margin: 0,
           }}
@@ -3581,7 +3581,7 @@ function CohesionDocPane(props: { compact: boolean }) {
         </h3>
         <p style={body}>
           Ship the new workspace to general availability the week of{' '}
-          <span style={{ color: 'var(--c1)', 'font-weight': '600' }}>
+          <span style={{ color: 'var(--c1)', 'font-weight': '500' }}>
             July 14
           </span>
           . Owners and dates below — shared automatically with everyone in
@@ -3654,7 +3654,7 @@ export function ChannelCohesionGraphic() {
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
   const prog = (a: number, b: number) => clamp01((t() - a) / (b - a));
   const ease = (x: number) =>
-    x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 
   onMount(() => {
     const reduce =
@@ -3704,7 +3704,7 @@ export function ChannelCohesionGraphic() {
   const nameStyle: JSX.CSSProperties = {
     color: 'var(--c1)',
     'font-family': appFont,
-    'font-weight': '600',
+    'font-weight': '500',
   };
   const timeStyle: JSX.CSSProperties = {
     color: 'var(--c4)',
@@ -3846,7 +3846,7 @@ export function ChannelCohesionGraphic() {
                 color: 'var(--c1)',
                 display: 'inline-flex',
                 'font-family': appFont,
-                'font-weight': '600',
+                'font-weight': '500',
                 gap: '6px',
               }}
             >
@@ -4254,7 +4254,7 @@ export function ChannelCohesionGraphic() {
                     color: 'var(--c4)',
                     'font-family': appFont,
                     'font-size': '14px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Aa
@@ -4402,7 +4402,7 @@ export function ChannelCohesionGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': compact() ? '13px' : '13.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Shared to #go-to-market
@@ -4559,7 +4559,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -4586,7 +4586,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,

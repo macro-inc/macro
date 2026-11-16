@@ -192,6 +192,13 @@ pub fn print(
     if let Some(url) = traces_url() {
         row("traces", url);
     }
+    // `services = true`: this machine's stacks on the shared dashboard.
+    if let Some(url) = port_open(3001)
+        .then(super::grafana_forwarder::dashboard_url)
+        .flatten()
+    {
+        row("grafana", url);
+    }
     if let Some(url) = dd_logs_url() {
         row("dd logs", url);
     }

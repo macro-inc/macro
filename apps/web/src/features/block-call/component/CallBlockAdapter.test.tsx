@@ -1,7 +1,7 @@
 import type { CallBlockProps } from '@block-call/constants';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallBlockAdapter } from './CallBlockAdapter';
 
 const state = vi.hoisted(() => ({
@@ -36,7 +36,12 @@ vi.mock('@core/component/DocumentBlockContainer', () => ({
   DocumentBlockContainer: (props: { children: unknown }) => props.children,
 }));
 vi.mock('@components/app/side-panel', () => ({
-  SidePanel: { Layout: (props: { children: unknown }) => props.children },
+  SidePanel: {
+    Root: (props: { children: unknown }) => props.children,
+    Layout: () => {
+      throw new Error('The recording body owns its panel layout');
+    },
+  },
 }));
 vi.mock('./CallRecording/CallRecordingSplitHeader', () => ({
   CallRecordingSplitHeader: () => null,
@@ -63,8 +68,19 @@ vi.mock('./CallRecording/CallRecordingBody', () => ({
     </>
   ),
 }));
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 

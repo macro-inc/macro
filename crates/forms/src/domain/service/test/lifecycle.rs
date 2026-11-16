@@ -346,6 +346,46 @@ async fn moving_a_form_files_it_names_both_folders_and_leaves_its_database() {
 }
 
 #[tokio::test]
+async fn appearance_validates_preserves_dates_and_emits_only_changes() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let receipt = || form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit);
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "unknown-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        forms.set_appearance(receipt(), invalid).await,
+        Err(FormError::InvalidAppearance(_))
+    ));
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    assert_eq!(
+        forms
+            .set_appearance(receipt(), appearance.clone())
+            .await
+            .unwrap(),
+        appearance
+    );
+    forms
+        .set_appearance(receipt(), appearance.clone())
+        .await
+        .unwrap();
+    let world = world.lock().unwrap();
+    assert_eq!(world.forms[0].form.appearance, Some(appearance));
+    assert_eq!(world.forms[0].form.updated_at, start_of_tests());
+    assert_eq!(world.event_types(), ["form.appearance_changed"]);
+    assert_eq!(world.events[0]["metadata"]["attribution"]["actor"], EDITOR);
+}
+
+#[tokio::test]
 async fn an_editor_brands_the_form_with_images_they_uploaded() {
     let logo = Uuid::from_u128(0x1060);
     let cover = Uuid::from_u128(0xc0e2);

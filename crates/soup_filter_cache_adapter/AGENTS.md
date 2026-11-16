@@ -66,6 +66,11 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - A thread may have Drafts/Sent previews with no All Mail preview (junk);
   keep those projections complete and let each tab apply its own membership.
 
+- Get an operation's parsed form from `parsed_document`, never
+  `Document::parse`: one cache write passes the same text through the
+  projection, notification, mail and property passes, and parsing a 20 KB Soup
+  operation for each cost more than the write.
+
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
   `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.

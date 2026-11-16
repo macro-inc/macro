@@ -3,13 +3,17 @@
 
 #[cfg(test)]
 mod test;
+mod thread_cpu;
+
 use std::{
+    collections::HashSet,
     sync::{
-        Arc,
+        Arc, LazyLock, Mutex, PoisonError,
         atomic::{self, AtomicU64},
     },
     time::Duration,
 };
+use thread_cpu::ThreadCpuSample;
 
 use axum::extract::MatchedPath;
 use http::{HeaderValue, Request, Response};
@@ -79,6 +83,14 @@ pub fn inject_trace_headers(headers: &mut http::HeaderMap) {
     });
 }
 
+/// The current span's trace id, as W3C trace context writes it; `None`
+/// outside a trace.
+pub fn current_trace_id() -> Option<String> {
+    let context = Span::current().context();
+    let trace = context.span().span_context().trace_id();
+    (trace != opentelemetry::trace::TraceId::INVALID).then(|| trace.to_string())
+}
+
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
 pub struct RequestIdBuilder(Arc<AtomicU64>);
@@ -121,7 +133,11 @@ pub struct MakeHttpRequestSpan;
 
 impl<B> MakeSpan<B> for MakeHttpRequestSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
-        http_request_span(request, request.uri().path())
+        let route = request
+            .extensions()
+            .get::<MatchedPath>()
+            .map(MatchedPath::as_str);
+        http_request_span(request, &redacted_path(request.uri().path(), route))
     }
 }
 
@@ -148,6 +164,37 @@ fn http_request_span<B>(request: &Request<B>, path: &str) -> Span {
         span.record("http.route", route.as_str());
     }
     span
+}
+
+/// Path parameters that carry a bearer credential (a sign-in session code, a
+/// one-time login or merge code, a meeting join or read-receipt token).
+/// `url.path` shows the route's placeholder in their place.
+const CREDENTIAL_PATH_PARAMS: &[&str] = &["{session_code}", "{code}", "{token}"];
+
+/// The request path for `url.path`, with each credential segment replaced by
+/// its route placeholder. Segments are matched from the end, because a nested
+/// router sees the path without its prefix while `MatchedPath` keeps it.
+/// Without a matched route nothing is replaced; a wildcard route that holds a
+/// credential falls back to the route itself.
+fn redacted_path<'a>(path: &'a str, route: Option<&'a str>) -> std::borrow::Cow<'a, str> {
+    let Some(route) = route.filter(|route| {
+        route
+            .split('/')
+            .any(|segment| CREDENTIAL_PATH_PARAMS.contains(&segment))
+    }) else {
+        return path.into();
+    };
+    let route_segments: Vec<&str> = route.split('/').collect();
+    let mut segments: Vec<&str> = path.split('/').collect();
+    if route_segments.len() < segments.len() || route.contains("{*") {
+        return route.into();
+    }
+    for (segment, route_segment) in segments.iter_mut().rev().zip(route_segments.iter().rev()) {
+        if CREDENTIAL_PATH_PARAMS.contains(route_segment) {
+            *segment = route_segment;
+        }
+    }
+    segments.join("/").into()
 }
 
 fn latency_millis(latency: Duration) -> u64 {
@@ -217,26 +264,63 @@ type ServiceBuilderAlias = ServiceBuilder<
     >,
 >;
 
+/// Runtimes that already run a starvation detector.
+static WATCHED_RUNTIMES: LazyLock<Mutex<HashSet<tokio::runtime::Id>>> =
+    LazyLock::new(Default::default);
+
 /// Spawns a background task that detects tokio runtime starvation.
 ///
 /// Ticks on `interval` and warns if the actual time between ticks exceeds it.
-/// A large gap indicates the tokio runtime is not polling tasks promptly, typically caused
-/// by blocking work (e.g. synchronous DNS resolution) on the runtime threads.
+/// A large gap means the tokio runtime is not polling tasks promptly. Starts
+/// at most one detector per runtime, so a service that builds several routers
+/// logs each late tick once.
+///
+/// On Linux the warning also says what the process's threads did during that
+/// late interval (`actual_ms` long):
+///
+/// - `cpu_wait_ms` is the longest any one thread was runnable but got no CPU.
+///   Near or above `delay_ms`, threads could not get a CPU: the container
+///   spent its CPU quota for the 100 ms period and every thread waited out the
+///   rest of it, or every CPU was busy, with this process's work or another's.
+///   With that wait, one task logging the same `delay_ms` over and over (the
+///   rest of the period) points at the quota.
+/// - Well below `delay_ms`, the delay came from inside the runtime: a task
+///   held a worker thread, computing or blocked (synchronous I/O or DNS, a
+///   contended `std::sync` lock). `cpu_run_ms`, the CPU time all threads ran
+///   during the interval, tells a burst of work from a blocked thread when
+///   set against the service's usual CPU use.
 pub fn spawn_starvation_detector(interval: Duration) {
+    let runtime = tokio::runtime::Handle::current().id();
+    let unwatched = WATCHED_RUNTIMES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(runtime);
+    if !unwatched {
+        return;
+    }
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(interval);
         tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // consume the immediate first tick
         tick.tick().await;
+        let mut threads_before = ThreadCpuSample::take();
         loop {
             let before = tokio::time::Instant::now();
             tick.tick().await;
             let elapsed = before.elapsed();
+            let threads_now = ThreadCpuSample::take();
+            let threads = threads_now
+                .as_ref()
+                .zip(threads_before.as_ref())
+                .map(|(now, before)| now.since(before));
+            threads_before = threads_now;
             if elapsed > interval + Duration::from_millis(5) {
                 tracing::warn!(
                     expected_ms = interval.as_millis() as u64,
                     actual_ms = elapsed.as_millis() as u64,
                     delay_ms = elapsed.saturating_sub(interval).as_millis() as u64,
+                    cpu_wait_ms = threads.map(|threads| threads.longest_wait.as_millis() as u64),
+                    cpu_run_ms = threads.map(|threads| threads.run.as_millis() as u64),
                     "tokio runtime starvation detected"
                 );
             }

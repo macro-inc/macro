@@ -1,6 +1,9 @@
 import type { EntityItem } from '@core/context/quickAccess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rankCommandSearchItems } from './rank-command-search-items';
+import {
+  rankCommandSearchItems,
+  sameRankInput,
+} from './rank-command-search-items';
 import type { CommandMenuItem } from './useCommandItems';
 
 const NOW = Date.parse('2026-09-26T12:00:00Z');
@@ -211,6 +214,62 @@ describe('command menu search ranking', () => {
     expect(ids([note('plan', 'Create plan'), create], 'create')[0]).toBe(
       'create'
     );
+  });
+
+  it.each([
+    {
+      query: 'settings',
+      label: 'Go to Settings',
+      names: [
+        'Settings: Edit theme button does nothing',
+        'Settings page crashes',
+        'Make Settings into Modal',
+      ],
+    },
+    {
+      query: 'email',
+      label: 'Go to Email',
+      names: ['Email digest', 'Email campaigns'],
+    },
+    { query: 'split', label: 'Create new split', names: ['Split screen'] },
+  ])(
+    'ranks an unused command named $query above recent names that start with it',
+    ({ query, label, names }) => {
+      const items = [
+        ...names.map((name, index) => note(`note-${index}`, name)),
+        command('command', label, 0),
+      ];
+      expect(ids(items, query)[0]).toBe('command');
+      expect(ids([...items].reverse(), query)[0]).toBe('command');
+    }
+  );
+
+  it('keeps an old exact entity name ahead of a recently used command named after it', () => {
+    const items = [
+      note('starts', 'Settings page crashes'),
+      command('tab', 'Go to settings tab 1', 0),
+      command('go', 'Go to Settings', NOW),
+      note('exact', 'Settings', NOW - 60 * DAY),
+    ];
+    expect(ids(items, 'settings')).toEqual(['exact', 'go', 'starts', 'tab']);
+  });
+
+  it('orders commands named after the query by where the match falls in their label', () => {
+    const items = [
+      command('create', 'Create event from email', 0),
+      command('go', 'Go to Email', 0),
+      command('open', 'Open Email', 0),
+    ];
+    expect(ids(items, 'email')).toEqual(['open', 'go', 'create']);
+  });
+
+  it('ranks a command whose word starts with a partial query among names starting with it', () => {
+    const items = [
+      note('contains', 'Make Settings into Modal'),
+      command('go', 'Go to Settings', 0),
+      note('starts', 'Settings page crashes', NOW - DAY),
+    ];
+    expect(ids(items, 'sett')).toEqual(['starts', 'go', 'contains']);
   });
 
   it('ranks an exact project name above a recently viewed channel that starts with it', () => {
@@ -581,5 +640,74 @@ describe('command menu search ranking', () => {
       'exact-note',
       'prefix-person',
     ]);
+  });
+  it('leads with teammates and conversations with them among equally good matches only', () => {
+    const windowed = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      personOrder,
+    });
+    const teammateDm = {
+      ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm'),
+      data: {
+        ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm').data,
+        participantIds: ['viewer', 'adams'],
+      },
+    } as EntityItem;
+    const items = [
+      // The window lists the outside contact first.
+      windowed('outside', 'Jacob', 0),
+      windowed('teammate', 'Jacob Baker', 1),
+      teammateDm,
+      windowed('weak-teammate', 'Major Jacobson', 2),
+      note('exact-note', 'Jacob', NOW),
+    ];
+    const order = rankCommandSearchItems(items, 'jacob', {
+      preserveAdditionalEntityMatches: true,
+      teammateIds: new Set(['teammate', 'adams', 'weak-teammate']),
+      viewerId: 'viewer',
+    }).map((item) => item.id);
+
+    expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
+    expect(order.indexOf('outside')).toBe(2);
+    // A teammate who matches less well stays below better matches.
+    expect(order.indexOf('weak-teammate')).toBeGreaterThan(
+      order.indexOf('exact-note')
+    );
+  });
+});
+
+describe('sameRankInput', () => {
+  it('treats new objects holding the same rows in the same order as unchanged', () => {
+    expect(
+      sameRankInput(
+        [channel('a', 'Alpha'), channel('b', 'Beta')],
+        [channel('a', 'Alpha'), channel('b', 'Beta')]
+      )
+    ).toBe(true);
+  });
+
+  it('sees a reorder, a removed row, a renamed row and a newer view', () => {
+    const previous = [channel('a', 'Alpha'), channel('b', 'Beta')];
+
+    expect(
+      sameRankInput(previous, [channel('b', 'Beta'), channel('a', 'Alpha')])
+    ).toBe(false);
+    expect(sameRankInput(previous, [channel('a', 'Alpha')])).toBe(false);
+    expect(
+      sameRankInput(previous, [channel('a', 'Alpha'), channel('b', 'Gamma')])
+    ).toBe(false);
+    expect(
+      sameRankInput(previous, [
+        channel('a', 'Alpha'),
+        channel('b', 'Beta', NOW + DAY),
+      ])
+    ).toBe(false);
+  });
+
+  it('keeps a command only when it is the same object', () => {
+    const open = command('open', 'Open', NOW);
+
+    expect(sameRankInput([open], [open])).toBe(true);
+    expect(sameRankInput([open], [command('open', 'Open', NOW)])).toBe(false);
   });
 });

@@ -9,6 +9,12 @@ async fn unwired_cleanup_refuses_every_call() {
         owner: TeamDeletionOwner::Team(team_id),
     };
 
+    assert!(matches!(
+        UnwiredOwnedEntityCleanup
+            .prepare_team_deletion(team_id)
+            .await,
+        Err(OwnedEntityCleanupUnwired)
+    ));
     assert_eq!(
         UnwiredOwnedEntityCleanup.team_bots(team_id).await,
         Err(OwnedEntityCleanupUnwired)

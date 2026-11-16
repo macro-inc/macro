@@ -27,6 +27,15 @@ pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 /// (`autoAccept` or `prompt`), so a runtime can tell its agent.
 pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
 
+/// A session a runtime reported on dial, as reconciliation sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeSession {
+    /// The session.
+    pub id: AgentSessionId,
+    /// No activity for the dormancy window and nothing waiting on it.
+    pub dormant: bool,
+}
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
@@ -565,6 +574,18 @@ pub struct AgentSessionRenamed {
     pub name: String,
 }
 
+/// A running session's newest one-line status, summarizing its tool calls
+/// for live viewers. Never stored: it describes the turn in flight and means
+/// nothing once that turn ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionActivitySummarized {
+    /// The running session.
+    pub agent_session_id: AgentSessionId,
+    /// The status line, such as "Reading 12 emails…"; `None` once the turn
+    /// that had one has ended.
+    pub text: Option<String>,
+}
+
 /// The provider-side identity of a session served by an external provider.
 ///
 /// For a Cursor-backed session this is the cloud agent: its `bc-…` id, the
@@ -626,6 +647,37 @@ pub struct TurnPrompter {
     pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
     /// The user who prompted it, absent when a bot acted on nobody's behalf.
     pub user: Option<MacroUserIdStr<'static>>,
+    /// The app tab the person typed the prompt in, when they typed it in one.
+    pub client: Option<UiClientId>,
+}
+
+/// One open Macro app tab, minted by the tab and kept for its lifetime.
+///
+/// Sent with a prompt typed in that tab, so what the turn shows the person
+/// reaches that tab and no other. It names a tab, not a person: it grants
+/// nothing, and is only ever read beside the prompter it came with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct UiClientId(Uuid);
+
+impl UiClientId {
+    /// Wrap a tab's id.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The id, for storage.
+    #[must_use]
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for UiClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl TurnPrompter {
@@ -665,6 +717,9 @@ pub struct StoredQueuedAction {
     /// Why the agent is being asked, composed into the prompt at dispatch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the prompt was typed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<UiClientId>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {
@@ -927,6 +982,53 @@ pub struct AgentSessionPreviewData {
 pub struct HistoryBoundary {
     /// Initialization row in this session's log.
     pub initialization_log_id: Uuid,
+}
+
+/// The `_meta` namespace Macro writes its own keys under on ACP frames.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The key under [`META_NAMESPACE`] that marks a `tool_call` frame as a card
+/// the service presented ([`SessionToolPresentation`]), not a call the agent
+/// made. The agent never saw it, so a rebuild of the agent's conversation
+/// from the log leaves it out.
+const PRESENTED_KEY: &str = "presented";
+
+/// The tool name a code-mode view card is presented under.
+pub const PRESENT_VIEW_TITLE: &str = "mcp__macro_internal__PresentView";
+
+/// The tool name a code-mode review card is presented under.
+pub const PRESENT_REVIEW_TITLE: &str = "mcp__macro_internal__PresentReview";
+
+/// The `_meta` a presented card's `tool_call` frame carries.
+#[must_use]
+pub fn presented_meta() -> agent_client_protocol::schema::v1::Meta {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        META_NAMESPACE.to_owned(),
+        serde_json::json!({ PRESENTED_KEY: true }),
+    );
+    meta
+}
+
+/// Whether a `tool_call` frame is a card the service presented.
+///
+/// Cards logged before the marker are recognized by the shape only
+/// presentation writes: a view or review title, the matching `view_` or
+/// `review_` id (a model's call ids never take it), opened `in_progress`.
+#[must_use]
+pub fn is_presented(call: &agent_client_protocol::schema::v1::ToolCall) -> bool {
+    let marked = call
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(PRESENTED_KEY))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let id = &*call.tool_call_id.0;
+    let legacy = call.status == agent_client_protocol::schema::v1::ToolCallStatus::InProgress
+        && ((call.title == PRESENT_VIEW_TITLE && id.starts_with("view_"))
+            || (call.title == PRESENT_REVIEW_TITLE && id.starts_with("review_")));
+    marked || legacy
 }
 
 /// A durable, nonblocking tool card supplied by a trusted session capability.

@@ -27,8 +27,11 @@ caller, so no tool is handwritten.
 ## Tags
 
 Every public SDK method carries exactly one of `@readonly`, `@write`
-(undoable change) or `@destructive` (deletes, overwrites, sends outside
-Macro, cancels), plus `@openworld` and `@idempotent` when true.
+(undoable change), `@send` (only sends something new outside Macro, such as
+an email; a call that can also edit or delete is `@destructive`; its
+own `<entity>_send` tool, not destructive, always open-world) or
+`@destructive` (deletes, overwrites, cancels), plus `@openworld` and
+`@idempotent` when true.
 `@mcp-exclude <reason>` on a method or class leaves it out. Generation fails
 on an untagged method, a parameter JSON can't carry (callbacks, bytes,
 streams; optional ones are dropped), or a class with methods no operation

@@ -80,26 +80,49 @@ Both information panels start with Record details and References; company-only
 Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
 Contact headers and Record details share `ContactEmailField` and
-`ContactCompanyField`. Their Tasks-style pills add an email only when blank and link/switch company
-only for server-classified personal-provider emails. Existing email and
-ineligible company values are read-only; no clear/unlink actions are exposed.
+`ContactCompanyField`. The email field lists every address as a Tasks-style
+pill, primary first; each pill opens Make primary and Remove, and a trailing
+control adds another. The company pill links or switches only for a
+personal-provider primary with no address on the company's domain, and offers
+Remove company whenever no address is on the company's domain
+(`companyDomain === false`), behind the shared confirmation dialog, which
+adds that the link cannot be recreated when the primary is not a
+personal-provider address. The single address in `companyDomainEmails`
+shows no Remove, and a company-domain contact keeps a read-only company value
+with its reason in a tooltip. These fields come only from the REST contact
+detail; a response without `emails` or `companyDomain` stays read-only.
 The separate Go to button navigates without selecting.
 Keep these property controls at a 24px visible face with 12px type/icons;
 reserve separate 44px touch targets with transparent expansion and margins.
 Desktop uses the property popover and entity picker; touch uses the shared dialog
 and picker sheet. Drafts remain visible on rejection, pending saves cannot be
 repeated, and record identity keys retire drafts when the record changes.
-After a desktop email addition, return focus to the read-only value in the
-originating property; it is programmatically focusable without adding a tab stop.
-Only committed responses update contact details, both company lists, address
-lookups and normalized contact fields, with session and stale-response fences.
+After a desktop email change, return focus to the control that started it, or
+to the add control once its address is gone. Property popovers are menus, which
+send Tab to their last control; the address editors stop that so Tab reaches
+each action. Only committed responses update contact details (the address list
+and company eligibility included), both company lists, address lookups and
+normalized contact fields, with session and stale-response fences. A lookup
+keeps naming the contact only while the contact holds the looked-up address.
+The Emails tab sends every address in `eca`, and Files adds one
+email-attachment participant leaf per address; the server rejects the whole
+Emails request when an address is no longer the contact's, so both read the
+committed list.
 
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
 filters. Archived People is current-administered-team scoped, server filtered
-before pagination; visible People remains viewer-wide. Team applies the same
-exclusive choice to its embedded contact response, including effective parent state.
+before pagination; visible People remains viewer-wide. Team reads its contacts a
+page at a time from `GET /crm/companies/{id}/contacts/page` (`queries/company-contacts.ts`):
+the server applies the Visible/Archived choice (a contact is archived when it or
+its company is) and the search, in the order the full list had, and the list loads
+the next page as its end scrolls into view. A cursor continues only the company,
+Visible/Archived choice and search it came from (anything else answers 400), and the
+loaded pages list each contact once. The server's search answer is shown as it
+came; only rows of an earlier search, kept while the new one loads, are narrowed
+on the client. The company read itself passes `includeContacts=false`. Confirmed visibility and contact edits patch cached Team
+pages in place and refresh the lists a contact can move between.
 
 Successful REST mutations write confirmed flags through the normalized Soup update
 path and patch paginated suggestions, company search pages, REST Soup and embedded

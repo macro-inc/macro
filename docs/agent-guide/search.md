@@ -6,6 +6,12 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+`Featured Results` are the name matches, listed before the search service
+answers. They obey the Type filter and tags like the rows below them, and
+featured documents and tasks show the same properties. They are not listed
+while the search is scoped to a channel, a sender, or a task facet (status,
+priority, assignee, created by), which name matches cannot be checked against.
+
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 **All** name results, and in the desktop Search page's `Featured Results`. They
 come from the routines list (Quick Access `routine` bucket), not the search
@@ -54,7 +60,9 @@ may still offer Next; it is not proof that the directory is exhausted.
 Returning to a previously paged query or exclusion policy restarts at its first
 window. An offline picker waiting for local context should recover when that
 context arrives. Partial caches stay local even online; Refresh schedules background
-sync rather than remote search. Hydration/context changes restart stale windows and
+sync rather than remote search. A tab with no usable local cache (unsupported
+browser, or a cache taken over by a newer build) lists server contact pages while
+online instead of showing options as unavailable. Hydration/context changes restart stale windows and
 must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
 person target. Resolving 500 selected people keeps all 500 and looks up self
 separately when that would otherwise overflow the batch.
@@ -67,8 +75,17 @@ in full-text mode while editing or switching categories. Clearing the query,
 including whitespace-only input, returns to name search and retains the category.
 Projects is always name-only: selecting it returns to name results and omits the
 full-text action. People full-text search uses the existing channel-content scope.
-Name mode makes no full-text requests; explicit full-text mode retains the search
-service's validation for short queries.
+Name mode makes no full-text requests; explicit full-text mode sends any query
+that is not blank or only quote marks, a single character included. A term
+under three characters matches as a whole word in document, chat, call and
+email content (`pr` finds "PR", not "project"); names and channel messages
+still match it as a prefix.
+
+Contacts, agent sessions and commands list before the local cache answers a
+typed query. While it has not, Command-K and phone name search show
+**Searching…** under the listed rows, once the wait passes 300 ms. It is most
+visible right after returning to the tab, when the cache engine restarts; a
+search refused during that restart is repeated as soon as the engine is back.
 
 Email Quick Access searches cached thread subjects, sender display names, and
 sender addresses, including the thread's earlier senders after someone else
@@ -198,6 +215,8 @@ survive that cleanup and still open when the viewer is ready.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
+N counts the matches the search returned, at most ten per result for a document,
+chat, agent session or call, so `[10]` can mean ten or more.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
 opens the first content match, or opens the session normally for a title-only hit. These are
 ACP-backed sessions, distinct from legacy chat results. Legacy chat rename, delete,

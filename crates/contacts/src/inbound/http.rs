@@ -1,6 +1,7 @@
 use crate::domain::models::messages::ContactsNodes;
-use crate::domain::ports::ContactsService;
-use axum::extract::{FromRef, FromRequestParts, Json, State};
+use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::ports::{ContactsService, PeopleSearchService};
+use axum::extract::{FromRef, FromRequestParts, Json, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -35,6 +36,92 @@ pub struct AddContactRequest {
     /// The user ID to add as a contact.
     #[schema(value_type = String)]
     pub user_id: MacroUserIdStr<'static>,
+}
+
+/// Query string for GET /contacts/search.
+#[derive(Deserialize, Debug, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct SearchPeopleParams {
+    /// Text matched against email and name. Under two characters after
+    /// trimming returns no people; over 512 bytes is rejected.
+    pub query: String,
+    /// Maximum results: default 20, values over 50 are capped at 50, zero is rejected.
+    #[param(minimum = 1)]
+    pub limit: Option<u32>,
+}
+
+/// One ranked person in a GET /contacts/search response.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchedPerson {
+    /// The person's user ID (`macro|<email>`).
+    #[schema(value_type = String)]
+    pub user_id: MacroUserIdStr<'static>,
+    /// Resolved name, as the contact directory shows it; null when unknown.
+    pub name: Option<String>,
+    /// Whether the person is on the viewer's current team.
+    pub is_teammate: bool,
+    /// Whether the person is an agent rather than a human; false for non-Macro contacts.
+    pub is_agent: bool,
+}
+
+impl From<PersonMatch> for SearchedPerson {
+    fn from(person: PersonMatch) -> Self {
+        Self {
+            user_id: person.contact.user_id,
+            name: person.contact.name,
+            is_teammate: person.is_teammate,
+            is_agent: person.is_agent,
+        }
+    }
+}
+
+/// Response body for GET /contacts/search.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct SearchPeopleResponse {
+    /// Matches ranked teammates first, then prefix matches, then by name or email.
+    pub people: Vec<SearchedPerson>,
+}
+
+/// GET /contacts/search handler: ranked search of the viewer's contacts and team.
+#[utoipa::path(get,
+    tag = "contacts",
+    operation_id = "search_people",
+    path = "/contacts/search",
+    params(SearchPeopleParams),
+    responses(
+    (status = 200, body=SearchPeopleResponse),
+    (status = 400, body=String),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(
+    skip_all,
+    fields(actor = %authorization.acting_entity())
+)]
+pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<S>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    Query(params): Query<SearchPeopleParams>,
+) -> Result<Json<SearchPeopleResponse>, (StatusCode, &'static str)> {
+    let query = PeopleSearchQuery::new(&params.query)
+        .ok_or((StatusCode::BAD_REQUEST, "query is too long"))?;
+    let limit = match params.limit {
+        None => PeopleSearchLimit::DEFAULT,
+        Some(limit) => PeopleSearchLimit::new(limit)
+            .ok_or((StatusCode::BAD_REQUEST, "limit must be at least 1"))?,
+    };
+    let viewer = authorization.authorization.user.macro_user_id.clone();
+    let people = service
+        .search_people(viewer, &query, limit)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to search people");
+            (StatusCode::INTERNAL_SERVER_ERROR, "failed to search people")
+        })?;
+    Ok(Json(SearchPeopleResponse {
+        people: people.into_iter().map(SearchedPerson::from).collect(),
+    }))
 }
 
 /// GET /contacts handler.
@@ -143,6 +230,48 @@ where
     }
 }
 
+/// Rate limit for people search: 600 requests per user per hour, the budget
+/// other interactive read routes use.
+pub struct PerUserPeopleSearchRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
+
+impl<S, Auth> RateLimitExtractable<S> for PerUserPeopleSearchRateLimit<Auth>
+where
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 600,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-user-people-search")
+            .append(&self.0.authorization.user.macro_user_id.as_ref())
+            .finish()
+    }
+}
+
+impl<S, Auth> FromRequestParts<S> for PerUserPeopleSearchRateLimit<Auth>
+where
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+{
+    type Rejection = macro_authorization::MacroAuthorizationRejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+            parts.extract_with_state(state).await?;
+        Ok(Self(authorization))
+    }
+}
+
 /// State required by the contacts HTTP router.
 pub struct ContactsRouterState<S, R, Auth> {
     /// The contacts service implementation.
@@ -213,10 +342,11 @@ where
     }
 }
 
-/// Builds the contacts API router with authorization and POST rate limiting.
+/// Builds the contacts API router with authorization, and per-user rate
+/// limits on POST /contacts and GET /contacts/search.
 pub fn contacts_router<S, R, Auth, T>(state: ContactsRouterState<S, R, Auth>) -> Router<T>
 where
-    S: ContactsService,
+    S: ContactsService + PeopleSearchService,
     R: RateLimitService + Clone,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -231,10 +361,20 @@ where
             axum::routing::post(add_contact_handler::<S, Auth>),
         )
         .layer(axum::middleware::from_fn_with_state(
-            rate_limit_state,
+            rate_limit_state.clone(),
             rate_limit_middleware::<
                 AddContactRateLimitState<R, Auth>,
                 PerUserAddContactRateLimit<Auth>,
+                AddContactRateLimitState<R, Auth>,
+            >,
+        ));
+    let search_route = Router::new()
+        .route("/contacts/search", get(search_people_handler::<S, Auth>))
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit_state,
+            rate_limit_middleware::<
+                AddContactRateLimitState<R, Auth>,
+                PerUserPeopleSearchRateLimit<Auth>,
                 AddContactRateLimitState<R, Auth>,
             >,
         ));
@@ -242,6 +382,7 @@ where
     Router::new()
         .route("/contacts", get(handler::<S, Auth>))
         .merge(post_route)
+        .merge(search_route)
         .with_state(state)
 }
 
@@ -254,11 +395,14 @@ where
         paths(
             handler,
             add_contact_handler,
+            search_people_handler,
         ),
         components(
             schemas(
                 GetContactsResponse,
                 AddContactRequest,
+                SearchPeopleResponse,
+                SearchedPerson,
             ),
         ),
         tags(

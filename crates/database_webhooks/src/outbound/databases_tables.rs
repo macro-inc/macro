@@ -90,7 +90,7 @@ impl<Databases: DatabasesService> WebhookTables for DatabasesServiceTables<Datab
                 viewer,
                 OpBatch::from(vec![DatabaseOp::Rows {
                     table: table_id,
-                    change: RowsChange::Insert { rows },
+                    change: RowsChange::Insert { rows, ids: None },
                 }]),
             )
             .await?;

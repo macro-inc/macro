@@ -41,6 +41,7 @@ const due = {
 const detail = {
   id: 'project',
   name: 'Launch',
+  appearance: null,
   updatedAt: '2026-09-30T12:00:00Z',
   userAccessLevel: 'owner' as const,
   taskCount: 0,

@@ -48,7 +48,7 @@ async fn state_is_preserved_within_one_actor_and_isolated_across_actors() {
     let server = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    let transport = HttpActorMcpTransport::new().unwrap();
+    let transport = HttpActorMcpTransport::new(AddressPolicy::AnyAddress).unwrap();
     let session = AgentSessionId::new();
     let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
     let requester = MacroUserIdStr::try_from_email("requester@example.com").unwrap();

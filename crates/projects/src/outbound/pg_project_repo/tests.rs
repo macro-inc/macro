@@ -1204,3 +1204,70 @@ async fn project_tree_lists_live_descendants_parents_first(
     assert_eq!(leaf, ProjectTree::default());
     Ok(())
 }
+
+const OWNER_ONLY_ID: &str = "10000000-0000-0000-0000-000000000005";
+
+fn assert_refused<T: std::fmt::Debug, E: std::fmt::Debug>(outcome: Result<T, E>) {
+    let error = format!("{:?}", outcome.expect_err("a sharing refusal"));
+    assert!(
+        error.contains(agent_correlation::context::SharingRefused::MESSAGE),
+        "expected a sharing refusal, got {error}"
+    );
+}
+
+async fn parent_of(pool: &Pool<Postgres>, id: &str) -> Option<String> {
+    sqlx::query_scalar!(r#"SELECT "parentId" FROM "Project" WHERE id = $1"#, id)
+        .fetch_one(pool)
+        .await
+        .expect("project")
+}
+
+/// The root folder is shared with a viewer, so filing a folder in it under a
+/// scope that may not share would give the viewer the folder: nothing is
+/// written. A folder only its owner can open takes new folders as before.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn a_scoped_session_cant_file_a_folder_in_a_shared_one(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let repo = test_repo(pool.clone());
+    let create_in = |parent: &str| CreateProjectArgs {
+        owner: project_owner(),
+        name: "Scoped".to_owned(),
+        parent_id: Some(parent.to_owned()),
+        share_permission: SharePermissionV2::new_project_share_permission(None),
+        updated_at: None,
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let projects_before = count_entity_rows(&pool).await;
+
+    scope_attribution(no_send, async {
+        assert_refused(repo.create_project(create_in(ROOT_ID)).await);
+        assert_refused(
+            repo.edit_project(EditProjectArgs {
+                project_id: OWNER_ONLY_ID.to_owned(),
+                name: None,
+                update_parent: true,
+                parent_id: Some(ROOT_ID.to_owned()),
+                share_permission: None,
+                team_share: None,
+            })
+            .await,
+        );
+    })
+    .await;
+    assert_eq!(count_entity_rows(&pool).await, projects_before);
+    assert_eq!(parent_of(&pool, OWNER_ONLY_ID).await, None);
+
+    let created = scope_attribution(no_send, repo.create_project(create_in(OWNER_ONLY_ID))).await?;
+    assert_eq!(created.parent_id.as_deref(), Some(OWNER_ONLY_ID));
+    Ok(())
+}

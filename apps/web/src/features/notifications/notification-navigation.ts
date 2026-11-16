@@ -1,6 +1,7 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestComputerSetup } from '@app/features/settings/computers/primitives/setup-request';
 import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
 import { paneRoute } from '@app/routes/app-route';
@@ -21,6 +22,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
+  enablePasswords,
   enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -33,6 +35,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -77,7 +80,8 @@ type OpenOptions = {
   onApplied?: VoidFunction;
 };
 
-function openContent(
+/** Opens `content` and returns the layout's result, for callers that act on reuse. */
+function openContentWithResult(
   layoutManager: SplitManager,
   content: SplitContent,
   options: OpenOptions
@@ -97,6 +101,15 @@ function openContent(
   });
   if (result?.status === 'opened' || result?.status === 'reused')
     reportApplied();
+  return result;
+}
+
+function openContent(
+  layoutManager: SplitManager,
+  content: SplitContent,
+  options: OpenOptions
+): void {
+  openContentWithResult(layoutManager, content, options);
 }
 
 /** Chats open in External's main pane; the chat's route claim reuses an open one. */
@@ -632,6 +645,41 @@ function getSupportedHandler(
           );
         };
       })
+      .with('password_access_requested', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'password_access_requested') return null;
+        // The request is answered in the item's pane in Passwords.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enablePasswords)) {
+            onApplied?.();
+            return;
+          }
+          const content: SplitContent = {
+            type: 'component',
+            id: 'passwords',
+            params: {
+              teamId: meta.content.teamId,
+              itemId: meta.content.itemId,
+              requestId: meta.content.requestId,
+            },
+            entryMetadata: {
+              route: paneRoute({ id: 'view-passwords', params: {} }),
+            },
+          };
+          const result = openContentWithResult(lm, content, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+          // Reuse only activates the open vault; hand it this item's params.
+          if (result?.status === 'reused')
+            result.split?.replace({
+              next: content,
+              mergeHistory: true,
+              referredFrom: null,
+            });
+        };
+      })
       .with('crm_discussion', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'crm_discussion') return null;
@@ -681,6 +729,60 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      // Signing in again happens on the computer's row in Settings → Runtimes.
+      .with(
+        'agent_sign_in_expiry',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({
+                    id: 'settings',
+                    params: { tab: 'runtimes' },
+                  }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
+      // Back into the computer's guided setup, at Bring your AI: a ready
+      // computer continues there, a failed one offers Retry setup. An agent
+      // teammate's computer has no setup of its own: a ready agent opens its
+      // DM, and a failed one its row in Members, which offers Retry.
+      .with('computer_setup', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'computer_setup') return null;
+        const computerId = meta.content.computerId;
+        const agent = meta.content.agent;
+        if (agent) {
+          const ready = meta.content.outcome.kind === 'ready';
+          return async (lm: SplitManager, newSplit = false) => {
+            if (!ready) {
+              openTeamMembersSettings(lm, {
+                newSplit,
+                sourceHandle,
+                onApplied,
+              });
+              return;
+            }
+            // Loaded on demand: the DM lookup pulls in the channel list.
+            const { openDirectMessage } = await import(
+              '@core/util/open-direct-message'
+            );
+            await openDirectMessage(cachedUserId(), agent.userId, (content) =>
+              openContent(lm, content, { newSplit, sourceHandle, onApplied })
+            );
+          };
+        }
+        return async (lm: SplitManager, newSplit = false) => {
+          requestComputerSetup(computerId);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       // Its machine has no page of its own; Settings → Runtimes points it out.
       .with('runtime_access_removed', () => {
         const harnessId = notification.entity_id;
@@ -711,16 +813,29 @@ export function openRuntimesSettings(
   );
 }
 
+/** Settings → Members, where an agent teammate's row shows its setup. */
+export function openTeamMembersSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'team-members' } }),
+      },
+    },
+    options
+  );
+}
+
 /**
  * Where a notification was opened from: the app's own lists, a browser
- * notification, a native (iOS, Android, macOS) notification, or a home
- * recommendation that opens through its notification.
+ * notification, or a native (iOS, Android, macOS) notification.
  */
-export type NotificationOpenSource =
-  | 'in_app'
-  | 'browser_push'
-  | 'native_push'
-  | 'home_recommendation';
+export type NotificationOpenSource = 'in_app' | 'browser_push' | 'native_push';
 
 /**
  * Opens the notification given the layout manager.

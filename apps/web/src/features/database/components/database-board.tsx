@@ -46,6 +46,7 @@ import {
 import { cardTitleColumn, laneId, laneLabel } from '../core/views';
 import { BoardLaneHeader } from './board-lane-header';
 import type { DatabaseTableProps } from './database-table';
+import { isOnLink } from './grid-cell';
 import { NewBoardGroup } from './new-board-group';
 import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
@@ -72,6 +73,7 @@ type DatabaseBoardProps = {
   layout: BoardLayout;
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   canEdit: boolean;
@@ -519,6 +521,7 @@ function BoardLane(
                 cardFields={props.layout.cardFields}
                 renderCell={props.renderCell}
                 renderTextValue={props.renderTextValue}
+                renderLinkValue={props.renderLinkValue}
                 renderMentionValue={props.renderMentionValue}
                 groupColumn={props.groupColumn}
                 groups={props.groups}
@@ -551,6 +554,7 @@ function LaneIcon(props: { group: BoardGroup; column: DatabaseViewColumn }) {
             <PropertyIcon
               type={props.column.dataType}
               entityType={props.column.specificEntityType}
+              percentage={!!props.column.percentage}
               class="size-4 text-ink-muted"
             />
           }
@@ -624,6 +628,7 @@ function BoardCard(props: {
   cardFields: string[];
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   groups: BoardGroup[];
@@ -646,6 +651,8 @@ function BoardCard(props: {
       return props.renderMentionValue(String(value), column.specificEntityType);
     if (isWritableText(column) && props.renderTextValue)
       return props.renderTextValue(String(value));
+    if (column.dataType === 'LINK' && props.renderLinkValue)
+      return props.renderLinkValue(String(value));
     return title();
   };
   const metadata = () =>
@@ -674,7 +681,9 @@ function BoardCard(props: {
               <button
                 type="button"
                 class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
-                onClick={() => props.onOpen(props.row.rowId)}
+                onClick={(event) => {
+                  if (!isOnLink(event)) props.onOpen(props.row.rowId);
+                }}
                 aria-label={`Open ${title()}`}
               >
                 <span role="heading" aria-level={3}>
@@ -771,7 +780,7 @@ function BoardCard(props: {
                 <div
                   class="flex min-w-0 flex-col gap-0.5 rounded has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
                   data-card-field
-                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id))}`}
+                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id), props.row.cells)}`}
                   data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
                   <span
@@ -801,7 +810,8 @@ function BoardCard(props: {
                             <span class="block break-words whitespace-normal text-xs text-ink-muted">
                               {formatCellValue(
                                 column(),
-                                rowValue(props.row, column().id)
+                                rowValue(props.row, column().id),
+                                props.row.cells
                               )}
                             </span>
                           }

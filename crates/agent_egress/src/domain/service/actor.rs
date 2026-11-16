@@ -220,7 +220,8 @@ where
     /// A call spending the owner's access in a turn somebody else prompted
     /// waits for the owner, one call at a time, the same as a sandbox's
     /// held call: the same approval record, announcement and standing
-    /// approvals. `Some` with what to tell the model when it may not run.
+    /// approvals. So does a write the owner confirms, in any turn. `Some`
+    /// with what to tell the model when it may not run.
     async fn hold_owner_call(
         &self,
         grant: &SessionGrant,
@@ -228,9 +229,9 @@ where
         destination: &McpDestination,
         request: &Value,
     ) -> Result<Option<String>, EgressError> {
-        let Some(prompter) = grant.held_prompter().filter(|_| *user == grant.owner) else {
+        if *user != grant.owner {
             return Ok(None);
-        };
+        }
         let (server_slug, server_name) = match destination {
             McpDestination::Connected(slug) => (slug.as_str().to_owned(), grant.display_name(slug)),
             McpDestination::Custom(key) => {
@@ -246,6 +247,9 @@ where
             .as_str()
             .unwrap_or_default()
             .to_owned();
+        let Some(prompter) = grant.approval_prompter(&server_slug, &tool) else {
+            return Ok(None);
+        };
         let status = self
             .approvals
             .hold_in_process(InProcessCall {

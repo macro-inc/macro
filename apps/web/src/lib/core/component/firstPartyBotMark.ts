@@ -5,6 +5,7 @@ import { isMacroCoderId } from '@core/constant/macroCoder';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { isMacroSystemId } from '@core/constant/macroSystem';
 import MacroLogo from '@icon/macro-logo.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import type { Component, ComponentProps } from 'solid-js';
@@ -19,6 +20,14 @@ export type FirstPartyBotMark = {
 const MACRO_MARK: FirstPartyBotMark = { Icon: MacroLogo, tone: 'accent' };
 const CURSOR_MARK: FirstPartyBotMark = { Icon: CursorIcon, tone: 'ink' };
 const CODEX_MARK: FirstPartyBotMark = { Icon: CodexIcon, tone: 'ink' };
+const CLAUDE_MARK: FirstPartyBotMark = { Icon: ClaudeIcon, tone: 'ink' };
+
+/** Keyed by the first word of a client's registered name, lowercased. */
+const MCP_CLIENT_MARKS = new Map<string, FirstPartyBotMark>([
+  ['claude', CLAUDE_MARK],
+  ['cursor', CURSOR_MARK],
+  ['codex', CODEX_MARK],
+]);
 
 /**
  * The avatar mark for a first-party bot (bare UUID or `bot|<uuid>`). System
@@ -42,6 +51,18 @@ export function firstPartyBotMark(
   if (isCursorBotId(id)) return CURSOR_MARK;
   if (isCodexBotId(id)) return CODEX_MARK;
   return undefined;
+}
+
+/**
+ * The brand mark for an MCP client by the name it registered with ("Claude",
+ * "Claude Code", "Cursor"), which is what a post made through it is labeled.
+ * Undefined for clients without a shipped mark.
+ */
+export function mcpClientMark(
+  clientName: string
+): FirstPartyBotMark | undefined {
+  const firstWord = clientName.trim().split(/\s+/)[0]?.toLowerCase();
+  return firstWord ? MCP_CLIENT_MARKS.get(firstWord) : undefined;
 }
 
 /** Text color class for a mark's tone. */

@@ -129,6 +129,45 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
+    async fn set_appearance(
+        &self,
+        document_id: &str,
+        update: &activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            r#"SELECT appearance FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE"#,
+            document_id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            r#"UPDATE "Document" SET appearance = $2 WHERE id = $1"#,
+            document_id,
+            serde_json::to_value(&update.appearance)
+                .map_err(|e| sqlx::Error::Encode(Box::new(e)))?,
+        )
+        .execute(&mut *tx)
+        .await?;
+        if let Some(activity) =
+            update.activity(model_entity::EntityType::Document, document_id, &previous)
+        {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
+        }
+        tx.commit().await?;
+        Ok(Some(previous))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_document_metadata(
         &self,
         document_id: &str,
@@ -137,6 +176,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 COALESCE(db.id, di.id) as "document_version_id!",
                 d.name as "document_name",
@@ -217,6 +257,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)
@@ -268,6 +313,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner,
                 d.name as "document_name",
                 d."branchedFromId" as "branched_from_id",
@@ -647,6 +693,21 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             FileTypeUpdate::Clear => None,
         });
 
+        let document_uuid = macro_uuid::string_to_uuid(&args.document_id).ok();
+        if document_uuid.is_none()
+            && args.project_id.is_some()
+            && !agent_correlation::context::may_share()
+        {
+            let (owner, from) =
+                edit::get_document_owner_and_folder(&mut transaction, &args.document_id).await?;
+            entity_access_db_utils::project_grants::refuse_unregistered_filing(
+                &mut transaction,
+                &owner,
+                from.as_deref(),
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
         edit::update_document_metadata(
             &mut transaction,
             &args.document_id,
@@ -655,6 +716,15 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             file_type_db,
         )
         .await?;
+        if let Some(document_uuid) = document_uuid {
+            entity_access_db_utils::project_grants::refuse_filing_in(
+                &mut transaction,
+                &document_uuid,
+                model_entity::EntityType::Document,
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
 
         if let Some(ref share_permission) = args.share_permission {
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
@@ -1100,6 +1170,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 d.name as "document_name",
                 COALESCE(di.id, db.id) as "document_version_id!",
@@ -1179,6 +1250,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)

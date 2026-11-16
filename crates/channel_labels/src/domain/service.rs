@@ -16,6 +16,7 @@ use crate::domain::ports::{ChannelLabelsRepo, ChannelLabelsService};
 #[derive(Debug, Clone)]
 pub struct ChannelLabelsServiceImpl<R> {
     repo: R,
+    sections: bool,
 }
 
 impl<R> ChannelLabelsServiceImpl<R>
@@ -25,7 +26,18 @@ where
 {
     /// Create a service backed by the provided repository.
     pub fn new(repo: R) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            sections: false,
+        }
+    }
+
+    /// Enable section semantics without changing the existing service port.
+    pub fn for_sections(repo: R) -> Self {
+        Self {
+            repo,
+            sections: true,
+        }
     }
 
     async fn apply_channel_label(
@@ -165,7 +177,7 @@ where
     ) -> Result<ChannelLabel, ChannelLabelsError> {
         let name = validate_name(&name)?;
         let rule = rule.map(validate_rule).transpose()?;
-        if rule.is_some() {
+        if rule.is_some() && !self.sections {
             let existing = self
                 .repo
                 .get_label(receipt.scope(), label_id, receipt.user_id())
@@ -221,7 +233,7 @@ where
         }
         let name = validate_name(&name)?;
         let rule = rule.map(validate_rule).transpose()?;
-        if rule.is_some() {
+        if rule.is_some() && !self.sections {
             let existing = self
                 .repo
                 .get_label(source.scope(), label_id, source.user_id())

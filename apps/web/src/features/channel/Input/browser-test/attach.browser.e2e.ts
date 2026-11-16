@@ -33,7 +33,31 @@ async function emulateIosApp(page: Page, photoLibrary: 'fails') {
   }, photoLibrary);
 }
 
-async function openPhone(page: Page) {
+/** Stands in for the macOS desktop app's Tauri bridge; every command rejects. */
+async function emulateMacosApp(page: Page) {
+  await page.addInitScript(() => {
+    const host = window as unknown as Record<string, unknown>;
+    host.isTauri = true;
+    host.__TAURI_OS_PLUGIN_INTERNALS__ = {
+      os_type: 'macos',
+      platform: 'macos',
+    };
+    host.__TAURI_INTERNALS__ = {
+      metadata: {
+        currentWindow: { label: 'main' },
+        currentWebview: { label: 'main', windowLabel: 'main' },
+      },
+      convertFileSrc: (path: string) => `asset://localhost/${path}`,
+      transformCallback: () => 0,
+      unregisterCallback: () => {},
+      invoke: async (command: string) => {
+        throw new Error(`No native command ${command}`);
+      },
+    };
+  });
+}
+
+async function openComposer(page: Page) {
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (
@@ -61,6 +85,32 @@ async function tapAttach(page: Page) {
   await page.locator('[data-composer-add-item="attach"]').tap();
 }
 
+async function chooseAttachOnDesktop(page: Page) {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Attach files' }).click();
+  return (await chooser).element();
+}
+
+test('a desktop browser narrows the file picker to channel file types', async ({
+  page,
+}) => {
+  await openComposer(page);
+  const picker = await chooseAttachOnDesktop(page);
+  expect(await picker.getAttribute('accept')).toContain('.png');
+});
+
+test('the desktop app opens the file picker without a type filter', async ({
+  page,
+}) => {
+  // In the macOS app (Chromium) a picker carrying the channel's extension
+  // list attached nothing; the agent composer's unfiltered picker works.
+  await emulateMacosApp(page);
+  await openComposer(page);
+  const picker = await chooseAttachOnDesktop(page);
+  expect(await picker.getAttribute('accept')).toBeNull();
+});
+
 test('a phone browser opens the file picker from the add drawer', async ({
   browser,
 }) => {
@@ -70,7 +120,7 @@ test('a phone browser opens the file picker from the add drawer', async ({
     hasTouch: true,
   });
   const page = await context.newPage();
-  await openPhone(page);
+  await openComposer(page);
 
   const chooser = page.waitForEvent('filechooser');
   await tapAttach(page);
@@ -88,7 +138,7 @@ test('the iOS app offers the file picker behind a tap when the photo library fai
   });
   const page = await context.newPage();
   await emulateIosApp(page, 'fails');
-  await openPhone(page);
+  await openComposer(page);
   let choosers = 0;
   page.on('filechooser', () => {
     choosers += 1;
