@@ -9,7 +9,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution::domain::{ExecuteRequest, Language};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -138,6 +138,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
+                    language: Language::Javascript,
                 },
                 request.cancel,
             )
@@ -196,6 +197,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
+                    language: Language::Javascript,
                 },
                 request.cancel,
             )

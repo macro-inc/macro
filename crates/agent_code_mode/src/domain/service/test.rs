@@ -125,6 +125,7 @@ fn request() -> ExecuteRequest {
     ExecuteRequest {
         source: "export async function main() { return {data: 42, reviews: []}; }".into(),
         timeout_ms: 1000,
+        language: code_execution::domain::Language::Javascript,
     }
 }
 #[tokio::test]
