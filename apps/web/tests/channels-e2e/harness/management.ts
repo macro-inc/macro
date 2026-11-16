@@ -196,7 +196,7 @@ export async function inviteByEmail(page: Page, email: string): Promise<void> {
   // The one row reads "Invite <address>" until the device's own list of
   // people answers; if it knows the address, the row becomes that person's,
   // sometimes as it is being clicked (MEM-01). Either row invites them.
-  await dialog.getByRole('option').filter({ hasText: email }).click();
+  await dialog.getByRole('option').filter({ hasText: email }).first().click();
   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(dialog).toBeHidden();
 }

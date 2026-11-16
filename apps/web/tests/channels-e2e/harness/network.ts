@@ -194,8 +194,13 @@ export function channelListRead(page: Page): Promise<void> {
       async (response) => {
         if (!response.url().includes('/dss/comms/channels?')) return false;
         if (!response.ok()) return false;
-        const body: { next_cursor?: string | null } = await response.json();
-        return !body.next_cursor;
+        try {
+          const body: { next_cursor?: string | null } = await response.json();
+          return !body.next_cursor;
+        } catch {
+          // the page moved on before the answer could be read
+          return false;
+        }
       },
       { timeout: 120_000 }
     )
@@ -213,9 +218,9 @@ export async function holdChannelList(
   const held: Array<() => void> = [];
   let holding = true;
   await page.route(CHANNEL_LIST, async (route) => {
-    const answer = await route.fetch();
-    if (holding) await new Promise<void>((letGo) => held.push(letGo));
     try {
+      const answer = await route.fetch();
+      if (holding) await new Promise<void>((letGo) => held.push(letGo));
       await route.fulfill({ response: answer });
     } catch {
       // the page that asked is gone
