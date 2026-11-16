@@ -39,6 +39,27 @@ impl<R: TeamRepository> MemoryTeams for MemoryTeamRepository<R> {
     }
 }
 
+/// Activity presence comes from the activity log, which records authored
+/// documents, task changes, sent email and channel messages.
+struct MemoryActivityLog<R>(R);
+#[async_trait::async_trait]
+impl<R: activity::SubjectActivityPresence + Send + Sync> MemoryActivity for MemoryActivityLog<R> {
+    #[tracing::instrument(skip_all, fields(date = %date), err)]
+    async fn acted_on(&self, user: &MacroUserIdStr<'_>, date: chrono::NaiveDate) -> Result<bool> {
+        let from = date.and_time(chrono::NaiveTime::MIN).and_utc();
+        self.0
+            .touched_between(user.as_ref(), from, from + chrono::Duration::days(1))
+            .await
+            .map_err(|e| MemoryError::Db(rootcause::report!(e).into_dynamic()))
+    }
+}
+
+fn memory_activity(pool: sqlx::PgPool) -> Arc<dyn MemoryActivity> {
+    Arc::new(MemoryActivityLog(
+        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+    ))
+}
+
 /// Build the daily generator with a deliberately bounded set of read capabilities.
 pub fn build_memory_service(
     pool: sqlx::PgPool,
@@ -73,8 +94,9 @@ pub fn build_memory_service(
         PgMemoryRepo::new(pool.clone()),
         Arc::new(generator),
         Arc::new(MemoryTeamRepository(
-            teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         )),
+        memory_activity(pool),
     )
 }
 
@@ -94,8 +116,9 @@ pub fn build_memory_tool_context(
             PgMemoryRepo::new(pool.clone()),
             Arc::new(generator),
             Arc::new(MemoryTeamRepository(
-                teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
+                teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
             )),
+            memory_activity(pool),
         )),
     }
 }
