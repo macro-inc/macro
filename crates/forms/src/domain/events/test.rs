@@ -19,7 +19,7 @@ fn owner() -> MacroUserIdStr<'static> {
 fn public(event: &FormTopicEvent) -> PublicEvent<'_, FormPublicEvent> {
     match event.access().unwrap() {
         Access::Public(public) => public,
-        Access::Internal(reason) => panic!("expected public, got {reason}"),
+        Access::Internal { reason } => panic!("expected public, got {reason}"),
     }
 }
 
@@ -142,7 +142,7 @@ fn created_payload_omits_the_name() {
 #[test]
 fn purge_stays_internal() {
     let event = FormTopicEvent::Purged(FormPurgedMetadata { form_id: form_id() });
-    assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+    assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
 }
 
 #[cfg(feature = "inbound")]

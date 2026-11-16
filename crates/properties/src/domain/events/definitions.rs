@@ -161,13 +161,15 @@ pub(super) fn access(
         PropertyTopicEvent::EntityPropertyUpdated(_)
         | PropertyTopicEvent::EntityPropertyDeleted(_)
         | PropertyTopicEvent::EntityPropertiesCleared(_) => {
-            return Ok(Access::internal_by_design(
-                "entity property events are declared by the entity property family",
-            ));
+            return Ok(Access::Internal {
+                reason: "entity property events are declared by the entity property family",
+            });
         }
     };
     let Some(owner) = owner else {
-        return Ok(Access::internal_by_design(OWNER_NOT_RECORDED));
+        return Ok(Access::Internal {
+            reason: OWNER_NOT_RECORDED,
+        });
     };
     let audience = match owner {
         // A user's own definitions (such as their personal labels) are
@@ -184,7 +186,11 @@ pub(super) fn access(
             entity_type: EntityType::Database,
             entity_id: database_id.to_string(),
         },
-        PropertyOwner::System => return Ok(Access::internal_by_design(SYSTEM_OWNED)),
+        PropertyOwner::System => {
+            return Ok(Access::Internal {
+                reason: SYSTEM_OWNED,
+            });
+        }
     };
     Ok(Access::Public(PublicEvent {
         name,

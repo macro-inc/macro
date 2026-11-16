@@ -17,7 +17,7 @@ fn owner() -> MacroUserIdStr<'static> {
 fn public(event: &DatabaseTopicEvent) -> PublicEvent<'_, DatabasePublicEvent> {
     match event.access().unwrap() {
         Access::Public(public) => public,
-        Access::Internal(reason) => panic!("expected public, got {reason}"),
+        Access::Internal { reason } => panic!("expected public, got {reason}"),
     }
 }
 
@@ -137,7 +137,7 @@ fn purge_stays_internal() {
     let event = DatabaseTopicEvent::Purged(DatabasePurgedMetadata {
         database_id: database_id(),
     });
-    assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+    assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
 }
 
 #[test]

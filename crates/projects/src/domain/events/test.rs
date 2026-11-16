@@ -81,7 +81,7 @@ mod access {
     fn public(event: &ProjectTopicEvent) -> PublicEvent<'_, ProjectPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -243,7 +243,7 @@ mod access {
         ] {
             assert!(matches!(
                 permanently_deleted(owner).access().unwrap(),
-                Access::Internal(_)
+                Access::Internal { .. }
             ));
         }
     }

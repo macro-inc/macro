@@ -599,7 +599,7 @@ fn public_events_reach_only_the_mailbox_owner() {
                     );
                 }
             }
-            Access::Internal(_) => {
+            Access::Internal { .. } => {
                 assert!(INTERNAL_EVENTS.contains(&name), "{name} must be public");
             }
         }

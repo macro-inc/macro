@@ -122,9 +122,9 @@ impl EventAccess for SoupTopicEvent {
         use macro_event_broker::access::Access;
 
         Ok(match self {
-            Self::Updated(_) | Self::Deleted(_) => Access::internal_by_design(
-                "per-user Soup cache patch protocol derived from public events",
-            ),
+            Self::Updated(_) | Self::Deleted(_) => Access::Internal {
+                reason: "per-user Soup cache patch protocol derived from public events",
+            },
         })
     }
 }

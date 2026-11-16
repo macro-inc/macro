@@ -302,9 +302,9 @@ impl EventAccess for ProjectTopicEvent {
                     }),
                 ),
                 Owner::Team(_) | Owner::Bot(_) => {
-                    return Ok(Access::internal_by_design(
-                        "a purged team- or bot-owned project has no audience left: its grants are gone and team membership is not access",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a purged team- or bot-owned project has no audience left: its grants are gone and team membership is not access",
+                    });
                 }
             },
             Self::Uploaded(metadata) => (

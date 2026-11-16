@@ -46,7 +46,7 @@ fn an_update_reaches_everyone_who_can_see_a_linked_record() {
 fn an_update_with_no_linked_record_stays_internal() {
     assert!(matches!(
         updated(Vec::new()).access().unwrap(),
-        Access::Internal(_)
+        Access::Internal { .. }
     ));
 }
 

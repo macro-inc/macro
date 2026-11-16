@@ -307,7 +307,7 @@ mod access {
     fn public(event: &ChatTopicEvent) -> PublicEvent<'_, ChatPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -428,7 +428,7 @@ mod access {
             actor_user_id: None,
             project_id: None,
         });
-        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
     }
 
     #[test]

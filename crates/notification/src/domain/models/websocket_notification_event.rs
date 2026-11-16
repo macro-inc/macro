@@ -151,9 +151,9 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> EventAccess
                 // only the owner differs between rows. Rows for any other
                 // notification are not this event's subject and get nothing.
                 let Some(first) = notifications.first() else {
-                    return Ok(Access::internal_by_design(
-                        "a delivery request with no recipients",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a delivery request with no recipients",
+                    });
                 };
                 let recipients = notifications
                     .iter()
@@ -168,9 +168,9 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> EventAccess
             }
             Self::NotificationStatusUpdatedForUsers { users, update } => {
                 if users.is_empty() {
-                    return Ok(Access::internal_by_design(
-                        "a status update with no recipients",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a status update with no recipients",
+                    });
                 }
                 let NotificationDelete::Delete { id } = **update;
                 (
@@ -188,9 +188,9 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> EventAccess
                 let changes: Vec<NotificationChange> =
                     updates.iter().map(NotificationChange::from).collect();
                 let Some(first) = changes.first() else {
-                    return Ok(Access::internal_by_design(
-                        "a status update with no changes",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a status update with no changes",
+                    });
                 };
                 (
                     NOTIFICATION_UPDATED,

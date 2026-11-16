@@ -75,7 +75,7 @@ mod access {
     fn public(event: &InitiativeTopicEvent) -> PublicEvent<'_, InitiativePublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -167,7 +167,7 @@ mod access {
             initiative_id: initiative_id(),
             audience_user_ids: Vec::new(),
         };
-        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
     }
 
     #[cfg(feature = "inbound")]

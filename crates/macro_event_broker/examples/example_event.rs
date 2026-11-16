@@ -64,9 +64,9 @@ impl EventAccess for ExampleTopicEvent {
         macro_event_broker::access::Access<'_, Self::PublicPayload>,
         macro_event_broker::access::AccessError,
     > {
-        Ok(macro_event_broker::access::Access::internal_by_design(
-            "broker example topic",
-        ))
+        Ok(macro_event_broker::access::Access::Internal {
+            reason: "broker example topic",
+        })
     }
 }
 

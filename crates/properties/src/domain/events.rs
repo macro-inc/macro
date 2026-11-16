@@ -247,9 +247,7 @@ impl EventAccess for PropertyTopicEvent {
         macro_event_broker::access::Access<'_, Self::PublicPayload>,
         macro_event_broker::access::AccessError,
     > {
-        use macro_event_broker::access::{
-            Access, Audience, EntityRef, PendingPhase, PublicEvent, Stage,
-        };
+        use macro_event_broker::access::{Access, Audience, EntityRef, PublicEvent, Stage};
         use public::{
             PublicEntityPropertiesCleared, PublicEntityPropertyUpdated, acting, public_entity_type,
         };
@@ -271,13 +269,14 @@ impl EventAccess for PropertyTopicEvent {
                     || is_select(&metadata.previous_value)
                     || (metadata.value.is_none() && metadata.previous_value.is_none())
                 {
-                    return Ok(Access::pending(
-                        PendingPhase::ProducerChange,
-                        MAYBE_PERSONAL_TAG,
-                    ));
+                    return Ok(Access::Internal {
+                        reason: MAYBE_PERSONAL_TAG,
+                    });
                 }
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {
-                    return Ok(Access::internal_by_design(NO_ENTITY_AUDIENCE));
+                    return Ok(Access::Internal {
+                        reason: NO_ENTITY_AUDIENCE,
+                    });
                 };
                 (
                     "entity_property.updated",
@@ -299,14 +298,15 @@ impl EventAccess for PropertyTopicEvent {
             // Says which property left the entity, which for a personal tag
             // reveals it to every viewer.
             Self::EntityPropertyDeleted(_) => {
-                return Ok(Access::pending(
-                    PendingPhase::ProducerChange,
-                    MAYBE_PERSONAL_TAG,
-                ));
+                return Ok(Access::Internal {
+                    reason: MAYBE_PERSONAL_TAG,
+                });
             }
             Self::EntityPropertiesCleared(metadata) => {
                 let Some(entity_type) = public_entity_type(metadata.entity_type) else {
-                    return Ok(Access::internal_by_design(NO_ENTITY_AUDIENCE));
+                    return Ok(Access::Internal {
+                        reason: NO_ENTITY_AUDIENCE,
+                    });
                 };
                 (
                     "entity_properties.cleared",

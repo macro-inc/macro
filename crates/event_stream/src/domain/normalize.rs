@@ -33,7 +33,7 @@ pub fn normalize<E: TopicEvent>(
     event: &Event<E>,
 ) -> Result<Option<PublicLogEvent>, NormalizeError> {
     let public = match event.event.access()? {
-        Access::Internal(_) => return Ok(None),
+        Access::Internal { .. } => return Ok(None),
         Access::Public(public) => public,
     };
     if !catalog::is_public_event(public.name) {

@@ -188,9 +188,9 @@ impl EventAccess for InitiativeTopicEvent {
                 audience_user_ids,
             } => {
                 if audience_user_ids.is_empty() {
-                    return Ok(Access::internal_by_design(
-                        "a purge published before audience capture has nobody left to reach",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a purge published before audience capture has nobody left to reach",
+                    });
                 }
                 (
                     "initiative.purged",

@@ -310,7 +310,7 @@ mod access {
     fn public(event: &CallTopicEvent) -> PublicEvent<'_, CallRecordPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -404,7 +404,7 @@ mod access {
 
         assert!(matches!(
             deleted(None).access().unwrap(),
-            Access::Internal(_)
+            Access::Internal { .. }
         ));
     }
 

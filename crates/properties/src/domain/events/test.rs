@@ -412,7 +412,7 @@ mod access {
     fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -499,7 +499,7 @@ mod access {
         for entity_type in [EntityType::CalendarEvent, EntityType::User] {
             assert!(matches!(
                 updated(entity_type).access().unwrap(),
-                Access::Internal(_)
+                Access::Internal { .. }
             ));
         }
     }
@@ -532,7 +532,7 @@ mod access {
             on_behalf_of: None,
         });
         for event in [PropertyTopicEvent::EntityPropertyUpdated(select), removed] {
-            assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+            assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
         }
     }
 }
@@ -547,7 +547,7 @@ mod definition_access {
     fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -623,7 +623,7 @@ mod definition_access {
             option_deleted(Some(PropertyOwner::System)),
             option_deleted(None),
         ] {
-            assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+            assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
         }
     }
 
@@ -653,7 +653,7 @@ mod definition_access {
                     );
                 }
                 // The deleted-option fixture predates owners on options.
-                Access::Internal(_) => assert!(!expected_public, "{name}"),
+                Access::Internal { .. } => assert!(!expected_public, "{name}"),
             }
         }
     }

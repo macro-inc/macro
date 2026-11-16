@@ -92,9 +92,9 @@ impl EventAccess for MentionTopicEvent {
             Self::Created(metadata) => ("mention.created", metadata, MentionPublicEvent::Created),
             Self::Deleted(metadata) => ("mention.deleted", metadata, MentionPublicEvent::Deleted),
             Self::MessageSent(_) => {
-                return Ok(Access::internal_by_design(
-                    "message.mentioned already delivers each message mention to the message's audience",
-                ));
+                return Ok(Access::Internal {
+                    reason: "message.mentioned already delivers each message mention to the message's audience",
+                });
             }
         };
         // The API only records mentions from documents, but the source kind

@@ -372,9 +372,9 @@ impl EventAccess for ChatTopicEvent {
                 }),
             ),
             Self::PermanentlyDeleted(_) => {
-                return Ok(Access::internal_by_design(
-                    "carries no owner and its grants are gone when consumed, so it has no audience; chat.deleted is the public signal",
-                ));
+                return Ok(Access::Internal {
+                    reason: "carries no owner and its grants are gone when consumed, so it has no audience; chat.deleted is the public signal",
+                });
             }
         };
         Ok(Access::Public(PublicEvent {

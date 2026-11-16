@@ -260,7 +260,7 @@ fn public(event: &BotTopicEvent) -> macro_event_broker::access::PublicEvent<'_, 
 
     match event.access().expect("valid access") {
         Access::Public(public) => public,
-        Access::Internal(reason) => panic!("expected public, got {reason}"),
+        Access::Internal { reason } => panic!("expected public, got {reason}"),
     }
 }
 

@@ -110,9 +110,9 @@ impl EventAccess for TeamsTopicForDms {
         use macro_event_broker::access::Access;
 
         Ok(match self {
-            Self::MemberJoined(_) | Self::Other(_) => Access::internal_by_design(
-                "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic access",
-            ),
+            Self::MemberJoined(_) | Self::Other(_) => Access::Internal {
+                reason: "consumer-side decoding of macro.teams; TeamTopicEvent declares the topic access",
+            },
         })
     }
 }

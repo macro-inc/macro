@@ -46,7 +46,7 @@ fn public<'e>(
 ) -> macro_event_broker::access::PublicEvent<'e, super::NotificationPublicEvent> {
     match event.access().expect("valid access") {
         Access::Public(public) => public,
-        Access::Internal(reason) => panic!("expected public, got {reason}"),
+        Access::Internal { reason } => panic!("expected public, got {reason}"),
     }
 }
 
@@ -131,7 +131,7 @@ fn an_empty_delivery_is_internal() {
             notifications: vec![],
         },
     );
-    assert!(matches!(event.access(), Ok(Access::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal { .. })));
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn an_empty_status_update_is_internal() {
             user: user("macro|a@example.com"),
             updates: vec![],
         };
-    assert!(matches!(event.access(), Ok(Access::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal { .. })));
 }
 
 #[test]
@@ -247,5 +247,5 @@ fn a_shared_deletion_with_no_users_is_internal() {
                 id: Uuid::from_u128(3),
             }),
         };
-    assert!(matches!(event.access(), Ok(Access::Internal(_))));
+    assert!(matches!(event.access(), Ok(Access::Internal { .. })));
 }

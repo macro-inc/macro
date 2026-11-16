@@ -250,8 +250,7 @@ impl EventAccess for FormTopicEvent {
         macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Access, Audience, EntityRef, EntityType, MinAccessLevel, PendingPhase, PublicEvent,
-            Stage,
+            Access, Audience, EntityRef, EntityType, MinAccessLevel, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -329,10 +328,9 @@ impl EventAccess for FormTopicEvent {
                 )),
             ),
             Self::Purged(_) => {
-                return Ok(Access::pending(
-                    PendingPhase::ProducerChange,
-                    "carries only the form id and its grants are gone when consumed; needs Owner plus an audience snapshot",
-                ));
+                return Ok(Access::Internal {
+                    reason: "the payload lacks an audience: it carries only the form id, and the form's grants are gone when the event is consumed (it needs the owner and a snapshot of the accessors)",
+                });
             }
         };
         let form_id = form_id.to_string();

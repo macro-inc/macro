@@ -937,7 +937,7 @@ mod requested_sessions {
         ));
         match event.event.access().unwrap() {
             Access::Public(public) => public.audience,
-            Access::Internal(reason) => panic!("requested sessions are public: {reason}"),
+            Access::Internal { reason } => panic!("requested sessions are public: {reason}"),
         }
     }
 

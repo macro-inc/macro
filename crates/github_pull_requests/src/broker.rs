@@ -60,9 +60,9 @@ impl EventAccess for GithubPullRequestTopicEvent {
             // Whoever can see any Macro record of the pull request.
             Self::Updated(update) => {
                 if update.foreign_entity_ids.is_empty() {
-                    return Ok(Access::internal_by_design(
-                        "a pull request update that touched no Macro record has no audience",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a pull request update that touched no Macro record has no audience",
+                    });
                 }
                 let github_key = update.github_key.to_lowercase();
                 Ok(Access::Public(PublicEvent {

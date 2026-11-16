@@ -93,7 +93,7 @@ impl TopicVisitor for Expose {
     fn visit<T: macro_event_broker::TopicEvent>(self) -> Self::Output {
         let event: T = serde_json::from_value(self.0).map_err(|error| error.to_string())?;
         let public = match event.access().map_err(|error| error.to_string())? {
-            event_access::Access::Internal(_) => return Ok(None),
+            event_access::Access::Internal { .. } => return Ok(None),
             event_access::Access::Public(public) => public,
         };
 

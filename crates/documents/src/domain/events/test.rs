@@ -342,7 +342,7 @@ mod access {
     fn public(event: &DocumentTopicEvent) -> PublicEvent<'_, DocumentPublicEvent> {
         match event.access().unwrap() {
             Access::Public(public) => public,
-            Access::Internal(reason) => panic!("expected public, got {reason}"),
+            Access::Internal { reason } => panic!("expected public, got {reason}"),
         }
     }
 
@@ -490,7 +490,7 @@ mod access {
         let event = DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_owned(),
         });
-        assert!(matches!(event.access().unwrap(), Access::Internal(_)));
+        assert!(matches!(event.access().unwrap(), Access::Internal { .. }));
     }
 
     /// A delivered lifecycle event's public body is the broker body, byte

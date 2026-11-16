@@ -168,9 +168,9 @@ impl EventAccess for ActivityTopicEvent {
                     })),
                 }))
             }
-            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Access::internal_by_design(
-                "session-viewer rows and global invalidations are app cache signals",
-            )),
+            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Access::Internal {
+                reason: "session-viewer rows and global invalidations are app cache signals",
+            }),
         }
     }
 }

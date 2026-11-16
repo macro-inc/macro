@@ -454,9 +454,9 @@ impl EventAccess for AgentTriggerTopicEvent {
                 (requested.bot_id, Audience::Any(audiences))
             }
             Self::New(NewAgentSessionEvent::ConversationMessage(_)) => {
-                return Ok(Access::internal_by_design(
-                    "agent conversation messages reach the agent runtime without webhook or SSE delivery",
-                ));
+                return Ok(Access::Internal {
+                    reason: "agent conversation messages reach the agent runtime without webhook or SSE delivery",
+                });
             }
             Self::Existing(ExistingAgentSessionEvent::Channel(metadata)) => (
                 metadata.bot_id,

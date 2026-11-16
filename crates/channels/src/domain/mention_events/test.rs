@@ -148,7 +148,7 @@ fn message_mentions_stay_internal() {
 
     assert!(matches!(
         MentionTopicEvent::MessageSent(document_mention()).access(),
-        Ok(Access::Internal(_))
+        Ok(Access::Internal { .. })
     ));
 }
 

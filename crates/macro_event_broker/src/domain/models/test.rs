@@ -32,9 +32,9 @@ impl EventAccess for ExampleTopicEvent {
     fn access(
         &self,
     ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
-        Ok(crate::access::Access::internal_by_design(
-            "broker test fixture",
-        ))
+        Ok(crate::access::Access::Internal {
+            reason: "broker test fixture",
+        })
     }
 }
 
@@ -150,9 +150,9 @@ impl EventAccess for DocumentsTopicEvent {
     fn access(
         &self,
     ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
-        Ok(crate::access::Access::internal_by_design(
-            "broker test fixture",
-        ))
+        Ok(crate::access::Access::Internal {
+            reason: "broker test fixture",
+        })
     }
 }
 

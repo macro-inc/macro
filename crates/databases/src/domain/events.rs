@@ -270,7 +270,7 @@ impl EventAccess for DatabaseTopicEvent {
         macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Access, Audience, EntityRef, EntityType, PendingPhase, PublicEvent, Stage,
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -349,10 +349,9 @@ impl EventAccess for DatabaseTopicEvent {
                 )),
             ),
             Self::Purged(_) => {
-                return Ok(Access::pending(
-                    PendingPhase::ProducerChange,
-                    "carries only the database id and its grants are gone when consumed; needs Owner plus an audience snapshot",
-                ));
+                return Ok(Access::Internal {
+                    reason: "the payload lacks an audience: it carries only the database id, and the database's grants are gone when the event is consumed (it needs the owner and a snapshot of the accessors)",
+                });
             }
         };
         let database_id = database_id.to_string();

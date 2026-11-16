@@ -246,9 +246,9 @@ impl EventAccess for CallTopicEvent {
             | Self::RecordArchived(_)
             | Self::RecordSummarized(_)
             | Self::RecordingReady(_) => {
-                return Ok(Access::internal_by_design(
-                    "call lifecycle facts are projected to macro.call_notifications, the public call family",
-                ));
+                return Ok(Access::Internal {
+                    reason: "call lifecycle facts are projected to macro.call_notifications, the public call family",
+                });
             }
             Self::RecordUpdated(metadata) => (
                 "call.record_updated",
@@ -274,9 +274,9 @@ impl EventAccess for CallTopicEvent {
             // still knows its audience. A record outside a channel has none.
             Self::RecordDeleted(metadata) => {
                 let Some(channel_id) = metadata.channel_id else {
-                    return Ok(Access::internal_by_design(
-                        "a deleted call record outside a channel has no grants left to reach anyone",
-                    ));
+                    return Ok(Access::Internal {
+                        reason: "a deleted call record outside a channel has no grants left to reach anyone",
+                    });
                 };
                 (
                     "call.record_deleted",

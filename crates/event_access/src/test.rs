@@ -42,22 +42,6 @@ fn parse_user_id_accepts_macro_ids_and_rejects_others() {
 }
 
 #[test]
-fn internal_reasons_name_their_phase() {
-    assert_eq!(
-        InternalReason::ByDesign("cache patches").to_string(),
-        "internal by design: cache patches"
-    );
-    assert_eq!(
-        InternalReason::PendingFamily {
-            phase: PendingPhase::ProducerChange,
-            note: "needs an audience snapshot",
-        }
-        .to_string(),
-        "pending public family: phase 7: needs an audience snapshot"
-    );
-}
-
-#[test]
 fn audiences_round_trip_through_their_wire_shape() {
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com")
         .unwrap()

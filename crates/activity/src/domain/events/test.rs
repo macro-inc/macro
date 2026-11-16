@@ -193,6 +193,6 @@ fn session_rows_and_invalidations_stay_internal() {
         },
         ActivityTopicEvent::Invalidated,
     ] {
-        assert!(matches!(event.access(), Ok(Access::Internal(_))));
+        assert!(matches!(event.access(), Ok(Access::Internal { .. })));
     }
 }

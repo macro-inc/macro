@@ -75,22 +75,15 @@ pub trait EventAccess {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Access<'a, P: Clone> {
     /// The event never leaves Macro.
-    Internal(InternalReason),
+    Internal {
+        /// Why: what makes the event internal by design (plumbing, a
+        /// projection of other events, a protocol that must not become public
+        /// API), or what is missing before it could be public (such as an
+        /// audience the payload lacks).
+        reason: &'static str,
+    },
     /// The event is delivered to its audience.
     Public(PublicEvent<'a, P>),
-}
-
-impl<P: Clone> Access<'_, P> {
-    /// Declare an event internal by design: it is plumbing, a projection of
-    /// other events, or a protocol that must not become public API.
-    pub fn internal_by_design(note: &'static str) -> Self {
-        Self::Internal(InternalReason::ByDesign(note))
-    }
-
-    /// Declare an event internal until a later phase makes its family public.
-    pub fn pending(phase: PendingPhase, note: &'static str) -> Self {
-        Self::Internal(InternalReason::PendingFamily { phase, note })
-    }
 }
 
 /// A public event: what it is called, what it is about, who may see it, and
@@ -121,65 +114,6 @@ pub enum Stage {
     /// Delivered only to users with the `public-event-stream` feature flag
     /// (streams: the stream's user; webhooks: the webhook's creator).
     Preview,
-}
-
-/// Why an event is internal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InternalReason {
-    /// Internal by design; never meant to be public.
-    ByDesign(&'static str),
-    /// Meant to become public in a later phase of the event-stream rollout.
-    PendingFamily {
-        /// The phase expected to make it public.
-        phase: PendingPhase,
-        /// What that phase needs to do, including anything the payload
-        /// still lacks.
-        note: &'static str,
-    },
-}
-
-impl fmt::Display for InternalReason {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ByDesign(note) => write!(f, "internal by design: {note}"),
-            Self::PendingFamily { phase, note } => {
-                write!(f, "pending public family: {phase}: {note}")
-            }
-        }
-    }
-}
-
-/// The rollout phase expected to make an internal event public.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PendingPhase {
-    /// Phase 4: entity-scoped families.
-    EntityFamilies,
-    /// Phase 5: personal families (email, calendar, notifications,
-    /// activity, mentions).
-    PersonalFamilies,
-    /// Phase 6: team families (teams, bots, property definitions, GitHub
-    /// deliveries).
-    TeamFamilies,
-    /// Phase 7: the producer must first capture an audience the event lacks.
-    ProducerChange,
-}
-
-impl PendingPhase {
-    /// The phase number in the rollout plan.
-    pub fn number(self) -> u8 {
-        match self {
-            Self::EntityFamilies => 4,
-            Self::PersonalFamilies => 5,
-            Self::TeamFamilies => 6,
-            Self::ProducerChange => 7,
-        }
-    }
-}
-
-impl fmt::Display for PendingPhase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "phase {}", self.number())
-    }
 }
 
 /// The entity a public event is about.

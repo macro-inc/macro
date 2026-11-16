@@ -648,9 +648,9 @@ impl EventAccess for EmailTopicEvent {
             Self::MessageDraftSynced(_)
             | Self::ThreadBackfilled(_)
             | Self::ThreadsReindexRequested(_) => {
-                return Ok(Access::internal_by_design(
-                    "email sync and indexing commands, not facts",
-                ));
+                return Ok(Access::Internal {
+                    reason: "email sync and indexing commands, not facts",
+                });
             }
         };
         // Mail is personal data: only the mailbox owner, never their teams.

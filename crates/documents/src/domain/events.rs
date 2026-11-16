@@ -363,7 +363,7 @@ impl EventAccess for DocumentTopicEvent {
         macro_event_broker::access::AccessError,
     > {
         use macro_event_broker::access::{
-            Access, AccessError, Audience, EntityRef, EntityType, PendingPhase, PublicEvent, Stage,
+            Access, AccessError, Audience, EntityRef, EntityType, PublicEvent, Stage,
         };
         use std::borrow::Cow;
 
@@ -462,10 +462,9 @@ impl EventAccess for DocumentTopicEvent {
                 )
             }
             Self::Purged(_) => {
-                return Ok(Access::pending(
-                    PendingPhase::ProducerChange,
-                    "carries only the document id and its grants are gone when consumed; needs Owner plus an audience snapshot",
-                ));
+                return Ok(Access::Internal {
+                    reason: "the payload lacks an audience: it carries only the document id, and the document's grants are gone when the event is consumed (it needs the owner and a snapshot of the accessors)",
+                });
             }
         };
         if uuid::Uuid::parse_str(document_id).is_err() {
