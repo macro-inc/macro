@@ -1,0 +1,19 @@
+crates/event_access/ACCESS_MODEL.md
+  s_c40fd2f0323f22::t_b3f2c6f2473df3 126-127,131-146,182-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7c7ca280bfad2cafc6a1b7abfee6eb56b105ccd6",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
