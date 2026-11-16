@@ -7,7 +7,8 @@ export type ImportFormat =
   | 'one_password_pux'
   | 'one_password_csv'
   | 'bitwarden_json'
-  | 'bitwarden_csv';
+  | 'bitwarden_csv'
+  | 'bitwarden_zip';
 
 export type ImportItemKind =
   | 'login'
@@ -50,7 +51,10 @@ export type ImportDroppedPart =
   | 'passkey'
   | 'password_history'
   | 'totp_non_default'
-  | 'extra_field';
+  | 'extra_field'
+  | 'empty_field'
+  | 'reprompt'
+  | 'uri_match_type';
 
 /** A source folder, keyed `folder:<index>`, parents before children. */
 export type ParsedImportFolder = {
