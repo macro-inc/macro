@@ -11,14 +11,15 @@
  * renders by priority. Renders not yet started can be cancelled.
  */
 
-import { isWasmTrap } from '@core/fig-engine/wasm-module';
+import psdEngineWasm from 'wasm:psd-engine';
+import type { PsdFile } from '@core/wasm/generated/psd-engine';
+import { isWasmTrap } from '@core/wasm/is-wasm-trap';
 import { match } from 'ts-pattern';
 import type { PsdRequest, PsdResponse } from './protocol';
-import { loadPsdEngineWasm, type WasmPsdFile } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-let file: WasmPsdFile | undefined;
+let file: PsdFile | undefined;
 let trapped = false;
 
 type Render = Extract<PsdRequest, { kind: 'render' }>;
@@ -56,7 +57,7 @@ function fail(id: number, error: unknown) {
   });
 }
 
-function openFile(): WasmPsdFile {
+function openFile(): PsdFile {
   if (trapped) throw new Error('the engine stopped after an internal error');
   if (!file) throw new Error('no document is open');
   return file;
@@ -145,7 +146,7 @@ function bytes(request: Extract<PsdRequest, { kind: 'bytes' }>): Uint8Array {
 async function serve(request: PsdRequest) {
   switch (request.kind) {
     case 'open': {
-      const wasm = await loadPsdEngineWasm();
+      const wasm = await psdEngineWasm.load();
       file?.free();
       file = undefined;
       trapped = false;
@@ -160,7 +161,7 @@ async function serve(request: PsdRequest) {
       return;
     }
     case 'blank': {
-      const wasm = await loadPsdEngineWasm();
+      const wasm = await psdEngineWasm.load();
       postBytes(
         request.id,
         wasm.PsdFile.blank(request.width, request.height, request.white)
@@ -245,7 +246,7 @@ async function serve(request: PsdRequest) {
     }
     case 'registerFont': {
       // Fonts belong to the worker, so they can arrive before the document.
-      const wasm = await loadPsdEngineWasm();
+      const wasm = await psdEngineWasm.load();
       const json = wasm.PsdFile.registerFont(
         new Uint8Array(request.bytes),
         request.family
