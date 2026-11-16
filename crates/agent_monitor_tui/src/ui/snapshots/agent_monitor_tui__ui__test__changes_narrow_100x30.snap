@@ -1,0 +1,34 @@
+---
+source: crates/agent_monitor_tui/src/ui/test.rs
+expression: "render(&mut app, 100, 30)"
+---
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]
+ CHANGES [8]  WALL [w]
+ REPO: demo-org/app [[ ]]  LANDED: hide [m]  SORT: attention [s]  SEARCH [/]
+┌ TIMELINE ───────────────────────────────────────────────────── ZOOM [- +]  PAN [< >]  NOW [Home] ┐
+│   origin/main 4be30b8 · fetched 5m ago · local main −37                       1 col = 15m  ◂ 16h │
+│┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼-10h┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼-4h┄┄┄┄┄┄┄┄┄┄┄NOW LANE            PR      CI AGE  │
+│«main −37 ━●━━●━●━━┳━●━●━━●━●━━┳━┳━━●━┳━━●━┳━━●━●━━┳━┳━━●━┳━●┳━●▶ origin/main     1 agent · 1 ▶   │
+▌                   │           │ │    │    │       │ │    │  ●◉●✕   ui-pages      #4215   ✕   20s │
+│●────────●───────●─│─────●─────│─│●───│───●│──────●│─│────│●┄┄┄┄┄   feat/invoice… #4190   ✓    1h │
+│                   │           │ │    │    │       │ │    ╰─●●─●◎   feat/trace-g… —       ·   10s │
+│   ·   ·   ·   ·   │   ·   ·   │ │    │    │       │ ╰●●┄┄┄┄┄┄┄┄┄   chore/deps-b… —       ·    2h │
+│                   │           │ │    │    │       ╰─●●─●─●─●─●●▶ ▶ rpc-server    #4211   ✓    0s │
+│   ·   ·   ·   ·   │   ·   ·   │ │    │    ╰───●──●──●──●──●──●┄┄   feat/search-… —       ·   26m │
+│                   │           │ │    ╰─────●───●───●───●───●┄┄┄┄   store-reducer #4207   ✓   51m │
+│   ·   ·   ·   ·   │   ·   ·   │ ╰────●──●─●┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   sync/backoff… —       ·    5h │
+│                   │           │           ╰───●─●─●┄┄┄┄┄┄┄┄┄┄┄┄┄   sync/backoff… —       ·    3h │
+│   ·   ·   ·   ·   │   ·   ·   │                   ╰───●──○┄┄┄┄┄┄   sync/backoff… —       ·    1h │
+│                   │           ╰▶┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄›┄┄┄› ▶ mesh-plan     —       ·     — │
+│                   ╰─○─○┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   eric/scratch… —       ·   10h │
+│«204 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   flaky-tests   —       ·    1d │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                  │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│ · 3 quieter branches not mapped                                                                  │
+│┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
+│ ▌feat/ui-pages  #4215 feat(monitor): pages and drill-in   ✕ CI  draft  draft  stacked on feat/sto│
+│  … ⟦○ aca7c9f 20s test(email): snapshot the digest renderer ↑⟧                                   │
+│                                                     COMMIT [←→]  OPEN AGENT [a]  INSPECT [Enter] │
+└──────────────────────────────────────────────────────────────────── SELECT [↑↓]  ATTENTION [n N] ┘
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

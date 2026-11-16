@@ -1,0 +1,55 @@
+[package]
+description = "Collector for the agent monitor: the normalized agent model, the single-writer store, source adapters, and the gRPC server and client over a Unix socket."
+edition = "2024"
+name = "agent_monitor"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+hyper-util = { workspace = true }
+notify = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+prost = { workspace = true }
+lazy-regex = { workspace = true }
+rand = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tokio-stream = { workspace = true, features = ["net"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+tower = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[build-dependencies]
+protox = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Used by the code `build.rs` generates into `OUT_DIR`.
+ignored = ["prost", "tonic-prost"]
+
+[dev-dependencies]
+clap = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tracing-subscriber = { workspace = true }

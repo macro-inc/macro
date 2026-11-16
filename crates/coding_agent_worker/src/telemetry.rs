@@ -1,4 +1,5 @@
-//! Opt-in service/enrollment tracing; stdout remains the daemon protocol.
+//! Opt-in service, enrollment and agent-monitor tracing; stdout remains the
+//! daemon protocol.
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -65,7 +66,9 @@ pub(crate) fn install() -> Telemetry {
         tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("macrod"))
             .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-                metadata.name().starts_with("macrod.enroll") || metadata.name() == "run_enroll"
+                metadata.name().starts_with("macrod.enroll")
+                    || metadata.name() == "run_enroll"
+                    || metadata.name().starts_with("macrod.monitor")
             }))
     });
     // Without a filter the registry logs every dependency at TRACE.

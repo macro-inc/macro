@@ -143,6 +143,9 @@ exceptions = [
   # Signal's libsignal, used by whatsmeow_signal; AGPL like this repository.
   { allow = ["AGPL-3.0-only"], crate = "libsignal-core" },
   { allow = ["AGPL-3.0-only"], crate = "libsignal-debug" },
+  # File-system notifications for the agent monitor's sources; public domain
+  # dedication.
+  { allow = ["CC0-1.0"], crate = "notify" },
   # Each entry is the crate and version constraint, and its specific allow
   # list
   #{ allow = ["Zlib"], crate = "adler32" },
@@ -221,6 +224,7 @@ deny = [
     "agent",                     # GenAI span tests
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
+    "agent_monitor",             # Trace propagation span tests only (dev-dependency)
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests

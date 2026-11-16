@@ -1,0 +1,9 @@
+{"timestamp":"2030-01-01T10:00:00.000Z","type":"session_meta","payload":{"id":"0aaaaaaa-1111-7222-8333-444444444444","cwd":"/work/gamma","git":{"branch":"feat/gamma"}}}
+{"timestamp":"2030-01-01T10:00:00.100Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}
+{"timestamp":"2030-01-01T10:00:00.200Z","type":"turn_context","payload":{"turn_id":"t1","cwd":"/work/gamma","model":"gpt-6-sol","effort":"high"}}
+{"timestamp":"2030-01-01T10:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Build the thing"}]}}
+{"timestamp":"2030-01-01T10:00:02.000Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call_1","name":"exec","input":"ls"}}
+{"timestamp":"2030-01-01T10:00:02.100Z","type":"token_usage_record","payload":{"usage":{"input_tokens":1000,"cached_input_tokens":600,"cache_write_input_tokens":100,"output_tokens":50,"reasoning_output_tokens":10,"total_tokens":1050}}}
+{"timestamp":"2030-01-01T10:00:02.200Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":600,"output_tokens":50}}}}
+{"timestamp":"2030-01-01T10:00:03.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":[{"type":"input_text","text":"file"}]}}
+{"timestamp":"2030-01-01T10:00:04.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t1"}}

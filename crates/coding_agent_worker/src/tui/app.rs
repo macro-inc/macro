@@ -124,6 +124,9 @@ pub(crate) struct App {
     pub(crate) spinner: usize,
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
+    /// The agent monitor's collector, hosted while `[monitor] enabled`.
+    #[cfg(unix)]
+    monitor: crate::monitor::Host,
     /// The agent the previous macrod handed over, relayed by the first start.
     inherited: Option<InheritedAgent>,
     /// A release staged for the next launch (Windows), shown until restart.
@@ -167,6 +170,8 @@ impl App {
             spinner: 0,
             logs,
             daemon: None,
+            #[cfg(unix)]
+            monitor: crate::monitor::Host::new(),
             inherited,
             update_ready: None,
             update_log: crate::update::log::user_log_path(),
@@ -203,6 +208,8 @@ impl App {
         .await
         {
             Ok(daemon) => {
+                #[cfg(unix)]
+                let daemon = daemon.reporting_to(self.monitor.link());
                 self.daemon = Some(daemon);
                 true
             }
@@ -218,6 +225,19 @@ impl App {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;
         }
+    }
+
+    /// Host the agent monitor's collector or stop hosting it, as
+    /// `[monitor] enabled` says.
+    pub(crate) async fn apply_monitor(&mut self) {
+        #[cfg(unix)]
+        self.monitor.apply(&self.config.monitor).await;
+    }
+
+    /// Stop hosting the agent monitor, on the way out.
+    pub(crate) async fn stop_monitor(&mut self) {
+        #[cfg(unix)]
+        self.monitor.stop().await;
     }
 
     /// The approval URL of the pairing in flight, when one is.
@@ -584,6 +604,7 @@ impl App {
             Ok(()) => match Config::load(&self.config_path) {
                 Ok(config) => {
                     self.config = config;
+                    self.apply_monitor().await;
                     // The core reads config at start, so a save while serving
                     // means a restart to apply it.
                     self.selected_setting =
@@ -650,6 +671,10 @@ impl App {
                     }
                     Setting::HerdrFocus => {
                         self.form.toggle_herdr_focus(&self.config);
+                        self.save_config().await;
+                    }
+                    Setting::Monitor => {
+                        self.form.toggle_monitor(&self.config);
                         self.save_config().await;
                     }
                     setting @ (Setting::Workspace

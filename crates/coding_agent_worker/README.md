@@ -212,3 +212,107 @@ durable answer is retained. Successful pending announcements are not posted agai
 Deploy the backend migration/service and update macrod to enable this path.
 Previously released daemons generate unrelated action IDs; this change does
 not repair old pending replies produced by those versions.
+
+## Monitor
+
+`macrod monitor` (Linux and macOS) is a live board of every agent on the
+machine: hc terminals, Claude Code and Codex sessions, macrod's own sessions,
+managers and work runs. The viewer (`crates/agent_monitor_tui`) reads one
+collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`.
+
+- **One collector per machine.** The first process to claim the socket hosts
+  it: the panel or `macrod service` while `[monitor] enabled` (the default),
+  or `macrod monitor serve`. A socket that answers is left alone; a panel
+  or service then tries the claim again every minute and takes over when
+  that collector exits; a socket left by a dead collector is replaced only
+  after a connect fails, under `<socket>.lock`. The socket lives in its own
+  directory, `~/.macrod/monitor/`, which the monitor creates 0700 (and
+  refuses to use when it is open to other users); the socket is 0600.
+  macrod's home itself may be 0755.
+- **`macrod monitor`** opens the viewer. When nothing answers it starts
+  `macrod monitor serve --exit-when-idle` detached (its own process group,
+  logging to `~/.macrod/monitor/collector.log`), which exits after ten minutes
+  without a viewer. The viewer reconnects by itself when its collector goes
+  away, and a collector started by a later `macrod monitor` takes over.
+  Its colours come from `[monitor] theme` (`classic`, the default, `ember`,
+  `phosphor` or `dusk`, in any case; `--theme` overrides it). A name that is
+  no theme draws in `classic` with a warning in the bottom status bar; the
+  collector ignores the key. In the viewer, Ctrl-T (or a backtick, for a
+  terminal in a browser, which keeps Ctrl-T) cycles the themes. Navigate
+  with the left-aligned page tabs (`0`–`8` or `w`) on every view. The monitor
+  has no filters. Agents, Tree and Wall have their own kind (`t`), status (`s`)
+  and text (`/`) filters; Agents and Wall can also include ended agents (`a`).
+  Tape, Failures and Changes have their own text search. Reset (`x`) clears
+  only the current page. Spend, Sources, BODY and agent/legacy lane detail pages have no filters.
+  Changes opens directly to the timeline, with repository, landed visibility,
+  sort and search in one wrapping toolbar. The search field appears while editing
+  or filtering. Zoom/pan controls sit on the graph's top border; selection and
+  attention controls sit on its bottom border. Enter opens details full-screen,
+  Escape returns, and `a` opens the selected agent. PR URLs and commits appear
+  inside the detail panel.
+  Enter keeps a filter edit; Escape cancels it. The AGENTS pane and page separate
+  current status from 24-hour activity. SPEND owns cost figures (including
+  lifetime cost by agent on its full page); FAILURES owns error totals.
+  Pane titles contain only names, with regular-weight bracketed hotkeys in the border color on the right;
+  the page tabs, page filters and bottom key row are left-aligned. The bottom row
+  includes `HELP [?]` and connection problems, without a healthy LIVE indicator.
+- **`macrod monitor serve`** runs the collector alone: no pairing, no config
+  lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
+  or the `--config` / `--profile` it is given (resolved as for
+  `macrod service`; the viewer passes its own to a collector it starts), and
+  refuses to start while another collector answers.
+- **Work runs** come from `[monitor] run_record_dirs` (`<id>.json` records
+  with an optional `<id>.cost`; a leading `~` is the home directory). A run
+  joins its terminal by the record's terminal name, or by an hc label named
+  in `run_id_labels` whose value is the run's id.
+- **Pull requests** come from what agents leave behind, with no polling:
+  a Claude Code session's record of a PR it created (or a call whose
+  command runs `gh pr create`, not one that only mentions it, and the PR URL
+  in that call's own successful result; Codex rollouts the same way) makes that
+  agent the PR's author; a herdr manager's `prs` file ties its PRs to the
+  manager; and an agent whose working directory is a clone of a GitHub
+  repository, on a PR's head branch, works on it. Their status (state, CI
+  as the `CI gate` status or else the check rollup, review, conflicts) is
+  the one polled source, `github`: one batched GraphQL query per 100
+  lookups through the `gh` CLI (`gh api graphql`, as whatever account `gh` is signed in to)
+  every `[monitor] pr_poll_secs` (60 by default, with jitter) while a viewer
+  watches and at most every 5 minutes otherwise; 0 turns it off. Without
+  `gh` the source shows absent. Merged and closed PRs older than
+  `history_hours` are dropped.
+- **Repositories** (the viewer's 8 CHANGES page) come from the `git`
+  source: each agent working directory resolves once to its repository's
+  common directory, so every worktree of a clone is one repository (8 at
+  most). It maps the trunk (`origin/HEAD`'s target, else `origin/main`),
+  the branches agents sit on, PR head branches and branches committed to in
+  the last day (40 lanes, 30 commits each), woken by inotify watches on the
+  refs, never by a timer; regathers are debounced and spaced at least ten
+  times the last gather's duration apart. It is read-only: it never
+  fetches, takes a git lock or runs `git status`. `[monitor] changes =
+  false` turns it off; page 8 then has no graphs and lists every pull
+  request on an `other PRs` tab, as the old PRS page did. That tab also
+  holds pull requests whose repository is not mapped (its agents aged out,
+  past the 8-repository cap, or opened from another checkout).
+- **`macrod monitor dump`** prints `{"connected": ...}`, then one
+  `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
+  stops after N updates. `--transcript <agent id>` prints that agent's
+  transcript instead (`{"item": ...}`: its last items, then each new one),
+  the same feed as the viewer's drill-in.
+- **`macrod monitor --demo`** shows the scripted demo fleet from the viewer's
+  own process, with no collector. Recordings shared outside the machine use it.
+- `--socket <path>` points any of them at another socket (tests).
+- A hosting panel or service adds the `daemon` source: its harness id,
+  whether the runtime is connected, and its open prompts, as that source's
+  health (detail = harness id, items = open prompts), visible in the viewer's
+  SOURCES pane.
+- The Config tab toggles hosting (`Agent monitor`), which writes a
+  `[monitor]` table; new configs leave it out (hosting is on by default),
+  because a macrod older than the monitor rejects a file that has one.
+  `history_hours`, `fps`, `run_record_dirs`, `pr_poll_secs`, `changes` and `theme` take effect
+  on the next start.
+- **History is bounded**: transcripts are indexed back `history_hours`
+  (24 by default), and an agent that ended or last wrote longer ago is
+  dropped unless a live terminal or running process still holds it, so a
+  collector left running for weeks stays the size of one window.
+- `macrod monitor serve` and `macrod service` export `macrod.monitor*` spans
+  when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Rows, spans and logs carry ids
+  and counts, never transcript text.

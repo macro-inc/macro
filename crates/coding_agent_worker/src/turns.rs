@@ -7,14 +7,26 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use agent_client_protocol::LineDirection;
+use tokio::sync::watch;
 
 #[cfg(test)]
 mod test;
 
 /// The ids of prompt requests sent to the ACP agent and not yet answered.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ActiveTurns {
     prompt_ids: Arc<Mutex<HashSet<String>>>,
+    /// How many are open, for the agent monitor.
+    open: watch::Sender<usize>,
+}
+
+impl Default for ActiveTurns {
+    fn default() -> Self {
+        Self {
+            prompt_ids: Arc::default(),
+            open: watch::Sender::new(0),
+        }
+    }
 }
 
 /// The JSON-RPC fields that say whether a line starts or ends a turn.
@@ -44,6 +56,7 @@ impl ActiveTurns {
                     && method == "session/prompt"
                 {
                     prompt_ids.insert(id.to_string());
+                    self.open.send_replace(prompt_ids.len());
                 }
             }
             LineDirection::Stdout => {
@@ -54,8 +67,9 @@ impl ActiveTurns {
                     id: Some(id),
                     method: None,
                 }) = serde_json::from_str(line)
+                    && prompt_ids.remove(&id.to_string())
                 {
-                    prompt_ids.remove(&id.to_string());
+                    self.open.send_replace(prompt_ids.len());
                 }
             }
             LineDirection::Stderr => {}
@@ -68,6 +82,7 @@ impl ActiveTurns {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
+        self.open.send_replace(0);
     }
 
     /// The prompt ids still running, to hand to the next process image.
@@ -82,10 +97,21 @@ impl ActiveTurns {
 
     /// Continue tracking turns an earlier process image saw start.
     pub fn restore(&self, prompt_ids: impl IntoIterator<Item = String>) {
-        self.prompt_ids
+        let mut open = self
+            .prompt_ids
             .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend(prompt_ids);
+            .unwrap_or_else(PoisonError::into_inner);
+        open.extend(prompt_ids);
+        self.open.send_replace(open.len());
+    }
+
+    /// How many turns are running, as it changes.
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "the agent monitor is Unix only")
+    )]
+    pub fn open_count(&self) -> watch::Receiver<usize> {
+        self.open.subscribe()
     }
 
     /// Whether no turn is running.

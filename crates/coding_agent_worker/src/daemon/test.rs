@@ -29,6 +29,10 @@ async fn stop_does_not_wait_for_in_flight_work() {
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
+        #[cfg(unix)]
+        harness_id: harness_id::HarnessId::TEST_A,
+        #[cfg(unix)]
+        _monitor_report: None,
     };
 
     tokio::time::timeout(Duration::from_secs(1), daemon.stop())

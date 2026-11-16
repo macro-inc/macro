@@ -199,6 +199,7 @@ async fn run_loop(
     let mut tick = tokio::time::interval(TICK);
     let mut poller = update::start_poller(app.config.update.auto);
     let mut staged: Option<StagedUpdate> = None;
+    app.apply_monitor().await;
     // Paired already? Start serving before the first frame.
     if app.paired() {
         app.restart_daemon().await;
@@ -246,6 +247,7 @@ async fn run_loop(
                         Some(daemon) => daemon.hand_off().await,
                         None => None,
                     };
+                    app.stop_monitor().await;
                     return Ok(Some(Restart { installed, agent }));
                 }
             }
@@ -253,6 +255,7 @@ async fn run_loop(
 
         if app.quit {
             app.stop_daemon().await;
+            app.stop_monitor().await;
             return Ok(None);
         }
     }

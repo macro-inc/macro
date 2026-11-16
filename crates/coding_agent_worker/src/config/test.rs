@@ -184,20 +184,20 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
 }
 
 #[test]
-fn macrods_directory_lives_in_home_or_the_windows_user_profile() {
+fn the_home_directory_is_home_or_the_windows_user_profile() {
     assert_eq!(
-        macrod_directory_in_home(Some("/home/eric"), Some("C:\\Users\\eric")),
-        Some(PathBuf::from("/home/eric").join(".macrod"))
+        home_directory_from(Some("/home/eric"), Some("C:\\Users\\eric")),
+        Some(PathBuf::from("/home/eric"))
     );
     assert_eq!(
-        macrod_directory_in_home(None, Some("C:\\Users\\eric")),
-        Some(PathBuf::from("C:\\Users\\eric").join(".macrod"))
+        home_directory_from(None, Some("C:\\Users\\eric")),
+        Some(PathBuf::from("C:\\Users\\eric"))
     );
     assert_eq!(
-        macrod_directory_in_home(Some(""), Some("C:\\Users\\eric")),
-        Some(PathBuf::from("C:\\Users\\eric").join(".macrod"))
+        home_directory_from(Some(""), Some("C:\\Users\\eric")),
+        Some(PathBuf::from("C:\\Users\\eric"))
     );
-    assert_eq!(macrod_directory_in_home(None, None), None);
+    assert_eq!(home_directory_from(None, None), None);
 }
 
 #[test]

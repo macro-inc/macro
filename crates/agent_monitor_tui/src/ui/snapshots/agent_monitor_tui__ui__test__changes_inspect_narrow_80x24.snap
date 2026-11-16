@@ -1,0 +1,28 @@
+---
+source: crates/agent_monitor_tui/src/ui/test.rs
+expression: "render(&mut app, 80, 24)"
+---
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]
+ SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
+ REPO: demo-org/app [[ ]]  LANDED: hide [m]  SORT: attention [s]  SEARCH [/]
+┌ DETAILS ─────────────────────────────────────────────────────────────────────┐
+│feat/ui-pages                                                                 │
+│#4215 feat(monitor): pages and drill-in                                       │
+│https://github.com/demo-org/app/pull/4215                                     │
+│                                                                              │
+│CI       failed                                                               │
+│Review   none                                                                 │
+│PR       draft                                                                │
+│Sync     12 ahead, 4 behind                                                   │
+│Local    2 unpushed commits                                                   │
+│Agents   ui-pages                                                             │
+│                                      OPEN AGENT [a]  COMMIT [←→]  BACK [Esc] │
+│COMMIT   SUBJECT                                                         AGE  │
+│aca7c9f  test(email): snapshot the digest renderer                       20s  │
+│b934cb6  feat(channels): pin a message to the header                     50s  │
+│c5c1ccd  perf(feed): batch avatar lookups                                1m   │
+│b9635c1  fix(viewer): keep the cursor on resize                          7m   │
+│c5f05d7  feat(viewer): command line mnemonics                            17m  │
+│d27d5ee  feat(viewer): drill-in transcript                               26m  │
+└──────────────────────────────────────────────────────────────────────────────┘
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]
