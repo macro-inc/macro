@@ -5,7 +5,7 @@ use macro_authorization::{
 use s3_client::S3;
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::{config::Config, disk::DiskGuard, scratch::Scratch};
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<NoopMacroAuthJwtValidator>;
 
@@ -16,4 +16,8 @@ pub struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub config: Arc<Config>,
+    /// Where conversions keep their files.
+    pub scratch: Arc<Scratch>,
+    /// Whether the disk has room for more conversions.
+    pub disk: DiskGuard,
 }

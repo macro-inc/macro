@@ -361,7 +361,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["client-pr
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
-nix = { version = "0.31", features = ["feature", "mman"] }
+nix = { version = "0.31", features = ["feature", "mman", "resource", "signal"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
@@ -384,7 +384,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["client-pr
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
-nix = { version = "0.31", features = ["feature", "mman"] }
+nix = { version = "0.31", features = ["feature", "mman", "resource", "signal"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
@@ -407,7 +407,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
-nix = { version = "0.31", features = ["feature", "fs", "mman"] }
+nix = { version = "0.31", features = ["feature", "fs", "mman", "resource", "signal"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
@@ -429,7 +429,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
-nix = { version = "0.31", features = ["feature", "fs", "mman"] }
+nix = { version = "0.31", features = ["feature", "fs", "mman", "resource", "signal"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }

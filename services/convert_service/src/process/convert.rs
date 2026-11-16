@@ -1,19 +1,15 @@
-use nix::{
-    libc::{_exit, exit},
-    unistd::{ForkResult, fork},
-};
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, path::Path, thread, time::Duration};
+use std::{borrow::Cow, ffi::OsStr, path::Path, sync::Arc, time::Duration};
 
 use anyhow::Context;
-use model::convert::ConvertQueueMessage;
+use model::{convert::ConvertQueueMessage, document::FileType};
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},
     model::{BomPart, DocxUploadJobData, DocxUploadJobResult, DocxUploadJobSuccessDataInner},
-    utils::{
-        cleanup_folder, conversion_timeout, get_lok_filter_from_file_types, resolve_file_type,
-    },
+    process::child::{ChildExit, run_confined, set_child_env},
+    scratch::Scratch,
+    utils::{conversion_timeout, get_lok_filter_from_file_types, resolve_file_type},
 };
 
 pub(super) fn is_docx_key(key: &str) -> bool {
@@ -22,16 +18,12 @@ pub(super) fn is_docx_key(key: &str) -> bool {
 
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
-///
-/// The span is errored by the returned error. Cleaning up a folder that was
-/// never created does not error it, so a job that failed before creating its
-/// folder still shows that failure; any other cleanup failure logs an error
-/// and errors the span.
-#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, message), fields(message_id = message.message_id))]
+#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, scratch, message), fields(message_id = message.message_id))]
 pub async fn process_message(
     worker: &sqs_worker::SQSWorker,
     s3_client: &s3_client::S3,
     lambda_client: &lambda_client::Lambda,
+    scratch: &Arc<Scratch>,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
     tracing::info!("processing message");
@@ -70,11 +62,7 @@ pub async fn process_message(
 
     tracing::info!(job_id=%job_id, message_body=?req, "message body");
 
-    let result = convert(&job_id, &req, s3_client).await;
-
-    if let Err(e) = cleanup_folder(&job_id) {
-        tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
-    }
+    let result = convert(&job_id, &req, s3_client, scratch).await;
 
     if let Some(update) = job_update(&job_id, &req, result.is_ok()) {
         tracing::trace!(status=%update.status, "sending job update to lambda");
@@ -143,6 +131,7 @@ pub async fn convert(
     job_id: &str,
     req: &ConvertQueueMessage,
     s3_client: &s3_client::S3,
+    scratch: &Arc<Scratch>,
 ) -> anyhow::Result<()> {
     let from_file_type = resolve_file_type(req.from_file_type, &req.from_key)?;
     let to_file_type = resolve_file_type(req.to_file_type, &req.to_key)?;
@@ -150,172 +139,161 @@ pub async fn convert(
     let filter = get_lok_filter_from_file_types(&from_file_type, &to_file_type)
         .context("unable to get lok filter")?;
 
-    let directory = format!("./{}", job_id);
-    let in_file_path = format!("{directory}/IN.{}", from_file_type.as_str());
-    let out_file_path = format!("{directory}/OUT.{}", to_file_type.as_str());
-
-    // Make directory of job_id
-    let file_content = s3_client
+    let input = s3_client
         .get(&req.from_bucket, &req.from_key)
         .await
         .context("unable to get object from S3")?;
 
-    std::fs::create_dir(&directory)
-        .map_err(|e| anyhow::anyhow!("unable to create directory {}: {}", directory, e))?;
-
-    let mut file = File::create(&in_file_path).context("unable to create input file")?;
-
-    file.write_all(&file_content)
-        .context("unable to write to input file")?;
-
-    let max_wait = conversion_timeout(&from_file_type, &to_file_type);
-    run_lok_conversion(
-        job_id,
-        &LOK_PATH,
-        &in_file_path,
-        &out_file_path,
-        to_file_type.as_str(),
-        &filter,
-        max_wait,
-    )?;
-
-    let file_content = std::fs::read(out_file_path).context("unable to read result file")?;
+    let conversion = Conversion::new(job_id, from_file_type, to_file_type, filter);
+    let output = convert_file(scratch.clone(), conversion, input).await?;
 
     s3_client
-        .put(&req.to_bucket, &req.to_key, &file_content)
+        .put(&req.to_bucket, &req.to_key, &output)
         .await
         .context("unable to upload file")?;
 
     Ok(())
 }
 
-/// Converts `in_file_path` to `out_file_path` with LibreOfficeKit in a forked
-/// child process, killing it after `max_wait`.
+/// One conversion to run.
+pub(crate) struct Conversion {
+    /// Names the job in logs.
+    pub job_id: String,
+    pub from: FileType,
+    pub to: FileType,
+    /// LibreOfficeKit filter options, see `get_lok_filter_from_file_types`.
+    pub filter: String,
+    /// How long the conversion may run before it is killed.
+    pub max_wait: Duration,
+}
+
+impl Conversion {
+    pub(crate) fn new(job_id: &str, from: FileType, to: FileType, filter: String) -> Self {
+        Self {
+            job_id: job_id.to_string(),
+            max_wait: conversion_timeout(&from, &to),
+            from,
+            to,
+            filter,
+        }
+    }
+}
+
+/// Converts `input` and returns the converted file.
+///
+/// The conversion blocks until LibreOffice finishes, so it runs on a blocking
+/// thread: on the async workers it would starve the health check and every
+/// other request for as long as it ran.
+pub(crate) async fn convert_file(
+    scratch: Arc<Scratch>,
+    conversion: Conversion,
+    input: Vec<u8>,
+) -> anyhow::Result<Vec<u8>> {
+    let span = tracing::Span::current();
+    let task = tokio::task::spawn_blocking(move || {
+        let _entered = span.enter();
+        convert_in_job_folder(&scratch, &LOK_PATH, &conversion, &input)
+    });
+
+    match task.await {
+        Ok(result) => result,
+        Err(e) => match e.try_into_panic() {
+            Ok(panic) => std::panic::resume_unwind(panic),
+            Err(e) => Err(e).context("conversion was cancelled"),
+        },
+    }
+}
+
+/// Converts `input` inside a job folder of its own, which is removed when
+/// this returns or panics.
+pub(crate) fn convert_in_job_folder(
+    scratch: &Scratch,
+    office_path: &str,
+    conversion: &Conversion,
+    input: &[u8],
+) -> anyhow::Result<Vec<u8>> {
+    let folder = scratch.create_job()?;
+    let in_file_path = folder
+        .path()
+        .join(format!("IN.{}", conversion.from.as_str()));
+    let out_file_path = folder
+        .path()
+        .join(format!("OUT.{}", conversion.to.as_str()));
+
+    std::fs::write(&in_file_path, input).context("unable to write input file")?;
+
+    run_lok_conversion(
+        conversion,
+        office_path,
+        folder.path(),
+        scratch.cache(),
+        &in_file_path,
+        &out_file_path,
+    )?;
+
+    std::fs::read(&out_file_path).context("unable to read result file")
+}
+
+/// Converts `in_file_path` to `out_file_path` with LibreOfficeKit in a child
+/// process confined to `folder`, killing it after the conversion's time limit.
 ///
 /// The child process keeps a LibreOffice crash or hang from taking down the
-/// worker. LibreOffice writes its scratch files into the input file's folder,
-/// so removing that folder cleans up after the child however it ended.
+/// worker. Removing `folder` cleans up after the child however it ended.
 pub(crate) fn run_lok_conversion(
-    job_id: &str,
+    conversion: &Conversion,
     office_path: &str,
-    in_file_path: &str,
-    out_file_path: &str,
-    to_format: &str,
-    filter: &str,
-    max_wait: Duration,
+    folder: &Path,
+    cache: &Path,
+    in_file_path: &Path,
+    out_file_path: &Path,
 ) -> anyhow::Result<()> {
-    let job_folder = Path::new(in_file_path)
-        .parent()
-        .map(std::path::absolute)
-        .context("input file should be inside a job folder")?
-        .context("unable to resolve job folder")?;
+    let job_id = conversion.job_id.as_str();
+    let in_file_path = in_file_path
+        .to_str()
+        .context("input file path is not UTF-8")?;
+    let out_file_path = out_file_path
+        .to_str()
+        .context("output file path is not UTF-8")?;
 
-    let mut child_pids = vec![];
-    match unsafe { fork() } {
-        Ok(ForkResult::Parent { child }) => {
-            tracing::info!(job_id=%job_id, "parent process: spawned child with PID: {}", child);
-            child_pids.push(child);
+    let exit = run_confined(folder, cache, conversion.max_wait, || {
+        tracing::info!(job_id=%job_id, "child process: initializing lok");
+        let result: anyhow::Result<()> = (|| {
+            set_child_env(c"SAL_LOG", OsStr::new(""))?;
+            let office = Office::new(office_path)
+                .map_err(|e| anyhow::anyhow!(e))
+                .context("unable to initialize lok")?;
+            tracing::trace!("office initialized");
+
+            let document = office
+                .load_document(in_file_path)
+                .map_err(|e| anyhow::anyhow!(e))
+                .context("unable to load document")?;
+            tracing::trace!("document loaded");
+
+            document
+                .save_as(out_file_path, conversion.to.as_str(), &conversion.filter)
+                .map_err(|e| anyhow::anyhow!(e))
+                .context("unable to save document")?;
+            tracing::trace!("document saved");
+
+            // The child exits right after this, so skip LibreOffice's
+            // teardown: Writer can crash while destroying a document it
+            // has already saved, which would fail a finished conversion.
+            std::mem::forget(document);
+            std::mem::forget(office);
+
+            Ok(())
+        })();
+
+        result.inspect_err(|e| tracing::error!(job_id=%job_id, error=?e, "unable to convert"))
+    })?;
+
+    match exit {
+        ChildExit::Succeeded => Ok(()),
+        ChildExit::TimedOut => {
+            anyhow::bail!("conversion timed out after {:?}", conversion.max_wait)
         }
-        Ok(ForkResult::Child) => unsafe {
-            tracing::info!(job_id=%job_id, "child process: initializing lok");
-            let result: anyhow::Result<()> = (|| {
-                std::env::set_var("SAL_LOG", "");
-                // LibreOffice deletes its TMPDIR scratch files only in its own
-                // teardown, which a child killed at its timeout, crashed, or
-                // ended with `_exit` below never runs.
-                std::env::set_var("TMPDIR", &job_folder);
-                let office = Office::new(office_path)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to initialize lok")?;
-                tracing::trace!("office initialized");
-
-                let document = office
-                    .load_document(in_file_path)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to load document")?;
-                tracing::trace!("document loaded");
-
-                document
-                    .save_as(out_file_path, to_format, filter)
-                    .map_err(|e| anyhow::anyhow!(e))
-                    .context("unable to save document")?;
-                tracing::trace!("document saved");
-
-                // The child exits right after this, so skip LibreOffice's
-                // teardown: Writer can crash while destroying a document it
-                // has already saved, which would fail a finished conversion.
-                std::mem::forget(document);
-                std::mem::forget(office);
-
-                Ok(())
-            })();
-
-            match result {
-                // `_exit` skips LibreOffice's exit handlers, which can hang
-                // after the teardown skipped above.
-                Ok(_) => _exit(0),
-                Err(e) => {
-                    tracing::error!(job_id=%job_id, error=?e, "unable to convert");
-                    exit(1)
-                }
-            }
-        },
-        Err(err) => {
-            tracing::error!(job_id=%job_id, error=?err, "fork failed");
-            anyhow::bail!("fork failed");
-        }
+        ChildExit::Failed(status) => anyhow::bail!("conversion failed with status {status}"),
+        ChildExit::Signaled(signal) => anyhow::bail!("conversion crashed with {signal}"),
     }
-
-    // Assume failure
-    let mut status_code = 1;
-    let start_time = std::time::Instant::now();
-    loop {
-        if child_pids.is_empty() {
-            break;
-        }
-
-        // Check if we've exceeded the timeout
-        if start_time.elapsed() > max_wait {
-            tracing::error!(job_id=%job_id, "conversion timed out");
-            // Kill any remaining child processes
-            for &pid in &child_pids {
-                tracing::trace!(job_id=%job_id, pid=%pid, "killing pid");
-                if let Err(e) = nix::sys::signal::kill(
-                    nix::unistd::Pid::from_raw(pid.into()),
-                    nix::sys::signal::Signal::SIGKILL,
-                ) {
-                    tracing::error!(job_id=%job_id, error=?e, "failed to kill child process {}", pid);
-                }
-            }
-        }
-
-        // Prevent locking
-        thread::sleep(Duration::from_millis(200));
-
-        // check for completed children
-        child_pids.retain(|&pid| {
-            match nix::sys::wait::waitpid(
-                nix::unistd::Pid::from_raw(pid.into()),
-                Some(nix::sys::wait::WaitPidFlag::WNOHANG),
-            ) {
-                Ok(nix::sys::wait::WaitStatus::StillAlive) => true,
-                Ok(nix::sys::wait::WaitStatus::Exited(_, status)) => {
-                    tracing::debug!(job_id=%job_id, status=status, "pid {} completed", pid);
-                    status_code = status;
-                    false
-                }
-                _ => {
-                    // This is called when the child process was forcefully killed above.
-                    false
-                }
-            }
-        });
-    }
-
-    if status_code != 0 {
-        tracing::error!(job_id=%job_id, status=status_code, "conversion failed with non-zero status code");
-        anyhow::bail!("conversion failed");
-    }
-
-    Ok(())
 }

@@ -1,19 +1,51 @@
-use crate::process::convert;
+use std::{sync::Arc, time::Duration};
+
+use crate::{disk::DiskGuard, process::convert, scratch::Scratch};
+
+/// How long the worker waits before checking a low disk again.
+const DISK_RECHECK_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Waits until the disk has room for more jobs.
+///
+/// A message received on a full disk can only fail, and a message that fails
+/// twice is dead-lettered. Left on the queue, it is converted by the task that
+/// replaces this one once the health check reports the low disk.
+pub(super) async fn wait_for_disk_space(disk: &DiskGuard) {
+    let mut paused = false;
+
+    while let Err(e) = disk.check() {
+        if !paused {
+            tracing::error!(error=?e, "pausing the convert queue: low disk space");
+            paused = true;
+        }
+        tokio::time::sleep(DISK_RECHECK_INTERVAL).await;
+    }
+
+    if paused {
+        tracing::info!("resuming the convert queue");
+    }
+}
 
 /// Runs the worker in a loop to handle restarting should it fail.
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     s3_client: s3_client::S3,
     lambda_client: lambda_client::Lambda,
+    scratch: Arc<Scratch>,
+    disk: DiskGuard,
 ) {
     loop {
         let worker_result = tokio::spawn({
             let worker = worker.clone();
             let s3_client = s3_client.clone();
             let lambda_client = lambda_client.clone();
+            let scratch = scratch.clone();
+            let disk = disk.clone();
             async move {
                 tracing::info!("worker started");
                 loop {
+                    wait_for_disk_space(&disk).await;
+
                     match worker.receive_messages().await {
                         Ok(messages) => {
                             if messages.is_empty() {
@@ -24,12 +56,14 @@ pub async fn run_worker(
                                 let worker = worker.clone();
                                 let s3_client = s3_client.clone();
                                 let lambda_client = lambda_client.clone();
+                                let scratch = scratch.clone();
 
                                 tokio::spawn(async move {
                                     let result = convert::process_message(
                                         &worker,
                                         &s3_client,
                                         &lambda_client,
+                                        &scratch,
                                         &message,
                                     )
                                     .await;

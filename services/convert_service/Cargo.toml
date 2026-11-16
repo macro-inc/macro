@@ -10,7 +10,6 @@ name = "convert_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [features]
-disable_cleanup = []
 disable_worker = []
 local_queue = []
 
@@ -22,7 +21,6 @@ axum = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 futures = { workspace = true }
-http-body-util = { workspace = true }
 lambda_client = { path = "../../crates/lambda_client" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
@@ -40,14 +38,16 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
 s3_key = { path = "../../crates/s3_key" }
-nix = { version = "0.29.0", features = ["process", "signal"] }
+nix = { workspace = true, features = ["process", "resource", "signal"] }
 rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
+rustix = { workspace = true, features = ["fs"] }
 s3_client = { path = "../../crates/s3_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client" }
 sqs_worker = { path = "../../crates/sqs_worker" }
+tempfile = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -63,6 +63,5 @@ docx_engine = { path = "../../crates/docx_engine" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 pptx_engine = { path = "../../crates/pptx_engine" }
-tempfile = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }

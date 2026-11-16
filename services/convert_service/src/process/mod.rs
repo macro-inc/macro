@@ -1,3 +1,4 @@
+pub(crate) mod child;
 pub(crate) mod convert;
 pub mod runner;
 

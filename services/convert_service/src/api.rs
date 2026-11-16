@@ -28,12 +28,13 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let port = state.config.port;
     let env = state.config.environment;
+    let disk = state.disk.clone();
     let traced_api = api_router()
         .with_state(state)
         .layer(cors.clone())
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
     // Health stays outside TraceLayer so the probe does not generate request logs.
-    let health = health::router().layer(cors);
+    let health = health::router(disk).layer(cors);
     let app = mount_at_root_and_prefix(traced_api.merge(health))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(
