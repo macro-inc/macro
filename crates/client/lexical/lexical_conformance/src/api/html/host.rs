@@ -36,7 +36,10 @@ fn serialize_host(root: &str, nodes: &str) -> Result<String> {
         io::Write,
         process::{Command, Stdio},
     };
+    // Without --no-install, Bun auto-installs a missing jsdom from the registry,
+    // unpinned and racing across concurrent cases, instead of failing.
     let mut child = Command::new("bun")
+        .arg("--no-install")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/api/html/host.mjs"
@@ -53,7 +56,7 @@ fn serialize_host(root: &str, nodes: &str) -> Result<String> {
     let output = child.wait_with_output()?;
     if !output.status.success() {
         return Err(fail(format!(
-            "HTML DOM host: {}",
+            "HTML DOM host (needs `bun install --cwd packages/lexical-conformance`): {}",
             String::from_utf8_lossy(&output.stderr)
         )));
     }

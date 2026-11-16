@@ -83,9 +83,7 @@ fn prepared(name: &str) -> Job {
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::setup_bun_pinned())
-        .add_step(Step::new("Install conformance dependencies").run(
-            "bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts",
-        ))
+        .add_step(steps::install_conformance_dependencies())
 }
 /// Native replay never suppresses failing or ledger-stale fixtures.
 pub fn native(nightly: bool) -> Job {

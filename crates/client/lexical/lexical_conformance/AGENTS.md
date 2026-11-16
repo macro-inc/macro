@@ -58,6 +58,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 ## Checks
 
+- The native replays here and in `document_session_ffi` export HTML through jsdom; run `bun install --cwd packages/lexical-conformance --frozen-lockfile` first. The host never auto-installs, and any job that runs these tests installs it.
 - `cargo test -p lexical_conformance -j4`
 - `cargo test -p lexical_model -j4`
 - `cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun)

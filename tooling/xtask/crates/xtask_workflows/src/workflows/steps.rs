@@ -94,6 +94,13 @@ pub fn setup_bun_pinned() -> Step<Use> {
         .add_with(("bun-version", "1.3.13"))
 }
 
+/// The pinned JS dependencies of `packages/lexical-conformance`, which the
+/// Rust fixture replays load through their jsdom HTML host.
+pub fn install_conformance_dependencies() -> Step<Run> {
+    Step::new("Install conformance dependencies")
+        .run("bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts")
+}
+
 /// Keyless Google Play access (Workload Identity Federation through the
 /// repository variables `GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER` /
 /// `GOOGLE_PLAY_SERVICE_ACCOUNT`), as step `auth`: an `androidpublisher`
