@@ -320,32 +320,52 @@ export async function handleBasicMention(
   item: Item,
   dependencies: HandlerDependencies
 ) {
+  const mention = prepareBasicMention(item, dependencies);
+  // Await only while tracking, so an untracked mention dispatches synchronously.
+  const mentionId = mention.tracking ? await mention.tracking : undefined;
+  dependencies.editor.dispatchCommand(
+    INSERT_DOCUMENT_MENTION_COMMAND,
+    mention.payload(mentionId)
+  );
+}
+
+/**
+ * Source handleBasicMention without the dispatch: `tracking` is the
+ * trackMention request when this mention is tracked (await it only then), and
+ * `payload` builds the INSERT_DOCUMENT_MENTION_COMMAND payload after it.
+ */
+export function prepareBasicMention(
+  item: Item,
+  dependencies: Omit<HandlerDependencies, 'editor'>
+) {
   const {
-    editor,
     blockName: parentBlockName,
     blockId,
     onDocumentMention,
     disableMentionTracking,
   } = dependencies;
-  let mentionId: string | undefined;
-  if (
+  const tracking =
     blockId &&
     parentBlockName !== 'channel' &&
     parentBlockName !== 'chat' &&
     !disableMentionTracking
-  ) {
-    mentionId = await trackMention(blockId, 'document', item.id);
-  }
-  const itemEntity = entityMapper('item')(item);
-  const itemBlock = getCombinedEntityBlockName(itemEntity);
-  const itemName = getItemName(itemEntity);
-  onDocumentMention?.(item);
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: item.id,
-    documentName: itemName,
-    blockName: itemBlock,
-    mentionUuid: mentionId,
-  });
+      ? trackMention(blockId, 'document', item.id)
+      : undefined;
+  return {
+    tracking,
+    payload(mentionId: string | undefined) {
+      const itemEntity = entityMapper('item')(item);
+      const itemBlock = getCombinedEntityBlockName(itemEntity);
+      const itemName = getItemName(itemEntity);
+      onDocumentMention?.(item);
+      return {
+        documentId: item.id,
+        documentName: itemName,
+        blockName: itemBlock,
+        mentionUuid: mentionId,
+      };
+    },
+  };
 }
 
 /**

@@ -215,7 +215,9 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => gifContext.dispose());
   const [floatingMenusActive, setFloatingMenusActive] = createSignal(true);
   overlayLifecycle.add(() => setFloatingMenusActive(false));
-  const imageUploads = createNativeImageUploadController();
+  const imageUploads = createNativeImageUploadController({
+    mentionSourceId: documentId,
+  });
   overlayLifecycle.add(() => imageUploads.dispose());
   const canInteractWithMedia = () =>
     ready() &&

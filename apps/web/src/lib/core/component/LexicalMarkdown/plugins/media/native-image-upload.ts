@@ -3,7 +3,7 @@ import { blockNameToFileExtensions } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { HEIC_EXTENSIONS } from '@core/heic';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { handleFileFolderDrop } from '@core/util/upload';
+import { handleFileFolderDrop, type UploadInput } from '@core/util/upload';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -15,10 +15,16 @@ import { Access } from '@macro-inc/collaboration/session/abi.generated';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { SessionPort } from '@macro-inc/lexical-wasm-view/view/session-port';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
+import type { HistoryItem } from '@queries/history/history';
 import { fileExtension } from '@service-storage/util/filename';
 import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
+import { uploadEntriesAsItems } from '../../utils/fileUploadUtils';
+import { prepareBasicMention } from '../../utils/mentionsUtils';
 import { registerNativeFilePaste } from '../file-paste/native';
-import { dispatchApplicationCommandSettled } from '../group-b/command';
+import {
+  dispatchApplicationCommandSettled,
+  dispatchApplicationCommandSettledIfSessionEdit,
+} from '../group-b/command';
 import { type MediaType, processFile, validateMediaFile } from './io';
 import { createNativeMediaUploadEvents } from './native-upload-events';
 
@@ -42,7 +48,10 @@ const uploadsByLocalUrl = new Map<
 const pendingSourceId = '';
 
 /** Media IO for one native document surface. Renderers subscribe to its events. */
-export function createNativeImageUploadController() {
+export function createNativeImageUploadController(options?: {
+  /** Source filesBlockId: the document that tracks pasted-file mentions. */
+  mentionSourceId?: () => string;
+}) {
   const events = createNativeMediaUploadEvents();
   const uploadsByFile = new Map<string, Promise<string>>();
   let mounted: EditorView | undefined;
@@ -53,6 +62,62 @@ export function createNativeImageUploadController() {
     for (const close of dialogs) close();
   });
 
+  // Source handleBasicMention: track, then insert at the current selection,
+  // only while the paste's view generation is still the live one.
+  const insertMention = async (
+    view: EditorView,
+    generation: number,
+    item: HistoryItem
+  ) => {
+    const mention = prepareBasicMention(item, {
+      blockId: options?.mentionSourceId?.(),
+    });
+    const mentionId = mention.tracking ? await mention.tracking : undefined;
+    const fresh = () => current(view, generation) && editable(view);
+    if (!fresh()) return;
+    const payload = mention.payload(mentionId);
+    const { mentionUuid, ...fields } = payload;
+    const result = await dispatchApplicationCommandSettledIfSessionEdit(
+      view,
+      'group-b.insert-document-mention',
+      () => (mentionUuid === undefined ? fields : { ...fields, mentionUuid }),
+      { admit: fresh }
+    );
+    if (result.status === 'error') throw result.error;
+  };
+  // Source onFilesReady: inline media first, in order, then the other files
+  // and folders uploaded and mentioned, rechecking editability between steps.
+  const filesReady =
+    (view: EditorView, generation: number) =>
+    async (
+      entries: Parameters<Parameters<typeof handleFileFolderDrop>[2]>[0]
+    ) => {
+      const writable = () =>
+        current(view, generation) &&
+        editable(view) &&
+        view.root.contentEditable === 'true';
+      if (!writable()) return;
+      const uploads: UploadInput[] = [];
+      for (const entry of entries) {
+        if (!writable()) return;
+        const kind = entry.isFolder
+          ? undefined
+          : inlineMediaKind(entry.file.name);
+        if (kind === undefined) {
+          uploads.push(entry);
+          continue;
+        }
+        if (!(await insertFile(entry.file, kind)) && writable())
+          toast.failure('Invalid media attachment file(s)');
+      }
+      if (!uploads.length || !writable()) return;
+      await uploadEntriesAsItems(uploads, writable, (item) =>
+        fireAndForget(
+          insertMention(view, generation, item),
+          'native-file-mention'
+        )
+      );
+    };
   const current = (view: EditorView, generation: number) =>
     !disposed &&
     mounted === view &&
@@ -260,41 +325,25 @@ export function createNativeImageUploadController() {
         );
         listeners.add(
           registerNativeFilePaste(view, {
+            // Source filePastePlugin: media inline, other files and folders
+            // uploaded and mentioned.
             accepts({ files, entries, directories, mobileImageRecovery }) {
-              const names = files.length
-                ? files.map((file) => file.name)
-                : entries.map((entry) => entry.name);
               return (
-                !directories.length &&
-                (names.length > 0
-                  ? names.every((name) => inlineMediaKind(name) !== undefined)
-                  : mobileImageRecovery)
+                files.length > 0 ||
+                entries.length > 0 ||
+                directories.length > 0 ||
+                mobileImageRecovery
               );
             },
             onPasteFilesAndDirs(files, directories) {
               const generation = view.mirror.keyGeneration;
               if (generation === null) return;
               fireAndForget(
-                handleFileFolderDrop(files, directories, async (entries) => {
-                  for (const entry of entries) {
-                    if (
-                      !current(view, generation) ||
-                      !editable(view) ||
-                      view.root.contentEditable !== 'true'
-                    )
-                      return;
-                    if (entry.isFolder) continue;
-                    const kind = inlineMediaKind(entry.file.name);
-                    if (
-                      kind !== undefined &&
-                      !(await insertFile(entry.file, kind)) &&
-                      current(view, generation) &&
-                      editable(view) &&
-                      view.root.contentEditable === 'true'
-                    )
-                      toast.failure('Invalid media attachment file(s)');
-                  }
-                }),
+                handleFileFolderDrop(
+                  files,
+                  directories,
+                  filesReady(view, generation)
+                ),
                 'native-media-paste'
               );
             },
