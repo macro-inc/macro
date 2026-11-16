@@ -100,3 +100,41 @@ test('dragging splits and resizing the window reflows a composer without observe
     contentType: 'image/png',
   });
 });
+
+test('moving navigation to an overlay keeps the scroll position of the panel beside it', async ({
+  page,
+}) => {
+  await page.goto('/?overlay-aside');
+  const scroller = page.getByTestId('scroller');
+  await scroller.hover();
+  await page.mouse.wheel(0, 1200);
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+  const before = await scroller.evaluate((element) => element.scrollTop);
+
+  // Sample after every paint: a reset that is corrected a frame later is
+  // still a visible jump.
+  const painted = await page.evaluate(
+    () =>
+      new Promise<number[]>((resolve) => {
+        const element = document.querySelector<HTMLElement>(
+          '[data-testid="scroller"]'
+        );
+        const samples: number[] = [];
+        const sample = (framesLeft: number) =>
+          requestAnimationFrame(() =>
+            setTimeout(() => {
+              samples.push(element?.scrollTop ?? -1);
+              if (framesLeft > 0) sample(framesLeft - 1);
+              else resolve(samples);
+            }, 0)
+          );
+        window.showOverlayAside();
+        sample(10);
+      })
+  );
+
+  await expect(page.getByText('Overlay navigation')).toBeVisible();
+  expect(painted).toEqual(painted.map(() => before));
+});
