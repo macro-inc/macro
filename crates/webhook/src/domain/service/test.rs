@@ -373,6 +373,7 @@ fn valid_filters() -> WebhookFilters {
     vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: None,
+        entity_types: None,
     }]
 }
 
@@ -707,6 +708,7 @@ async fn patch_endpoint_and_headers_publish_final_validity_row_without_secrets()
     let replacement_filters = vec![WebhookFilter {
         events: vec!["webhook.updated".to_string()],
         ids: Some(vec!["wh_target".to_string()]),
+        entity_types: None,
     }];
     let request = PatchWebhookRequest {
         name: None,
@@ -1059,6 +1061,7 @@ async fn filter_with_empty_events_is_rejected() {
     request.filters = vec![WebhookFilter {
         events: Vec::new(),
         ids: None,
+        entity_types: None,
     }];
 
     assert_bad_request(service.create_webhook(caller(), request).await);
@@ -1073,6 +1076,7 @@ async fn filter_with_empty_ids_is_rejected() {
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: Some(Vec::new()),
+        entity_types: None,
     }];
 
     assert_bad_request(service.create_webhook(caller(), request).await);
@@ -1101,6 +1105,7 @@ async fn filter_with_valid_ids_is_accepted() {
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: Some(vec!["file_1".to_string()]),
+        entity_types: None,
     }];
     let expected_filters = request.filters.clone();
 
@@ -1426,4 +1431,47 @@ async fn delete_succeeds_when_event_scheduling_fails() {
         .delete_webhook(caller(), "wh_test".to_string())
         .await
         .expect("event scheduling must not fail webhook deletion");
+}
+
+/// The webhook API keeps its original cap of 50 filters (streams take 32).
+#[test]
+fn a_webhook_holds_up_to_50_filters() {
+    let fifty: WebhookFilters = (0..50).flat_map(|_| valid_filters()).collect();
+    let fifty_one: WebhookFilters = (0..51).flat_map(|_| valid_filters()).collect();
+
+    assert!(super::validate_filters(&fifty, false).is_ok());
+    assert_bad_request(super::validate_filters(&fifty_one, false));
+}
+
+/// The `public-event-stream` flag for every user, or none.
+struct Flagged(bool);
+
+impl event_stream::domain::ports::PreviewFlag for Flagged {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
+/// A malformed wildcard is a literal name for an unflagged creator, as
+/// before wildcards existed, and a 400 for a flagged one.
+#[tokio::test]
+async fn only_a_flagged_creator_has_wildcard_syntax_checked() {
+    let mut request = create_request();
+    request.filters[0].events = vec!["doc*".to_string()];
+    let service = |flagged| {
+        WebhookServiceImpl::new(
+            FakeRepo::default(),
+            FakeValidationClient::default(),
+            NoopMacroEventBroker,
+        )
+        .with_preview_flag(Arc::new(Flagged(flagged)))
+    };
+
+    assert!(
+        service(false)
+            .create_webhook(caller(), request.clone())
+            .await
+            .is_ok()
+    );
+    assert_bad_request(service(true).create_webhook(caller(), request).await);
 }

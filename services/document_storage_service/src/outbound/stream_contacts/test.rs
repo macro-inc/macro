@@ -61,8 +61,8 @@ async fn contact_pair_is_found_with_one_exact_lookup() {
     assert!(
         checker
             .is_contact(
-                id("macro|changed@example.com"),
-                id("macro|reader@example.com")
+                &id("macro|changed@example.com"),
+                &id("macro|reader@example.com")
             )
             .await
             .unwrap()
@@ -82,8 +82,8 @@ async fn non_contact_is_rejected() {
     assert!(
         !checker
             .is_contact(
-                id("macro|changed@example.com"),
-                id("macro|reader@example.com")
+                &id("macro|changed@example.com"),
+                &id("macro|reader@example.com")
             )
             .await
             .unwrap()

@@ -1,0 +1,97 @@
+id: rust-access-no-wildcard-arm
+valid:
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) | Self::B { .. } => Access::Internal { reason: "a" },
+                Self::C(m) if m.hidden => Access::Internal { reason: "c" },
+                Self::C(_) => Access::Internal { reason: "c" },
+            })
+        }
+    }
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            match &self.origin {
+                Some(origin) => todo_free(origin),
+                None => other(),
+            }
+        }
+    }
+  - |
+    fn classify(event: &E) -> u8 {
+        match event {
+            E::A => 1,
+            _ => 0,
+        }
+    }
+  - |
+    impl Receipt {
+        fn access(&self) -> GitAccess {
+            match self.level {
+                Level::Read => GitAccess::Read,
+                _ => GitAccess::Write,
+            }
+        }
+    }
+invalid:
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                _ => Access::Internal { reason: "everything else" },
+            })
+        }
+    }
+  - |
+    impl macro_event_broker::access::EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                other => Access::Internal { reason: "everything else" },
+            })
+        }
+    }
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                _ if true => Access::Internal { reason: "guarded" },
+                Self::B => Access::Internal { reason: "b" },
+            })
+        }
+    }
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) | _ => Access::Internal { reason: "hidden catch-all" },
+            })
+        }
+    }
+  - |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                rest @ _ => Access::Internal { reason: "bound catch-all" },
+            })
+        }
+    }
+  - |
+    fn definitions(event: &E) -> Result<Access<'_, P>, AccessError> {
+        Ok(match event {
+            E::A => Access::Internal { reason: "a" },
+            _ => Access::Internal { reason: "everything else" },
+        })
+    }

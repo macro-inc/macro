@@ -1,47 +1,15 @@
 //! Broker envelopes and publication for committed message facts.
 
+pub use crate::domain::events::MessageTopicEvent;
 use crate::domain::events::{
     MessageAttachmentCreatedMetadata, MessageAttachmentRemovedMetadata, MessageDeletedMetadata,
     MessageMentionedMetadata, MessagePatchedMetadata, MessagePostedMetadata,
 };
-use macro_event_broker::{Event, MacroEvent, TopicEvent};
-use macro_event_topics::MacroMessagesTopic;
-use serde::{Deserialize, Serialize};
+use macro_event_broker::{Event, MacroEvent};
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
-
-/// Lifecycle events for the common message service, one per committed fact.
-/// Reactions and typing never reach the topic.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(tag = "event_type", content = "metadata")]
-pub enum MessageTopicEvent {
-    /// A user or bot posted a root or reply.
-    #[serde(rename = "message.posted")]
-    Posted(MessagePostedMetadata),
-    /// A message's content was patched.
-    #[serde(rename = "message.patched")]
-    Patched(MessagePatchedMetadata),
-    /// A message was tombstoned.
-    #[serde(rename = "message.deleted")]
-    Deleted(MessageDeletedMetadata),
-    /// An entity (user, bot, document, …) was mentioned in a posted message.
-    #[serde(rename = "message.mentioned")]
-    Mentioned(MessageMentionedMetadata),
-    /// Attachments were added to a message.
-    #[serde(rename = "message.attachment_created")]
-    AttachmentCreated(MessageAttachmentCreatedMetadata),
-    /// Attachments were removed from a message.
-    #[serde(rename = "message.attachment_removed")]
-    AttachmentRemoved(MessageAttachmentRemovedMetadata),
-}
-
-impl TopicEvent for MessageTopicEvent {
-    type Topic = MacroMessagesTopic;
-    const SCHEMA_VERSION: u8 = 1;
-}
 
 /// Message facts keyed by thread root to preserve conversation ordering.
 #[derive(Debug, Clone)]

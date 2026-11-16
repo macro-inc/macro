@@ -163,6 +163,27 @@ impl<Access: EntityAccessService> EntityAccessService for ViewOnlyAccess<Access>
         self.0.get_users_by_entity(entity_id, entity_type).await
     }
 
+    async fn is_accessor(
+        &self,
+        principal_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<bool, AccessError> {
+        self.0
+            .is_accessor(principal_id, entity_id, entity_type)
+            .await
+    }
+
+    async fn get_users_by_entity_uncached(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.0
+            .get_users_by_entity_uncached(entity_id, entity_type)
+            .await
+    }
+
     async fn get_call_channel(
         &self,
         call_id: &Uuid,

@@ -15,8 +15,9 @@ in-call chat.
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
-- `src/domain/notification_events.rs`: public call event contract for
-  access-checked webhook and stream subscribers.
+- `src/domain/notification_events.rs`: the call notification topic for
+  access-checked webhook and stream subscribers; who receives each event is
+  its `EventAccess` impl in `src/domain/events.rs`.
 - `src/inbound/axum_router.rs`, `src/inbound/stale_call_sweeper.rs`: HTTP routes
   and the sweeper that ends abandoned calls and deletes orphaned RTC rooms
   (`src/domain/service/orphan_rooms.rs`).
@@ -53,6 +54,7 @@ in-call chat.
 - Add a call event/activity: `src/domain/activity.rs` → `src/domain/events.rs`
   → `src/outbound/pg_call_repo.rs`.
 - Add a public call notification: `src/domain/notification_events.rs` →
+  its access in `src/domain/events.rs` →
   `src/domain/service.rs` or its meeting/channel submodule → `crates/webhook`.
 - Change ringing/decline behavior: `src/domain/service.rs` → `src/inbound/axum_router.rs`.
 - Add an AI tool over calls: `src/inbound/toolset.rs` (feature `ai_tools`).

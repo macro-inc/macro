@@ -1,3 +1,4 @@
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{
     Event, EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBroker,
     MacroEventBrokerService, TopicEvent,
@@ -52,6 +53,21 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+impl EventAccess for ExampleTopicEvent {
+    type PublicPayload = macro_event_broker::access::Unexposed;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        Ok(macro_event_broker::access::Access::Internal {
+            reason: "broker example topic",
+        })
+    }
 }
 
 /// Publishable event for [`MacroExampleTopic`].

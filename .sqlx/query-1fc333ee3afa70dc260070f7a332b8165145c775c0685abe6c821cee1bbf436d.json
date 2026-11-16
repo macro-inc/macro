@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT tu.user_id FROM team_user tu\n                WHERE tu.team_id = $1 AND tu.user_id = ANY($2)\n                  AND (tu.crm_access OR tu.team_role <> 'member')\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1fc333ee3afa70dc260070f7a332b8165145c775c0685abe6c821cee1bbf436d"
+}

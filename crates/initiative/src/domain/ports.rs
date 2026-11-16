@@ -113,7 +113,13 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the initiative and clean up its own rows in one transaction.
-    fn delete(&self, id: InitiativeId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Returns the users who had explicit access (direct, channel and team
+    /// grants; no link viewers), read in that transaction before the access
+    /// rows are deleted.
+    fn delete(
+        &self,
+        id: InitiativeId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 }
 
 /// Inbound service port: the initiative API used by drivers (HTTP).

@@ -9,6 +9,9 @@
 #[cfg(test)]
 mod test;
 
+/// Who receives these events outside Macro.
+pub mod events;
+
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroUsersTopic;
 use macro_user_id::user_id::MacroUserIdStr;

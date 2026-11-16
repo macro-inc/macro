@@ -1,0 +1,282 @@
+id: rust-access-no-wildcard-arm
+snapshots:
+  ? |
+    fn definitions(event: &E) -> Result<Access<'_, P>, AccessError> {
+        Ok(match event {
+            E::A => Access::Internal { reason: "a" },
+            _ => Access::Internal { reason: "everything else" },
+        })
+    }
+  : labels:
+    - source: '_ => Access::Internal { reason: "everything else" },'
+      style: primary
+      start: 145
+      end: 197
+    - source: Result<Access<'_, P>, AccessError>
+      style: secondary
+      start: 29
+      end: 63
+    - source: |-
+        fn definitions(event: &E) -> Result<Access<'_, P>, AccessError> {
+            Ok(match event {
+                E::A => Access::Internal { reason: "a" },
+                _ => Access::Internal { reason: "everything else" },
+            })
+        }
+      style: secondary
+      start: 0
+      end: 206
+    - source: _
+      style: secondary
+      start: 145
+      end: 146
+  ? |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                _ => Access::Internal { reason: "everything else" },
+            })
+        }
+    }
+  : labels:
+    - source: '_ => Access::Internal { reason: "everything else" },'
+      style: primary
+      start: 216
+      end: 268
+    - source: access
+      style: secondary
+      start: 63
+      end: 69
+    - source: EventAccess
+      style: secondary
+      start: 5
+      end: 16
+    - source: |-
+        impl EventAccess for E {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    _ => Access::Internal { reason: "everything else" },
+                })
+            }
+        }
+      style: secondary
+      start: 0
+      end: 287
+    - source: |-
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    _ => Access::Internal { reason: "everything else" },
+                })
+            }
+      style: secondary
+      start: 60
+      end: 285
+    - source: _
+      style: secondary
+      start: 216
+      end: 217
+  ? |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                _ if true => Access::Internal { reason: "guarded" },
+                Self::B => Access::Internal { reason: "b" },
+            })
+        }
+    }
+  : labels:
+    - source: '_ if true => Access::Internal { reason: "guarded" },'
+      style: primary
+      start: 216
+      end: 268
+    - source: access
+      style: secondary
+      start: 63
+      end: 69
+    - source: EventAccess
+      style: secondary
+      start: 5
+      end: 16
+    - source: |-
+        impl EventAccess for E {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    _ if true => Access::Internal { reason: "guarded" },
+                    Self::B => Access::Internal { reason: "b" },
+                })
+            }
+        }
+      style: secondary
+      start: 0
+      end: 344
+    - source: |-
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    _ if true => Access::Internal { reason: "guarded" },
+                    Self::B => Access::Internal { reason: "b" },
+                })
+            }
+      style: secondary
+      start: 60
+      end: 342
+    - source: _ if true
+      style: secondary
+      start: 216
+      end: 225
+  ? |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                rest @ _ => Access::Internal { reason: "bound catch-all" },
+            })
+        }
+    }
+  : labels:
+    - source: 'rest @ _ => Access::Internal { reason: "bound catch-all" },'
+      style: primary
+      start: 216
+      end: 275
+    - source: access
+      style: secondary
+      start: 63
+      end: 69
+    - source: EventAccess
+      style: secondary
+      start: 5
+      end: 16
+    - source: |-
+        impl EventAccess for E {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    rest @ _ => Access::Internal { reason: "bound catch-all" },
+                })
+            }
+        }
+      style: secondary
+      start: 0
+      end: 294
+    - source: |-
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    rest @ _ => Access::Internal { reason: "bound catch-all" },
+                })
+            }
+      style: secondary
+      start: 60
+      end: 292
+    - source: rest @ _
+      style: secondary
+      start: 216
+      end: 224
+  ? |
+    impl EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) | _ => Access::Internal { reason: "hidden catch-all" },
+            })
+        }
+    }
+  : labels:
+    - source: 'Self::A(_) | _ => Access::Internal { reason: "hidden catch-all" },'
+      style: primary
+      start: 156
+      end: 222
+    - source: access
+      style: secondary
+      start: 63
+      end: 69
+    - source: EventAccess
+      style: secondary
+      start: 5
+      end: 16
+    - source: |-
+        impl EventAccess for E {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) | _ => Access::Internal { reason: "hidden catch-all" },
+                })
+            }
+        }
+      style: secondary
+      start: 0
+      end: 241
+    - source: |-
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) | _ => Access::Internal { reason: "hidden catch-all" },
+                })
+            }
+      style: secondary
+      start: 60
+      end: 239
+    - source: Self::A(_) | _
+      style: secondary
+      start: 156
+      end: 170
+  ? |
+    impl macro_event_broker::access::EventAccess for E {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(match self {
+                Self::A(_) => Access::Internal { reason: "a" },
+                other => Access::Internal { reason: "everything else" },
+            })
+        }
+    }
+  : labels:
+    - source: 'other => Access::Internal { reason: "everything else" },'
+      style: primary
+      start: 244
+      end: 300
+    - source: access
+      style: secondary
+      start: 91
+      end: 97
+    - source: macro_event_broker::access::EventAccess
+      style: secondary
+      start: 5
+      end: 44
+    - source: |-
+        impl macro_event_broker::access::EventAccess for E {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    other => Access::Internal { reason: "everything else" },
+                })
+            }
+        }
+      style: secondary
+      start: 0
+      end: 319
+    - source: |-
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(match self {
+                    Self::A(_) => Access::Internal { reason: "a" },
+                    other => Access::Internal { reason: "everything else" },
+                })
+            }
+      style: secondary
+      start: 88
+      end: 317
+    - source: other
+      style: secondary
+      start: 244
+      end: 249

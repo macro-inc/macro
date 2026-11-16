@@ -1,7 +1,6 @@
 use super::*;
 use crate::config::{HarnessCredentials, MacroApi};
 use harness_id::HarnessId;
-use webhook::domain::models::WebhookFilter;
 
 fn test_client(storage_url: &str) -> EventStreamClient {
     EventStreamClient::new(
@@ -75,7 +74,7 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
     .await;
     let client = test_client(&url);
     let mut stream = client
-        .connect::<Envelope>(&[WebhookFilter {
+        .connect::<Envelope>(&[StreamFilter {
             events: vec!["agent_trigger.new".to_owned()],
             ids: None,
         }])
@@ -164,4 +163,29 @@ async fn serve(
         }
     });
     (format!("http://{addr}"), requests)
+}
+
+/// The daemon's filter and scope read as the server's own types.
+#[test]
+fn the_wire_types_parse_as_the_servers() {
+    let filters = vec![
+        StreamFilter {
+            events: vec!["agent_trigger.new".to_owned()],
+            ids: Some(vec!["bot-1".to_owned()]),
+        },
+        StreamFilter {
+            events: vec!["*".to_owned()],
+            ids: None,
+        },
+    ];
+    let json = serde_json::to_string(&filters).unwrap();
+    let parsed: Vec<event_stream::domain::filters::WebhookFilter> =
+        serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed[0].ids.as_deref(), Some(&["bot-1".to_owned()][..]));
+    assert_eq!(parsed[1].ids, None);
+
+    for scope in [StreamScope::User, StreamScope::Team] {
+        let server: event_stream::domain::models::WebhookScope = scope.to_string().parse().unwrap();
+        assert_eq!(server.to_string(), scope.to_string());
+    }
 }

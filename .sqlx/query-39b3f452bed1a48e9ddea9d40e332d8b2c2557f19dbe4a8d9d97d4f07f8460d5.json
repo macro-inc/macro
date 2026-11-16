@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1 FROM entity_access ea\n            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'user'\n              AND ea.granted_from_project_id IS NULL\n              AND (ea.source_id = $3\n                   OR (ea.source_id LIKE 'macro|%' AND lower(ea.source_id) = $3))\n        ) AS \"is_user!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_user!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "39b3f452bed1a48e9ddea9d40e332d8b2c2557f19dbe4a8d9d97d4f07f8460d5"
+}

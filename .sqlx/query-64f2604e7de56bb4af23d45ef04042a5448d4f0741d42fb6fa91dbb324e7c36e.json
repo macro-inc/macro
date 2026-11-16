@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT team_id, team_role::text AS \"team_role!\"\n            FROM team_user\n            WHERE user_id = $1\n            ORDER BY team_role DESC, team_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_role!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "64f2604e7de56bb4af23d45ef04042a5448d4f0741d42fb6fa91dbb324e7c36e"
+}

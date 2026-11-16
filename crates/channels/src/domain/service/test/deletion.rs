@@ -30,6 +30,56 @@ async fn channel_owner_can_delete_every_channel_type() {
 }
 
 #[tokio::test]
+async fn channel_deleted_event_carries_the_participants_loaded_before_the_delete() {
+    let channel_id = Uuid::now_v7();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@example.com");
+    let participant = |user_id: &str, role| ChannelParticipant {
+        channel_id,
+        user_id: user_id.to_string(),
+        role,
+        joined_at: Utc::now(),
+        left_at: None,
+    };
+    repo.state.lock().unwrap().participants = vec![
+        participant("macro|owner@example.com", ParticipantRole::Owner),
+        participant("macro|member@example.com", ParticipantRole::Member),
+        participant(
+            "bot|00000000-0000-0000-0000-000000000001",
+            ParticipantRole::Member,
+        ),
+    ];
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.delete_channel(sender("macro|owner@example.com"), channel_id)
+        .await
+        .unwrap();
+
+    let events = events.events.lock().unwrap();
+    let [
+        ChannelEvent::ChannelDeleted {
+            participant_user_ids,
+            ..
+        },
+    ] = events.as_slice()
+    else {
+        panic!("expected one channel deleted event, got {events:?}");
+    };
+    assert_eq!(
+        participant_user_ids
+            .iter()
+            .map(|id| id.as_ref())
+            .collect::<Vec<_>>(),
+        ["macro|owner@example.com", "macro|member@example.com"],
+        "user participants only; bots are not routing targets"
+    );
+}
+
+#[tokio::test]
 async fn only_admins_of_the_channels_own_team_can_delete_without_ownership() {
     let channel_team = Uuid::now_v7();
     let other_team = Uuid::now_v7();

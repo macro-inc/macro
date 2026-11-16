@@ -1,6 +1,7 @@
 pub mod broker_events;
 pub mod context;
 pub mod conversations;
+pub mod events;
 pub mod processing;
 pub mod project_assignment;
 pub mod service;

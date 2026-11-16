@@ -1,3 +1,4 @@
+use crate::access::EventAccess;
 use std::future::pending;
 use std::sync::{
     Arc, Mutex,
@@ -137,6 +138,18 @@ impl TopicEvent for ExampleTopicEvent {
     const SCHEMA_VERSION: u8 = 1;
 }
 
+impl EventAccess for ExampleTopicEvent {
+    type PublicPayload = crate::access::Unexposed;
+
+    fn access(
+        &self,
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::Internal {
+            reason: "broker test fixture",
+        })
+    }
+}
+
 pub struct ExampleMacroEvent {
     key: String,
     event: Event<ExampleTopicEvent>,
@@ -258,6 +271,18 @@ impl TopicEvent for UnserializableTopicEvent {
     type Topic = MacroExampleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+impl EventAccess for UnserializableTopicEvent {
+    type PublicPayload = crate::access::Unexposed;
+
+    fn access(
+        &self,
+    ) -> Result<crate::access::Access<'_, Self::PublicPayload>, crate::access::AccessError> {
+        Ok(crate::access::Access::Internal {
+            reason: "broker test fixture",
+        })
+    }
 }
 
 struct UnserializableMacroEvent {

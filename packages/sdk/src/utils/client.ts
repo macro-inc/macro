@@ -24,7 +24,6 @@ import {
 } from '../config';
 import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
-import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 import { observeSdk } from './activity';
 
@@ -127,7 +126,11 @@ export class MacroClient {
 
   readonly wsVerify?: string;
 
-  readonly events: MacroEvents;
+  /**
+   * Secret that verifies persisted webhook deliveries
+   * (`opts.webhookSecret` or `MACRO_WEBHOOK_SECRET`).
+   */
+  readonly webhookSecret?: string;
 
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
@@ -246,8 +249,7 @@ export class MacroClient {
       typeof process !== 'undefined'
         ? process.env.MACRO_WEBHOOK_SECRET
         : undefined;
-    const webhookSecret = opts.webhookSecret ?? envWebhookSecret;
-    this.events = new MacroEvents(this, webhookSecret);
+    this.webhookSecret = opts.webhookSecret ?? envWebhookSecret;
   }
 
   /** Whether requests have a user identity accepted by acting-user endpoints. */

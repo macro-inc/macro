@@ -196,6 +196,9 @@ export default defineConfig({
           /^MessageEventAttachment$/,
           /^ChannelEventAttachment$/,
           /^ChannelSender$/,
+          // Each family's public event union (DocumentPublicEvent includes
+          // the excluded DocumentTopicEvent).
+          /PublicEvent$/,
         ],
       },
     },

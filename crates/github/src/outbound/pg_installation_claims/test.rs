@@ -141,3 +141,44 @@ async fn a_personal_installation_follows_the_linked_account(pool: Pool<Postgres>
             .unwrap()
     );
 }
+
+/// `claimants` is `has_claim` for many users at once: the same answer for
+/// every candidate and installation.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn claimants_agree_with_has_claim(pool: Pool<Postgres>) {
+    install(&pool, "100", SOLO, "user").await;
+    installed_by(&pool, "100", SOLO_GITHUB).await;
+    install(&pool, "101", SOLO, "user").await;
+    installed_by(&pool, "101", "55555").await;
+    install(&pool, "200", "dddddddd-dddd-dddd-dddd-dddddddddddd", "team").await;
+    relink(&pool, SOLO, Some("55555")).await;
+    // Every fixture user: team members with and without a linked account.
+    let mut candidates: Vec<MacroUserIdStr<'static>> =
+        sqlx::query_scalar!(r#"SELECT DISTINCT user_id AS "user_id!" FROM team_user ORDER BY 1"#)
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|id| MacroUserIdStr::try_from(id).unwrap())
+            .collect();
+    candidates.insert(0, user(SOLO));
+    candidates.dedup();
+    let claims = PgGithubInstallationClaims::new(pool);
+
+    for installation in [100, 101, 200, 300] {
+        let mut expected = Vec::new();
+        for candidate in &candidates {
+            if claims.has_claim(candidate, installation).await.unwrap() {
+                expected.push(candidate.clone());
+            }
+        }
+        assert_eq!(
+            claims.claimants(&candidates, installation).await.unwrap(),
+            expected,
+            "installation {installation}"
+        );
+    }
+}

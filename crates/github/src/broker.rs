@@ -1,5 +1,8 @@
 //! Broker envelope and publication for verified GitHub App deliveries.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::GithubWebhookReceived;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubWebhooksTopic;

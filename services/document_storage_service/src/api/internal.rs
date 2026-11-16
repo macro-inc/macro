@@ -18,7 +18,7 @@ use super::{
     user::populate_items,
 };
 use crate::api::context::{
-    AuthorizationService, DocumentService, DssChatPurgeService, DssDocumentPurger,
+    AuthorizationService, DocumentService, DssChatMutationService, DssDocumentPurger,
     EntityAccessService, ProjectService,
 };
 use crate::api::items::get_item_ids;
@@ -205,7 +205,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             delete(
                 purge_owned_entity::handler::<
                     DssDocumentPurger,
-                    DssChatPurgeService,
+                    DssChatMutationService,
                     ProjectService,
                 >,
             ),

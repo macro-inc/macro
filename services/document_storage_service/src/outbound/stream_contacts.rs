@@ -2,9 +2,9 @@
 
 use contacts::domain::models::query::ContactLookup;
 use contacts::domain::ports::ContactsPageRepository;
+use event_stream::domain::ports::ContactDirectory;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
-use webhook::domain::ports::WebhookContactChecker;
 
 /// Answers "is `other` a contact of `user`" with one indexed point lookup
 /// (`lookup.sql`), never by paging the user's contact list.
@@ -27,22 +27,21 @@ impl<R> Clone for ContactsStreamChecker<R> {
     }
 }
 
-impl<R: ContactsPageRepository> WebhookContactChecker for ContactsStreamChecker<R> {
-    type Err = anyhow::Error;
-
+impl<R: ContactsPageRepository + Send + Sync + 'static> ContactDirectory
+    for ContactsStreamChecker<R>
+{
     async fn is_contact(
         &self,
-        user: MacroUserIdStr<'static>,
-        other: MacroUserIdStr<'static>,
-    ) -> Result<bool, Self::Err> {
+        user: &MacroUserIdStr<'static>,
+        other: &MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
         let Some(lookup) = ContactLookup::new(vec![other.clone()]) else {
             return Ok(false);
         };
         let found = self
             .repository
-            .lookup_contact_ids(user, &lookup)
-            .await
-            .map_err(|error| anyhow::anyhow!("contact lookup failed: {error:?}"))?;
+            .lookup_contact_ids(user.clone(), &lookup)
+            .await?;
         Ok(found.iter().any(|id| id.as_ref() == other.as_ref()))
     }
 }

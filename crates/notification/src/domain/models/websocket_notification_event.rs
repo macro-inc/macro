@@ -1,5 +1,8 @@
 //! Broker event models for realtime notification delivery.
 
+#[cfg(test)]
+mod test;
+
 use std::borrow::Cow;
 
 use macro_event_broker::{Event, MacroEvent, TopicEvent};

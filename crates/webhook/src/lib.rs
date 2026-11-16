@@ -6,9 +6,9 @@ pub mod domain;
 #[cfg(any(feature = "inbound", feature = "consumer", feature = "worker"))]
 /// HTTP, Kafka consumer, and queue worker adapters.
 pub mod inbound;
-#[cfg(any(feature = "outbound", feature = "stream"))]
-/// Postgres, HTTP, and Kafka stream adapters.
+#[cfg(feature = "outbound")]
+/// Postgres, HTTP, and SQS adapters.
 pub mod outbound;
-#[cfg(any(feature = "consumer", feature = "stream"))]
-/// Broker topics shared by every webhook consumption path.
+#[cfg(feature = "consumer")]
+/// Broker topics carrying public events.
 pub mod topics;

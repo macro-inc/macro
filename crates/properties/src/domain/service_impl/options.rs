@@ -14,7 +14,7 @@ where
         team: Option<&TeamReceipt>,
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
-    ) -> Result<(i32, PropertyOptionValue, Option<String>), PropertiesErr> {
+    ) -> Result<(i32, PropertyOptionValue, Option<String>, PropertyOwner), PropertiesErr> {
         let definition = self
             .owned_modifiable_definition(
                 property_definition_id,
@@ -45,6 +45,6 @@ where
 
         validate_option_color(&definition.data_type, color.as_deref(), color.as_deref())?;
 
-        Ok((display_order, option_value, color))
+        Ok((display_order, option_value, color, definition.owner))
     }
 }

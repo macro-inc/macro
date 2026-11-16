@@ -13,7 +13,7 @@ pub mod source_grants;
 pub mod team_share;
 
 pub use channel_share::get_direct_channel_grants;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 pub use model_entity::EntityType;
 use model_owner::Owner;
 pub use models_entity_access_management::EntityAccessSourceType;
@@ -23,7 +23,7 @@ use models_permissions::share_permission::channel_share_permission::{
 };
 use scoped_grants::{Grant, refuse_added_access, refuse_grant};
 pub use source_grants::delete_source_grants;
-use sqlx::{PgConnection, Postgres, QueryBuilder, Transaction};
+use sqlx::{Executor, PgConnection, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
 /// *NOTE*: The transaction does not get committed automatically
@@ -219,6 +219,70 @@ pub async fn delete_entity_access_rows(
     .await?;
 
     Ok(())
+}
+
+/// Users with explicit access to an entity: direct user grants, active
+/// participants of granted channels, and members of granted teams. Link
+/// viewers are not listed. Sorted and deduplicated; ids that are not user ids
+/// are skipped.
+///
+/// Run it inside the deleting transaction, before
+/// [`delete_entity_access_rows`], to snapshot who could see an entity that is
+/// about to disappear.
+#[tracing::instrument(skip(executor), err)]
+pub async fn entity_users<'e, E>(
+    executor: E,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+) -> Result<Vec<MacroUserIdStr<'static>>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let users = sqlx::query_scalar!(
+        r#"
+    SELECT user_id FROM (
+        -- Direct user grants
+        SELECT source_id as user_id FROM entity_access
+        WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user'
+
+        UNION ALL
+
+        -- Channel Members
+        SELECT cp.user_id FROM comms_channel_participants cp
+        WHERE cp.left_at IS NULL AND cp.channel_id IN (
+            SELECT source_id::uuid FROM entity_access
+            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'channel'
+        )
+
+        UNION ALL
+
+        -- Team Members
+        SELECT tu.user_id FROM team_user tu
+        WHERE tu.team_id IN (
+            SELECT source_id::uuid FROM entity_access
+            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'team'
+        )
+    ) AS combined_users
+
+    "#,
+        entity_id,
+        entity_type.as_ref(),
+    )
+    .fetch_all(executor)
+    .await?;
+
+    let mut users: Vec<MacroUserIdStr<'static>> = users
+        .into_iter()
+        .flatten()
+        .filter_map(|user| {
+            MacroUserIdStr::parse_from_str(user.as_str())
+                .ok()
+                .map(CowLike::into_owned)
+        })
+        .collect();
+    users.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    users.dedup();
+    Ok(users)
 }
 
 /// Grant call-only comment access to an active participant of a standalone call.

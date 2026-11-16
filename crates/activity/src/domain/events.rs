@@ -12,6 +12,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroActivityTopic;
 use model_entity::EntityType;
@@ -134,6 +135,100 @@ impl TopicEvent for ActivityTopicEvent {
 
     // Older consumers skip the new session event during rolling deployment.
     const SCHEMA_VERSION: u8 = 2;
+}
+
+impl EventAccess for ActivityTopicEvent {
+    type PublicPayload = ActivityPublicEvent;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        use macro_event_broker::access::{
+            Access, Audience, EntityRef, PublicEvent, Stage, parse_user_id,
+        };
+        use std::borrow::Cow;
+
+        match self {
+            Self::Recorded {
+                recipient_id,
+                activities,
+            } => {
+                let user_id = parse_user_id(recipient_id)?;
+                // The recipient's feed is personal: only them, never their teams.
+                Ok(Access::Public(PublicEvent {
+                    name: ACTIVITY_RECORDED,
+                    entity: EntityRef::new(EntityType::User, recipient_id.clone()),
+                    audience: Audience::Recipient { user_id },
+                    stage: Stage::Preview,
+                    payload: Cow::Owned(ActivityPublicEvent::Recorded(ActivityRecorded {
+                        activities: activities.iter().map(PublicActivity::from).collect(),
+                    })),
+                }))
+            }
+            Self::SessionRecorded { .. } | Self::Invalidated => Ok(Access::Internal {
+                reason: "session-viewer rows and global invalidations are app cache signals",
+            }),
+        }
+    }
+}
+
+const ACTIVITY_RECORDED: &str = "activity.recorded";
+
+/// The public projection of [`ActivityTopicEvent`], delivered only to the
+/// addressed recipient.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum ActivityPublicEvent {
+    /// Activities the recipient may see were recorded.
+    #[serde(rename = "activity.recorded")]
+    Recorded(ActivityRecorded),
+}
+
+/// Public body of `activity.recorded`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ActivityRecorded {
+    /// The recorded rows, in recording order.
+    pub activities: Vec<PublicActivity>,
+}
+
+/// One recorded activity: who did what to which entity, without the action's
+/// payload (read it back through the activity API).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicActivity {
+    /// The activity id.
+    pub id: Uuid,
+    /// Who acted, as a principal string (`macro|…` or `bot|…`).
+    pub actor_id: String,
+    /// Whose activity this is, as a principal string.
+    pub subject_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: EntityType,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// The action tag, such as `created`.
+    pub action: String,
+    /// When it happened.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl From<&ActivityWireRow> for PublicActivity {
+    fn from(row: &ActivityWireRow) -> Self {
+        Self {
+            id: row.id,
+            actor_id: row.actor_id.clone(),
+            subject_id: row.subject_id.clone(),
+            entity_type: row.entity_type,
+            entity_id: row.entity_id.clone(),
+            action: row.action.clone(),
+            occurred_at: row.occurred_at,
+        }
+    }
 }
 
 /// Publishable realtime activity event, keyed by its recipient.

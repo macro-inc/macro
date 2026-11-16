@@ -157,7 +157,7 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, id: InitiativeId) -> Result<(), Self::Err> {
+    async fn delete(&self, id: InitiativeId) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
         create::delete(&self.pool, id).await
     }
 }

@@ -6,6 +6,7 @@
  */
 
 /**
- * Entity ids matched by this filter. When absent, the filter matches all entity ids.
+ * Entity ids matched by this filter. When absent, the filter matches all
+entity ids.
  */
 export type WebhookFilterIds = string[] | null;

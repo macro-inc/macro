@@ -1,0 +1,33 @@
+id: rust-event-access-in-events-rs
+valid:
+  - |
+    impl TopicEvent for WidgetTopicEvent {
+        type Topic = MacroWidgetsTopic;
+        const SCHEMA_VERSION: u8 = 1;
+    }
+  - |
+    impl EventAccessAdapter for Widget {
+        fn access(&self) {}
+    }
+invalid:
+  - |
+    impl EventAccess for WidgetTopicEvent {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }
+  - |
+    impl macro_event_broker::access::EventAccess for WidgetTopicEvent {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }
+  - |
+    impl<'a, T: Clone> EventAccess for Envelope<'a, T> {
+        type PublicPayload = Unexposed;
+        fn access(&self) -> Result<Access<'_, Unexposed>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }

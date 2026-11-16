@@ -2,6 +2,9 @@
 
 pub mod models;
 
+/// Who receives GitHub App deliveries outside Macro.
+pub mod events;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 

@@ -17,7 +17,6 @@ use entity_access::domain::models::{
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, CreatePropertyScope,
@@ -31,6 +30,7 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{DataType, PropertyOwner};
 use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
@@ -212,11 +212,13 @@ where
     /// Build an option creation event from the authoritative persisted state.
     fn property_option_created_event(
         option: &PropertyOption,
+        owner: &PropertyOwner,
         actor_user_id: &MacroUserIdStr<'_>,
     ) -> PropertyMacroEvent {
         PropertyMacroEvent::property_option_created(PropertyOptionCreatedMetadata {
             option_id: option.id,
             property_definition_id: option.property_definition_id,
+            owner: Some(owner.clone()),
             actor_user_id: Some(actor_user_id.clone().into_owned()),
             value: option.value.clone(),
             color: option.color.clone(),
@@ -227,11 +229,13 @@ where
     /// Build an option update event from the authoritative post-update state.
     fn property_option_updated_event(
         option: &PropertyOption,
+        owner: &PropertyOwner,
         actor_user_id: &MacroUserIdStr<'_>,
     ) -> PropertyMacroEvent {
         PropertyMacroEvent::property_option_updated(PropertyOptionUpdatedMetadata {
             option_id: option.id,
             property_definition_id: option.property_definition_id,
+            owner: Some(owner.clone()),
             actor_user_id: Some(actor_user_id.clone().into_owned()),
             value: option.value.clone(),
             color: option.color.clone(),
@@ -242,11 +246,13 @@ where
     /// Build an option deletion event from the value captured before deletion.
     fn property_option_deleted_event(
         option: &PropertyOption,
+        owner: &PropertyOwner,
         actor_user_id: &MacroUserIdStr<'_>,
     ) -> PropertyMacroEvent {
         PropertyMacroEvent::property_option_deleted(PropertyOptionDeletedMetadata {
             option_id: option.id,
             property_definition_id: option.property_definition_id,
+            owner: Some(owner.clone()),
             actor_user_id: Some(actor_user_id.clone().into_owned()),
             value: option.value.clone(),
         })
@@ -1436,7 +1442,7 @@ where
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
-        let (display_order, option_value, color) = self
+        let (display_order, option_value, color, owner) = self
             .prepare_property_option(user_id, team, property_definition_id, request)
             .await?;
 
@@ -1452,7 +1458,9 @@ where
             "successfully added property option"
         );
 
-        self.publish_property_event(Self::property_option_created_event(&option, user_id));
+        self.publish_property_event(Self::property_option_created_event(
+            &option, &owner, user_id,
+        ));
 
         Ok(option)
     }
@@ -1464,7 +1472,7 @@ where
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
-        let (display_order, option_value, color) = self
+        let (display_order, option_value, color, owner) = self
             .prepare_property_option(user_id, team, property_definition_id, request)
             .await?;
         let result = self
@@ -1480,6 +1488,7 @@ where
         if result.created {
             self.publish_property_event(Self::property_option_created_event(
                 &result.option,
+                &owner,
                 user_id,
             ));
         }
@@ -1549,7 +1558,11 @@ where
             .map_err(anyhow::Error::from)?
         {
             UpdatePropertyOptionOutcome::Updated(updated) => {
-                self.publish_property_event(Self::property_option_updated_event(&updated, user_id));
+                self.publish_property_event(Self::property_option_updated_event(
+                    &updated,
+                    &definition.owner,
+                    user_id,
+                ));
                 Ok(updated)
             }
             UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
@@ -1615,15 +1628,19 @@ where
         };
 
         for option in before.iter().filter(|o| plan.delete.contains(&o.id)) {
-            self.publish_property_event(Self::property_option_deleted_event(option, user_id));
+            self.publish_property_event(Self::property_option_deleted_event(
+                option,
+                &definition.owner,
+                user_id,
+            ));
         }
         for option in &after {
             let event = if plan.rewrite.iter().any(|r| r.option_id == option.id) {
-                Self::property_option_updated_event(option, user_id)
+                Self::property_option_updated_event(option, &definition.owner, user_id)
             } else if before.iter().any(|o| o.id == option.id) {
                 continue;
             } else {
-                Self::property_option_created_event(option, user_id)
+                Self::property_option_created_event(option, &definition.owner, user_id)
             };
             self.publish_property_event(event);
         }
@@ -1639,12 +1656,13 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
-        self.owned_modifiable_definition(
-            property_definition_id,
-            user_id,
-            team_id_from_receipt(team),
-        )
-        .await?;
+        let definition = self
+            .owned_modifiable_definition(
+                property_definition_id,
+                user_id,
+                team_id_from_receipt(team),
+            )
+            .await?;
 
         let option = self
             .repository
@@ -1668,7 +1686,11 @@ where
             entities_updated = mutations.len(),
             "successfully deleted property option"
         );
-        self.publish_property_event(Self::property_option_deleted_event(&option, user_id));
+        self.publish_property_event(Self::property_option_deleted_event(
+            &option,
+            &definition.owner,
+            user_id,
+        ));
         self.publish_option_change_events(&mutations, user_id);
 
         Ok(())
@@ -1762,7 +1784,11 @@ where
 
         // The option keeps its id, so this reports the same label now hanging
         // off the team definition rather than a newly created one.
-        self.publish_property_event(Self::property_option_updated_event(&remap.option, user_id));
+        self.publish_property_event(Self::property_option_updated_event(
+            &remap.option,
+            &target_definition.owner,
+            user_id,
+        ));
         self.publish_option_change_events(&remap.mutations, user_id);
 
         Ok(remap.option)
@@ -1803,7 +1829,11 @@ where
             "merged personal label into an existing team label"
         );
 
-        self.publish_property_event(Self::property_option_deleted_event(&source_option, user_id));
+        self.publish_property_event(Self::property_option_deleted_event(
+            &source_option,
+            &source_definition.owner,
+            user_id,
+        ));
         self.publish_option_change_events(&remap.mutations, user_id);
 
         Ok(remap.option)

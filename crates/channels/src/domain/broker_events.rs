@@ -83,6 +83,15 @@ pub struct ChannelDeletedMetadata {
     pub channel_id: Uuid,
     /// Actor that deleted the channel.
     pub actor: ChannelSender<'static>,
+    /// Routing: the users who were active participants when the channel was
+    /// deleted. Participant rows cascade with the channel, so this snapshot is
+    /// the only way to reach them after the delete. Not part of the public
+    /// payload; events published before it existed decode as empty, and an
+    /// empty snapshot is not serialized, so the public body matches the one
+    /// delivered before the field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub participant_user_ids: Vec<MacroUserIdStr<'static>>,
 }
 
 /// The channel-only shape of a posted message.

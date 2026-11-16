@@ -75,7 +75,23 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.agent_sessions",
             "macro.agent_session_lifecycle",
             "macro.users",
-            "macro.passwords"
+            "macro.passwords",
+            "macro.projects",
+            "macro.chats",
+            "macro.databases",
+            "macro.forms",
+            "macro.initiatives",
+            "macro.properties",
+            "macro.calls",
+            "macro.github_pull_requests",
+            "macro.email",
+            "macro.calendar",
+            "macro.activity",
+            "macro.notifications",
+            "macro.mentions",
+            "macro.teams",
+            "macro.bots",
+            "macro.github_webhooks",
         ]
     );
 }
@@ -116,6 +132,7 @@ fn decodes_channel_events() {
         channel_id: Uuid::nil(),
         actor: ChannelSender::try_from("macro|owner@example.com".to_string())
             .expect("valid channel sender"),
+        participant_user_ids: Vec::new(),
     }));
     let payload = serde_json::to_vec(&event).expect("serializable");
 
@@ -187,6 +204,12 @@ impl FlakyIngestionService {
 }
 
 impl WebhookEventIngestionService for FlakyIngestionService {
+    async fn ingest_public_event<E: macro_event_broker::TopicEvent>(
+        &self,
+        _event: Event<E>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
     async fn ingest_call_notification_event(
         &self,
         _event: macro_event_broker::Event<call::domain::notification_events::CallNotificationEvent>,
@@ -238,13 +261,6 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_user_event(
         &self,
         _event: Event<user_events::UserTopicEvent>,
-    ) -> Result<(), WebhookEventIngestionError> {
-        self.ingest()
-    }
-
-    async fn ingest_password_event(
-        &self,
-        _event: Event<password_events::PasswordTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

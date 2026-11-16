@@ -1,0 +1,68 @@
+id: rust-event-access-in-events-rs
+snapshots:
+  ? |
+    impl EventAccess for WidgetTopicEvent {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }
+  : labels:
+    - source: |-
+        impl EventAccess for WidgetTopicEvent {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(Access::Internal { reason: "plumbing" })
+            }
+        }
+      style: primary
+      start: 0
+      end: 194
+    - source: EventAccess
+      style: secondary
+      start: 5
+      end: 16
+  ? |
+    impl macro_event_broker::access::EventAccess for WidgetTopicEvent {
+        type PublicPayload = Self;
+        fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }
+  : labels:
+    - source: |-
+        impl macro_event_broker::access::EventAccess for WidgetTopicEvent {
+            type PublicPayload = Self;
+            fn access(&self) -> Result<Access<'_, Self>, AccessError> {
+                Ok(Access::Internal { reason: "plumbing" })
+            }
+        }
+      style: primary
+      start: 0
+      end: 222
+    - source: macro_event_broker::access::EventAccess
+      style: secondary
+      start: 5
+      end: 44
+  ? |
+    impl<'a, T: Clone> EventAccess for Envelope<'a, T> {
+        type PublicPayload = Unexposed;
+        fn access(&self) -> Result<Access<'_, Unexposed>, AccessError> {
+            Ok(Access::Internal { reason: "plumbing" })
+        }
+    }
+  : labels:
+    - source: |-
+        impl<'a, T: Clone> EventAccess for Envelope<'a, T> {
+            type PublicPayload = Unexposed;
+            fn access(&self) -> Result<Access<'_, Unexposed>, AccessError> {
+                Ok(Access::Internal { reason: "plumbing" })
+            }
+        }
+      style: primary
+      start: 0
+      end: 217
+    - source: EventAccess
+      style: secondary
+      start: 19
+      end: 30

@@ -371,6 +371,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// [`Self::get_entity_users`] without the adapter's process cache, so a
+    /// grant change is visible to the next call.
+    fn get_entity_users_uncached(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Gets the users each entity's `entity_access` grants reach (direct users, team
     /// members, and active channel participants), the same users
     /// [`Self::get_entity_users`] returns for an entity of a type without a special
@@ -389,8 +397,95 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Whether `principal_id` is an explicit accessor of an entity through its
+    /// `entity_access` rows: a direct `user` grant, an active participant of a
+    /// granting channel, or a member of a granting team. This is the exact
+    /// test for membership in [`Self::get_entity_users`]'s generic union; it
+    /// does not cover email-thread owners or CRM and foreign-entity rules.
+    ///
+    /// `principal_id` is a canonical, lowercased `macro|<email>`. Stored ids
+    /// match case-insensitively, the way [`MacroUserIdStr`] parses them.
+    fn is_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// The teams an entity's own grants name, uncached: `team` grants, and
+    /// grants to a channel a team owns (a team channel), at `min_level` or
+    /// above when given. Not the teams of the entity's individual accessors.
+    fn get_entity_granted_teams(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// The team that owns a team channel; `None` for any other channel.
+    fn get_channel_team(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
+    /// The team owning a CRM company or contact, when at least one member
+    /// may see it (CRM access, and admins only for a hidden record); `None`
+    /// otherwise or when it is missing.
+    fn get_crm_entity_team(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
+    /// Of `users`, the members of `team_id` who may see a CRM company,
+    /// contact or pipeline through that team: CRM access (`crm_access`, or a
+    /// role above member), and admins and owners only for a hidden company or
+    /// contact.
+    fn get_crm_team_viewers(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        team_id: &Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// The members of [`Self::get_entity_users`]'s generic union reached
+    /// through a grant at `min_level` or above, in one read, uncached.
+    fn get_entity_users_at_least(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Whether `principal_id` holds a direct `user` grant on an entity, not
+    /// inherited from a project: membership in [`Self::get_direct_entity_users`].
+    /// `principal_id` matches as in [`Self::is_entity_user`].
+    fn is_direct_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// Whether `principal_id` is an active participant of a channel:
+    /// membership in [`Self::get_channel_users`]. `principal_id` matches as in
+    /// [`Self::is_entity_user`].
+    fn is_channel_user(
+        &self,
+        channel_id: &Uuid,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
     /// Get all active participant user IDs in a channel.
     fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// [`Self::get_channel_users`] without the adapter's process cache, so a
+    /// participant who joins or leaves is visible to the next call.
+    fn get_channel_users_uncached(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
@@ -719,14 +814,86 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     ///
     /// The activity team feed applies this audience in SQL
     /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
-    /// [`EntityAudienceLookup`] resolves it for many entities at once
-    /// (`outbound/pg_access_repo/queries/entity_audiences.rs`); keep the three
-    /// in step.
+    /// [`Self::is_accessor`] and [`Self::get_users_by_entity_uncached`] answer
+    /// the same audience, and [`EntityAudienceLookup`] resolves it for many
+    /// entities at once (`outbound/pg_access_repo/queries/entity_audiences.rs`);
+    /// keep them all in step.
     fn get_users_by_entity(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// [`Self::get_users_by_entity`] without the adapter's per-process
+    /// cache: grant and participant changes are visible to the next call.
+    /// For callers that act on membership changes as they happen.
+    ///
+    /// The default delegates to [`Self::get_users_by_entity`], which is right
+    /// for implementations that keep no cache.
+    fn get_users_by_entity_uncached(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send {
+        self.get_users_by_entity(entity_id, entity_type)
+    }
+
+    /// Whether `principal_id` is in the set
+    /// [`Self::get_users_by_entity_uncached`] returns for the entity, decided
+    /// without listing every accessor and without any process cache.
+    ///
+    /// `principal_id` is a Macro user id (`macro|<email>`), matched as
+    /// [`MacroUserIdStr`] lowercases it. Link-share access does not count.
+    /// Unsupported entity types, malformed entity ids and malformed principal
+    /// ids return [`AccessError::BadRequest`].
+    ///
+    /// The default tests membership in [`Self::get_users_by_entity_uncached`];
+    /// the database-backed service overrides it with bounded lookups.
+    fn is_accessor(
+        &self,
+        principal_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send {
+        async move {
+            let Ok(principal) = MacroUserIdStr::parse_from_str(principal_id) else {
+                return Err(AccessError::BadRequest("invalid principal_id"));
+            };
+            Ok(self
+                .get_users_by_entity_uncached(entity_id, entity_type)
+                .await?
+                .iter()
+                .any(|user| user.as_ref() == principal.as_ref()))
+        }
+    }
+
+    /// The explicit accessors (as [`Self::get_users_by_entity_uncached`])
+    /// whose access is at least `min_level`, such as a form's editors.
+    ///
+    /// The default asks each accessor's level; the database-backed service
+    /// overrides it with one set-based read over the grants.
+    fn get_users_by_entity_at_least(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send {
+        async move {
+            let mut admitted = Vec::new();
+            for user in self
+                .get_users_by_entity_uncached(entity_id, entity_type)
+                .await?
+            {
+                let level = self
+                    .get_access_level(Some(&user.0), entity_id, entity_type)
+                    .await?;
+                if level.is_some_and(|level| level >= min_level) {
+                    admitted.push(user);
+                }
+            }
+            Ok(admitted)
+        }
+    }
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
@@ -876,6 +1043,27 @@ impl EntityAccessService for NoOpEntityAccessService {
         ))
     }
 
+    async fn is_accessor(
+        &self,
+        _principal_id: &str,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<bool, AccessError> {
+        Err(AccessError::internal(
+            "entity access service not configured",
+        ))
+    }
+
+    async fn get_users_by_entity_uncached(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Err(AccessError::internal(
+            "entity access service not configured",
+        ))
+    }
+
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,
@@ -916,6 +1104,42 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
         ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+}
+
+/// Which teams hold access to an entity as a team.
+///
+/// A team holds access when the entity is granted to the team itself, not
+/// when one of its members can open it: a `team` grant, a grant to a channel
+/// the team owns, membership of a team channel for that channel (and its
+/// calls), or a CRM record the team owns that some member may see. Link
+/// shares never count. CRM records are not visible to every member, so a
+/// caller acting for one member checks [`Self::get_team_crm_viewers`] too. Team-workspace webhooks match entity events through it
+/// (`crates/event_access/ACCESS_MODEL.md`, "Team webhooks").
+pub trait EntityTeamAccess: Clone + Send + Sync + 'static {
+    /// The teams holding access to the entity, sorted and deduplicated, read
+    /// through to the database. With `min_level`, only grants at or above it
+    /// count; channels and CRM records carry no team-level grant, so they
+    /// reach no team under a floor. Unsupported entity types and malformed
+    /// ids return [`AccessError::BadRequest`].
+    fn get_teams_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// Of `users`, those who may see a CRM company, contact or pipeline as
+    /// members of `team_id` (CRM access, and admins only for a hidden
+    /// record), read through to the database. Every other entity type
+    /// returns no one: only CRM records hide from some of a team that holds
+    /// them.
+    fn get_team_crm_viewers(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        team_id: Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }
 
 /// Resolves the current users of many entities of one type at once.

@@ -31,6 +31,8 @@ outbound = [
   "upstream_error/reqwest",
 ]
 ports = []
+# OpenAPI schemas for the public event projection.
+schema = ["dep:utoipa"]
 sync = [
   "dep:documents",
   "dep:entity_access",

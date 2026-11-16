@@ -8,7 +8,7 @@ use crate::domain::{
         CreateWebhookOutcome, CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookFilters,
         WebhookHeaders, WebhookId, WebhookStatus,
     },
-    ports::{WebhookRepo, WebhookWorkspaceResolver},
+    ports::{WebhookInterest, WebhookRepo, WebhookWorkspaceResolver},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
@@ -141,40 +141,6 @@ async fn fetch_user_team_workspace_id(
 impl WebhookWorkspaceResolver for PgRepository {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(skip(self, people), err)]
-    async fn resolve_workspace_ids(
-        &self,
-        people: Vec<MacroUserIdStr<'static>>,
-    ) -> Result<Vec<String>, Self::Err> {
-        let mut workspace_ids = people
-            .iter()
-            .map(|person| person.as_ref().to_string())
-            .collect::<Vec<_>>();
-        workspace_ids.sort_unstable();
-        workspace_ids.dedup();
-
-        if workspace_ids.is_empty() {
-            return Ok(workspace_ids);
-        }
-
-        let team_workspace_ids = sqlx::query_scalar!(
-            r#"
-            SELECT DISTINCT team_id::text AS "team_id!"
-            FROM team_user
-            WHERE user_id = ANY($1)
-            ORDER BY team_id::text
-            "#,
-            &workspace_ids
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        workspace_ids.extend(team_workspace_ids);
-        workspace_ids.sort_unstable();
-        workspace_ids.dedup();
-        Ok(workspace_ids)
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn get_user_team_workspace_id(
         &self,
@@ -182,6 +148,53 @@ impl WebhookWorkspaceResolver for PgRepository {
     ) -> Result<Option<String>, Self::Err> {
         fetch_user_team_workspace_id(&self.pool, user_id).await
     }
+}
+
+impl WebhookInterest for PgRepository {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn any_webhook_names(&self, event_name: &str) -> Result<bool, Self::Err> {
+        let family_pattern = family_pattern(event_name);
+        // The live-webhook predicates are inside the materialized CTE so the
+        // probes use the partial `webhook_filters_live_gin_idx` (a BitmapOr
+        // over live webhooks only): paused, invalid or deleted webhooks
+        // naming the event cannot make a miss look like a likely hit and
+        // push the planner onto a seq scan. Planned per call
+        // (`persistent(false)`): a cached generic plan, blind to the names,
+        // would expect an early hit and seq-scan on a miss.
+        sqlx::query_scalar!(
+            r#"
+            WITH named AS MATERIALIZED (
+                SELECT 1
+                FROM webhook w
+                WHERE w.deleted_at IS NULL
+                  AND w.status = 'active'
+                  AND w.is_valid
+                  AND (
+                      w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($1::text)))
+                      OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+                      OR w.filters @> '[{"events": ["*"]}]'::jsonb
+                  )
+            )
+            SELECT EXISTS (SELECT 1 FROM named) AS "wanted!"
+            "#,
+            event_name,
+            &family_pattern,
+        )
+        .persistent(false)
+        .fetch_one(&self.pool)
+        .await
+    }
+}
+
+/// The family wildcard of an event name (`document.*`), or the name itself
+/// when it has no family.
+fn family_pattern(event_name: &str) -> String {
+    event_name.split_once('.').map_or_else(
+        || event_name.to_owned(),
+        |(family, _)| format!("{family}.*"),
+    )
 }
 
 impl WebhookRepo for PgRepository {
@@ -282,6 +295,10 @@ impl WebhookRepo for PgRepository {
         event: String,
         entity_id: String,
     ) -> Result<Vec<Webhook>, Self::Err> {
+        // Filters may name the event exactly, by family (`document.*`) or as
+        // `*`. All three are fetched here; whether a wildcard counts (its
+        // owner's rollout flag) and `entity_types` are decided by ingestion.
+        let family_pattern = family_pattern(&event);
         let rows = sqlx::query_as!(
             WebhookRow,
             r#"
@@ -305,17 +322,22 @@ impl WebhookRepo for PgRepository {
               AND w.deleted_at IS NULL
               AND w.status = 'active'
               AND w.is_valid
-              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+              AND (
+                  w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+                  OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($4::text)))
+                  OR w.filters @> '[{"events": ["*"]}]'::jsonb
+              )
               AND jsonb_path_exists(
                   w.filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $2::text, 'id', $3::text)
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $family || @.events[*] == "*") && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $2::text, 'family', $4::text, 'id', $3::text)
               )
             ORDER BY w.id
             "#,
             &workspace_ids,
             &event,
-            &entity_id
+            &entity_id,
+            &family_pattern,
         )
         .fetch_all(&self.pool)
         .await?;

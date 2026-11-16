@@ -1,4 +1,7 @@
 //! Broker envelopes and publication for persisted pull request updates.
+
+#[cfg(test)]
+mod test;
 use crate::domain::events::GithubPullRequestUpdated;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubPullRequestsTopic;
@@ -12,10 +15,12 @@ pub enum GithubPullRequestTopicEvent {
     #[serde(rename = "github_pull_request.updated")]
     Updated(GithubPullRequestUpdated),
 }
+
 impl TopicEvent for GithubPullRequestTopicEvent {
     type Topic = MacroGithubPullRequestsTopic;
     const SCHEMA_VERSION: u8 = 1;
 }
+
 /// An event keyed by PR so updates retain per-PR ordering.
 #[derive(Debug, Clone)]
 pub struct GithubPullRequestMacroEvent {

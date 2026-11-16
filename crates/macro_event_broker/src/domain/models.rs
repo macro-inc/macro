@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use event_access::EventAccess;
 use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -13,7 +14,12 @@ use crate::domain::ports::{MacroEventCollection, MessageParts};
 /// Implement this trait for each topic-specific event enum. The enum should use
 /// `#[serde(tag = "event_type", content = "metadata")]` so the wire payload is
 /// self-describing while each variant still carries strongly typed metadata.
-pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
+///
+/// Every topic event must also implement [`EventAccess`]: who may receive
+/// each event outside Macro, and in what shape. It is a supertrait, so a
+/// topic event that does not declare its access does not compile. See
+/// `crates/event_access/ACCESS_MODEL.md`.
+pub trait TopicEvent: EventAccess + Serialize + DeserializeOwned + Send + Sync {
     /// The concrete topic type that all variants of this event enum belong to.
     type Topic: Topic;
 

@@ -8,7 +8,7 @@ use crate::domain::{
         CreateWebhookOutcome, CreateWebhookRequest, PatchWebhookRequest, Webhook,
         WebhookEventQueueMessage, WebhookStatus,
     },
-    ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
+    ports::{WebhookEventEnqueuer, WebhookRepo},
 };
 use call::domain::notification_events::{CallNotificationEvent, CallNotificationMetadata};
 use channel_sender::ChannelSender;
@@ -21,9 +21,8 @@ use channels::domain::{
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
-    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentPurgedMetadata, DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
     AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
@@ -42,6 +41,11 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
+use uuid::Uuid;
+
+const DOCUMENT_ENTITY_TYPE: &str = "document";
+const CHANNEL_ENTITY_TYPE: &str = "channel";
+const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 const COPIED_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
@@ -58,10 +62,7 @@ async fn private_call_invitation_reaches_only_the_recipient_workspace() {
     metadata.invited_by = Some("macro|sender@example.com".to_string());
     let event = Event::new(CallNotificationEvent::Invited(metadata));
     let access = MockAccessService::with_users(Vec::new());
-    let repository = MockRepository::new(
-        vec![TEAM_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_recipient", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_recipient", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
 
     service(access.clone(), repository.clone(), enqueuer.clone())
@@ -71,7 +72,6 @@ async fn private_call_invitation_reaches_only_the_recipient_workspace() {
 
     assert!(lock(&access.calls).is_empty());
     let state = lock(&repository.state);
-    assert!(state.workspace_calls.is_empty());
     assert_eq!(
         state.match_calls[0].workspace_ids,
         vec![PERSONAL_WORKSPACE_ID.to_string()]
@@ -95,10 +95,7 @@ async fn private_call_event_without_recipient_is_never_fanned_out() {
         CallNotificationMetadata::new(call_id, None),
     ));
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
 
     let result = service(access, repository.clone(), enqueuer.clone())
@@ -120,13 +117,7 @@ async fn public_call_event_resolves_current_call_accessors() {
         call_id, None,
     )));
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![
-            PERSONAL_WORKSPACE_ID.to_string(),
-            TEAM_WORKSPACE_ID.to_string(),
-        ],
-        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
 
     service(access.clone(), repository.clone(), enqueuer)
@@ -138,7 +129,11 @@ async fn public_call_event_resolves_current_call_accessors() {
         lock(&access.calls).as_slice(),
         &[(CALL_ID.to_string(), EntityType::Call)]
     );
-    assert_eq!(lock(&repository.state).workspace_calls.len(), 1);
+    assert_eq!(
+        lock(&access.team_calls).as_slice(),
+        &[(CALL_ID.to_string(), EntityType::Call, None)]
+    );
+    assert_eq!(lock(&repository.state).match_calls.len(), 1);
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -169,6 +164,15 @@ struct MockAccessService {
     users: Vec<MacroUserIdStr<'static>>,
     failure: Option<AccessFailure>,
     calls: Arc<Mutex<Vec<(String, EntityType)>>>,
+    /// Access levels by user id, for access-floor audiences.
+    levels: Arc<Mutex<std::collections::HashMap<String, AccessLevel>>>,
+    /// What a stale cached listing would still say.
+    stale_users: Option<Vec<MacroUserIdStr<'static>>>,
+    /// Teams holding access to the entity themselves.
+    teams: Arc<Mutex<Vec<Uuid>>>,
+    /// Who may see a CRM record through a team; everyone asked when unset.
+    crm_viewers: Arc<Mutex<Option<Vec<String>>>>,
+    team_calls: Arc<Mutex<Vec<(String, EntityType, Option<AccessLevel>)>>>,
 }
 
 impl MockAccessService {
@@ -177,8 +181,110 @@ impl MockAccessService {
             users,
             failure: None,
             calls: Arc::default(),
+            levels: Arc::default(),
+            stale_users: None,
+            teams: Arc::default(),
+            crm_viewers: Arc::default(),
+            team_calls: Arc::default(),
         }
     }
+
+    fn with_teams(self, teams: Vec<Uuid>) -> Self {
+        *lock(&self.teams) = teams;
+        self
+    }
+}
+
+impl EntityTeamAccess for MockAccessService {
+    async fn get_teams_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: Option<AccessLevel>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        lock(&self.team_calls).push((entity_id.to_string(), entity_type, min_level));
+        match self.failure {
+            Some(AccessFailure::Internal) => Err(AccessError::internal("mock access failure")),
+            None => Ok(lock(&self.teams).clone()),
+        }
+    }
+
+    async fn get_team_crm_viewers(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _team_id: Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(match lock(&self.crm_viewers).as_ref() {
+            Some(viewers) => users
+                .iter()
+                .filter(|user| viewers.iter().any(|viewer| viewer == user.as_ref()))
+                .cloned()
+                .collect(),
+            None => users.to_vec(),
+        })
+    }
+}
+
+/// A team directory with fixed members per team.
+#[derive(Default)]
+struct Members {
+    teams: Mutex<std::collections::HashMap<Uuid, Vec<MacroUserIdStr<'static>>>>,
+}
+
+impl Members {
+    fn of(team: &str, members: &[&str]) -> Arc<Self> {
+        let directory = Self::default();
+        lock(&directory.teams).insert(
+            Uuid::parse_str(team).unwrap(),
+            members.iter().map(|member| user_id(member)).collect(),
+        );
+        Arc::new(directory)
+    }
+}
+
+impl event_stream::domain::ports::TeamDirectory for Members {
+    async fn members(
+        &self,
+        team_id: Uuid,
+    ) -> Result<
+        Vec<(
+            MacroUserIdStr<'static>,
+            event_stream::domain::ports::TeamRole,
+        )>,
+        rootcause::Report,
+    > {
+        Ok(lock(&self.teams)
+            .get(&team_id)
+            .into_iter()
+            .flatten()
+            .map(|member| {
+                (
+                    member.clone(),
+                    event_stream::domain::ports::TeamRole::Member,
+                )
+            })
+            .collect())
+    }
+
+    async fn teams_of(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<(Uuid, event_stream::domain::ports::TeamRole)>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+}
+
+/// The service under test, with team membership from `members`.
+fn service_with_members(
+    access: MockAccessService,
+    repository: MockRepository,
+    enqueuer: MockEnqueuer,
+    members: Arc<Members>,
+) -> TestService {
+    WebhookEventIngestionServiceImpl::new(Arc::new(access), repository, enqueuer)
+        .with_audience_directories(members, Arc::new(Unconfigured))
 }
 
 impl EntityAccessService for MockAccessService {
@@ -204,11 +310,14 @@ impl EntityAccessService for MockAccessService {
 
     async fn get_access_level(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        unimplemented!("not used by webhook event ingestion")
+        let user_id = user_id
+            .map(|user| user.as_ref().to_string())
+            .unwrap_or_default();
+        Ok(lock(&self.levels).get(&user_id).copied())
     }
 
     async fn check_access(
@@ -249,7 +358,21 @@ impl EntityAccessService for MockAccessService {
         unimplemented!("not used by webhook event ingestion")
     }
 
+    /// The cached listing: answers with `stale_users` when set, as the
+    /// adapter's 10 s cache would after a grant change. Ingestion must not
+    /// use it.
     async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self
+            .stale_users
+            .clone()
+            .unwrap_or_else(|| self.users.clone()))
+    }
+
+    async fn get_users_by_entity_uncached(
         &self,
         entity_id: &str,
         entity_type: EntityType,
@@ -291,11 +414,8 @@ struct MatchCall {
 }
 
 struct MockRepositoryState {
-    resolved_workspace_ids: Vec<String>,
     matching_webhooks: Vec<Webhook>,
-    fail_workspace_resolution: bool,
     fail_matching: bool,
-    workspace_calls: Vec<Vec<MacroUserIdStr<'static>>>,
     match_calls: Vec<MatchCall>,
 }
 
@@ -305,40 +425,14 @@ struct MockRepository {
 }
 
 impl MockRepository {
-    fn new(resolved_workspace_ids: Vec<String>, matching_webhooks: Vec<Webhook>) -> Self {
+    fn new(matching_webhooks: Vec<Webhook>) -> Self {
         Self {
             state: Arc::new(Mutex::new(MockRepositoryState {
-                resolved_workspace_ids,
                 matching_webhooks,
-                fail_workspace_resolution: false,
                 fail_matching: false,
-                workspace_calls: Vec::new(),
                 match_calls: Vec::new(),
             })),
         }
-    }
-}
-
-impl WebhookWorkspaceResolver for MockRepository {
-    type Err = anyhow::Error;
-
-    async fn resolve_workspace_ids(
-        &self,
-        people: Vec<MacroUserIdStr<'static>>,
-    ) -> Result<Vec<String>, Self::Err> {
-        let mut state = lock(&self.state);
-        state.workspace_calls.push(people);
-        if state.fail_workspace_resolution {
-            anyhow::bail!("workspace resolver unavailable");
-        }
-        Ok(state.resolved_workspace_ids.clone())
-    }
-
-    async fn get_user_team_workspace_id(
-        &self,
-        _user_id: MacroUserIdStr<'static>,
-    ) -> Result<Option<String>, Self::Err> {
-        Ok(None)
     }
 }
 
@@ -452,15 +546,23 @@ impl WebhookEventEnqueuer for MockEnqueuer {
     }
 }
 
-type TestService =
-    WebhookEventIngestionServiceImpl<MockAccessService, MockRepository, MockEnqueuer>;
+type TestService = WebhookEventIngestionServiceImpl<
+    MockAccessService,
+    MockRepository,
+    MockEnqueuer,
+    NoPreview,
+    Members,
+    Unconfigured,
+>;
 
+/// The service under test, with a team directory where no team has members:
+/// team workspace webhooks need [`service_with_members`].
 fn service(
     access: MockAccessService,
     repository: MockRepository,
     enqueuer: MockEnqueuer,
 ) -> TestService {
-    WebhookEventIngestionServiceImpl::new(Arc::new(access), repository, enqueuer)
+    service_with_members(access, repository, enqueuer, Arc::default())
 }
 
 fn webhook(id: &str, workspace_id: &str) -> Webhook {
@@ -634,39 +736,15 @@ fn document_event_cases() -> Vec<EventCase> {
     ]
 }
 
-fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicEvent>)> {
-    vec![
-        (
-            "document.content_uploaded",
-            Event::new(DocumentTopicEvent::ContentUploaded(
-                DocumentContentUploadedMetadata {
-                    document_id: DOCUMENT_ID.to_string(),
-                    owner: Owner::User(user_id("macro|owner@example.com")),
-                    file_type: "pdf".parse().expect("valid file type"),
-                    document_version_id: Some("convert".to_string()),
-                },
-            )),
-        ),
-        (
-            "document.sync_content_updated",
-            Event::new(DocumentTopicEvent::SyncContentUpdated(
-                DocumentSyncContentUpdatedMetadata {
-                    editors: Vec::new(),
-                    document_id: DOCUMENT_ID.to_string(),
-                    file_type: "md".parse().expect("valid file type"),
-                    document_version_id: None,
-                    actor: None,
-                    on_behalf_of: None,
-                },
-            )),
-        ),
-        (
-            "document.purged",
-            Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
-                document_id: DOCUMENT_ID.to_string(),
-            })),
-        ),
-    ]
+/// Document events that stay internal: the content events became preview
+/// public events (`document.content_changed`), a purge has no audience left.
+fn internal_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicEvent>)> {
+    vec![(
+        "document.purged",
+        Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        })),
+    )]
 }
 
 fn channel_event_cases() -> Vec<EventCase> {
@@ -712,6 +790,7 @@ fn channel_event_cases() -> Vec<EventCase> {
                 ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                     channel_id,
                     actor: sender(owner),
+                    participant_user_ids: Vec::new(),
                 }),
                 3,
             )),
@@ -990,10 +1069,7 @@ async fn normalizes_and_matches_all_fifteen_event_variants() {
 
     for event_case in event_cases {
         let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-        let repository = MockRepository::new(
-            vec![PERSONAL_WORKSPACE_ID.to_string()],
-            vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
-        );
+        let repository = MockRepository::new(vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)]);
         let enqueuer = MockEnqueuer::default();
         let service = service(access.clone(), repository.clone(), enqueuer.clone());
         let expected_envelope = event_case.event.envelope();
@@ -1054,27 +1130,28 @@ async fn normalizes_and_matches_all_fifteen_event_variants() {
 }
 
 #[tokio::test]
-async fn search_only_document_events_skip_webhook_delivery() {
+async fn internal_document_events_skip_webhook_delivery() {
     let access = MockAccessService {
         users: vec![user_id(PERSONAL_WORKSPACE_ID)],
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
+        levels: Arc::default(),
+        stale_users: None,
+        teams: Arc::default(),
+        crm_viewers: Arc::default(),
+        team_calls: Arc::default(),
     };
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)]);
     {
         let mut state = lock(&repository.state);
-        state.fail_workspace_resolution = true;
         state.fail_matching = true;
     }
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
-    for (event_name, event) in search_only_document_event_cases() {
+    for (event_name, event) in internal_document_event_cases() {
         assert!(
-            normalized_document_event(&event)
+            normalize(&event)
                 .unwrap_or_else(|error| panic!("{event_name} normalization failed: {error}"))
                 .is_none(),
             "{event_name} should not normalize to a public webhook event"
@@ -1087,7 +1164,6 @@ async fn search_only_document_events_skip_webhook_delivery() {
 
     assert!(lock(&access.calls).is_empty());
     let repository_state = lock(&repository.state);
-    assert!(repository_state.workspace_calls.is_empty());
     assert!(repository_state.match_calls.is_empty());
     assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
@@ -1099,14 +1175,20 @@ async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
             users: vec![user_id("macro|unrelated@example.com")],
             failure: Some(AccessFailure::Internal),
             calls: Arc::default(),
+            levels: Arc::default(),
+            stale_users: None,
+            teams: Arc::default(),
+            crm_viewers: Arc::default(),
+            team_calls: Arc::default(),
         };
-        let repository = MockRepository::new(
-            vec!["workspace-that-must-not-be-used".to_string()],
-            vec![webhook("wh_match", event_case.workspace_id)],
-        );
-        lock(&repository.state).fail_workspace_resolution = true;
+        let repository = MockRepository::new(vec![webhook("wh_match", event_case.workspace_id)]);
         let enqueuer = MockEnqueuer::default();
-        let service = service(access.clone(), repository.clone(), enqueuer.clone());
+        let service = service_with_members(
+            access.clone(),
+            repository.clone(),
+            enqueuer.clone(),
+            Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+        );
         let expected_envelope = serde_json::to_value(&event_case.event).unwrap();
         let before_ingestion = Utc::now();
 
@@ -1124,11 +1206,6 @@ async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
             event_case.event_name
         );
         let repository_state = lock(&repository.state);
-        assert!(
-            repository_state.workspace_calls.is_empty(),
-            "workspace resolution must not be called for {}",
-            event_case.event_name
-        );
         assert_eq!(
             repository_state.match_calls,
             vec![MatchCall {
@@ -1172,15 +1249,17 @@ async fn webhook_event_fans_out_complete_envelope_to_every_match() {
     let event_case = webhook_event_cases().remove(1);
     let expected_envelope = serde_json::to_value(&event_case.event).unwrap();
     let access = MockAccessService::with_users(Vec::new());
-    let repository = MockRepository::new(
-        Vec::new(),
-        vec![
-            webhook("wh_first_match", event_case.workspace_id),
-            webhook("wh_second_match", event_case.workspace_id),
-        ],
-    );
+    let repository = MockRepository::new(vec![
+        webhook("wh_first_match", event_case.workspace_id),
+        webhook("wh_second_match", event_case.workspace_id),
+    ]);
     let enqueuer = MockEnqueuer::default();
-    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let service = service_with_members(
+        access.clone(),
+        repository.clone(),
+        enqueuer.clone(),
+        Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+    );
 
     service
         .ingest_webhook_event(event_case.event)
@@ -1189,7 +1268,6 @@ async fn webhook_event_fans_out_complete_envelope_to_every_match() {
 
     assert!(lock(&access.calls).is_empty());
     let repository_state = lock(&repository.state);
-    assert!(repository_state.workspace_calls.is_empty());
     assert_eq!(
         repository_state.match_calls,
         vec![MatchCall {
@@ -1217,10 +1295,7 @@ async fn webhook_event_fans_out_complete_envelope_to_every_match() {
 #[tokio::test]
 async fn malformed_webhook_ids_are_permanent_and_skip_all_resolution() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
@@ -1248,7 +1323,6 @@ async fn malformed_webhook_ids_are_permanent_and_skip_all_resolution() {
 
     assert!(lock(&access.calls).is_empty());
     let repository_state = lock(&repository.state);
-    assert!(repository_state.workspace_calls.is_empty());
     assert!(repository_state.match_calls.is_empty());
     assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
@@ -1256,7 +1330,7 @@ async fn malformed_webhook_ids_are_permanent_and_skip_all_resolution() {
 #[tokio::test]
 async fn no_accessors_resolves_no_workspaces_and_enqueues_nothing() {
     let access = MockAccessService::with_users(Vec::new());
-    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let repository = MockRepository::new(Vec::new());
     let enqueuer = MockEnqueuer::default();
     let service = service(access, repository.clone(), enqueuer.clone());
     let event = document_event_cases().remove(0).event;
@@ -1264,7 +1338,6 @@ async fn no_accessors_resolves_no_workspaces_and_enqueues_nothing() {
     event.ingest(&service).await.expect("no access is a no-op");
 
     let repository_state = lock(&repository.state);
-    assert_eq!(repository_state.workspace_calls, vec![Vec::new()]);
     assert_eq!(
         repository_state.match_calls,
         vec![MatchCall {
@@ -1280,13 +1353,7 @@ async fn no_accessors_resolves_no_workspaces_and_enqueues_nothing() {
 async fn no_matching_webhooks_enqueues_nothing_after_workspace_expansion() {
     let reader = user_id(PERSONAL_WORKSPACE_ID);
     let access = MockAccessService::with_users(vec![reader.clone()]);
-    let repository = MockRepository::new(
-        vec![
-            PERSONAL_WORKSPACE_ID.to_string(),
-            TEAM_WORKSPACE_ID.to_string(),
-        ],
-        Vec::new(),
-    );
+    let repository = MockRepository::new(Vec::new());
     let enqueuer = MockEnqueuer::default();
     let service = service(access, repository.clone(), enqueuer.clone());
     let event = document_event_cases().remove(0).event;
@@ -1294,13 +1361,10 @@ async fn no_matching_webhooks_enqueues_nothing_after_workspace_expansion() {
     event.ingest(&service).await.expect("no matches is a no-op");
 
     let repository_state = lock(&repository.state);
-    assert_eq!(repository_state.workspace_calls, vec![vec![reader]]);
     assert_eq!(
         repository_state.match_calls[0].workspace_ids,
-        vec![
-            PERSONAL_WORKSPACE_ID.to_string(),
-            TEAM_WORKSPACE_ID.to_string(),
-        ]
+        vec![reader.to_string()],
+        "a reader's access reaches their personal workspace, not their teams'"
     );
     assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
@@ -1310,24 +1374,23 @@ async fn fans_out_exact_envelope_once_per_personal_and_team_webhook() {
     let event = document_event_cases().remove(3).event;
     let expected_envelope = event.envelope();
     let reader = user_id(PERSONAL_WORKSPACE_ID);
-    let access = MockAccessService::with_users(vec![reader.clone()]);
-    let repository = MockRepository::new(
-        vec![
-            PERSONAL_WORKSPACE_ID.to_string(),
-            TEAM_WORKSPACE_ID.to_string(),
-        ],
-        vec![
-            webhook("wh_personal", PERSONAL_WORKSPACE_ID),
-            webhook("wh_team", TEAM_WORKSPACE_ID),
-        ],
-    );
+    let access = MockAccessService::with_users(vec![reader])
+        .with_teams(vec![Uuid::parse_str(TEAM_WORKSPACE_ID).unwrap()]);
+    let repository = MockRepository::new(vec![
+        webhook("wh_personal", PERSONAL_WORKSPACE_ID),
+        webhook("wh_team", TEAM_WORKSPACE_ID),
+    ]);
     let enqueuer = MockEnqueuer::default();
-    let service = service(access, repository.clone(), enqueuer.clone());
+    let service = service_with_members(
+        access,
+        repository.clone(),
+        enqueuer.clone(),
+        Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+    );
 
     event.ingest(&service).await.expect("fan-out succeeds");
 
     let repository_state = lock(&repository.state);
-    assert_eq!(repository_state.workspace_calls, vec![vec![reader]]);
     assert_eq!(
         repository_state.match_calls,
         vec![MatchCall {
@@ -1358,13 +1421,10 @@ async fn fans_out_exact_envelope_once_per_personal_and_team_webhook() {
 #[tokio::test]
 async fn enqueue_failure_is_transient_after_every_send_completes() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![
-            webhook("wh_fail", PERSONAL_WORKSPACE_ID),
-            webhook("wh_slow", PERSONAL_WORKSPACE_ID),
-        ],
-    );
+    let repository = MockRepository::new(vec![
+        webhook("wh_fail", PERSONAL_WORKSPACE_ID),
+        webhook("wh_slow", PERSONAL_WORKSPACE_ID),
+    ]);
     let enqueuer = MockEnqueuer::default();
     {
         let mut state = lock(&enqueuer.state);
@@ -1389,7 +1449,7 @@ async fn enqueue_failure_is_transient_after_every_send_completes() {
 #[tokio::test]
 async fn malformed_document_id_is_permanent_and_skips_access_resolution() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let repository = MockRepository::new(Vec::new());
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository, enqueuer);
     let event = Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
@@ -1438,8 +1498,13 @@ async fn entity_access_internal_error_is_not_transient() {
         users: Vec::new(),
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
+        levels: Arc::default(),
+        stale_users: None,
+        teams: Arc::default(),
+        crm_viewers: Arc::default(),
+        team_calls: Arc::default(),
     };
-    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let repository = MockRepository::new(Vec::new());
     let enqueuer = MockEnqueuer::default();
     let service = service(access, repository, enqueuer);
     let event = document_event_cases().remove(0).event;
@@ -1562,10 +1627,7 @@ fn agent_trigger_existing_event()
 #[tokio::test]
 async fn a_document_trigger_is_gated_by_its_document() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
 
     service
@@ -1599,10 +1661,7 @@ fn agent_trigger_task_assignment_event() -> Event<AgentTriggerTopicEvent> {
 #[tokio::test]
 async fn a_task_assignment_is_gated_by_the_task_and_delivered_under_the_bot() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
     let event = agent_trigger_task_assignment_event();
@@ -1617,11 +1676,11 @@ async fn a_task_assignment_is_gated_by_the_task_and_delivered_under_the_bot() {
         &[(DOCUMENT_ID.to_owned(), EntityType::Document)],
     );
     let repository_state = lock(&repository.state);
-    assert_eq!(
-        repository_state.workspace_calls,
-        vec![vec![user_id(PERSONAL_WORKSPACE_ID)]],
-    );
     assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(
+        repository_state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+    );
     assert_eq!(
         repository_state.match_calls[0].entity_id,
         bot_id::BotId::TEST_A.to_string(),
@@ -1642,7 +1701,7 @@ async fn a_task_assignment_is_gated_by_the_task_and_delivered_under_the_bot() {
 #[tokio::test]
 async fn a_task_assignment_does_not_grant_the_assigner_access_to_the_trigger() {
     let access = MockAccessService::with_users(vec![]);
-    let repository = MockRepository::new(vec![], vec![]);
+    let repository = MockRepository::new(vec![]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
@@ -1656,7 +1715,6 @@ async fn a_task_assignment_does_not_grant_the_assigner_access_to_the_trigger() {
         &[(DOCUMENT_ID.to_owned(), EntityType::Document)],
     );
     let repository_state = lock(&repository.state);
-    assert_eq!(repository_state.workspace_calls, vec![vec![]]);
     assert!(repository_state.match_calls[0].workspace_ids.is_empty());
     assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
@@ -1665,10 +1723,7 @@ async fn a_task_assignment_does_not_grant_the_assigner_access_to_the_trigger() {
 #[tokio::test]
 async fn an_existing_session_trigger_is_gated_by_its_message_parent() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
 
     service
@@ -1688,10 +1743,7 @@ async fn an_existing_session_trigger_is_gated_by_its_message_parent() {
 #[tokio::test]
 async fn a_requested_session_is_scoped_to_its_requester_and_named_by_the_bot() {
     let access = MockAccessService::with_users(vec![]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
     let event = agent_trigger_requested_event();
@@ -1723,10 +1775,7 @@ async fn a_requested_session_is_scoped_to_its_requester_and_named_by_the_bot() {
 #[tokio::test]
 async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
     let event = agent_trigger_new_event();
@@ -1808,10 +1857,7 @@ async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
     };
 
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
     let event = agent_session_lifecycle_event(|identity| {
@@ -1867,10 +1913,7 @@ async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
     };
 
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let service = service(access, repository.clone(), MockEnqueuer::default());
 
     service
@@ -1910,10 +1953,7 @@ async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
     use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
 
     let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
@@ -1936,9 +1976,9 @@ async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
         "agent_session.deleted"
     );
     assert_eq!(
-        repository_state.workspace_calls.last().map(Vec::len),
-        Some(2),
-        "the owner and the channel's member both resolve to workspaces"
+        repository_state.match_calls[0].workspace_ids.len(),
+        2,
+        "the owner's and the channel member's personal workspaces"
     );
 }
 
@@ -1947,10 +1987,7 @@ async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
     use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
 
     let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
-    let repository = MockRepository::new(
-        vec![PERSONAL_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)]);
     let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
 
     let mut event = agent_session_lifecycle_event(|identity| {
@@ -1967,43 +2004,14 @@ async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
 
     assert!(lock(&access.calls).is_empty(), "nothing is looked up");
     assert_eq!(
-        lock(&repository.state).workspace_calls.last().map(Vec::len),
-        Some(1)
-    );
-}
-
-/// The live stream mirrors the persisted fan-out: a departed session's owner
-/// keeps ownership, so the stream audience is the union of the owner's
-/// workspace and the origin parent, not the parent alone.
-#[test]
-fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
-    use crate::domain::ingestion::stream::agent_session_lifecycle_stream_candidate;
-    use crate::domain::stream::StreamAudience;
-    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
-
-    let event = agent_session_lifecycle_event(|identity| {
-        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
-    });
-
-    let candidate =
-        agent_session_lifecycle_stream_candidate(&event).expect("a deleted session streams");
-
-    assert_eq!(
-        candidate.audience,
-        StreamAudience::Any(vec![
-            StreamAudience::Workspace {
-                workspace_id: "macro|asker@example.com".to_owned(),
-            },
-            StreamAudience::Entity {
-                entity_id: uuid::Uuid::from_u128(1).to_string(),
-                entity_type: EntityType::Channel,
-            },
-        ]),
+        lock(&repository.state).match_calls[0].workspace_ids,
+        vec!["macro|asker@example.com".to_string()],
+        "the owner's personal workspace only"
     );
 }
 
 #[tokio::test]
-async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
+async fn user_picture_changed_reaches_only_the_changed_users_personal_workspace() {
     let user = "macro|owner@example.com";
     let event = Event::new(user_events::UserTopicEvent::PictureChanged(
         user_events::UserPictureChangedMetadata {
@@ -2014,10 +2022,7 @@ async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
     ));
     let expected_envelope = serde_json::to_value(&event).unwrap();
     let access = MockAccessService::with_users(vec![user_id("macro|contact@example.com")]);
-    let repository = MockRepository::new(
-        vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_match", user)],
-    );
+    let repository = MockRepository::new(vec![webhook("wh_match", user)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
@@ -2028,11 +2033,11 @@ async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
 
     assert!(lock(&access.calls).is_empty());
     let repository_state = lock(&repository.state);
-    assert_eq!(repository_state.workspace_calls, vec![vec![user_id(user)]]);
     assert_eq!(
         repository_state.match_calls,
         vec![MatchCall {
-            workspace_ids: vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
+            // Never the user's team workspaces: their teams are not the audience.
+            workspace_ids: vec![user.to_string()],
             event_name: "user.picture_changed".to_string(),
             entity_id: user.to_string(),
         }]
@@ -2056,7 +2061,7 @@ async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
 }
 
 #[tokio::test]
-async fn user_event_workspace_resolution_failure_is_transient() {
+async fn user_event_matching_failure_is_transient() {
     let event = Event::new(user_events::UserTopicEvent::PictureChanged(
         user_events::UserPictureChangedMetadata {
             user_id: user_id("macro|owner@example.com"),
@@ -2064,8 +2069,8 @@ async fn user_event_workspace_resolution_failure_is_transient() {
             url: None,
         },
     ));
-    let repository = MockRepository::new(Vec::new(), Vec::new());
-    lock(&repository.state).fail_workspace_resolution = true;
+    let repository = MockRepository::new(Vec::new());
+    lock(&repository.state).fail_matching = true;
     let service = service(
         MockAccessService::with_users(Vec::new()),
         repository,
@@ -2075,88 +2080,1002 @@ async fn user_event_workspace_resolution_failure_is_transient() {
     let error = service
         .ingest_user_event(event)
         .await
-        .expect_err("resolution failure surfaces");
+        .expect_err("matching failure surfaces");
 
     assert!(error.is_transient());
 }
 
-/// A resolved agent access request is a private hint for the requesting agent:
-/// it streams to that one user, never to teammates or entity accessors, and the
-/// delivered payload carries exactly the four agreed fields.
+/// The envelope the webhook system delivered before declared access existed: the
+/// complete broker envelope, minus a call's private routing field. Kept here
+/// as the reference the access-driven normalization must reproduce.
+fn legacy_envelope<E: serde::Serialize>(event: &Event<E>) -> String {
+    let mut envelope = serde_json::to_value(event).unwrap();
+    if let Some(metadata) = envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipient_user_id");
+    }
+    serde_json::to_string(&envelope).unwrap()
+}
+
+/// The delivered body, byte for byte, as the HTTP worker and SSE send it.
+fn delivered_envelope<E: TopicEvent>(event: &Event<E>) -> (NormalizedWebhookEvent, String) {
+    let (normalized, _) = normalize(event)
+        .unwrap_or_else(|error| panic!("normalization failed: {error}"))
+        .expect("delivered event is public");
+    let body = serde_json::to_string(&normalized.broker_envelope).unwrap();
+    (normalized, body)
+}
+
+fn assert_wire_unchanged<E: TopicEvent>(event: &Event<E>) {
+    let (normalized, body) = delivered_envelope(event);
+    assert_eq!(body, legacy_envelope(event), "{}", normalized.event_name);
+    assert_eq!(
+        normalized.broker_envelope["event_type"], normalized.event_name,
+        "the public name is the payload tag"
+    );
+}
+
+fn call_events() -> Vec<Event<CallNotificationEvent>> {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let public = || {
+        let mut metadata = CallNotificationMetadata::new(call_id, Some(Uuid::from_u128(9)));
+        metadata.created_by = Some("macro|creator@example.com".to_string());
+        metadata.identity = Some("room-identity".to_string());
+        metadata.user_id = Some("macro|joiner@example.com".to_string());
+        metadata
+    };
+    let private = || {
+        let mut metadata = public();
+        metadata.meeting_id = Some(Uuid::from_u128(10));
+        metadata.invited_by = Some("macro|sender@example.com".to_string());
+        metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+        metadata
+    };
+    [
+        CallNotificationEvent::Started(public()),
+        CallNotificationEvent::Ended(public()),
+        CallNotificationEvent::ParticipantJoined(public()),
+        CallNotificationEvent::ParticipantLeft(public()),
+        CallNotificationEvent::RecordingReady(public()),
+        CallNotificationEvent::Summarized(public()),
+        CallNotificationEvent::Ringing(private()),
+        CallNotificationEvent::Answered(private()),
+        CallNotificationEvent::Declined(private()),
+        CallNotificationEvent::Invited(private()),
+    ]
+    .into_iter()
+    .map(Event::new)
+    .collect()
+}
+
+/// Every delivered event keeps today's wire shape exactly: same keys, same
+/// order, same values, with only a call's routing field stripped.
+#[test]
+fn delivered_envelopes_are_byte_identical_to_the_legacy_envelope() {
+    for case in document_event_cases()
+        .into_iter()
+        .chain(channel_event_cases())
+        .chain(message_event_cases())
+    {
+        match &case.event {
+            TestBrokerEvent::Document(event) => assert_wire_unchanged(event),
+            TestBrokerEvent::Channel(event) => assert_wire_unchanged(event),
+            TestBrokerEvent::Message(event) => assert_wire_unchanged(event),
+        }
+    }
+    for case in webhook_event_cases() {
+        assert_wire_unchanged(&case.event);
+    }
+    for event in call_events() {
+        assert_wire_unchanged(&event);
+    }
+    for event in [
+        agent_trigger_new_event(),
+        agent_trigger_requested_event(),
+        agent_trigger_document_event(),
+        agent_trigger_existing_event(),
+        agent_trigger_task_assignment_event(),
+    ] {
+        assert_wire_unchanged(&event);
+    }
+    {
+        use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+        assert_wire_unchanged(&agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }));
+    }
+    assert_wire_unchanged(&Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: Some("file_1".to_string()),
+            url: Some("https://example.com/picture.png".to_string()),
+        },
+    )));
+}
+
+/// Optional envelope fields survive in place when present.
+#[test]
+fn delivered_envelopes_keep_correlation_fields() {
+    let mut event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0001),
+        DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+            sub_type: None,
+            document_id: DOCUMENT_ID.to_string(),
+            actor_user_id: Some(user_id("macro|owner@example.com")),
+            actor: None,
+            on_behalf_of: None,
+            project_id: None,
+        }),
+    );
+    event.agent_correlation_id = Some(Uuid::from_u128(5));
+    event.routine_id = Some(Uuid::from_u128(6));
+    event.agent_verb = Some("future-verb".to_string());
+
+    assert_wire_unchanged(&event);
+}
+
+/// A literal of today's private call payload: the recipient routes the event
+/// and is never delivered.
+#[test]
+fn call_invitation_wire_shape_is_unchanged() {
+    let mut metadata = CallNotificationMetadata::new(Uuid::parse_str(CALL_ID).unwrap(), None);
+    metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+    metadata.invited_by = Some("macro|sender@example.com".to_string());
+    let event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0002),
+        CallNotificationEvent::Invited(metadata),
+    );
+
+    let (normalized, body) = delivered_envelope(&event);
+
+    assert_eq!(normalized.event_name, "call.invited");
+    assert_eq!(normalized.entity_type, "call");
+    assert_eq!(normalized.entity_id, CALL_ID);
+    assert_eq!(
+        body,
+        r#"{"event_id":"01980000-0000-7000-8000-000000000002","schema_version":1,"event_type":"call.invited","metadata":{"call_id":"0198a1b2-c3d4-7e5f-8061-728394a5b6c7","invited_by":"macro|sender@example.com"}}"#
+    );
+}
+
+/// A literal of today's user picture payload.
+#[test]
+fn user_picture_changed_wire_shape_is_unchanged() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(0x0198_0000_0000_7000_8000_0000_0000_0003),
+        user_events::UserTopicEvent::PictureChanged(user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: None,
+            url: None,
+        }),
+    );
+
+    let (normalized, body) = delivered_envelope(&event);
+
+    assert_eq!(normalized.entity_type, "user");
+    assert_eq!(normalized.entity_id, "macro|owner@example.com");
+    assert_eq!(
+        body,
+        r#"{"event_id":"01980000-0000-7000-8000-000000000003","schema_version":1,"event_type":"user.picture_changed","metadata":{"user_id":"macro|owner@example.com","file_id":null,"url":null}}"#
+    );
+}
+
+/// An agent conversation message was never delivered (it has no mention or
+/// request to route); it is now declared internal instead of failing.
+#[test]
+fn agent_conversation_messages_stay_undelivered() {
+    use agent_trigger::domain::broker_events::{
+        AgentConversationMessageEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(mentioned)) =
+        agent_trigger_document_event().event
+    else {
+        panic!("the document trigger fixture is a mention");
+    };
+    let event = Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::ConversationMessage(AgentConversationMessageEvent {
+            bot_id: mentioned.bot_id,
+            session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+            message: mentioned.message,
+            context: None,
+        }),
+    ));
+
+    assert!(normalize(&event).unwrap().is_none());
+}
+
+mod preview_and_wildcards {
+    use super::*;
+    use crate::domain::models::WebhookFilter;
+    use event_stream::domain::ports::PreviewFlag;
+    use macro_event_broker::access::Stage;
+
+    const FLAGGED: &str = "macro|flagged@example.com";
+
+    #[derive(Clone, Copy)]
+    struct OnlyFlagged;
+
+    impl PreviewFlag for OnlyFlagged {
+        async fn enabled_for(&self, user: &MacroUserIdStr<'static>) -> bool {
+            user.as_ref() == FLAGGED
+        }
+    }
+
+    fn webhook_with(
+        id: &str,
+        owner: &str,
+        events: &[&str],
+        entity_types: Option<&[&str]>,
+    ) -> Webhook {
+        let mut webhook = webhook(id, owner);
+        webhook.created_by_user_id = owner.to_string();
+        webhook.filters = vec![WebhookFilter {
+            events: events.iter().map(|event| (*event).to_string()).collect(),
+            ids: None,
+            entity_types: entity_types
+                .map(|types| types.iter().map(|kind| (*kind).to_string()).collect()),
+        }];
+        webhook
+    }
+
+    fn document_updated() -> NormalizedWebhookEvent {
+        NormalizedWebhookEvent {
+            event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+            schema_version: 1,
+            event_name: "document.updated".to_string(),
+            entity_type: "document".to_string(),
+            entity_id: "0193b3a0-0000-7000-8000-00000000d0c1".to_string(),
+            ordering_key: "0193b3a0-0000-7000-8000-00000000d0c1".to_string(),
+            occurred_at: timestamp(),
+            broker_envelope: Value::Null,
+        }
+    }
+
+    fn ids(webhooks: &[Webhook]) -> Vec<&str> {
+        webhooks.iter().map(|webhook| webhook.id.as_str()).collect()
+    }
+
+    fn flagged_service() -> WebhookEventIngestionServiceImpl<
+        MockAccessService,
+        MockRepository,
+        MockEnqueuer,
+        OnlyFlagged,
+        Members,
+        Unconfigured,
+    > {
+        service(
+            MockAccessService::with_users(Vec::new()),
+            MockRepository::new(Vec::new()),
+            MockEnqueuer::default(),
+        )
+        .with_preview_flag(Arc::new(OnlyFlagged))
+    }
+
+    #[tokio::test]
+    async fn a_wildcard_matches_only_for_a_flagged_creator() {
+        let candidates = vec![
+            webhook_with("wh_flagged", FLAGGED, &["document.*"], None),
+            webhook_with("wh_unflagged", PERSONAL_WORKSPACE_ID, &["document.*"], None),
+            webhook_with(
+                "wh_exact",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                None,
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Stable)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_flagged", "wh_exact"]);
+    }
+
+    #[tokio::test]
+    async fn a_preview_event_reaches_only_flagged_creators() {
+        let candidates = vec![
+            webhook_with("wh_flagged", FLAGGED, &["document.updated"], None),
+            webhook_with(
+                "wh_unflagged",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                None,
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Preview)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_flagged"]);
+    }
+
+    #[tokio::test]
+    async fn with_the_flag_off_for_everyone_preview_events_and_wildcards_never_match() {
+        let candidates = vec![
+            webhook_with("wh_star", FLAGGED, &["*"], None),
+            webhook_with("wh_exact", FLAGGED, &["document.updated"], None),
+        ];
+        let unflagged = service(
+            MockAccessService::with_users(Vec::new()),
+            MockRepository::new(Vec::new()),
+            MockEnqueuer::default(),
+        );
+
+        let stable = unflagged
+            .admitted_webhooks(candidates.clone(), &document_updated(), Stage::Stable)
+            .await;
+        let preview = unflagged
+            .admitted_webhooks(candidates, &document_updated(), Stage::Preview)
+            .await;
+
+        assert_eq!(ids(&stable), vec!["wh_exact"]);
+        assert!(preview.is_empty());
+    }
+
+    #[tokio::test]
+    async fn entity_types_narrow_a_match() {
+        let candidates = vec![
+            webhook_with(
+                "wh_document",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                Some(&["document"]),
+            ),
+            webhook_with(
+                "wh_channel",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                Some(&["channel"]),
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Stable)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_document"]);
+    }
+}
+
+/// Form responses go to editors: explicit accessors at Edit or above.
+#[tokio::test]
+async fn an_access_floor_audience_reaches_only_accessors_at_that_level() {
+    let editor = "macro|editor@example.com";
+    let viewer = "macro|viewer@example.com";
+    let access = MockAccessService::with_users(vec![user_id(editor), user_id(viewer)]);
+    let team_calls = access.team_calls.clone();
+    lock(&access.levels).insert(editor.to_string(), AccessLevel::Edit);
+    lock(&access.levels).insert(viewer.to_string(), AccessLevel::View);
+    let repository = MockRepository::new(Vec::new());
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+    let event = NormalizedWebhookEvent {
+        event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+        schema_version: 1,
+        event_name: "form.response_submitted".to_string(),
+        entity_type: "form".to_string(),
+        entity_id: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+        ordering_key: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+        occurred_at: timestamp(),
+        broker_envelope: Value::Null,
+    };
+
+    service
+        .resolve_audience_and_enqueue(
+            event,
+            macro_event_broker::access::Stage::Stable,
+            &Audience::EntityAtLeast {
+                entity_type: EntityType::Form,
+                entity_id: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+                min_level: macro_event_broker::access::MinAccessLevel::Edit,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        lock(&repository.state).match_calls[0].workspace_ids,
+        vec![editor.to_string()]
+    );
+    assert_eq!(
+        lock(&team_calls).as_slice(),
+        &[(
+            "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+            EntityType::Form,
+            Some(AccessLevel::Edit)
+        )],
+        "team workspaces are asked at the same floor"
+    );
+}
+
+mod team_and_installation_audiences {
+    use super::*;
+    use event_stream::domain::ports::{GithubClaims, InstallationOwners, TeamDirectory, TeamRole};
+    use macro_event_broker::access::{MinTeamRole, Stage};
+
+    const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x7ea);
+    const ADMIN: &str = "macro|admin@example.com";
+    const MEMBER: &str = "macro|member@example.com";
+    const CLAIMANT: &str = "macro|claimant@example.com";
+    const INSTALLATION: &str = "4242";
+
+    #[derive(Default)]
+    struct Directories {
+        members: Mutex<Vec<(MacroUserIdStr<'static>, TeamRole)>>,
+        claimants: Mutex<Vec<String>>,
+        personal_owner: Option<MacroUserIdStr<'static>>,
+    }
+
+    impl TeamDirectory for Directories {
+        async fn members(
+            &self,
+            team_id: uuid::Uuid,
+        ) -> Result<Vec<(MacroUserIdStr<'static>, TeamRole)>, rootcause::Report> {
+            assert_eq!(team_id, TEAM);
+            Ok(lock(&self.members).clone())
+        }
+
+        async fn teams_of(
+            &self,
+            _user: &MacroUserIdStr<'static>,
+        ) -> Result<Vec<(uuid::Uuid, TeamRole)>, rootcause::Report> {
+            Ok(Vec::new())
+        }
+    }
+
+    impl GithubClaims for Directories {
+        async fn claimants(
+            &self,
+            users: &[MacroUserIdStr<'static>],
+            installation_id: &str,
+        ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+            let claimants = lock(&self.claimants).clone();
+            Ok(users
+                .iter()
+                .filter(|user| {
+                    installation_id == INSTALLATION
+                        && claimants.iter().any(|claimant| claimant == user.as_ref())
+                })
+                .cloned()
+                .collect())
+        }
+
+        async fn installation_owners(
+            &self,
+            _installation_id: &str,
+        ) -> Result<InstallationOwners, rootcause::Report> {
+            Ok(InstallationOwners {
+                users: self.personal_owner.iter().cloned().collect(),
+                teams: vec![TEAM],
+            })
+        }
+
+        async fn has_claim(
+            &self,
+            user: &MacroUserIdStr<'static>,
+            installation_id: &str,
+        ) -> Result<bool, rootcause::Report> {
+            Ok(installation_id == INSTALLATION
+                && lock(&self.claimants)
+                    .iter()
+                    .any(|claimant| claimant == user.as_ref()))
+        }
+    }
+
+    fn event(name: &str) -> NormalizedWebhookEvent {
+        NormalizedWebhookEvent {
+            event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+            schema_version: 1,
+            event_name: name.to_string(),
+            entity_type: "team".to_string(),
+            entity_id: TEAM.to_string(),
+            ordering_key: TEAM.to_string(),
+            occurred_at: timestamp(),
+            broker_envelope: Value::Null,
+        }
+    }
+
+    async fn matched_workspaces(directories: &Arc<Directories>, audience: Audience) -> Vec<String> {
+        let repository = MockRepository::new(Vec::new());
+        let service = service(
+            MockAccessService::with_users(Vec::new()),
+            repository.clone(),
+            MockEnqueuer::default(),
+        )
+        .with_audience_directories(directories.clone(), directories.clone());
+        service
+            .resolve_audience_and_enqueue(event("team.invite_created"), Stage::Stable, &audience)
+            .await
+            .unwrap();
+        let mut workspaces = lock(&repository.state)
+            .match_calls
+            .last()
+            .map(|call| call.workspace_ids.clone())
+            .unwrap_or_default();
+        workspaces.sort();
+        workspaces
+    }
+
+    #[tokio::test]
+    async fn admin_only_team_events_reach_admins_personal_workspaces_only() {
+        let directories = Arc::new(Directories::default());
+        *lock(&directories.members) = vec![
+            (user_id(ADMIN), TeamRole::Admin),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        let admins_only = Audience::Team {
+            team_id: TEAM,
+            min_role: MinTeamRole::Admin,
+        };
+
+        assert_eq!(
+            matched_workspaces(&directories, admins_only.clone()).await,
+            vec![ADMIN.to_string()],
+            "never the team workspace, never a plain member"
+        );
+
+        // Demoted: they stop receiving.
+        *lock(&directories.members) = vec![
+            (user_id(ADMIN), TeamRole::Member),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        assert!(
+            matched_workspaces(&directories, admins_only)
+                .await
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn installation_events_reach_claimants_and_owning_teams_only() {
+        let directories = Arc::new(Directories {
+            personal_owner: Some(user_id(CLAIMANT)),
+            ..Directories::default()
+        });
+        *lock(&directories.members) = vec![(user_id(MEMBER), TeamRole::Member)];
+        *lock(&directories.claimants) = vec![CLAIMANT.to_string()];
+        let installation = Audience::GithubInstallation {
+            installation_id: INSTALLATION.to_string(),
+        };
+
+        // The member has no linked GitHub account: no claim, no delivery.
+        assert_eq!(
+            matched_workspaces(&directories, installation.clone()).await,
+            vec![TEAM.to_string(), CLAIMANT.to_string()]
+        );
+
+        // The claimant unlinks GitHub: they stop receiving.
+        lock(&directories.claimants).clear();
+        assert_eq!(
+            matched_workspaces(&directories, installation).await,
+            vec![TEAM.to_string()]
+        );
+    }
+
+    /// A team webhook gets an installation's events only if its creator holds
+    /// a claim (as on the stream), not merely because the team owns it.
+    #[tokio::test]
+    async fn an_owning_teams_webhook_needs_a_claimant_creator() {
+        let directories = Arc::new(Directories::default());
+        *lock(&directories.members) = vec![
+            (user_id(CLAIMANT), TeamRole::Member),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        *lock(&directories.claimants) = vec![CLAIMANT.to_string()];
+        let mut by_claimant = webhook("wh_by_claimant", &TEAM.to_string());
+        by_claimant.created_by_user_id = CLAIMANT.to_string();
+        let mut by_member = webhook("wh_by_member", &TEAM.to_string());
+        by_member.created_by_user_id = MEMBER.to_string();
+        let repository = MockRepository::new(vec![by_claimant, by_member]);
+        let enqueuer = MockEnqueuer::default();
+        let service = service(
+            MockAccessService::with_users(Vec::new()),
+            repository,
+            enqueuer.clone(),
+        )
+        .with_audience_directories(directories.clone(), directories.clone());
+
+        service
+            .resolve_audience_and_enqueue(
+                event("github_webhook.received"),
+                Stage::Stable,
+                &Audience::GithubInstallation {
+                    installation_id: INSTALLATION.to_string(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let enqueued: Vec<String> = lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect();
+        assert_eq!(enqueued, vec!["wh_by_claimant".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn without_directories_these_audiences_stay_unsupported() {
+        let service = WebhookEventIngestionServiceImpl::new(
+            Arc::new(MockAccessService::with_users(Vec::new())),
+            MockRepository::new(Vec::new()),
+            MockEnqueuer::default(),
+        );
+
+        let result = service
+            .resolve_audience_and_enqueue(
+                event("team.invite_created"),
+                Stage::Stable,
+                &Audience::Team {
+                    team_id: TEAM,
+                    min_role: MinTeamRole::Admin,
+                },
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(WebhookEventIngestionError::UnsupportedAudience(_))
+        ));
+    }
+
+    /// Without a team directory no creator's membership can be confirmed, so
+    /// team workspace webhooks receive nothing.
+    #[tokio::test]
+    async fn without_a_team_directory_team_webhooks_get_nothing() {
+        let enqueuer = MockEnqueuer::default();
+        let service = WebhookEventIngestionServiceImpl::new(
+            Arc::new(MockAccessService::with_users(Vec::new())),
+            MockRepository::new(vec![
+                super::webhook("wh_team", &TEAM.to_string()),
+                super::webhook("wh_personal", PERSONAL_WORKSPACE_ID),
+            ]),
+            enqueuer.clone(),
+        );
+
+        service
+            .resolve_audience_and_enqueue(
+                event("team.updated"),
+                Stage::Stable,
+                &Audience::Team {
+                    team_id: TEAM,
+                    min_role: MinTeamRole::Member,
+                },
+            )
+            .await
+            .unwrap();
+
+        let enqueued: Vec<String> = lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect();
+        assert_eq!(enqueued, vec!["wh_personal".to_string()]);
+    }
+}
+
+/// A revocation just before an event excludes the user at once: matching
+/// reads current access, never the adapter's 10 s cached listing.
+#[tokio::test]
+async fn a_revocation_just_before_an_event_excludes_the_user_from_matching() {
+    let kept = "macro|kept@example.com";
+    let revoked = "macro|revoked@example.com";
+    let mut access = MockAccessService::with_users(vec![user_id(kept)]);
+    access.stale_users = Some(vec![user_id(kept), user_id(revoked)]);
+    let repository = MockRepository::new(Vec::new());
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+    let event = Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
+        document_id: DOCUMENT_ID.to_string(),
+        owner: Owner::User(user_id(kept)),
+        actor_user_id: Some(user_id(kept)),
+        actor: None,
+        on_behalf_of: None,
+        document_name: Some("renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: true,
+    }));
+
+    service.ingest_document_event(event).await.unwrap();
+
+    assert_eq!(
+        lock(&repository.state).match_calls[0].workspace_ids,
+        vec![kept.to_string()]
+    );
+}
+
+/// An event no webhook's filters name skips audience resolution entirely.
+#[tokio::test]
+async fn an_event_no_webhook_names_resolves_no_audience() {
+    struct NobodyWants;
+    impl crate::domain::ports::WebhookInterest for NobodyWants {
+        type Err = std::convert::Infallible;
+        async fn any_webhook_names(&self, event_name: &str) -> Result<bool, Self::Err> {
+            assert_eq!(event_name, "document.updated");
+            Ok(false)
+        }
+    }
+    let access = MockAccessService::with_users(vec![user_id("macro|reader@example.com")]);
+    let repository = MockRepository::new(Vec::new());
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default())
+        .with_interest(Arc::new(NobodyWants));
+    let event = Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
+        document_id: DOCUMENT_ID.to_string(),
+        owner: Owner::User(user_id("macro|reader@example.com")),
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+        document_name: Some("renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    }));
+
+    service.ingest_document_event(event).await.unwrap();
+
+    assert!(lock(&access.calls).is_empty(), "no accessor lookup");
+    assert!(lock(&repository.state).match_calls.is_empty());
+}
+
+/// A team workspace receives an entity's events only while the team itself
+/// holds access to the entity; a member's own access reaches only that
+/// member's personal workspace.
+mod team_workspaces {
+    use super::*;
+
+    const MEMBER: &str = "macro|member@example.com";
+    const OUTSIDER: &str = "macro|outsider@example.com";
+
+    fn team() -> Uuid {
+        Uuid::parse_str(TEAM_WORKSPACE_ID).unwrap()
+    }
+
+    fn workspaces(repository: &MockRepository) -> Vec<Vec<String>> {
+        lock(&repository.state)
+            .match_calls
+            .iter()
+            .map(|call| call.workspace_ids.clone())
+            .collect()
+    }
+
+    /// A member's private DM: both participants can read it, the team has no
+    /// access to it, so its messages reach no team webhook.
+    #[tokio::test]
+    async fn a_members_private_dm_message_reaches_no_team_webhook() {
+        let access = MockAccessService::with_users(vec![user_id(MEMBER), user_id(OUTSIDER)]);
+        let repository = MockRepository::new(vec![webhook("wh_team", TEAM_WORKSPACE_ID)]);
+        let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+        let posted = message_event_cases().remove(0);
+        assert_eq!(posted.event_name, "message.posted");
+
+        posted.event.ingest(&service).await.unwrap();
+
+        assert_eq!(
+            workspaces(&repository),
+            vec![vec![MEMBER.to_string(), OUTSIDER.to_string()]]
+        );
+        assert_eq!(
+            lock(&access.team_calls)[0].1,
+            EntityType::Channel,
+            "the channel's teams were asked"
+        );
+    }
+
+    /// A document granted to the team reaches the team webhook; once the
+    /// grant is revoked, the next event no longer does.
+    #[tokio::test]
+    async fn a_team_grant_reaches_the_team_webhook_until_it_is_revoked() {
+        let access = MockAccessService::with_users(vec![user_id(MEMBER)]).with_teams(vec![team()]);
+        let repository = MockRepository::new(vec![webhook("wh_team", TEAM_WORKSPACE_ID)]);
+        let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+        document_event_cases()
+            .remove(1)
+            .event
+            .ingest(&service)
+            .await
+            .unwrap();
+        lock(&access.teams).clear();
+        document_event_cases()
+            .remove(1)
+            .event
+            .ingest(&service)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            workspaces(&repository),
+            vec![
+                vec![MEMBER.to_string(), TEAM_WORKSPACE_ID.to_string()],
+                vec![MEMBER.to_string()],
+            ]
+        );
+        assert_eq!(
+            lock(&access.team_calls)
+                .iter()
+                .map(|(id, entity_type, floor)| (id.as_str(), *entity_type, *floor))
+                .collect::<Vec<_>>(),
+            vec![
+                (DOCUMENT_ID, EntityType::Document, None),
+                (DOCUMENT_ID, EntityType::Document, None),
+            ],
+            "every event asks current access"
+        );
+    }
+
+    fn delivered(enqueuer: &MockEnqueuer) -> Vec<String> {
+        lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect()
+    }
+
+    /// A team webhook delivers to its creator's endpoint, so it stops the
+    /// moment the creator leaves the team, on a stable topic too.
+    #[tokio::test]
+    async fn a_team_webhook_stops_when_its_creator_leaves_the_team() {
+        let access = MockAccessService::with_users(vec![user_id(MEMBER)]).with_teams(vec![team()]);
+        let mut team_webhook = webhook("wh_team", TEAM_WORKSPACE_ID);
+        team_webhook.created_by_user_id = MEMBER.to_string();
+        let repository = MockRepository::new(vec![team_webhook]);
+        let enqueuer = MockEnqueuer::default();
+        let members = Members::of(TEAM_WORKSPACE_ID, &[MEMBER]);
+        let service = service_with_members(access, repository, enqueuer.clone(), members.clone());
+        let updated = document_event_cases().remove(1);
+        assert_eq!(updated.event_name, "document.updated");
+
+        updated.event.ingest(&service).await.unwrap();
+        assert_eq!(delivered(&enqueuer), vec!["wh_team".to_string()]);
+
+        lock(&members.teams).insert(team(), Vec::new());
+        updated.event.ingest(&service).await.unwrap();
+        assert_eq!(
+            delivered(&enqueuer),
+            vec!["wh_team".to_string()],
+            "the removed creator's webhook matches nothing"
+        );
+    }
+
+    fn crm_note() -> TestBrokerEvent {
+        let company = Uuid::parse_str("66666666-6666-6666-6666-666666666666").unwrap();
+        let message_id = Uuid::parse_str("55555555-5555-5555-5555-555555555555").unwrap();
+        TestBrokerEvent::Message(Event::with_schema_version(
+            MessageTopicEvent::Posted(MessagePostedMetadata {
+                parent: MessageParent::parse("crm_company", &company.to_string()).unwrap(),
+                message_id,
+                thread_id: None,
+                root_id: message_id,
+                sender: sender(MEMBER),
+                triggered_by: None,
+                content: "a note".to_string(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            }),
+            1,
+        ))
+    }
+
+    /// A note on a team CRM record reaches a team webhook only while its
+    /// creator has CRM access in that team.
+    #[tokio::test]
+    async fn a_crm_note_reaches_a_team_webhook_only_with_the_creators_crm_access() {
+        for (crm_access, expected) in [(false, vec![]), (true, vec!["wh_team".to_string()])] {
+            let access = MockAccessService::with_users(Vec::new()).with_teams(vec![team()]);
+            *lock(&access.crm_viewers) = Some(if crm_access {
+                vec![MEMBER.to_string()]
+            } else {
+                Vec::new()
+            });
+            let mut team_webhook = webhook("wh_team", TEAM_WORKSPACE_ID);
+            team_webhook.created_by_user_id = MEMBER.to_string();
+            let enqueuer = MockEnqueuer::default();
+            let service = service_with_members(
+                access,
+                MockRepository::new(vec![team_webhook]),
+                enqueuer.clone(),
+                Members::of(TEAM_WORKSPACE_ID, &[MEMBER]),
+            );
+
+            crm_note().ingest(&service).await.unwrap();
+
+            assert_eq!(delivered(&enqueuer), expected, "crm_access = {crm_access}");
+        }
+    }
+
+    /// An owner audience names a person, not their teams.
+    #[tokio::test]
+    async fn an_owner_audience_reaches_only_the_owners_personal_workspace() {
+        let owner = user_id(MEMBER);
+        let repository = MockRepository::new(Vec::new());
+        let service = service(
+            MockAccessService::with_users(Vec::new()).with_teams(vec![team()]),
+            repository.clone(),
+            MockEnqueuer::default(),
+        );
+        let event = NormalizedWebhookEvent {
+            event_id: "0193b3a0-0000-7000-8000-000000000002".to_string(),
+            schema_version: 1,
+            event_name: "project.permanently_deleted".to_string(),
+            entity_type: "project".to_string(),
+            entity_id: "0193b3a0-0000-7000-8000-00000000a0a0".to_string(),
+            ordering_key: "0193b3a0-0000-7000-8000-00000000a0a0".to_string(),
+            occurred_at: timestamp(),
+            broker_envelope: Value::Null,
+        };
+
+        service
+            .resolve_audience_and_enqueue(
+                event,
+                macro_event_broker::access::Stage::Stable,
+                &Audience::Owner { user_id: owner },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(workspaces(&repository), vec![vec![MEMBER.to_string()]]);
+    }
+}
+
+/// A resolved agent access request is a private hint for the requesting
+/// agent: only that account's personal workspace matches, no entity access is
+/// resolved, and the delivered payload carries exactly the four agreed fields.
 #[tokio::test]
 async fn a_resolved_password_request_reaches_only_the_requesting_agent() {
-    use crate::domain::ingestion::stream::password_stream_candidate;
-    use crate::domain::stream::StreamAudience;
     use password_events::{
         AccessRequestResolution, AccessRequestResolvedMetadata, PasswordTopicEvent,
     };
 
     let agent = "macro|agent@example.com";
-    let item = uuid::Uuid::from_u128(2);
+    let item = Uuid::from_u128(2);
     let event = Event::new(PasswordTopicEvent::AccessRequestResolved(
         AccessRequestResolvedMetadata {
             recipient_user_id: user_id(agent),
-            team_id: uuid::Uuid::from_u128(1),
+            team_id: Uuid::from_u128(1),
             item_id: item,
-            request_id: uuid::Uuid::from_u128(3),
+            request_id: Uuid::from_u128(3),
             status: AccessRequestResolution::Approved,
         },
     ));
-
-    let candidate = password_stream_candidate(&event).expect("the resolution streams");
-    assert_eq!(
-        candidate.audience,
-        StreamAudience::User {
-            user_id: agent.to_owned(),
-        },
-    );
-    assert_eq!(
-        candidate.event.event_name,
-        "passwords.access_request.resolved"
-    );
-    assert_eq!(candidate.event.entity_type, "password_item");
-    assert_eq!(candidate.event.entity_id, item.to_string());
-    assert_eq!(
-        candidate.event.broker_envelope["metadata"],
-        serde_json::json!({
-            "teamId": "00000000-0000-0000-0000-000000000001",
-            "itemId": "00000000-0000-0000-0000-000000000002",
-            "requestId": "00000000-0000-0000-0000-000000000003",
-            "status": "approved",
-        }),
-    );
-
-    // Durable webhooks: only the agent's own workspace is matched; no entity
-    // access is resolved, so teammates' workspaces are never consulted.
-    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
-    let repository = MockRepository::new(
-        vec![agent.to_string(), TEAM_WORKSPACE_ID.to_string()],
-        vec![webhook("wh_agent", agent)],
-    );
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")])
+        .with_teams(vec![Uuid::parse_str(TEAM_WORKSPACE_ID).unwrap()]);
+    let repository = MockRepository::new(vec![webhook("wh_agent", agent)]);
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
     service
-        .ingest_password_event(event)
+        .ingest_public_event(event)
         .await
         .expect("the resolution is ingested");
 
     assert!(lock(&access.calls).is_empty());
-    let repository_state = lock(&repository.state);
-    assert!(repository_state.workspace_calls.is_empty());
+    assert!(lock(&access.team_calls).is_empty());
     assert_eq!(
-        repository_state.match_calls,
+        lock(&repository.state).match_calls,
         vec![MatchCall {
             workspace_ids: vec![agent.to_string()],
             event_name: "passwords.access_request.resolved".to_string(),
             entity_id: item.to_string(),
         }]
     );
-    drop(repository_state);
     let enqueuer_state = lock(&enqueuer.state);
     assert_eq!(enqueuer_state.attempted_messages.len(), 1);
-    assert!(
-        enqueuer_state.attempted_messages[0].event.broker_envelope["metadata"]
-            .get("recipientUserId")
-            .is_none()
+    let delivered = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(delivered.entity_type, "password_item");
+    assert_eq!(
+        delivered.broker_envelope["metadata"],
+        serde_json::json!({
+            "teamId": "00000000-0000-0000-0000-000000000001",
+            "itemId": "00000000-0000-0000-0000-000000000002",
+            "requestId": "00000000-0000-0000-0000-000000000003",
+            "status": "approved",
+        }),
     );
 }

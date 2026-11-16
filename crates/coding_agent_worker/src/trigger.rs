@@ -15,7 +15,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use strum::IntoEnumIterator as _;
 use trigger_context::{TriggerContext, TriggerOrigin};
-use webhook::domain::models::WebhookFilter;
+
+use crate::outbound::stream::StreamFilter;
 
 #[cfg(test)]
 mod test;
@@ -189,9 +190,9 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
 /// A name this daemon does not yet handle is still worth subscribing to -
 /// it arrives, is recognised as unsupported, and is skipped - which beats
 /// silently never being sent it.
-pub fn trigger_filters(bots: impl IntoIterator<Item = impl ToString>) -> Vec<WebhookFilter> {
+pub fn trigger_filters(bots: impl IntoIterator<Item = impl ToString>) -> Vec<StreamFilter> {
     let ids: Vec<String> = bots.into_iter().map(|bot| bot.to_string()).collect();
-    vec![WebhookFilter {
+    vec![StreamFilter {
         events: AgentTriggerEventName::iter()
             .map(|event| event.to_string())
             .collect(),

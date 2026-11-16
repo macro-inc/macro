@@ -15,6 +15,7 @@ mod test;
 
 use agent_runtime_protocol::domain::action::AgentActionId;
 use bots::domain::models::BotId;
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -432,6 +433,74 @@ impl TopicEvent for AgentSessionLifecycleEvent {
     type Topic = MacroAgentSessionLifecycleTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+impl EventAccess for AgentSessionLifecycleEvent {
+    type PublicPayload = Self;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        use macro_event_broker::access::{
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let name: &'static str = AgentSessionLifecycleEventName::from(self).into();
+        let session_id = self.session_id().to_string();
+        let audience = match self {
+            // A deleted session's grants go with its row. Its owner keeps
+            // ownership, and the channel or document it was opened from still
+            // knows its audience: deliver to the union of the two.
+            Self::Deleted(deleted) => {
+                // Webhooks match the owner's personal workspace (Owner);
+                // streams match the owner's personal stream for any
+                // credential acting for them (Workspace, not a personal
+                // class).
+                let owner = Audience::Any(vec![
+                    Audience::Owner {
+                        user_id: deleted.identity.owner_id.clone(),
+                    },
+                    Audience::Workspace {
+                        workspace_id: deleted.identity.owner_id.to_string(),
+                    },
+                ]);
+                match &deleted.identity.origin {
+                    Some(origin) => Audience::Any(vec![
+                        owner,
+                        Audience::Entity {
+                            entity_type: origin.parent.access_entity_type(),
+                            entity_id: origin.parent.entity_id(),
+                        },
+                    ]),
+                    None => owner,
+                }
+            }
+            Self::Opened(_)
+            | Self::TurnStarted(_)
+            | Self::TurnEnded(_)
+            | Self::CommandRejected(_)
+            | Self::Settled(_)
+            | Self::WaitingForInput(_)
+            | Self::InputReceived(_)
+            | Self::Mentioned(_)
+            | Self::Stopped(_)
+            | Self::Renamed(_) => Audience::Entity {
+                entity_type: EntityType::AgentSession,
+                entity_id: session_id.clone(),
+            },
+        };
+        Ok(Access::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::AgentSession, session_id),
+            audience,
+            stage: Stage::Stable,
+            payload: Cow::Borrowed(self),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroAgentSessionLifecycleTopic`].

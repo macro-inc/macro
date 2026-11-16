@@ -129,7 +129,7 @@ async fn rejected_initial_values_delete_the_new_project_and_its_description() {
     let mut repo = created_repo();
     repo.expect_delete()
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(()) }));
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
     let events = Arc::new(super::events::Events::default());
     let svc = InitiativeServiceImpl::new(
         repo,

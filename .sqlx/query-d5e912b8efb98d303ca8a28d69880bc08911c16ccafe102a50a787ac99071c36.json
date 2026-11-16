@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT c.team_id FROM crm_companies c\n                WHERE c.id = $1 AND EXISTS (\n                    SELECT 1 FROM team_user tu\n                    WHERE tu.team_id = c.team_id\n                      AND (tu.crm_access OR tu.team_role <> 'member')\n                      AND (NOT c.hidden OR tu.team_role <> 'member')\n                )\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d5e912b8efb98d303ca8a28d69880bc08911c16ccafe102a50a787ac99071c36"
+}

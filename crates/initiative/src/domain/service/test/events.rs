@@ -84,7 +84,7 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete()
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(()) }));
+        .return_once(|_| Box::pin(async { Ok(Vec::new()) }));
     let mut surfaces = MockInitiativeDescriptionSurfaces::new();
     surfaces.expect_delete().times(1).return_once(|_| {
         Box::pin(async {
@@ -148,4 +148,35 @@ async fn appearance_validates_and_records_only_changes() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn purged_event_carries_the_audience_the_repo_read_before_the_delete() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(vec![user(OWNER), user(MEMBER)]) }));
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let events = Arc::new(Events::default());
+
+    service_with(repo, surfaces)
+        .with_event_publisher(events.clone())
+        .delete(owner_receipt())
+        .await
+        .unwrap();
+
+    let recorded = events.0.lock().unwrap();
+    let [
+        InitiativeTopicEvent::Purged {
+            audience_user_ids, ..
+        },
+    ] = recorded.as_slice()
+    else {
+        panic!("one purge event, got {recorded:?}");
+    };
+    assert_eq!(audience_user_ids, &vec![user(OWNER), user(MEMBER)]);
 }

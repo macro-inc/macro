@@ -1,5 +1,6 @@
 use chrono::Utc;
 use macro_event_broker::Event;
+use macro_event_broker::access::EventAccess as _;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -84,4 +85,75 @@ fn metadata_from_entity_mention_maps_fields() {
     };
 
     assert_eq!(MentionMetadata::from(&mention), metadata());
+}
+
+fn document_mention() -> MentionMetadata {
+    MentionMetadata {
+        source: EntityRef {
+            id: "doc-1".to_string(),
+            kind: "document".to_string(),
+        },
+        mentioned: EntityRef {
+            id: "macro|reader@example.com".to_string(),
+            kind: "user".to_string(),
+        },
+    }
+}
+
+#[test]
+fn document_mentions_reach_the_document_audience() {
+    use macro_event_broker::access::{Access, Audience, EntityType, Stage};
+
+    for (event, name) in [
+        (
+            MentionTopicEvent::Created(document_mention()),
+            "mention.created",
+        ),
+        (
+            MentionTopicEvent::Deleted(document_mention()),
+            "mention.deleted",
+        ),
+    ] {
+        let Access::Public(public) = event.access().expect("valid access") else {
+            panic!("{name} must be public");
+        };
+        assert_eq!(public.name, name);
+        assert_eq!(public.stage, Stage::Preview);
+        assert_eq!(
+            public.audience,
+            Audience::Entity {
+                entity_type: EntityType::Document,
+                entity_id: "doc-1".to_string(),
+            }
+        );
+        assert_eq!(public.entity.entity_type.as_str(), "document");
+        assert_eq!(public.entity.entity_id, "doc-1");
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": name,
+                "metadata": {
+                    "source_type": "document",
+                    "source_id": "doc-1",
+                    "mentioned_kind": "user",
+                    "mentioned_id": "macro|reader@example.com",
+                },
+            })
+        );
+    }
+}
+
+#[test]
+fn message_mentions_stay_internal() {
+    use macro_event_broker::access::Access;
+
+    assert!(matches!(
+        MentionTopicEvent::MessageSent(document_mention()).access(),
+        Ok(Access::Internal { .. })
+    ));
+}
+
+#[test]
+fn an_unknown_source_kind_is_rejected() {
+    assert!(MentionTopicEvent::Created(metadata()).access().is_err());
 }

@@ -7,7 +7,9 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::notification_events::CallNotificationEvent;
 use chrono::{DateTime, Utc};
+use macro_event_broker::access::EventAccess;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroCallsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -152,10 +154,162 @@ pub enum CallTopicEvent {
     RecordImported(CallRecordImportedMetadata),
 }
 
+/// What a [`CallTopicEvent::RecordUpdated`] changed, without the new values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CallRecordChange {
+    /// The record's display name changed.
+    Name,
+    /// Whether the record is shared with the team changed.
+    TeamSharing,
+}
+
+/// Public payload of `call.record_updated`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicCallRecordUpdated {
+    /// The call record.
+    pub call_id: Uuid,
+    /// The channel containing it, if any.
+    pub channel_id: Option<Uuid>,
+    /// The user who updated it, if any.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// What changed; read the record for the new values.
+    pub changes: Vec<CallRecordChange>,
+}
+
+/// Public payload of `call.record_deleted`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicCallRecordDeleted {
+    /// The deleted call record.
+    pub call_id: Uuid,
+    /// The channel that contained it.
+    pub channel_id: Uuid,
+    /// The user who deleted it, if any.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// Public payload of `call.record_imported`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicCallRecordImported {
+    /// The created or refreshed call record.
+    pub call_id: Uuid,
+}
+
+/// The public projection of the call-record events on [`MacroCallsTopic`].
+/// Live call facts are public through `macro.call_notifications` instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum CallRecordPublicEvent {
+    /// A call record's name or team sharing changed.
+    #[serde(rename = "call.record_updated")]
+    RecordUpdated(PublicCallRecordUpdated),
+    /// A call record was deleted.
+    #[serde(rename = "call.record_deleted")]
+    RecordDeleted(PublicCallRecordDeleted),
+    /// A call record was imported from a connected meeting provider.
+    #[serde(rename = "call.record_imported")]
+    RecordImported(PublicCallRecordImported),
+}
+
 impl TopicEvent for CallTopicEvent {
     type Topic = MacroCallsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+impl EventAccess for CallTopicEvent {
+    type PublicPayload = CallRecordPublicEvent;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        use macro_event_broker::access::{
+            Access, Audience, EntityRef, EntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
+
+        let call = |call_id: &Uuid| Audience::Entity {
+            entity_type: EntityType::Call,
+            entity_id: call_id.to_string(),
+        };
+        let (name, call_id, audience, payload) = match self {
+            Self::Started(_)
+            | Self::RecordArchived(_)
+            | Self::RecordSummarized(_)
+            | Self::RecordingReady(_) => {
+                return Ok(Access::Internal {
+                    reason: "call lifecycle facts are projected to macro.call_notifications, the public call family",
+                });
+            }
+            Self::RecordUpdated(metadata) => (
+                "call.record_updated",
+                metadata.call_id,
+                call(&metadata.call_id),
+                CallRecordPublicEvent::RecordUpdated(PublicCallRecordUpdated {
+                    call_id: metadata.call_id,
+                    channel_id: metadata.channel_id,
+                    actor_user_id: metadata.actor_user_id.clone(),
+                    changes: [
+                        (metadata.custom_name.is_some(), CallRecordChange::Name),
+                        (
+                            metadata.share_with_team.is_some(),
+                            CallRecordChange::TeamSharing,
+                        ),
+                    ]
+                    .into_iter()
+                    .filter_map(|(changed, change)| changed.then_some(change))
+                    .collect(),
+                }),
+            ),
+            // The deleted record has no grants left; the channel it was in
+            // still knows its audience. A record outside a channel has none.
+            Self::RecordDeleted(metadata) => {
+                let Some(channel_id) = metadata.channel_id else {
+                    return Ok(Access::Internal {
+                        reason: "a deleted call record outside a channel has no grants left to reach anyone",
+                    });
+                };
+                (
+                    "call.record_deleted",
+                    metadata.call_id,
+                    Audience::Entity {
+                        entity_type: EntityType::Channel,
+                        entity_id: channel_id.to_string(),
+                    },
+                    CallRecordPublicEvent::RecordDeleted(PublicCallRecordDeleted {
+                        call_id: metadata.call_id,
+                        channel_id,
+                        actor_user_id: metadata.actor_user_id.clone(),
+                    }),
+                )
+            }
+            Self::RecordImported(metadata) => (
+                "call.record_imported",
+                metadata.call_id,
+                call(&metadata.call_id),
+                CallRecordPublicEvent::RecordImported(PublicCallRecordImported {
+                    call_id: metadata.call_id,
+                }),
+            ),
+        };
+        Ok(Access::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Call, call_id.to_string()),
+            audience,
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
 }
 
 /// Publishable event for [`MacroCallsTopic`], keyed by the call's bare id.
@@ -229,5 +383,71 @@ impl MacroEvent for CallMacroEvent {
 
     fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
         Self::with_event(key, event)
+    }
+}
+
+impl EventAccess for CallNotificationEvent {
+    type PublicPayload = Self;
+
+    fn access(
+        &self,
+    ) -> Result<
+        macro_event_broker::access::Access<'_, Self::PublicPayload>,
+        macro_event_broker::access::AccessError,
+    > {
+        use macro_event_broker::access::{
+            Access, AccessError, Audience, EntityRef, EntityType, PublicEvent, Stage,
+        };
+        use macro_user_id::user_id::MacroUserIdStr;
+        use std::borrow::Cow;
+
+        let metadata = self.metadata();
+        let call_id = metadata.call_id.to_string();
+        let audience = match self {
+            Self::Ringing(_) | Self::Answered(_) | Self::Declined(_) | Self::Invited(_) => {
+                let recipient = metadata
+                    .recipient_user_id
+                    .clone()
+                    .filter(|id| !id.is_empty())
+                    .ok_or(AccessError::MissingRecipient)?;
+                let user_id = MacroUserIdStr::try_from(recipient.clone()).map_err(|_| {
+                    AccessError::InvalidEntityId {
+                        entity_type: "user",
+                        entity_id: recipient,
+                    }
+                })?;
+                Audience::Recipient { user_id }
+            }
+            Self::Started(_)
+            | Self::Ended(_)
+            | Self::ParticipantJoined(_)
+            | Self::ParticipantLeft(_)
+            | Self::RecordingReady(_)
+            | Self::Summarized(_) => Audience::Entity {
+                entity_type: EntityType::Call,
+                entity_id: call_id.clone(),
+            },
+        };
+        // The recipient routes the event; it is never part of the payload.
+        let mut payload = self.clone();
+        match &mut payload {
+            Self::Started(metadata)
+            | Self::Ended(metadata)
+            | Self::ParticipantJoined(metadata)
+            | Self::ParticipantLeft(metadata)
+            | Self::RecordingReady(metadata)
+            | Self::Summarized(metadata)
+            | Self::Ringing(metadata)
+            | Self::Answered(metadata)
+            | Self::Declined(metadata)
+            | Self::Invited(metadata) => metadata.recipient_user_id = None,
+        }
+        Ok(Access::Public(PublicEvent {
+            name: self.name(),
+            entity: EntityRef::new(EntityType::Call, call_id),
+            audience,
+            stage: Stage::Stable,
+            payload: Cow::Owned(payload),
+        }))
     }
 }
