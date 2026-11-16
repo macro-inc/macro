@@ -7,7 +7,7 @@ Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
 `redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
-`routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
+`routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts`, `convert-service.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -51,7 +51,7 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts` and `convert-service.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -60,7 +60,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts, Outlook sync, Routine suggestions, Computer capacity, and Search and database saturation) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync, Routine suggestions, Computer capacity, Search and database saturation, and Convert service alerts) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -390,3 +390,16 @@ The eager, lazy and skipped metrics stay empty until the agent-harness-service
 release that records those span fields; the dials, sessions and starvation
 metrics read fields prod emits today. Span-based metrics count from deploy
 onward.
+
+## Convert service coverage
+
+`monitors/convert-service.ts` adds **one monitor and one dashboard** for the
+disk of each convert-service task, from the ECS Fargate integration's
+ephemeral storage metrics. It warns at 70% and alerts at 85% over 15 minutes
+and does not page; [the runbook](../../../docs/runbooks/convert-service.md#disk-filling)
+covers it.
+
+The service fails its own health check near 90% and ECS replaces the task, so
+on a build with that check the monitor reports a leak while conversions still
+succeed. The metric has prod data today, so the monitor alerts on its first
+evaluation if a task is already full.

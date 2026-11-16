@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool,convert-service}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -104,3 +104,7 @@ From `infra/`:
   `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns
   its monitors into missing data.
+- `monitors/convert-service.ts` sets its thresholds below the share of disk
+  at which convert-service fails its own health check (`MIN_FREE_BYTES` in
+  `services/convert_service/src/disk.rs`). Move them together, and when the
+  task's ephemeral storage changes.

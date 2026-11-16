@@ -181,6 +181,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'apm-server-error-anomaly',
     'computer-fleet-capacity',
     'computer-host-capacity',
+    'convert-service-disk',
     'error-logs-anomaly',
     'macrodb-blocked-connections',
     'macrodb-cpu',
