@@ -1,3 +1,8 @@
+import {
+  currentQueryAccount,
+  resetQueryAccountSession,
+} from '@queries/auth/account-scope';
+import { authKeys } from '@queries/auth/keys';
 import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type {
@@ -14,6 +19,12 @@ import { createEmailPrivacySource } from './email-privacy';
 import { crmKeys } from './keys';
 
 type PrivacyClient = typeof crmEmailPrivacyClient;
+let accountClient: QueryClient;
+vi.mock('@queries/client', () => ({
+  get queryClient() {
+    return accountClient;
+  },
+}));
 
 const settings: CrmEmailPrivacyResponse = {
   enabled: true,
@@ -36,11 +47,15 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
         mutations: { retry: false },
       },
     });
+    accountClient = client;
     cleanups.push(() => {
       dispose();
       client.clear();
     });
     const privacy = {
+      excludedThreads: vi
+        .fn<PrivacyClient['excludedThreads']>()
+        .mockResolvedValue(ok({ threads: [], next_cursor: null })),
       get: vi
         .fn<PrivacyClient['get']>()
         .mockResolvedValue(ok({ ...settings, ...initial })),
@@ -59,6 +74,11 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
 }
 
 async function signIn(h: ReturnType<typeof mount>) {
+  await resetQueryAccountSession();
+  await h.client.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: async () => ({ id: 'user', authenticated: true }),
+  });
   h.setTeam('team');
   h.setUser('user');
   await waitFor(() => expect(h.source.query.isSuccess).toBe(true));
@@ -173,4 +193,197 @@ describe('CRM email privacy query adapter', () => {
       )?.enabled
     ).toBe(false);
   });
+});
+
+it('commits a thread exception through the shared privacy refresh and paginated source', async () => {
+  const h = mount();
+  await signIn(h);
+  h.privacy.excludedThreads.mockResolvedValue(
+    ok({
+      threads: [
+        {
+          thread_id: 'thread',
+          link_id: 'mailbox',
+          subject: 'Private conversation',
+        },
+      ],
+      next_cursor: 'thread',
+    })
+  );
+  let nextPage!: ReturnType<typeof h.source.createExcludedThreads>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    nextPage = h.source.createExcludedThreads(() => 'cursor');
+  });
+  await waitFor(() => expect(nextPage.isSuccess).toBe(true));
+  expect(h.privacy.excludedThreads).toHaveBeenCalledWith(
+    'cursor',
+    expect.any(AbortSignal)
+  );
+  expect(nextPage.data?.threads[0].threadId).toBe('thread');
+  const readers = [
+    { body: { eca: ['person@example.com'] }, refresh: vi.fn(async () => {}) },
+    { body: { ecd: ['example.com'] }, refresh: vi.fn(async () => {}) },
+    {
+      body: { crma: 'activity', emailView: 'all' },
+      refresh: vi.fn(async () => {}),
+    },
+    { body: { emailView: 'inbox' }, refresh: vi.fn(async () => {}) },
+    { body: { crma: 'activity' }, refresh: vi.fn(async () => {}) },
+    {
+      body: { crma: { company: 'company' }, emailView: 'all' },
+      refresh: vi.fn(async () => {}),
+    },
+  ];
+  for (const reader of readers) {
+    cleanups.push(
+      registerActiveGraphqlSoupQuery({
+        isEnabled: () => true,
+        cacheMaintained: () => true,
+        body: () => reader.body,
+        refresh: reader.refresh,
+      })
+    );
+  }
+  const emailsKey = soupKeys.astItems({
+    params: { limit: 100, sort_method: 'updated_at' },
+    body: { ecd: ['example.com'] },
+  }).queryKey;
+  h.client.setQueryData(emailsKey, ['previously visible thread']);
+  const unrelatedKeys = [
+    [...soupKeys._def, 'ordinary-inbox'],
+    crmKeys.company('company').queryKey,
+    crmKeys.pipelines('team').queryKey,
+    crmKeys.excludedEmailThreads('team', 'other-user', 1, undefined).queryKey,
+  ];
+  for (const key of unrelatedKeys) h.client.setQueryData(key, []);
+  await h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: true,
+  });
+  expect(h.privacy.update).toHaveBeenCalledWith({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: true,
+  });
+  for (const reader of readers.slice(0, 2))
+    expect(reader.refresh).toHaveBeenCalledOnce();
+  for (const reader of readers.slice(2))
+    expect(reader.refresh).not.toHaveBeenCalled();
+  expect(h.client.getQueryState(emailsKey)?.isInvalidated).toBe(true);
+  for (const key of unrelatedKeys)
+    expect(h.client.getQueryState(key)?.isInvalidated).toBe(false);
+  expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2);
+  expect(h.privacy.get).toHaveBeenCalledOnce();
+});
+
+it('keeps a restoration saved and refreshes exception pages when a contribution reader fails', async () => {
+  const h = mount();
+  await signIn(h);
+  h.privacy.excludedThreads.mockResolvedValueOnce(
+    ok({
+      threads: [
+        {
+          thread_id: 'thread',
+          link_id: 'mailbox',
+          subject: 'Private conversation',
+        },
+      ],
+      next_cursor: null,
+    })
+  );
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(list.data?.threads).toHaveLength(1));
+  cleanups.push(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      cacheMaintained: () => true,
+      body: () => ({ ecd: ['example.com'] }),
+      refresh: async () => {
+        throw new Error('Contribution refresh failed');
+      },
+    })
+  );
+  const emailsKey = soupKeys.astItems({
+    params: { limit: 100, sort_method: 'updated_at' },
+    body: { ecd: ['example.com'] },
+  }).queryKey;
+  h.client.setQueryData(emailsKey, ['previously visible thread']);
+
+  await h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: false,
+  });
+
+  await waitFor(() => {
+    expect(h.source.update.isSuccess).toBe(true);
+    expect(list.data?.threads).toHaveLength(0);
+  });
+  expect(h.privacy.update).toHaveBeenCalledOnce();
+  expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2);
+  expect(h.client.getQueryState(emailsKey)?.isInvalidated).toBe(true);
+  expect(h.feedback.failure).toHaveBeenCalledOnce();
+});
+
+it('cancels a private-subject read across login and never caches it for the previous session', async () => {
+  const h = mount();
+  await signIn(h);
+  const account = currentQueryAccount();
+  const oldKey = crmKeys.excludedEmailThreads(
+    'team',
+    'user',
+    account?.session,
+    undefined
+  ).queryKey;
+  const held =
+    Promise.withResolvers<
+      Awaited<ReturnType<PrivacyClient['excludedThreads']>>
+    >();
+  h.privacy.excludedThreads.mockReturnValueOnce(held.promise).mockResolvedValue(
+    ok({
+      threads: [
+        {
+          thread_id: 'other-thread',
+          link_id: 'other-mailbox',
+          subject: 'Current private subject',
+        },
+      ],
+      next_cursor: null,
+    })
+  );
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(h.privacy.excludedThreads).toHaveBeenCalledOnce());
+  const signal = h.privacy.excludedThreads.mock.calls[0][1];
+  await resetQueryAccountSession();
+  await waitFor(() => expect(signal?.aborted).toBe(true));
+  held.resolve(
+    ok({
+      threads: [
+        {
+          thread_id: 'late-thread',
+          link_id: 'late-mailbox',
+          subject: 'Late private subject',
+        },
+      ],
+      next_cursor: null,
+    })
+  );
+  await h.client.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: async () => ({ id: 'other-user', authenticated: true }),
+  });
+  h.setUser('other-user');
+  await waitFor(() => expect(list.isSuccess).toBe(true));
+  expect(list.data?.threads[0].subject).toBe('Current private subject');
+  expect(h.client.getQueryData(oldKey)).toBeUndefined();
 });

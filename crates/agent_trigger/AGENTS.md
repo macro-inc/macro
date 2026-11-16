@@ -24,7 +24,9 @@ session that results.
   non-message trigger paths.
 - `src/outbound/jev_judge.rs`: the Jev implicit-trigger judge — one yes/no
   question per live agent in the thread; the domain routes to the single
-  agent at or above the threshold.
+  agent at or above the threshold. The transcript names people and labels
+  agents `agent N (name)` (`thread_window::render_transcript`); raw sender ids
+  never reach the judge.
 
 ## Scope
 
@@ -53,6 +55,11 @@ session that results.
 
 ## Gotchas
 
+- Every judged message records `agent.trigger.inferred.*` (outcome,
+  probabilities, top probability, threshold, routed bot) on the `evaluate`
+  span and logs one `agent trigger judged an unmentioned message` info event;
+  search those to count inferred replies or tune `ADDRESSED_THRESHOLD`. An
+  inferred follow-up carries the judge's confidence in its `FollowUpContext`.
 - Implicit replies need `TYPESAFE_API_KEY` in the host (`agent_trigger_service`,
   `agent_harness_service`); while it is unset only mentions and explicit
   replies reach agents. Image captions still use the fast vision model,

@@ -290,7 +290,7 @@ impl ServerHandler for InternalTools {
                 let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
-                    Ok(value) => CallToolResult::structured(value),
+                    Ok(value) => code_result(value),
                     Err(error) => {
                         CallToolResult::error(vec![ContentBlock::text(error.description)])
                     }
@@ -329,4 +329,28 @@ impl ServerHandler for InternalTools {
         };
         Ok(result.into())
     }
+}
+
+/// The receipt as structured content, which Macro's own agent reads with its
+/// `modelMedia`; other clients read the text and image blocks, so the pixels
+/// reach them as images rather than base64 text.
+fn code_result(value: serde_json::Value) -> CallToolResult {
+    let mut text = value.clone();
+    let media = text
+        .as_object_mut()
+        .and_then(|object| object.remove("modelMedia"));
+    let mut content = vec![ContentBlock::text(text.to_string())];
+    for image in media
+        .as_ref()
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(data) = image.get("data").and_then(serde_json::Value::as_str) {
+            content.push(ContentBlock::image(data, "image/png"));
+        }
+    }
+    let mut result = CallToolResult::success(content);
+    result.structured_content = Some(value);
+    result
 }

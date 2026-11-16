@@ -45,6 +45,7 @@ location_check = []
 
 [dependencies]
 passwords = { path = "../../crates/passwords" }
+password_events = { path = "../../crates/password_events" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
@@ -76,7 +77,7 @@ axum = { workspace = true, features = [
 ] }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
-bots = { path = "../../crates/bots" }
+bots = { path = "../../crates/bots", features = ["realtime"] }
 bot_id = { path = "../../crates/bot_id" }
 calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
@@ -186,6 +187,7 @@ initiative = { path = "../../crates/initiative", features = ["inbound", "postgre
 jsonwebtoken = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
@@ -320,6 +322,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 bebop = { workspace = true }
 sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
 tokio-tungstenite = { workspace = true }

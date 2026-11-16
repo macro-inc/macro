@@ -385,3 +385,15 @@ async fn an_unattended_program_runs_without_another_check() {
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
     assert!(checker.checked.lock().unwrap().is_empty());
 }
+
+#[test]
+fn every_operation_gets_at_least_one_call() {
+    assert!(matches!(
+        Limits {
+            max_calls_per_operation: 0,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+}

@@ -413,6 +413,7 @@ fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
 fn a_managed_follow_up_carries_its_context_to_delivery() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::Inferred,
+        confidence: Some(72),
         discussion: DiscussionContext {
             agent_request: None,
             surface: DiscussionSurface::DocumentComment {

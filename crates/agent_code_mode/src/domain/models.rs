@@ -151,6 +151,69 @@ pub struct ExecutionReceipt {
     pub result: Option<Value>,
     /// Safe failure text, when execution did not succeed.
     pub error: Option<String>,
+    /// Pixels of the images `main` returned in `images`, for the model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_media: Vec<ModelImage>,
+}
+
+/// Most images one result may show the model, as for a RenderCanvas result.
+pub const MAX_RESULT_IMAGES: usize = 2;
+
+/// A static file `main` returned in `images`, such as `await canvas.render()`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ReturnedImage {
+    /// Static file id; other serialized fields of the SDK image are ignored.
+    pub id: StaticFileId,
+}
+
+/// A static file id: a path component, never a URL or path.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+pub struct StaticFileId(String);
+
+impl TryFrom<String> for StaticFileId {
+    type Error = &'static str;
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        if lazy_regex::regex_is_match!(r"^[A-Za-z0-9_-]{1,128}$", &id) {
+            Ok(Self(id))
+        } else {
+            Err("an image id is a static file id")
+        }
+    }
+}
+
+impl AsRef<str> for StaticFileId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Base64 PNG pixels the model sees as an image block, never a URL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelImage {
+    /// Always an image.
+    pub r#type: ModelMediaType,
+    /// Always a PNG.
+    pub media_type: ModelImageMediaType,
+    /// Base64 PNG bytes.
+    pub data: String,
+}
+
+/// The kind of model media; only images.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelMediaType {
+    /// An image block.
+    Image,
+}
+
+/// The media type of a model image; only PNG.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub enum ModelImageMediaType {
+    /// image/png.
+    #[serde(rename = "image/png")]
+    Png,
 }
 
 /// Safe service errors, separate from failures returned by a running program.

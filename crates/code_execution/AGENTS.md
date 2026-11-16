@@ -14,9 +14,11 @@ composition root.
   cancellation.
 - `src/domain/context.rs`: `CodeContext`, the type of an attended `main`'s
   argument.
-- `src/outbound/deno.rs`: process lifecycle and restricted permissions.
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
-  and final JSON protocol.
+- `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
+  import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
+  `deno/unavailable.mjs`).
+- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs,
+  removing every way to the network but `fetch`, and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
@@ -32,8 +34,9 @@ must be listed in the generator's `postReads`, or dry runs skip it.
 The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
-Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
-run under a plain user token (public MCP) has. APIs that ask a program to
+Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
+credential it carries; it is the only mark a run under a plain user
+token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
@@ -52,7 +55,10 @@ unchecked. Unattended (routine) programs are checked by their host as a whole
 routine when saved, so their runs aren't checked again.
 
 The bootstrap bans timers before importing `main.ts`, and the import map points
-node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
+node timer modules (and, in attended runs, worker modules) at `timers.mjs`; every
+other built-in outside `NODE_ALLOWED` goes to `unavailable.mjs`. Bumping
+`DENO_VERSION` means running `every_node_builtin_but_the_allowed_ones_is_unavailable`
+and adding any new built-in to `NODE_BUILTINS`. The bundled SDK's only timer is
 the SSE reconnect delay, so a reconnecting event stream fails the same way.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
