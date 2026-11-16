@@ -720,7 +720,7 @@ describe('pipe characters inside pipe-table cells', () => {
         [
           '| Person | Bug Reports | Share |',
           '| :--- | :---: | :---: |',
-          `| ${GAB_MENTION} | 206 | $ 26.8\\% $ |`,
+          `| ${GAB_MENTION} | 206 | $$ 26.8\\% $$ |`,
         ].join('\n'),
         transformers
       );
@@ -735,6 +735,8 @@ describe('pipe characters inside pipe-table cells', () => {
         expect(mention.getUserId()).toBe('macro|gab@macro.com');
         expect(mention.getEmail()).toBe('gab@macro.com');
         expect(grid[1][1].getTextContent().trim()).toBe('206');
+        const [share] = $inlineNodes(grid[1][2]).filter($isEquationNode);
+        expect(share?.getEquation().trim()).toBe('26.8\\%');
       });
     });
   }
