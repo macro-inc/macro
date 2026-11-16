@@ -85,6 +85,7 @@ const FORMATS = valuesOf<ImportFormat>()([
   'one_password_csv',
   'bitwarden_json',
   'bitwarden_csv',
+  'bitwarden_zip',
 ]);
 const KINDS = valuesOf<ImportItemKind>()([
   'login',
@@ -110,6 +111,9 @@ const DROPPED_PARTS = valuesOf<ImportDroppedPart>()([
   'password_history',
   'totp_non_default',
   'extra_field',
+  'empty_field',
+  'reprompt',
+  'uri_match_type',
 ]);
 
 const keys = (value: object) => Object.keys(value).sort();
