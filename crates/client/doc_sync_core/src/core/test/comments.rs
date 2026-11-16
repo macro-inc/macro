@@ -268,3 +268,31 @@ fn successful_projection_resyncs_charge_the_shared_budget_without_network_fetch(
     h.send(SyncInput::ProjectionResynced);
     assert_eq!(h.core.phase(), Phase::Stopped);
 }
+#[test]
+fn a_comment_acknowledged_during_a_reset_is_accepted() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    let peer = Doc::new(9);
+    peer.edit("comment");
+    let id = h.core.message_id();
+    h.core.comments.push(CommentRequest {
+        id: id.clone(),
+        request: RequestId(31),
+        bytes: peer.snapshot(),
+        deadline: Millis(60_000),
+    });
+    h.send(SyncInput::Reset);
+    assert_eq!(h.core.phase, Phase::Resetting);
+    h.remote(sync_protocol::FromRemote::RemoteUpdateAck { id: id.as_str() });
+    assert!(h.out.events.iter().any(|e| matches!(
+        e,
+        SyncEvent::Reply {
+            request: RequestId(31),
+            reply: Reply::Comment(CommentReply::Accepted),
+        }
+    )));
+    assert_eq!(
+        h.core.assist_replay.len(),
+        1,
+        "imported once the reset ends"
+    );
+}

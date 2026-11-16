@@ -210,7 +210,14 @@ impl SyncCore {
         }
         if let Some(index) = self.comments.iter().position(|p| p.id.as_str() == id) {
             let comment = self.comments.remove(index);
-            if self
+            if self.phase == Phase::Resetting {
+                // The server accepted it; import the echo once the reset ends.
+                self.assist_replay.push(comment.bytes);
+                out.events.push(SyncEvent::Reply {
+                    request: comment.request,
+                    reply: Reply::Comment(CommentReply::Accepted),
+                });
+            } else if self
                 .import(&comment.bytes, ImportOrigin::CommentEcho, now, doc, out)
                 .is_some()
             {
