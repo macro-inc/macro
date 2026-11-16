@@ -70,6 +70,8 @@ Keep clipboardDom additive to headless clipboard: export plain, internal JSON an
 Route raw live-state string and query-kind-7 exports through the model streaming writer in `src/bulk.rs`; keep application saved-state cleanup separate.
 
 Sync policy, authorization, history and retries remain in document_session/doc_sync_core.
+The code-persistence reopen assertion is cross-checked by the independent v11 Source
+metadata capture in packages/lexical-conformance/fixtures/table-reopen-v11.
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
 Use `createMacro` for application markdown; `create` retains the generic rich-text registry for portable clients and conformance. Keep server composers out of both constructors.

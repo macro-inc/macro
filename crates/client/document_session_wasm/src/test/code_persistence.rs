@@ -176,9 +176,9 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
     assert_eq!(before["root"]["$"].get("id"), None);
     before["root"]["$"]["id"] = serde_json::json!(root_id);
     assert_eq!(after, before);
-    // Source's reopen of bare stored metadata writes the parsed environmentTags:null
-    // slot as one root map insert (table-reopen-b.json 0f0dba80), and the open stores the
-    // root id it minted: two ops from the reader's peer.
+    // The v11 Source recorder's current-version control writes the missing
+    // environmentTags:null slot without a version bump (table-reopen-v11/search-off/current).
+    // This reader also stores its minted root id: two ops from its peer.
     let mut reopened = seeded.oplog_vv();
     reopened.insert(77, 2);
     assert_eq!(session.version(), reopened);

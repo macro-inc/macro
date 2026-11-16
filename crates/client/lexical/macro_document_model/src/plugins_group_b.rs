@@ -55,7 +55,7 @@ mod metadata;
 mod movement;
 pub use metadata::{
     DOCUMENT_METADATA, DOCUMENT_METADATA_UPGRADE_REQUESTED, DOCUMENT_VERSION,
-    document_metadata_upgrade,
+    document_metadata_normalize, document_metadata_upgrade,
 };
 mod structure;
 pub mod table;

@@ -1460,31 +1460,8 @@ fn open_stored_in(
     Ok((surface, doc, per_commit))
 }
 
-/// Table reopen capture (b) (table-reopen-b.json 0f0dba80): reopening a keyless document
-/// sends one update with only root metadata ops and no table-node op; history then has an
-/// undo item. Fixture: Source's received snapshot bytes, captured at version 10. The capture
-/// sent only environmentTags:null; at version 11 the same open also upgrades the stored
-/// version in that update (documentMetadataPlugin). The op order below is derived from
-/// that rule, not recorded; it needs a version-11 Source re-capture.
-#[test]
-fn reopening_a_keyless_version_10_table_writes_only_root_metadata()
--> Result<(), Box<dyn std::error::Error>> {
-    // RemoteInitialSync snapshot from table-reopen-b.json (frame d7dc61da), SHA-256
-    // f60b590a08550c51d2584f971258860a56c3f2e8b1a51310d63fd8ec0d804555.
-    let (surface, _doc, per_commit) = open_stored(include_bytes!(
-        "testdata/table-keyless-reopen-received.loro"
-    ))?;
-    assert_eq!(
-        per_commit,
-        [vec![
-            map_op("insert", "version"),
-            map_op("insert", "environmentTags")
-        ]]
-    );
-    assert!(surface.history().can_undo);
-    assert!(!surface.history().can_redo);
-    Ok(())
-}
+#[path = "metadata_hydration/table_reopen.rs"]
+mod table_reopen;
 
 /// Undo of the first load restores the stored nulls in Loro; Source's Mirror holds them
 /// again, so the next local edit deletes them again (t1yn condition 2).

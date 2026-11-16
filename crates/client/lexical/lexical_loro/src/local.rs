@@ -137,16 +137,18 @@ impl LoroProjection {
         };
         self.project_states(doc, pass, origin, now, suppress_events, exports)
     }
-    /// Write the opt-in root search text derived from `state` as one local Loro commit,
-    /// with no model update, as Source's full-state sync does after the initial content. As
-    /// a local projection it also deletes the pending stored nulls.
+    /// Write load-time state normalization and opt-in derived root search text in one
+    /// local Loro commit, as Source's full-state sync does before its version upgrade.
+    /// The supplied state-only commits expose retained root slots to this same pass;
+    /// pending stored nulls are also deleted as in any local projection.
     pub fn refresh_root_search_text(
         &mut self,
         doc: &LoroDoc,
         state: &EditorState,
+        normalizations: &[Commit],
         now: loro::Timestamp,
     ) -> Result<LocalProjected> {
-        if self.search_text.is_none() {
+        if self.search_text.is_none() && normalizations.is_empty() {
             return Ok(LocalProjected::default());
         }
         let candidates = state
@@ -155,9 +157,13 @@ impl LoroProjection {
             .map(|key| (key, Mutation::Updated))
             .collect::<OrderedMap<_, _>>();
         let mut exports = std::mem::take(&mut self.own_exports);
+        let all = normalizations
+            .iter()
+            .flat_map(Commit::chain)
+            .collect::<Vec<_>>();
         let pass = Pass {
-            all: &[],
-            prev_state: state,
+            all: &all,
+            prev_state: all.first().map_or(state, |commit| &commit.prev),
             next_state: state,
             candidates,
         };

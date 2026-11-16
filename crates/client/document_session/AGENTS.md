@@ -48,13 +48,14 @@ The host supplies identities and both clocks and executes the returned effects.
   operation exists; consuming-view exposure, not model publication, owns signature
   observation revisions.
 - Clean persisted transparent wrappers only during writable initialization; use stored editor JSON to retain imported state and protected local fields, and apply initial hooks once.
-- Run the load follow-up on every writable application open, after the UndoManager exists and inside one history-merge group: the root search-text refresh, then the requested metadata update (version upgrade when stale, otherwise the stored-slot supersede). It is one undoable step, as in Source; read and comment-only opens write nothing. A failed search-text refresh projection is reported as FollowUpFailed and the open continues, as Source's background load write: partial ops are sealed with FIXUP_ORIGIN and the projection is re-attached to the actual document. A missing projection stays fatal.
+- Run the load follow-up on every writable application open after the UndoManager exists: project parsed metadata and optional derived search text together, then the queued version upgrade when stale. Skip empty projections and preserve one undo group; read and comment-only opens write nothing. A failed load-refresh projection is reported as FollowUpFailed and the open continues: partial ops are sealed with FIXUP_ORIGIN and the projection is re-attached to the actual document. A missing projection stays fatal.
 - Answer a local chain's metadata upgrade request with its own following update in the same drain (Edit only); a failure is reported as a follow-up failure and keeps the triggering edit.
 - Never weaken either side of the collab differential or change oracle expectations.
 
 ## Checks
 
 - `cargo test -p document_session -j4`
+- `cargo test -p document_session --all-features -j2` covers the native bridge and application projection-failure controls; keep these enabled when changing load normalization or recovery.
 - `cargo check -p document_session --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p document_session --all-targets -j4 -- -D warnings`
 - `cargo test -p document_session --no-default-features --features application -j2` checks generic admission with compatibility disabled.
@@ -73,6 +74,7 @@ successful binding. Validate complete generic batches before changing the live d
 
 - `src/session.rs`: shared lifecycle, SyncDoc lending adapter and ordered output drain.
 - `src/editor.rs`: initialization, remote repair and deterministic Loro grouping.
+- `tests/metadata_hydration/table_reopen.rs`: v11 Source-recorded reopen commits, partial delivery, access and no-op controls.
 - `src/editor/builder.rs`: default registry, command handlers and persistent node-id index.
 - `src/editor/identity_test.rs`: complete subtree-history JSON, durable identities, caret restoration and typed root metadata regressions.
 - `src/editor/id_state_test.rs`: supplied-key code snapshot/fresh-load round trip and strict rejection of distinct state keys named id.
@@ -97,7 +99,6 @@ the pending timer; no mutable Loro document handle escapes.
 
 Run the current TS stack differential from the repository root:
 `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`.
-Run `cargo test -p document_session --all-features -j4` for the native bridge too.
 Use the production `register_editor_commands` in application formatting integration
 controls; a registry-only Macro builder has no core formatting command handlers.
 `tests/telemetry.rs` isolates its tracing subscriber from parallel unit callsites.

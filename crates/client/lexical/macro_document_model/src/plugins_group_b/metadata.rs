@@ -30,16 +30,26 @@ pub static DOCUMENT_METADATA: StateKey<Arc<Value>> = StateKey::new("documentMeta
 /// answers with [`document_metadata_upgrade`] in its own following update.
 pub static DOCUMENT_METADATA_UPGRADE_REQUESTED: EventKey<()> =
     EventKey::new("group-b.document-metadata-upgrade-requested");
-static UPGRADE: CommandKey<()> = CommandKey::new("group-b.document-metadata-upgrade");
+#[derive(Clone, Debug)]
+enum MetadataUpdate {
+    Normalize,
+    Upgrade,
+}
+static UPGRADE: CommandKey<MetadataUpdate> = CommandKey::new("group-b.document-metadata-upgrade");
 static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
     command: CommandKind::Extension(&UPGRADE),
     priority: CommandPriority::Editor,
     placement: Placement::After,
 }];
 
+/// Publish the parsed live metadata before the separately queued version upgrade.
+pub fn document_metadata_normalize() -> Command {
+    Command::Extension(ExtensionCommand::new(&UPGRADE, MetadataUpdate::Normalize))
+}
+
 /// Source's queued `editor.update(..., { tag: 'history-merge' })` that sets the version.
 pub fn document_metadata_upgrade() -> Command {
-    Command::Extension(ExtensionCommand::new(&UPGRADE, ()))
+    Command::Extension(ExtensionCommand::new(&UPGRADE, MetadataUpdate::Upgrade))
 }
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
@@ -59,8 +69,15 @@ impl Plugin for Metadata {
         let Command::Extension(command) = command else {
             return Ok(Handled::No);
         };
-        if command.payload(&UPGRADE).is_none() {
+        let Some(action) = command.payload(&UPGRADE) else {
             return Ok(Handled::No);
+        };
+        if matches!(action, MetadataUpdate::Normalize) {
+            tx.supersede_retained_root_state(
+                &DOCUMENT_METADATA,
+                crate::sync::RETAINED_LIVE_ROOT_STATE,
+            )?;
+            return Ok(Handled::Yes);
         }
         let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
         if current

@@ -12,6 +12,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
+- `corpus/table-reopen.test.tsx`: independent real v11 Source collaboration reopen capture; raw fixtures and the rerun command live in `fixtures/table-reopen-v11/README.md`.
 - `bench/docs`: synthetic S/M/L Markdown seeds for the native `document_session` bulk benchmark; its `benches/README.md` defines measurement scope and load guards.
 - `diff/listeners.test.ts`: real JS command priority snapshots, identity, truthiness, live registration and caught opaque exceptions.
 - `diff/host.test.ts`: real indexed EditorHandle lifecycle, native fields, packet decoding and JS transforms with current-hook reentry, identity and rollback.

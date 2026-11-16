@@ -4,7 +4,7 @@
 //! projected, as its own local Loro commit.
 use super::*;
 use macro_document_model::plugins_group_b::{
-    DOCUMENT_METADATA_UPGRADE_REQUESTED, document_metadata_upgrade,
+    DOCUMENT_METADATA_UPGRADE_REQUESTED, document_metadata_normalize, document_metadata_upgrade,
 };
 
 impl EditorSurface {
@@ -26,13 +26,44 @@ impl EditorSurface {
         upgrade: bool,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
-        let state = self.core.state().clone();
         if let Some(undo) = &mut self.undo
             && self.history_ready
             && !self.group_active
         {
             self.group_active = undo.group_start().is_ok();
         }
+        // Source publishes its parsed live metadata before the queued version bump.
+        // Consume this state-only update in the refresh projection below, so derived
+        // search text and metadata share one Loro commit and one recovery boundary.
+        let normalized = match self.core.apply(
+            Input::Command {
+                command: document_metadata_normalize(),
+                selection: ViewSelection::KeepModel,
+            },
+            history_time(now)?,
+        ) {
+            Ok(output) => output.commits,
+            Err(error) => {
+                if let Some(observer) = &self.reported_errors {
+                    observer.reported(&error.error, view.len());
+                }
+                view.push(ViewEffect::Editor(Effect::FollowUpFailed {
+                    plugin: "group-b.document-metadata",
+                    kind: error.error.kind(),
+                    message: Arc::from(error.error.to_string()),
+                }));
+                *error.committed
+            }
+        };
+        let normalized = if normalized
+            .iter()
+            .any(|commit| commit.stored_state_superseded)
+        {
+            normalized.as_slice()
+        } else {
+            &[]
+        };
+        let state = self.core.state().clone();
         // Source's load write is a background update: a failed projection write is reported
         // and the open continues. Partial ops are sealed as a fixup, then the editor and its
         // projection are rebuilt from the actual document, as resync does, without
@@ -44,35 +75,36 @@ impl EditorSurface {
             projection.fail_after_writes(writes);
         }
         let mut upgrade = upgrade;
-        let refreshed = match projection.refresh_root_search_text(doc, &state, now.wall.0 / 1000) {
-            Ok(projected) => projected.changed,
-            Err(error) => {
-                view.push(ViewEffect::Editor(Effect::FollowUpFailed {
-                    plugin: "load-search-text",
-                    kind: "Projection",
-                    message: Arc::from(error.to_string()),
-                }));
-                doc.commit_with(
-                    loro::CommitOptions::new()
-                        .origin(FIXUP_ORIGIN)
-                        .timestamp(now.wall.0 / 1000),
-                );
-                // Initialize carries the rebuilt state.
-                let mut rebuilt = Vec::new();
-                if let Attached::Ready { upgrade: requested } =
-                    self.attach_editor(doc, now, Access::Edit, &mut rebuilt)?
-                {
-                    upgrade = requested;
+        let refreshed =
+            match projection.refresh_root_search_text(doc, &state, normalized, now.wall.0 / 1000) {
+                Ok(projected) => projected.changed,
+                Err(error) => {
+                    view.push(ViewEffect::Editor(Effect::FollowUpFailed {
+                        plugin: "load-search-text",
+                        kind: "Projection",
+                        message: Arc::from(error.to_string()),
+                    }));
+                    doc.commit_with(
+                        loro::CommitOptions::new()
+                            .origin(FIXUP_ORIGIN)
+                            .timestamp(now.wall.0 / 1000),
+                    );
+                    // Initialize carries the rebuilt state.
+                    let mut rebuilt = Vec::new();
+                    if let Attached::Ready { upgrade: requested } =
+                        self.attach_editor(doc, now, Access::Edit, &mut rebuilt)?
+                    {
+                        upgrade = requested;
+                    }
+                    if let Some(undo) = &mut self.undo
+                        && self.history_ready
+                        && !self.group_active
+                    {
+                        self.group_active = undo.group_start().is_ok();
+                    }
+                    false
                 }
-                if let Some(undo) = &mut self.undo
-                    && self.history_ready
-                    && !self.group_active
-                {
-                    self.group_active = undo.group_start().is_ok();
-                }
-                false
-            }
-        };
+            };
         // Only the application Metadata plugin requests the upgrade.
         if !upgrade {
             return Ok(refreshed);

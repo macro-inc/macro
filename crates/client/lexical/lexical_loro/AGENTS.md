@@ -19,6 +19,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 ## Boundaries
 
 - Keep application node types, canonical editor serialization and ownership policy behind SyncPolicy.
+- Project load-time retained-state normalization and derived search text in the same refresh commit, before a separately queued schema upgrade.
 - Require explicit SyncPolicy permission for null own text during read and binding; retain null unchanged and reject every other malformed text value.
 - Keep canonical editor aliases separate from source own-undefined storage encoding; compare canonical reads strictly and retain every underlying Loro value and operation.
 - Apply ComparisonKind only to model-versus-Loro comparisons after dropped/transparent projection; keep writer serialization unchanged, reread changed child fields during incremental checks, and preserve real incoming raw cache updates.
