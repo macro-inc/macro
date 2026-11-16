@@ -9,7 +9,6 @@
  */
 
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
-import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
@@ -19,6 +18,7 @@ import {
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { EventForm } from '@app/features/calendar/views/composer/EventForm';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -249,17 +249,19 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       <div class="flex min-h-0 w-full flex-col gap-4">
         <div
           data-calendar-tool-composer
-          class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm"
+          class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
         >
           <Show when={props.sink.lockedNotice()}>
             {(notice) => (
-              <p class="text-xs text-ink-extra-muted/60">{notice()}</p>
+              <p class="px-4 pt-3 text-xs text-ink-extra-muted/60">
+                {notice()}
+              </p>
             )}
           </Show>
           <Show when={!controller.selectedCalendarOption()}>
             <div
               role="status"
-              class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
+              class="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-ink-muted"
             >
               <Show
                 when={!calendarLoadFailed()}

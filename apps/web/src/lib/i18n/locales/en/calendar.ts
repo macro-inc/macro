@@ -26,4 +26,10 @@ export default {
   replyYes: 'Yes',
   replyNo: 'No',
   retry: 'Retry',
+  allDay: 'All day',
+  duration: 'Duration',
+  closeComposer: 'Close event composer',
+  moreOptions: 'More options',
+  fewerOptions: 'Fewer options',
+  applyChangesTo: 'Apply changes to',
 };

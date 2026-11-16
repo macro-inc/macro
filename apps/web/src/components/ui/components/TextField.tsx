@@ -45,20 +45,29 @@ function TextFieldInput(props: TextFieldInputProps) {
 }
 
 export type TextFieldTextAreaProps<T extends ValidComponent = 'textarea'> =
-  ComponentProps<typeof KobalteTextField.TextArea<T>>;
+  ComponentProps<typeof KobalteTextField.TextArea<T>> & {
+    /** Borderless, auto-growing title treatment used by composer headings. */
+    variant?: 'default' | 'title';
+  };
 
 function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
   props: TextFieldTextAreaProps<T>
 ) {
-  const [local, rest] = splitProps(props as TextFieldTextAreaProps, ['class']);
+  const [local, rest] = splitProps(props as TextFieldTextAreaProps, [
+    'class',
+    'variant',
+  ]);
 
   return (
     <KobalteTextField.TextArea
       data-slot="text-field-textarea"
       class={cn(
-        'flex min-h-20 w-full resize-none rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base text-ink caret-current outline-none transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none',
+        'flex w-full resize-none text-ink caret-current outline-none',
+        local.variant === 'title'
+          ? 'min-h-8 max-h-24 overflow-y-auto border-0 bg-transparent p-0 text-2xl font-semibold leading-8 touch:min-h-[30px] touch:max-h-[90px] touch:text-[22px] touch:leading-[30px]'
+          : 'min-h-20 rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none',
         'placeholder:text-ink-placeholder',
-        inputOutlineFocusClasses,
+        local.variant !== 'title' && inputOutlineFocusClasses,
         'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         local.class

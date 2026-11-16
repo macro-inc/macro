@@ -1,4 +1,4 @@
-import type { DateTimeRangeProps } from '@app/components/date-time-range/date-time-range-fields';
+import type { DateTimeRangeProps } from '@app/components/date-time-range/date-time-range-context';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import type { CalendarUpdateScope } from '@service-email/client';
 import type { JSX } from 'solid-js';

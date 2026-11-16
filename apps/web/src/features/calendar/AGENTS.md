@@ -22,6 +22,8 @@ host lives in `../block-calendar/`.
 - `hooks/use-calendar-occurrence-data.ts`: range reads and event projection.
 - `components/composer/create-calendar-event-form-controller.ts` and
   `hooks/use-event-editor.ts`: draft validation, permissions, and submission.
+- `views/composer/EventForm.tsx`: desktop form composition over the shared controller;
+  `context/event-form-context.ts` supplies the same state to desktop and phone parts.
 - `types.ts`: occurrence identity, source metadata, viewer capabilities, and the
   grid-only `CalendarGridPeriodView` versus route-level `CalendarPeriodView`.
 

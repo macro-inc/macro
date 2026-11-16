@@ -1,9 +1,12 @@
 import {
+  dateTimeRangeValue,
   moveAllDayRange,
   moveTimedRange,
+  timeRangeFromValue,
 } from '@app/components/date-time-range/time-range';
 import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
+import { addMinutes } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_GUEST_POLICY } from '../../types';
 import {
@@ -453,6 +456,23 @@ export function createCalendarEventFormController(
     replaceState(convertTimesForAllDay(state(), allDay));
   };
 
+  const setDuration = (minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    const current = convertTimesForAllDay(state(), false);
+    const range = timeRangeFromValue(current);
+    if (!range) return;
+
+    // A duration follows later start edits; an explicitly picked end stays put.
+    endChosen = false;
+    replaceState({
+      ...current,
+      ...dateTimeRangeValue({
+        ...range,
+        end: addMinutes(range.start, minutes),
+      }),
+    });
+  };
+
   const setEventKind = (kind: EventEditorEventKind) => {
     if (kind === eventKind()) return;
     if (kind === 'out_of_office') {
@@ -664,6 +684,7 @@ export function createCalendarEventFormController(
     setStart,
     setEnd,
     setAllDay,
+    setDuration,
     eventKind,
     isOutOfOffice,
     setEventKind,

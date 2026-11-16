@@ -40,6 +40,25 @@ function TextAreaDemo() {
 }
 // #endregion
 
+// #region demo:title
+function TitleDemo() {
+  return (
+    <TextField class="w-full max-w-sm" defaultValue="">
+      <TextField.Label>Event title</TextField.Label>
+      <TextField.TextArea
+        variant="title"
+        autoResize
+        rows={1}
+        placeholder="New event"
+      />
+      <TextField.Description>
+        A borderless heading that grows to three lines, then scrolls.
+      </TextField.Description>
+    </TextField>
+  );
+}
+// #endregion
+
 // #region demo:states
 function StatesDemo() {
   return (
@@ -87,6 +106,13 @@ export default defineDoc({
       description:
         '`TextField.TextArea` shares the same root API. `autoResize` lets Kobalte grow it with its content.',
       render: TextAreaDemo,
+    },
+    {
+      id: 'title',
+      title: 'Composer title',
+      description:
+        'Use `variant="title"` with `autoResize` for a three-line heading on desktop and touch.',
+      render: TitleDemo,
     },
     {
       id: 'states',

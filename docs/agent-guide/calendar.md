@@ -21,11 +21,16 @@ desktop and mobile Join with work and personal Google accounts signed in; a work
 calendar should open Meet with the work account. Search results without loaded
 calendar account metadata and other conferencing providers keep their original URL.
 
-Event composer dropdown triggers and date/time inputs use the theme control
-surface, so they blend with the dialog instead of using the darker page fill.
-Their menus stay inside the composer's portal scope. Verify that calendar,
-recurrence, Guests, conferencing, Location, and Notifications open on the first
-click from the title field and accept changes without closing the composer.
+The desktop composer orders kind, title, time, description, guests, call, location,
+and calendar in aligned icon/value rows. Its title grows to three lines, then scrolls.
+Location is an inline text field. **More options** reveals Notifications and authorized
+Guest permissions; it also reveals an empty description on an existing event.
+The plain duration value opens duration choices and **All day**. Choosing a duration
+keeps that length when the start moves; explicitly picking an end keeps that end fixed.
+Dropdown triggers and date/time inputs use the theme control surface. Their menus
+stay inside the composer's portal scope. Verify that calendar, recurrence, Guests,
+conferencing, and Notifications open on the first click from the title field and
+accept changes without closing the composer.
 Each end is a date button (its calendar closes on a pick) and, unless all day,
 a time field: type `3p` or `15:30` and the list jumps there, Enter commits,
 Escape restores the old time. Escape dismisses the active menu before the composer.
@@ -555,7 +560,7 @@ does not silently send the invitation from another connected inbox.
 Failed calendar or account queries show `Could not load your calendars.` with
 `Try again`, rather than offering consent or presenting the failure as backfill.
 
-`New event` opens the compact composer with All day in the date/time fields.
+`New event` opens the desktop composer with All day in the duration menu; the phone form retains its All-day switch.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates the Macro call together with the event in one save, so the
@@ -796,7 +801,7 @@ the editor sends a detail change at all: answer `PATCH /events/{id}` with HTTP 4
 `guests_cannot_modify`, or the GraphQL `updateCalendarEvent` mutation with an error whose
 `extensions.code` is `guests_cannot_modify`.
 With the `enable-calendar-guest-invites` flag on, the organizer sets what guests may do in the
-composer's `Guest permissions` row, under the pills on desktop and phones alike:
+composer's `Guest permissions` row, inside **More options** on desktop and below the rows on phones:
 `Modify event`, `Invite others` and `See guest list`, in Google Calendar's order, with Google's
 defaults (invite others and see the guest list) preselected on a new event and the stored
 `guestPolicy` on an edit. As in Google, checking `Modify event` also checks `Invite others` and

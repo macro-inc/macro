@@ -1,5 +1,4 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
-import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
@@ -19,6 +18,7 @@ import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { EventForm } from '@app/features/calendar/views/composer/EventForm';
 import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
@@ -173,7 +173,10 @@ function EventComposerContent(
   }
 
   return (
-    <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
+    <div
+      ref={attachHotkeys}
+      class="flex h-full min-h-0 flex-col text-ink touch:p-4"
+    >
       <PanelEventForm
         timeFormat={preferences.timeFormat}
         controller={controller}

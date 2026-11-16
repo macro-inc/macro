@@ -5,15 +5,12 @@ import {
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { Button, cn, Input, Layer, RadioGroup, Tooltip } from '@ui';
+import { Button, cn, Input, Layer, RadioGroup } from '@ui';
+import { For, type JSX, Show } from 'solid-js';
 import {
-  createContext,
-  For,
-  type JSX,
-  type ParentProps,
-  Show,
-  useContext,
-} from 'solid-js';
+  EventFormContext,
+  useEventForm,
+} from '../../context/event-form-context';
 import {
   calendarDescriptionToEditorHtml,
   exportCalendarDescription,
@@ -37,6 +34,7 @@ import {
 } from './EventPropertyPills';
 import { EventTitleInput } from './EventTitleInput';
 import type { EventFormState } from './event-form-state';
+import { EventFieldLock as LockedField } from './field-lock/EventFieldLock';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 /** Whether edits to a recurring event patch one occurrence or the whole series. */
@@ -48,34 +46,13 @@ const RECURRING_EDIT_SCOPE_OPTIONS = [
   label: string;
 }[];
 
-const EventFormPartsContext = createContext<EventFormState>();
-
-function useEventForm() {
-  const form = useContext(EventFormPartsContext);
-  if (!form) throw new Error('EventFormParts must be rendered inside Root');
-  return form;
-}
-
-/** Explains a locked field on hover and keyboard focus. */
-function LockedField(props: ParentProps<{ reason?: string; class?: string }>) {
-  return (
-    <Show when={props.reason} fallback={props.children}>
-      {(reason) => (
-        <Tooltip as="span" label={reason()} tabIndex={0} class={props.class}>
-          {props.children}
-        </Tooltip>
-      )}
-    </Show>
-  );
-}
-
 function Root(props: {
   form: EventFormState;
   class?: string;
   children: JSX.Element;
 }) {
   return (
-    <EventFormPartsContext.Provider value={props.form}>
+    <EventFormContext.Provider value={props.form}>
       <form
         id={props.form.ids.form}
         class={cn(
@@ -89,7 +66,7 @@ function Root(props: {
       >
         {props.children}
       </form>
-    </EventFormPartsContext.Provider>
+    </EventFormContext.Provider>
   );
 }
 

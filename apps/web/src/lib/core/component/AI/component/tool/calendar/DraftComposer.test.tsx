@@ -54,7 +54,7 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./EventPreview', () => ({ CalendarToolEventPreview: () => null }));
-vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
+vi.mock('@app/features/calendar/views/composer/EventForm', () => ({
   EventForm: (props: EventFormProps) => (
     <>
       <select
