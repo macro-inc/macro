@@ -32,6 +32,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`rust/libraries.md`](../../.agents/rules/rust/libraries.md) | CS 56–67 | Rust and `Cargo.toml` |
 | [`rust/security.md`](../../.agents/rules/rust/security.md) | CS | Rust |
 | [`web/data.md`](../../.agents/rules/web/data.md) | FE | `apps/web`, `packages` |
+| [`web/optimistic-updates.md`](../../.agents/rules/web/optimistic-updates.md) | FE 70 | `apps/web/src` optimistic updates |
 | [`web/solid.md`](../../.agents/rules/web/solid.md) | FE | `apps/web`, `packages` |
 | [`web/architecture.md`](../../.agents/rules/web/architecture.md) | FE | `apps/web`, `packages` |
 | [`web/libraries.md`](../../.agents/rules/web/libraries.md) | FE 35–46 | `apps/web`, `packages` |

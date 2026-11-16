@@ -45,7 +45,7 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
 - **FE-38** Server state is TanStack Query: `queryOptions` factories at module
   scope, called as `useQuery(() => xQueryOptions(id()))`; keys come from the
   module's `keys.ts` built with `createQueryKeys`, never inline arrays;
-  optimistic mutations use `onMutate` (cancel, snapshot, patch, return context).
+  optimistic updates go through the normalized cache queue (FE-70), not `onMutate`.
   GraphQL reads go through `src/lib/urql-solid` / `createLiveQuery`.
 - **FE-39** Check `@solid-primitives/*` before writing a reactive utility, and
   declare the package you import in `package.json`. Debounce and throttle

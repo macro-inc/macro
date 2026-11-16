@@ -983,6 +983,7 @@ export function restoreUserNotifications(notifications: NotificationItem[]) {
   });
 }
 
+// ast-grep-ignore: ts-optimistic-through-mutation-queue -- Realtime echo: applies a socket-delivered notification, not a mutation.
 export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {

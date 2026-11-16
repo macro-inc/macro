@@ -77,6 +77,7 @@ export function SignatureSection(props: {
   // Updating the links cache can remount this row. Hook callbacks still run
   // after that; callbacks passed to mutate would leave the old draft behind.
   const updateSettings = useUpdateEmailSettingsMutation({
+    // ast-grep-ignore: tsx-optimistic-through-mutation-queue -- Local signature draft snapshot.
     onMutate: () => signatureDrafts()[props.link.id],
     onSuccess: (data, { linkId, settings }, submittedDraft) => {
       if (settings.signature === undefined) return;
@@ -101,6 +102,7 @@ export function SignatureSection(props: {
   });
 
   const importGmailSignature = useImportGmailSignatureMutation({
+    // ast-grep-ignore: tsx-optimistic-through-mutation-queue -- Local signature draft snapshot.
     onMutate: () => signatureDrafts()[props.link.id],
     onSuccess: (result, { linkId }, submittedDraft) => {
       if (result.success) {
