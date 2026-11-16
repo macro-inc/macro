@@ -300,6 +300,68 @@ it('leaves a pen stroke alone when fingers land beside it', () => {
   expect(Object.keys(editor.document.items)).toHaveLength(3);
 });
 
+it('turns a finger held still into a long press and spends the finger', () => {
+  vi.useFakeTimers();
+  const pressed = vi.fn();
+  const { editor, finger } = setup({
+    tool: () => 'select',
+    longPress: () => pressed,
+  });
+  const before = editor.document;
+
+  // The press lands on the shape, which starts a move, and drifts a little.
+  finger(1, 'pointerdown', 20, 20);
+  finger(1, 'pointermove', 24, 23);
+  expect(editor.getSession().transform).toBeDefined();
+  vi.advanceTimersByTime(500);
+
+  expect(pressed).toHaveBeenCalledWith({ x: 20, y: 20 });
+  expect(editor.getSession().transform).toBeUndefined();
+
+  // Dragging on afterwards moves nothing.
+  finger(1, 'pointermove', 120, 90);
+  finger(1, 'pointerup', 120, 90);
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().canUndo).toBe(false);
+});
+
+it('does not long press once the finger has started dragging or lifted', () => {
+  vi.useFakeTimers();
+  const pressed = vi.fn();
+  const { finger } = setup({ tool: () => 'select', longPress: () => pressed });
+
+  finger(1, 'pointerdown', 20, 20);
+  finger(1, 'pointermove', 40, 20);
+  vi.advanceTimersByTime(600);
+  finger(1, 'pointerup', 40, 20);
+
+  finger(1, 'pointerdown', 200, 200);
+  finger(1, 'pointerup', 200, 200);
+  vi.advanceTimersByTime(600);
+
+  // A second finger makes it a pinch, not a press.
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 260, 200);
+  vi.advanceTimersByTime(600);
+
+  expect(pressed).not.toHaveBeenCalled();
+});
+
+it('leaves a still finger to the tool when the host takes no long press', () => {
+  vi.useFakeTimers();
+  const { editor, finger } = setup({
+    tool: () => 'rectangle',
+    longPress: () => undefined,
+  });
+
+  finger(1, 'pointerdown', 150, 150);
+  vi.advanceTimersByTime(600);
+  finger(1, 'pointermove', 220, 230);
+  finger(1, 'pointerup', 220, 230);
+
+  expect(Object.keys(editor.document.items)).toHaveLength(3);
+});
+
 it('leaves a single finger to the tool', () => {
   const { editor, finger } = setup({ tool: () => 'pan' });
 

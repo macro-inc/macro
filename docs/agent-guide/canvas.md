@@ -12,6 +12,22 @@ started may remain: no new item, no changed selection, no undo step, no text
 box. Lift one finger and move the other: nothing happens until both are up.
 One-finger behavior is unchanged.
 
+## Touch layout
+
+On a phone or tablet the canvas has no floating toolbar or always-open
+inspector. Its controls sit above the dock: the zoom level (a sheet with fit,
+zoom levels, grid and snapping), undo and redo, the drawing tools, and, with
+something selected, **Style**, **Duplicate**, **Delete** and **More**. The
+page's **New** button is hidden while a canvas is open. On an upright phone
+Rectangle/Ellipse and Arrow/Line/Connector each share a button: tap it again
+while it is selected to choose another. **Style** opens the inspector in a
+bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
+long press on the canvas with Select or Hand, opens the sheet of clipboard,
+group, arrange, select-all and delete actions; the long press selects what is
+under the finger first. Check that nothing sits under the dock or the home
+indicator, that every button answers a real tap, and that closing a sheet
+leaves the selection as it was.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without

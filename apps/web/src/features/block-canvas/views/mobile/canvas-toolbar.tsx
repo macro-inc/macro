@@ -1,6 +1,5 @@
 import { MobileDockButton } from '@components/app/mobile/MobileDockButton';
 import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
-import { isMobile } from '@core/mobile/isMobile';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import { Dropdown } from '@ui';
@@ -109,10 +108,11 @@ function ToolGroupButton(props: {
 }
 
 /**
- * The drawing tools, as an island in the bottom chrome. A phone folds the
- * shapes and the lines into two groups; a tablet has room for every tool.
+ * The drawing tools, as an island in the bottom chrome. Where there is no
+ * room to list every tool, the shapes and the lines fold into two groups.
  */
 export function MobileCanvasToolbar(props: {
+  everyTool: boolean;
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
   attachOpen: boolean;
@@ -135,7 +135,7 @@ export function MobileCanvasToolbar(props: {
         {toolButton('select')}
         {toolButton('pan')}
         <Show
-          when={isMobile()}
+          when={!props.everyTool}
           fallback={
             <For each={[...SHAPE_TOOLS, ...LINE_TOOLS]}>{toolButton}</For>
           }

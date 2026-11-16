@@ -110,13 +110,32 @@ while every view lists the tools it offers. A canvas embedded in a document
 keeps the desktop read-only view on every device, so its controls stay inside
 the embed.
 
-On touch the drawing tools are an island in the app's bottom chrome, in the
+On touch the canvas's controls are islands in the app's bottom chrome, in the
 `accessory` float region above the dock, so the dock, the home indicator and
 the keyboard never cover them, and the page's New button gives way while a
-canvas is open. A phone folds Rectangle and Ellipse into one button and Arrow,
-Line and Connector into another: a tap picks the group's last tool, and a tap
-while it is picked opens the others. A tablet lists every tool. A read-only
-canvas offers Select and Hand. The chrome steps aside while the keyboard is up.
+canvas is open. Zoom and undo/redo sit on the left, the drawing tools in the
+middle, and, while something is selected, Style, Duplicate, Delete and More on
+the right. They share one row wherever it fits (tablets, a phone on its side);
+an upright phone stacks the tools under the rest. Where there is no room to list
+every tool, Rectangle and Ellipse fold into one button and Arrow, Line and
+Connector into another: a tap picks the group's last tool, and a tap while it is
+picked opens the others. A read-only canvas offers zoom, Select and Hand. The
+chrome steps aside while the keyboard is up.
+
+The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
+to selection, zoom levels, the dot grid and snapping. More, and a long press on
+the canvas with Select or Hand, open a sheet with every context-menu action:
+clipboard, duplicate, select all, group, layer order and delete. A long press
+first selects what is under the finger, as a right-click does, and cancels
+whatever the press had started; `longPress` on the graphics input reports it,
+half a second in, if the finger has drifted no more than 10px.
+
+On a phone Style opens the inspector in a sheet over the lower half of the
+screen. Its scrim is clear, so the shape stays visible and a change shows as it
+is made, and a tap on the canvas closes it with the selection kept. Wider touch
+screens keep the inspector as a floating panel on the right, between the split
+header and the bottom chrome; Style collapses it, remembered for the browser
+session.
 
 ## Controls
 
@@ -537,8 +556,6 @@ selection, and group movement. Scene hierarchy, paint order, and picking bounds
 are indexed on immutable snapshots; edits and undo replace those indexes.
 Selection outlines share a camera transform so panning does not rewrite every
 outline. Mutable scene builders continue to bypass caches.
-
-On touch layouts, keep the floating zoom/inspector below the split header so the details button and document-title file menu remain reachable.
 
 
 ## AI snapshot rendering and measured fitting

@@ -53,6 +53,12 @@ export type GraphicsInputOptions = {
   appearance?: () => Appearance;
   /** Local viewport position and picking modifiers; never document/awareness state. */
   onHover?: (hover: GraphicsHover | undefined) => void;
+  /**
+   * What a finger held still on the surface does, given where it is in client
+   * coordinates. Return nothing while a long press has no meaning (a drawing
+   * tool, say) and the press stays with the tool.
+   */
+  longPress?: () => ((point: Point) => void) | undefined;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -83,6 +89,7 @@ export function attachCameraControls(
   const touchNavigation = attachTouchNavigation(element, editor, {
     ignoreTarget: options.ignoreTarget,
     navigation: options.navigation,
+    longPress: options.longPress,
   });
   let hoverPointer: PointerEvent | undefined;
   const clearHover = () => {

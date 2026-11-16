@@ -3,7 +3,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createImageActions } from '@core/component/ImageActions';
 import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type DocumentGeometry, screenToWorld } from '@macro-inc/graphics';
+import {
+  type DocumentGeometry,
+  type Point,
+  screenToWorld,
+} from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
 import {
@@ -278,9 +282,16 @@ function Root(props: ParentProps<CanvasViewProps>) {
 }
 
 /** The scene: every item, the text being edited, and other people's presence. */
-function Surface() {
+function Surface(props: {
+  /**
+   * What a finger held still on the scene does, given where it is on the
+   * screen; nothing while a long press should stay with the tool.
+   */
+  longPress?: () => ((point: Point) => void) | undefined;
+}) {
   const view = useCanvasView();
-  const { props, state, editor } = view;
+  const { state, editor } = view;
+  const viewProps = view.props;
   return (
     <div
       ref={view.setHost}
@@ -296,7 +307,7 @@ function Surface() {
         if (!event.dataTransfer?.files.length) return;
         event.preventDefault();
         fireAndForget(
-          props.assets.files(
+          viewProps.assets.files(
             Array.from(event.dataTransfer.files),
             view.worldPoint(event.clientX, event.clientY)
           ),
@@ -346,8 +357,8 @@ function Surface() {
           video: (itemProps) => (
             <CanvasMediaView
               {...itemProps}
-              playing={props.assets.playing() === itemProps.item.id}
-              onStop={props.assets.stopPlayback}
+              playing={viewProps.assets.playing() === itemProps.item.id}
+              onStop={viewProps.assets.stopPlayback}
             />
           ),
           artifact: (itemProps) => (
@@ -362,7 +373,7 @@ function Surface() {
           document: (itemProps) => (
             <CanvasDocumentView
               {...itemProps}
-              embedView={props.embedView}
+              embedView={viewProps.embedView}
               active={state.embeds.active() === itemProps.item.id}
               onEnter={() => state.embeds.enter(itemProps.item.id)}
               onExit={view.exitEmbed}
@@ -423,6 +434,7 @@ function Surface() {
           appearance: state.defaults,
           duplicateOnAltDrag: true,
           onShapeCreated: state.shapeCreated,
+          longPress: () => props.longPress?.(),
         }}
         gridColor={
           state.grid()
@@ -432,7 +444,7 @@ function Surface() {
       >
         <EraserTrail points={state.eraser.trail()} />
         <MediaUploadPreviews
-          previews={props.assets.previews()}
+          previews={viewProps.assets.previews()}
           camera={state.camera()}
         />
         <Show
@@ -456,7 +468,7 @@ function Surface() {
           )}
         </Show>
       </GraphicsSurface>
-      <Show when={props.presence}>
+      <Show when={viewProps.presence}>
         {(presence) => (
           <GraphicsPresenceOverlay
             editor={editor}

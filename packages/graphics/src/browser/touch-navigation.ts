@@ -6,6 +6,9 @@ import { createGlide, type FingerPair, pinchStep } from '../pan-zoom';
 const GLIDE_RELEASE_MS = 150;
 /** How far back the pair's last moments are read to tell a pinch from a pan. */
 const PINCH_WINDOW_MS = 160;
+/** How long one finger rests before it is a long press, and how far it may drift. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 10;
 
 const insideEditableText = (target: Element) =>
   target.closest('[contenteditable]')?.getAttribute('contenteditable') ===
@@ -24,6 +27,10 @@ const insideEditableText = (target: Element) =>
  * A pen or a mouse pressed on the surface keeps its gesture: fingers landing
  * meanwhile (a resting palm) are ignored, as they were before fingers navigated.
  *
+ * One finger held still is a long press when the host has a use for it. It
+ * voids the first finger's gesture the same way, and the finger then does
+ * nothing more until it lifts.
+ *
  * The listeners sit on the window's capture phase so they see every touch on
  * the surface, including the ones a tool handler stops from propagating.
  */
@@ -33,6 +40,7 @@ export function attachTouchNavigation(
   options: {
     ignoreTarget?: (target: EventTarget | null) => boolean;
     navigation?: 'free' | 'centered-image';
+    longPress?: () => ((point: Point) => void) | undefined;
   } = {}
 ) {
   // Fingers on the surface in the order they landed, in client coordinates.
@@ -48,6 +56,14 @@ export function attachTouchNavigation(
   let voiding = false;
   // Pens and mice pressed on the surface.
   const otherPointers = new Set<number>();
+  let longPress:
+    | { id: number; origin: Point; timer: ReturnType<typeof setTimeout> }
+    | undefined;
+
+  const cancelLongPress = () => {
+    if (longPress) clearTimeout(longPress.timer);
+    longPress = undefined;
+  };
 
   const glide = createGlide((delta) => {
     editor.panBy(delta);
@@ -88,7 +104,7 @@ export function attachTouchNavigation(
   // the browser sends when it takes a touch over for its own pan or zoom. This
   // surface opts out of that (`touch-action: none`) and navigates itself, so it
   // tells the gesture owners the same way.
-  const voidSingleFingerGesture = (landing: number) => {
+  const voidSingleFingerGesture = (landing?: number) => {
     voiding = true;
     for (const id of touches.keys()) {
       if (id === landing) continue;
@@ -180,8 +196,27 @@ export function attachTouchNavigation(
     }
     if (!touches.size) selectionBefore = editor.getSession().selectedIds;
 
-    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (touches.size < 2) return;
+    const point = { x: event.clientX, y: event.clientY };
+    touches.set(event.pointerId, point);
+    cancelLongPress();
+    if (touches.size < 2) {
+      const onLongPress = options.longPress?.();
+      if (!onLongPress) return;
+      const pressed = () => {
+        longPress = undefined;
+        // From here the finger is spent: it neither finishes what it started
+        // nor begins anything else before it lifts.
+        navigating = true;
+        voidSingleFingerGesture();
+        onLongPress(point);
+      };
+      longPress = {
+        id: event.pointerId,
+        origin: point,
+        timer: setTimeout(pressed, LONG_PRESS_MS),
+      };
+      return;
+    }
 
     swallow(event);
     if (!navigating) {
@@ -200,6 +235,13 @@ export function attachTouchNavigation(
       otherPointers.delete(event.pointerId);
     if (!touches.has(event.pointerId)) return;
     touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (longPress?.id === event.pointerId) {
+      const drift = Math.hypot(
+        event.clientX - longPress.origin.x,
+        event.clientY - longPress.origin.y
+      );
+      if (drift > LONG_PRESS_SLOP_PX) cancelLongPress();
+    }
     if (!navigating) return;
 
     swallow(event);
@@ -209,6 +251,7 @@ export function attachTouchNavigation(
   const pointerEnd = (event: PointerEvent) => {
     otherPointers.delete(event.pointerId);
     if (voiding || !touches.has(event.pointerId)) return;
+    if (longPress?.id === event.pointerId) cancelLongPress();
     if (!navigating) {
       touches.delete(event.pointerId);
       return;
@@ -250,6 +293,7 @@ export function attachTouchNavigation(
     tracking: () => touches.size > 0,
     detach() {
       glide.cancel();
+      cancelLongPress();
       window.removeEventListener('pointerdown', pointerDown, true);
       window.removeEventListener('pointermove', pointerMove, true);
       window.removeEventListener('pointerup', pointerEnd, true);
