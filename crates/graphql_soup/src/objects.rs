@@ -512,6 +512,7 @@ where
                 GraphqlSoupEntityType::DatabaseRow => GraphqlSoupDatabaseRow::<E>::type_name(),
                 GraphqlSoupEntityType::Harness => GraphqlSoupHarness::<E>::type_name(),
                 GraphqlSoupEntityType::Team => GraphqlSoupTeam::<E>::type_name(),
+                GraphqlSoupEntityType::OutsideSoup => return None,
             }
             .into_owned(),
         )

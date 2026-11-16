@@ -1480,7 +1480,10 @@ where
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
-    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
+    #[tracing::instrument(
+        err,
+        skip(self, requesting_user, source_ids, query, github_pull_request_filter)
+    )]
     async fn handle_foreign_entity_request(
         &self,
         requesting_user: Option<String>,
@@ -1703,6 +1706,31 @@ where
         })
     }
 
+    /// Grouped items for the request, without entity properties.
+    async fn grouped_items(
+        &self,
+        mut req: GroupedSortRequest<'_>,
+    ) -> Result<T::GroupedItems, SoupErr> {
+        let user_id = req.user_id.clone();
+        if let Some(entities) = self
+            .favorite_entities(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| favorites::apply(ast, &entities));
+        }
+        // Grouped queries carry no team receipt, so associations resolve
+        // under the viewer's own CRM teams.
+        if let Some(resolved) = self
+            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
+        }
+        self.handle_grouped_soup_request(req).await
+    }
+
     async fn populate_grouped_items(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -1889,7 +1917,11 @@ where
                     .map(SoupCandidate::from_projection_hydration)
                     .paginate(limit.into(), |item: &SoupCandidate| CursorVal {
                         sort_type: sort,
-                        last_val: sort.position(item.sort_key, item.item.updated_at()),
+                        last_val: sort.position(
+                            item.sort_key,
+                            item.item.name(),
+                            item.item.updated_at(),
+                        ),
                     })
                     .filter_on(entity_filter)
                     .into_page();
@@ -2211,30 +2243,29 @@ where
         self.populate_properties_output(user_id, output).await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(err, skip(self, req), fields(with_properties = tracing::field::Empty))]
     async fn get_user_soup_grouped(
         &self,
-        mut req: GroupedSortRequest<'_>,
+        req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", true);
         let user_id = req.user_id.clone();
-        if let Some(entities) = self
-            .favorite_entities(&user_id, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req
-                .cursor
-                .map_filter(|ast| favorites::apply(ast, &entities));
-        }
-        // Grouped queries carry no team receipt, so associations resolve
-        // under the viewer's own CRM teams.
-        if let Some(resolved) = self
-            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
-        }
-        let items = self.handle_grouped_soup_request(req).await?;
+        let items = self.grouped_items(req).await?;
         self.populate_grouped_items(user_id, items).await
+    }
+
+    #[tracing::instrument(
+        name = "get_user_soup_grouped",
+        err,
+        skip(self, req),
+        fields(with_properties = tracing::field::Empty)
+    )]
+    async fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", false);
+        self.grouped_items(req).await
     }
 
     async fn caller_tag_sets<'a>(

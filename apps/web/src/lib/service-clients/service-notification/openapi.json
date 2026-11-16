@@ -1837,11 +1837,37 @@
           }
         }
       },
+      "ComputerSetupAgent": {
+        "type": "object",
+        "description": "The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.",
+        "required": ["userId", "name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The agent's name."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The agent's Macro user id, to open a DM with it."
+          }
+        }
+      },
       "ComputerSetupMetadata": {
         "type": "object",
         "description": "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow.",
         "required": ["computerId", "computerName", "outcome"],
         "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSetupAgent",
+                "description": "The agent teammate the computer runs; absent for a plain computer."
+              }
+            ]
+          },
           "computerId": {
             "type": "string",
             "format": "uuid",

@@ -228,6 +228,7 @@ pub const POST_READS: &[(&str, &str)] = &[
     ("POST", "/channel-labels/preview"),
     ("POST", "/channels/preview"),
     ("POST", "/crm/pipelines/{id}/rows"),
+    ("POST", "/crm/previews"),
     ("POST", "/documents/github_prs/tasks"),
     ("POST", "/documents/preview"),
     ("POST", "/documents/similarity_search"),

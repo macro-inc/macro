@@ -9,7 +9,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import {
+  encodeClearScope,
+  encodeInboxScope,
+  toInboxClear,
+  toInboxGroup,
+} from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -327,6 +332,29 @@ describe('toInboxGroup', () => {
 });
 
 describe('encodeInboxScope', () => {
+  it('reads both access-request kinds without duplicating kinds or reordering ordinary rows', () => {
+    expect(
+      encodeInboxScope({
+        rowTypes: [
+          'email',
+          'access_requested',
+          'task',
+          'access_requested',
+          'email',
+        ],
+        unreadOnly: true,
+      })
+    ).toEqual({
+      rowTypes: [
+        'EMAIL',
+        'ACCESS_REQUESTED',
+        'PASSWORD_ACCESS_REQUESTED',
+        'TASK',
+      ],
+      unreadOnly: true,
+    });
+  });
+
   it('reads every row, new types included, when every type is chosen', () => {
     expect(encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({
       rowTypes: [],
@@ -343,6 +371,73 @@ describe('encodeInboxScope', () => {
     expect(
       encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
     ).toEqual({ rowTypes: [], unreadOnly: true });
+  });
+});
+
+describe('encodeClearScope', () => {
+  it('clears both access-request kinds without duplicating kinds or reordering ordinary rows', () => {
+    expect(
+      encodeClearScope({
+        rowTypes: [
+          'email',
+          'access_requested',
+          'task',
+          'access_requested',
+          'email',
+        ],
+        unreadOnly: true,
+      })
+    ).toEqual({
+      rowTypes: [
+        'EMAIL',
+        'ACCESS_REQUESTED',
+        'PASSWORD_ACCESS_REQUESTED',
+        'TASK',
+      ],
+      unreadOnly: true,
+    });
+  });
+
+  it('names every kind it takes, never an empty or missing list', () => {
+    const every = encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(every.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length + 1);
+    expect(
+      encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ rowTypes: every.rowTypes, unreadOnly: true });
+  });
+
+  it('names the chosen kinds', () => {
+    expect(encodeClearScope({ rowTypes: ['email'] })).toEqual({
+      rowTypes: ['EMAIL'],
+    });
+  });
+});
+
+describe('toInboxClear', () => {
+  it('reads a clear as the server stores it', () => {
+    expect(
+      toInboxClear({
+        clearId: 'clear-1',
+        status: 'APPLYING',
+        rowTypes: ['TASK', 'EMAIL'],
+        unreadOnly: true,
+        since: '2026-02-01T00:00:00+00:00',
+        asOf: '2026-02-01T10:00:00+00:00',
+        rowCount: 40,
+        revision: 3,
+      })
+    ).toEqual({
+      id: 'clear-1',
+      status: 'applying',
+      takes: {
+        rowTypes: ['task', 'email'],
+        unreadOnly: true,
+        since: Date.parse('2026-02-01T00:00:00Z'),
+      },
+      asOf: Date.parse('2026-02-01T10:00:00Z'),
+      rows: 40,
+      revision: 3,
+    });
   });
 });
 

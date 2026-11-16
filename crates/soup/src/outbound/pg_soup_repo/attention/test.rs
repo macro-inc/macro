@@ -575,3 +575,85 @@ async fn team_notifications_are_candidates_only_for_members(
     assert!(attention_soup_page(&pool, teammate).await?.is_empty());
     Ok(())
 }
+
+// A bulk clear marks a team request done and owns it through `done_by`; its
+// undo reopens it, but a state change made in between takes ownership back, so
+// the undo leaves that notification alone. The UPDATEs mirror the clear and
+// undo statements in `notification::outbound::bulk_action`.
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed", "attention_teams")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_cleared_team_request_leaves_attention_until_undone(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TEAM_1: &str = "bbbbbbbb-0000-0000-0000-000000000001";
+    const REQUEST: &str = "0190b000-0000-7000-8000-000000000060";
+    let action_id = Uuid::parse_str("0190b000-0000-7000-8000-0000000000aa")?;
+    let request_id = Uuid::parse_str(REQUEST)?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let team_page = || {
+        let mut request = req(ATTENTION, &link_ids, &sources);
+        request.types = &[EntityType::Team];
+        request.keying = AttentionKeying::FiledEntity;
+        attention_soup_page(&pool, request)
+    };
+    let clear = || {
+        sqlx::query(
+            "UPDATE user_notification SET state = 'done', done_by = $1 \
+             WHERE user_id = $2 AND notification_id = $3",
+        )
+        .bind(action_id)
+        .bind(USER_1)
+        .bind(request_id)
+        .execute(&pool)
+    };
+    let undo = || {
+        sqlx::query(
+            "UPDATE user_notification SET state = 'unseen', done_by = NULL \
+             WHERE user_id = $2 AND notification_id = $3 AND done_by = $1 \
+             AND state = 'done' AND deleted_at IS NULL",
+        )
+        .bind(action_id)
+        .bind(USER_1)
+        .bind(request_id)
+        .execute(&pool)
+    };
+    let listed = vec![(EntityType::Team, TEAM_1.to_string())];
+
+    clear().await?;
+    assert!(team_page().await?.is_empty());
+    assert_eq!(undo().await?.rows_affected(), 1);
+    assert_eq!(keys(&team_page().await?), listed);
+
+    // A writer that knows nothing of bulk actions reopens it after a clear.
+    clear().await?;
+    sqlx::query(
+        "UPDATE user_notification SET state = 'seen' \
+         WHERE user_id = $1 AND notification_id = $2",
+    )
+    .bind(USER_1)
+    .bind(request_id)
+    .execute(&pool)
+    .await?;
+    let done_by: Option<Uuid> = sqlx::query_scalar(
+        "SELECT done_by FROM user_notification WHERE user_id = $1 AND notification_id = $2",
+    )
+    .bind(USER_1)
+    .bind(request_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(done_by, None);
+    assert_eq!(keys(&team_page().await?), listed);
+    assert_eq!(undo().await?.rows_affected(), 0);
+
+    // Leaving the team drops its request from attention.
+    sqlx::query("DELETE FROM team_user WHERE user_id = $1 AND team_id = $2::uuid")
+        .bind(USER_1)
+        .bind(TEAM_1)
+        .execute(&pool)
+        .await?;
+    assert!(team_page().await?.is_empty());
+    Ok(())
+}

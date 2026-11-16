@@ -354,6 +354,9 @@ export const storageExcluded = [
   'requestToJoin',
   // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
   'collaborateForm',
+  // The company Team tab's paging; SDK callers read a company's whole contact
+  // list with listCompanyContacts.
+  'listCompanyContactsPage',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
   'cancelSlackImport',
   'completeSlackImportUploads',
@@ -463,6 +466,9 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
+  // Chip titles for a page of CRM records, a web-app batch preview; the SDK
+  // reads companies and contacts by handle.
+  'previewCrmRecords',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.

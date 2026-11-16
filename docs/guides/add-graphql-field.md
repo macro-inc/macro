@@ -66,7 +66,9 @@ domain operation doesn't exist, add it to the domain crate first.
   `null` for shared ones. See the [security rules](../../.agents/rules/rust/security.md).
 - **Batch per-entity edges with a DataLoader.** A field resolved once per list row
   goes through a keyed `Loader` (copy `crates/graphql_crm/src/loaders.rs`). Poll
-  hydration futures concurrently so the loader can batch them.
+  hydration futures concurrently so the loader can batch them, and spawn its
+  batches with `|batch| tokio::spawn(batch.in_current_span())` so they stay in
+  the request's trace.
 - **Typed errors.** Set `extensions.code` with the crate's helper (copy `bad_input`
   / `unavailable` in `crates/graphql_calendar/src/lib.rs`, or `mutation_error` in
   `src/mutation.rs`). Log internal details and return a generic message. The web
