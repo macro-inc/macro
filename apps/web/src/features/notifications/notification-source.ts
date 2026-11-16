@@ -3,6 +3,8 @@ import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
+import { Telemetry } from '@macro-inc/observability';
+import { fetchActiveNotificationIds } from '@queries/notification/graphql/active-notification-ids';
 import { updateSoupForNotification } from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
@@ -107,6 +109,10 @@ export type NotificationSource = {
 const NOTIFICATION_EVENT_TYPE = 'notification';
 
 const QUERY_LIMIT = 500;
+
+const DOCUMENT_MENTION = 'document_mention';
+// The server's maximum, so one read discards a session's whole backlog.
+const DOCUMENT_MENTION_CLEANUP_LIMIT = 500;
 
 // Persistent overrides for the `done` flag that survive cache writes.
 // In-flight infinite-query page fetches can land after an optimistic cache
@@ -370,14 +376,49 @@ export function createNotificationSource(
     createEffect(() => {
       // This flag defaults off in production. Cleanup may observe an activated
       // feed, but must not become the reader that wakes it during startup.
-      if (!enabled() || !notificationsQuery.isStarted) return;
+      if (!enabled() || usesGraphql() || !notificationsQuery.isStarted) return;
       const toDiscard = notifications().filter(
         (n) =>
-          n.notification_event_type === 'document_mention' && n.state !== 'done'
+          n.notification_event_type === DOCUMENT_MENTION && n.state !== 'done'
       );
       if (toDiscard.length === 0) return;
       fireAndForget(
         discardDocumentMentions(toDiscard.map((n) => n.id)),
+        'notifications'
+      );
+    });
+
+    // GraphQL mode never reads the feed for this. Each signed-in session
+    // reads the ids of every active mention once, which also reaches mentions
+    // outside the feed's window, and mentions delivered afterwards are
+    // discarded as they arrive. A read that lands after the session ended
+    // (sign-out, account switch, transport swap) is dropped.
+    let cleanupSession = 0;
+    const discardActiveDocumentMentions = (session: number) =>
+      Telemetry.span('notification.document_mention_cleanup', async (span) => {
+        const ids = await fetchActiveNotificationIds(
+          [DOCUMENT_MENTION],
+          DOCUMENT_MENTION_CLEANUP_LIMIT
+        );
+        span.setAttr('notification.count', ids.length);
+        const sessionEnded =
+          session !== cleanupSession || !enabled() || !usesGraphql();
+        if (ids.length === 0 || sessionEnded) return;
+        await discardDocumentMentions(ids);
+      });
+    createEffect(() => {
+      if (!enabled() || !usesGraphql()) return;
+      cleanupSession += 1;
+      const session = cleanupSession;
+      untrack(() =>
+        fireAndForget(discardActiveDocumentMentions(session), 'notifications')
+      );
+    });
+    subscriptions.add((notification) => {
+      if (!usesGraphql()) return;
+      if (notification.notification_event_type !== DOCUMENT_MENTION) return;
+      fireAndForget(
+        discardDocumentMentions([notification.id]),
         'notifications'
       );
     });

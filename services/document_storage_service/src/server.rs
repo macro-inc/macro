@@ -2732,6 +2732,15 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_active_notification_ids_context:
+            complete_graph::ActiveNotificationIdsGraphqlContext::new(
+                notification::domain::active_notification_ids::ActiveNotificationIdService::new(
+                    notification::outbound::active_notification_ids::PgActiveNotificationIdRepository(
+                        readonly_db.clone(),
+                    ),
+                    model_notifications::NotifEvent::EVENT_TYPES,
+                ),
+            ),
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(

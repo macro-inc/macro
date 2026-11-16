@@ -15,6 +15,9 @@ mutations, and the realtime subscription.
   discussion, ...) — add a new file here per event kind.
 - `src/subscriptions.rs`: `workFeedUpdates`-style realtime notification push.
 - `src/mutations.rs`: mark read/unread for an entity or explicit id set.
+- `src/active_notification_ids.rs`: `GraphqlUser.activeNotificationIds`, read
+  through `ActiveNotificationIdsGraphqlContext` in request data; invalid input
+  returns `BAD_USER_INPUT`.
 
 ## Scope
 

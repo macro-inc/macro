@@ -31,6 +31,12 @@ through the same service.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
+- `domain/active_notification_ids.rs` + `outbound/active_notification_ids.rs`:
+  the ids of a user's active notifications of known event types (default 100,
+  at most 500), for clients that act on a type without reading their feed.
+  The service takes the known types from its caller (`NotifEvent::EVENT_TYPES`).
+  No index leads with the event type, so a rare type scans the user's live
+  notifications under a 5 s statement timeout.
 - `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one
   user's notifications done as a stored action with a per-notification
   ledger: chunked, leased, resumable and undoable. The inbox's clear runs on
