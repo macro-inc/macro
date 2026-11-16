@@ -534,8 +534,11 @@ group: a caret plus the account address header with a checkbox that shows or hid
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
-warning icon whose tooltip shows the provider error; the account keeps syncing its other
-calendars and the badge clears on its own once that calendar syncs again.
+warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
+wording; touch has no hover, so on phones and tablets that line is written under the
+calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
+account keeps syncing its other calendars and the badge clears on its own once that
+calendar syncs again.
 Phones have no sidebar, so the header gear's settings sheet carries the same list under
 `Calendars`, between Period and Display: each account row shows or hides all of its
 calendars (a minus when only some show), and its trailing caret (`Expand <address>`)
@@ -543,7 +546,10 @@ opens one check row per calendar with the same swatch, warning and RSS marks. Ac
 start collapsed each time the sheet opens. The rows write the same browser-local
 visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
 expanded the sheet scrolls under its pinned handle. The dropdown form of the header
-gear, which only a tablet's inline Calendar preview shows, still lists accounts only.
+gear, which only a tablet's inline Calendar preview shows, nests the same choices the
+way it nests Week starts on: each account under `Calendars` opens a submenu with
+`All calendars` (mixed while only some show) and one checkbox per calendar, and the
+account row carries an accent dot while any of its calendars is hidden.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
