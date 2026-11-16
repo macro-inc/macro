@@ -1,0 +1,21 @@
+crates/agent_monitor_tui/AGENTS.md
+  s_564ae7a9b7392a::t_f14ce2042b6d3c 27-28
+crates/agent_monitor_tui/src/ui/tabs.rs
+  s_564ae7a9b7392a::t_edcc350e947008 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "36ae8bfdbd951df21abc4b3d52554783ec312fa9",
+  "prompts": {},
+  "sessions": {
+    "s_564ae7a9b7392a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e266-9e70-7091-9ea4-3b7a56db33fe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
