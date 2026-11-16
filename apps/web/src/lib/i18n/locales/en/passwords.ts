@@ -83,6 +83,13 @@ export default {
   moveFolderTo: 'Move “{{name}}” to',
   deleteFolder: 'Delete folder',
   folderActions: 'Folder actions for {{name}}',
+  filterItems: 'Filter items',
+  groupItems: 'Group by',
+  typeFilter: 'Type filter',
+  listOptions: 'List options',
+  openFilters: 'Open item filters',
+  listControls: 'List controls',
+  group: 'Group',
   topLevel: 'Top level',
   deleteFolderTitle: 'Delete “{{name}}”?',
   deleteFolderItems: {

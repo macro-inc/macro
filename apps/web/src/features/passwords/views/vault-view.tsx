@@ -14,6 +14,7 @@ import { usePending } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -40,6 +41,10 @@ import { ItemForm } from '../components/item-form';
 import { ItemList } from '../components/item-list';
 import { ItemLogo } from '../components/item-logo';
 import { KIND_ICONS } from '../components/kind-icon';
+import {
+  PasswordTypeControls,
+  PasswordTypeDrawer,
+} from '../components/list-controls';
 import { NewItemMenu } from '../components/new-item-menu';
 import { ShareMenu } from '../components/share-menu';
 import {
@@ -83,7 +88,7 @@ function destinationFolder(filter: PasswordFilter) {
 function emptyReason(vault: VaultController): VaultEmptyReason {
   if (vault.search().trim()) return 'search';
   if (vault.filter().startsWith('folder:')) return 'folder';
-  if (vault.filter() === 'all') return 'vault';
+  if (vault.filter() === 'all' && vault.kinds().length === 0) return 'vault';
   return 'filter';
 }
 
@@ -492,7 +497,7 @@ function LeavePrompt(props: {
 export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
 }) {
-  const vault = createVault();
+  const vault = createVault({ entry: useSplitPanel()?.handle });
   const { source, scope } = usePasswords();
   let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
@@ -510,6 +515,13 @@ export function VaultView(props: {
   const editing = editingFolder;
   /** A name field chosen in the header menu, opened when the menu closes. */
   let headerEditor: FolderEditing | undefined;
+  const typeControls = () => ({
+    kinds: vault.kinds(),
+    groupBy: vault.groupBy(),
+    onKindChange: vault.setKindSelected,
+    onClearKinds: vault.clearKinds,
+    onGroupByChange: vault.setGroupBy,
+  });
   const [mobileFolders, setMobileFolders] = createSignal(false);
   const [importing, setImporting] = createSignal(false);
   const openImport = () => setImporting(true);
@@ -701,6 +713,7 @@ export function VaultView(props: {
                   </ViewSidebar.Title>
                 }
               >
+                <PasswordTypeControls {...typeControls()} />
                 <Show when={currentFolder()}>
                   {(folder) => (
                     <FolderActionsMenu
@@ -763,6 +776,7 @@ export function VaultView(props: {
                       scrollable
                       class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
                       contentClass="px-(--mobile-chrome-gutter)"
+                      leading={<PasswordTypeDrawer {...typeControls()} />}
                       items={mobileTabs()}
                       value={mobileTab()}
                       onChange={(tab) =>
@@ -822,6 +836,7 @@ export function VaultView(props: {
                     onSelectDraft={vault.selectDraft}
                     loadLogo={logo}
                     drag={drag}
+                    groupBy={vault.groupBy()}
                   />
                   <Show
                     when={
