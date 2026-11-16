@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+      lexical_wasm_view_changed: ${{ steps.filter.outputs.lexical_wasm_view_changed }}
     timeout-minutes: 10
     steps:
     - name: Checkout Repo
@@ -109,6 +110,13 @@ jobs:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
             - 'apps/web/src/lib/queries/calendar/**'
+          lexical_wasm_view_changed:
+            - 'packages/lexical-wasm-view/**'
+            - 'packages/collaboration/src/session/**'
+            - 'crates/client/document_session/**'
+            - 'crates/client/document_session_wasm/**'
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/lexical/**'
     - id: codegen
       name: Detect schema changes
       run: |
@@ -954,6 +962,12 @@ jobs:
         bunx playwright install-deps chromium
         just test-calendar-details-browser
       working-directory: apps/web
+    - name: Native Editor View Browser Tests
+      if: needs.path-check.outputs.lexical_wasm_view_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        env -u LD_LIBRARY_PATH bun run test:browser
+      working-directory: packages/lexical-wasm-view
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

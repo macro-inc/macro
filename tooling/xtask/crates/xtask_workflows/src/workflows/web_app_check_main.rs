@@ -78,6 +78,10 @@ fn path_check() -> Job {
             "calendar_details_changed",
             "${{ steps.filter.outputs.calendar_details_changed }}",
         )
+        .add_output(
+            "lexical_wasm_view_changed",
+            "${{ steps.filter.outputs.lexical_wasm_view_changed }}",
+        )
         .add_step(path_check_checkout())
         .add_step(paths_filter())
         .add_step(detect_schema_changes())
@@ -359,6 +363,7 @@ fn browser() -> Job {
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
+        .add_step(run_lexical_wasm_view_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -530,6 +535,9 @@ fn paths_filter() -> Step<Use> {
     // `calendar_details_changed` covers what the event details browser tests
     // render and the query modules their fixture replaces, whose exports the
     // fixture must keep matching.
+    // `lexical_wasm_view_changed` covers the native editor view and what its
+    // browser fixtures run for real: the session executor and the Rust crates
+    // the document-session wasm is built from.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -540,7 +548,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\nlexical_wasm_view_changed:\n  - 'packages/lexical-wasm-view/**'\n  - 'packages/collaboration/src/session/**'\n  - 'crates/client/document_session/**'\n  - 'crates/client/document_session_wasm/**'\n  - 'crates/client/doc_sync_core/**'\n  - 'crates/client/lexical/**'\n"
             ),
         ))
 }
@@ -759,6 +767,19 @@ fn run_calendar_details_browser_tests() -> Step<Run> {
             "needs.path-check.outputs.calendar_details_changed == 'true'",
         ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// The native editor view's browser suite (both Playwright configs) against the
+/// document-session wasm the job built. Only when the view, the session
+/// executor or the Rust crates behind that wasm change.
+fn run_lexical_wasm_view_browser_tests() -> Step<Run> {
+    Step::new("Native Editor View Browser Tests")
+        // Same LD_LIBRARY_PATH caveat as the sign-up browser tests.
+        .run("bunx playwright install-deps chromium\nenv -u LD_LIBRARY_PATH bun run test:browser")
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.lexical_wasm_view_changed == 'true'",
+        ))
+        .working_directory(xtask_paths::repo_dir!("packages/lexical-wasm-view"))
 }
 
 fn cycles_import_check() -> Step<Run> {

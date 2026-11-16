@@ -595,6 +595,52 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
     );
 }
 
+/// The native editor view's browser suite runs real document-session wasm, so a
+/// change to the view, the session executor or the crates behind that wasm runs
+/// both of its Playwright configs in the job that builds the wasm.
+#[test]
+fn native_editor_view_browser_tests_run_when_the_view_or_its_wasm_changes() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let view = filters
+        .split("lexical_wasm_view_changed:")
+        .nth(1)
+        .expect("lexical_wasm_view_changed filter");
+    for path in [
+        "packages/lexical-wasm-view/**",
+        "packages/collaboration/src/session/**",
+        "crates/client/document_session/**",
+        "crates/client/document_session_wasm/**",
+        "crates/client/doc_sync_core/**",
+        "crates/client/lexical/**",
+    ] {
+        assert!(view.contains(path), "{path} runs the suite: {view}");
+    }
+    let job = browser_job(&yaml);
+    let step = job
+        .split("- name: Native Editor View Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("native editor view browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.lexical_wasm_view_changed == 'true'")
+            && step.contains("bun run test:browser")
+            && step.contains("packages/lexical-wasm-view"),
+        "the step runs the suite when the view changes: {step}"
+    );
+    let build = job
+        .find("- name: Build document-session WASM for tests")
+        .expect("the job builds the document-session wasm");
+    let run = job
+        .find("- name: Native Editor View Browser Tests")
+        .expect("native editor view browser step");
+    assert!(build < run, "the suite runs after the wasm build");
+}
+
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
