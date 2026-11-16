@@ -41,9 +41,18 @@ own permission checks and agent attribution apply.
 - `TOOLS` (comma-separated tool names) is what each deployed env offers:
   the ChatGPT listing's promises, since OpenAI's review reads every tool
   offered. Unset offers everything (local). A name no tool has fails at boot.
-- Results drop personal identifiers (`dropPersonalIdentifiers`): OpenAI
-  rejected a submission for returning user ids and emails the request
-  didn't need.
+- ChatGPT never sees a user id or email: every `macro|<email>` and email
+  in a result becomes a person token (`person_u_…` / `person_e_…`,
+  `src/person-tokens.ts`), and a token anywhere in a call's arguments turns
+  back into what it replaced before the call runs, so assigning, mentioning
+  and filtering by person still work. Tokens are AES-GCM under the
+  `PERSON_TOKEN_KEY` secret, bound to the viewer, no stored map.
+  `people_read` (always offered) is the one tool that returns a name and
+  email for a token. OpenAI rejected a submission for returning identifiers
+  the request didn't need.
+- `PERSON_TOKEN_KEY` (`openssl rand -base64 32 | bunx wrangler secret put
+  PERSON_TOKEN_KEY --env <env>`) is required in dev and prod; the Worker
+  refuses to start without it. Rotating it voids tokens ChatGPT holds.
 - `RESOURCE_URL` and `AUTHORIZATION_SERVER_URL` mirror
   `McpChatgptServiceUrl` and `McpPublicUrl` in `crates/macro_service_urls`;
   change all of them together. Service hosts come from the SDK for

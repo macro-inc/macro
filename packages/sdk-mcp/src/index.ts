@@ -4,7 +4,6 @@ export {
   OperationError,
   type OperationResult,
   runOperation,
-  withoutPersonalIdentifiers,
 } from './call';
 export type { Catalog, HintClass, Operation, Schema } from './catalog';
 export { catalog, handleClasses } from './generated/catalog';
