@@ -13,9 +13,11 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
@@ -174,7 +176,12 @@ function projectMenuEntries(
           action(
             id,
             t('entityActions.rename'),
-            single(props.onRename),
+            () => {
+              triggerFocusNewElement(RENAME_FIELD_SELECTOR, {
+                touchOnly: true,
+              });
+              return single(props.onRename)();
+            },
             PencilIcon
           )
         )
