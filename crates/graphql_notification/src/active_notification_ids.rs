@@ -3,7 +3,8 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use async_graphql::{Context, ErrorExtensions, ID};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::active_notification_ids::{
-    ActiveNotificationIdRepository, ActiveNotificationIdService, ActiveNotificationIdsError,
+    ActiveNotificationIdRepository, ActiveNotificationIdService, ActiveNotificationIdStorageError,
+    ActiveNotificationIdsError,
 };
 use uuid::Uuid;
 
@@ -60,7 +61,7 @@ impl ActiveNotificationIdsGraphqlContext {
 }
 
 /// The ids of `user_id`'s active notifications of `event_types`, newest first.
-#[tracing::instrument(skip_all, err(Debug))]
+#[tracing::instrument(skip_all)]
 pub async fn resolve_active_notification_ids(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -80,15 +81,20 @@ pub async fn resolve_active_notification_ids(
     Ok(ids.into_iter().map(|id| ID(id.to_string())).collect())
 }
 
-/// Map a domain rejection to bad input and a storage failure to a generic error.
+/// Map a domain rejection to bad input and a storage failure, which the
+/// domain service has already logged, to a generic error. A timeout is marked
+/// so clients can tell it apart without a message to parse.
 fn graphql_error(error: ActiveNotificationIdsError) -> async_graphql::Error {
-    let ActiveNotificationIdsError::Repository(report) = error else {
+    let ActiveNotificationIdsError::Storage(failure) = error else {
         return async_graphql::Error::new(error.to_string()).extend_with(|_, extensions| {
             extensions.set("code", "BAD_USER_INPUT");
         });
     };
-    tracing::error!(error = ?report, "failed to read active notification ids");
+    let timed_out = matches!(failure, ActiveNotificationIdStorageError::TimedOut);
     async_graphql::Error::new("notifications are unavailable").extend_with(|_, extensions| {
         extensions.set("code", "INTERNAL_SERVER_ERROR");
+        if timed_out {
+            extensions.set("timedOut", true);
+        }
     })
 }

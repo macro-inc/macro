@@ -4,7 +4,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchActiveNotificationIds } from '@queries/notification/graphql/active-notification-ids';
+import {
+  ActiveNotificationIdsTimeoutError,
+  fetchActiveNotificationIds,
+} from '@queries/notification/graphql/active-notification-ids';
 import { updateSoupForNotification } from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
@@ -392,19 +395,32 @@ export function createNotificationSource(
     // reads the ids of every active mention once, which also reaches mentions
     // outside the feed's window, and mentions delivered afterwards are
     // discarded as they arrive. A read that lands after the session ended
-    // (sign-out, account switch, transport swap) is dropped.
+    // (sign-out, account switch, transport swap) is dropped. A failed read or
+    // mark skips the cleanup until the next session: it is logged once and
+    // sets no state, so nothing retries it.
     let cleanupSession = 0;
     const discardActiveDocumentMentions = (session: number) =>
       Telemetry.span('notification.document_mention_cleanup', async (span) => {
-        const ids = await fetchActiveNotificationIds(
-          [DOCUMENT_MENTION],
-          DOCUMENT_MENTION_CLEANUP_LIMIT
-        );
-        span.setAttr('notification.count', ids.length);
-        const sessionEnded =
-          session !== cleanupSession || !enabled() || !usesGraphql();
-        if (ids.length === 0 || sessionEnded) return;
-        await discardDocumentMentions(ids);
+        try {
+          const ids = await fetchActiveNotificationIds(
+            [DOCUMENT_MENTION],
+            DOCUMENT_MENTION_CLEANUP_LIMIT
+          );
+          span.setAttr('notification.count', ids.length);
+          const sessionEnded =
+            session !== cleanupSession || !enabled() || !usesGraphql();
+          if (ids.length === 0 || sessionEnded) return;
+          await markNotificationsAsDoneMutation.mutateAsync({
+            notificationIds: ids,
+          });
+        } catch (error) {
+          const timedOut = error instanceof ActiveNotificationIdsTimeoutError;
+          span.setAttr('error.type', timedOut ? 'timeout' : 'other');
+          console.warn(
+            'Skipped document mention cleanup for this session',
+            error
+          );
+        }
       });
     createEffect(() => {
       if (!enabled() || !usesGraphql()) return;

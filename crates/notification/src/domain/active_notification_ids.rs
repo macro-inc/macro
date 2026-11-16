@@ -4,6 +4,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::future::Future;
+use tracing::field::Empty;
 use uuid::Uuid;
 
 /// Ids returned when the caller names no limit.
@@ -21,10 +22,21 @@ pub trait ActiveNotificationIdRepository: Send + Sync {
         user: MacroUserIdStr<'_>,
         event_types: &[String],
         limit: u32,
-    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, ActiveNotificationIdStorageError>> + Send;
 }
 
-/// A rejected read of active notification ids.
+/// Why storage could not read the ids.
+#[derive(Debug, thiserror::Error)]
+pub enum ActiveNotificationIdStorageError {
+    /// The read ran past its statement timeout.
+    #[error("Reading notification ids timed out")]
+    TimedOut,
+    /// Any other storage failure.
+    #[error("Could not read notification ids: {0}")]
+    Failed(Report),
+}
+
+/// A rejected or failed read of active notification ids.
 #[derive(Debug, thiserror::Error)]
 pub enum ActiveNotificationIdsError {
     /// A read names at least one event type.
@@ -36,9 +48,9 @@ pub enum ActiveNotificationIdsError {
     /// The limit is between 1 and [`MAX_LIMIT`].
     #[error("Notification id limit must be between 1 and {MAX_LIMIT}")]
     InvalidLimit,
-    /// Persistence failed.
-    #[error("Could not read notification ids: {0}")]
-    Repository(Report),
+    /// Storage could not read the ids.
+    #[error(transparent)]
+    Storage(ActiveNotificationIdStorageError),
 }
 
 /// Reads the ids of a user's own active notifications.
@@ -58,15 +70,17 @@ impl<R: ActiveNotificationIdRepository> ActiveNotificationIdService<R> {
     }
 
     /// The ids of `user`'s active notifications of `event_types`, newest
-    /// first: at most `limit`, [`DEFAULT_LIMIT`] when none is given.
+    /// first: at most `limit`, [`DEFAULT_LIMIT`] when none is given. A storage
+    /// failure is logged here, once.
     #[tracing::instrument(
         skip_all,
         fields(
             event_type_count = event_types.len(),
-            limit = tracing::field::Empty,
-            notification_count = tracing::field::Empty,
-        ),
-        err
+            limit = Empty,
+            notification.id_count = Empty,
+            db.statement_timed_out = Empty,
+            otel.status_code = Empty,
+        )
     )]
     pub async fn list(
         &self,
@@ -75,7 +89,8 @@ impl<R: ActiveNotificationIdRepository> ActiveNotificationIdService<R> {
         limit: Option<u32>,
     ) -> Result<Vec<Uuid>, ActiveNotificationIdsError> {
         let limit = limit.unwrap_or(DEFAULT_LIMIT);
-        tracing::Span::current().record("limit", limit);
+        let span = tracing::Span::current();
+        span.record("limit", limit);
         if !(1..=MAX_LIMIT).contains(&limit) {
             return Err(ActiveNotificationIdsError::InvalidLimit);
         }
@@ -93,13 +108,30 @@ impl<R: ActiveNotificationIdRepository> ActiveNotificationIdService<R> {
 
         event_types.sort();
         event_types.dedup();
-        let ids = self
+        let read = self
             .repository
             .active_notification_ids(user, &event_types, limit)
-            .await
-            .map_err(ActiveNotificationIdsError::Repository)?;
-        tracing::Span::current().record("notification_count", ids.len());
-        Ok(ids)
+            .await;
+        let timed_out = matches!(read, Err(ActiveNotificationIdStorageError::TimedOut));
+        span.record("db.statement_timed_out", timed_out);
+        match read {
+            Ok(ids) => {
+                span.record("notification.id_count", ids.len());
+                Ok(ids)
+            }
+            Err(error) => {
+                span.record("otel.status_code", "ERROR");
+                if timed_out {
+                    tracing::warn!(
+                        db.statement_timed_out = true,
+                        "reading active notification ids timed out"
+                    );
+                } else {
+                    tracing::error!(error = ?error, "failed to read active notification ids");
+                }
+                Err(ActiveNotificationIdsError::Storage(error))
+            }
+        }
     }
 }
 

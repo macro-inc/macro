@@ -2,9 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use graphql_notification::ActiveNotificationIdsGraphqlContext;
 use notification::domain::active_notification_ids::{
-    ActiveNotificationIdRepository, ActiveNotificationIdService,
+    ActiveNotificationIdRepository, ActiveNotificationIdService, ActiveNotificationIdStorageError,
 };
-use rootcause::Report;
 
 use super::*;
 
@@ -25,7 +24,7 @@ impl ActiveNotificationIdRepository for RecordingRepository {
         user: MacroUserIdStr<'_>,
         event_types: &[String],
         limit: u32,
-    ) -> Result<Vec<Uuid>, Report> {
+    ) -> Result<Vec<Uuid>, ActiveNotificationIdStorageError> {
         self.reads
             .lock()
             .unwrap()
@@ -123,4 +122,61 @@ async fn rejects_empty_unknown_and_out_of_range_reads_as_bad_input() {
         );
     }
     assert!(repository.reads.lock().unwrap().is_empty());
+}
+
+/// Fails every read the way storage does, with SQL in the failure.
+struct FailingRepository {
+    timed_out: bool,
+}
+
+impl ActiveNotificationIdRepository for FailingRepository {
+    async fn active_notification_ids(
+        &self,
+        _user: MacroUserIdStr<'_>,
+        _event_types: &[String],
+        _limit: u32,
+    ) -> Result<Vec<Uuid>, ActiveNotificationIdStorageError> {
+        if self.timed_out {
+            return Err(ActiveNotificationIdStorageError::TimedOut);
+        }
+        Err(ActiveNotificationIdStorageError::Failed(
+            rootcause::report!("SELECT notification_id FROM user_notification failed"),
+        ))
+    }
+}
+
+#[tokio::test]
+async fn storage_failures_are_internal_errors_marked_only_when_the_read_timed_out() {
+    let harness = harness();
+
+    for timed_out in [true, false] {
+        let context = ActiveNotificationIdsGraphqlContext::new(ActiveNotificationIdService::new(
+            FailingRepository { timed_out },
+            model_notifications::NotifEvent::EVENT_TYPES,
+        ));
+        let response = harness
+            .schema
+            .execute(
+                harness
+                    .request(
+                        r#"{ user { activeNotificationIds(eventTypes: ["document_mention"]) } }"#,
+                        authenticated_parts(),
+                    )
+                    .data(context),
+            )
+            .await;
+
+        assert_eq!(response.errors.len(), 1);
+        let error = &response.errors[0];
+        assert_eq!(error.message, "notifications are unavailable");
+        let extensions = error.extensions.as_ref().unwrap();
+        assert_eq!(
+            extensions.get("code"),
+            Some(&async_graphql::Value::from("INTERNAL_SERVER_ERROR"))
+        );
+        assert_eq!(
+            extensions.get("timedOut"),
+            timed_out.then(|| async_graphql::Value::from(true)).as_ref()
+        );
+    }
 }

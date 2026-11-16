@@ -36,7 +36,9 @@ through the same service.
   at most 500), for clients that act on a type without reading their feed.
   The service takes the known types from its caller (`NotifEvent::EVENT_TYPES`).
   No index leads with the event type, so a rare type scans the user's live
-  notifications under a 5 s statement timeout.
+  notifications under a 5 s statement timeout; the service span records
+  `notification.id_count` and `db.statement_timed_out`, and logs a timeout
+  once at warn.
 - `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one
   user's notifications done as a stored action with a per-notification
   ledger: chunked, leased, resumable and undoable. The inbox's clear runs on
