@@ -129,7 +129,7 @@ impl RouterCore {
                 },
             ));
             route.state = RouteState::Closed;
-            route.reassembler = sync_protocol::framing::Reassembler::default();
+            route.reassembler = inbound_reassembler();
             route.pending.clear();
             if initial_token.is_some() {
                 route.initial_token = initial_token;
@@ -145,7 +145,7 @@ impl RouterCore {
                     initial_token,
                     access: WriteAccess::Full,
                     delay: Millis(500),
-                    reassembler: sync_protocol::framing::Reassembler::default(),
+                    reassembler: inbound_reassembler(),
                     deadline: None,
                 },
             );
@@ -307,7 +307,7 @@ impl RouterCore {
         let Some(route) = self.routes.get_mut(doc) else {
             return;
         };
-        route.reassembler = sync_protocol::framing::Reassembler::default();
+        route.reassembler = inbound_reassembler();
         route.deadline = Some(self.now.mono.after(self.subscribe_timeout));
         if let Some(token) = route.initial_token.take() {
             route.state = RouteState::Subscribing;
@@ -393,7 +393,7 @@ impl RouterCore {
                 route.state = RouteState::Open;
                 route.deadline = None;
                 route.delay = Millis(500);
-                route.reassembler = sync_protocol::framing::Reassembler::default();
+                route.reassembler = inbound_reassembler();
                 out.to_sessions.push((
                     doc.clone(),
                     RouteEvent::Subscribed {
@@ -465,7 +465,7 @@ impl RouterCore {
                 },
             ));
             route.pending.clear();
-            route.reassembler = sync_protocol::framing::Reassembler::default();
+            route.reassembler = inbound_reassembler();
             route.deadline = None;
             route.state = RouteState::Dropped {
                 at: self.now.mono.after(route.delay),

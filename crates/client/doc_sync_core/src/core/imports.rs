@@ -182,7 +182,7 @@ impl SyncCore {
     pub(super) fn disconnected(&mut self, now: Now, out: &mut SyncOutput) {
         self.push_failed(now, out);
         self.assist_push = None;
-        self.reassembler = sync_protocol::framing::Reassembler::default();
+        self.reassembler = inbound_reassembler();
         self.since.clear();
         self.convergence = None;
         self.convergence_retry = None;

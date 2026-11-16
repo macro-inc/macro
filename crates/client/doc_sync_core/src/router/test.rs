@@ -269,3 +269,30 @@ fn a_subscribe_timeout_closes_the_route_as_retryable() {
             .collect::<Vec<_>>()
     );
 }
+#[test]
+fn an_endless_unfinished_route_message_drops_the_route() {
+    let (mut r, mut o) = setup();
+    subscribed(&mut r, &mut o);
+    let mut chunk = vec![0u8; 1024 * 1024 + 1];
+    chunk[0] = 0;
+    let mut dropped = false;
+    for _ in 0..=(MAX_INBOUND_MESSAGE_BYTES / (1024 * 1024)) {
+        incoming(
+            &mut r,
+            &mut o,
+            sync_protocol::FromRouter::RouterDocFrame {
+                doc_id: "document-test",
+                payload: SliceWrapper::from_cooked(&chunk),
+            },
+        );
+        if o
+            .to_sessions
+            .iter()
+            .any(|(_, e)| matches!(e, RouteEvent::Closed { .. }))
+        {
+            dropped = true;
+            break;
+        }
+    }
+    assert!(dropped, "the route kept buffering past the inbound limit");
+}

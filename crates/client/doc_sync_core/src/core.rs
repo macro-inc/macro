@@ -229,7 +229,7 @@ impl SyncCore {
         Ok(Self {
             now,
             rows_after_gap: BTreeSet::new(),
-            reassembler: sync_protocol::framing::Reassembler::default(),
+            reassembler: inbound_reassembler(),
             server_vv: loro::VersionVector::default(),
             foreign_writer_closed: false,
             route_denied: false,

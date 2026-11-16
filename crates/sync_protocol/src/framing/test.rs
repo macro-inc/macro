@@ -84,3 +84,14 @@ fn reassembler_round_trips_with_into_frames() {
     }
     assert_eq!(out, Some(payload));
 }
+
+#[test]
+fn a_limited_reassembler_rejects_an_oversized_message_and_recovers() {
+    let mut reassembler = Reassembler::with_limit(4);
+    assert_eq!(reassembler.push(&[0, 1, 2, 3]), Ok(None));
+    assert_eq!(
+        reassembler.push(&[0, 4, 5]),
+        Err(FramingError::MessageTooLarge { limit: 4 })
+    );
+    assert_eq!(reassembler.push(&[1, 9]), Ok(Some(vec![9])));
+}

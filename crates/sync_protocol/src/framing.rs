@@ -6,6 +6,12 @@ pub enum FramingError {
     /// A frame must contain at least its final-chunk header.
     #[error("received empty websocket frame")]
     EmptyFrame,
+    /// The frames of one message exceeded the reassembler's limit.
+    #[error("reassembled message exceeds {limit} bytes")]
+    MessageTooLarge {
+        /// The reassembler's byte limit.
+        limit: usize,
+    },
 }
 
 type Result<T> = std::result::Result<T, FramingError>;
@@ -55,13 +61,29 @@ pub fn strip_frame(frame: &[u8]) -> Result<(bool, &[u8])> {
 #[derive(Default)]
 pub struct Reassembler {
     buffer: Vec<u8>,
+    limit: Option<usize>,
 }
 
 impl Reassembler {
+    /// A reassembler that rejects a message once its frames exceed `limit` bytes.
+    pub fn with_limit(limit: usize) -> Self {
+        Self {
+            buffer: Vec::new(),
+            limit: Some(limit),
+        }
+    }
+
     /// Feeds one frame. Returns the complete message once the final frame
-    /// arrives, otherwise `None` (more frames pending).
+    /// arrives, otherwise `None` (more frames pending). Over the limit, the
+    /// partial message is discarded and an error returned.
     pub fn push(&mut self, frame: &[u8]) -> Result<Option<Vec<u8>>> {
         let (is_final, payload) = strip_frame(frame)?;
+        if let Some(limit) = self.limit {
+            if self.buffer.len().saturating_add(payload.len()) > limit {
+                self.buffer = Vec::new();
+                return Err(FramingError::MessageTooLarge { limit });
+            }
+        }
         self.buffer.extend_from_slice(payload);
         if is_final {
             Ok(Some(std::mem::take(&mut self.buffer)))

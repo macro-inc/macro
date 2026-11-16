@@ -166,6 +166,14 @@ pub const CLOSE_RETRYABLE: u16 = 4000;
 /// Close code the sync service uses for a revoked, expired or retired session.
 pub const CLOSE_POLICY_VIOLATION: u16 = 1008;
 
+/// Largest inbound message the client reassembles; a document service never
+/// sends one this large, so a larger stream is a protocol error.
+pub const MAX_INBOUND_MESSAGE_BYTES: usize = 256 * 1024 * 1024;
+
+pub(crate) fn inbound_reassembler() -> sync_protocol::framing::Reassembler {
+    sync_protocol::framing::Reassembler::with_limit(MAX_INBOUND_MESSAGE_BYTES)
+}
+
 /// Router events are scoped to a physical route subscription generation.
 #[derive(Clone, Debug)]
 pub enum RouteEvent {
