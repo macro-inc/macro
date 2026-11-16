@@ -600,24 +600,24 @@ async fn a_cleared_team_request_leaves_attention_until_undone(
         attention_soup_page(&pool, request)
     };
     let clear = || {
-        sqlx::query(
+        sqlx::query!(
             "UPDATE user_notification SET state = 'done', done_by = $1 \
              WHERE user_id = $2 AND notification_id = $3",
+            action_id,
+            USER_1,
+            request_id,
         )
-        .bind(action_id)
-        .bind(USER_1)
-        .bind(request_id)
         .execute(&pool)
     };
     let undo = || {
-        sqlx::query(
+        sqlx::query!(
             "UPDATE user_notification SET state = 'unseen', done_by = NULL \
              WHERE user_id = $2 AND notification_id = $3 AND done_by = $1 \
              AND state = 'done' AND deleted_at IS NULL",
+            action_id,
+            USER_1,
+            request_id,
         )
-        .bind(action_id)
-        .bind(USER_1)
-        .bind(request_id)
         .execute(&pool)
     };
     let listed = vec![(EntityType::Team, TEAM_1.to_string())];
@@ -629,19 +629,19 @@ async fn a_cleared_team_request_leaves_attention_until_undone(
 
     // A writer that knows nothing of bulk actions reopens it after a clear.
     clear().await?;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE user_notification SET state = 'seen' \
          WHERE user_id = $1 AND notification_id = $2",
+        USER_1,
+        request_id,
     )
-    .bind(USER_1)
-    .bind(request_id)
     .execute(&pool)
     .await?;
-    let done_by: Option<Uuid> = sqlx::query_scalar(
+    let done_by = sqlx::query_scalar!(
         "SELECT done_by FROM user_notification WHERE user_id = $1 AND notification_id = $2",
+        USER_1,
+        request_id,
     )
-    .bind(USER_1)
-    .bind(request_id)
     .fetch_one(&pool)
     .await?;
     assert_eq!(done_by, None);
@@ -649,11 +649,13 @@ async fn a_cleared_team_request_leaves_attention_until_undone(
     assert_eq!(undo().await?.rows_affected(), 0);
 
     // Leaving the team drops its request from attention.
-    sqlx::query("DELETE FROM team_user WHERE user_id = $1 AND team_id = $2::uuid")
-        .bind(USER_1)
-        .bind(TEAM_1)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        USER_1,
+        Uuid::parse_str(TEAM_1)?,
+    )
+    .execute(&pool)
+    .await?;
     assert!(team_page().await?.is_empty());
     Ok(())
 }
