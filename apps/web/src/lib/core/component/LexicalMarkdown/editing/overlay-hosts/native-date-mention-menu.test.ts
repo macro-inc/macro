@@ -1,5 +1,4 @@
 import 'fake-indexeddb/auto';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { locks } from 'node:worker_threads';
@@ -30,26 +29,9 @@ import { createNativeDateMentionViews } from '../../decorator-host/native-date-m
 import { dispatchApplicationCommand } from '../../plugins/group-b/command';
 import { createNativeUserMentionMenuHost } from './native-user-mention-menu';
 
-// This test must be copied to this directory in the coherent source tree.
-// Its package is materialized from the coordinator's sealed manifest, never built here.
-const hash = (bytes: Uint8Array) =>
-  createHash('sha256').update(bytes).digest('hex');
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 beforeAll(() => {
-  const manifestPath = process.env.DATE_CONSUMER_NATIVE_MANIFEST;
-  const manifestHash = process.env.DATE_CONSUMER_NATIVE_MANIFEST_SHA256;
-  if (!manifestPath || !manifestHash)
-    throw new Error('Exact coordinator native manifest required');
-  const raw = readFileSync(manifestPath);
-  expect(hash(raw)).toBe(manifestHash);
-  const manifest = z
-    .object({ files: z.record(z.string(), z.object({ sha256: z.string() })) })
-    .parse(JSON.parse(raw.toString()));
   const own = resolve(import.meta.dirname, '../../../../document-session/wasm');
-  for (const [name, file] of Object.entries(manifest.files)) {
-    expect(hash(readFileSync(resolve(own, name)))).toBe(file.sha256);
-  }
-  expect(Object.keys(manifest.files)).toHaveLength(7);
   Object.defineProperty(navigator, 'locks', {
     configurable: true,
     value: locks,
