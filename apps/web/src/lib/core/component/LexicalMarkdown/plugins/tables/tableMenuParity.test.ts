@@ -9,9 +9,12 @@
  * stripped) and the full selection (both endpoints as root paths with type and
  * offset, format and style; none and an outside range kept distinct).
  *
- * History here is fixture history only: @lexical/history on Source against the
- * native session's own undo. It is not app Loro history acceptance, which
- * stays with the table-hover-browser-test history epoch.
+ * Source's own undo is fixture history (@lexical/history), which restores the
+ * exact snapshot. The app undoes through Loro (registerLoroHistory) instead, so
+ * native's undo is compared with that app path derived from the same run: the
+ * stored-null rule on the JSON and the local awareness on the selection (see
+ * appUndone). Full app Loro history acceptance stays with the
+ * table-hover-browser-test history epoch.
  */
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
@@ -34,6 +37,7 @@ import {
   $getNodeByKey,
   $getRoot,
   $getSelection,
+  $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
   $setSelection,
@@ -84,6 +88,9 @@ interface Outcome {
   json: unknown;
   selection: SelectionDescriptor;
 }
+/** A Lexical point the local awareness holds, by node key. */
+type AwarenessPoint = { key: string; offset: number; type: 'text' | 'element' };
+type Awareness = { anchor: AwarenessPoint; focus: AwarenessPoint };
 interface Scenario {
   name: string;
   rows: CellSpec[][];
@@ -265,6 +272,27 @@ function normalize(value: unknown): unknown {
 
 // --- Source -------------------------------------------------------------
 
+/** Storage-null keys Source's Loro reconcile reads back as null when absent. */
+const STORAGE_NULL_KEYS: Record<string, string[]> = {
+  text: ['detail', 'format', 'style'],
+  paragraph: ['direction', 'indent', 'textFormat', 'textStyle'],
+};
+/**
+ * The app's undo JSON: after a Loro-driven import every storage-null key a
+ * node holds absent reads null, touched or not (Source probe log 8803f2b1).
+ */
+function storageNullRule(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(storageNullRule);
+  if (!value || typeof value !== 'object') return value;
+  const node: Record<string, unknown> = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, storageNullRule(item)])
+  );
+  const type = typeof node.type === 'string' ? node.type : '';
+  for (const key of STORAGE_NULL_KEYS[type] ?? [])
+    if (!(key in node)) node[key] = null;
+  return node;
+}
+
 function $tableRows() {
   const table = $getRoot().getChildren().find($isTableNode);
   return table ? table.getChildren().filter($isTableRowNode) : [];
@@ -328,6 +356,45 @@ function sourceOutcome(editor: LexicalEditor): Outcome {
     selection: editor.getEditorState().read($sourceSelection),
   };
 }
+/**
+ * CollabProvider's localCursorUpdate after each local update: only a range
+ * selection converts (cursor.ts:84 also converts node selections, which no
+ * scenario makes); a table or null selection keeps the previous awareness.
+ */
+function $observeAwareness(previous: Awareness | null): Awareness | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return previous;
+  const point = (p: PointType): AwarenessPoint => ({
+    key: p.key,
+    offset: p.offset,
+    type: p.type,
+  });
+  return { anchor: point(selection.anchor), focus: point(selection.focus) };
+}
+/**
+ * The app's undo selection: the from-Loro update clears it, then
+ * $createSelectionFromPeerAwareness (cursor.ts:375) builds a range from the
+ * local awareness when both points resolve, with the format of the selection
+ * the undo replaced and an empty style. Keys stand in for Loro cursors, which
+ * the undone nodes keep.
+ */
+function $appUndoSelection(
+  awareness: Awareness | null,
+  format: number
+): SelectionDescriptor {
+  const resolve = ({ key, offset, type }: AwarenessPoint): Endpoint | null => {
+    const node = $getNodeByKey(key);
+    if (!node?.isAttached()) return null;
+    const size = $isElementNode(node)
+      ? node.getChildrenSize()
+      : node.getTextContentSize();
+    return { path: $path(node), type, offset: Math.min(offset, size) };
+  };
+  const anchor = awareness && resolve(awareness.anchor);
+  const focus = awareness && resolve(awareness.focus);
+  if (!anchor || !focus) return { kind: 'none' };
+  return { kind: 'range', anchor, focus, format, style: '' };
+}
 function update(editor: LexicalEditor, fn: () => void) {
   return new Promise<void>((resolve) =>
     editor.update(fn, { onUpdate: () => resolve() })
@@ -368,6 +435,7 @@ async function source(scenario: Scenario) {
     } else if (live.kind === 'caret') $cellAt(live.cell).selectStart();
     else $getRoot().getLastChildOrThrow().selectEnd();
   });
+  let awareness = editor.getEditorState().read(() => $observeAwareness(null));
   const before = sourceOutcome(editor);
   await update(editor, () => {
     // TableMoveHandle runMenuAction, verbatim in shape.
@@ -386,6 +454,11 @@ async function source(scenario: Scenario) {
     if (cell) $menuItem(scenario.action, cell);
   });
   const after = sourceOutcome(editor);
+  const replacedFormat = editor.getEditorState().read(() => {
+    awareness = $observeAwareness(awareness);
+    const selection = $getSelection();
+    return $isRangeSelection(selection) ? selection.format : 0;
+  });
   const undone = new Promise<void>((resolve) => {
     const off = editor.registerUpdateListener(() => {
       off();
@@ -394,7 +467,13 @@ async function source(scenario: Scenario) {
   });
   editor.dispatchCommand(UNDO_COMMAND, undefined);
   await undone;
-  return { before, after, undone: sourceOutcome(editor) };
+  const appUndone: Outcome = {
+    json: storageNullRule(before.json),
+    selection: editor
+      .getEditorState()
+      .read(() => $appUndoSelection(awareness, replacedFormat)),
+  };
+  return { before, after, undone: sourceOutcome(editor), appUndone };
 }
 
 // --- Native -------------------------------------------------------------
@@ -537,16 +616,12 @@ for (const scenario of SCENARIOS) {
     expect(nativeOutcome(fixture)).toEqual(expected.after);
   });
 
-  // C-UNDO-SNAPSHOT-01: this oracle's undo is @lexical/history (fixture
-  // only). Source's app undo is Loro (registerLoroHistory): it re-imports
-  // stored nulls (detail, format, style, direction, indent, textFormat,
-  // textStyle) and does not restore a TableSelection, so the oracle's
-  // post-undo JSON and selection do not model the app path. Keep `.fails`
-  // until the oracle models it.
-  test.fails(`(e) C-UNDO-SNAPSHOT-01: one undo equals Source: ${scenario.name}`, async () => {
+  // C-UNDO-SNAPSHOT-01: compared with the app's Loro undo, not the fixture's
+  // @lexical/history snapshot (see appUndone).
+  test(`(e) one undo equals Source's app undo: ${scenario.name}`, async () => {
     const { expected, fixture } = await nativeAfterAction();
     expect(nativeOutcome(fixture)).toEqual(expected.after);
     fixture.port.command(CommandCode.Undo);
-    expect(nativeOutcome(fixture)).toEqual(expected.undone);
+    expect(nativeOutcome(fixture)).toEqual(expected.appUndone);
   });
 }
