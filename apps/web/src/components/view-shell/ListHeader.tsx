@@ -85,8 +85,10 @@ export function ListHeaderSearch(props: {
     props.focusResults();
     // A view whose results are not on screen (a tab without a list) has
     // nowhere to send the keyboard: ArrowDown and Enter stay with the field,
-    // and Escape leaves it as it would without a list.
-    if (document.activeElement === input) {
+    // and Escape leaves it as it would without a list. Escape has already
+    // blurred the field, so focus left on the page counts as not moved.
+    const focused = document.activeElement;
+    if (focused === input || focused === document.body) {
       if (row === 'first') return;
 
       input?.blur();
