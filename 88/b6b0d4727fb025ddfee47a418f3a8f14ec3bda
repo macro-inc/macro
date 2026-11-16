@@ -1,0 +1,53 @@
+packages/sdk-ocaml/e2e/common.ml
+  s_2902879595f308::t_228d54b5df2486 47
+  s_2902879595f308::t_583477280c0c06 59-60
+  s_2902879595f308::t_513b7f0e8bef92 56,122-125
+packages/sdk-ocaml/e2e/cleanup.ml
+  s_2902879595f308::t_583477280c0c06 13,21-23,144-145
+  s_2902879595f308::t_228d54b5df2486 146-151
+packages/sdk-ocaml/e2e/email_draft.ml
+  s_2902879595f308::t_228d54b5df2486 50-52
+  s_2902879595f308::t_583477280c0c06 1-5,10-11,14-28,38-41,47-48,53
+packages/sdk-ocaml/e2e/projects.ml
+  s_2902879595f308::t_583477280c0c06 30-31
+  s_2902879595f308::t_2dbc25abc8bc7c 15
+packages/sdk-ocaml/e2e/calendar.ml
+  s_2902879595f308::t_df8a846a0372b6 31
+  s_2902879595f308::t_49fad42ef8e461 36
+packages/sdk-ocaml/e2e/README.md
+  s_2902879595f308::t_47f65ddd5a05d2 50-55
+packages/sdk-ocaml/e2e/channels.ml
+  s_8c8730c08d5e2b::t_f430582d2d8bd0 18
+packages/sdk-ocaml/e2e/chats.ml
+  s_8c8730c08d5e2b::t_9c74d36f5324a5 19
+packages/sdk-ocaml/e2e/documents.ml
+  s_8c8730c08d5e2b::t_6f426689701db4 20
+packages/sdk-ocaml/e2e/properties.ml
+  s_8c8730c08d5e2b::t_096d85d1cfb50c 24-25
+packages/sdk-ocaml/e2e/tasks.ml
+  s_8c8730c08d5e2b::t_85f465f5f4fd0b 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "88b6b0d4727fb025ddfee47a418f3a8f14ec3bda",
+  "prompts": {},
+  "sessions": {
+    "s_2902879595f308": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "032e234d-3e13-4851-bcf6-8822aee1bbe8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8c8730c08d5e2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c600d448-418a-4335-8e4d-4d2c4092e5a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
