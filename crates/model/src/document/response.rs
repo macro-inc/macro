@@ -81,6 +81,9 @@ pub struct DocumentResponse {
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentResponseMetadata {
+    /// Entity-owned presentation overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The version of the document
@@ -130,6 +133,7 @@ impl DocumentResponseMetadata {
     /// Initialize document response from document metadata
     fn initialize_from_document_metadata(document_metadata: &DocumentMetadata) -> Self {
         DocumentResponseMetadata {
+            appearance: document_metadata.appearance.clone(),
             document_id: document_metadata.document_id.clone(),
             document_version_id: document_metadata.document_version_id,
             owner: document_metadata.owner.clone(),
@@ -184,6 +188,10 @@ pub struct CreateDocumentResponseData {
 }
 
 pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseData>;
+
+/// Error `code` of the 404 body returned when a create names an
+/// `email_attachment_id` that no longer exists.
+pub const EMAIL_ATTACHMENT_NOT_FOUND_CODE: &str = "EMAIL_ATTACHMENT_NOT_FOUND";
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]

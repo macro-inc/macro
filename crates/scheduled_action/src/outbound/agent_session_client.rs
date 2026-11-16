@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use agent_session::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
-    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
-    ValidateRoutineSession, ValidatedRoutineSession,
+    RoutineActivity, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
+    RoutineSessions, ValidateRoutineSession, ValidatedRoutineSession,
 };
 use anyhow::{Context, Result};
 use macro_authorization::INTERNAL_API_KEY_HEADER;
@@ -24,6 +24,8 @@ enum Operation {
     Prompt,
     Status,
     Cancel,
+    Delete,
+    Activity,
 }
 
 impl Operation {
@@ -34,12 +36,14 @@ impl Operation {
             Self::Prompt => "internal/routine-sessions/prompt",
             Self::Status => "internal/routine-sessions/status",
             Self::Cancel => "internal/routine-sessions/cancel",
+            Self::Delete => "internal/routine-sessions/delete",
+            Self::Activity => "internal/routine-sessions/activity",
         }
     }
 
     fn timeout(self) -> Duration {
         match self {
-            Self::Status | Self::Cancel => SNAPSHOT_TIMEOUT,
+            Self::Status | Self::Cancel | Self::Delete | Self::Activity => SNAPSHOT_TIMEOUT,
             _ => REQUEST_TIMEOUT,
         }
     }
@@ -213,6 +217,18 @@ impl RoutineSessions for AgentSessionClient {
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.send(Operation::Cancel, &command).await?;
         Ok(())
+    }
+
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.send(Operation::Delete, &command).await?;
+        Ok(())
+    }
+
+    async fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<RoutineActivity, RoutineSessionError> {
+        self.command(Operation::Activity, &command).await
     }
 }
 

@@ -238,6 +238,8 @@ impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions, Updates: Coding
             let prepared = self
                 .sessions
                 .prepare(PrepareRoutineSession {
+                    billing: Default::default(),
+                    instructions: None,
                     selection: ValidateRoutineSession {
                         owner: command.user_id.clone(),
                         bot_id,

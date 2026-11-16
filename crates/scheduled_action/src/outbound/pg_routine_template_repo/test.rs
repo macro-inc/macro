@@ -24,6 +24,7 @@ fn snapshot(
             label: "customer-success".into(),
             fill: VariableFill::Shared,
         }],
+        appearance: action.appearance.clone(),
     }
 }
 

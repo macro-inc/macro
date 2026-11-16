@@ -13,7 +13,7 @@ use crate::links::types::{DbLink, DbUserProvider};
 mod test;
 
 /// fetches a link given an email address and provider.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_link_by_email(
     pool: &PgPool,
     email_address: &str,
@@ -42,7 +42,7 @@ pub async fn fetch_link_by_email(
 }
 
 /// fetches email_links given a macro_id.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, macro_id), err)]
 pub async fn fetch_link_by_macro_id(
     pool: &PgPool,
     macro_id: &str,
@@ -77,7 +77,7 @@ pub async fn fetch_link_by_macro_id(
 /// [`fetch_link_by_macro_id`] would return. The comparison is
 /// case-insensitive: the macro_id email part is always lowercased, but
 /// `email_address` preserves its original casing.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address, macro_id), err)]
 pub async fn fetch_link_by_macro_id_and_email_address(
     pool: &PgPool,
     macro_id: &str,
@@ -213,7 +213,7 @@ struct DbInboxDetailsRow {
 /// inbox's settings, its most recent backfill job status, and its own photo
 /// (the self-contact's SFS photo, synced from people/me). Inboxes without an
 /// `email_settings` row get default settings.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, macro_id), err)]
 pub async fn fetch_inbox_details_for_macro_id(
     pool: &PgPool,
     macro_id: &MacroUserIdStr<'_>,
@@ -240,7 +240,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
                        THEN 'InProgress'::email_backfill_job_status
                    ELSE 'Complete'::email_backfill_job_status END
                ELSE bj.status END as "latest_backfill_status?: _",
@@ -357,7 +357,7 @@ pub async fn fetch_links_by_fusionauth_user_id(
 /// owns or has delegated access to — callers map that to a not-found/unauthorized
 /// response. Lets mutating thread routes derive the inbox from the thread instead
 /// of an `X-Email-Link-Id` header.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, macro_id), err)]
 pub async fn fetch_owned_link_for_thread(
     pool: &PgPool,
     macro_id: &str,
@@ -391,7 +391,7 @@ pub async fn fetch_owned_link_for_thread(
 
 /// Resolves the inbox (email_link) that owns a message, scoped to the caller's
 /// own and delegated inboxes. See [`fetch_owned_link_for_thread`].
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, macro_id), err)]
 pub async fn fetch_owned_link_for_message(
     pool: &PgPool,
     macro_id: &str,

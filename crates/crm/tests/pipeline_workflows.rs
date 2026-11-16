@@ -97,6 +97,9 @@ fn viewer(id: &str) -> Viewer {
 
 struct Fixture {
     workflows: Workflows,
+    pipelines: Arc<Pipelines>,
+    crm: Arc<Crm>,
+    access: Arc<Access>,
     acme: Uuid,
     globex: Uuid,
     sam: Uuid,
@@ -191,7 +194,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
         NoOpTableEventPublisher,
         NoopMacroEventBroker,
     ));
-    let pipelines = Pipelines::new(
+    let pipelines = Arc::new(Pipelines::new(
         PgPipelineRepo::new(
             pool.clone(),
             PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone())),
@@ -199,13 +202,16 @@ async fn fixture(pool: &PgPool) -> Fixture {
         databases,
         access.clone(),
         Stages,
-    );
-    let crm = Crm::new(
+    ));
+    let crm = Arc::new(Crm::new(
         CompaniesRepositoryImpl::new(pool.clone()),
         NoOpCompanyMetadataResolver,
-    );
+    ));
     Fixture {
-        workflows: Workflows::new(Arc::new(pipelines), Arc::new(crm), access),
+        workflows: Workflows::new(pipelines.clone(), crm.clone(), access.clone()),
+        pipelines,
+        crm,
+        access,
         acme,
         globex,
         sam,
@@ -265,7 +271,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
             .iter()
             .map(|f| f.name.as_str())
             .collect::<Vec<_>>(),
-        ["Company", "Stage", "Owner", "Revenue"]
+        [
+            "Company",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency"
+        ]
     );
 
     let added = workflows
@@ -354,7 +367,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         ]
     );
     assert_eq!(stages.empty, 1);
-    assert_eq!(all.totals, [(String::from("Revenue"), 48_000.0)]);
+    assert_eq!(
+        all.totals,
+        [crm::domain::pipeline_workflows::FieldTotal {
+            field: "Revenue".into(),
+            currency: Some("USD".into()),
+            sum: 48_000.0
+        }]
+    );
     let found = workflows
         .find(&owner, id, query(Vec::new(), Some("GLOB")))
         .await
@@ -694,6 +714,9 @@ async fn pipelines_are_created_with_stages_and_edited_by_name(pool: PgPool) {
     );
 }
 
+#[path = "pipeline_workflows/commercial.rs"]
+mod commercial;
+
 #[path = "pipeline_workflows/requirements.rs"]
 mod requirements;
 
@@ -845,3 +868,7 @@ async fn a_tracked_pipeline_still_requires_a_record(pool: PgPool) {
         Err(WorkflowError::Invalid(_))
     ));
 }
+
+#[cfg(feature = "inbound")]
+#[path = "pipeline_workflows/http.rs"]
+mod http;

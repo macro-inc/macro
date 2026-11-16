@@ -26,6 +26,10 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
@@ -567,6 +571,12 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              text={t('nav.openInNewTab')}
+              onClick={() => openInNewTab(openInCurrentSplit)}
+            />
+          </Show>
           <Show when={canOpenFullscreen()}>
             <MenuItem text={t('nav.openFullscreen')} onClick={openFullscreen} />
           </Show>

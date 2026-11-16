@@ -41,12 +41,15 @@ Chat sidebar, following the standard hexagonal crate layout.
   channel *visibility inside* a label differs — don't make label ordering
   per-user.
 - Team labels remain restricted to channels in the same team; personal labels require active channel membership.
+- `/channel-sections` reuses label storage through `for_sections` constructors; sections use either explicit picks or a name rule, and applying a rule atomically replaces the picks.
+- Sections expose unjoined team channels only within the verified team scope. Legacy labels and previews remain participant-only; legacy smart-tag writes stay read-only.
 
 - PATCH `{label_id}` accepts optional `targetScope: "personal" | "team"` with
   the existing `name` and optional `rule`; omission keeps rename behavior.
   Transferring a section preserves its ID and contents, but rejects any member
-  the actor cannot access or the destination cannot label. Conflicting manual
-  destination assignments move to the transferred section atomically.
+  the actor cannot access or the destination cannot label, including unjoined
+  rule matches when moving to personal scope. Conflicting manual destination
+  assignments move to the transferred section atomically.
 
 ## Related
 

@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  ActivityErrorBody,
+  ActivityReports,
   AddServerRequest,
   BrowsePipedreamMcpCatalogParams,
   CallToolRequest,
@@ -28,6 +30,7 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  ExplicitMemory,
   GenerateImageErrorBody,
   GenerateImageRequest,
   GenerateImageResponse,
@@ -37,8 +40,13 @@ import type {
   GetChatPermissionsResponse,
   GetChatResponse,
   GetChatsForAttachmentResponse,
+  GetUserActivityParams,
   HttpSendChatMessageRequest,
+  ImportEntitiesResponse,
+  ImportNotionPageRequest,
+  ImportNotionPageResponse,
   ImportSource,
+  ListImportEntitiesParams,
   ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -56,6 +64,8 @@ import type {
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
   ProjectionStateResponse,
+  ReadActivityResponse,
+  ReadMyActivityParams,
   RejectToolCallRequest,
   RunImportOutcome,
   RunImportRequest,
@@ -76,6 +86,9 @@ import type {
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  TrackImportEntityRequest,
+  TrackImportEntityResponse,
+  UpdateExplicitMemoryRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -88,6 +101,75 @@ import type {
   WebSearch,
   WebSearchResponse,
 } from './schemas';
+
+/**
+ * Includes actions agents performed on the user's behalf. Returns at most
+100 events; `truncated` reports that more matched, so narrow the range.
+ * @summary Read the acting user's own activity in a time range, newest first.
+ */
+export type readMyActivityResponse200 = {
+  data: ReadActivityResponse;
+  status: 200;
+};
+
+export type readMyActivityResponse400 = {
+  data: ActivityErrorBody;
+  status: 400;
+};
+
+export type readMyActivityResponse500 = {
+  data: ActivityErrorBody;
+  status: 500;
+};
+
+export type readMyActivityResponseSuccess = readMyActivityResponse200 & {
+  headers: Headers;
+};
+export type readMyActivityResponseError = (
+  | readMyActivityResponse400
+  | readMyActivityResponse500
+) & {
+  headers: Headers;
+};
+
+export type readMyActivityResponse =
+  | readMyActivityResponseSuccess
+  | readMyActivityResponseError;
+
+export const getReadMyActivityUrl = (params: ReadMyActivityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/activity?${stringifiedParams}`
+    : `/activity`;
+};
+
+export const readMyActivity = async (
+  params: ReadMyActivityParams,
+  options?: RequestInit
+): Promise<readMyActivityResponse> => {
+  const res = await fetch(getReadMyActivityUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readMyActivityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readMyActivityResponse;
+};
 
 /**
  * @summary Set the pricing for a model and recompute its recorded rows. Admin only.
@@ -1644,6 +1726,197 @@ export const generateImage = async (
 };
 
 /**
+ * @summary List the caller's import ledger: staged candidates, running and finished
+imports (with the team's imports), and declined items.
+ */
+export type listImportEntitiesResponse200 = {
+  data: ImportEntitiesResponse;
+  status: 200;
+};
+
+export type listImportEntitiesResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listImportEntitiesResponseSuccess =
+  listImportEntitiesResponse200 & {
+    headers: Headers;
+  };
+export type listImportEntitiesResponseError = listImportEntitiesResponse500 & {
+  headers: Headers;
+};
+
+export type listImportEntitiesResponse =
+  | listImportEntitiesResponseSuccess
+  | listImportEntitiesResponseError;
+
+export const getListImportEntitiesUrl = (params?: ListImportEntitiesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/import/entities?${stringifiedParams}`
+    : `/import/entities`;
+};
+
+export const listImportEntities = async (
+  params?: ListImportEntitiesParams,
+  options?: RequestInit
+): Promise<listImportEntitiesResponse> => {
+  const res = await fetch(getListImportEntitiesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listImportEntitiesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listImportEntitiesResponse;
+};
+
+/**
+ * @summary Track an external item in the ledger: stage it as a candidate, or record a
+Macro entity already created from it. Says when the item was already
+imported, so callers do not create a duplicate.
+ */
+export type trackImportEntityResponse200 = {
+  data: TrackImportEntityResponse;
+  status: 200;
+};
+
+export type trackImportEntityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type trackImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
+  headers: Headers;
+};
+export type trackImportEntityResponseError = (
+  | trackImportEntityResponse400
+  | trackImportEntityResponse422
+  | trackImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type trackImportEntityResponse =
+  | trackImportEntityResponseSuccess
+  | trackImportEntityResponseError;
+
+export const getTrackImportEntityUrl = () => {
+  return `/import/entities`;
+};
+
+export const trackImportEntity = async (
+  trackImportEntityRequest: TrackImportEntityRequest,
+  options?: RequestInit
+): Promise<trackImportEntityResponse> => {
+  const res = await fetch(getTrackImportEntityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(trackImportEntityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: trackImportEntityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as trackImportEntityResponse;
+};
+
+/**
+ * @summary Decline one of the caller's staged candidates; it is remembered as declined
+and not proposed again.
+ */
+export type declineImportEntityResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type declineImportEntityResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type declineImportEntityResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type declineImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type declineImportEntityResponseSuccess =
+  declineImportEntityResponse204 & {
+    headers: Headers;
+  };
+export type declineImportEntityResponseError = (
+  | declineImportEntityResponse404
+  | declineImportEntityResponse409
+  | declineImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type declineImportEntityResponse =
+  | declineImportEntityResponseSuccess
+  | declineImportEntityResponseError;
+
+export const getDeclineImportEntityUrl = (id: string) => {
+  return `/import/entities/${id}`;
+};
+
+export const declineImportEntity = async (
+  id: string,
+  options?: RequestInit
+): Promise<declineImportEntityResponse> => {
+  const res = await fetch(getDeclineImportEntityUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: declineImportEntityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as declineImportEntityResponse;
+};
+
+/**
  * @summary Where the user's Notion workspace import stands.
  */
 export type notionReportHandlerResponse200 = {
@@ -1742,6 +2015,71 @@ export const cancelNotionHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelNotionHandlerResponse;
+};
+
+/**
+ * @summary Import one Notion page as a Macro document through the caller's Notion
+connection, deduplicated against the ledger. Notion databases are not
+imported; a whole workspace goes through a reviewed import instead.
+ */
+export type importNotionPageResponse200 = {
+  data: ImportNotionPageResponse;
+  status: 200;
+};
+
+export type importNotionPageResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type importNotionPageResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type importNotionPageResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
+  headers: Headers;
+};
+export type importNotionPageResponseError = (
+  | importNotionPageResponse400
+  | importNotionPageResponse422
+  | importNotionPageResponse500
+) & {
+  headers: Headers;
+};
+
+export type importNotionPageResponse =
+  | importNotionPageResponseSuccess
+  | importNotionPageResponseError;
+
+export const getImportNotionPageUrl = () => {
+  return `/import/notion/pages`;
+};
+
+export const importNotionPage = async (
+  importNotionPageRequest: ImportNotionPageRequest,
+  options?: RequestInit
+): Promise<importNotionPageResponse> => {
+  const res = await fetch(getImportNotionPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importNotionPageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: importNotionPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as importNotionPageResponse;
 };
 
 /**
@@ -2443,6 +2781,201 @@ export const getMemoryHandler = async (
     status: res.status,
     headers: res.headers,
   } as getMemoryHandlerResponse;
+};
+
+/**
+ * Reports use UTC calendar days, Monday-start weeks and calendar months.
+An empty list means no stored activity, not no work.
+ * @summary Read privacy-reviewed professional activity of the caller or a current teammate.
+ */
+export type getUserActivityResponse200 = {
+  data: ActivityReports;
+  status: 200;
+};
+
+export type getUserActivityResponse400 = {
+  data: MemoryErrorBody;
+  status: 400;
+};
+
+export type getUserActivityResponse403 = {
+  data: MemoryErrorBody;
+  status: 403;
+};
+
+export type getUserActivityResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type getUserActivityResponseSuccess = getUserActivityResponse200 & {
+  headers: Headers;
+};
+export type getUserActivityResponseError = (
+  | getUserActivityResponse400
+  | getUserActivityResponse403
+  | getUserActivityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserActivityResponse =
+  | getUserActivityResponseSuccess
+  | getUserActivityResponseError;
+
+export const getGetUserActivityUrl = (params: GetUserActivityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/memory/activity?${stringifiedParams}`
+    : `/memory/activity`;
+};
+
+export const getUserActivity = async (
+  params: GetUserActivityParams,
+  options?: RequestInit
+): Promise<getUserActivityResponse> => {
+  const res = await fetch(getGetUserActivityUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserActivityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserActivityResponse;
+};
+
+/**
+ * Content is newline-separated; edits address one-based lines.
+ * @summary Read the caller's private explicit memory and its revision.
+ */
+export type readExplicitMemoryResponse200 = {
+  data: ExplicitMemory;
+  status: 200;
+};
+
+export type readExplicitMemoryResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type readExplicitMemoryResponseSuccess =
+  readExplicitMemoryResponse200 & {
+    headers: Headers;
+  };
+export type readExplicitMemoryResponseError = readExplicitMemoryResponse500 & {
+  headers: Headers;
+};
+
+export type readExplicitMemoryResponse =
+  | readExplicitMemoryResponseSuccess
+  | readExplicitMemoryResponseError;
+
+export const getReadExplicitMemoryUrl = () => {
+  return `/memory/explicit`;
+};
+
+export const readExplicitMemory = async (
+  options?: RequestInit
+): Promise<readExplicitMemoryResponse> => {
+  const res = await fetch(getReadExplicitMemoryUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readExplicitMemoryResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readExplicitMemoryResponse;
+};
+
+/**
+ * A stale revision changes nothing and answers 409; reread before retrying.
+Additions that fail privacy review answer 422.
+ * @summary Apply one edit to the caller's private explicit memory.
+ */
+export type editExplicitMemoryResponse200 = {
+  data: ExplicitMemory;
+  status: 200;
+};
+
+export type editExplicitMemoryResponse400 = {
+  data: MemoryErrorBody;
+  status: 400;
+};
+
+export type editExplicitMemoryResponse409 = {
+  data: MemoryErrorBody;
+  status: 409;
+};
+
+export type editExplicitMemoryResponse422 = {
+  data: MemoryErrorBody;
+  status: 422;
+};
+
+export type editExplicitMemoryResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type editExplicitMemoryResponseSuccess =
+  editExplicitMemoryResponse200 & {
+    headers: Headers;
+  };
+export type editExplicitMemoryResponseError = (
+  | editExplicitMemoryResponse400
+  | editExplicitMemoryResponse409
+  | editExplicitMemoryResponse422
+  | editExplicitMemoryResponse500
+) & {
+  headers: Headers;
+};
+
+export type editExplicitMemoryResponse =
+  | editExplicitMemoryResponseSuccess
+  | editExplicitMemoryResponseError;
+
+export const getEditExplicitMemoryUrl = () => {
+  return `/memory/explicit`;
+};
+
+export const editExplicitMemory = async (
+  updateExplicitMemoryRequest: UpdateExplicitMemoryRequest,
+  options?: RequestInit
+): Promise<editExplicitMemoryResponse> => {
+  const res = await fetch(getEditExplicitMemoryUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateExplicitMemoryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: editExplicitMemoryResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as editExplicitMemoryResponse;
 };
 
 /**
@@ -3686,6 +4219,11 @@ export type fetchWebPageResponse402 = {
   status: 402;
 };
 
+export type fetchWebPageResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type fetchWebPageResponse422 = {
   data: WebErrorBody;
   status: 422;
@@ -3713,6 +4251,7 @@ export type fetchWebPageResponseError = (
   | fetchWebPageResponse400
   | fetchWebPageResponse401
   | fetchWebPageResponse402
+  | fetchWebPageResponse404
   | fetchWebPageResponse422
   | fetchWebPageResponse429
   | fetchWebPageResponse502
@@ -3773,6 +4312,11 @@ export type searchWebResponse402 = {
   status: 402;
 };
 
+export type searchWebResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type searchWebResponse429 = {
   data: void;
   status: 429;
@@ -3795,6 +4339,7 @@ export type searchWebResponseError = (
   | searchWebResponse400
   | searchWebResponse401
   | searchWebResponse402
+  | searchWebResponse404
   | searchWebResponse429
   | searchWebResponse502
   | searchWebResponse503

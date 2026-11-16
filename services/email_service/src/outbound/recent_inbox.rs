@@ -145,5 +145,11 @@ fn summarize(inbox: &str, message: Message) -> RecentInboxMessage {
         subject: message.subject,
         snippet: message.snippet,
         received_at: message.internal_date_ts.or(message.sent_at),
+        labels: message
+            .labels
+            .into_iter()
+            .map(|label| label.name.unwrap_or(label.provider_label_id))
+            .collect(),
+        body: message.body_text,
     }
 }

@@ -23,7 +23,14 @@ consumer talks to.
   discovery and dispatch; `GET /coding-agents` serves the signed-in user's
   listing to the SDK, the `/internal/coding-agents` commands serve tools.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
-  capped to 25 sessions before folding their logs.
+  capped to 25 sessions before folding their logs. Served to the caller by
+  `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`. In code mode,
+  `macro.agentSessions.updates()` reads the route and an `agentUpdates` view
+  draws the cards, only for sessions the viewer owns.
+- `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
+  `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
+  share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
@@ -58,6 +65,14 @@ consumer talks to.
 
 - `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
+`release_session` stops an idle actor silently (`CloseReason::Released`): the
+actor refuses with `SessionRelease::Busy` unless its machine is live with no
+turn, permission request, elicitation or queued action; otherwise it flushes
+buffered frames and stops without the `disconnected` frame, telemetry close or
+`session_stopped` callback that every other stop has, and its claim is
+released under its fence. Use it only to free memory; a stop anyone should
+see goes through `close_session`.
+
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
@@ -75,11 +90,19 @@ advance past unavailable sessions. Quiet batches bind to the actual prompt actio
 notification-only turns record `PrompterKind::System` and no human authority.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
-provenance when runtimes echo their prompt history. Queue reads discard legacy
+provenance when runtimes echo their prompt history. A log trigger records this
+once as `agent_session.has_trusted_notifications`; history reads test that flag,
+never the log's JSON. Queue reads discard legacy
 private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+`TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
+the turn's prompt in (`ControlRequest.clientId`, or `promptClientId` on a
+create carrying the first prompt). `ControlPrincipal::admit_client` admits it
+on both paths: refused from runtimes, dropped for programs. Every
+`set_turn_prompter` overwrites it, a system turn never stores one, and it only
+addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 
 Archive state lives on `agent_session`: `archived_by`
 (`agent_session_archive_cause`: `user`, `pull_request_merged`,
@@ -127,18 +150,53 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity: `domain/lifecycle_activity.rs` maps lifecycle events for DSS's activity
+consumer. `opened` for a person-started session is their Created activity,
+which places it in Home's own work as soon as its row commits; `deleted` purges
+it. The harness publishes `opened` before provisioning the sandbox, so keep it
+there.
+
+Activity summaries: `domain/activity_summary.rs` is a turn observer the
+harness binds next to the queue. For each running turn it keeps one task that
+summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
+details already shown to readers, never tool input or output) with
+`outbound/activity_summarizer.rs` (Nemotron), resting 4s for the first 10 lines
+and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines go
+to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
+(`agent_session_activity`), and a `null` line clears it when the turn ends.
+Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Persist `AcpReady` through the fenced session log before opening or restoring
+  a session on an already-initialized shared runtime; MCP and model-gateway
+  credentials remain revoked while the durable status is disconnected.
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened for its owner, a routine's run (source
+  `routine`) or a draft's background session, and refuses any other;
+  `activity` returns content-free counts (tool calls, turns).
+- A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
+  is work the owner asked for that runs out of sight: source `user`, origin
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no
+  notifications about it, and it is never named or retitled
+  (`AdmittedAgentSessionNameGenerator`).
+
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
   `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
   an unclaimed warm session, or an older runtime. It describes a session; `source`
-  and `visibility` decide what happens to it, and a runtime's claim never sets them.
+  and `visibility` decide what happens to it (only `is_background` also reads the
+  origin), and a runtime's claim never sets them.
   Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
   `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,
@@ -150,6 +208,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
+- Whether an in-process session's turns are billed is
+  `agent_session.billing` (`SessionBilling`: `billable`, the default, or
+  `non_billable`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_billing`). A
+  non-billable session never claims a warm row, which is billable.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.
@@ -166,3 +229,7 @@ through `set_name` clears it, so a name a person chose is never replaced.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+- No session opens for a bot bound to an agent teammate's computer
+  (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
+  external create refuse it with `TeamAgentComputer` (409).
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.

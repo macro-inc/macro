@@ -4,8 +4,19 @@ name = "natural_time"
 publish = false
 version = "0.1.0"
 
+[lib]
+# `cdylib` for the browser build; `rlib` so Rust callers link it normally.
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 chrono = { workspace = true }
 nom = { workspace = true }
 strsim = { workspace = true }
 thiserror = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32, so a native
+# build never compiles any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+wasm-bindgen = { workspace = true }

@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
-use crate::catalog::{Catalog, Table};
+use crate::catalog::{Catalog, PEOPLE_ID, Table};
 use crate::fold::{Bin, Cell, CellKey, Row, fold_bins, fold_relations};
 use crate::resolve::{
     ComparisonOperator, DeleteQuery, Filter, Query, SelectQuery, UpdateQuery, Value, binding,
@@ -473,7 +473,9 @@ fn begin_relation(read: &mut Read, requests: &mut Requests) -> Result<Step, RunE
     if let Some(hint) = read.key_hint() {
         match &mut query {
             GqlQuery::Soup { key_hint, .. } => *key_hint = Some(hint),
-            GqlQuery::People { ids } => {
+            // This source accepts user identities, not arbitrary join values.
+            // Missing identity hints remain explicit refusals in bounded adapters.
+            GqlQuery::People { ids } if hint.column == Some(PEOPLE_ID) => {
                 *ids = Some(
                     hint.values
                         .into_iter()
@@ -485,7 +487,7 @@ fn begin_relation(read: &mut Read, requests: &mut Requests) -> Result<Step, RunE
                         .collect(),
                 )
             }
-            GqlQuery::GroupSoup { .. } => {}
+            GqlQuery::People { .. } | GqlQuery::GroupSoup { .. } => {}
         }
     }
     read.query = Some(query);

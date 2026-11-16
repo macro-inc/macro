@@ -14,7 +14,10 @@ release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
-`tauri/macro_bundle_updater_plugin`), but native code — anything under
+`tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
+Application Support directory so storage pressure cannot purge them; the
+updater ignores legacy cache contents (see
+`tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
 depends on new native code must therefore only reach native builds that have
 it, and users on older native builds must be pushed to update instead of
@@ -72,7 +75,9 @@ icon and app-name branding are Android-only.
 3. Add the **`ios-update`** label to the PR — once it is ready to merge: the
    **`iOS App Store Release`** workflow
    (`.github/workflows/ios-app-store-release.yml`) first refuses drafts and
-   PRs with failing checks (pending ones are waited on, up to 30 minutes), then builds the app from
+   PRs with failing checks (pending ones are waited on, up to 30 minutes; the
+   native checks and either platform's release checks don't count, so a failed
+   or in-flight Android release never holds this one back), then builds the app from
    the PR head on the Namespace macOS runner inside the Nix dev shell (like
    the `ios-preview` label), uploads it to TestFlight, waits for App Store
    Connect processing + export compliance, and submits it for App Review

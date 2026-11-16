@@ -140,9 +140,70 @@ fn status_check_requires_the_ios_native_check() {
         "status-check must need the gate: {status}"
     );
     assert!(
-        status.contains("needs.ios-native-check.result }}\" == \"failure\""),
-        "status-check must fail when the gate fails: {status}"
+        !status_check_passes(&[("ios-native-check", "failure")]),
+        "status-check must fail when the gate fails"
     );
+}
+
+/// Every job the status check reads.
+const STATUS_CHECK_NEEDS: &[&str] = &[
+    "path-check",
+    "android-native-check",
+    "typescript",
+    "generated-code",
+    "biome-check",
+    "test",
+    "functional",
+    "browser",
+    "cycles",
+    "build",
+    "ios-native-check",
+];
+
+/// Run the status check's script with every job succeeding except `results`,
+/// and say whether it passed.
+fn status_check_passes(results: &[(&str, &str)]) -> bool {
+    let step = serde_json::to_value(check_job_results()).expect("status check step");
+    let script = STATUS_CHECK_NEEDS.iter().fold(
+        step["run"].as_str().expect("script").to_owned(),
+        |script, need| {
+            let result = results
+                .iter()
+                .find(|(id, _)| id == need)
+                .map_or("success", |(_, result)| *result);
+            script.replace(&format!("${{{{ needs.{need}.result }}}}"), result)
+        },
+    );
+    assert!(
+        !script.contains("${{"),
+        "a need is missing from the list: {script}"
+    );
+    std::process::Command::new("bash")
+        .args(["-c", &script])
+        .output()
+        .expect("run the status check script")
+        .status
+        .success()
+}
+
+/// A job that hits its timeout reports `cancelled`, so the status check passes
+/// only on success, or on a skip for a job that path filters can skip.
+#[test]
+fn status_check_passes_only_on_success_or_skip() {
+    assert!(status_check_passes(&[]));
+    assert!(status_check_passes(&[
+        ("test", "skipped"),
+        ("build", "skipped")
+    ]));
+    for need in STATUS_CHECK_NEEDS {
+        for result in ["failure", "cancelled"] {
+            assert!(
+                !status_check_passes(&[(need, result)]),
+                "status check passed with {need} {result}"
+            );
+        }
+    }
+    assert!(!status_check_passes(&[("android-native-check", "skipped")]));
 }
 
 #[test]
@@ -202,21 +263,19 @@ fn typecheck_compiles_no_rust() {
     );
 }
 
-/// The OpenAPI clients, specta types, SDK and docs tool pages all come from
-/// workspace binaries, so one job builds them once and checks all four.
+/// The OpenAPI clients, specta types, and SDK all come from
+/// workspace binaries, so one job builds them once and checks all three.
 #[test]
 fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let generated = job(&yaml, "generated-code", "biome-check");
     // Specta runs last: its `cargo run -p` builds resolve features per
-    // package and would otherwise make the docs build recompile.
+    // package and would otherwise make the schema build recompile.
     let order = [
         "Build schema binaries",
         "bun run gen-api -- --check",
         "bun run sync-specs",
         "git status --porcelain -- packages/sdk",
-        "bun run generate:tools",
-        "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
         "just gen-dynamic-ui-types",
@@ -314,10 +373,7 @@ fn status_check_requires_generated_code() {
         .nth(1)
         .expect("status check job");
     assert!(status.contains("- generated-code"), "{status}");
-    assert!(
-        status.contains("needs.generated-code.result }}\" == \"failure\""),
-        "{status}"
-    );
+    assert!(!status_check_passes(&[("generated-code", "failure")]));
 }
 
 #[test]
@@ -343,6 +399,10 @@ fn should_run_includes_fold_wasm_inputs() {
     assert!(
         should_run.contains("crates/database_sql/**"),
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
+    );
+    assert!(
+        should_run.contains("crates/natural_time/**"),
+        "date phrase wasm source must rebuild the web artifact: {should_run}"
     );
 }
 
@@ -377,6 +437,13 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     assert!(
         build.contains("just build-dev"),
         "build still produces the vite bundle: {build}"
+    );
+    let package_cache = format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR);
+    assert!(build.contains(&package_cache), "{build}");
+    assert_eq!(
+        yaml.matches("WASM_PKG_HTTP_CACHE: '1'").count(),
+        yaml.matches(&package_cache).count(),
+        "every PR step that reuses wasm packages shares them across nodes: {yaml}"
     );
 }
 
@@ -415,13 +482,15 @@ fn functional_job(yaml: &str) -> &str {
 fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
-    let wasm = test_job
-        .find("just build-agent-fold-wasm")
-        .expect("build WASM before the test setup hook");
     let vitest = test_job
         .find("bun run test --shard=${{ matrix.shard }}/6")
         .expect("vitest step runs one shard");
-    assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+        let wasm = test_job
+            .find(build)
+            .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
+        assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    }
     assert!(
         test_job.contains("fail-fast: false"),
         "a failing shard must not hide the others' failures: {test_job}"
@@ -473,9 +542,8 @@ fn browser_suites_build_the_wasm_they_load_first() {
 /// A browser suite that isn't required could fail without blocking a merge.
 #[test]
 fn status_check_requires_the_browser_jobs() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    assert!(yaml.contains(r#"[[ "${{ needs.functional.result }}" == "failure" ]]"#));
-    assert!(yaml.contains(r#"[[ "${{ needs.browser.result }}" == "failure" ]]"#));
+    assert!(!status_check_passes(&[("functional", "failure")]));
+    assert!(!status_check_passes(&[("browser", "failure")]));
 }
 
 /// The event details fixture replaces the calendar query modules with preview
@@ -784,14 +852,6 @@ fn preview_steps_follow_the_build_and_cannot_fail_it() {
     }
 }
 
-/// A job that hits its timeout reports `cancelled`, so the required check must
-/// not pass on a generated code job that never finished.
-#[test]
-fn status_check_rejects_a_cancelled_generated_code_job() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
-}
-
 /// The checks run at once, and the step still fails, naming the check, when any
 /// one of them fails; every check's output is printed either way.
 #[test]
@@ -863,6 +923,11 @@ fn every_former_typecheck_step_still_runs() {
             "Check Collaboration Package Types",
             "packages/collaboration",
             "bun run type-check",
+        ),
+        (
+            "Check Observability Package",
+            "packages/observability",
+            "bun run type-check && bun run test",
         ),
         (
             "Check Lexical Service Types",

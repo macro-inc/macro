@@ -418,7 +418,9 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -517,7 +519,9 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -581,7 +585,9 @@ pub async fn new_email_media_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -615,6 +621,41 @@ pub async fn release_upload_claim(db: &Pool<Postgres>, attachment_id: Uuid) -> a
     Ok(())
 }
 
+/// An attachment whose upload is claimed but has no document or SFS file yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingUploadClaim {
+    pub attachment_id: Uuid,
+    pub claim_age_seconds: i64,
+}
+
+/// The message's oldest upload claim that hasn't stored its attachment yet.
+#[tracing::instrument(skip(db), err)]
+pub async fn oldest_pending_upload_claim(
+    db: &Pool<Postgres>,
+    message_id: Uuid,
+) -> anyhow::Result<Option<PendingUploadClaim>> {
+    let claim = sqlx::query_as!(
+        PendingUploadClaim,
+        r#"
+        SELECT
+            a.id AS attachment_id,
+            EXTRACT(EPOCH FROM now() - a.upload_claimed_at)::bigint AS "claim_age_seconds!"
+        FROM email_attachments a
+        WHERE a.message_id = $1
+            AND a.upload_claimed_at IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
+            AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)
+        ORDER BY a.upload_claimed_at, a.id
+        LIMIT 1
+        "#,
+        message_id
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(claim)
+}
+
 pub async fn fetch_attachment_upload_metadata_by_id(
     db: &Pool<Postgres>,
     attachment_id: Uuid,
@@ -631,11 +672,11 @@ pub async fn fetch_attachment_upload_metadata_by_id(
             m.internal_date_ts as "internal_date_ts!",
             m.id as message_db_id,
             m.thread_id as thread_db_id,
-            from_contact.email_address as sender_email,
+            from_contact.email_address as "sender_email?",
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         JOIN email_threads t ON m.thread_id = t.id
         WHERE a.id = $1
         "#,

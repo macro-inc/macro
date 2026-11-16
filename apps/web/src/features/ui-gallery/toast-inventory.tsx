@@ -10,6 +10,7 @@ import DesktopIcon from '@icon/system/regular/desktop.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import ImportIcon from '@icon/system/regular/tray-arrow-down.svg';
@@ -167,6 +168,28 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
           </div>
         ),
         actions: [{ label: 'Allow', onClick: dismiss }],
+      },
+    }),
+  },
+  {
+    name: 'Microphone access is off',
+    category: 'Recovery',
+    source: 'features/channel/Call/microphone-blocked-toast.tsx',
+    trigger: 'A call could not use the microphone because access is denied.',
+    behavior: '10 seconds · Open Settings only in the iOS and Android apps',
+    create: (dismiss) => ({
+      custom: {
+        title: t('calls.microphoneAccessTitle'),
+        icon: MicrophoneSlash,
+        color: 'var(--color-failure)',
+        titleColor: 'var(--color-failure)',
+        dismissLabel: t('common.maybeLater'),
+        content: () => (
+          <div class="text-xs text-ink-extra-muted">
+            {t('calls.microphoneAccessMobile')}
+          </div>
+        ),
+        actions: [{ label: t('calls.openSettings'), onClick: dismiss }],
       },
     }),
   },

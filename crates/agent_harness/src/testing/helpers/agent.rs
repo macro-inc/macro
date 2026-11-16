@@ -298,6 +298,13 @@ impl FakeAgent {
                     {
                         progress.opening = Some(request.id.clone());
                     }
+                    // An external runtime's connection carries many
+                    // sessions: another one loads after the first is open.
+                    ClientRequest::LoadSessionRequest(_)
+                        if progress.stage == Stage::SessionOpen =>
+                    {
+                        progress.opening = Some(request.id.clone());
+                    }
                     ClientRequest::NewSessionRequest(_)
                     | ClientRequest::LoadSessionRequest(_)
                     | ClientRequest::ResumeSessionRequest(_) => {

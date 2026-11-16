@@ -84,7 +84,8 @@ impl AgentSessionNameGenerator for HaikuAgentSessionNameGenerator {
             .owner_user()
             .map_err(|error| rootcause::report!(error))?;
         let usage_ctx = UsageContext::new(AiFeature::ChatRename, owner.clone())
-            .with_entity(Some(session.id.as_uuid()));
+            .with_entity(Some(session.id.as_uuid()))
+            .with_agent_session(Some(session.id.as_uuid()));
         let response = agent::complete(
             PredefinedModel::Fast,
             AGENT_SESSION_RENAME_SYSTEM_PROMPT,
@@ -120,7 +121,8 @@ impl AgentSessionNameGenerator for HaikuAgentSessionNameGenerator {
             .owner_user()
             .map_err(|error| rootcause::report!(error))?;
         let usage_ctx = UsageContext::new(AiFeature::ChatRename, owner.clone())
-            .with_entity(Some(session.id.as_uuid()));
+            .with_entity(Some(session.id.as_uuid()))
+            .with_agent_session(Some(session.id.as_uuid()));
         let response = agent::complete(
             PredefinedModel::Fast,
             AGENT_SESSION_RETITLE_SYSTEM_PROMPT,

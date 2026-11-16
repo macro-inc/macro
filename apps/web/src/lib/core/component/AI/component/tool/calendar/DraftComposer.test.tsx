@@ -45,7 +45,6 @@ vi.mock('@core/email-link', () => ({
   useAddInboxFlow: () => mocks.startAddInbox,
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@ui', () => ({

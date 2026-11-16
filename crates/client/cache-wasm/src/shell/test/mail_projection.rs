@@ -88,6 +88,7 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                 js(serde_json::json!({})),
                 js(data.clone()),
                 Some("mail-viewer".into()),
+                JsValue::UNDEFINED,
             ),
             WritePath::Enqueue => enqueue(&engine),
             WritePath::Commit => {

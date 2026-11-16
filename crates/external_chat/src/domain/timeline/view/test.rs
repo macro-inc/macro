@@ -11,6 +11,7 @@ fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
     ExternalChatPersonRef {
         name: name.to_owned(),
         user_id: user.map(str::to_owned),
+        picture_file_id: None,
     }
 }
 
@@ -73,21 +74,19 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
         voter: StoredPerson {
             person_id: Uuid::from_u128(10),
             user_id: Some("macro|ana@example.com".to_owned()),
-            name: Some("Ana".to_owned()),
         },
     };
-    // Ben voted before any message of his carried his name.
     let ben = StoredVote {
         message_id: message,
         selected: vec!["aa".to_owned()],
         voter: StoredPerson {
             person_id: Uuid::from_u128(11),
             user_id: None,
-            name: None,
         },
     };
     let mut people = People::default();
-    people.learn_person(Uuid::from_u128(11), "Ben".to_owned());
+    people.name_person(Uuid::from_u128(10), "Ana".to_owned(), None);
+    people.name_person(Uuid::from_u128(11), "Ben".to_owned(), None);
 
     let view = rich_view(
         poll,
@@ -237,30 +236,37 @@ fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
 }
 
 #[test]
-fn a_stored_person_shows_their_name_else_what_the_provider_calls_them() {
-    let named = StoredPerson {
-        person_id: Uuid::from_u128(1),
-        user_id: None,
-        name: Some("Ana".to_owned()),
-    };
-    let numbered = StoredPerson {
-        person_id: Uuid::from_u128(2),
-        user_id: None,
-        name: None,
-    };
-    let blank = StoredPerson {
-        person_id: Uuid::from_u128(3),
-        user_id: Some("macro|carol@example.com".to_owned()),
-        name: Some("  ".to_owned()),
-    };
+fn stored_people_carry_their_picture_and_unknown_ones_have_none() {
     let mut people = People::default();
-    people.learn_person(Uuid::from_u128(1), "Ana's number".to_owned());
-    people.learn_person(Uuid::from_u128(2), "Ben's number".to_owned());
+    people.name_person(
+        Uuid::from_u128(10),
+        "Ana".to_owned(),
+        Some(Uuid::from_u128(99)),
+    );
 
-    assert_eq!(people.stored(&named), person("Ana", None));
-    assert_eq!(people.stored(&numbered), person("Ben's number", None));
+    let ana = people.person(&StoredPerson {
+        person_id: Uuid::from_u128(10),
+        user_id: None,
+    });
+    let stranger = people.person(&StoredPerson {
+        person_id: Uuid::from_u128(11),
+        user_id: None,
+    });
+
     assert_eq!(
-        people.stored(&blank),
-        person(UNKNOWN_PERSON, Some("macro|carol@example.com"))
+        ana,
+        ExternalChatPersonRef {
+            name: "Ana".to_owned(),
+            user_id: None,
+            picture_file_id: Some(Uuid::from_u128(99)),
+        }
+    );
+    assert_eq!(
+        stranger,
+        ExternalChatPersonRef {
+            name: UNKNOWN_PERSON.to_owned(),
+            user_id: None,
+            picture_file_id: None,
+        }
     );
 }

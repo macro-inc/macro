@@ -170,6 +170,7 @@ fn segments_body(
             pending = true;
             None
         }
+        Some(ReplyOutcome::Refused(reason)) => Some(reason.clone()),
     };
     AgentChatReplyBody::Segments {
         segments: shown,
@@ -200,6 +201,7 @@ fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
         ReplyOutcome::NeedsInput { question } => format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
         ReplyOutcome::AwaitingApproval(call) => awaiting_approval(&call),
         ReplyOutcome::Resumed => return AgentChatReplyBody::Pending,
+        ReplyOutcome::Refused(reason) => reason,
     };
     AgentChatReplyBody::Markdown { markdown }
 }
@@ -209,7 +211,10 @@ fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
 /// the hold for everyone else rather than asking anything of them.
 fn awaiting_approval(call: &HeldToolCall) -> String {
     let tool = &call.tool_name;
-    if call.server_slug == MACRO_SERVER_SLUG {
+    // People never see that the agent works in code; the step stands for itself.
+    if call.server_slug == MACRO_SERVER_SLUG && tool == "ExecuteCode" {
+        "Waiting for the session owner to allow a step in their workspace.".to_owned()
+    } else if call.server_slug == MACRO_SERVER_SLUG {
         format!("Waiting for the session owner to allow `{tool}`.")
     } else {
         let server = &call.server_name;
@@ -226,7 +231,8 @@ const fn patch_policy(outcome: &ReplyOutcome) -> PatchMessageNotificationPolicy 
         | ReplyOutcome::Empty
         | ReplyOutcome::Cancelled
         | ReplyOutcome::Failed
-        | ReplyOutcome::NeedsInput { .. } => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+        | ReplyOutcome::NeedsInput { .. }
+        | ReplyOutcome::Refused(_) => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
         // The owner, the one person who can act, is notified by the hold.
         ReplyOutcome::AwaitingApproval(_) | ReplyOutcome::Resumed => {
             PatchMessageNotificationPolicy::Default

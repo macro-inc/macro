@@ -12,6 +12,7 @@ import {
 } from './draft-storage';
 import { createRoutineCreatorSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import { RoutineCreatedItem } from './routine-created-item';
 import { onRoutineDraftStarted } from './routine-draft-start';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
@@ -49,6 +50,7 @@ export function RoutineNew(props: {
             source={source}
             defaultModel={defaultModelForPlan(hasPaidAccess())}
             decisionsEnabled={decisions().enabled}
+            CreatedItem={RoutineCreatedItem}
             storage={storage}
             slots={{
               PromptEditor: RoutinePromptEditor,

@@ -129,6 +129,35 @@ fn an_insert_reads_its_rows_cells_and_values_from_json() {
                         value: CellValue::Clear,
                     }],
                 ],
+                ids: None,
+            },
+        }
+    );
+}
+
+#[test]
+fn an_insert_carries_the_ids_the_client_minted_for_its_rows() {
+    let op: DatabaseOp = serde_json::from_value(json!({
+        "kind": "rows",
+        "table": TABLE,
+        "change": {
+            "kind": "insert",
+            "rows": [[{"column": NAME, "value": {"type": "text", "value": "Sam"}}]],
+            "ids": [SAM],
+        },
+    }))
+    .unwrap();
+
+    assert_eq!(
+        op,
+        DatabaseOp::Rows {
+            table: TABLE,
+            change: RowsChange::Insert {
+                rows: vec![vec![CellWrite {
+                    column: NAME,
+                    value: CellValue::Text("Sam".into()),
+                }]],
+                ids: Some(vec![SAM]),
             },
         }
     );
@@ -604,7 +633,16 @@ fn a_column_binding_an_existing_property_names_only_the_property() {
 fn a_taken_id_names_what_it_names() {
     let view = ViewId::from_uuid(Uuid::from_u128(0x71e));
     assert_eq!(
-        serde_json::to_value([TakenId::Column(STATUS), TakenId::View(view)]).unwrap(),
-        json!([{"kind": "column", "id": STATUS}, {"kind": "view", "id": view}])
+        serde_json::to_value([
+            TakenId::Column(STATUS),
+            TakenId::View(view),
+            TakenId::Row(SAM)
+        ])
+        .unwrap(),
+        json!([
+            {"kind": "column", "id": STATUS},
+            {"kind": "view", "id": view},
+            {"kind": "row", "id": SAM},
+        ])
     );
 }

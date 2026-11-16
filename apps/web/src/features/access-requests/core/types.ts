@@ -10,7 +10,8 @@ export type ShareEntity = {
     | 'call'
     | 'email_thread'
     | 'agent_session'
-    | 'external_chat';
+    | 'external_chat'
+    | 'harness';
   entityId: string;
 };
 export type AccessRequest = {
@@ -24,6 +25,8 @@ export type AccessRequest = {
   resolvedAt?: string | null;
   grantedLevel?: AccessLevel | null;
   retryAfter?: string | null;
+  /** The agent that asked on the requester's behalf, when one did. */
+  requestedByAgent?: string | null;
 };
 export type RequestState = {
   owner?: string | null;
@@ -57,6 +60,7 @@ export function shareEntity(
     case 'email_thread':
     case 'agent_session':
     case 'external_chat':
+    case 'harness':
       return { entityType: itemType, entityId: id };
   }
 }

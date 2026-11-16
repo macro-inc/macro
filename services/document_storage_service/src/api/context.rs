@@ -220,6 +220,13 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssPipelineWorkflowState =
+    crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
+        ai_tools::ToolPipelineWorkflows,
+        ai_tools::ToolCrmTransferService,
+        AuthorizationService,
+    >;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -525,7 +532,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -534,6 +541,7 @@ pub(crate) type DssBotsState =
 /// Type alias for the harnesses service wired into DSS.
 pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
     harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+    hosted_runtimes::outbound::pg::PgComputerAgents,
 >;
 
 /// Type alias for the harnesses router state.
@@ -833,6 +841,14 @@ pub(crate) type InitiativeServiceType =
 pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the initiative history router state.
+pub(crate) type DssInitiativeActivityState =
+    initiative::inbound::axum_router::InitiativeActivityRouterState<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+        AuthorizationService,
+    >;
+
 /// Type alias for the collab-surface service.
 pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
     forms::outbound::collaborative_layout::RepositoryFormIds<
@@ -916,8 +932,13 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
+    EntityAccessService,
+    PgWebhookRepo,
+    crate::outbound::stream_contacts::ContactsStreamChecker<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =
@@ -935,6 +956,8 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
@@ -949,6 +972,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
+    pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
@@ -956,6 +980,8 @@ pub(crate) struct ApiContext {
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
+    #[from_ref(skip)]
+    pub channel_sections_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
@@ -963,10 +989,12 @@ pub(crate) struct ApiContext {
     pub slack_state: DssSlackState,
     pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
+    pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
@@ -991,6 +1019,9 @@ pub(crate) struct ApiContext {
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
+    /// The saved-view service behind GraphQL, the REST definitions routes and
+    /// the legacy `/saved_views` routes.
+    pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
@@ -1030,6 +1061,7 @@ pub(crate) struct ApiContext {
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
+    pub pipeline_workflow_state: DssPipelineWorkflowState,
 }
 
 env_var! {
@@ -1076,7 +1108,14 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
+            term_matching_rollout: ctx.search_term_matching.clone(),
         }
+    }
+}
+
+impl FromRef<ApiContext> for crate::api::saved_views::definitions::SavedViewDefinitionsState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        Self(ctx.saved_views.clone())
     }
 }
 

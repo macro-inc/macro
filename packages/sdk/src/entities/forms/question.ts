@@ -20,7 +20,11 @@ export class FormQuestion {
     return new FormQuestion(form, id);
   }
 
-  /** The question's current presentation and column facts. */
+  /**
+   * The question's current presentation and column facts.
+   *
+   * @readonly
+   */
   async detail(): Promise<FormQuestionDetail> {
     const detail = await this.form.schema();
     const question = detail.sections
@@ -35,12 +39,20 @@ export class FormQuestion {
     return question;
   }
 
-  /** The question's current title (its column's name). */
+  /**
+   * The question's current title (its column's name).
+   *
+   * @readonly
+   */
   async title(): Promise<string> {
     return (await this.detail()).title;
   }
 
-  /** The column behind the question. Reading the column itself needs database access. */
+  /**
+   * The column behind the question. Reading the column itself needs database access.
+   *
+   * @readonly
+   */
   async column(): Promise<DatabaseColumn> {
     return DatabaseColumn.byId(
       await this.form.table(),
@@ -48,7 +60,11 @@ export class FormQuestion {
     );
   }
 
-  /** Current choices, in display order. */
+  /**
+   * Current choices, in display order.
+   *
+   * @readonly
+   */
   async options(): Promise<FormOption[]> {
     return (await this.detail()).options.map((option) =>
       FormOption.byId(this, option.id),
@@ -70,7 +86,11 @@ export class FormOption {
     return new FormOption(question, id);
   }
 
-  /** The choice's label and color. */
+  /**
+   * The choice's label and color.
+   *
+   * @readonly
+   */
   async detail(): Promise<QuestionOption> {
     const option = (await this.question.detail()).options.find(
       (candidate) => candidate.id === this.id,
@@ -82,12 +102,20 @@ export class FormOption {
     return option;
   }
 
-  /** The choice's label. */
+  /**
+   * The choice's label.
+   *
+   * @readonly
+   */
   async label(): Promise<string> {
     return (await this.detail()).label;
   }
 
-  /** The choice's color, when one is set. */
+  /**
+   * The choice's color, when one is set.
+   *
+   * @readonly
+   */
   async color(): Promise<string | undefined> {
     return (await this.detail()).color ?? undefined;
   }

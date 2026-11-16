@@ -1,9 +1,10 @@
+import { useReadsHeldByAgentArrival } from '@app/features/agent-navigation/context/agent-arrivals';
 import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
-import { onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 import {
   ensureNotificationSourceLoaded,
   markNotificationsForEntityAsReadInBackground,
@@ -36,12 +37,28 @@ function DebouncedMarker(props: DebouncedMarkerProps) {
   return '';
 }
 
-/** Mark ready content read on mount; channel callers can retain their delay. */
-export function NotificationReadMarker(props: {
+type NotificationReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   entity: Entity;
-}) {
+};
+
+/**
+ * Mark ready content read on mount; channel callers can retain their delay.
+ * In a pane an agent opened, it waits until the person touches the pane: an
+ * agent showing them an item doesn't mean they read it.
+ */
+export function NotificationReadMarker(props: NotificationReadMarkerProps) {
+  const held = useReadsHeldByAgentArrival();
+
+  return (
+    <Show when={!held()}>
+      <ReadMarkerOnMount {...props} />
+    </Show>
+  );
+}
+
+function ReadMarkerOnMount(props: NotificationReadMarkerProps) {
   if (props.entity.type === 'email') {
     return (
       <EmailReadMarker
@@ -135,13 +152,26 @@ export function ChannelDebouncedNotificationReadMarker(
   );
 }
 
-export function EmailReadMarker(props: {
+type EmailReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   threadId: string;
   /** The inbox the thread belongs to; scopes mark-as-seen to a non-primary inbox. */
   linkId?: string;
-}) {
+};
+
+/** Marks an email thread seen; waits, like the others, in a pane an agent opened. */
+export function EmailReadMarker(props: EmailReadMarkerProps) {
+  const held = useReadsHeldByAgentArrival();
+
+  return (
+    <Show when={!held()}>
+      <EmailSeenOnMount {...props} />
+    </Show>
+  );
+}
+
+function EmailSeenOnMount(props: EmailReadMarkerProps) {
   const markSeenMutation = useMarkThreadAsSeenMutation();
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 

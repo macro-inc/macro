@@ -53,6 +53,7 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             id,
@@ -83,6 +84,7 @@ fn action(action: AgentAction) -> DeliverAction {
         actor: Some(staff_sender()),
         announce: None,
         context: None,
+        client: None,
     }
 }
 
@@ -178,6 +180,7 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
         let id = AgentSessionId::new();
         let result = service
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 origin: trigger_context::TriggerOrigin::Unknown,
                 id: Some(id),
                 owner: Owner::User(sender()),
@@ -729,6 +732,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             announced: Some(macro_uuid::generate_uuid_v7()),
             created_at: chrono::Utc::now(),
             context: None,
+            client: None,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();
@@ -763,7 +767,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             sessions,
             MockContainerManager::new(),
             AnnouncerMock::new(),
-            TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            TestConnections::new(MirrorBindings::default(), RuntimeRegistry::new()),
             PromptContextMock::default(),
             PromptComposerMock::default(),
             EgressProvisionerMock::new(),

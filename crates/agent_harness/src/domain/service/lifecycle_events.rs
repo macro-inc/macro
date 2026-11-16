@@ -55,13 +55,13 @@ where
         self.identity_of(&session).await
     }
 
-    /// [`Self::identity`], with whether the session's bot is a coding agent -
-    /// read together because the notifications a fact warrants depend on
-    /// both.
+    /// [`Self::identity`], with whether the session's bot is a coding agent
+    /// and whether it runs out of sight - read together because the
+    /// notifications a fact warrants depend on all three.
     pub(super) async fn identity_and_coding(
         &self,
         session_id: AgentSessionId,
-    ) -> Result<(SessionIdentity, bool)> {
+    ) -> Result<(SessionIdentity, bool, bool)> {
         let session = self.sessions.get_session(session_id).await?;
         let (identity, persona) =
             tokio::try_join!(self.identity_of(&session), self.reply_persona(&session))?;
@@ -69,7 +69,11 @@ where
             Some(policy) => policy.is_conversation_session(session_id).await?,
             None => false,
         };
-        Ok((identity, !is_dm && persona.is_coding))
+        Ok((
+            identity,
+            !is_dm && persona.is_coding,
+            session.is_background(),
+        ))
     }
 
     /// The persona a session's thread replies speak as: its bot's name, and
@@ -116,9 +120,15 @@ where
         build: impl FnOnce(SessionIdentity) -> AgentSessionLifecycleEvent,
     ) {
         match self.identity_and_coding(session_id).await {
-            Ok((identity, is_coding)) => {
+            Ok((identity, is_coding, background)) => {
                 let event = build(identity);
-                let notifications = plan(&event, is_coding);
+                // Nobody can open a background session, so nothing about it
+                // is news to anyone; whoever asked reads its result elsewhere.
+                let notifications = if background {
+                    Vec::new()
+                } else {
+                    plan(&event, is_coding)
+                };
                 self.lifecycle_publisher.publish(event).await;
                 for notification in notifications {
                     self.notifier.notify(notification).await;

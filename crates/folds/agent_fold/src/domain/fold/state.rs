@@ -200,7 +200,7 @@ impl FoldState {
         self.pending_config_requests.clear();
         self.forget_interactions();
         self.pending_controls.clear();
-        self.close_turn(None);
+        self.close_turn(None, None);
     }
 
     /// Advance by one log entry, returning what it changed in emission order.
@@ -334,7 +334,9 @@ impl FoldState {
                             }
                         }
                     });
-                    StepChange::message(stop.and_then(|stop| self.close_turn(Some(stop))))
+                    StepChange::message(
+                        stop.and_then(|stop| self.close_turn(Some(stop), entry.logged_at)),
+                    )
                 }
                 // The agent summarized its own context.
                 RawJsonRpcMessage::Notification(notification)
@@ -404,7 +406,7 @@ impl FoldState {
                     } else if control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.end_turn(id, Some(result)))
+                        StepChange::message(self.end_turn(id, Some(result), entry.logged_at))
                     }
                 }
                 RawJsonRpcMessage::Response(Response::Error { id, error }) => {
@@ -414,7 +416,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.fail_turn(id, error))
+                        StepChange::message(self.fail_turn(id, error, entry.logged_at))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),

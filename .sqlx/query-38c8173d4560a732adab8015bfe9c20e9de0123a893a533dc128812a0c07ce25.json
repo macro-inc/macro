@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            a.id AS attachment_id,\n            EXTRACT(EPOCH FROM now() - a.upload_claimed_at)::bigint AS \"claim_age_seconds!\"\n        FROM email_attachments a\n        WHERE a.message_id = $1\n            AND a.upload_claimed_at IS NOT NULL\n            AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)\n            AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)\n        ORDER BY a.upload_claimed_at, a.id\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "claim_age_seconds!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "38c8173d4560a732adab8015bfe9c20e9de0123a893a533dc128812a0c07ce25"
+}

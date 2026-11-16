@@ -167,6 +167,6 @@ export function handleChannelAccessRequestChanged(payload: {
 /** Once the viewer is let in, their channel list gains the channel. */
 export function refreshJoinedChannel() {
   return queryClient.invalidateQueries({
-    queryKey: channelKeys.listChannels.queryKey,
+    queryKey: channelKeys.listChannels._def,
   });
 }

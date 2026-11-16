@@ -133,6 +133,28 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### APK for sideloading
+
+Each production release gets a signed ARM64 APK,
+`macro-<tag>-android-arm64.apk`, and its `.sha256` as release assets. The
+`Android APK on Release` workflow builds them on the same `released` event as
+`Deploy Production Release`. It is a separate workflow, so the deploy never
+waits on it, and a failed APK build leaves the release in place.
+
+- It runs the App Bundle build with `--apk`, with the same production `VITE_*`
+  environment, which is defined once in the generated workflow sources. Both
+  builds fail when the PostHog key is empty, because without it every feature
+  flag reads false.
+- It signs with the upload key, so an APK updates an earlier APK install in
+  place. A Play-installed app has the Play App Signing certificate: uninstall it
+  before installing an APK, and the reverse.
+- The version code is the one committed at the tag. The installed app then
+  takes web updates over the air like a Play install.
+- To rebuild a release's APK, re-run its build job, or run the workflow with
+  "Use workflow from" set to the release tag. Only tags that contain the
+  workflow can be picked, so releases cut before it have no APK build. Assets
+  stay with their release; nothing prunes them.
+
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
@@ -188,7 +210,9 @@ To release:
    it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
-   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   up to 30 minutes; the native checks and either platform's release checks
+   don't count, so a failed or in-flight iOS release never holds this one
+   back), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
    the merge result, so such a bundle could never pass it; the refusal lists
    the native files `main` changed; merge `main`, bump, re-add the label).
@@ -1004,10 +1028,11 @@ finds access granted; **Dismiss** stops the prompt on that device. The return
 check runs when the page becomes visible again: the Android WebView fires no
 window `focus` when the app comes back from Settings. The
 call notification is public, so the lock screen shows the call and its actions.
-Test both permission states. Microphone access is required to join;
-camera access is requested when enabling video, and Bluetooth access when selecting
-that route on Android 12 or newer. A denied permission does not silently enable
-capture.
+Test both permission states. Microphone access is required to join: a denied
+join shows the **Microphone access is off** toast with **Open Settings**, and a
+denied Answer leaves **Open settings** on the call screen. Camera access is
+requested when enabling video, and Bluetooth access when selecting that route on
+Android 12 or newer. A denied permission does not silently enable capture.
 
 While ringing, the native call activity fills the screen with an opaque themed
 background, caller initials and name (or channel name when unavailable), channel

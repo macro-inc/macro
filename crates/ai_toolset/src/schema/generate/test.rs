@@ -199,3 +199,42 @@ fn accepts_a_tagged_enum_under_a_named_property() {
         2
     );
 }
+
+#[derive(JsonSchema)]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct Clause {
+    include: String,
+}
+
+/// One clause, or several that all apply.
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[expect(dead_code, reason = "Schema generation fixture")]
+enum Where {
+    One(Clause),
+    All(Vec<Clause>),
+}
+
+#[derive(JsonSchema)]
+#[schemars(title = "OptionalUnionInput", description = "An optional union")]
+#[expect(dead_code, reason = "Schema generation fixture")]
+struct OptionalUnionInput {
+    /// Which items to keep.
+    filter: Option<Where>,
+}
+
+#[test]
+fn an_optional_union_is_one_any_of_that_keeps_its_descriptions() {
+    let validated = generate_validated_input_schema::<OptionalUnionInput>().unwrap();
+    let json = schema_json(&validated.schema);
+    let filter = property(&json, "filter");
+    let branches = filter["anyOf"].as_array().unwrap();
+    assert_eq!(branches.len(), 3, "{filter:#}");
+    assert_eq!(branches[0]["properties"]["include"]["type"], "string");
+    assert_eq!(branches[1]["type"], "array");
+    assert_eq!(branches[2]["type"], "null");
+    assert_eq!(
+        filter["description"],
+        "Which items to keep.\n\nOne clause, or several that all apply."
+    );
+}

@@ -30,6 +30,17 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'phone',
+      testMatch: 'recipient-directory.app.e2e.ts',
+      use: {
+        ...devices['iPhone 13'],
+        browserName: 'chromium',
+        launchOptions: {
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+        },
+      },
+    },
+    {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],

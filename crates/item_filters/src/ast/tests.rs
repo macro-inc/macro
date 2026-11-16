@@ -1952,3 +1952,43 @@ fn agent_session_visibility_literals_use_the_column_values() {
     assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
     assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
 }
+
+#[test]
+fn email_subject_literal_trims_and_bounds_its_text() {
+    use crate::ast::email::EmailLiteral;
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "  FYI  " } })).unwrap();
+    assert_matches!(&tree, Expr::Literal(EmailLiteral::Subject(query)) => {
+        assert_eq!(query.as_str(), "FYI");
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "l": { "Subject": "FYI" } })
+    );
+
+    for rejected in [json!("   "), json!("x".repeat(201))] {
+        let result: Result<Expr<EmailLiteral>, _> =
+            serde_json::from_value(json!({ "l": { "Subject": rejected } }));
+        assert!(result.is_err());
+    }
+    let longest: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "é".repeat(200) } })).unwrap();
+    assert_matches!(longest, Expr::Literal(EmailLiteral::Subject(_)));
+}
+
+#[test]
+fn email_attachment_literal_names_kinds_in_snake_case() {
+    use crate::ast::email::{AttachmentKind, EmailLiteral};
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Attachment": "document" } })).unwrap();
+    assert_matches!(
+        tree,
+        Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Document))
+    );
+    assert!(
+        serde_json::from_value::<Expr<EmailLiteral>>(json!({ "l": { "Attachment": "zip" } }))
+            .is_err()
+    );
+}

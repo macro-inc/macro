@@ -26,7 +26,6 @@ use crate::{
 #[cfg(test)]
 mod test;
 
-const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 /// The scope that makes a Google account a mailbox Macro can read and send
 /// from. A consent that leaves it out cannot provision an inbox, so the
@@ -216,11 +215,12 @@ pub async fn init_gmail_link_handler(
         .context("failed to sign OAuth state")?;
 
     let authorization_url = google_authorization_url(
+        &ctx.google_authorization_url,
         ctx.auth_client.google_client_id(),
         &redirect_uri,
         &authorization_scopes,
         &state_str,
-    )?;
+    );
 
     Ok(Json(InitGmailLinkResponse {
         authorization_url: authorization_url.to_string(),
@@ -248,13 +248,13 @@ fn gmail_authorization_scopes(calendar_scope_enabled: bool, scopes: ConsentScope
 }
 
 fn google_authorization_url(
+    endpoint: &Url,
     client_id: &str,
     redirect_uri: &str,
     scopes: &str,
     state: &str,
-) -> anyhow::Result<Url> {
-    let mut authorization_url =
-        Url::parse(GOOGLE_AUTHORIZATION_URL).context("invalid Google authorization URL")?;
+) -> Url {
+    let mut authorization_url = endpoint.clone();
     authorization_url
         .query_pairs_mut()
         .append_pair("client_id", client_id)
@@ -265,7 +265,7 @@ fn google_authorization_url(
         .append_pair("access_type", "offline")
         .append_pair("include_granted_scopes", "true")
         .append_pair("prompt", "consent");
-    Ok(authorization_url)
+    authorization_url
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]

@@ -26,7 +26,19 @@ const draftFields = {
   enabled: z.boolean().optional(),
   runVisibility: z.enum(['listed', 'unlisted']).optional(),
   description: z.string().optional(),
+  suggestionId: z.string().optional(),
   dangerouslyOperateAsUser: z.boolean().optional(),
+  // What AI created while drafting; drafts from before have none.
+  created: z
+    .array(
+      z.strictObject({
+        entityType: z.string(),
+        entityId: z.string(),
+        used: z.boolean(),
+      })
+    )
+    .max(64)
+    .optional(),
   // Drafts saved before routines took apps have none.
   apps: z
     .array(z.strictObject({ app_slug: z.string(), server_name: z.string() }))

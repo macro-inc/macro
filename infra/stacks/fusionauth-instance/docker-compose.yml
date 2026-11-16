@@ -18,6 +18,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      # FusionAuth starts once this passes: probe every second while starting.
+      start_period: 30s
+      start_interval: 1s
     networks:
       - auth-internal
     volumes:

@@ -124,6 +124,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
             InboxRemoval::Disconnect => {
                 sqlx::query!("UPDATE email_links SET is_sync_active = false,disconnect_requested_at = now(),sync_generation = sync_generation + 1,updated_at = now() WHERE id = $1",link)
                     .execute(&mut *tx).await.map_err(failed)?;
+                drop_superseded_work(&mut tx, link, current.sync_generation + 1).await?;
                 if current.provider == UserProvider::Outlook && current.grant_id.is_some() {
                     let watches = sqlx::query!(
                         "SELECT id,provider_id FROM email_provider_subscriptions WHERE link_id=$1",
@@ -286,7 +287,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
             UserProvider::Outlook => {
                 let stream=sqlx::query!("SELECT id,initial_complete FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog' LIMIT 1",link,current.sync_generation).fetch_optional(&mut *tx).await.map_err(failed)?;
                 let in_progress=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder') AND NOT initial_complete)
-                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import) AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
+                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity') AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
                 let run_id = stream
                     .as_ref()
                     .map_or_else(macro_uuid::generate_uuid_v7, |stream| stream.id);
@@ -315,20 +316,25 @@ impl InboxLifecycleRepository for PgMailboxSync {
     async fn bindings_for_deleted_user(
         &self,
         owner: &str,
-    ) -> Result<Vec<(InboxActor, Uuid)>, InboxLifecycleError> {
-        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
-            UNION SELECT l.id AS link_id,l.macro_id AS actor_id FROM email_links l WHERE l.fusionauth_user_id = $1
+    ) -> Result<Vec<DeletedUserBinding>, InboxLifecycleError> {
+        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!",true AS "is_custodian!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
+            UNION SELECT l.id AS link_id,l.macro_id AS actor_id,false AS is_custodian FROM email_links l WHERE l.fusionauth_user_id = $1
                 AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)"#,owner).fetch_all(&self.db).await.map_err(failed)?;
         rows.into_iter()
             .map(|row| {
-                Ok((
-                    InboxActor {
+                Ok(DeletedUserBinding {
+                    actor: InboxActor {
                         macro_id: macro_user_id::user_id::MacroUserIdStr::try_from(row.actor_id)
                             .map_err(failed)?,
                         credential_owner: owner.into(),
                     },
-                    row.link_id,
-                ))
+                    link_id: row.link_id,
+                    kind: if row.is_custodian {
+                        DeletedUserBindingKind::Custodian
+                    } else {
+                        DeletedUserBindingKind::Owner
+                    },
+                })
             })
             .collect()
     }
@@ -389,11 +395,12 @@ async fn rebind_work(
     sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
     // The import run continues in the new generation, so it keeps its stamps.
-    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at)
-        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2
+    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision)
+        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision FROM email_sync_streams WHERE link_id = $1 AND generation = $2
         ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
+    drop_superseded_work(tx, link, new).await?;
     sqlx::query!(r#"UPDATE email_mailbox_drafts SET generation = $3,lease_id = NULL,lease_until = NULL,
         state = CASE WHEN state = 'running' THEN 'pending' ELSE state END,available_at = now(),updated_at = now() WHERE link_id = $1 AND generation = $2"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(
@@ -403,6 +410,33 @@ async fn rebind_work(
         link,
         old,
         new
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed)?;
+    Ok(())
+}
+
+/// Claims only take work of the link's current `sync_generation`, which never
+/// goes back, so older work is dead. Left in place it stays due forever, at the
+/// front of the claim indexes, and every claim reads past all of it.
+async fn drop_superseded_work(
+    tx: &mut Transaction<'_, Postgres>,
+    link: Uuid,
+    current: i64,
+) -> Result<(), InboxLifecycleError> {
+    sqlx::query!(
+        "DELETE FROM email_sync_streams WHERE link_id = $1 AND generation < $2",
+        link,
+        current
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failed)?;
+    sqlx::query!(
+        "DELETE FROM email_message_reconciliation WHERE link_id = $1 AND generation < $2",
+        link,
+        current
     )
     .execute(&mut **tx)
     .await

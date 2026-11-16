@@ -122,6 +122,13 @@ export function fetchDatabaseDetail(
   return fetchCached({ ...databaseDetailQueryOptions(id), staleTime: 0 });
 }
 
+/** A database's schema from the cache while fresh, for readers that show it without opening it. */
+export function fetchCachedDatabaseDetail(
+  id: string
+): ResultAsync<DatabaseDetail, ResultError[]> {
+  return fetchCached(databaseDetailQueryOptions(id));
+}
+
 /** {@link useViewerDatabases}, read once. */
 export function fetchViewerDatabases(): ResultAsync<
   DatabaseDetail[],

@@ -63,9 +63,32 @@ pub trait MemoryService: Send + Sync + 'static {
         &self,
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Memory>>> + Send;
+
+    /// Private explicit memory, always read as the authenticated caller.
+    fn explicit(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<ExplicitMemory>> + Send;
+
+    /// Apply one explicit edit at the caller's current revision.
+    fn update_memory(
+        &self,
+        user: MacroUserIdStr<'static>,
+        revision: i64,
+        edit: &MemoryEdit,
+    ) -> impl Future<Output = Result<ExplicitMemory>> + Send;
+
+    /// Professional activity of the caller or a current teammate, inclusive dates.
+    fn get_user_activity(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        user: MacroUserIdStr<'static>,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<Activity>>> + Send;
 }
 
-use super::models::{Activity, ExplicitMemory};
+use super::models::{Activity, ExplicitMemory, MemoryEdit};
 use chrono::NaiveDate;
 
 /// A consistent generation input; profile revision guards every generated write.

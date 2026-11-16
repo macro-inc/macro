@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Set-based equivalent of filtering thread_interactions by\n-- crm_email_thread_allowed($1, thread_id). Calling the function per thread\n-- re-ran crm_email_domain_blocked, which scans the team's blocklists and every\n-- company domain of the team, once for each participant of each thread. Keep\n-- these predicates in sync with both functions; the privacy parity tests\n-- compare this query against them.\nWITH matching_messages AS (\n    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at\n    FROM email_messages m\n    JOIN email_message_recipients r ON r.message_id = m.id\n    JOIN email_contacts ec ON ec.id = r.contact_id\n    WHERE m.link_id = $2 AND ec.link_id = $2 AND m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3\n    UNION\n    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at)\n    FROM email_messages m\n    JOIN email_contacts ec ON ec.id = m.from_contact_id\n    WHERE m.link_id = $2 AND ec.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3\n), thread_interactions AS MATERIALIZED (\n    SELECT thread_id,\n           min(occurred_at) FILTER (WHERE is_sent) AS first_sent_at,\n           min(occurred_at) AS first_at,\n           max(occurred_at) AS last_at,\n           bool_or(is_sent) AS is_sent\n    FROM matching_messages\n    GROUP BY thread_id\n), contributing_mailboxes AS MATERIALIZED (\n    -- The mailbox conditions depend only on the thread's link.\n    SELECT l.id AS link_id, l.macro_id AS owner\n    FROM crm_email_consent consent\n    JOIN email_links l\n      ON l.id = consent.link_id AND l.macro_id = consent.user_id\n     AND l.is_primary AND l.deleting_at IS NULL\n    JOIN team_user member ON member.team_id = $1 AND member.user_id = l.macro_id\n    WHERE consent.team_id = $1 AND consent.enabled\n), thread_links AS MATERIALIZED (\n    SELECT ti.*, t.link_id\n    FROM thread_interactions ti\n    JOIN email_threads t ON t.id = ti.thread_id\n), contributed_threads AS MATERIALIZED (\n    -- Every thread here has a non-draft message: the one that matched.\n    SELECT tl.*, cm.owner\n    FROM thread_links tl\n    JOIN contributing_mailboxes cm ON cm.link_id = tl.link_id\n), thread_messages AS MATERIALIZED (\n    SELECT ct.thread_id, ct.owner, m.id, m.from_contact_id\n    FROM contributed_threads ct\n    JOIN email_messages m ON m.thread_id = ct.thread_id AND NOT m.is_draft\n), participants AS MATERIALIZED (\n    SELECT thread_id, owner, from_contact_id AS contact_id\n    FROM thread_messages WHERE from_contact_id IS NOT NULL\n    UNION\n    SELECT tm.thread_id, tm.owner, r.contact_id\n    FROM thread_messages tm\n    JOIN email_message_recipients r ON r.message_id = tm.id\n), participant_domains AS MATERIALIZED (\n    SELECT p.owner, p.contact_id, lower(split_part(ec.email_address, '@', 2)) AS domain\n    FROM (SELECT DISTINCT owner, contact_id FROM participants) p\n    JOIN email_contacts ec ON ec.id = p.contact_id\n), domain_suffixes AS MATERIALIZED (\n    -- A blocked domain matches itself and every subdomain: the participant\n    -- domain or any suffix of it that follows a dot.\n    SELECT pd.domain, s.suffix\n    FROM (SELECT DISTINCT domain FROM participant_domains) pd\n    CROSS JOIN LATERAL (\n        SELECT pd.domain AS suffix\n        UNION\n        SELECT substr(pd.domain, i + 1)\n        FROM generate_series(1, length(pd.domain)) i\n        WHERE substr(pd.domain, i, 1) = '.'\n    ) s\n), owners AS MATERIALIZED (\n    SELECT DISTINCT owner FROM contributed_threads\n), blocked_suffixes AS MATERIALIZED (\n    SELECT o.owner, lower(b.domain) AS suffix\n    FROM owners o\n    JOIN crm_personal_email_blocklist b ON b.team_id = $1 AND b.user_id = o.owner\n    UNION\n    SELECT o.owner, lower(b.domain)\n    FROM owners o CROSS JOIN crm_blocked_domains b\n    WHERE b.team_id = $1\n    UNION\n    -- Look up only the suffixes in play rather than every company domain.\n    SELECT o.owner, lower(d.domain)\n    FROM owners o\n    CROSS JOIN (SELECT DISTINCT suffix FROM domain_suffixes) s\n    JOIN crm_domains d ON d.team_id = $1 AND lower(d.domain) = s.suffix\n    JOIN crm_companies c ON c.id = d.company_id AND NOT c.email_sync\n), blocked_owner_domains AS MATERIALIZED (\n    SELECT DISTINCT b.owner, s.domain\n    FROM blocked_suffixes b\n    JOIN domain_suffixes s ON s.suffix = b.suffix\n), blocked_threads AS MATERIALIZED (\n    SELECT DISTINCT p.thread_id\n    FROM blocked_owner_domains b\n    JOIN participant_domains pd ON pd.owner = b.owner AND pd.domain = b.domain\n    JOIN participants p ON p.owner = pd.owner AND p.contact_id = pd.contact_id\n)\nSELECT COALESCE(min(first_sent_at), min(first_at)) AS first_at,\n       max(last_at) AS last_at, bool_or(is_sent) AS is_sent\nFROM contributed_threads\nWHERE thread_id NOT IN (SELECT thread_id FROM blocked_threads)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_sent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "572fad3edde7ec7a459064e8a3a4e06883ae2ec693173db25a75b9b8d91418ae"
+}

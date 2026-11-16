@@ -18,7 +18,7 @@ const message: ChatMessage = {
 
 describe('chat message senders', () => {
   it('shows a Macro user as themselves, whatever WhatsApp called them', () => {
-    const row = chatMessageData(message, undefined, (body) => body);
+    const row = chatMessageData(message, (body) => body);
 
     expect(row.sender_id).toBe('macro|owner@example.test');
     expect(row.imported_author).toBeNull();
@@ -27,11 +27,62 @@ describe('chat message senders', () => {
   it('shows anyone else by their WhatsApp name', () => {
     const row = chatMessageData(
       { ...message, sender: { name: 'Ana Ruiz' } },
-      undefined,
       (body) => body
     );
 
     expect(row.sender_id).toBe('');
-    expect(row.imported_author).toEqual({ name: 'Ana Ruiz' });
+    expect(row.imported_author).toEqual({ name: 'Ana Ruiz', avatar_url: null });
+  });
+
+  it('shows their WhatsApp picture when the owner can see one', () => {
+    const row = chatMessageData(
+      {
+        ...message,
+        sender: { name: 'Ana Ruiz', pictureUrl: 'https://files.test/file/ana' },
+      },
+      (body) => body
+    );
+
+    expect(row.imported_author).toEqual({
+      name: 'Ana Ruiz',
+      avatar_url: 'https://files.test/file/ana',
+    });
+  });
+});
+
+describe('chat message reactions', () => {
+  it('names each reactor: Macro users as themselves, anyone else by name', () => {
+    const row = chatMessageData(
+      {
+        ...message,
+        reactions: [
+          {
+            emoji: '👍',
+            reactors: [
+              { name: 'Owner', userId: 'macro|owner@example.test' },
+              { name: 'Ana Ruiz' },
+              { name: '+5550002' },
+            ],
+            mine: true,
+          },
+        ],
+      },
+      (body) => body
+    );
+
+    expect(row.reactions).toEqual([
+      {
+        emoji: '👍',
+        users: [
+          'macro|owner@example.test',
+          'external-reactor:1',
+          'external-reactor:2',
+        ],
+        names: {
+          'external-reactor:1': 'Ana Ruiz',
+          'external-reactor:2': '+5550002',
+        },
+      },
+    ]);
   });
 });

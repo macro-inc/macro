@@ -4,10 +4,20 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/passwords",
+  "crates/stripe_inbox",
+  "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
+  "crates/shown_text",
+  "crates/suggestions",
+  "crates/suggestions_db_utils",
+  "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
@@ -73,9 +83,11 @@ members = [
   "crates/generic_email_domains",
   "crates/git_patch",
   "crates/gmail_client",
+  "crates/gmail_emulator",
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
+  "crates/graphql_contacts",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_databases",
@@ -94,9 +106,15 @@ members = [
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
+  "crates/harnessd_protocol",
   "crates/harnesses",
+  "crates/hosted_runtimes",
+  "crates/incus_client",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -125,6 +143,7 @@ members = [
   "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
+  "crates/outlook_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -135,6 +154,7 @@ members = [
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
+  "crates/subsequence_match",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
@@ -144,9 +164,11 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/single_flight",
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
+  "crates/user_events",
   "crates/user_language",
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
@@ -213,6 +235,11 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
+pairing_id = { path = "crates/pairing_id" }
+openbao_client = { path = "crates/openbao_client" }
+macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -283,6 +310,7 @@ determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+emojis = "0.9.1"
 eventsource-stream = "0.2.3"
 flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
@@ -303,6 +331,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -328,6 +357,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+libc = "0.2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -336,6 +366,8 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "services-tokio",
   "webhooks",
 ] }
+mail-builder = "0.4.3"
+mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
@@ -343,6 +375,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
@@ -370,6 +403,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
@@ -394,9 +428,11 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-rmcp = "1.6.0"
+rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
+rrule = "0.14.0"
+rsa = "0.9.10"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
@@ -483,6 +519,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -525,7 +564,7 @@ zip = { version = "9.0.5", default-features = false, features = [
   "xz",
   "zstd",
 ] }
-ammonia = "4.1.8"
+ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
 
@@ -534,6 +573,8 @@ subtle = "2.6.1"
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
+# Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
+chrono-tz = { path = "vendor/chrono-tz" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests

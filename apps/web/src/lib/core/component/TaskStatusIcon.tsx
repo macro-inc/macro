@@ -69,7 +69,6 @@ export function TaskStatusIcon(
       role="img"
       aria-label={`Task: ${status().label}`}
       aria-hidden={props.decorative || undefined}
-      data-icon-motion="none"
       class={cn(
         ICON_SIZE_CLASSES[props.size ?? 'xs'],
         props.theme === 'monochrome' ? 'text-current' : status().color,

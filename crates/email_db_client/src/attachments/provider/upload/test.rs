@@ -1299,3 +1299,82 @@ async fn cloud_reference_documents_are_never_claimed_as_files(pool: Pool<Postgre
     assert!(!attachment_is_claimed(&pool, attachment.attachment_db_id).await?);
     Ok(())
 }
+
+/// A claimed attachment that the query doesn't return is never uploaded, and
+/// its claim keeps the message's projection waiting forever.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn senderless_message_returns_every_attachment_it_claims(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let document_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0501")?;
+    let media_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0502")?;
+
+    let documents =
+        new_email_document_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
+    let media = new_email_media_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
+
+    assert!(attachment_is_claimed(&pool, document_id).await?);
+    assert!(attachment_is_claimed(&pool, media_id).await?);
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| (a.attachment_db_id, a.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(document_id, None)]
+    );
+    assert_eq!(
+        media
+            .iter()
+            .map(|a| (a.attachment_db_id, a.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(media_id, None)]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn pending_upload_claim_names_the_claim_until_its_file_is_stored(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-0000000ec401")?;
+    let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-00000c4a0401")?;
+    sqlx::query!(
+        "UPDATE email_attachments SET upload_claimed_at = now() - interval '5 minutes' WHERE id = $1",
+        attachment_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let claim = oldest_pending_upload_claim(&pool, message_id)
+        .await?
+        .expect("the claim has stored nothing yet");
+    assert_eq!(claim.attachment_id, attachment_id);
+    assert!(
+        (300..360).contains(&claim.claim_age_seconds),
+        "claim age {}",
+        claim.claim_age_seconds
+    );
+
+    sqlx::query!(
+        "INSERT INTO email_attachments_sfs (id, attachment_id, sfs_id) VALUES ($1, $2, $3)",
+        Uuid::from_u128(1),
+        attachment_id,
+        Uuid::from_u128(2)
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(oldest_pending_upload_claim(&pool, message_id).await?, None);
+
+    Ok(())
+}

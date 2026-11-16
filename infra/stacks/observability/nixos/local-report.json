@@ -1,0 +1,379 @@
+{
+  "description": "Loki queries over run_local's run, step, crate, build and service events (service_name=local-telemetry), read by both local-dashboard.nix and scripts/ci-report.ts --spec local. $NAME expands to filters.NAME and $RANGE to the window. Every filter names the machine (its `machine` field, or on older events its `host_name` or hashed `host`), and the dashboard narrows each one to its Machine variable.",
+  "filters": {
+    "RUN": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "READY": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | outcome=\"success\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "STOPPED": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | outcome!=\"success\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "STEP": "{service_name=\"local-telemetry\"} | event=\"step\" | kind=\"up\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "TOP": "{service_name=\"local-telemetry\"} | event=\"step\" | kind=\"up\" | parent_step=\"\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "CRIT": "{service_name=\"local-telemetry\"} | event=\"step\" | kind=\"up\" | lane=\"main\" | parent_step=\"\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "NESTED": "{service_name=\"local-telemetry\"} | event=\"step\" | kind=\"up\" | parent_step!=\"\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "CRATE": "{service_name=\"local-telemetry\"} | event=\"crate\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "BUILD": "{service_name=\"local-telemetry\"} | event=\"build\" | outcome=\"success\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "SERVICE": "{service_name=\"local-telemetry\"} | event=\"service\" | seconds_to_healthy!=\"\" | label_format machine=\"{{ or .machine .host_name .host }}\"",
+    "ACTION": "{service_name=\"local-telemetry\"} | event=\"run\" | kind!=\"up\" | label_format machine=\"{{ or .machine .host_name .host }}\""
+  },
+  "tables": [
+    {
+      "id": "summary",
+      "title": "run_local: time to ready",
+      "description": "Bring-ups (attached, detached and run_dev) from the first step to a backend answering through the proxy with Vite started.",
+      "by": [],
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum(count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "Ready",
+          "unit": "percentunit",
+          "expr": "(sum(count_over_time($READY [$RANGE])) or 0 * sum(count_over_time($RUN [$RANGE]))) / sum(count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "Machines",
+          "unit": "short",
+          "expr": "count(sum by (machine) (count_over_time($RUN [$RANGE])))"
+        }
+      ]
+    },
+    {
+      "id": "machines",
+      "title": "Machines",
+      "description": "Each machine's bring-ups: its `machine` setting, or a hash of its hostname when it has none. CPUs and memory tell hashed machines apart; memory arrives only from runs recorded since it was added. Build is the cargo build of the service binaries in a bring-up.",
+      "by": [
+        "machine"
+      ],
+      "sort": "Runs",
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (machine) (count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "Fresh p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | start=\"fresh\" | unwrap seconds | __error__=\"\" [$RANGE]) by (machine)"
+        },
+        {
+          "name": "Resume p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | start=\"resume\" | unwrap seconds | __error__=\"\" [$RANGE]) by (machine)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (machine)"
+        },
+        {
+          "name": "Ready",
+          "unit": "percentunit",
+          "expr": "(sum by (machine) (count_over_time($READY [$RANGE])) or 0 * sum by (machine) (count_over_time($RUN [$RANGE]))) / sum by (machine) (count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "Build p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $BUILD | kind=\"up\" | unwrap seconds | __error__=\"\" [$RANGE]) by (machine)"
+        },
+        {
+          "name": "sccache hits",
+          "unit": "percentunit",
+          "expr": "sum by (machine) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) / (sum by (machine) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) + sum by (machine) (sum_over_time($BUILD | unwrap sccache_misses | __error__=\"\" [$RANGE])))"
+        },
+        {
+          "name": "CPUs",
+          "unit": "short",
+          "expr": "max_over_time($RUN | unwrap cpus | __error__=\"\" [$RANGE]) by (machine)"
+        },
+        {
+          "name": "Memory",
+          "unit": "decgbytes",
+          "expr": "max_over_time($RUN | unwrap memory_gb | __error__=\"\" [$RANGE]) by (machine)"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "title": "Time to ready by start",
+      "description": "Fresh starts wipe the instance's data; resumes keep it. Detached runs are the ones agents and pipes start.",
+      "by": [
+        "start",
+        "detached"
+      ],
+      "sort": "p90",
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (start, detached) (count_over_time($READY [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        }
+      ]
+    },
+    {
+      "id": "steps",
+      "title": "Bring-up steps by p90",
+      "description": "Every bring-up step, including the background teardown and frontend lanes, which overlap the foreground: steps don't sum to the run.",
+      "by": [
+        "step"
+      ],
+      "sort": "p90",
+      "limit": 25,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (step) (count_over_time($STEP [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $STEP | unwrap seconds | __error__=\"\" [$RANGE]) by (step)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $STEP | unwrap seconds | __error__=\"\" [$RANGE]) by (step)"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (step) (sum_over_time($STEP | unwrap seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
+      ]
+    },
+    {
+      "id": "critical",
+      "title": "Critical path by step",
+      "description": "The foreground steps a bring-up waits on in order (lane main, not nested in another step), by fresh or resumed start. Share is the step's part of all foreground time for that start: the biggest share is the bottleneck. Recorded since runs gained lanes; older events have none.",
+      "by": [
+        "start",
+        "step"
+      ],
+      "sort": "Share",
+      "limit": 30,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (start, step) (count_over_time($CRIT [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $CRIT | unwrap seconds | __error__=\"\" [$RANGE]) by (start, step)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $CRIT | unwrap seconds | __error__=\"\" [$RANGE]) by (start, step)"
+        },
+        {
+          "name": "Share",
+          "unit": "percentunit",
+          "expr": "sum by (start, step) (sum_over_time($CRIT | unwrap seconds | __error__=\"\" [$RANGE])) / on (start) group_left sum by (start) (sum_over_time($CRIT | unwrap seconds | __error__=\"\" [$RANGE]))"
+        }
+      ]
+    },
+    {
+      "id": "nested",
+      "title": "Nested steps",
+      "description": "Steps that run inside another step, such as a computer image's Nix build and its Docker load.",
+      "by": [
+        "parent_step",
+        "step"
+      ],
+      "sort": "p90",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (parent_step, step) (count_over_time($NESTED [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $NESTED | unwrap seconds | __error__=\"\" [$RANGE]) by (parent_step, step)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $NESTED | unwrap seconds | __error__=\"\" [$RANGE]) by (parent_step, step)"
+        }
+      ]
+    },
+    {
+      "id": "crates",
+      "title": "Slowest crates in service builds",
+      "description": "Units cargo compiled for at least a second in a service build, from `cargo build --timings`; workspace says whether the crate is in this repository. A build that compiles nothing records no crates.",
+      "by": [
+        "crate",
+        "target",
+        "workspace"
+      ],
+      "sort": "Hours",
+      "limit": 25,
+      "columns": [
+        {
+          "name": "Builds",
+          "unit": "short",
+          "expr": "sum by (crate, target, workspace) (count_over_time($CRATE [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $CRATE | unwrap seconds | __error__=\"\" [$RANGE]) by (crate, target, workspace)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $CRATE | unwrap seconds | __error__=\"\" [$RANGE]) by (crate, target, workspace)"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (crate, target, workspace) (sum_over_time($CRATE | unwrap seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
+      ]
+    },
+    {
+      "id": "failures",
+      "title": "Failed and interrupted bring-ups by step",
+      "description": "The step a failed run stopped at, or for an interrupted run (killed, or stopped mid-bring-up) the step it was in.",
+      "by": [
+        "outcome",
+        "failed_step"
+      ],
+      "sort": "Runs",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (outcome, failed_step) (count_over_time($STOPPED [$RANGE]))"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "title": "Slowest services to turn healthy",
+      "description": "From a container starting to its first passing health probe. Services without a health check have no row.",
+      "by": [
+        "service"
+      ],
+      "sort": "p90",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Starts",
+          "unit": "short",
+          "expr": "sum by (service) (count_over_time($SERVICE [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        }
+      ]
+    },
+    {
+      "id": "builds",
+      "title": "Service builds",
+      "description": "The cargo build of the service binaries, in bring-ups and rebuilds. Units are what cargo compiled; the sccache hit rate counts the whole shared server during the build.",
+      "by": [
+        "kind"
+      ],
+      "sort": "p90",
+      "columns": [
+        {
+          "name": "Builds",
+          "unit": "short",
+          "expr": "sum by (kind) (count_over_time($BUILD [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $BUILD | unwrap seconds | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $BUILD | unwrap seconds | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "Units p50",
+          "unit": "short",
+          "expr": "quantile_over_time(0.5, $BUILD | unwrap units_compiled | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "sccache hits",
+          "unit": "percentunit",
+          "expr": "sum by (kind) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) / (sum by (kind) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) + sum by (kind) (sum_over_time($BUILD | unwrap sccache_misses | __error__=\"\" [$RANGE])))"
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "title": "Rebuilds, restarts and stops",
+      "description": "Commands on a running stack: `just run_local rebuild`, `restart-frontend`, `stop`, and the r and f hotkeys.",
+      "by": [
+        "kind",
+        "outcome"
+      ],
+      "sort": "Runs",
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (kind, outcome) (count_over_time($ACTION [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $ACTION | unwrap seconds | __error__=\"\" [$RANGE]) by (kind, outcome)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $ACTION | unwrap seconds | __error__=\"\" [$RANGE]) by (kind, outcome)"
+        }
+      ]
+    }
+  ]
+}

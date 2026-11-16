@@ -21,18 +21,29 @@ export type CallPanelState = {
   onClose: () => void;
 };
 
+export type CallDiscussionAccess =
+  | { kind: 'member' }
+  | {
+      kind: 'guest';
+      session: { token: string; participantId: string };
+    };
+
 /**
- * The one place a signed-in call chooses its discussion. Nothing below it
+ * The one place a call chooses its discussion. Nothing below it
  * knows there is another kind. The record polls and returns a new object each
  * time, so these stay unkeyed: remounting would lose scroll and focus.
  */
 export function CallDiscussionContent(props: {
   discussion: Accessor<CallDiscussion | undefined>;
+  access: CallDiscussionAccess;
   panel: CallPanelState;
   onViewChannel: (channelId: string) => void;
   onOutsideCountChange?: (count: number) => void;
-  /** The state the channel needs, for a host that doesn't already provide it. */
-  channelHost?: (channel: JSX.Element) => JSX.Element;
+  /**
+   * The app state a channel needs when its host does not provide it. The host
+   * renders the channel itself so it can see those providers.
+   */
+  host?: (discussion: () => JSX.Element) => JSX.Element;
 }) {
   const channelThread = () => {
     const discussion = props.discussion();
@@ -46,9 +57,9 @@ export function CallDiscussionContent(props: {
   return (
     <Suspense>
       <Switch>
-        <Match when={channelThread()}>
+        <Match when={props.access.kind === 'member' && channelThread()}>
           {(thread) => {
-            const panel = (
+            const panel = () => (
               <ChannelCallPanel
                 channelId={thread().channel_id}
                 rootId={thread().root_id}
@@ -56,13 +67,14 @@ export function CallDiscussionContent(props: {
                 onOutsideCountChange={props.onOutsideCountChange}
               />
             );
-            return props.channelHost ? props.channelHost(panel) : panel;
+            return props.host ? props.host(panel) : panel();
           }}
         </Match>
         <Match when={callChat()}>
           {(chat) => (
             <CallChat
               callId={chat().call_id}
+              access={props.access}
               open={props.panel.open}
               focusOnOpen={props.panel.focusOnOpen}
               onClose={props.panel.onClose}

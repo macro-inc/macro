@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod activity;
+pub mod appearance;
 pub mod create;
 pub mod delete;
 pub mod description;
@@ -29,9 +31,15 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    create::create_initiative_handler, delete::delete_initiative_handler,
-    description::get_initiative_description_handler, get::get_initiative_handler,
-    list::list_initiatives_handler, page::page_initiatives_handler,
+    activity::{
+        InitiativeActivityRouterState, get_initiative_activity_handler, initiative_activity_router,
+    },
+    create::create_initiative_handler,
+    delete::delete_initiative_handler,
+    description::get_initiative_description_handler,
+    get::get_initiative_handler,
+    list::list_initiatives_handler,
+    page::page_initiatives_handler,
     update::update_initiative_handler,
 };
 use crate::domain::{
@@ -120,6 +128,10 @@ where
                 .delete(delete_initiative_handler::<S, Eas, Auth>),
         )
         .route(
+            "/{initiative_id}/appearance",
+            routing::put(appearance::set_initiative_appearance::<S, Eas, Auth>),
+        )
+        .route(
             "/{initiative_id}/description",
             routing::get(get_initiative_description_handler::<S, Eas, Auth>),
         )
@@ -203,6 +215,7 @@ impl IntoResponse for InitiativeError {
         let status_code = match &self {
             InitiativeError::NotFound => StatusCode::NOT_FOUND,
             InitiativeError::Unauthorized => StatusCode::UNAUTHORIZED,
+            InitiativeError::Forbidden(_) => StatusCode::FORBIDDEN,
             InitiativeError::BadRequest(_) => StatusCode::BAD_REQUEST,
             InitiativeError::Conflict(_) => StatusCode::CONFLICT,
             InitiativeError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,

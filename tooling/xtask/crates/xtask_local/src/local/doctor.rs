@@ -4,7 +4,7 @@ use std::process::Command;
 
 use anyhow::{Result, bail};
 
-use super::{arch, cli::InstanceArgs, instance::Instance, stage::Stage};
+use super::{allocator, arch, cli::InstanceArgs, instance::Instance, stage::Stage};
 
 enum Status {
     Ok(String),
@@ -15,19 +15,12 @@ enum Status {
 /// Run all checks, print results, and fail if any check failed.
 pub fn run(args: &InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     stage.section(&format!("doctor-local — instance {}", instance.name()));
 
     let checks: Vec<(&str, Status)> = vec![
         ("docker daemon", check_docker()),
         ("docker compose", check_compose()),
-        (
-            "zig / cargo-zigbuild",
-            check_bin(
-                "cargo-zigbuild",
-                "install cargo-zigbuild + zig (in the nix dev shell)",
-            ),
-        ),
         (
             "sccache",
             check_bin("sccache", "install sccache (in the nix dev shell)"),
@@ -41,9 +34,10 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
             "sqlx-cli",
             check_bin("sqlx", "cargo install sqlx-cli (in the nix dev shell)"),
         ),
-        ("rust target", check_rust_target()),
+        ("build host", check_build_host()),
         ("ports", check_ports(&instance)),
         ("port forwarding", check_port_forwarding(&instance)),
+        ("instances", check_instances()),
     ];
 
     let mut failed = false;
@@ -107,9 +101,9 @@ fn check_bin(bin: &str, hint: &str) -> Status {
     }
 }
 
-fn check_rust_target() -> Status {
-    let target = match arch::detect() {
-        Ok(t) => t,
+fn check_build_host() -> Status {
+    let target = match arch::detect().and_then(|t| arch::ensure_linux_host().map(|()| t)) {
+        Ok(target) => target,
         Err(e) => {
             return Status::Fail {
                 msg: e.to_string(),
@@ -117,29 +111,7 @@ fn check_rust_target() -> Status {
             };
         }
     };
-    let sysroot = match Command::new("rustc").args(["--print", "sysroot"]).output() {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => {
-            return Status::Fail {
-                msg: "rustc not found".into(),
-                hint: None,
-            };
-        }
-    };
-    let std_dir = std::path::Path::new(&sysroot)
-        .join("lib/rustlib")
-        .join(target.triple);
-    if std_dir.exists() {
-        Status::Ok(target.describe())
-    } else {
-        Status::Fail {
-            msg: format!("rust target {} not installed", target.triple),
-            hint: Some(format!(
-                "add {} to rust-toolchain.toml `targets` and re-enter `nix develop`",
-                target.triple
-            )),
-        }
-    }
+    Status::Ok(target.describe())
 }
 
 /// Docker Desktop's VM can wedge so that a container's host port bindings are
@@ -226,17 +198,36 @@ fn check_port_forwarding(instance: &Instance) -> Status {
 }
 
 fn check_ports(instance: &Instance) -> Status {
-    let busy = instance.busy_ports();
+    let busy = match allocator::busy_ports(instance) {
+        Ok(busy) => busy,
+        Err(error) => return Status::Warn(format!("could not check: {error:#}")),
+    };
     if busy.is_empty() {
-        Status::Ok(format!(
-            "all {} ports free",
-            super::instance::Port::all().count()
-        ))
+        return Status::Ok(format!(
+            "window {} free or this instance's own",
+            instance.port_base()
+        ));
+    }
+
+    let list: Vec<String> = busy.iter().map(|p| p.to_string()).collect();
+    let consequence = if instance.is_default() {
+        "the default instance's ports are fixed; use --instance <name> for a free window"
     } else {
-        let list: Vec<String> = busy.iter().map(|p| p.to_string()).collect();
-        Status::Warn(format!(
-            "in use: {} (may be this instance's own running containers; otherwise pass --port-base)",
-            list.join(", ")
-        ))
+        "a start moves to a free window, unless --port-base pins this one"
+    };
+    Status::Warn(format!("in use: {} ({consequence})", list.join(", ")))
+}
+
+/// Report named instances that hold ports or subnets with nothing running. They
+/// may be someone's data, so this names them and removes nothing.
+fn check_instances() -> Status {
+    let census = match allocator::census() {
+        Ok(census) => census,
+        Err(error) => return Status::Warn(format!("could not list: {error:#}")),
+    };
+    let running = census.running.len();
+    match census.leftovers_message() {
+        Some(leftovers) => Status::Warn(format!("{running} running; {leftovers}")),
+        None => Status::Ok(format!("{running} running, nothing left over")),
     }
 }

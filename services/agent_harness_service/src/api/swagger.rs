@@ -10,8 +10,8 @@ use agent_harness::inbound::app_connections::{self, AppConnectedRequest};
 use agent_harness::inbound::capability_discovery;
 use agent_harness::inbound::mode_choice::{self, AgentModeChoiceRequest, AgentModeChoiceResponse};
 use agent_harness::inbound::model_load::{
-    self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
-    ModelHarnessDto,
+    self, AgentModelDto, AgentModelsStatusDto, CredentialRejectedResponse, LoadAgentModelsRequest,
+    LoadAgentModelsResponse, ModelHarnessDto,
 };
 use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
@@ -26,6 +26,7 @@ use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
 };
+use agent_session::domain::updates::{AgentUpdate, AgentUpdateKind, AgentUpdates};
 use agent_session::inbound::axum_router::auto_archive::{
     AutoArchiveOverridesBody, AutoArchivePreferencesBody, SessionAutoArchiveResponse,
 };
@@ -33,6 +34,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::task::{LinkTaskRequest, LinkedTaskResponse};
 use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
@@ -67,12 +69,15 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        crate::voice_gateway::catalog,
+        crate::voice_gateway::sample,
         universal_input::inbound::axum_router::classify,
         universal_input::inbound::axum_router::extract,
         agent_code_mode::inbound::axum_router::get_code_execution,
         agent_session::inbound::axum_router::activity::get_agent_session_activity,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::present_view,
+        agent_code_mode::inbound::axum_router::open_in_app,
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
@@ -95,6 +100,8 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::unlink_session_pull_request,
         axum_router::pull_requests::sessions_for_pull_request,
         axum_router::pull_requests::sessions_for_pull_requests,
+        axum_router::task::link_agent_session_task,
+        axum_router::updates::list_agent_session_updates,
         axum_router::get_agent_session_log_handler,
         axum_router::get_agent_session_folded_log_handler,
         axum_router::control_agent_session_handler,
@@ -129,8 +136,13 @@ impl Modify for SecurityAddon {
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
         app_connections::app_connected_handler,
+        crate::computers::claude::claude_sign_in_handler,
+        crate::computers::claude::claude_sign_in_complete_handler,
+        crate::computers::claude::claude_sign_out_handler,
+        crate::computers::claude::claude_mode_handler,
     ),
     components(schemas(
+        team_agents::domain::voice::Voice,
         CodingAgent,
         CodingAgentsResponse,
         CreateAgentSessionRequest,
@@ -158,6 +170,11 @@ impl Modify for SecurityAddon {
         PullRequestSessionsResponse,
         PullRequestUrls,
         PullRequestsSessionsResponse,
+        LinkTaskRequest,
+        LinkedTaskResponse,
+        AgentUpdates,
+        AgentUpdate,
+        AgentUpdateKind,
         PullRequestSessions,
         PullRequestLinkedSession,
         SessionPullRequestLink,
@@ -179,6 +196,7 @@ impl Modify for SecurityAddon {
         WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
+        CredentialRejectedResponse,
         AgentModelDto,
         AgentModelsStatusDto,
         ModelHarnessDto,
@@ -202,12 +220,19 @@ impl Modify for SecurityAddon {
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
+        crate::computers::claude::ClaudeSignInStarted,
+        crate::computers::claude::ClaudeSignInComplete,
+        crate::computers::claude::ClaudeSignedIn,
+        crate::computers::claude::ClaudeModeResponse,
+        crate::computers::claude::ClaudeAccountStatus,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
         (name = "agent-models", description = "Fresh provider model discovery"),
         (name = "agent-repositories", description = "Repositories a coding session can work on"),
-        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent")
+        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent"),
+        (name = "computers", description = "Claude sign-in on Macro computers"),
+        (name = "voices", description = "Voices agent teammates speak with on calls")
     )
 )]
 pub struct ApiDoc;

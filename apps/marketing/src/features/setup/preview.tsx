@@ -4,10 +4,9 @@ import '../../styles/dark-theme.css';
 import '../../styles/fonts.css';
 import './cream-preview.css';
 import { lazy } from 'solid-js';
-import { hydrate, render } from 'solid-js/web';
+import { render } from 'solid-js/web';
 import { analytics } from '../../app/utils/utilAnalytic';
 import { buildAppUrl } from '../../app/utils/utilBaseUrl';
-import { Homepage } from './Homepage';
 import { applyPalette, onPaletteChange, preferredPalette } from './sitePalette';
 
 // The homepage does not need the account, integration, and team setup screens.
@@ -44,19 +43,18 @@ function Preview() {
     );
   }
 
-  return <Homepage />;
+  return null;
 }
-// Light-mode visitors get the cream palette; see sitePalette.ts.
+// Apply the website palette policy before rendering; see sitePalette.ts.
 applyPalette(preferredPalette());
 onPaletteChange(applyPalette);
 
 const root = document.getElementById('root');
-if (root) {
-  if (root.hasAttribute('data-hydrate-homepage')) {
-    hydrate(() => <Homepage />, root);
-  } else {
-    root.textContent = '';
-    render(() => <Preview />, root);
-  }
+if (window.location.pathname === '/') {
+  // Use the same router and persistent navigation as every other website page.
+  void import('../../app/main/index');
+} else if (root) {
+  root.textContent = '';
+  render(() => <Preview />, root);
   root.dataset.publicReady = 'true';
 }

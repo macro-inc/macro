@@ -11,10 +11,7 @@ import type {
 import { applyDatabaseOps } from '@queries/storage/databases';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ResultAsync } from 'neverthrow';
-import {
-  columnSchemaMessage,
-  type DatabaseColumnKind,
-} from '../../database/core/column-schema';
+import { columnSchemaMessage } from '../../database/core/column-schema';
 import type {
   FormColumnWrites,
   FormWriteFailure,
@@ -24,13 +21,6 @@ import type { FormColumnKind } from '../core/form-model';
 /** What the builder says when the database refused a column write: the grid's words. */
 export function columnWriteFailure(error: DatabaseOpsError): FormWriteFailure {
   return { message: columnSchemaMessage(error) };
-}
-
-/** A form's kind as the grid converts to it; a relation's rows live in the form's database. */
-function databaseKind(kind: FormColumnKind): DatabaseColumnKind {
-  return kind.type === 'relation'
-    ? { type: 'relation', table: kind.table }
-    : kind;
 }
 
 const opKind = (kind: FormColumnKind): OpColumnKind => kind;
@@ -90,7 +80,7 @@ export function createColumnWrites(
         databaseId,
         tableId,
         columnId,
-        to: databaseKind(to),
+        to,
         name,
       }).mapErr(columnWriteFailure),
   };

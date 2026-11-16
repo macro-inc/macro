@@ -43,7 +43,8 @@ paths but share the agent harness process. `McpPublicUrl` and
 `CognitionPublicUrl` separately preserve the registered public OAuth identities;
 do not substitute the internal API routes when building callbacks. Their direct local defaults use
 port 8101 with `/cognition`, `/scheduled-action`, `/preview`, and the MCP base
-at the root. Gateway paths remain unchanged.
+at the root. Gateway paths remain unchanged. `McpChatgptServiceUrl` is the ChatGPT MCP Worker, a separate
+process; the harness's OAuth broker accepts its `/mcp` URL as a token resource.
 
 ## Gotchas
 

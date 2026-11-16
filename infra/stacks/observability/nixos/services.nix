@@ -17,6 +17,7 @@ in
   imports = [
     ./dashboards.nix
     ./ci-dashboard.nix
+    ./local-dashboard.nix
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
     ./prod-alerts-dashboard.nix

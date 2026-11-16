@@ -9,7 +9,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, ContentBlock};
 use std::net::IpAddr;
 use std::sync::OnceLock;
 use url::Url;
@@ -119,7 +119,7 @@ pub(crate) async fn tool_result_with_images<R: MarkdownImageResolver>(
     result.content.extend(
         images
             .into_iter()
-            .map(|image| Content::image(image.data, image.mime_type)),
+            .map(|image| ContentBlock::image(image.data, image.mime_type)),
     );
     result
 }

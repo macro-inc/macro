@@ -261,7 +261,7 @@ where
 /// How a new message's signed agent attribution labels it: with the client a
 /// user drives the agent through, when the credential names one.
 /// Only a user credential carries one; it is set only alongside `agent_id`.
-fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+pub fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
     if let MacroAuthorization::User(user) = principal
         && let CredentialOrigin::AccountManager(credential) = &user.origin
     {

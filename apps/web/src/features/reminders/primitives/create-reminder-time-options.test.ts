@@ -1,71 +1,105 @@
+import type { NaturalTimeState } from '@core/natural-time/create-natural-time';
+import { loadNaturalTimeForTest } from '@core/natural-time/tests/load-wasm';
 import { createRoot, createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { createReminderTimeOptions } from './create-reminder-time-options';
+
+let ready: NaturalTimeState;
+
+beforeAll(async () => {
+  ready = { status: 'ready', reader: await loadNaturalTimeForTest() };
+});
+
+function choicesFor(text: string, state: NaturalTimeState = ready) {
+  return createRoot((dispose) => {
+    const [query] = createSignal(text);
+    const choices = createReminderTimeOptions(query, () => state)();
+    dispose();
+    return {
+      reason: choices.reason,
+      times: choices.times.map(({ label, date, note }) => ({
+        label,
+        at: `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`,
+        note,
+      })),
+    };
+  });
+}
 
 describe('createReminderTimeOptions', () => {
   beforeEach(() => {
+    vi.stubEnv('TZ', 'America/New_York');
     vi.useFakeTimers();
     // Friday afternoon so "tomorrow" and weekday shorthands are unambiguous
-    vi.setSystemTime(new Date('2026-10-09T15:00:00'));
+    vi.setSystemTime(new Date(2026, 9, 9, 15, 0));
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
-  it('resolves tmrw to tomorrow morning', () => {
-    createRoot((dispose) => {
-      const [query] = createSignal('tmrw');
-      const options = createReminderTimeOptions(query);
-      const tomorrow = options().find((option) =>
-        option.label.toLowerCase().includes('tomorrow')
-      );
-      expect(tomorrow).toBeTruthy();
-      expect(tomorrow?.date.getDate()).toBe(10);
-      expect(tomorrow?.date.getHours()).toBe(9);
-      dispose();
+  it('offers the presets before anything is typed', () => {
+    expect(choicesFor('').times.map(({ label }) => label)).toEqual([
+      'In 30m',
+      'Later today',
+      'Tomorrow',
+      'Next week',
+    ]);
+  });
+
+  it('puts the typed time first and drops the preset at the same time', () => {
+    expect(choicesFor('tomorrow')).toEqual({
+      reason: undefined,
+      times: [{ label: 'tomorrow', at: '10/10 9:00', note: 'default time' }],
     });
+    expect(choicesFor('next week').times).toEqual([
+      { label: 'next week', at: '10/12 9:00', note: 'default time' },
+    ]);
   });
 
-  it('resolves tmrw 8 to tomorrow at 8am', () => {
-    createRoot((dispose) => {
-      const [query] = createSignal('tmrw 8');
-      const options = createReminderTimeOptions(query);
-      expect(options().length).toBeGreaterThan(0);
-      const match = options()[0];
-      expect(match.date.getDate()).toBe(10);
-      expect(match.date.getHours()).toBe(8);
-      expect(match.date.getMinutes()).toBe(0);
-      dispose();
+  it('offers both halves of the day when am or pm is guessed', () => {
+    expect(choicesFor('tmrw 8').times).toEqual([
+      { label: 'tmrw 8', at: '10/10 8:00', note: 'AM assumed' },
+      { label: 'tmrw 8', at: '10/10 20:00', note: undefined },
+    ]);
+    expect(choicesFor('tmrw 8p').times).toEqual([
+      { label: 'tmrw 8p', at: '10/10 20:00', note: undefined },
+    ]);
+  });
+
+  it('resolves weekday shorthands to their next occurrence', () => {
+    expect(choicesFor('fri').times[0]?.at).toBe('10/16 9:00');
+    expect(choicesFor('thu').times[0]?.at).toBe('10/15 9:00');
+    expect(choicesFor('mon').times[0]?.at).toBe('10/12 9:00');
+  });
+
+  it('explains a phrase it cannot read and keeps matching presets', () => {
+    expect(choicesFor('every friday')).toEqual({
+      reason: 'Repeating reminders aren’t supported.',
+      times: [],
     });
+    expect(choicesFor('later').times.map(({ label }) => label)).toEqual([
+      'Later today',
+    ]);
   });
 
-  it('resolves tmrw 8p to tomorrow at 8pm', () => {
-    createRoot((dispose) => {
-      const [query] = createSignal('tmrw 8p');
-      const options = createReminderTimeOptions(query);
-      expect(options().length).toBeGreaterThan(0);
-      const match = options()[0];
-      expect(match.label.toLowerCase()).toContain('8 pm');
-      expect(match.date.getDate()).toBe(10);
-      expect(match.date.getHours()).toBe(20);
-      dispose();
+  it('keeps the presets while the reader loads or after it fails', () => {
+    expect(choicesFor('tom', { status: 'loading' })).toEqual({
+      reason: undefined,
+      times: [{ label: 'Tomorrow', at: '10/10 9:00', note: undefined }],
     });
-  });
-
-  it('resolves weekday shorthands like fri and thu', () => {
-    createRoot((dispose) => {
-      for (const [queryText, expectedDay] of [
-        ['fri', 5],
-        ['thu', 4],
-        ['mon', 1],
-      ] as const) {
-        const [query] = createSignal(queryText);
-        const options = createReminderTimeOptions(query);
-        expect(options().length).toBeGreaterThan(0);
-        expect(options()[0].date.getDay()).toBe(expectedDay);
-      }
-      dispose();
+    expect(choicesFor('next friday at 3', { status: 'failed' })).toEqual({
+      reason: 'Typed times aren’t available right now. Choose one below.',
+      times: [],
     });
   });
 });

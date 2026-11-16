@@ -373,6 +373,8 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   };
 
   const ctx: ComposeContextValue = {
+    // This surface offers the draft's explicit recipients and host-scoped extras.
+    createRecipientSource: undefined,
     bodyActions: createComposeBodyActions(),
     isMobile,
     // The AI tool has its own execute contract and does not expose scheduled send.

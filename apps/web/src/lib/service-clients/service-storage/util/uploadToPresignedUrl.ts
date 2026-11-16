@@ -16,7 +16,8 @@ export async function uploadToPresignedUrl({
   onProgress,
 }: {
   presignedUrl: string;
-  buffer: BufferSource;
+  /** The body; a `Blob` of files on disk is streamed without being read. */
+  buffer: BufferSource | Blob;
   sha: string;
   type: string;
   signal?: AbortSignal;

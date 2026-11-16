@@ -16,19 +16,25 @@ no I/O.
   `RoutineProgram::from_task`.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
-  CreateRoutine and the scheduler's drafter both read), `STEP_CONTEXT` (the type of
+  CreateRoutine, the scheduler's drafter and the Compose Routines skill read),
+  `STEP_CONTEXT` (the type of
   `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
 - `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
   code (text, number, boolean, choice, or a question for AI), which `main`
-  reads as `knobs.<name>`, typed from the knob but not its value; and
-  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`.
+  reads as `knobs.<name>`, typed from the knob but not its value;
+  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`
+  (parsed with nom); and `sentence_runs`, that sentence read with its knobs
+  as text and values, as a routine suggestion's card shows it.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
-- `src/starters.rs` + `src/starters/*.ts`: starter routines whose step is
-  code, offered by the new-routine flow and shown to the drafter as worked
-  examples. The harness's real-Deno test type-checks each one.
+- `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
+  routines: surface, title, trigger (cron without a zone), a code step and/or
+  Ask AI instructions, and authored `affects_others`, `safe_default` and
+  `template` marks. The new-routine flow offers its templates, the drafter
+  sees its code routines as worked examples, and suggestions may only pick
+  from it. The harness's real-Deno test type-checks every code step.
 - `src/validate.rs`: save-time rules and `limits`, including that every
   knob fits its type and is read by the code, and every sentence slot names
   one of the step's knobs.
@@ -44,7 +50,8 @@ no I/O.
 ## Boundaries
 
 - Depends on: `bots` (`AgentMcpServer`).
-- Used by: `scheduled_action`, `routines` (agent tools), and through the
+- Used by: `scheduled_action`, `routines` (agent tools), `system_skills`
+  (Compose Routines), and through the
   scheduler's generated clients the SDK (`macro.routines`) and the web app's
   routines editor (`core/routine-steps.ts`).
 
@@ -79,6 +86,10 @@ no I/O.
   sharing a routine as a template drops it.
 - `RoutineModelId` rejects blank models while parsing, so a single agent task
   with a blank model fails `from_task` rather than validation.
+- Only a code routine that affects no one else may be `safe_default` (a
+  pre-selected suggestion), and it must run on a workspace-wide event with no
+  condition or scope to set up; the catalog tests enforce both. Ask AI acts
+  on whatever arrives at run time, so it never qualifies.
 - A single agent task keeps the rules it was saved under: `validate()` skips
   the blank and length limits on its instructions, so stored routines keep
   running. Adding steps makes it a program, which gets every limit.

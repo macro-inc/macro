@@ -8,6 +8,15 @@ export type IdentityBindingWire = {
 };
 
 import type { EntityResolverWire } from './exchange/entity-resolvers';
+import type {
+  ContactReconcile,
+  ContactSnapshotRequest,
+  PeopleContextUpdate,
+  PeopleReferenceRequest,
+  PeopleScope,
+  PeopleSearch,
+  PeopleSqlRequest,
+} from './people/generated';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -58,13 +67,15 @@ export function parseCacheRevision(value: unknown): CacheRevision {
 export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
 
 /** Validates the durable database-generation UUID shared by cache hosts. */
+export function isStorageGeneration(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)
+  );
+}
+
 export function parseStorageGeneration(value: unknown): string {
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-      value
-    )
-  ) {
+  if (!isStorageGeneration(value)) {
     throw new TypeError('invalid cache storage generation');
   }
   return value;
@@ -73,8 +84,42 @@ export function parseStorageGeneration(value: unknown): string {
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
+/** Ranks a record read with the typed search whose rows it loads. */
+export type RecordReadPriority = 'typed-search';
+
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
+
+/** Rust engine::HydrationScope: captured before fetching a background page. */
+export type HydrationScope = PeopleScope;
+
+/** Scope rejection is expected cancellation, not a storage failure. */
+export function isStaleHydrationScopeError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message === 'cache hydration scope changed'
+  );
+}
+
+export type PeopleRequest =
+  | {
+      kind: 'contact-snapshot';
+      request: ContactSnapshotRequest;
+      traceparent?: string;
+    }
+  | {
+      kind: 'contact-reconcile';
+      request: ContactReconcile;
+      traceparent?: string;
+    }
+  | { kind: 'people-sql'; request: PeopleSqlRequest; traceparent?: string }
+  | {
+      kind: 'people-references';
+      request: PeopleReferenceRequest;
+      traceparent?: string;
+    }
+  | { kind: 'people-context'; scope: PeopleScope; traceparent?: string }
+  | { kind: 'people-update'; update: PeopleContextUpdate; traceparent?: string }
+  | { kind: 'people-search'; request: PeopleSearch; traceparent?: string };
 
 export type SearchProfile = 'quick-access-v1';
 
@@ -103,6 +148,9 @@ export type SearchCacheArgs = {
 };
 
 export type SearchCachePage = {
+  /** Engine projection revision; absent on older native binaries. Contact
+   * ingestion/search requires revision 5 (including page-retention support). */
+  projectionVersion?: number;
   documents: SearchDocumentWire[];
   nextCursor: SearchCursor | null;
 };
@@ -285,6 +333,8 @@ export type ReadRecordsByKeysArgs = {
   fragmentName: string;
   /** Canonical normalized entity keys; bounded by the selection page size. */
   keys: string[];
+  /** Set when the records are the rows of a typed search someone waits on. */
+  priority?: RecordReadPriority;
 };
 
 export type SelectedRecordByKeyWire = {
@@ -811,6 +861,7 @@ export type CacheRequest = { id: number } & (
   | {
       /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
+      hydrationScope?: HydrationScope;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -876,7 +927,10 @@ export type CacheRequest = { id: number } & (
       document: string;
       fragmentName: string;
       keys: string[];
+      /** May overtake reads, fences and queued network results, never a local change. */
+      priority?: RecordReadPriority;
     }
+  | PeopleRequest
   | {
       kind: 'search';
       request: SearchCacheArgs & { nowMs: number };
@@ -936,6 +990,22 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(request: CacheRequest): boolean {
+  if (request.kind !== 'search') return false;
+
+  const query = request.request.query ?? '';
+  return query.trim() !== '';
+}
+
+/** The rows a typed search named: the search is not answered until they load. */
+export function isTypedSearchRowRead(request: CacheRequest): boolean {
+  return (
+    request.kind === 'read-records-by-keys' &&
+    request.priority === 'typed-search'
+  );
+}
 
 /**
  * A read-only request was refused because the database was moving between

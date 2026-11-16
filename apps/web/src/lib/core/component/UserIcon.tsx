@@ -8,6 +8,7 @@ import {
   getDisplayName,
   getDisplayNameParts,
   getInitials,
+  getInitialsFromName,
   macroIdToEmail,
   tryMacroId,
   useIsConnectedSecondaryInbox,
@@ -18,13 +19,15 @@ import RobotIcon from '@icon/system/regular/robot.svg';
 import Trash from '@icon/system/regular/trash.svg?component-solid';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { firstPartyBotMark, firstPartyBotMarkTone } from './firstPartyBotMark';
+import { BotMarkAvatar } from './BotMarkAvatar';
+import { firstPartyBotMark } from './firstPartyBotMark';
 import { UserCardTrigger } from './UserCardTrigger';
 
 export type UserIconSize = AvatarSize;
 
 export type UserIconProps = {
+  /** Already-resolved name; avoids retaining this row in the global name store. */
+  name?: string;
   isDeleted?: boolean;
   size?: UserIconSize;
   suppressClick?: boolean;
@@ -38,6 +41,7 @@ export type UserIconProps = {
  * Internal render. Image or fallback.
  */
 function ProfileImage(props: {
+  name?: string;
   id?: string;
   email?: string;
   photoUrl?: string;
@@ -55,6 +59,8 @@ function ProfileImage(props: {
   });
 
   const initials = () => {
+    if (props.name !== undefined)
+      return getInitialsFromName(props.name, email());
     const { firstName, lastName } = getDisplayNameParts(macroId());
     return getInitials(firstName, lastName, email());
   };
@@ -100,6 +106,7 @@ function ProfileImage(props: {
  * Avatar content based on user state (deleted, has id, has email, or unknown).
  */
 function UserIconContent(props: {
+  name?: string;
   id?: string;
   email?: string;
   isDeleted?: boolean;
@@ -111,10 +118,18 @@ function UserIconContent(props: {
         <Trash />
       </Match>
       <Match when={props.id} keyed>
-        {(id) => <ProfileImage id={id} photoUrl={props.photoUrl} />}
+        {(id) => (
+          <ProfileImage id={id} name={props.name} photoUrl={props.photoUrl} />
+        )}
       </Match>
       <Match when={!props.id && props.email} keyed>
-        {(email) => <ProfileImage email={email} photoUrl={props.photoUrl} />}
+        {(email) => (
+          <ProfileImage
+            email={email}
+            name={props.name}
+            photoUrl={props.photoUrl}
+          />
+        )}
       </Match>
       <Match when={!props.id && !props.email}>
         <Avatar.Fallback class="font-semibold">?</Avatar.Fallback>
@@ -134,7 +149,7 @@ export function UserIcon(props: UserIconProps) {
     props.id ? tryMacroId(props.id) : undefined
   );
 
-  const displayName = () => getDisplayName(macroId());
+  const displayName = () => props.name ?? getDisplayName(macroId());
 
   const email = createMemo(() => {
     const id = macroId();
@@ -171,18 +186,7 @@ export function UserIcon(props: UserIconProps) {
     <Switch>
       <Match when={firstPartyBotMark(props.id)} keyed>
         {(mark) => (
-          <Avatar
-            size={size()}
-            class={cn(
-              'bg-surface ring ring-edge-muted',
-              firstPartyBotMarkTone(mark),
-              props.class
-            )}
-          >
-            <Avatar.Fallback>
-              <Dynamic component={mark.Icon} class="size-[62%]" />
-            </Avatar.Fallback>
-          </Avatar>
+          <BotMarkAvatar mark={mark} size={size()} class={props.class} />
         )}
       </Match>
 
@@ -211,6 +215,7 @@ export function UserIcon(props: UserIconProps) {
           onMouseDown={props.suppressClick ? undefined : openDm}
         >
           <UserIconContent
+            name={props.name}
             id={props.id}
             email={props.email}
             isDeleted={props.isDeleted}
@@ -240,6 +245,7 @@ export function UserIcon(props: UserIconProps) {
                 onMouseDown={avatarMouseDown()}
               >
                 <UserIconContent
+                  name={props.name}
                   id={id}
                   email={props.email}
                   isDeleted={props.isDeleted}
@@ -270,6 +276,7 @@ export function UserIcon(props: UserIconProps) {
               onMouseDown={avatarMouseDown()}
             >
               <UserIconContent
+                name={props.name}
                 id={props.id}
                 email={props.email}
                 isDeleted={props.isDeleted}

@@ -56,7 +56,7 @@ impl StreamableHttpClient for TracedClient {
     async fn get_stream(
         &self,
         uri: Arc<str>,
-        session_id: Arc<str>,
+        session_id: Option<Arc<str>>,
         last_event_id: Option<String>,
         auth_header: Option<String>,
         headers: HashMap<HeaderName, HeaderValue>,

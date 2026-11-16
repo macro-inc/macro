@@ -89,6 +89,7 @@ opens the methods and exact request and response types for that namespace.
 | {@link src/entities/crm/namespace!CrmNamespace | macro.crm} | Company and contact records, with notes and relationships. |
 | {@link src/entities/favorites/namespace!FavoritesNamespace | macro.favorites} | Entities the current user has saved as favorites. |
 | {@link src/entities/pins/namespace!PinsNamespace | macro.pins} | Items pinned to fixed positions in the user's home view. |
+| {@link src/entities/activity/namespace!ActivityNamespace | macro.activity} | What the current user did across Macro in a time range, including actions agents took for them. |
 
 ### AI and integrations
 
@@ -97,6 +98,7 @@ opens the methods and exact request and response types for that namespace.
 | {@link src/entities/agent-sessions/namespace!AgentSessionNamespace | macro.agentSessions} | Agent conversations with their configuration, messages, queued actions, and execution state. |
 | {@link src/entities/bots/namespace!BotsNamespace | macro.bots} | Bots: create, configure, channel access, webhooks and tokens. |
 | {@link src/entities/ai/namespace!AiNamespace | macro.ai} | AI operations on content you supply: structured generation and yes/no classification with Jev. |
+| {@link src/entities/memory/namespace!MemoryNamespace | macro.memory} | The current user's private explicit AI memory, edited one line at a time. |
 | {@link src/events/receiver!MacroEvents | macro.events} | Live entity events your application can subscribe to through a stream or webhook receiver. |
 | {@link src/entities/webhooks/namespace!WebhooksNamespace | macro.webhooks} | Persistent subscriptions that deliver events to your application's URL. |
 

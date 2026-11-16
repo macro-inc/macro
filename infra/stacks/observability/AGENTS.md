@@ -23,6 +23,9 @@ us-east-1. `README.md` is the full operations guide.
   free `panelId`; never renumber one, since sent notifications link to it.
 - Change a CI percentile, queue or CI hours query: edit `nixos/ci-report.json`;
   the `Macro CI` dashboard's Loki panels and `scripts/ci-report.ts` both read it.
+- Change a run_local query: edit `nixos/local-report.json`, read by the
+  `Macro run_local` dashboard and `scripts/ci-report.ts --spec local`. Both
+  dashboards share their Loki panel builders in `nixos/loki-report-panels.nix`.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
