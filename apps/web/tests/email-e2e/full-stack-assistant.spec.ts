@@ -170,10 +170,8 @@ for (const provider of PROVIDERS) {
       await expect(card.getByRole('status')).toHaveText('Sent', {
         timeout: 60_000,
       });
-      await expect(subject).toBeDisabled();
-      await expect(subject).toHaveValue('Lunch on Thursday');
-      saw('STX-976');
-
+      // The field shows what was typed whether or not the card took the edit:
+      // only the sent message says that the edit of the subject was kept.
       await expect
         .poll(
           async () =>
@@ -184,6 +182,10 @@ for (const provider of PROVIDERS) {
         )
         .toContain('Lunch on Thursday');
       confirmed('F-168');
+
+      await expect(subject).toBeDisabled();
+      await expect(subject).toHaveValue('Lunch on Thursday');
+      saw('STX-976');
     });
 
     // When this fails, the conversation does not show what the assistant

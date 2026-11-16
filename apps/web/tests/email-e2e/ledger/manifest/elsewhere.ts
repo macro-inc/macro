@@ -887,6 +887,8 @@ export const elsewhere = {
       source: [
         'src/features/home/home-facets.ts',
         'src/features/home/work-feed/home-work-feed.ts',
+        'src/features/home/queries/home-query.ts',
+        'src/features/home/queries/home-admission.ts',
       ],
     },
     {

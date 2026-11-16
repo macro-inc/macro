@@ -430,7 +430,7 @@ AX-043	The onboarding step's "Continue with Microsoft" button in google-accounts
 AX-044	no Try again is offered when the connected accounts fail to load during onboarding
 AX-048	picking Email in the Create menu opens no new message
 AX-051	the universal input's Connect Google starts no connection when no inbox is connected
-AX-052	The review composer's subject setter in DraftComposer.tsx ignores typed subject edits, so the drafted email is sent with its original subject; the field keeps the typed text, and the test fails where it reads the subject of the sent message at the provider.
+AX-052	The review composer's subject setter in DraftComposer.tsx ignores typed subject edits, so the drafted email is sent with its original subject. The field keeps the typed text, so the first assertion that can see the edit is the subject of the sent message at the provider, right after the send; the test fails there.
 AX-054	The review composer's onSend wiring in DraftComposer.tsx no longer calls handleSend, so "Send email" (and Cmd+Enter) on the review card does nothing.
 AX-056	The row click and content-hit click handlers of an email row in the Search list (soup-view.tsx) return before opening the entity, so a search result opens no thread.
 AX-057	The click handler of a desktop Home row (HomeListEntity in HomeList.tsx) no longer activates an email row, so clicking a thread on Home does not open it.
