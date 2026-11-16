@@ -9,9 +9,11 @@ import {
   EntityConversationComposer,
 } from '@core/messages/EntityConversation';
 import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
-import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
+import {
+  virtualKeyboardHeight,
+  virtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
 import type { MessageParent } from '@service-storage/messages';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -45,7 +47,8 @@ export function MobileDiscussion(props: {
     if (element && !props.conversation.targetId())
       element.scrollTop = element.scrollHeight;
   };
-  createResizeObserver(thread, scrollToEnd);
+  // Resizing also happens while paging. Only open, send, and keyboard changes
+  // choose the newest position; do not override the reader on a body resize.
   createEffect(
     on(
       [
@@ -85,7 +88,21 @@ export function MobileDiscussion(props: {
   );
   // The keyboard consumes only the sheet's bottom content. Keep the newest
   // comment visible after that external viewport change, unless following a link.
-  createEffect(on(virtualKeyboardHeight, scrollToEnd, { defer: true }));
+  createEffect(
+    on([virtualKeyboardHeight, virtualKeyboardVisible], scrollToEnd, {
+      defer: true,
+    })
+  );
+  // Safari changes the visual viewport while its keyboard animates without
+  // publishing a native keyboard-height signal. Content resizes are unrelated.
+  const visualViewport = window.visualViewport;
+  const followKeyboardResize = () => {
+    if (virtualKeyboardVisible()) scrollToEnd();
+  };
+  visualViewport?.addEventListener('resize', followKeyboardResize);
+  onCleanup(() =>
+    visualViewport?.removeEventListener('resize', followKeyboardResize)
+  );
   return (
     <>
       <div>

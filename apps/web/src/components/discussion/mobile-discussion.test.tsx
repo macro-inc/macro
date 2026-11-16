@@ -1,5 +1,8 @@
 import type { ConversationPresentation } from '@core/messages/EntityConversation';
-import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  setVirtualKeyboardHeight,
+  setVirtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
 import type { MessageListItem } from '@service-storage/messages';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, For } from 'solid-js';
@@ -16,31 +19,62 @@ vi.mock('@core/messages/EntityConversation', () => ({
 }));
 
 let drawerStyles: HTMLStyleElement;
+const resizeObservers = new Set<ControlledResizeObserver>();
+class ControlledResizeObserver implements ResizeObserver {
+  readonly targets = new Set<Element>();
+  private readonly callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    resizeObservers.add(this);
+  }
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+  disconnect() {
+    this.targets.clear();
+    resizeObservers.delete(this);
+  }
+  deliver(target: Element) {
+    if (!this.targets.has(target)) return;
+    this.callback(
+      [
+        {
+          target,
+          contentRect: target.getBoundingClientRect(),
+          borderBoxSize: [],
+          contentBoxSize: [],
+          devicePixelContentBoxSize: [],
+        },
+      ],
+      this
+    );
+  }
+}
 beforeEach(() => {
   drawerStyles = document.createElement('style');
   drawerStyles.textContent =
     '[data-corvu-drawer-content] { transition-duration: 0s; animation-name: none; }';
   document.head.append(drawerStyles);
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-  );
+  vi.stubGlobal('ResizeObserver', ControlledResizeObserver);
   vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal('visualViewport', new EventTarget());
   setVirtualKeyboardVisible(false);
+  setVirtualKeyboardHeight(0);
 });
 afterEach(() => {
   cleanup();
   drawerStyles.remove();
   setVirtualKeyboardVisible(false);
+  setVirtualKeyboardHeight(0);
+  resizeObservers.clear();
   vi.unstubAllGlobals();
 });
 
-// This guards count-triggered forced scrolling, not browser scroll anchoring.
-it('does not force the sheet to the bottom when earlier comments increase the count', async () => {
+// Geometry delivery is explicit; browser scroll anchoring still needs device verification.
+it('preserves paging and linked-comment positions while keeping keyboard scrolling', async () => {
   const newest: MessageListItem = {
     id: 'newest',
     parent: { type: 'initiative', id: 'project' },
@@ -69,9 +103,10 @@ it('does not force the sheet to the bottom when earlier comments increase the co
     state: { ...newest.state, root_id: 'older' },
   };
   const [messages, setMessages] = createSignal([newest]);
+  const [target, setTarget] = createSignal<string | null>(null);
   const conversation: ConversationPresentation = {
     messages,
-    targetId: () => null,
+    targetId: target,
     targetRequestKey: () => undefined,
     pending: () => false,
     unavailable: () => false,
@@ -83,7 +118,9 @@ it('does not force the sheet to the bottom when earlier comments increase the co
         <button onClick={() => setMessages([older, newest])}>
           Load earlier comments
         </button>
-        <For each={messages()}>{(message) => <p>{message.content}</p>}</For>
+        <For each={messages()}>
+          {(message) => <p data-message-id={message.id}>{message.content}</p>}
+        </For>
       </>
     ),
   };
@@ -106,7 +143,46 @@ it('does not force the sheet to the bottom when earlier comments increase the co
     screen.getByRole('button', { name: 'Load earlier comments' })
   );
   await Promise.resolve();
+  for (const observer of resizeObservers) observer.deliver(thread);
   expect(screen.getByText('Older comment')).toBeTruthy();
   expect(sheet.textContent).toContain('Discussion 2');
+  expect(thread.scrollTop).toBe(240);
+
+  window.visualViewport?.dispatchEvent(new Event('resize'));
+  expect(thread.scrollTop).toBe(240);
+
+  // Safari changes visibility and then its visual viewport, without a height signal.
+  setVirtualKeyboardVisible(true);
+  await Promise.resolve();
+  expect(thread.scrollTop).toBe(thread.scrollHeight);
+  thread.scrollTop = 240;
+  window.visualViewport?.dispatchEvent(new Event('resize'));
+  expect(thread.scrollTop).toBe(thread.scrollHeight);
+
+  thread.scrollTop = 240;
+  setVirtualKeyboardHeight(300);
+  await Promise.resolve();
+  expect(thread.scrollTop).toBe(thread.scrollHeight);
+
+  const olderMessage = screen.getByText('Older comment');
+  thread.style.overflowY = 'auto';
+  const scrollToTarget = vi.fn(() => {
+    thread.scrollTop = 240;
+  });
+  olderMessage.scrollIntoView = scrollToTarget;
+  thread.scrollTop = 1400;
+  setTarget('older');
+  expect(scrollToTarget).toHaveBeenCalledWith({
+    behavior: 'smooth',
+    block: 'center',
+  });
+  expect(thread.scrollTop).toBe(240);
+  setVirtualKeyboardHeight(0);
+  setVirtualKeyboardVisible(false);
+  await Promise.resolve();
+  setVirtualKeyboardVisible(true);
+  setVirtualKeyboardHeight(300);
+  window.visualViewport?.dispatchEvent(new Event('resize'));
+  await Promise.resolve();
   expect(thread.scrollTop).toBe(240);
 });

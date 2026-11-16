@@ -18,6 +18,7 @@ The owning surface supplies `EntityConversation` presentation and permissions.
 - Show surviving reply counts even when every root message is deleted; use the empty entry only when the count is zero.
 - Keep the composer draft when closing the sheet, and focus only after a user opens an empty discussion.
 - Use `MobileDrawer.FixedContent` with `KeyboardFooter`; preserve the default keyboard behavior of other drawers.
+- Never force the thread to the bottom on resize or page/count changes; reserve that for opening, sending, and keyboard changes without a linked target.
 - Keep desktop discussion inline; only phone entry compositions use this component.
 
 ## Checks
