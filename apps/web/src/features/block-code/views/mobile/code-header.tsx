@@ -1,6 +1,8 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import { isMobile } from '@core/mobile/isMobile';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { Show } from 'solid-js';
 import { CodeFileTypeChip } from '../../component/CodeFileTypeChip';
@@ -15,6 +17,7 @@ import {
  * mode on tablets, and Info.
  */
 export function MobileCodeHeader(props: CodeHeaderProps) {
+  const permissions = useGetPermissions();
   const blockId = useBlockId();
   const blockAlias = useBlockAliasedName();
   const name = useBlockDocumentName();
@@ -22,6 +25,9 @@ export function MobileCodeHeader(props: CodeHeaderProps) {
 
   return (
     <MobileBlockHeader
+      entityKind={blockAlias}
+      permissions={permissions()}
+      badge={<SplitPermissionsBadge />}
       id={blockId}
       name={name() ?? ''}
       iconType={blockAlias}

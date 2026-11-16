@@ -1,8 +1,10 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
-import { useBlockId } from '@core/block';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { PdfSplitToolbar } from '../../component/PdfSplitToolbar';
 import { usePdfHeaderTools } from '../shared/pdf-header-parts';
@@ -12,6 +14,8 @@ import { usePdfHeaderTools } from '../shared/pdf-header-parts';
  * Info, over the page toolbar.
  */
 export function MobilePdfHeader() {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
   const { itemType, ops, actions } = usePdfHeaderTools();
@@ -20,6 +24,9 @@ export function MobilePdfHeader() {
   return (
     <>
       <MobileBlockHeader
+        entityKind={entityKind}
+        permissions={permissions()}
+        badge={<SplitPermissionsBadge />}
         id={documentId}
         name={fileName()}
         iconType="pdf"
