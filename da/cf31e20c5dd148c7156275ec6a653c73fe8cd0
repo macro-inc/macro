@@ -1,0 +1,29 @@
+apps/web/src/features/block-canvas/core/transitions/scene-geometry.ts
+  s_695cafe799631b::t_33245f6cb32356 27-30,32-33,35
+packages/graphics/src/loro/backend.ts
+  s_8b139b3d2541ba::t_ac07b7ac0ed9b7 156-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dacf31e20c5dd148c7156275ec6a653c73fe8cd0",
+  "prompts": {},
+  "sessions": {
+    "s_695cafe799631b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bc62c68-1b4e-4243-bba7-d22f0052d31c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
