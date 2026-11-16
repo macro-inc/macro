@@ -465,8 +465,14 @@ impl EditorSurface {
                 .origin(FIXUP_ORIGIN)
                 .timestamp(now.wall.0 / 1000),
         );
+        // The restored manager's push/pop callbacks write to the selection
+        // store installed with it, not the fresh one `init` installs.
+        let selection = self.history_selection.clone();
         self.init(doc, now, access, view)?;
-        self.undo = undo;
+        if let Some(undo) = undo {
+            self.undo = Some(undo);
+            self.history_selection = selection;
+        }
         self.cursor = cursor;
         self.remote_pending(doc, now, access, view, false)?;
         self.history_changed(view);

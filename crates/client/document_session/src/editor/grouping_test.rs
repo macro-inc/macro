@@ -1081,3 +1081,108 @@ fn typing_history_groups_by_the_wall_clock_like_source() {
         ]
     );
 }
+
+#[test]
+fn undo_after_resync_restores_the_selection_before_the_edit() {
+    let config = crate::application::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0)).expect("actual Macro surface");
+    let doc = lexical_loro::new_doc(7).expect("actual Loro");
+    let mut view = Vec::new();
+    surface
+        .init(&doc, now(0), Access::Edit, &mut view)
+        .expect("open");
+    surface
+        .apply(
+            &doc,
+            Input::SetState {
+                state: serde_json::from_value(json!({"root":{"type":"root","children":[
+                    {"type":"paragraph","children":[{"type":"text","text":"abc"}]}
+                ]}}))
+                .expect("initial model"),
+                tags: TagSet::default(),
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("persist initial text");
+    surface
+        .apply(
+            &doc,
+            Input::Command {
+                command: Command::ClearHistory,
+                selection: ViewSelection::KeepModel,
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("clear bootstrap history");
+    let text = surface
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .expect("text");
+    let at = |offset| {
+        let point = Point::text(text, Utf16Offset(offset));
+        ViewSelection::Range {
+            anchor: point,
+            focus: point,
+            resolution_dirty: false,
+        }
+    };
+    surface
+        .resync(&doc, now(100), Access::Edit, &mut view)
+        .expect("resync keeps the history manager");
+    surface
+        .apply(
+            &doc,
+            Input::Command {
+                command: Command::InsertText("X".into()),
+                selection: at(1),
+            },
+            now(500),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("type after resync");
+    assert_eq!(surface.state().root_text_content().as_ref(), "aXbc");
+    let text = surface
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .expect("text after typing");
+    let point = Point::text(text, Utf16Offset(4));
+    surface
+        .apply(
+            &doc,
+            Input::SelectionFromView {
+                selection: ViewSelection::Range {
+                    anchor: point,
+                    focus: point,
+                    resolution_dirty: false,
+                },
+                change: None,
+            },
+            now(550),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("move the caret away from the edit");
+    assert!(
+        surface
+            .apply(&doc, Input::Undo, now(600), Access::Edit, &mut view)
+            .expect("undo after resync")
+    );
+    assert_eq!(surface.state().root_text_content().as_ref(), "abc");
+    assert_eq!(
+        view_selection(surface.state().selection()),
+        at(1)
+    );
+}
