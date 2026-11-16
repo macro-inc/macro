@@ -300,10 +300,12 @@ export class CrmNamespace {
   }
 
   /**
-   * The team's CRM companies, most recent interaction first, filtered by the
-   * company's own Stage and Owner properties, name or domain text, and whether
-   * hidden companies are included. Each row carries the company's own Stage,
-   * Owner and Revenue; pipeline deals have their own (`crm.pipelines`).
+   * The team's CRM companies, most recent interaction first.
+   *
+   * Filters by the company's own Stage and Owner properties, name or domain
+   * text, and whether hidden companies are included. Each row carries the
+   * company's own Stage, Owner and Revenue; pipeline deals have their own
+   * (`crm.pipelines`).
    * Filters cover only the team's 500 most recently active companies (and 500
    * more hidden ones with `includeHidden`); use `searchCompanies` to find an
    * older company by name.
