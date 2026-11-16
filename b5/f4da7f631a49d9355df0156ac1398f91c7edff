@@ -1,0 +1,97 @@
+packages/sdk-ocaml/spike-wasm/compile.sh
+  s_0cdbf5058399df::t_8cf2bae6b80c9d 1-28
+  s_4de99c3be44255::t_2be9209e960e95 29-36
+packages/sdk-ocaml/spike-wasm/fetch/macro_sdk_fetch.ml
+  s_0cdbf5058399df::t_cc88a8475a95e9 20
+  s_0cdbf5058399df::t_e5cf456cccd90b 1-19,21-59
+packages/sdk-ocaml/spike-wasm/fetch/macro_sdk_fetch.mli
+  s_0cdbf5058399df::t_e5cf456cccd90b 1-17
+packages/sdk-ocaml/spike-wasm/fetch/code_mode.ml
+  s_0cdbf5058399df::t_e5cf456cccd90b 1-42
+  s_19e7455dcd0901::t_8cf912e2d2df65 43-44
+packages/sdk-ocaml/spike-wasm/.gitignore
+  s_0cdbf5058399df::t_770bf38ba7ac41 1-2
+packages/sdk-ocaml/spike-wasm/prebuild.sh
+  s_0cdbf5058399df::t_770bf38ba7ac41 1-51,53-62
+  s_0cdbf5058399df::t_a0dd7203b0dd1b 52
+  s_19e7455dcd0901::t_81e1719d9239a0 63-70
+packages/sdk-ocaml/spike-wasm/all.sh
+  s_0cdbf5058399df::t_a0dd7203b0dd1b 1-7
+packages/sdk-ocaml/spike-wasm/runtime/bigstringaf.wat
+  s_0cdbf5058399df::t_a0dd7203b0dd1b 1-7,9,11,13,15,17,19-40
+  s_0cdbf5058399df::t_262cce36c79be8 8,10,12,14,16,18
+packages/sdk-ocaml/spike-wasm/programs/contacts.ml
+  s_0cdbf5058399df::t_e5cf456cccd90b 1-10
+packages/sdk-ocaml/spike-wasm/fetch/code_mode.mli
+  s_0cdbf5058399df::t_e5cf456cccd90b 1-11
+packages/sdk-ocaml/spike-wasm/shell.nix
+  s_0cdbf5058399df::t_6c5c59178f1cdc 1-33
+packages/sdk-ocaml/spike-wasm/fetch/await.mli
+  s_19e7455dcd0901::t_dcd5b21eb95897 1-13
+packages/sdk-ocaml/spike-wasm/fetch/await_cps.ml
+  s_19e7455dcd0901::t_06063670e8cea0 1-39
+packages/sdk-ocaml/spike-wasm/fetch/await_jspi.ml
+  s_19e7455dcd0901::t_f74bc387919705 1-5
+packages/sdk-ocaml/spike-wasm/prune.sh
+  s_8dacbdae2863e4::t_536e40949476b3 1-13
+packages/sdk-ocaml/spike-wasm/run.mjs
+  s_8dacbdae2863e4::t_80337e2d72b31f 1-93
+packages/sdk-ocaml/spike-wasm/runtime/await.js
+  s_19e7455dcd0901::t_b3affd1daa853e 1-8
+packages/sdk-ocaml/spike-wasm/runtime/await.wat
+  s_19e7455dcd0901::t_058a659cd1c93e 1-12
+packages/sdk-ocaml/spike-wasm/stub.mjs
+  s_8dacbdae2863e4::t_2f83f4b1b92b01 1-12
+packages/sdk-ocaml/spike-wasm/README.md
+  s_4034a1ab8352ec::t_f8b6a25625c0b6 1-24
+packages/sdk-ocaml/spike-wasm/try.sh
+  s_4034a1ab8352ec::t_b5182d5947e7b1 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b5f4da7f631a49d9355df0156ac1398f91c7edff",
+  "prompts": {},
+  "sessions": {
+    "s_0cdbf5058399df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ff9ef4d-4eb0-4ed3-8508-e87e34d6857a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_19e7455dcd0901": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2c02256-11ee-4267-b095-d88e7cb7df7b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4034a1ab8352ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c071e5-bedc-444f-93e5-7bacdda05a7b",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4de99c3be44255": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb80936-77b8-47b6-8e64-a86407cfc90b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8dacbdae2863e4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fcecbfc5-75ce-4eea-8f46-925ffe784c1a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
