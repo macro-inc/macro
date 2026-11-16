@@ -18,7 +18,7 @@ export function ComposerDescriptionEditor(
     model.controller.setField('description', value)
   );
   return (
-    <div class="min-h-18 max-h-36 w-full overflow-y-auto rounded-xl bg-control">
+    <div class="min-h-12 max-h-52 w-full overflow-y-auto rounded-lg border border-transparent bg-ink/6 focus-within:border-input-focus">
       <MarkdownTextarea
         type="calendar"
         initialHtml={description.initialHtml}
@@ -32,8 +32,10 @@ export function ComposerDescriptionEditor(
         resolveAppLink={props.resolveAppLink}
         placeholder={t('calendar.addDescription')}
         portalScope="local"
-        domRef={(element) => element.setAttribute('aria-label', 'Description')}
-        class="min-h-18 w-full bg-transparent px-2.5 py-2 text-sm text-ink outline-none"
+        domRef={(element) =>
+          element.setAttribute('aria-label', t('calendar.description'))
+        }
+        class="min-h-12 w-full bg-transparent px-2.5 py-1 text-sm text-ink outline-none"
       />
     </div>
   );

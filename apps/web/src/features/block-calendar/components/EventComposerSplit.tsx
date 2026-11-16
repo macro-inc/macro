@@ -5,15 +5,13 @@ import {
 } from '@app/features/calendar/components/composer/event-form-model';
 import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import { MobileEventForm } from '@app/features/calendar/components/composer/MobileEventForm';
+import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import {
-  type CreatedCalendarEvent,
-  useEventEditor,
-} from '@app/features/calendar/hooks/use-event-editor';
+import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';

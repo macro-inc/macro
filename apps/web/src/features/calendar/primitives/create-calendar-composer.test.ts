@@ -24,6 +24,47 @@ function createController() {
 }
 
 describe('calendar composer model', () => {
+  it('keeps an imported point time zone read-only without blocking its other edits', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const controller = createCalendarEventFormController({
+        initialValue: {
+          ...defaultEditorInitialValues(new Date('2030-01-01T09:00:00'), false),
+          title: 'Planning',
+          start: '2030-01-01T09:00',
+          end: '2030-01-01T09:00',
+          importedPointTime: {
+            kind: 'timed',
+            startsAt: '2030-01-01T09:00:00Z',
+            endsAt: '2030-01-01T09:00:00Z',
+            timeZone: 'UTC',
+          },
+        },
+        isEdit: true,
+        calendarOptions: () => [],
+        guestOptions: () => [],
+      });
+      const onSubmit = vi.fn();
+      const model = createCalendarComposer({
+        controller,
+        pending: false,
+        isEdit: true,
+        initialMetadata: { timeZone: 'UTC' },
+        onSubmit,
+      });
+      expect(model.timeZoneIsDisabled()).toBe(true);
+      expect(model.setTimeZone('America/New_York')).toBe(false);
+      expect(model.isDirty()).toBe(false);
+      controller.setField('title', 'Updated');
+      expect(model.canSave()).toBe(true);
+      model.submit();
+      expect(onSubmit.mock.lastCall?.[0]).toMatchObject({
+        title: 'Updated',
+        time: controller.state().importedPointTime,
+      });
+      expect(onSubmit.mock.lastCall?.[2]).toBeUndefined();
+    });
+  });
   it.each([
     {
       rule: 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,SU;WKST=SU',

@@ -28,6 +28,7 @@ import {
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
 import { eventGuestOptions } from '../components/composer/guest-options';
+import type { CreatedCalendarEvent } from '../core/composer';
 import type { ComposerMetadataChanges } from '../core/composer-metadata';
 import {
   type CalendarEvent,
@@ -108,12 +109,6 @@ function hasTimeChanged(
     )
     .otherwise(() => true);
 }
-
-/** A new event's id and the time it was created with. */
-export type CreatedCalendarEvent = {
-  eventId: string;
-  time: EventEditorSubmitValues['time'];
-};
 
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;

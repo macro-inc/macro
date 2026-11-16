@@ -11,6 +11,7 @@ import {
 import type { EventEditorDisabledFields } from '../components/composer/event-form-model';
 import { outOfOfficeNoticeFor } from '../components/composer/out-of-office';
 import type { CalendarComposerOptions } from '../core/composer';
+import { isTimedPointEvent } from '../utils/calendar-date';
 import { rezoneRecurrenceUntil } from '../utils/recurrence';
 import { createComposerMetadata } from './create-composer-metadata';
 
@@ -80,6 +81,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
   };
   const timeZoneIsDisabled = () => {
     if (metadataIsDisabled() || !timeZoneRelevant()) return true;
+    if (isTimedPointEvent(state())) return true;
     return fieldIsReadOnly('start') || fieldIsReadOnly('end');
   };
   const setTimeZone = (zone: string) => {

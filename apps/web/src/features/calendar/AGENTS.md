@@ -24,8 +24,10 @@ host lives in `../block-calendar/`.
   `hooks/use-event-editor.ts`: draft validation, permissions, and submission.
 - `components/composer/root/` and `context/calendar-composer-context.ts`: new composer
   Root/parts over `primitives/create-calendar-composer.ts`; preserved behavior has
-  temporary old/new conformance coverage. Keep the current `views/composer/EventForm.tsx`
-  and `context/event-form-context.ts` intact until the replacement is ready.
+  temporary old/new conformance coverage. `views/composer/StandaloneComposer.tsx`
+  owns the new desktop data composition, with `DesktopComposer.tsx` as its layout.
+  Keep the current `views/composer/EventForm.tsx` and `context/event-form-context.ts`
+  intact until the replacement is ready.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
   Initialize the zone to the zone represented by the form's wall-clock fields.
@@ -38,6 +40,8 @@ host lives in `../block-calendar/`.
 - Build redesigned calendar-owned UI as new Root-and-parts components; port preserved
   behavior into primitives using old/new conformance tests, keep those temporary
   tests out of commits, and retain replaced components unwired for reference.
+- Place standalone composer instances under a caller-owned `TraceFlow`; flags and
+  delayed suggestions register loading phases without owning placement or navigation.
 - Keep new behavior in `primitives/`, pure domain code in `core/`, transport
   adapters in `queries/`, and host composition in `views/`.
 - Keep presentation components independent of production services; use the

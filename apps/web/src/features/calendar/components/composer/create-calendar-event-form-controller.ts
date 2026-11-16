@@ -668,6 +668,7 @@ export function createCalendarEventFormController(
 
   return {
     state,
+    initialValue,
     value,
     calendarOptions: availableCalendarOptions,
     guestOptions: options.guestOptions,

@@ -1,5 +1,5 @@
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
+import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { confirmDialog } from '@ui';

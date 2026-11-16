@@ -1,7 +1,7 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
+import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
   composePropsFromParams,

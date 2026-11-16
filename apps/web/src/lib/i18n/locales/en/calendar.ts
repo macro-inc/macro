@@ -86,4 +86,21 @@ export default {
   removeNotification: 'Remove {{offset}} notification',
   otherNotificationsPreserved:
     '{{count}} other notification methods are preserved.',
+  pinComposer: 'Pin event composer',
+  unpinComposer: 'Unpin event composer',
+  loadingEvent: 'Loading event…',
+  readingEventSuggestion: 'Reading the email for a time and place',
+  description: 'Description',
+  timeZone: 'Time zone',
+  visibility: 'Visibility',
+  visibilityDefault: 'Default visibility',
+  visibilityPublic: 'Public',
+  visibilityPrivate: 'Private',
+  visibilityConfidential: 'Confidential',
+  visibilityUnavailable: 'Visibility for one occurrence is unavailable',
+  conferenceLocked:
+    'Microsoft keeps the online meeting link on an existing event. To remove it, use “Replace event” after saving or discarding your edits without a meeting link.',
+  providerDeclinesWarning:
+    'Macro checks for conflicts in the background while this calendar is connected. Replies already sent cannot be undone by changing this event.',
+  declineReply: 'Auto-decline reply: “{{message}}”',
 };

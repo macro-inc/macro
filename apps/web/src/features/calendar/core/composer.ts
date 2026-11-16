@@ -10,6 +10,12 @@ import type {
   ComposerMetadataChanges,
 } from './composer-metadata';
 
+/** A newly created event and the time accepted by the write adapter. */
+export interface CreatedCalendarEvent {
+  eventId: string;
+  time: EventEditorSubmitValues['time'];
+}
+
 /** Host-owned data and actions for the new calendar composer, without UI slots. */
 export interface CalendarComposerOptions {
   controller: CalendarEventFormController;

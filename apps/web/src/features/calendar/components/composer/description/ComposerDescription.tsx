@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import {
   ComposerDescriptionEditor,
@@ -9,14 +9,19 @@ export function ComposerDescription(
   props: Omit<ComposerDescriptionEditorProps, 'initialValue'>
 ) {
   const model = useCalendarComposer();
-  const initialValue = model.state().description;
-  // A permission refusal resets the model; remount its editor with the reset value.
-  const editorIdentity = () =>
-    model.fieldIsReadOnly('description') ? 'locked' : 'editable';
+  // External seeds and permission changes remount Lexical. Ordinary typing
+  // changes only the current value, so it keeps the editor and its caret intact.
+  const editorIdentity = createMemo(() => ({
+    initialValue: model.controller.initialValue().description,
+    readOnly: model.fieldIsReadOnly('description'),
+  }));
   return (
     <Show keyed when={editorIdentity()}>
-      {(_identity) => (
-        <ComposerDescriptionEditor {...props} initialValue={initialValue} />
+      {(identity) => (
+        <ComposerDescriptionEditor
+          {...props}
+          initialValue={identity.initialValue}
+        />
       )}
     </Show>
   );
