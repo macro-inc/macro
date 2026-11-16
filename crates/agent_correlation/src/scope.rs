@@ -131,6 +131,18 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/documents/{id}/team_share"),
     ("PUT", "/crm/pipelines/{id}/sharing"),
     ("PUT", "/passwords/teams/{id}/items/{id}/share"),
+    (
+        "POST",
+        "/passwords/agent/teams/{id}/items/{id}/access-requests",
+    ),
+    (
+        "POST",
+        "/passwords/teams/{id}/items/{id}/agent-access-requests/{id}/resolve",
+    ),
+    (
+        "POST",
+        "/passwords/teams/{id}/items/{id}/agents/{id}/revoke",
+    ),
     ("PUT", "/databases/{id}/awareness"),
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
@@ -216,6 +228,7 @@ pub const POST_READS: &[(&str, &str)] = &[
     ("POST", "/channel-labels/preview"),
     ("POST", "/channels/preview"),
     ("POST", "/crm/pipelines/{id}/rows"),
+    ("POST", "/crm/previews"),
     ("POST", "/documents/github_prs/tasks"),
     ("POST", "/documents/preview"),
     ("POST", "/documents/similarity_search"),

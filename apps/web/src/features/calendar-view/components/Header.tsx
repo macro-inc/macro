@@ -323,7 +323,7 @@ export function Header(props: {
                 <CalendarSchedulingActions />
               </Show>
               <Show when={props.presentation === 'preview' || isMobile()}>
-                <CalendarSettingsDropdown isNarrow={isNarrow()} />
+                <CalendarSettingsDropdown />
               </Show>
             </div>
           </HeaderIsland>

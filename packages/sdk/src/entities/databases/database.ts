@@ -192,6 +192,7 @@ function typeLabel(type: ColumnType): string {
   return match(type)
     .with({ type: 'text' }, () => 'Text')
     .with({ type: 'number' }, () => 'Number')
+    .with({ type: 'percentage' }, () => 'Percentage')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
     .with({ type: 'date_range' }, () => 'Time range')
@@ -246,6 +247,17 @@ function soleResult<
     );
   return result;
 }
+
+/** What a new database is called, and its first table. */
+export type CreateDatabaseOptions = {
+  /** The database's name. */
+  name: string;
+  /**
+   * The name of the table the database starts with; "Table 1" when omitted.
+   * Name it when you are about to fill a table, and build into it.
+   */
+  firstTable?: string;
+};
 
 /**
  * A Macro database: a named collection of tables, owned and shared as one
@@ -303,13 +315,15 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return new Database(client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /** Create a database owned by the caller; see {@link CreateDatabaseOptions}. */
   static async create(
     client: MacroClient,
-    options: { name: string },
+    options: CreateDatabaseOptions,
   ): Promise<Database> {
     const record = unwrap(
-      await client.storage.createDatabase({ body: { name: options.name } }),
+      await client.storage.createDatabase({
+        body: { name: options.name, firstTable: options.firstTable },
+      }),
     );
     return new Database(client, record.id);
   }

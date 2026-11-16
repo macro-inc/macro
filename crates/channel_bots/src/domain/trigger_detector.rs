@@ -26,7 +26,8 @@ use super::sender_label;
 /// only when all of the following hold:
 ///
 /// * the message is a thread reply (never a top-level message),
-/// * the thread already contains a Macro AI message,
+/// * the thread already contains a Macro AI message of its own (not a post a
+///   user made as Macro AI through a client, such as an MCP client),
 /// * the classifier judges that the message expects an agent response.
 ///
 /// Attributed bot messages trigger like a person's, within the agent hop
@@ -183,11 +184,21 @@ where
 }
 
 /// Macro AI's messages are the agent's; other bots go by their public name.
+///
+/// A post a user made through a client, such as an MCP client, is sent as
+/// Macro AI's bot but is that client's: it goes by the client's name and does
+/// not make the thread Macro AI's, so replies to it never pull Macro AI in.
 fn transcript_message(message: &Message) -> TranscriptMessage {
-    let from_agent =
+    let is_macro_bot =
         message.sender_id.as_bot().map(|bot| bot.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID);
-    let sender = match &message.bot_profile {
-        Some(profile) if !from_agent => profile.name.clone(),
+    let client = message
+        .sender_id
+        .as_bot()
+        .and(message.triggered_via.as_ref());
+    let from_agent = is_macro_bot && client.is_none();
+    let sender = match (client, &message.bot_profile) {
+        (Some(client), _) => client.clone(),
+        (None, Some(profile)) if !from_agent => profile.name.clone(),
         _ => sender_label(message.sender_id.as_ref()),
     };
     TranscriptMessage {

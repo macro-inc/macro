@@ -36,6 +36,9 @@ startup and every five minutes outside the local environment. The closure claims
 one user at a time with `FOR UPDATE SKIP LOCKED` and a 25-minute lease. A batch is
 bounded to 25 claims; a user's model work is bounded to 20 minutes. Failures keep
 their lease until it expires and do not prevent the remaining users from running.
+While the PostHog flag `disable-memory-refresh` is on for the service context
+`memory-refresh`, no new user is claimed: the flag is read before every claim, so a
+batch stops after the user in progress. A failed flag read keeps generation running.
 Shutdown cancels and drains the tracked task. The CLI awaits one user's generation
 and can be used locally with the existing provider and service configuration.
 

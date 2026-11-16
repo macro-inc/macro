@@ -51,9 +51,10 @@ export function ChannelPin(props: {
         </span>
         <Switch>
           <Match when={(props.mentions ?? 0) > 0}>
+            {/* A one-digit count is a 20px circle centered on the dot's center. */}
             <ChannelMentionCount
               count={props.mentions ?? 0}
-              class="absolute top-1 left-1 box-content border-2 border-panel"
+              class="absolute top-px left-px h-5 min-w-5 border-2 border-panel"
             />
           </Match>
           <Match when={props.unread}>

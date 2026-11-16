@@ -25,6 +25,9 @@ in-call chat.
   start and leave, and nonhuman join-by-ID requests. Human sessions can join
   existing calls by ID while the flag is disabled; legacy GET remains available.
 - `src/outbound/pg_call_repo.rs`, `src/outbound/pg_voice_repo.rs`: Postgres.
+- `src/outbound/pg_call_repo/call_list.rs` (+ `call_list/page.sql`,
+  `call_list/people.sql`): the call list behind Soup's call views and CRM
+  Calls tabs, read from the viewer's grants outward.
 - `src/outbound/pg_call_repo/lifecycle.rs`: atomic empty and program-only
   archival checks; the latter uses the last human departure and a 60-second grace.
 - `src/outbound/ai_call_summarizer.rs`, `src/outbound/s3_recording_storage.rs`:
@@ -64,6 +67,9 @@ in-call chat.
 - A call's discussion is stored in `call_entities.discussion` when it is created, and can't be
   inferred from `channel_id`: past channel calls keep `call_chat`. See
   `docs/design/call-chat-in-channel.md`.
+- A call id lives in exactly one of `calls`, `call_records`, or an imported
+  `call_entities` row: archiving moves it in one transaction. The call list
+  takes the first match per granted id, so never let two of them hold the same id.
 - Declining a call on one device must stop ringing on every other device — this
   regressed once (#7092); route the decline through the shared call state, not
   a per-device signal.

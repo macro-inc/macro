@@ -20,7 +20,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import LockIcon from '@icon/system/regular/lock.svg';
+import TrayArrowDownIcon from '@icon/system/regular/tray-arrow-down.svg';
 import { Button, Dropdown } from '@ui';
 import { err } from 'neverthrow';
 import {
@@ -42,6 +42,10 @@ import { KIND_ICONS } from '../components/kind-icon';
 import { NewItemMenu } from '../components/new-item-menu';
 import { ShareMenu } from '../components/share-menu';
 import {
+  type VaultEmptyReason,
+  VaultEmptyState,
+} from '../components/vault-empty-state';
+import {
   FolderActionItems,
   type FolderCommands,
   type FolderEditing,
@@ -58,6 +62,9 @@ import {
 } from '../core/types';
 import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
+import type { AgentRequestSource } from '../queries/agent-requests';
+import { ImportDialog } from './import-dialog';
+import { ItemAgentRequests } from './item-agent-requests';
 
 type MobileTab = 'all' | 'favorites' | 'recent' | 'shared' | 'folders';
 
@@ -75,20 +82,11 @@ function destinationFolder(filter: PasswordFilter) {
   return filter.startsWith('folder:') ? filter.slice(7) : null;
 }
 
-function EmptyState(props: { vault: VaultController }) {
-  const message = () => {
-    if (props.vault.search().trim()) return t('passwords.noResults');
-    if (props.vault.filter().startsWith('folder:'))
-      return t('passwords.emptyFolder');
-    if (props.vault.filter() === 'all') return t('passwords.emptyVault');
-    return t('passwords.empty');
-  };
-  return (
-    <div class="flex flex-col items-center gap-2 px-4 pt-16 text-center">
-      <LockIcon class="size-5 text-ink-extra-muted" />
-      <p class="text-sm text-ink-muted">{message()}</p>
-    </div>
-  );
+function emptyReason(vault: VaultController): VaultEmptyReason {
+  if (vault.search().trim()) return 'search';
+  if (vault.filter().startsWith('folder:')) return 'folder';
+  if (vault.filter() === 'all') return 'vault';
+  return 'filter';
 }
 
 function DetailBack(props: { onBack: () => void }) {
@@ -112,6 +110,7 @@ function ItemPane(props: {
   vault: VaultController;
   item: PasswordItem;
   now: number;
+  agentRequests?: AgentRequestSource;
   onBack: () => void;
 }) {
   const { source, recipients, recipientsLoading, recipientsError } =
@@ -284,6 +283,11 @@ function ItemPane(props: {
                     fireAndForget(props.vault.loadHistory(), 'passwords'),
                 }}
               />
+              <Show when={props.item.canManage && props.agentRequests}>
+                {(source) => (
+                  <ItemAgentRequests source={source()} itemId={props.item.id} />
+                )}
+              </Show>
             </>
           }
         >
@@ -435,6 +439,7 @@ function ListChrome(props: { children: JSX.Element }) {
 function MobileNew(props: {
   hasSelection: boolean;
   onCreate: (kind: PasswordKind) => void;
+  onImport: () => void;
 }) {
   const shell = useViewShell();
   return (
@@ -447,11 +452,18 @@ function MobileNew(props: {
       <div class="pointer-events-auto flex justify-end px-(--mobile-chrome-gutter)">
         <MobileCreateMenu
           label={t('passwords.new')}
-          items={PASSWORD_KINDS.map((kind) => ({
-            label: t(`passwords.${kind}`),
-            icon: KIND_ICONS[kind],
-            onSelect: () => props.onCreate(kind),
-          }))}
+          items={[
+            ...PASSWORD_KINDS.map((kind) => ({
+              label: t(`passwords.${kind}`),
+              icon: KIND_ICONS[kind],
+              onSelect: () => props.onCreate(kind),
+            })),
+            {
+              label: t('passwords.import'),
+              icon: TrayArrowDownIcon,
+              onSelect: props.onImport,
+            },
+          ]}
         />
       </div>
     </FloatRegion>
@@ -485,10 +497,59 @@ function LeavePrompt(props: {
   );
 }
 
+/** An item to open, from a notification; `focusRequestId` makes each request distinct. */
+export type PasswordsFocus = {
+  itemId: string;
+  focusRequestId: number;
+};
+
+/**
+ * The item a notification's split params point at, when it belongs to the
+ * viewer's current team; any other team opens the vault without a selection.
+ */
+export function focusFromParams(
+  params: Record<string, unknown> | undefined,
+  teamId: string | undefined,
+  focusRequestId: number
+): PasswordsFocus | undefined {
+  if (
+    !params ||
+    typeof params.itemId !== 'string' ||
+    params.teamId !== teamId ||
+    teamId === undefined
+  )
+    return;
+  return { itemId: params.itemId, focusRequestId };
+}
+
+/**
+ * Each focus request selects its item once, after the list loads; a failed
+ * load keeps it waiting for a retry. An item the viewer cannot see is never
+ * selected.
+ */
+export function createFocusSelection(
+  vault: VaultController,
+  focus: () => PasswordsFocus | undefined
+) {
+  let handledFocus: number | undefined;
+  createEffect(() => {
+    const current = focus();
+    if (!current || current.focusRequestId === handledFocus) return;
+    if (!vault.items.isSuccess) return;
+    handledFocus = current.focusRequestId;
+    const item = vault.loadedItems().find(({ id }) => id === current.itemId);
+    if (item) vault.select(item);
+  });
+}
+
 export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
+  /** Absent when the agent vault is off: no agent controls render. */
+  agentRequests?: AgentRequestSource;
+  focus?: PasswordsFocus;
 }) {
   const vault = createVault();
+  createFocusSelection(vault, () => props.focus);
   const { source, scope } = usePasswords();
   let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
@@ -507,6 +568,8 @@ export function VaultView(props: {
   /** A name field chosen in the header menu, opened when the menu closes. */
   let headerEditor: FolderEditing | undefined;
   const [mobileFolders, setMobileFolders] = createSignal(false);
+  const [importing, setImporting] = createSignal(false);
+  const openImport = () => setImporting(true);
   const [leave, setLeave] = createSignal<(allow: boolean) => void>();
   const [now, setNow] = createSignal(Date.now());
   const ticker = setInterval(() => {
@@ -678,10 +741,9 @@ export function VaultView(props: {
           <VaultSidebar
             {...sidebarProps()}
             editing={isTouchDevice() && mobileFolders() ? undefined : editing()}
-            search={vault.search()}
-            onSearch={vault.setSearch}
             destination={destination()}
             onCreate={create}
+            onImport={openImport}
             onLock={vault.lock}
           />
         </ViewShell.Aside>
@@ -759,6 +821,7 @@ export function VaultView(props: {
                   presentation="toolbar"
                   destination={destination()}
                   onCreate={create}
+                  onImport={openImport}
                 />
                 <ListHeaderSearch
                   label={t('passwords.search')}
@@ -797,7 +860,11 @@ export function VaultView(props: {
                 </div>
               </ViewShell.Header>
             </ListChrome>
-            <MobileNew hasSelection={!!selection()} onCreate={create} />
+            <MobileNew
+              hasSelection={!!selection()}
+              onCreate={create}
+              onImport={openImport}
+            />
           </Show>
           <ViewShell.Content>
             <div class="h-full overflow-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]">
@@ -847,7 +914,11 @@ export function VaultView(props: {
                       vault.drafts().length === 0
                     }
                   >
-                    <EmptyState vault={vault} />
+                    <VaultEmptyState
+                      reason={emptyReason(vault)}
+                      onCreate={create}
+                      onImport={openImport}
+                    />
                   </Show>
                 </Match>
               </Switch>
@@ -873,6 +944,7 @@ export function VaultView(props: {
                   vault={vault}
                   item={item}
                   now={now()}
+                  agentRequests={props.agentRequests}
                   onBack={() => vault.select(undefined)}
                 />
               )}
@@ -880,6 +952,20 @@ export function VaultView(props: {
           </Switch>
         </ViewShell.Detail>
       </ViewShell.Root>
+      <Show when={importing()}>
+        <ImportDialog
+          items={vault.availableItems}
+          folders={vault.loadedFolders}
+          refresh={async () => {
+            await Promise.all([vault.items.refetch(), vault.folders.refetch()]);
+          }}
+          onOpenFolder={(folderId) => {
+            setImporting(false);
+            selectFilter(folderId ? `folder:${folderId}` : 'all');
+          }}
+          onClose={() => setImporting(false)}
+        />
+      </Show>
     </div>
   );
 }

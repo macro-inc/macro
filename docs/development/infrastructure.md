@@ -227,9 +227,9 @@ and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
 
 `agent-harness-service` is the only ECS agent service. Its process also owns
 chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
-and event workers, and projection refresh sweeps. `preview-gateway` retains
-only networking, and `document-cognition` retains the projection queue and
-public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+and event workers. `preview-gateway` retains
+only networking, and `document-cognition` retains the retired projection queue
+and public DNS record. `mcp-server` retains its public DNS record. Both hostnames
 point at the shared gateway, preserving public URLs and OAuth callbacks. The
 retired MCP and schedule stack programs contain no compute resources. Follow
 [the cutover guide](../guides/consolidate-agent-services.md) before deployment;
