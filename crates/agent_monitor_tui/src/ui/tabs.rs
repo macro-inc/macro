@@ -31,7 +31,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, page: &Page) -> Rect {
     let mut line = Line::default();
     for (label, key, target) in tabs {
         let style = if active == target {
-            theme::selected().fg(Token::Highlight.color())
+            theme::ink(Token::TextDim).bg(Token::Selection.color())
         } else {
             theme::ink(Token::TextDim)
         };

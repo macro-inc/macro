@@ -24,7 +24,8 @@ times a second, and ticks at `fps` only while something animates.
   today (`Totals::spend_by_kind`), never a sum of rows' lifetime costs, so it adds up to the day total.
 - `src/ui.rs`: bottom key hints and width breakpoints; panes and
   pages live in `src/ui/`. `ui/tabs.rs` draws left-aligned page tabs on every
-  view, wrapping on narrow terminals. The global header and quote board are removed.
+  view, wrapping on narrow terminals. Mark the active tab only with a subtle
+  background; preserve the inactive text color and weight. The global header and quote board are removed.
   `ui/agent_summary.rs` draws separate status and activity rows inside AGENTS,
   both in the monitor and on its full page. Spend lives in SPEND (the full
   page also lists lifetime cost by agent), and error counts live in FAILURES.
