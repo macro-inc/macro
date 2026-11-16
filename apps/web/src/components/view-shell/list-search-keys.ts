@@ -79,16 +79,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
 
     // With no rows to land on, ArrowDown and Enter stay with the field, as in
     // a view without a list, so typing goes on.
-    const checksRows = row === 'first' && !rowsPending;
-    if (checksRows && options.hasResults?.() === false) return;
-
-    // The list's own "go to first item" also scrolls that row into view. It
-    // answers false when the list has no rows.
-    const goToFirst =
-      row === 'first' ? getActiveCommandByToken(TOKENS.entity.jump.home) : null;
-    const canGoToFirst = goToFirst && (goToFirst.condition?.() ?? true);
-    const landed = canGoToFirst ? goToFirst.keyDownHandler?.() : undefined;
-    if (checksRows && !options.hasResults && landed === false) return;
+    if (row === 'first' && !landsOnFirstRow(rowsPending)) return;
 
     focusResults();
     // A view whose results are not on screen (a tab without a list) has
@@ -105,6 +96,14 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     }
 
     if (collapses) options.clear();
+  };
+
+  // Moves the list to its first row, unless it has none to land on.
+  const landsOnFirstRow = (rowsPending: boolean) => {
+    if (!rowsPending && options.hasResults?.() === false) return false;
+
+    const landed = goToFirstRow();
+    return rowsPending || Boolean(options.hasResults) || landed !== false;
   };
 
   // Returns whether a suggestion took the key instead of the results.
@@ -181,4 +180,13 @@ function isComposing(event: KeyboardEvent) {
 
 function hasModifier(event: KeyboardEvent) {
   return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+}
+
+// The list's own "go to first item" also scrolls that row into view. It
+// answers false when the list has no rows.
+function goToFirstRow() {
+  const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);
+  if (!goToFirst || !(goToFirst.condition?.() ?? true)) return undefined;
+
+  return goToFirst.keyDownHandler?.();
 }
