@@ -1,0 +1,103 @@
+packages/sdk-ocaml/analyzer/test/corpus/alias_of_alias.ml
+  s_e015be4a6833c1::t_893647ff8c3f42 1-5
+packages/sdk-ocaml/analyzer/test/corpus/camlinternal.ml
+  s_e015be4a6833c1::t_3c51178bf69223 1-2
+packages/sdk-ocaml/analyzer/test/corpus/class_method.ml
+  s_4034a1ab8352ec::t_6b2949d4b7c1c6 1-5
+packages/sdk-ocaml/analyzer/test/corpus/direct.ml
+  s_e015be4a6833c1::t_d944811f4d2303 1-2
+packages/sdk-ocaml/analyzer/test/corpus/first_class_module.ml
+  s_e015be4a6833c1::t_7f060bbba33911 1-14
+packages/sdk-ocaml/analyzer/test/corpus/forged_request.ml
+  s_e015be4a6833c1::t_0c9dd722ebe737 1-13
+packages/sdk-ocaml/analyzer/test/corpus/forged_update.ml
+  s_e015be4a6833c1::t_35312f86943f39 1-3
+packages/sdk-ocaml/analyzer/test/corpus/function_value.ml
+  s_e015be4a6833c1::t_de231fcc784c0d 1-3
+packages/sdk-ocaml/analyzer/test/corpus/functor_alias_argument.ml
+  s_e015be4a6833c1::t_719981cdec32b6 1-17
+packages/sdk-ocaml/analyzer/test/corpus/functor_parameter.ml
+  s_e015be4a6833c1::t_fa2de71f16c3d9 1-15
+packages/sdk-ocaml/analyzer/test/corpus/functor_returns_sdk.ml
+  s_4034a1ab8352ec::t_fd09a01aab5b23 1-5
+packages/sdk-ocaml/analyzer/test/corpus/functor_root_module.ml
+  s_e015be4a6833c1::t_fea1e821beab3c 1-16
+packages/sdk-ocaml/analyzer/test/corpus/functor_whole_module.ml
+  s_e015be4a6833c1::t_551e1515a1c75a 1-8
+packages/sdk-ocaml/analyzer/test/corpus/helper.ml
+  s_e015be4a6833c1::t_b08948745c8617 1-5
+packages/sdk-ocaml/analyzer/test/corpus/include_nested.ml
+  s_e015be4a6833c1::t_84987933d50264 1-17
+packages/sdk-ocaml/analyzer/test/corpus/include_toplevel.ml
+  s_e015be4a6833c1::t_95f365fece463c 1-5
+packages/sdk-ocaml/analyzer/test/corpus/let_module.ml
+  s_e015be4a6833c1::t_948b00564e9ad5 1-4
+packages/sdk-ocaml/analyzer/test/corpus/let_open.ml
+  s_e015be4a6833c1::t_a7b901dcde0962 1-4
+packages/sdk-ocaml/analyzer/test/corpus/local_module_named_like_sdk.ml
+  s_e015be4a6833c1::t_2403d11fbef9b5 1-6
+packages/sdk-ocaml/analyzer/test/corpus/local_open.ml
+  s_e015be4a6833c1::t_97da2b4da6fcbe 1-2
+packages/sdk-ocaml/analyzer/test/corpus/module_alias.ml
+  s_e015be4a6833c1::t_fb7293610abfa0 1-4
+packages/sdk-ocaml/analyzer/test/corpus/nested_alias.ml
+  s_e015be4a6833c1::t_6c65447e88bc9b 1-17
+packages/sdk-ocaml/analyzer/test/corpus/obj_alias.ml
+  s_e015be4a6833c1::t_ca53c4230e9d4e 1-4
+packages/sdk-ocaml/analyzer/test/corpus/obj_open.ml
+  s_e015be4a6833c1::t_65eabf00216d7f 1-4
+packages/sdk-ocaml/analyzer/test/corpus/object_method.ml
+  s_e015be4a6833c1::t_a4e6a83e27f0cd 1-5
+packages/sdk-ocaml/analyzer/test/corpus/open_root.ml
+  s_e015be4a6833c1::t_13a3151c138ccc 1-4
+packages/sdk-ocaml/analyzer/test/corpus/open_service.ml
+  s_e015be4a6833c1::t_f301ede6cb5b8b 1-4
+packages/sdk-ocaml/analyzer/test/corpus/open_struct.ml
+  s_4034a1ab8352ec::t_851e2014106af6 1-7
+packages/sdk-ocaml/analyzer/test/corpus/pack_inferred.ml
+  s_4034a1ab8352ec::t_5f0dfa7cde3ad2 1-11
+packages/sdk-ocaml/analyzer/test/corpus/partial_application.ml
+  s_e015be4a6833c1::t_bce8c8dbde2fb9 1-3
+packages/sdk-ocaml/analyzer/test/corpus/reads_request.ml
+  s_e015be4a6833c1::t_ff2c557a4eb4c6 1-4
+packages/sdk-ocaml/analyzer/test/corpus/recursive_module.ml
+  s_e015be4a6833c1::t_36537e8bb9c973 1-10
+packages/sdk-ocaml/analyzer/test/corpus/renamed_operation.ml
+  s_e015be4a6833c1::t_3d87da295ada1c 1-3
+packages/sdk-ocaml/analyzer/test/corpus/shadowing.ml
+  s_e015be4a6833c1::t_7a512f1cf6ea02 1-9
+packages/sdk-ocaml/analyzer/test/corpus/signature_constraint.ml
+  s_e015be4a6833c1::t_127f788c40aa3a 1-10
+packages/sdk-ocaml/analyzer/test/corpus/types_and_codecs.ml
+  s_e015be4a6833c1::t_b99bf91897ccbf 1-11
+packages/sdk-ocaml/analyzer/test/corpus/dune
+  s_4034a1ab8352ec::t_7246e03376f7d3 1-9
+packages/sdk-ocaml/analyzer/test/corpus/unsafe_get.ml
+  s_4034a1ab8352ec::t_501b1879501d90 1-2
+packages/sdk-ocaml/analyzer/test/test_corpus.ml
+  s_4034a1ab8352ec::t_293f15fae2dac7 1-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9822830e9c2debb3b3c94e9f0eb480b7ff605371",
+  "prompts": {},
+  "sessions": {
+    "s_4034a1ab8352ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c071e5-bedc-444f-93e5-7bacdda05a7b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e015be4a6833c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "497631fe-089f-4a0c-bf2f-36800aaf41e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
