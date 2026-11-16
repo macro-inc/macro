@@ -104,6 +104,11 @@ pub struct Harness {
     /// machine the user paired themselves.
     #[serde(default)]
     pub computer_id: Option<ComputerId>,
+    /// The agent teammate whose computer this is, when it is one. People
+    /// reach the agent by message; nothing else may run on its computer.
+    /// Set on the caller-facing listings and on a patch's answer.
+    #[serde(default)]
+    pub team_agent_user_id: Option<MacroUserIdStr<'static>>,
     /// How Claude Code on this machine is paid for, derived from whether
     /// it has an active Claude login. Only meaningful for Macro computers.
     #[serde(default)]

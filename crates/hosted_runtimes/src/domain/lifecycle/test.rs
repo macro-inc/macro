@@ -9,6 +9,7 @@ mod billing;
 mod comped;
 mod instance_lost;
 mod pool;
+mod setup_notice;
 
 const HOST: HostId = HostId::new(uuid::Uuid::from_u128(
     0x0000_0000_0000_4000_8000_0000_0000_0001,

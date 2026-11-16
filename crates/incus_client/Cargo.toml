@@ -4,6 +4,10 @@ name = "incus_client"
 publish = false
 version = "0.1.0"
 
+[features]
+# `IncusClient::over_plain_http`, for wiremock tests in dependent crates.
+test-support = []
+
 [dependencies]
 chrono = { workspace = true }
 futures = { workspace = true }

@@ -21,6 +21,8 @@ use crate::domain::models::{
 use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
 
+mod agents;
+pub use agents::PgComputerAgents;
 mod apply;
 mod pool;
 mod records;
@@ -218,7 +220,7 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             DELETE FROM computer_reservation WHERE id = $1
             RETURNING id, team_id, host_id, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,
-                      purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at
+                      purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at, agent_user_id
             "#,
             reservation_id.as_uuid(),
         )
@@ -273,8 +275,8 @@ impl ComputerRepo for PgComputerRepo {
             INSERT INTO hosted_runtime
                 (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id,
                  comp_reason, purchase_key, host_id, awake, state, enrollment_generation,
-                 created_by, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                 created_by, created_at, updated_at, agent_user_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             "#,
             reservation.id.as_uuid(),
             reservation.team_id,
@@ -294,6 +296,7 @@ impl ComputerRepo for PgComputerRepo {
             reservation.created_by.as_ref(),
             reservation.created_at,
             now,
+            reservation.agent.as_ref().map(|agent| agent.as_ref()),
         )
         .execute(&mut *tx)
         .await?;
@@ -369,7 +372,7 @@ impl ComputerRepo for PgComputerRepo {
             ReservationRow,
             r#"
             SELECT id, team_id, host_id, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,
-                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at
+                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at, agent_user_id
             FROM computer_reservation WHERE id = $1
             "#,
             reservation_id.as_uuid(),
@@ -385,7 +388,7 @@ impl ComputerRepo for PgComputerRepo {
             ReservationRow,
             r#"
             SELECT id, team_id, host_id, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,
-                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at
+                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at, agent_user_id
             FROM computer_reservation WHERE team_id = $1 ORDER BY created_at
             "#,
             team_id,
@@ -404,7 +407,7 @@ impl ComputerRepo for PgComputerRepo {
             ReservationRow,
             r#"
             SELECT id, team_id, host_id, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,
-                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at
+                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at, agent_user_id
             FROM computer_reservation WHERE created_at <= $1 ORDER BY created_at LIMIT $2
             "#,
             created_before,

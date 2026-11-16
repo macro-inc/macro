@@ -1491,3 +1491,37 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn a_one_character_query_is_a_whole_word_in_content_and_a_capped_prefix_in_names()
+-> anyhow::Result<()> {
+    let args = UnifiedSearchArgs {
+        search_indices: HashSet::from([
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+        ]),
+        user_id: "user".to_string(),
+        page_size: 10,
+        match_type: "partial".to_string(),
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["a".to_string()],
+            mode: DocumentSearchMode::NameContent,
+            ..Default::default()
+        },
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["a".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let request = serde_json::to_string(&build_unified_search_request(&args)?.to_json())?;
+
+    assert!(request.contains(r#""query":{"match_phrase":{"content":"a"}}"#));
+    assert!(request.contains(
+        r#"{"match_phrase_prefix":{"document_name":{"query":"a","max_expansions":256}}}"#
+    ));
+    assert!(request.contains(r#"{"query":"(a)","fields":["subject""#));
+    assert!(!request.contains(r#""match_phrase_prefix":{"content""#));
+    Ok(())
+}

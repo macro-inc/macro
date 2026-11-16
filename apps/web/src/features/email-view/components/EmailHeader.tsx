@@ -10,11 +10,10 @@ import {
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import {
   canSearchEmailTab,
@@ -37,6 +36,8 @@ import { EmailControls } from './EmailControls';
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
   onSearchEscape?: () => void;
+  /** Hands the search field's focus to the view's search keys. */
+  registerSearch?: (focus: () => void) => () => void;
   tabOnly?: boolean;
 };
 
@@ -96,7 +97,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
-  let focusSearch: (() => void) | undefined;
+  let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
   const inboxSelected = () => !savedViewActive() && isEmailInboxTab(state.tab);
@@ -112,30 +113,13 @@ export function EmailHeader(props: EmailHeaderProps) {
       ? 'Inbox'
       : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
-  const runSearch = () => {
-    focusSearch?.();
-    return true;
-  };
   const canSearch = () => canSearchEmailTab(state.tab);
 
-  // Mail clients search with `/`; elsewhere it opens the app's search view.
-  registerHotkey({
-    hotkey: '/',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Search email',
-    condition: () => panel.isPanelActive() && canSearch(),
-    keyDownHandler: runSearch,
-  });
+  onCleanup(() => releaseSearch?.());
 
-  // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    search: {
-      description: 'Search email',
-      condition: canSearch,
-      run: runSearch,
-    },
     filter: {
       description: 'Filter email',
       condition: () => state.tab !== 'scheduled',
@@ -205,7 +189,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           onValueChange={(search) => setState('search', search)}
           onEscape={props.onSearchEscape}
           registerFocus={(focus) => {
-            focusSearch = focus;
+            releaseSearch = props.registerSearch?.(focus);
           }}
         />
       </Show>

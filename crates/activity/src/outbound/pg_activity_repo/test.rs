@@ -691,9 +691,11 @@ async fn subject_overview_filters_subject_and_window_and_orders_sparse_aggregate
 async fn subject_overview_buckets_fifteen_minute_rows_across_havana_midnights(pool: PgPool) {
     let repo = PgActivityRepo::new(pool);
     let subject = "macro|havana@example.com";
+    // Cuba's last spring forward was 2026-03-08 and its next fall back is
+    // 2027-11-07 (IANA tzdata 2026f); both dates hold in older releases too.
     let transition_starts = [
         ("2026-03-08T04:00:00Z", "spring"),
-        ("2026-11-01T04:00:00Z", "fall"),
+        ("2027-11-07T04:00:00Z", "fall"),
     ];
     let mut activities = Vec::new();
     let mut source = 200_u128;
@@ -713,27 +715,34 @@ async fn subject_overview_buckets_fifteen_minute_rows_across_havana_midnights(po
     }
     repo.insert_activities(&activities).await.unwrap();
 
-    let overview = repo
-        .subject_overview(
-            subject,
-            overview_window(chrono_tz::America::Havana, "2026-03-07", "2026-11-02"),
-        )
-        .await
-        .unwrap();
+    let mut days = Vec::new();
+    let mut total = 0;
+    for (start, end) in [("2026-03-07", "2026-03-09"), ("2027-11-06", "2027-11-08")] {
+        let overview = repo
+            .subject_overview(
+                subject,
+                overview_window(chrono_tz::America::Havana, start, end),
+            )
+            .await
+            .unwrap();
+        days.extend(
+            overview
+                .days
+                .iter()
+                .map(|day| (day.day.to_string(), day.count.get())),
+        );
+        total += overview.total();
+    }
 
     assert_eq!(
-        overview
-            .days
-            .iter()
-            .map(|day| (day.day.to_string(), day.count.get()))
-            .collect::<Vec<_>>(),
+        days,
         vec![
             ("2026-03-07".to_owned(), 4),
             ("2026-03-08".to_owned(), 5),
-            ("2026-11-01".to_owned(), 9),
+            ("2027-11-07".to_owned(), 9),
         ]
     );
-    assert_eq!(overview.total(), 18);
+    assert_eq!(total, 18);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -800,7 +809,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
 ) {
     let repo = PgActivityRepo::new(pool);
     let subject = "macro|havana-start@example.com";
-    let first_midnight = chrono::DateTime::parse_from_rfc3339("2026-11-01T04:00:00Z")
+    let first_midnight = chrono::DateTime::parse_from_rfc3339("2027-11-07T04:00:00Z")
         .unwrap()
         .with_timezone(&Utc);
     let mut activities = Vec::new();
@@ -830,7 +839,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
     let starting_on_fallback = repo
         .subject_overview(
             subject,
-            overview_window(chrono_tz::America::Havana, "2026-11-01", "2026-11-02"),
+            overview_window(chrono_tz::America::Havana, "2027-11-07", "2027-11-08"),
         )
         .await
         .unwrap();
@@ -840,14 +849,14 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
             .iter()
             .map(|day| (day.day.to_string(), day.count.get()))
             .collect::<Vec<_>>(),
-        vec![("2026-11-01".to_owned(), 4)]
+        vec![("2027-11-07".to_owned(), 4)]
     );
     assert_eq!(starting_on_fallback.total(), 4);
 
     let ending_on_fallback = repo
         .subject_overview(
             subject,
-            overview_window(chrono_tz::America::Havana, "2026-10-31", "2026-11-01"),
+            overview_window(chrono_tz::America::Havana, "2027-11-06", "2027-11-07"),
         )
         .await
         .unwrap();
@@ -857,7 +866,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
             .iter()
             .map(|day| (day.day.to_string(), day.count.get()))
             .collect::<Vec<_>>(),
-        vec![("2026-10-31".to_owned(), 1)]
+        vec![("2027-11-06".to_owned(), 1)]
     );
     assert_eq!(ending_on_fallback.total(), 1);
 }

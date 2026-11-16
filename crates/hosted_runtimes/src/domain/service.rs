@@ -201,6 +201,36 @@ impl<
         Ok(())
     }
 
+    /// An agent teammate's computer status for the team roster, with the
+    /// fleet's current availability. Unlike `status`, a detached fleet is not
+    /// refused: the roster still shows the durable state.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(ComputerStatus, crate::domain::models::FleetAttachment), ComputerError> {
+        let availability = self
+            .attachment
+            .attachment(self.clock.now())
+            .await
+            .map_err(internal)?;
+        let record = self.team_record(team_id, computer_id).await?;
+        Ok((self.status_of(&record).await?, availability))
+    }
+
+    /// Release an agent teammate's computer when the agent is removed: the
+    /// lifecycle's normal release, without fleet access or name confirmation.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerStatus, ComputerError> {
+        self.apply_for_team(team_id, computer_id, Event::ReleaseNow)
+            .await
+    }
+
     /// Configure the fail-closed rollout at the composition root.
     pub fn with_rollout(mut self, rollout: crate::domain::rollout::ComputerRollout) -> Self {
         self.rollout = rollout;

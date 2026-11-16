@@ -327,7 +327,6 @@ function DriveTutorials() {
 }
 
 export function DriveSidebar() {
-  const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
   // A long folder tree scrolls under a drag held at its edge.
   if (useDragDropContext()) {
@@ -335,17 +334,7 @@ export function DriveSidebar() {
   }
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
-      <ViewSidebar.Header
-        searchLabel="Search files"
-        search={() => (
-          <SearchBar
-            label="Search files"
-            placeholder="Search files"
-            value={state.value().search}
-            onValueChange={state.setSearch}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Drive</ViewSidebar.Title>

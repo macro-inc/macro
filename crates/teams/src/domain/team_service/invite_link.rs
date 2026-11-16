@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::service::NotificationIngress;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 
-use super::TeamServiceImpl;
+use super::{SeatBilling, TeamServiceImpl};
 use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::CrmEnqueuer,
@@ -191,7 +191,12 @@ where
         }
 
         match self
-            .join_team_directly(&team.team_id, user_id, TeamJoinMethod::InviteLink)
+            .join_team_directly(
+                &team.team_id,
+                user_id,
+                TeamJoinMethod::InviteLink,
+                SeatBilling::Billed,
+            )
             .await?
         {
             Some(member) => {

@@ -1,5 +1,6 @@
 //! Models, the lifecycle state machine, ports and services.
 
+pub mod agent;
 pub mod claude_sign_in;
 pub mod enrollment;
 #[cfg(test)]

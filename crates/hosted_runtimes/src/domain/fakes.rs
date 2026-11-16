@@ -3,6 +3,7 @@
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -112,6 +113,45 @@ pub struct FakeRepo {
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
+    /// The agent teammate each computer was bought for.
+    pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+}
+
+impl crate::domain::agent::ComputerAgents for FakeRepo {
+    type Error = std::convert::Infallible;
+
+    async fn agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, Self::Error> {
+        Ok(self.agents.lock().unwrap().get(&computer).cloned())
+    }
+
+    async fn computer_for_agent(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ComputerId>, Self::Error> {
+        let computers = self.computers.lock().unwrap();
+        Ok(self
+            .agents
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(id, linked)| {
+                linked.as_ref() == agent.as_ref()
+                    && computers.get(id).is_some_and(|c| c.team_id == team_id)
+            })
+            .map(|(id, _)| *id))
+    }
+
+    async fn has_live_computer(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.computer_for_agent(team_id, agent).await?.is_some())
+    }
 }
 
 impl FakeRepo {
@@ -245,6 +285,7 @@ impl ComputerRepo for FakeRepo {
             provision_traceparent: reservation.provision_traceparent,
             expires_at,
             created_at: now,
+            agent: reservation.agent,
         };
         self.purchase_keys
             .lock()
@@ -541,10 +582,19 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let (state, effects) = match transitioned {
+        let (mut state, effects) = match transitioned {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
+        // Latch setup milestones like the Postgres applier.
+        let (phase, connected, waiting) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.waiting_for_capacity(),
+        );
+        if let Some(setup) = state.setup.as_mut() {
+            setup.advance(&phase, connected, waiting, now);
+        }
         computer.state = state;
         self.push_effects(computer, effects, now);
         Ok(Some(Applied::Changed(Box::new(computer.clone()))))
@@ -931,6 +981,26 @@ impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
     }
 }
 
+/// Records every setup notice sent; `fail` refuses every send after
+/// recording it.
+#[derive(Default)]
+pub struct FakeSetupNotices {
+    pub sent: Mutex<Vec<crate::domain::ports::SetupNotice>>,
+    pub fail: AtomicBool,
+}
+
+impl crate::domain::ports::SetupNotices for FakeSetupNotices {
+    type Err = FakeError;
+
+    async fn send(&self, notice: crate::domain::ports::SetupNotice) -> Result<(), FakeError> {
+        self.sent.lock().unwrap().push(notice);
+        if self.fail.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
+        Ok(())
+    }
+}
+
 /// A guest program for a fake [`crate::domain::ports::Fleet::exec`]: it reads
 /// its stdin to the end, then writes the stdout `script` makes of it and exits
 /// with `script`'s code.
@@ -951,5 +1021,27 @@ pub fn scripted_process<Err: Send + 'static>(
         stdin: Box::pin(stdin),
         stdout: Box::pin(stdout),
         exit: Box::pin(async move { Ok(program.await.unwrap()) }),
+    }
+}
+
+/// A fixture enrollment for `computer_id`, carrying an agent when `agent`.
+pub fn enrollment(computer_id: ComputerId, agent: bool) -> crate::domain::enrollment::Enrollment {
+    crate::domain::enrollment::Enrollment {
+        computer_id,
+        generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
+        pairing_id: crate::domain::ids::PairingId::new_from_uuid(Uuid::from_u128(1)),
+        device_secret: crate::domain::enrollment::DeviceSecret::new(
+            "fixture-pairing-value".to_owned(),
+        ),
+        name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
+        deployment: deployment(),
+        traceparent: None,
+        agent: agent.then(|| crate::domain::agent::AgentEnrollment {
+            agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+                "macro|agent@example.com".to_owned(),
+            )
+            .unwrap(),
+            env: crate::domain::agent::AgentEnv::default(),
+        }),
     }
 }
