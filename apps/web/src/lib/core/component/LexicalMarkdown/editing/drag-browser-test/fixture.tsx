@@ -48,7 +48,7 @@ import {
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createRoot, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { DecoratorRenderer } from '../../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRenderer';
@@ -80,7 +80,10 @@ import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
 import { createChecklistControls } from '../../plugins/checklist-controls/checklistControlsPlugin';
 import { codePlugin } from '../../plugins/code/codePlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
-import { dragInsertPlugin } from '../../plugins/drag-insert/dragInsertPlugin';
+import {
+  createDragInsertStore,
+  dragInsertPlugin,
+} from '../../plugins/drag-insert/dragInsertPlugin';
 import {
   createDraggableBlockStore,
   draggableBlockPlugin,
@@ -218,6 +221,39 @@ if (DRAG_ENABLED)
   draggableBlockPlugin({ setState: setDragState, anchorElem: element('body') })(
     BODY
   );
+if (new URLSearchParams(location.search).has('second')) {
+  // A second rich editor on the page with the app's drag plugins (block handle and
+  // registerMarkdownEditing's drag-insert over a listener container), as two documents
+  // open side by side, to observe Source's cross-editor block-handle drop.
+  const container = document.createElement('div');
+  const host = document.createElement('div');
+  host.id = 'second';
+  host.setAttribute('role', 'textbox');
+  host.setAttribute('aria-label', 'Second');
+  host.setAttribute('aria-multiline', 'true');
+  container.append(host);
+  element('body').after(container);
+  const second = mount('second');
+  registerList(second);
+  const [, setSecondDragState] = createDraggableBlockStore();
+  draggableBlockPlugin({ setState: setSecondDragState, anchorElem: host })(
+    second
+  );
+  const [insert, setInsert] = createDragInsertStore();
+  dragInsertPlugin({ setState: setInsert, dragListenerRef: container })(second);
+  createRoot(() =>
+    createEffect(() => {
+      host.dataset.insertVisible = String(insert.visible);
+    })
+  );
+  second.update(
+    () =>
+      $getRoot()
+        .clear()
+        .append($createParagraphNode().append($createTextNode('destination'))),
+    { discrete: true }
+  );
+}
 const CHECKLIST_CONTROLS = createChecklistControls();
 if (CONTROLS_ENABLED) CHECKLIST_CONTROLS.plugin(BODY);
 const [bodyEditable, setBodyEditable] = createSignal(BODY.isEditable());

@@ -31,6 +31,13 @@ Playwright's awaited locator checks. A mouse drag in a touch viewport is still
 a mouse drag. This cohort does not establish a touch drag gesture, a click
 block-actions menu, document transport/durability, or an installed-app result.
 
+`?second` mounts a second Source rich editor beside the body with the app's
+drag plugins (block handle and drag-insert over a listener container).
+`cross-editor-drag.browser.e2e.ts` pins Source's cross-editor handle drop: the
+drop fires, drag-insert consumes it and hides its indicator, and neither
+document changes. The native `group-b` browser test in
+`packages/lexical-wasm-view` checks the same outcome.
+
 The fixture keeps real providers and rewrites only analytics script/pixel
 origins to local inert assets in its build configuration. Every other external
 HTTP/WebSocket attempt fails the test. Static source maps must be checked for

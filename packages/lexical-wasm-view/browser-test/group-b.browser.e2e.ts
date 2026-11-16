@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }, info) => {
 });
 
 for (const order of ['drag-first', 'insert-first']) {
-  test(`native handle moves an entire first-item list and cross-editor drop copies it (${order})`, async ({
+  test(`native handle moves an entire first-item list and a cross-editor drop changes neither document (${order})`, async ({
     page,
   }) => {
     await page.evaluate(() => {
@@ -75,12 +75,39 @@ for (const order of ['drag-first', 'insert-first']) {
 
     await expect(first.locator(':scope > *').first()).toHaveText('target');
     await expect(first.locator('li')).toHaveText(['first', 'second']);
+    // As in Source with the app's drag plugins (drag-browser-test/cross-editor-drag):
+    // the handle carries only this editor's block key, so the other editor's drag-insert
+    // consumes the drop and hides its indicator, and neither document changes. Window
+    // capture sees the drop before any editor handler stops it.
+    await page.evaluate(() => {
+      window.addEventListener(
+        'drop',
+        (event) => {
+          if (
+            event.target instanceof Node &&
+            document.getElementById('second')?.contains(event.target)
+          ) {
+            document.body.dataset.secondDrops = String(
+              Number(document.body.dataset.secondDrops ?? 0) + 1
+            );
+          }
+        },
+        true
+      );
+    });
     await first.locator('li').first().hover();
     await handle.dragTo(page.locator('#second p'), {
       targetPosition: { x: 30, y: 18 },
     });
 
-    await expect(page.locator('#second li')).toHaveText(['first', 'second']);
+    const second = page.locator('#second');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-second-drops',
+      '1'
+    );
+    await expect(page.locator('[data-insertion="second"]')).toBeHidden();
+    await expect(second.locator('li')).toHaveCount(0);
+    await expect(second).toHaveText('destination');
     expect(
       await page.evaluate(
         () =>
@@ -88,7 +115,8 @@ for (const order of ['drag-first', 'insert-first']) {
             .nodes()
             .filter((node) => node.type === 'task-list').length
       )
-    ).toBe(1);
+    ).toBe(0);
+    await expect(first.locator(':scope > *').first()).toHaveText('target');
     await expect(first.locator('li')).toHaveText(['first', 'second']);
     expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
   });
