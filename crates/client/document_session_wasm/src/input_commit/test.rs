@@ -454,3 +454,85 @@ fn actual_read_queries_and_registration_metadata_preserve_historical_receipt() {
     assert_eq!(receipt.commit_id(), expected);
     assert_eq!(receipt.main_handled(), Some(false));
 }
+
+#[test]
+fn database_result_belongs_to_the_observed_main_commit_and_survives_output_transfer() {
+    let mut machine = machine();
+    let start = bytes(&application(
+        &machine,
+        "group-b.database-create-start",
+        "{}",
+    ))
+    .expect("database start");
+    machine
+        .input_observed(&start, 2.0, 2.0, "1")
+        .expect("start");
+    let started = machine.input_commits.read("1").expect("receipt");
+    assert_eq!(started.database_kind().as_deref(), Some("started"));
+    let key = started.database_key().expect("actual Await key");
+    assert!(!started
+        .database_await_id()
+        .expect("actual Await id")
+        .is_empty());
+    machine.take_output().expect("output transfer");
+    assert_eq!(
+        machine
+            .input_commits
+            .read("1")
+            .expect("receipt")
+            .database_key(),
+        Some(key)
+    );
+    let complete = bytes(&application(
+        &machine,
+        "group-b.database-create-complete",
+        &format!(r#"{{"key":{key},"documentId":"fixture-database"}}"#),
+    ))
+    .expect("completion");
+    machine
+        .input_observed(&complete, 3.0, 3.0, "2")
+        .expect("complete");
+    let completed = machine.input_commits.read("2").expect("receipt");
+    assert_eq!(completed.database_kind().as_deref(), Some("inserted"));
+    assert_eq!(completed.database_key(), None);
+    assert!(machine.input_commits.read("1").is_err());
+    let noop = bytes(&application(
+        &machine,
+        "group-b.equation",
+        r#"{"key":0,"equation":"x"}"#,
+    ))
+    .expect("unrelated");
+    machine
+        .input_observed(&noop, 4.0, 4.0, "3")
+        .expect("unrelated");
+    assert_eq!(
+        machine
+            .input_commits
+            .read("3")
+            .expect("receipt")
+            .database_kind(),
+        None
+    );
+    assert_eq!(started.database_kind().as_deref(), Some("started"));
+}
+
+#[test]
+fn database_start_receipt_survives_an_output_encoder_error_after_publication() {
+    let mut machine = machine();
+    let start = bytes(&application(
+        &machine,
+        "group-b.database-create-start",
+        "{}",
+    ))
+    .expect("database start");
+    machine.fail_next_output_generation = true;
+    assert!(matches!(
+        machine.input_observed(&start, 2.0, 2.0, "1"),
+        Err(BoundaryError::Invalid("diff generation"))
+    ));
+    let receipt = machine.input_commits.read("1").expect("committed receipt");
+    assert_eq!(receipt.main_kind(), InputCommitKind::Published);
+    assert_eq!(receipt.database_kind().as_deref(), Some("started"));
+    assert!(receipt.database_key().is_some());
+    assert!(receipt.database_await_id().is_some());
+}

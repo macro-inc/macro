@@ -374,6 +374,18 @@ export class InputCommitReceipt {
      */
     readonly commitId: bigint | undefined;
     /**
+     * Actual constructor identity, copied with the matching start key.
+     */
+    readonly databaseAwaitId: string | undefined;
+    /**
+     * Actual allocated Await key, present only for a successful start.
+     */
+    readonly databaseKey: number | undefined;
+    /**
+     * Closed operation result from this entry's own committed Database command.
+     */
+    readonly databaseKind: string | undefined;
+    /**
      * The exact accepted session-local correlation identity.
      */
     readonly entryId: bigint;
@@ -657,6 +669,9 @@ export interface InitOutput {
     readonly editorsession_viewCommandEscape: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_viewCommandOwner: (a: number) => [bigint, number, number];
     readonly inputcommitreceipt_commitId: (a: number) => [number, bigint];
+    readonly inputcommitreceipt_databaseAwaitId: (a: number) => [number, number];
+    readonly inputcommitreceipt_databaseKey: (a: number) => number;
+    readonly inputcommitreceipt_databaseKind: (a: number) => [number, number];
     readonly inputcommitreceipt_entryId: (a: number) => bigint;
     readonly inputcommitreceipt_mainHandled: (a: number) => number;
     readonly inputcommitreceipt_mainKind: (a: number) => number;

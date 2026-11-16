@@ -33,7 +33,11 @@ mention replaces it. Reopen the document and compare the saved mention. Close
 the document while creation is pending and confirm retained callbacks cannot
 write into a newly opened editor. GIF opens the shared search picker; choose a
 result and verify its uploaded image appears at the captured insertion point.
-Link and Query work in the native body; Database stays hidden until a document-owned request callback supplies it. Verify that closing
+Link, Query and Database work in the native body. Database uses the document-owned
+request callback, and Query uses its native insertion command. The Database action inserts a pending placeholder before creation, then replaces that
+same placeholder with a database card. Move the caret while creation is pending
+and verify the card stays anchored; removing the placeholder cancels insertion
+without deleting the created database. Verify that closing
 the document retires its menu registrations without affecting a newly opened
 editor.
 
@@ -3523,7 +3527,6 @@ Editor engine parity uses the paired browser harness in
 documents and an independent browser profile; saved-state and compatibility
 evidence must be present before treating matching screenshots as acceptance.
 
-
 ## Native preview installation checks
 
 Run the [six-step install check](../../apps/web/scripts/editor-live-check/README.md)
@@ -3590,7 +3593,6 @@ Reopen the document to check that the shared renderers mount again.
 
 Open a native document containing an agent preview chip and sealed agent
 activity. Check the preview and completed steps, then reopen the document.
-
 
 Open a native document containing a diff owned by the current user and a diff
 owned by another user. Check that inserted content and Accept/Reject controls

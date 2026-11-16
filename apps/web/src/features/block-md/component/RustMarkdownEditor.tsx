@@ -66,6 +66,7 @@ import {
 } from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeCreationComposerController } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-creation';
+import { createNativeDatabaseController } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-database';
 import { createNativeGifContext } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-gif';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { registerNativeTitleHandoffKeys } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-title-handoff';
@@ -548,6 +549,8 @@ export default function RustMarkdownEditor(props: {
                     throw new Error('Editor open cancelled');
                   const creation = createNativeCreationComposerController(view);
                   overlayLifecycle.add(creation.dispose);
+                  const database = createNativeDatabaseController(view);
+                  overlayLifecycle.add(database.dispose);
                   const installed = installNativeMarkdownOverlays(view, {
                     canEdit,
                     tasks: {
@@ -580,6 +583,7 @@ export default function RustMarkdownEditor(props: {
                         requestLink: () => formatting.requestLink(),
                         requestGif: () => gifContext.requestOpen(),
                         requestCreation: creation.requestCreation,
+                        requestDatabase: database.requestDatabase,
                       },
                     },
                     tags: {

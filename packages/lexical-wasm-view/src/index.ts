@@ -20,6 +20,7 @@ export {
 } from './view/editor-view';
 export {
   createInputCommitObservation,
+  type DatabaseCommitEvidence,
   type InputCommitEvidence,
   type InputCommitFailure,
   type InputCommitObservation,

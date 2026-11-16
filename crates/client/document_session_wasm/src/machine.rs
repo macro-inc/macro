@@ -44,6 +44,8 @@ pub(crate) struct Machine {
     pub(crate) fail_next_output_generation: bool,
     #[cfg(not(feature = "compatibility"))]
     pub(crate) input_commits: crate::input_commit::InputCommitLedger,
+    pub(crate) database_commit:
+        Option<macro_document_model::plugins_group_b::DatabaseMainCommitResult>,
 }
 impl Machine {
     pub(crate) fn take_output(&mut self) -> Result<Vec<u8>, BoundaryError> {
@@ -229,6 +231,7 @@ impl Machine {
             fail_next_output_generation: false,
             #[cfg(not(feature = "compatibility"))]
             input_commits: Default::default(),
+            database_commit: None,
         })
     }
     /// Explicit transport opt-in, never inferred from a registry/query/registration.
@@ -400,6 +403,7 @@ impl Machine {
             observer.take();
             crate::code_tokens::begin_entry(*token, entry);
         }
+        self.database_commit = None;
         let result = self.call_entry(input, mono, wall, main_commit);
         if let Some((token, observer)) = &self.code_tokens {
             observer.take();
@@ -503,7 +507,12 @@ impl Machine {
         match &mut self.session {
             Session::Editor(s) => match (input, main_commit) {
                 (SessionInput::Editor(input), Some(outcome)) => {
-                    s.handle_editor_with_main_commit(now, input, outcome);
+                    s.handle_editor_with_database_commit(
+                        now,
+                        input,
+                        outcome,
+                        &mut self.database_commit,
+                    );
                 }
                 (input, None) => {
                     s.handle(now, input);

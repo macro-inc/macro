@@ -10,7 +10,9 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getRoot,
+  $getSelection,
   $insertNodes,
+  $isRangeSelection,
   $nodesOfType,
   createEditor,
 } from 'lexical';
@@ -238,4 +240,61 @@ describe('creating a database in a document', () => {
         );
     }
   );
+});
+
+it('records Source creating and tracking while its original Await remains attached', async () => {
+  vi.clearAllMocks();
+  const editor = documentEditor();
+  const order: string[] = [];
+  const awaiting = () =>
+    editor.read(() => $nodesOfType(AwaitNode).map((node) => node.getText()));
+  mocks.create.mockImplementation(async () => {
+    expect(awaiting()).toEqual(['Creating database…']);
+    order.push('create');
+    return ok('db-1');
+  });
+  mocks.track.mockImplementation(async () => {
+    expect(awaiting()).toEqual(['Creating database…']);
+    order.push('track');
+    return 'mention-1';
+  });
+  await insertNewDatabase(editor, {
+    sourceDocumentId: 'doc-1',
+    sourceBlockName: 'md',
+  });
+  expect(order).toEqual(['create', 'track']);
+  expect(awaiting()).toEqual([]);
+  expect(editor.read(() => $nodesOfType(AwaitNode))).toEqual([]);
+});
+
+it('Source keeps the original insertion anchor and a caret moved to another paragraph', async () => {
+  vi.clearAllMocks();
+  const created = Promise.withResolvers<Result<string, unknown>>();
+  mocks.create.mockReturnValue(created.promise);
+  const editor = documentEditor();
+  const inserting = insertNewDatabase(editor);
+  editor.update(
+    () => {
+      const elsewhere = $createTextNode('Elsewhere');
+      $getRoot().append($createParagraphNode().append(elsewhere));
+      elsewhere.select(4, 4);
+    },
+    { discrete: true }
+  );
+  created.resolve(ok('db-1'));
+  await inserting;
+  editor.read(() => {
+    expect(
+      $getRoot()
+        .getChildren()
+        .map((node) => node.getType())
+    ).toEqual(['paragraph', 'document-card', 'paragraph', 'paragraph']);
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection))
+      throw new Error('Source caret is not a range');
+    expect(selection.anchor.getNode().getTextContent()).toBe('Elsewhere');
+    expect(selection.focus.getNode().getTextContent()).toBe('Elsewhere');
+    expect(selection.anchor.offset).toBe(4);
+    expect(selection.focus.offset).toBe(4);
+  });
 });

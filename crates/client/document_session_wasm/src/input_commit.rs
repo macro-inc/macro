@@ -1,6 +1,7 @@
 //! Entry-correlated main transaction evidence for the ordinary native profile.
 use crate::*;
 use lexical_model::{Handled, MainCommitOutcome};
+use macro_document_model::plugins_group_b::{DatabaseCommandResult, DatabaseMainCommitResult};
 use std::num::NonZeroU64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -30,6 +31,7 @@ enum InputCommitSlot {
     Complete {
         entry_id: InputCommitEntryId,
         outcome: MainCommitOutcome,
+        database: Option<DatabaseMainCommitResult>,
     },
 }
 #[derive(Default)]
@@ -57,7 +59,11 @@ impl InputCommitLedger {
             self.invalidate();
             return Err(BoundaryError::Invalid("input commit entry changed"));
         }
-        self.slot = InputCommitSlot::Complete { entry_id, outcome };
+        self.slot = InputCommitSlot::Complete {
+            entry_id,
+            outcome,
+            database: None,
+        };
         Ok(())
     }
     pub(crate) fn invalidate(&mut self) {
@@ -65,10 +71,16 @@ impl InputCommitLedger {
     }
     fn read(&self, text: &str) -> Result<InputCommitReceipt, BoundaryError> {
         let requested = InputCommitEntryId::parse(text)?;
-        match self.slot {
-            InputCommitSlot::Complete { entry_id, outcome } if requested == entry_id => {
-                Ok(InputCommitReceipt { entry_id, outcome })
-            }
+        match &self.slot {
+            InputCommitSlot::Complete {
+                entry_id,
+                outcome,
+                database,
+            } if requested == *entry_id => Ok(InputCommitReceipt {
+                entry_id: *entry_id,
+                outcome: *outcome,
+                database: database.clone(),
+            }),
             _ => Err(BoundaryError::Invalid("input commit receipt unavailable")),
         }
     }
@@ -88,9 +100,55 @@ pub enum InputCommitKind {
 pub struct InputCommitReceipt {
     entry_id: InputCommitEntryId,
     outcome: MainCommitOutcome,
+    database: Option<DatabaseMainCommitResult>,
 }
 #[wasm_bindgen]
 impl InputCommitReceipt {
+    /// Closed operation result from this entry's own committed Database command.
+    #[wasm_bindgen(getter, js_name = databaseKind)]
+    pub fn database_kind(&self) -> Option<String> {
+        let database = self.database.as_ref()?;
+        if !matches!(self.outcome, MainCommitOutcome::Published { commit_id, .. } if commit_id == database.commit_id)
+        {
+            return Some("invalid".into());
+        }
+        Some(
+            match database.result {
+                DatabaseCommandResult::None => "none",
+                DatabaseCommandResult::Started { .. } => "started",
+                DatabaseCommandResult::Inserted => "inserted",
+                DatabaseCommandResult::NotAwait => "not-await",
+                DatabaseCommandResult::Removed => "removed",
+                DatabaseCommandResult::Absent => "absent",
+                DatabaseCommandResult::Invalid(_) => "invalid",
+            }
+            .into(),
+        )
+    }
+    /// Actual allocated Await key, present only for a successful start.
+    #[wasm_bindgen(getter, js_name = databaseKey)]
+    pub fn database_key(&self) -> Option<u32> {
+        match &self.database.as_ref()?.result {
+            DatabaseCommandResult::Started { key, .. }
+                if self.database_kind().as_deref() == Some("started") =>
+            {
+                Some(key.index())
+            }
+            _ => None,
+        }
+    }
+    /// Actual constructor identity, copied with the matching start key.
+    #[wasm_bindgen(getter, js_name = databaseAwaitId)]
+    pub fn database_await_id(&self) -> Option<String> {
+        match &self.database.as_ref()?.result {
+            DatabaseCommandResult::Started { await_id, .. }
+                if self.database_kind().as_deref() == Some("started") =>
+            {
+                Some(await_id.clone())
+            }
+            _ => None,
+        }
+    }
     /// The exact accepted session-local correlation identity.
     #[wasm_bindgen(getter, js_name = entryId)]
     pub fn entry_id(&self) -> u64 {
@@ -175,6 +233,11 @@ impl machine::Machine {
         // A trap before this point leaves InFlight, never a false NotPublished.
         // Preserve an original native error if finishing the slot also fails.
         let finished = self.input_commits.finish(entry, outcome);
+        if finished.is_ok() {
+            if let InputCommitSlot::Complete { database, .. } = &mut self.input_commits.slot {
+                *database = self.database_commit.take();
+            }
+        }
         result.and_then(|flags| finished.map(|()| flags))
     }
 }

@@ -10,6 +10,19 @@ export type InputCommitCancellation = Extract<
   { status: 'cancelled' }
 >['reason'];
 
+/** Closed result copied from the exact native main transaction, not view mutations. */
+export type DatabaseCommitEvidence =
+  | { readonly kind: 'started'; readonly key: number; readonly awaitId: string }
+  | {
+      readonly kind:
+        | 'none'
+        | 'inserted'
+        | 'not-await'
+        | 'removed'
+        | 'absent'
+        | 'invalid';
+    };
+
 /** Copied entry evidence, independent of attachment, durability or permission. */
 export type InputCommitEvidence =
   | {
@@ -27,6 +40,7 @@ export type InputCommitEvidence =
       readonly entryId: bigint;
       readonly commitId: bigint;
       readonly mainHandled: boolean;
+      readonly database?: DatabaseCommitEvidence;
     }
   | {
       readonly status: 'unavailable';

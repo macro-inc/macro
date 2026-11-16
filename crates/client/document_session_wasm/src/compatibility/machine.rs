@@ -115,6 +115,7 @@ impl Machine {
         };
         drop(span);
         Ok(Self {
+            database_commit: None,
             session,
             output: vec![],
             listener_metadata: None,

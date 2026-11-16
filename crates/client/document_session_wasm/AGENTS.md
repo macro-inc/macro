@@ -87,6 +87,8 @@ Reserve a fresh pending publication version at compatBegin, publish that version
 
 Decode legacy EditorPaste tag 4 with default-false PasteIntent and additive tag 10 with its exact typed intent; preserve clipboard, constructor JSON and selection semantics on both paths.
 
+Copy Database start/completion authority into the entry-correlated ordinary receipt before output consumption; retain its main commit identity and actual Await key/id, and never infer insertion from view mutations. Compatibility keeps no ordinary receipt exports.
+
 ## Checks
 
 - `cargo test -p document_session_wasm -j2`

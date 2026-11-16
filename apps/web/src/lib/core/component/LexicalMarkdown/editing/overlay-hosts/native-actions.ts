@@ -15,6 +15,7 @@ import { createNativeListenerScope } from './native-listeners';
 
 export interface NativeActionRequests {
   requestTable(): void | Promise<void>;
+  requestDatabase?: (context?: ActionContext) => Promise<void>;
   openFileDialog?: (kind: 'all') => boolean;
   requestGif?: () => boolean;
   requestEquation?: () => void;
@@ -96,6 +97,8 @@ export function createNativeActionMenuHost(
     )
       return true;
     switch (item.id) {
+      case 'database':
+        return typeof requests.requestDatabase === 'function';
       case 'table':
         return typeof requests.requestTable === 'function';
       case 'image':
@@ -165,13 +168,18 @@ export function createNativeActionMenuHost(
       return;
     }
     // Source Query checks the shared flag before scheduling its insertion update.
-    if (item.id === 'database-query' && !isFeatureEnabled(enableDatabases))
+    if (
+      (item.id === 'database-query' || item.id === 'database') &&
+      !isFeatureEnabled(enableDatabases)
+    )
       return;
     const requestContext = Telemetry.captureContext();
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     if (!current()) return;
     return requestContext.run(async () => {
-      if (item.id === 'database-query') {
+      if (item.id === 'database' && requests.requestDatabase) {
+        await requests.requestDatabase(context);
+      } else if (item.id === 'database-query') {
         const result = await dispatchApplicationCommandSettledIfSessionEdit(
           view,
           'group-b.database-query-insert',

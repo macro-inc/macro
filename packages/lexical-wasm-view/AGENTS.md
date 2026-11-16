@@ -106,6 +106,8 @@ Keep a published NodeSelection through every keydown, beforeinput and selectionc
 
 Assert direct child types when testing rich insertion into code, since nested blocks can preserve the same visible text.
 
+Read Database results from the actual owned InputCommitReceipt getters before freeing it; retain the copied key/id with that entry's main publication so later output failures cannot lose cleanup ownership.
+
 ## Checks
 
 - Set `NATIVE_SESSION_GUARD_PROFILE=preview` only for matched dev-probes test artifacts; leave it unset or use `production` for no-dev artifacts so the production export guard runs.
