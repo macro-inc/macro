@@ -127,7 +127,7 @@ function RoleSelect(props: {
       <Select.Trigger
         variant="ghost"
         as={Button}
-        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
+        class="w-18 rounded-xs px-2 text-xs touch:min-h-11 data-expanded:bg-ink/10"
         disabled={props.disabled}
       >
         <Select.Value<RoleOption>>
@@ -185,45 +185,109 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-4 py-4">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="shrink-0">
-          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
+    <div class="py-2" data-team-member={props.member.user_id}>
+      <div class="flex items-start gap-3 px-4 py-1">
+        <div class="flex min-h-9 touch:min-h-11 shrink-0 items-center touch:[&_[role=button]]:min-h-11 touch:[&_[role=button]]:min-w-11 [&_[role=button]]:items-center [&_[role=button]]:justify-center">
+          <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <div class="text-sm font-medium text-ink truncate">
-              {displayName()}
-              {props.isCurrentUser && (
-                <span class="text-ink-muted font-normal"> (you)</span>
-              )}
-            </div>
+        <div class="min-w-0 flex-1 py-2">
+          <div class="min-w-0 text-sm font-medium text-ink [overflow-wrap:anywhere]">
+            <span>{displayName()}</span>{' '}
+            <Show when={props.isCurrentUser}>
+              <span class="inline-block whitespace-nowrap text-xs font-normal text-ink-muted">
+                (you)
+              </span>
+            </Show>
             <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
               <AgentTag />
             </Show>
           </div>
           <Show when={showEmail()}>
-            <div class="text-xs text-ink-muted truncate">{email()}</div>
-          </Show>
-          <Show when={props.canManageCrm}>
-            <div class="mt-2">
-              <ToggleSwitch
-                size="md"
-                label={t('crm.memberAccess')}
-                labelClass="text-xs text-ink-muted"
-                checked={props.crmAccess}
-                disabled={
-                  props.crmPending || props.member.role !== TeamRole.member
-                }
-                onChange={props.onCrmAccessChange}
-                aria-label={t('crm.memberAccessFor', { name: displayName() })}
-              />
+            <div class="text-xs text-ink-muted [overflow-wrap:anywhere]">
+              {email()}
             </div>
           </Show>
         </div>
+        <div class="flex min-h-9 touch:min-h-11 items-center gap-1 shrink-0">
+          <Show
+            when={props.isOwner && !isMemberOwner()}
+            fallback={
+              <span class="flex w-18 min-h-9 touch:min-h-11 items-center justify-center text-xs text-ink-muted capitalize">
+                {props.member.role}
+              </span>
+            }
+          >
+            <RoleSelect
+              value={props.member.role}
+              onChange={props.onRoleChange}
+            />
+          </Show>
+          <Show when={props.canManageRemovals}>
+            <Show
+              when={props.canRemove}
+              fallback={
+                <Tooltip
+                  label={
+                    isMemberOwner()
+                      ? 'Cannot remove team owner'
+                      : 'Cannot remove yourself'
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled
+                    aria-label="Remove member"
+                    class="touch:min-h-11 touch:min-w-11"
+                  >
+                    <TrashIcon class="size-4" />
+                  </Button>
+                </Tooltip>
+              }
+            >
+              <Tooltip label="Remove member">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Remove member"
+                  class="touch:min-h-11 touch:min-w-11"
+                  onClick={props.onRemove}
+                >
+                  <TrashIcon class="size-4" />
+                </Button>
+              </Tooltip>
+            </Show>
+          </Show>
+        </div>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <Show when={props.showPlan}>
+      <Show when={props.canManageCrm}>
+        <SettingsRow
+          label={t('crm.memberAccess')}
+          description={
+            props.member.role !== TeamRole.member
+              ? t('crm.memberAccessAlways')
+              : undefined
+          }
+        >
+          <Show when={props.member.role === TeamRole.member}>
+            <ToggleSwitch
+              size="md"
+              label={t('crm.memberAccessFor', { name: displayName() })}
+              labelClass="sr-only"
+              class="touch:min-h-11 touch:min-w-11 justify-center"
+              checked={props.crmAccess}
+              disabled={props.crmPending}
+              onChange={props.onCrmAccessChange}
+              aria-label={t('crm.memberAccessFor', { name: displayName() })}
+            />
+          </Show>
+        </SettingsRow>
+      </Show>
+      <Show when={props.showPlan}>
+        <SettingsRow
+          label="Seat plan"
+          class="touch:[&_button]:min-h-11 touch:[&_button]:min-w-11"
+        >
           <Show
             when={props.canEditPlan}
             fallback={
@@ -240,47 +304,8 @@ function MemberRow(props: {
               pendingDowngrade={props.pendingDowngrade}
             />
           </Show>
-        </Show>
-        <Show
-          when={props.isOwner && !isMemberOwner()}
-          fallback={
-            <span class="text-xs text-ink-muted capitalize">
-              {props.member.role}
-            </span>
-          }
-        >
-          <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
-        </Show>
-        <Show when={props.canManageRemovals}>
-          <Show
-            when={props.canRemove}
-            fallback={
-              <Tooltip
-                label={
-                  isMemberOwner()
-                    ? 'Cannot remove team owner'
-                    : 'Cannot remove yourself'
-                }
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled
-                  class="opacity-50 cursor-not-allowed"
-                >
-                  <TrashIcon class="size-4" />
-                </Button>
-              </Tooltip>
-            }
-          >
-            <Tooltip label="Remove member">
-              <Button variant="ghost" size="sm" onClick={props.onRemove}>
-                <TrashIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          </Show>
-        </Show>
-      </div>
+        </SettingsRow>
+      </Show>
     </div>
   );
 }

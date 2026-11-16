@@ -718,7 +718,9 @@ change this setting, and admins and owners cannot be denied. Mailbox contributio
 consent stays unchanged. Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
 In team settings, admins and owners see a CRM access switch for each member.
-Owner/admin switches stay enabled and cannot be changed. A failed save keeps
+Owners and admins show the reason they always retain access instead of a disabled switch.
+Member rows place the CRM label and switch on opposite sides below the identity and role controls;
+the current-user marker stays separate from wrapping names or email addresses. A failed save keeps
 the previous state and can be retried; members do not see these controls.
 `GET /crm/member-access` reports current access even
 when record routes return access denied. Clients holding CRM caches may request

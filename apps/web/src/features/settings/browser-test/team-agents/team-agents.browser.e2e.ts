@@ -124,6 +124,7 @@ async function scriptAuthService(
     /** Owners and admins own an agent computer's runtime; others don't see it. */
     viewerOwnsRuntimes?: boolean;
     failedCrmSaves?: number;
+    extraMembers?: { user_id: string; role: 'admin' | 'member' }[];
   } = {}
 ) {
   const backend = {
@@ -154,6 +155,11 @@ async function scriptAuthService(
   const members = () => [
     { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
     { user_id: MEMBER, role: 'member', team_id: 'team-1', plan: 'premium' },
+    ...(options.extraMembers ?? []).map((member) => ({
+      ...member,
+      team_id: 'team-1',
+      plan: 'premium',
+    })),
     // The server adds an agent's own account to the team.
     ...backend.agents.map((agent) => ({
       user_id: agent.userId,
@@ -770,36 +776,29 @@ test('a DM with an agent teammate that is not running says so', async ({
   await expect(dm.locator('[data-agent-dm-chip]')).toHaveCount(0);
 });
 
-test('CRM access can be revoked and restored while owners stay enabled', async ({
+test('CRM access can be revoked and restored while privileged roles retain access', async ({
   page,
 }, testInfo) => {
   const backend = await scriptAuthService(page);
   await page.goto('/');
-  const controls = page
-    .getByRole('group', { name: /^CRM access for/ })
-    .getByRole('switch');
-  await expect(controls).toHaveCount(2);
-  const owner = controls.nth(0);
-  const member = controls.nth(1);
-  await expect(owner).toBeChecked();
-  await expect(owner).toBeDisabled();
+  const ownerRow = page.locator(`[data-team-member="${OWNER}"]`);
+  await expect(ownerRow.getByRole('switch')).toHaveCount(0);
+  await expect(
+    ownerRow.getByText('Owners and admins always have access')
+  ).toBeVisible();
+  const control = page.getByRole('group', { name: /^CRM access for/ });
+  const member = control.getByRole('switch', { name: /^CRM access for/ });
+  await expect(member).toHaveCount(1);
   await expect(member).toBeChecked();
-  await page
-    .getByRole('group', { name: /^CRM access for/ })
-    .nth(1)
-    .locator('label')
-    .click();
+  await control.click();
   await expect(member).not.toBeChecked();
   expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
+  expect(backend.crmAccess[OWNER]).toBe(true);
   await screenshot(page, testInfo, 'crm-access-denied');
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth)
   ).toBeLessThanOrEqual(testInfo.project.use.viewport!.width);
-  await page
-    .getByRole('group', { name: /^CRM access for/ })
-    .nth(1)
-    .locator('label')
-    .click();
+  await control.click();
   await expect(member).toBeChecked();
   expect(backend.crmSaves).toEqual([
     { user_id: MEMBER, enabled: false },
@@ -807,6 +806,93 @@ test('CRM access can be revoked and restored while owners stay enabled', async (
   ]);
   await screenshot(page, testInfo, 'crm-access-restored');
 });
+
+for (const width of [360, 390]) {
+  test(`member controls fit long emails at ${width}px with aligned touch targets`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone', 'Phone touch layout');
+    await page.setViewportSize({ width, height: 844 });
+    const longEmail = 'member.with.a.long.email.address@example.com';
+    const longMember = `macro|${longEmail}`;
+    const backend = await scriptAuthService(page, 2, {
+      extraMembers: [{ user_id: longMember, role: 'member' }],
+    });
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'Members', exact: true }).waitFor();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    expect(await page.evaluate(() => window.innerWidth)).toBe(width);
+    expect(
+      await page.evaluate(() => matchMedia('(pointer: coarse)').matches)
+    ).toBe(true);
+    const owner = page.locator(`[data-team-member="${OWNER}"]`);
+    const member = page.locator(`[data-team-member="${longMember}"]`);
+    await expect(member.getByText(longEmail, { exact: true })).toBeVisible();
+    await expect(owner.getByText('(you)', { exact: true })).toBeVisible();
+    const layout = await member.evaluate((row) => {
+      const bounds = row.getBoundingClientRect();
+      const avatar = row
+        .querySelector('[role="button"]')!
+        .getBoundingClientRect();
+      const role = row
+        .querySelector('button[aria-haspopup="listbox"]')!
+        .getBoundingClientRect();
+      const remove = row
+        .querySelector('[aria-label="Remove member"]')!
+        .getBoundingClientRect();
+      const toggle = row
+        .querySelector('[role="group"][aria-label^="CRM access"]')!
+        .getBoundingClientRect();
+      return {
+        avatarHeight: avatar.height,
+        avatarWidth: avatar.width,
+        roleHeight: role.height,
+        removeHeight: remove.height,
+        removeWidth: remove.width,
+        toggleHeight: toggle.height,
+        toggleWidth: toggle.width,
+        controlAlignment: Math.abs(
+          role.y + role.height / 2 - remove.y - remove.height / 2
+        ),
+        toggleRight: toggle.right - bounds.right,
+        roleOffset: role.y - bounds.y,
+      };
+    });
+    expect(layout.avatarHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.avatarWidth).toBeGreaterThanOrEqual(44);
+    expect(layout.roleHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.removeHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.removeWidth).toBeGreaterThanOrEqual(44);
+    expect(layout.toggleHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.toggleWidth).toBeGreaterThanOrEqual(44);
+    expect(layout.controlAlignment).toBeLessThan(1);
+    expect(layout.toggleRight).toBeLessThanOrEqual(-15);
+    const ownerRoleOffset = await owner.evaluate((row) => {
+      const remove = row.querySelector('[aria-label="Remove member"]')!;
+      return remove.getBoundingClientRect().y - row.getBoundingClientRect().y;
+    });
+    expect(Math.abs(ownerRoleOffset - layout.roleOffset)).toBeLessThan(1);
+    expect(
+      await member.getByText(longEmail, { exact: true }).evaluate((email) => {
+        const style = getComputedStyle(email);
+        return (
+          style.textOverflow !== 'ellipsis' &&
+          email.scrollWidth <= email.clientWidth
+        );
+      })
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth)
+    ).toBeLessThanOrEqual(width);
+    await screenshot(page, testInfo, `crm-member-layout-${width}`);
+    const toggle = member.getByRole('group', { name: /^CRM access for/ });
+    await toggle.click({ position: { x: 1, y: 1 } });
+    await expect(toggle.getByRole('switch')).not.toBeChecked();
+    expect(backend.crmSaves).toEqual([{ user_id: longMember, enabled: false }]);
+  });
+}
 
 test('CRM access controls are hidden from ordinary members', async ({
   page,
@@ -829,21 +915,12 @@ test('CRM access save failures keep the prior setting and allow retry', async ({
   await page.goto('/');
   const member = page
     .getByRole('group', { name: /^CRM access for/ })
-    .getByRole('switch')
-    .nth(1);
+    .getByRole('switch');
   await expect(member).toBeChecked();
-  await page
-    .getByRole('group', { name: /^CRM access for/ })
-    .nth(1)
-    .locator('label')
-    .click();
+  await page.getByRole('group', { name: /^CRM access for/ }).click();
   await expect.poll(() => backend.crmSaves.length).toBe(1);
   await expect(member).toBeEnabled();
   await expect(member).toBeChecked();
-  await page
-    .getByRole('group', { name: /^CRM access for/ })
-    .nth(1)
-    .locator('label')
-    .click();
+  await page.getByRole('group', { name: /^CRM access for/ }).click();
   await expect(member).not.toBeChecked();
 });
