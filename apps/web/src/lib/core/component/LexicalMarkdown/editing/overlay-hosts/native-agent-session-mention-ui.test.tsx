@@ -256,15 +256,16 @@ const SESSION: AgentSessionMentionItem = {
 test('ui: menu closed and unmounted while pending still inserts', async () => {
   // Every release waits for the menu's actual select (test-case-lifetime.ts).
   const lifetime = caseLifetime('ui: menu closed and unmounted while pending');
-  // The raw models reach the sink on every exit, before any release; a write
-  // failure is a secondary error after the body's own.
+  // With AGENT_SESSION_UI_OUT set, the raw models reach that file on every
+  // exit, before any release; a write failure is a secondary error after the
+  // body's own.
   const output = process.env.AGENT_SESSION_UI_OUT;
-  if (!output) throw new Error('AGENT_SESSION_UI_OUT is required');
-  lifetime.join(async () => {
-    writeFileSync(output, `${JSON.stringify({ records }, null, 1)}\n`, {
-      flag: 'wx',
+  if (output)
+    lifetime.join(async () => {
+      writeFileSync(output, `${JSON.stringify({ records }, null, 1)}\n`, {
+        flag: 'wx',
+      });
     });
-  });
   // Source first, to completion, so its tracking double is reset before native.
   const oracle = await sourceOracle(lifetime);
   setDecorator(AgentSessionMentionNode, () => null);
