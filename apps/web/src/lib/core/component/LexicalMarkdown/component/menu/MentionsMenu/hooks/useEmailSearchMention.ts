@@ -1,7 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
-import type { EmailEntity } from '@entity';
+import type { EmailEntity, EntityData } from '@entity';
 import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,
@@ -22,7 +22,7 @@ const RECENT_EMAIL_THREADS_ARGS: SoupItemsQueryArgs = {
   body: { ...QUERY_FILTERS_BASE, email_filters: {} },
 };
 
-function emailEntityItem(email: EmailEntity): EntityItem {
+function emailEntityItem(email: EntityData): EntityItem {
   return {
     kind: 'entity',
     id: email.id,
@@ -82,15 +82,20 @@ export function useEmailSearchMention(
   const cachedThreads = createLazyMemo(() =>
     cachedEmails.items().filter((item) => !item.data.isDraft)
   );
+  // Whether Quick Access holds any thread at all, whatever was typed.
+  const everyCachedEmail = quickAccess.useList({
+    buckets: ['email'],
+    enabled: () => usesQuickAccess() && listEnabled(),
+  });
   const usesRecentThreads = () =>
     usesQuickAccess() &&
-    !cachedEmails.isLoading() &&
-    cachedThreads().length === 0;
+    !everyCachedEmail.items().some((item) => !item.data.isDraft);
+  // Like the search below, asks again whenever it is shown.
   const recentThreadsQuery = useSoupItemsQuery(
     () => RECENT_EMAIL_THREADS_ARGS,
     () => ({
       enabled: usesRecentThreads() && listEnabled(),
-      staleTime: 60_000,
+      staleTime: 0,
     })
   );
   const recentThreads = createLazyMemo((): EntityItem[] => {
@@ -100,8 +105,7 @@ export function useEmailSearchMention(
         (entity): entity is EmailEntity =>
           entity.type === 'email' && !entity.isDraft
       )
-      .map(emailEntityItem)
-      .sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+      .map(emailEntityItem);
   });
 
   const args = createLazyMemo((): SearchSoupQueryArgs => {
@@ -132,20 +136,7 @@ export function useEmailSearchMention(
     if (emailSearchQuery.status !== 'success') return [];
     return emailSearchQuery.data
       .filter((e) => e.type === 'email')
-      .map(
-        (e): EntityItem => ({
-          kind: 'entity',
-          id: e.id,
-          bucket: 'email',
-          searchText: e.name ?? 'No Subject',
-          sortTimestamp: e.updatedAt ? new Date(e.updatedAt).getTime() : 0,
-          timestamps: {
-            updatedAt: e.updatedAt ?? null,
-            createdAt: e.createdAt ?? null,
-          },
-          data: e as unknown as EntityItem['data'],
-        })
-      );
+      .map(emailEntityItem);
   });
 
   const emailSearch = createFreshSearch<EntityItem>({
@@ -175,15 +166,21 @@ export function useEmailSearchMention(
         ? cachedEmails.totalCount() -
           (cachedEmails.items().length - emails().length)
         : emails().length,
-    hasMore: () =>
-      usesQuickAccess()
+    // The REST list is one page of the newest threads.
+    hasMore: () => {
+      if (usesRecentThreads()) return false;
+      return usesQuickAccess()
         ? cachedEmails.hasMore()
-        : Boolean(emailSearchQuery.hasNextPage),
-    isLoadingMore: () =>
-      usesQuickAccess()
+        : Boolean(emailSearchQuery.hasNextPage);
+    },
+    isLoadingMore: () => {
+      if (usesRecentThreads()) return recentThreadsQuery.isFetching;
+      return usesQuickAccess()
         ? cachedEmails.isLoadingMore()
-        : emailSearchQuery.isFetching,
+        : emailSearchQuery.isFetching;
+    },
     loadMore: async () => {
+      if (usesRecentThreads()) return;
       if (usesQuickAccess()) {
         await cachedEmails.loadMore();
       } else if (emailSearchQuery.hasNextPage) {

@@ -66,20 +66,38 @@ const mocks = vi.hoisted(() => ({
   bucketRows: [] as EntityItem[],
   searchEnabled: [] as boolean[],
   restEnabled: [] as boolean[],
+  restSettled: true,
 }));
 
 beforeEach(() => {
   mocks.bucketRows = [];
   mocks.searchEnabled.length = 0;
   mocks.restEnabled.length = 0;
+  mocks.restSettled = true;
 });
+
+/** The bucket's rows, narrowed by the term as the Quick Access search would. */
+function bucketRowsMatching(term: string): EntityItem[] {
+  return mocks.bucketRows.filter((row) =>
+    row.searchText.toLowerCase().includes(term.toLowerCase())
+  );
+}
 
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     usesRecordSelection: () => false,
-    useList: (options: { enabled: () => boolean }) => ({
-      items: () => (options.enabled() ? mocks.bucketRows : []),
-      totalCount: () => (options.enabled() ? mocks.bucketRows.length : 0),
+    useList: (options: {
+      enabled: () => boolean;
+      searchTerm?: () => string;
+    }) => ({
+      items: () =>
+        options.enabled()
+          ? bucketRowsMatching(options.searchTerm?.() ?? '')
+          : [],
+      totalCount: () =>
+        options.enabled()
+          ? bucketRowsMatching(options.searchTerm?.() ?? '').length
+          : 0,
       hasMore: () => false,
       isLoading: () => false,
       isLoadingMore: () => false,
@@ -104,15 +122,26 @@ vi.mock('@queries/soup/search', () => ({
   }),
 }));
 
-vi.mock('@queries/soup/items', () => ({
-  useSoupItemsQuery: (_args: unknown, options: () => { enabled: boolean }) => ({
-    get isSuccess() {
-      mocks.restEnabled.push(options().enabled);
-      return options().enabled;
+vi.mock('@queries/soup/items', async () => {
+  const { createRenderEffect } = await import('solid-js');
+  return {
+    useSoupItemsQuery: (
+      _args: unknown,
+      options: () => { enabled: boolean }
+    ) => {
+      createRenderEffect(() => mocks.restEnabled.push(options().enabled));
+      return {
+        get isSuccess() {
+          return options().enabled && mocks.restSettled;
+        },
+        get isFetching() {
+          return options().enabled && !mocks.restSettled;
+        },
+        data: [NEWER_REST_THREAD, REST_DRAFT, OLDER_REST_THREAD],
+      };
     },
-    data: [OLDER_REST_THREAD, REST_DRAFT, NEWER_REST_THREAD],
-  }),
-}));
+  };
+});
 
 vi.mock('@app/features/next-soup/filters/query-filters', () => ({
   QUERY_FILTERS_BASE: {},
@@ -158,6 +187,39 @@ it('lists Quick Access threads, not drafts, and leaves the REST list alone when 
   expect(mention.emails().map((item) => item.id)).toEqual(['cached-thread']);
   expect(mention.totalCount()).toBe(1);
   expect(mocks.restEnabled).not.toContain(true);
+  dispose();
+});
+
+it('stays on Quick Access when it has threads but none match a short term', () => {
+  mocks.bucketRows = [CACHED_THREAD];
+  const [term, setTerm] = createSignal('');
+  const { mention, dispose } = createRoot((dispose) => ({
+    mention: useEmailSearchMention({
+      searchTerm: term,
+      recentWhenShort: () => true,
+    }),
+    dispose,
+  }));
+
+  setTerm('zx');
+  expect(mention.emails()).toEqual([]);
+  expect(mocks.restEnabled).not.toContain(true);
+  dispose();
+});
+
+it('reports the REST threads as loading until they arrive', () => {
+  mocks.restSettled = false;
+  const { mention, dispose } = createRoot((dispose) => ({
+    mention: useEmailSearchMention({
+      searchTerm: () => '',
+      recentWhenShort: () => true,
+    }),
+    dispose,
+  }));
+
+  expect(mention.emails()).toEqual([]);
+  expect(mention.isLoadingMore()).toBe(true);
+  expect(mention.hasMore()).toBe(false);
   dispose();
 });
 
