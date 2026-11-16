@@ -60,8 +60,9 @@ delivers. Subscribers are:
   workspace ids and only webhooks in those workspaces match
   (`resolve_audience_and_enqueue` in `crates/webhook/src/domain/ingestion.rs`).
 
-A lookup that cannot answer admits nobody, and a resolution error drops that
-event for those subscribers without closing their streams
+A lookup that cannot answer (an unsupported entity type) admits nobody
+(`crates/event_stream/src/domain/access.rs`), and a resolution error drops
+that event for those subscribers without closing their streams
 (`crates/event_stream/src/domain/fan_out.rs`).
 
 ### Link-share viewers are excluded
@@ -85,14 +86,14 @@ users named in the event.
 | `Entity { entity_type, entity_id }` | the entity's explicit accessors (`entity_access`) | **Yes** | a stream whose user is an accessor, any scope | the accessors' personal and team workspaces |
 | `EntityAtLeast { .., min_level }` | explicit accessors at or above `comment`, `edit` or `owner` | **Yes** | a stream whose user's level is at least the floor | those accessors' personal and team workspaces |
 | `Team { team_id, min_role }` | `team_user` membership and role | No: team membership | a stream whose user is a member (or admin) of the team | `member`: the team workspace; `admin`: each current admin's personal workspace |
-| `TeamsOf { user_id }` | the user's teams | No: team membership | team-scoped streams of the user's teams | the user's personal and team workspaces |
+| `TeamsOf { user_id }` | the user's teams | No: team membership | team-scoped streams whose holder's workspace (their most privileged team) is one of the user's teams | the user's personal and team workspaces |
 | `ContactsOf { user_id }` | the user and their contact graph | No: contacts | personal streams of the user and of each contact | the user's own workspaces (webhooks cannot enumerate contacts) |
-| `GithubInstallation { installation_id }` | a claim on the installation (`has_claim`, the rule routines use) | No: GitHub claim | a stream whose user holds a claim | claimants' workspaces, and owning teams' workspaces whose webhook creator holds a claim |
+| `GithubInstallation { installation_id }` | a claim on the installation (`has_claim`, the rule routines use) | No: GitHub claim | a stream whose user holds a claim | claimants' personal workspaces (no team expansion), and owning teams' workspaces when the webhook's creator holds a claim |
 | `Recipient { user_id }` | the one user named in the event | No: explicit user | that user's personal streams; on flagged streams a bot only if the user owns it | that user's personal workspace only |
 | `Owner { user_id }` | the owning user named in the event | No: explicit user | as `Recipient` | the owner's personal and team workspaces |
 | `Snapshot { user_ids }` | users the producer captured (grants already gone) | No: explicit users | those users' personal streams, bots acting for them included | each user's personal workspace |
 | `Person { user_id }` | the user named in the event | No: explicit user | that user's own streams, any scope | never (live streams only) |
-| `Workspace { workspace_id }` | one webhook workspace | No: workspace | the stream whose workspace it is (team-scoped: the user's team) | that workspace |
+| `Workspace { workspace_id }` | one webhook workspace | No: workspace | the stream whose workspace it is (personal: its user; team-scoped: its holder's most privileged team) | that workspace |
 | `Any([..])` | union | as its members | if any member admits | the union of its members |
 
 Code: streams `AudienceResolver::admits` in
@@ -101,7 +102,9 @@ Code: streams `AudienceResolver::admits` in
 and `resolve_workspace_ids` in `crates/webhook/src/outbound/pg_repository.rs`.
 
 On flagged streams, webhook, bot and API key lifecycle events reach only the
-account holder or a bot they own (`ACCOUNT_HOLDER_FAMILIES` in
+account holder (their own credential, a bot they own, or a harness runtime
+acting for them; `is_account_holder` in
+`crates/event_stream/src/domain/models.rs`; `ACCOUNT_HOLDER_FAMILIES` in
 `crates/event_stream/src/domain/catalog.rs`, `eligible` in
 `crates/event_stream/src/domain/registry.rs`).
 
@@ -126,18 +129,18 @@ change.
 
 ## When someone loses access
 
-- **Live streams** cache each looked-up fact (accessor sets, exact checks,
-  team members, a user's teams, contacts, GitHub claims) for 5 s
+- **Live streams** cache each looked-up fact (accessor sets, exact and
+  at-least-level checks, team members, a user's teams, contacts, GitHub claims) for 5 s
   (`ACCESS_CACHE_TTL` in `crates/event_stream/src/domain/access.rs`). The
   access adapters themselves do not cache. Events that change access
-  (sharing, participants, team membership, bot deletion) evict the affected
-  facts before anything after them is delivered
+  (sharing, participants, team membership) evict the affected facts before
+  anything after them is delivered
   (`crates/event_stream/src/domain/invalidations.rs`,
   `AccessCaches::invalidate`), so staleness is at most 5 s and none after a
   logged revocation. Replaying from a cursor re-resolves each event's
   audience at replay time (`replayable` in
-  `crates/event_stream/src/domain/stream.rs`). A deleted bot's streams close
-  as `revoked`, and every stream re-validates its credential every 60 s.
+  `crates/event_stream/src/domain/stream.rs`). A bot deletion closes the bot's
+  streams as `revoked` (`crates/event_stream/src/domain/fan_out.rs`), and every stream re-validates its credential every 60 s.
 - **Webhooks** resolve the audience uncached for every event
   (`users_with_access` in `crates/webhook/src/domain/ingestion.rs`): a grant
   or revocation committed before the event is consumed counts.
@@ -210,7 +213,7 @@ one you want.
 The payload is an explicit projection, not the internal metadata: ids, the
 actor, what changed. Routing fields (recipients, snapshots) go on the
 audience and never into the payload. It derives `utoipa::ToSchema` behind the
-crate's `schema` feature so it joins the OpenAPI event union. Never add
+crate's `schema` (or `inbound`) feature so it joins the OpenAPI event union. Never add
 secrets, tokens or header values.
 
 ### 4. Register the family
@@ -219,16 +222,22 @@ secrets, tokens or header values.
   audience classes and stage) to `public_event_registry!` in
   `crates/event_stream/src/domain/catalog.rs`. That one registration feeds
   the catalog endpoint, wildcard expansion and the OpenAPI `WebhookEvent`
-  union.
+  union (webhook management and the agent-runtime contract are listed
+  `outside_union`).
 - Move its topic out of `INTERNAL_TOPICS` into both `declare_topics!` lists
   in `crates/event_stream/src/topics.rs`, and add its
   `ingest_public_event` arm in `crates/webhook/src/inbound/kafka_consumer.rs`.
+  The ingestion group starts a new topic at `Latest`.
 - Enable the crate's schema feature in `event_stream`'s `schema` feature.
 - An event that changes access returns its `Invalidation` in
-  `crates/event_stream/src/domain/invalidations.rs`.
+  `crates/event_stream/src/domain/invalidations.rs`. An internal topic whose
+  events only change access goes in `ACCESS_CHANGE_TOPICS` and
+  `LogMacroEvent` (`crates/event_stream/src/topics.rs`).
 - Regenerate the clients (`bun run gen-api cloud-storage` in `apps/web`, then
   `bun run sync-specs && bun run generate` in `packages/sdk`) and hydrate the
-  family in the SDK (`packages/sdk/src/events/hydrate/`).
+  family in the SDK (`packages/sdk/src/events/hydrate/`, routed from
+  `src/events/receiver.ts`; see the `add-sdk-endpoint` skill), and add its
+  row to `crates/webhook/README.md`.
 
 ### 5. Tests to add
 

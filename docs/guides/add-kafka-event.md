@@ -209,7 +209,9 @@ The checklist:
   A new topic fails `every_topic_is_delivered_or_listed_internal` until it is
   delivered or listed internal.
 - An event that changes access returns its `Invalidation` in
-  `crates/event_stream/src/domain/invalidations.rs`.
+  `crates/event_stream/src/domain/invalidations.rs`; an internal topic whose
+  events only change access goes in `ACCESS_CHANGE_TOPICS` and
+  `LogMacroEvent`.
 - Regenerate the clients and hydrate the family in the SDK, and add its row
   to `crates/webhook/README.md`.
 
