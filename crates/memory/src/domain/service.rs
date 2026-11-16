@@ -116,6 +116,8 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
 pub const MAX_REFRESH_ATTEMPTS: u8 = 3;
 /// Bounds one user's model work, inside the 25-minute claim lease.
 const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
+/// Bounds giving up a day, which runs after a full refresh in the same lease.
+const GIVE_UP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(240);
 /// A day is generated only this long after it ends, so activity still on its way
 /// into the activity log is counted before the day is judged inactive.
 const ACTIVITY_SETTLE: Duration = Duration::hours(1);
@@ -334,10 +336,19 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
                 return ClaimOutcome::Retry;
             }
         }
-        match self.give_up(claim.user.clone(), claim.date).await {
-            Ok(()) => ClaimOutcome::GaveUp,
-            Err(error) => {
+        match tokio::time::timeout(
+            GIVE_UP_TIMEOUT,
+            self.give_up(claim.user.clone(), claim.date),
+        )
+        .await
+        {
+            Ok(Ok(())) => ClaimOutcome::GaveUp,
+            Ok(Err(error)) => {
                 tracing::warn!(error = ?error, "memory refresh could not give up the day");
+                ClaimOutcome::Retry
+            }
+            Err(_) => {
+                tracing::warn!("memory refresh timed out giving up the day");
                 ClaimOutcome::Retry
             }
         }

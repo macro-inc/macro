@@ -28,7 +28,8 @@ impl ComposedMemoryRepo for PgMemoryRepo {
             WITH due AS (
                 SELECT j.user_id, COALESCE(p.through_date + 1, (j.created_at AT TIME ZONE 'UTC')::date - 1) AS day
                 FROM memory_refresh_job j LEFT JOIN memory_profile p ON p.user_id = j.user_id
-                WHERE j.lease_until < NOW() AND (p.through_date IS NULL OR p.through_date < $1)
+                WHERE j.lease_until < NOW()
+                  AND COALESCE(p.through_date + 1, (j.created_at AT TIME ZONE 'UTC')::date - 1) <= $1
                 ORDER BY j.lease_until, j.user_id LIMIT 1 FOR UPDATE OF j SKIP LOCKED
             )
             UPDATE memory_refresh_job j SET lease_token = $2, lease_until = NOW() + INTERVAL '25 minutes',

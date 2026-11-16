@@ -111,6 +111,9 @@ async fn leases_preserve_first_failed_day_and_catch_up_sequentially(pool: PgPool
         repo.snapshot(&user, yesterday).await.unwrap().first_date,
         NaiveDate::from_ymd_opt(2026, 6, 17)
     );
+    // A new user's first day waits for the cutoff like every later day.
+    let before_first_day = NaiveDate::from_ymd_opt(2026, 6, 16).unwrap();
+    assert!(repo.claim_refresh(before_first_day).await.unwrap().is_none());
     let claim = repo.claim_refresh(yesterday).await.unwrap().unwrap();
     assert_eq!(claim.date, NaiveDate::from_ymd_opt(2026, 6, 17).unwrap());
     assert!(repo.claim_refresh(yesterday).await.unwrap().is_none());
