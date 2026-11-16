@@ -15,6 +15,7 @@ The owning surface supplies `EntityConversation` presentation and permissions.
 
 - Keep fetching, paging, permission checks, and thread rendering in the existing conversation owner.
 - Show a plus suffix when more timeline pages exist; never present a partial count as an exact total.
+- Show surviving reply counts even when every root message is deleted; use the empty entry only when the count is zero.
 - Keep the composer draft when closing the sheet, and focus only after a user opens an empty discussion.
 - Use `MobileDrawer.FixedContent` with `KeyboardFooter`; preserve the default keyboard behavior of other drawers.
 - Keep desktop discussion inline; only phone entry compositions use this component.

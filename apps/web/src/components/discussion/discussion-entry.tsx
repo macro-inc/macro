@@ -27,16 +27,7 @@ export function DiscussionEntry(props: {
       aria-haspopup="dialog"
       class="block w-full rounded-3xl bg-ink/5 p-3 text-left"
     >
-      <Show
-        when={props.preview.newest}
-        fallback={
-          <span class="flex min-h-6 items-center gap-3 text-sm text-ink-muted">
-            <ChatCircleIcon class="size-4" />
-            {t('common.addComment')}
-            <CaretRightIcon class="ml-auto size-4" />
-          </span>
-        }
-      >
+      <Show when={props.preview.newest}>
         {(message) => (
           <div class="flex gap-2 [--avatar-group-separator:var(--color-panel)]">
             <div class="size-8 shrink-0">
@@ -65,25 +56,44 @@ export function DiscussionEntry(props: {
                   inert
                 />
               </div>
-              <div class="mt-2 flex items-center gap-2 text-sm text-ink-muted">
-                <AvatarGroup size="sm">
-                  <For each={props.preview.commenters.slice(0, 3)}>
-                    {(commenter) => (
-                      <DiscussionAvatar message={commenter} size="sm" />
-                    )}
-                  </For>
-                  <Show when={props.preview.commenters.length > 3}>
-                    <AvatarGroup.Count size="sm">
-                      +{props.preview.commenters.length - 3}
-                    </AvatarGroup.Count>
-                  </Show>
-                </AvatarGroup>
-                <span>{countLabel()}</span>
-                <CaretRightIcon class="size-4" />
-              </div>
             </div>
           </div>
         )}
+      </Show>
+      <Show
+        when={props.preview.count > 0}
+        fallback={
+          <span class="flex min-h-6 items-center gap-3 text-sm text-ink-muted">
+            <ChatCircleIcon class="size-4" />
+            {t('common.addComment')}
+            <CaretRightIcon class="ml-auto size-4" />
+          </span>
+        }
+      >
+        <div
+          class="flex items-center gap-2 text-sm text-ink-muted [--avatar-group-separator:var(--color-panel)]"
+          classList={{
+            'mt-2 ml-10': !!props.preview.newest,
+            'min-h-6': !props.preview.newest,
+          }}
+        >
+          <Show when={props.preview.commenters.length > 0}>
+            <AvatarGroup size="sm">
+              <For each={props.preview.commenters.slice(0, 3)}>
+                {(commenter) => (
+                  <DiscussionAvatar message={commenter} size="sm" />
+                )}
+              </For>
+              <Show when={props.preview.commenters.length > 3}>
+                <AvatarGroup.Count size="sm">
+                  +{props.preview.commenters.length - 3}
+                </AvatarGroup.Count>
+              </Show>
+            </AvatarGroup>
+          </Show>
+          <span>{countLabel()}</span>
+          <CaretRightIcon class="size-4" />
+        </div>
       </Show>
     </button>
   );
