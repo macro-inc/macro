@@ -18,6 +18,24 @@ pub const RETAINED_LIVE_ROOT_STATE: &[&str] = &["documentMetadata"];
 pub static MACRO_SEARCH_TEXT_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy {
     root_search_text: true,
 };
+/// The own fields Source's import changes: computed at export, cleared by `|| undefined`
+/// on import, or never imported. The one table behind stored normalization, stored
+/// comparison and the null-alias canonicalization.
+///
+/// Inventory 2d0e8174, class column. Source control: storedFieldSync.test.ts (fixture
+/// provenance in document_session/tests/testdata/source-stored-field-sync).
+fn normalized_fields(node_type: &str) -> &'static [&'static str] {
+    match node_type {
+        "table" => &["frozenColumnCount", "frozenRowCount", "rowStriping"],
+        "tablecell" => &["width"],
+        "listitem" => &["checked"],
+        "code" | "custom-code" => &["language", "theme"],
+        "code-highlight" => &["highlightType"],
+        "pr-mention" => &["id", "url"],
+        "classed-block" => &["attributes"],
+        _ => &[],
+    }
+}
 impl SyncPolicy for MacroSyncPolicy {
     fn writes_root_search_text(&self) -> bool {
         self.root_search_text
@@ -36,20 +54,18 @@ impl SyncPolicy for MacroSyncPolicy {
         // These specific optional fields use null/unset aliases across source and
         // native exports. Code getters omit unset values; table imports may
         // retain explicit null. The persisted Loro values remain untouched.
-        let fields: &[&str] = match node.get("type").and_then(serde_json::Value::as_str) {
-            // colWidths is not aliased: Source keeps a stored null raw
-            // (TableNode.updateFromJSON setColWidths, LexicalTable.dev.mjs :3775)
-            // and native ColumnWidths holds Null.
-            Some("table") => &["frozenColumnCount", "frozenRowCount", "rowStriping"],
-            Some("tablecell") => &["width"],
-            Some("code" | "custom-code") => &["language", "theme"],
-            Some("code-highlight") => &["highlightType"],
-            Some("pr-mention") => &["url"],
-            Some("classed-block") => &["attributes"],
-            Some("listitem") => &["checked"],
-            _ => &[],
-        };
-        for field in fields {
+        // colWidths is not aliased: Source keeps a stored null raw (TableNode.updateFromJSON
+        // setColWidths, LexicalTable.dev.mjs :3775) and native ColumnWidths holds Null. A
+        // pr-mention id is never aliased; only its url is optional.
+        let node_type = node
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        for field in normalized_fields(&node_type) {
+            if node_type == "pr-mention" && *field == "id" {
+                continue;
+            }
             if node.get(*field).is_some_and(serde_json::Value::is_null) {
                 node.remove(*field);
             }
@@ -57,20 +73,7 @@ impl SyncPolicy for MacroSyncPolicy {
     }
 
     fn stored_normalized_fields(&self, node_type: &str) -> &'static [&'static str] {
-        // Inventory 2d0e8174, class column: the only own fields Source's import changes are
-        // computed at export, cleared by `|| undefined` on import, or never imported.
-        // Source control: storedFieldSync.test.ts (fixture provenance in
-        // document_session/tests/testdata/source-stored-field-sync).
-        match node_type {
-            "table" => &["frozenColumnCount", "frozenRowCount", "rowStriping"],
-            "tablecell" => &["width"],
-            "listitem" => &["checked"],
-            "code" | "custom-code" => &["language", "theme"],
-            "code-highlight" => &["highlightType"],
-            "pr-mention" => &["id", "url"],
-            "classed-block" => &["attributes"],
-            _ => &[],
-        }
+        normalized_fields(node_type)
     }
     fn remote_update_defaults(&self, node_type: &str) -> &'static [(&'static str, &'static str)] {
         // Source control source-remote-code-default.source-control.test.ts: the code-prism
@@ -103,19 +106,15 @@ impl SyncPolicy for MacroSyncPolicy {
             }
         };
         match node.get("type").and_then(Value::as_str) {
-            // `x ? x : undefined` at export.
-            Some("table") => {
-                for field in ["frozenColumnCount", "frozenRowCount", "rowStriping"] {
+            // Table: `x ? x : undefined` at export. `setWidth(width || undefined)`,
+            // setLanguage/setTheme/highlight `|| undefined`.
+            Some(
+                node_type @ ("table" | "tablecell" | "code" | "custom-code" | "code-highlight"),
+            ) => {
+                for field in normalized_fields(node_type) {
                     clear(node, field, &falsy);
                 }
             }
-            // `setWidth(width || undefined)`, setLanguage/setTheme/highlight `|| undefined`.
-            Some("tablecell") => clear(node, "width", &falsy),
-            Some("code" | "custom-code") => {
-                clear(node, "language", &falsy);
-                clear(node, "theme", &falsy);
-            }
-            Some("code-highlight") => clear(node, "highlightType", &falsy),
             // The constructor: a GitHub PR URL id moves into a falsy url (nodes/wire.rs).
             Some("pr-mention") => {
                 let id = node
