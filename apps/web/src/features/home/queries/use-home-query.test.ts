@@ -16,11 +16,23 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/collection/row-store')),
   useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
-  createSearchState: () => ({
-    isSearching: () => false,
-    usesServiceSearch: () => false,
+  createSearchState: (options: { text: () => string }) => ({
+    isSearching: () => options.text().trim().length > 0,
+    data: () => serviceSearch.hits,
+    isLocalSearchSettling: () => false,
+    usesServiceSearch: () => serviceSearch.failed,
     isSettling: () => false,
+    isLoading: () => false,
+    isFetching: () => false,
+    hasNextPage: () => false,
+    isFetchingNextPage: () => false,
+    error: () =>
+      serviceSearch.failed ? new Error('search unavailable') : undefined,
   }),
+}));
+const serviceSearch = vi.hoisted(() => ({
+  hits: [] as unknown[],
+  failed: false,
 }));
 // Keep data-only query tests independent of unrelated UI barrel dependencies.
 vi.mock('@entity', async () => ({
@@ -39,6 +51,8 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 const workFeedSource = vi.hoisted(() => ({
   enabled: undefined as (() => boolean) | undefined,
   items: () => [] as unknown[],
+  entities: () => [] as unknown[],
+  loading: false,
   delegate: { canComplete: () => undefined, prepare: () => undefined },
 }));
 vi.mock('../work-feed/home-work-feed', () => ({
@@ -49,7 +63,8 @@ vi.mock('../work-feed/home-work-feed', () => ({
     workFeedSource.enabled = options.enabled;
     return {
       items: () => workFeedSource.items(),
-      isLoading: () => false,
+      entities: () => workFeedSource.entities(),
+      isLoading: () => workFeedSource.loading,
       isFetching: () => false,
       isLoadingMore: () => false,
       hasMore: () => false,
@@ -518,6 +533,10 @@ describe('Home work feed', () => {
     vi.setSystemTime(new Date(2026, 8, 10, 12));
     flags.graphqlSoup = true;
     touch.device = false;
+    workFeedSource.entities = () => [];
+    serviceSearch.hits = [];
+    serviceSearch.failed = false;
+    workFeedSource.loading = false;
     workFeedSource.items = () => [
       {
         kind: 'entity',
@@ -541,7 +560,7 @@ describe('Home work feed', () => {
     expect(source.markDoneDelegate()).toBe(workFeedSource.delegate);
   });
 
-  it('keeps Noise and search on the Soup sources', () => {
+  it('keeps Noise on the Soup sources and completes searched rows as feed items', () => {
     const notifications = makeQuery([email('from-soup', 9)], false);
     const activity = makeQuery([], false);
     const { source, setState } = mount(notifications, activity);
@@ -552,7 +571,80 @@ describe('Home work feed', () => {
 
     setState('tab', 'signal');
     setState('search', 'plan');
-    expect(workFeedSource.enabled?.()).toBe(false);
+    expect(source.markDoneDelegate()).toBe(workFeedSource.delegate);
+  });
+
+  it('finds the rows the work feed lists when searching, ahead of other hits', () => {
+    workFeedSource.entities = () => [
+      { type: 'chat', id: 'feed-chat', name: 'Quarterly plan review' },
+      { type: 'document', id: 'feed-task', name: 'Fix login' },
+      { type: 'document', id: 'feed-doc', name: 'Hiring plan' },
+    ];
+    serviceSearch.hits = [
+      { ...email('hit-email', 9), name: 'Notes that mention a plan' },
+    ];
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+
+    expect(workFeedSource.enabled?.()).toBe(true);
+    expect(ids(source)).toEqual(['feed-chat', 'feed-doc', 'hit-email']);
+    expect(source.isLoading()).toBe(false);
+
+    setState('search', '');
+    expect(ids(source)).toEqual(['from-work-feed']);
+  });
+
+  it('stays loading while a search waits for the feed that holds its matches', () => {
+    workFeedSource.entities = () => [];
+    workFeedSource.loading = true;
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+    expect(source.isLoading()).toBe(true);
+
+    workFeedSource.loading = false;
+    expect(source.isLoading()).toBe(false);
+  });
+
+  it('keeps the matching feed rows when the search service fails', () => {
+    workFeedSource.entities = () => [
+      { type: 'document', id: 'feed-doc', name: 'Hiring plan' },
+    ];
+    serviceSearch.failed = true;
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+    expect(ids(source)).toEqual(['feed-doc']);
+    expect(source.error()).toBeUndefined();
+
+    setState('search', 'absent');
+    expect(ids(source)).toEqual([]);
+    expect(source.error()).toEqual(new Error('search unavailable'));
+  });
+
+  it('searches only the Soup sources where Home is not the work feed', () => {
+    touch.device = true;
+    workFeedSource.entities = () => [
+      { type: 'document', id: 'feed-doc', name: 'Hiring plan' },
+    ];
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+
+    expect(ids(source)).toEqual([]);
   });
 
   it('keeps touch devices on the notification feed', () => {
