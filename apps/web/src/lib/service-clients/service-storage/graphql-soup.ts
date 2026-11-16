@@ -803,7 +803,9 @@ export function getGraphqlSoupClient(): Client {
   if (!sessionActive()) return graphqlSoupClient;
   const native = isTauri();
   // Only the browser Turso client is session-latched, so a later emergency
-  // kill applies on the next navigation rather than mid-page.
+  // kill applies on the next navigation rather than mid-page. A browser with
+  // no stored PostHog flags (first visit, cleared site data) decides before
+  // `/flags` answers, so it sees the kill switch only from its next load.
   if (!native && browserCacheClientActivated && cachedClient)
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
