@@ -9,7 +9,6 @@ use sync_server_core::domain::room::{AlarmOutcome, InboundFrame, Room, RoomConfi
 mod golden;
 
 /// Golden fixtures with every callback implemented by the native room.
-/// Add names with the callback extraction commits starting at C8.
 pub const ENABLED: &[&str] = &[
     "surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl",
     "surface_migration.test/isolated_initialization_acknowledges_only_the_identical_verified_operation_and_seed.jsonl",

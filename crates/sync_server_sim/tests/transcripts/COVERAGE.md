@@ -106,8 +106,8 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 The corpus lives in `sync_server_sim`; record it from `services/sync-service` with
 `just record-transcripts <temporary-directory>` and compare with
 `just diff-transcripts git:HEAD <temporary-directory>`. Git comparisons also read
-the original service location in pre-C7 commits. `ENABLED` is empty in C7; native
-callback replay starts with C8.
+the original service location in older commits. Native callback replay covers the
+fixtures listed in `sync_server_sim::replay::ENABLED`.
 
 The C4 expired-during-connect capture shows a server-closed socket still present
 in the runtime list. SimPorts retains it until `RuntimeCloses`; it does not infer
