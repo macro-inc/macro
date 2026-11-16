@@ -28,7 +28,7 @@ export function MobileFormBlockHeader(props: FormBlockHeaderProps) {
         trailing={
           <>
             <Show when={!props.respondOnly && canEditForm(props.detail())}>
-              <BlockLiveIndicators />
+              <BlockLiveIndicators entityId={() => props.formId} />
             </Show>
             <MobileHeader.Island>
               <div class="flex items-center gap-1.5">

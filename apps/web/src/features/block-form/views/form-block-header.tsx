@@ -50,7 +50,7 @@ export function FormBlockHeader(props: FormBlockHeaderProps) {
       </Show>
       <SplitHeaderRight>
         <Show when={!props.respondOnly && canEditForm(props.detail())}>
-          <BlockLiveIndicators />
+          <BlockLiveIndicators entityId={() => props.formId} />
         </Show>
         <div class="order-[1000] flex items-center gap-2">
           <Show
