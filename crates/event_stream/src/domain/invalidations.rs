@@ -156,6 +156,7 @@ pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
         | LogMacroEvent::AgentSessionMacroEvent(_)
         | LogMacroEvent::AgentSessionLifecycleMacroEvent(_)
         | LogMacroEvent::UserMacroEvent(_)
+        | LogMacroEvent::PasswordMacroEvent(_)
         | LogMacroEvent::PropertyMacroEvent(_)
         | LogMacroEvent::CallMacroEvent(_)
         | LogMacroEvent::GithubPullRequestMacroEvent(_)
@@ -194,6 +195,7 @@ pub fn log_record(event: &LogMacroEvent) -> Result<Option<LogRecord>, NormalizeE
         LogMacroEvent::AgentSessionMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::AgentSessionLifecycleMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::UserMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::PasswordMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::ProjectMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::ChatMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::DatabaseMacroEvent(event) => normalize(event.event())?,

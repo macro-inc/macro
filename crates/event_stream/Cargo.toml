@@ -34,6 +34,7 @@ schema = [
   "properties/inbound",
   "teams/schema",
   "user_events/schema",
+  "password_events/schema",
 ]
 
 consumer = [
@@ -104,6 +105,7 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true, optional = true }
+password_events = { path = "../password_events" }
 user_events = { path = "../user_events" }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

@@ -32,6 +32,7 @@ use macro_event_topics::{
 };
 use messages::outbound::broker::MessageMacroEvent;
 use notification::domain::models::websocket_notification_event::JsonNotificationMacroEvent;
+use password_events::PasswordMacroEvent;
 use projects::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 use teams::domain::events::TeamMacroEvent;
@@ -46,6 +47,7 @@ macro_event_broker::declare_topics!(
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
     UserMacroEvent,
+    PasswordMacroEvent,
     ProjectMacroEvent,
     ChatMacroEvent,
     DatabaseMacroEvent,
@@ -73,6 +75,7 @@ macro_event_broker::declare_topics!(
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
     UserMacroEvent,
+    PasswordMacroEvent,
     ProjectMacroEvent,
     ChatMacroEvent,
     DatabaseMacroEvent,

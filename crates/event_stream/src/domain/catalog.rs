@@ -32,6 +32,8 @@ use initiative::domain::events::{InitiativePublicEvent, InitiativeTopicEvent};
 use messages::outbound::broker::MessageTopicEvent;
 use notification::domain::events::NotificationPublicEvent;
 use notification::domain::models::websocket_notification_event::NotificationTopicEvent;
+use password_events::PasswordTopicEvent;
+use password_events::events::PasswordPublicEvent;
 use projects::domain::events::{ProjectPublicEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyPublicEvent, PropertyTopicEvent};
 use serde::Serialize;
@@ -232,6 +234,10 @@ public_event_registry! {
         /// User profile events from the `macro.users` topic.
         User(UserTopicEvent => UserTopicEvent) {
             "user.picture_changed": ["user"], [ContactsOf, TeamsOf], Stable;
+        }
+        /// Vault facts addressed to one account from the `macro.passwords` topic.
+        Password(PasswordTopicEvent => PasswordPublicEvent) {
+            "passwords.access_request.resolved": ["password_item"], [Recipient], Stable;
         }
         /// Project lifecycle events from the `macro.projects` topic.
         Project(ProjectTopicEvent => ProjectPublicEvent) {

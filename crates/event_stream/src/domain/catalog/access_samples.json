@@ -1367,6 +1367,18 @@
       }
     }
   ],
+  "Password": [
+    {
+      "event_type": "passwords.access_request.resolved",
+      "metadata": {
+        "recipientUserId": "macro|agent@example.com",
+        "teamId": "00000000-0000-0000-0000-000000000001",
+        "itemId": "00000000-0000-0000-0000-000000000002",
+        "requestId": "00000000-0000-0000-0000-000000000003",
+        "status": "approved"
+      }
+    }
+  ],
   "Project": [
     {
       "event_type": "project.created",

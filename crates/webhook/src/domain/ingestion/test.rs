@@ -3023,3 +3023,59 @@ mod team_workspaces {
         assert_eq!(workspaces(&repository), vec![vec![MEMBER.to_string()]]);
     }
 }
+
+/// A resolved agent access request is a private hint for the requesting
+/// agent: only that account's personal workspace matches, no entity access is
+/// resolved, and the delivered payload carries exactly the four agreed fields.
+#[tokio::test]
+async fn a_resolved_password_request_reaches_only_the_requesting_agent() {
+    use password_events::{
+        AccessRequestResolution, AccessRequestResolvedMetadata, PasswordTopicEvent,
+    };
+
+    let agent = "macro|agent@example.com";
+    let item = Uuid::from_u128(2);
+    let event = Event::new(PasswordTopicEvent::AccessRequestResolved(
+        AccessRequestResolvedMetadata {
+            recipient_user_id: user_id(agent),
+            team_id: Uuid::from_u128(1),
+            item_id: item,
+            request_id: Uuid::from_u128(3),
+            status: AccessRequestResolution::Approved,
+        },
+    ));
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")])
+        .with_teams(vec![Uuid::parse_str(TEAM_WORKSPACE_ID).unwrap()]);
+    let repository = MockRepository::new(vec![webhook("wh_agent", agent)]);
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_public_event(event)
+        .await
+        .expect("the resolution is ingested");
+
+    assert!(lock(&access.calls).is_empty());
+    assert!(lock(&access.team_calls).is_empty());
+    assert_eq!(
+        lock(&repository.state).match_calls,
+        vec![MatchCall {
+            workspace_ids: vec![agent.to_string()],
+            event_name: "passwords.access_request.resolved".to_string(),
+            entity_id: item.to_string(),
+        }]
+    );
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let delivered = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(delivered.entity_type, "password_item");
+    assert_eq!(
+        delivered.broker_envelope["metadata"],
+        serde_json::json!({
+            "teamId": "00000000-0000-0000-0000-000000000001",
+            "itemId": "00000000-0000-0000-0000-000000000002",
+            "requestId": "00000000-0000-0000-0000-000000000003",
+            "status": "approved",
+        }),
+    );
+}

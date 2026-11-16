@@ -75,6 +75,7 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.agent_sessions",
             "macro.agent_session_lifecycle",
             "macro.users",
+            "macro.passwords",
             "macro.projects",
             "macro.chats",
             "macro.databases",
