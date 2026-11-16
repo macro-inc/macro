@@ -120,7 +120,9 @@ aws "${list_args[@]}" |
 # it is always retained; the exclusions below are for objects this script does
 # not own - the records themselves, the archive uploaded as its own resource,
 # and the cache WASM, which `prune-old-brotli-from-s3.sh` retires on its own
-# schedule because the generic sync never uploads it.
+# schedule because the generic sync never uploads it. Videos under web-hosted/
+# are kept too: native bundles leave them out and load them from here, and an
+# app that can no longer take OTA updates may name one long after ten builds.
 prunable=$work/prunable
 : >"$prunable"
 while IFS= read -r key; do
@@ -129,6 +131,7 @@ while IFS= read -r key; do
   "$records_prefix"/*) continue ;;
   *app-archive.zip | app-archive/*) continue ;;
   *cache_wasm_bg*) continue ;;
+  web-hosted/* | */web-hosted/*) continue ;;
   *index.html) continue ;;
   esac
   printf '%s\n' "$key" >>"$prunable"
