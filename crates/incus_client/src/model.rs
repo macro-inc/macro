@@ -235,3 +235,12 @@ pub struct ImageAliasInfo {
     /// Container or VM image.
     pub kind: InstanceKind,
 }
+
+/// What creating a custom volume did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VolumeCreation {
+    /// The volume was created empty.
+    Created,
+    /// A volume by that name already existed and was left as it is.
+    AlreadyExists,
+}

@@ -22,6 +22,8 @@ export interface EmptyStatePanelProps {
   primaryAction?: EmptyStateAction;
   /** Custom primary control, such as a create menu, instead of a single action. */
   primaryActionContent?: JSXElement;
+  /** A quieter alternative shown beside the primary action. */
+  secondaryAction?: EmptyStateAction;
   actionsClass?: string;
   /**
    * When set, renders a secondary "Documentation" button that opens the given
@@ -110,6 +112,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           when={
             primaryActionContent() ||
             props.primaryAction ||
+            props.secondaryAction ||
             props.documentationUrl
           }
         >
@@ -137,6 +140,17 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
               }
             >
               {primaryActionContent()}
+            </Show>
+            <Show when={props.secondaryAction}>
+              {(action) => (
+                <PillButton
+                  tone="subtle"
+                  icon={action().icon}
+                  onClick={action().onClick}
+                >
+                  {action().label}
+                </PillButton>
+              )}
             </Show>
             <Show when={props.documentationUrl}>
               {(url) => (

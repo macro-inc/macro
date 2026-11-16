@@ -37,6 +37,8 @@ mod saved_queries;
 mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
+mod storage_reads;
+#[cfg(feature = "gateway")]
 mod tables;
 #[cfg(feature = "gateway")]
 mod team_share;
@@ -208,9 +210,10 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
                 name: "Summer Offsite".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )
@@ -254,9 +257,10 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
                 name: "Hiring".to_string(),
                 owner_id: user(),
                 acting_bot: None,
+                first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )

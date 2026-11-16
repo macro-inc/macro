@@ -29,12 +29,14 @@ pub mod channel_membership;
 pub mod channel_role;
 pub mod channel_users;
 pub mod chat_access;
+pub mod crm_batch_access;
 pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod crm_entity_users;
 pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
+pub mod entity_audiences;
 pub mod foreign_entity_access;
 pub mod form_access;
 pub mod initiative_access;
@@ -54,7 +56,7 @@ mod typed_owner_test;
 pub struct SourceIds(pub Vec<String>);
 
 type UserSourceIdsKey = (DatabaseKey, String);
-type UserSourceIds = Result<SourceIds, Arc<sqlx::Error>>;
+type UserSourceIds = Result<Arc<SourceIds>, Arc<sqlx::Error>>;
 
 static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSourceIds>> =
     LazyLock::new(SingleFlight::new);
@@ -65,7 +67,28 @@ static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSo
 /// Callers that miss the cache at the same time for the same database and user
 /// share one run of the query. A failure reaches all of them as an
 /// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(pool), err, fields(coalesced = tracing::field::Empty))]
+pub async fn get_user_source_ids(
+    pool: &Pool<Postgres>,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> anyhow::Result<SourceIds> {
+    let source_ids = shared_user_source_ids(pool, user_id).await?;
+
+    // The caller's own copy is made here, after the cache lock is released.
+    Ok(Arc::unwrap_or_clone(source_ids))
+}
+
+/// The source ids every caller of one lookup shares. The cache keeps them
+/// behind a pointer because it has one lock for all users, and a hit or a
+/// store that copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_source_ids",
+    skip(pool, user_id),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(
@@ -75,12 +98,12 @@ static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSo
         convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
     )
 )]
-pub async fn get_user_source_ids(
+async fn shared_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
-) -> anyhow::Result<SourceIds> {
+) -> anyhow::Result<Arc<SourceIds>> {
     let Some(user_id) = user_id else {
-        return Ok(SourceIds(vec![]));
+        return Ok(Arc::new(SourceIds(vec![])));
     };
 
     let user_id = user_id.as_ref().to_string();
@@ -92,6 +115,7 @@ pub async fn get_user_source_ids(
         async move {
             query_user_source_ids(&pool, &user_id)
                 .await
+                .map(Arc::new)
                 .map_err(Arc::new)
         }
     };
@@ -103,6 +127,10 @@ pub async fn get_user_source_ids(
 }
 
 async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let source_ids = sqlx::query_scalar!(
         r#"
             SELECT cp.channel_id::text FROM comms_channel_participants cp
@@ -115,8 +143,9 @@ async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Re
             "#,
         user_id
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(SourceIds(source_ids.into_iter().flatten().collect()))
 }
@@ -140,6 +169,11 @@ pub async fn get_team_scope_source_ids(
     bot_id: &BotIdStr<'_>,
     team_id: &uuid::Uuid,
 ) -> anyhow::Result<SourceIds> {
+    // Keep transaction acquisition out of callers' nested access-check futures.
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let source_ids = sqlx::query_scalar!(
         r#"
         WITH active_bot AS (
@@ -177,8 +211,9 @@ pub async fn get_team_scope_source_ids(
         bot_id.as_uuid(),
         team_id,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(SourceIds(source_ids))
 }

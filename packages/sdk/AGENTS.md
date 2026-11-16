@@ -48,9 +48,11 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  either the single agent task or `steps` (generated `CodeStep`s, agent steps
-  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
-  restricts to an explicit user request; `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
+  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
+  request, or the older single agent task. Its examples use steps only:
+  agents copy them, and a routine draft hands back steps, converting a single
+  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
@@ -59,7 +61,9 @@ enforced by the ordinary backend APIs.
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
   `children()` and `keepAsOwn()` read and change the link, and
   `RoutineExecution.created` holds the routines a run created. The rules an
-  agent needs are in the `@agent` block on `RoutineNamespace`.
+  agent needs are in the `@agent` block on `RoutineNamespace`, which the
+  routine drafter also reads; code mode follows it with the Compose Routines
+  skill (`crates/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
@@ -158,7 +162,7 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
-- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
+- Keep the human-session-only Passwords vault endpoints, including batch import and name matching, in coverage exclusions;
   normal human-session authorization and secret disclosure are outside v1 agent capabilities.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
@@ -192,6 +196,8 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- The SDK is a root Bun workspace member: its dependencies resolve from the
+  root `bun.lock`, and there is no `bun.lock` here.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
@@ -310,3 +316,5 @@ the existing gateway prefixes.
 - Keep LiveKit and OpenTelemetry external in the calls build so room objects and
   tracing use the consumer's runtime instances. Do not re-export calls helpers
   or their runtime types from `src/macro.ts`.
+
+- `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.

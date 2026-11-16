@@ -32,6 +32,7 @@ export function ProjectWorkspace(props: ProjectWorkspaceProps) {
               <ProjectTasksList
                 projectId={props.project.id}
                 project={props.project}
+                source={props.source}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={
                   canEditProject(props.project) ? props.onCreateTask : undefined

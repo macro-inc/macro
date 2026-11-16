@@ -3,11 +3,16 @@ import {
   type TasksViewProviderProps,
 } from '@app/features/tasks-view/tasks-view-context';
 import { type ParentProps, Show } from 'solid-js';
-import { useProjectsContext } from './context/projects-context';
+import {
+  type ProjectSource,
+  useProjectsContext,
+} from './context/projects-context';
 import { createProjectTasksDataSource } from './queries/project-tasks';
 
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
+  /** Reuse the host's project read instead of issuing a duplicate request. */
+  source?: ProjectSource;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
   onCreateTask?: TasksViewProviderProps['onCreateTask'];
 }>;
@@ -30,7 +35,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
               projectId,
-              context.createProjectSource(() => projectId),
+              props.source ?? context.createProjectSource(() => projectId),
               state,
               options
             )

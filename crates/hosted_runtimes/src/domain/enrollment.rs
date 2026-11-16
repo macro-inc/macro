@@ -36,6 +36,10 @@ pub struct Enrollment {
     /// reports join it. Opaque ids only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub traceparent: Option<String>,
+    /// The agent teammate this computer runs, if it was bought for one.
+    /// Older macrod builds ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<crate::domain::agent::AgentEnrollment>,
 }
 
 /// The service addresses of the deployment a computer joins, as the guest

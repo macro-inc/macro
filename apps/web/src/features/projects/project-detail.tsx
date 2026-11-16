@@ -1,6 +1,6 @@
 import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import {
@@ -13,7 +13,6 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -32,6 +31,10 @@ import {
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import {
+  ProjectBreadcrumbItem,
+  type ProjectBreadcrumbProps,
+} from './project-breadcrumb';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
@@ -41,55 +44,6 @@ import { MobileProjectDetailHeader } from './views/mobile/project-detail-header'
 import { MobileProjectWorkspace } from './views/mobile/project-workspace';
 import { ProjectDetailHeader } from './views/project-detail-header';
 import { ProjectWorkspace } from './views/project-workspace';
-
-type ProjectBreadcrumbProps = {
-  entry: {
-    value: string;
-    data: { type: 'initiative'; id: string; fallbackName?: string };
-  };
-  order: number;
-};
-
-function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
-  const source = useProjectsContext().createProjectSource(
-    () => props.entry.data.id
-  );
-  const name = () =>
-    source.project()?.name ?? props.entry.data.fallbackName ?? 'Project';
-  return (
-    <ViewBreadcrumbs.Item
-      value={props.entry.value}
-      metadata={props.entry.data}
-      order={props.order}
-    >
-      {(item) => (
-        <div class="flex min-w-0 items-center">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={name()}
-          >
-            <EntityIcon
-              targetType="initiative"
-              appearance={source.project()?.appearance}
-              size="xs"
-            />
-            <span class="truncate">{name()}</span>
-          </ViewBreadcrumbs.Button>
-        </div>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
-
-export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
-  return (
-    <Projects>
-      <ProjectBreadcrumbContent {...props} />
-    </Projects>
-  );
-}
 
 export type ProjectDetailHeaderProps = {
   source: ProjectSource;
@@ -112,7 +66,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
-  useSplitDisplayName(() => source.project()?.name ?? 'Project');
+  useSplitDisplayName(
+    () => source.project()?.name ?? t('tabs.projectFallbackName')
+  );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
@@ -163,7 +119,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   return (
     <>
       <Show when={props.breadcrumb}>
-        {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
+        {(breadcrumb) => (
+          <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
       </Show>
       <Show
         when={isTouchDevice()}

@@ -2,6 +2,7 @@ import {
   ListColumnHeader,
   type ListColumnHeaderProps,
 } from '@app/components/list/ListColumnHeader';
+import type { SortSelection } from '@app/features/soup';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
@@ -21,16 +22,22 @@ type SortableHeaderProps = Omit<
   reverseSortId?: TaskSortId;
 };
 
+const SEARCH_SORT: SortSelection<TaskSortId> = { id: 'updated_at' };
 function SortableHeader(props: SortableHeaderProps) {
-  const { state, setPrimarySort } = useTasksView();
-  const active = () =>
-    state.sort[0]?.id === props.sortId ||
-    (props.reverseSortId !== undefined &&
-      state.sort[0]?.id === props.reverseSortId);
+  const { state, source, setPrimarySort } = useTasksView();
+  const keepsSearchOrder = () =>
+    Boolean(state.search.trim()) && !source.sortsSearchResults;
+  const shownSort = () => (keepsSearchOrder() ? SEARCH_SORT : state.sort[0]);
+  const sortable = () => !keepsSearchOrder() && props.sortId !== undefined;
+  const active = () => {
+    const id = shownSort()?.id;
+    return (
+      id !== undefined && (id === props.sortId || id === props.reverseSortId)
+    );
+  };
   const reversed = () =>
     active() &&
-    (state.sort[0]?.id === props.reverseSortId ||
-      state.sort[0]?.reversed === true);
+    (shownSort()?.id === props.reverseSortId || shownSort()?.reversed === true);
   const sort = () => {
     if (!props.sortId) return;
     if (props.reverseSortId && state.sort[0]?.id === props.sortId) {
@@ -44,7 +51,7 @@ function SortableHeader(props: SortableHeaderProps) {
       {...props}
       active={active()}
       reversed={reversed()}
-      onClick={props.sortId ? sort : undefined}
+      onClick={sortable() ? sort : undefined}
     />
   );
 }
@@ -61,13 +68,7 @@ export function TaskListHeader(props: {
       style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
-      <span
-        role="columnheader"
-        class="ms-2 truncate"
-        style={{ 'grid-area': 'content' }}
-      >
-        Task
-      </span>
+      <SortableHeader label="Task" area="content" sortId="title" />
       <SortableHeader
         label="Due date"
         area="dueDate"

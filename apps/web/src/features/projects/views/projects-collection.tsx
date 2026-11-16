@@ -476,6 +476,7 @@ export function ProjectsCollection(props: {
     <Show when={!isTouchDevice()}>
       <ViewLayoutDropdown
         grouped
+        size="icon-md"
         label="Project layout"
         layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
         value={isGantt() ? 'gantt' : 'list'}
@@ -488,6 +489,7 @@ export function ProjectsCollection(props: {
   const sortControl = () => (
     <ListSortDropdown
       grouped
+      size="icon-md"
       label="Sort projects"
       value={collection.sort()}
       options={[...PROJECT_SORT_OPTIONS]}
@@ -499,6 +501,7 @@ export function ProjectsCollection(props: {
   const groupControl = () => (
     <ListGroupDropdown
       grouped
+      size="icon-md"
       label="Group projects"
       value={collection.groupBy()}
       options={[...PROJECT_GROUP_OPTIONS]}
@@ -520,6 +523,7 @@ export function ProjectsCollection(props: {
     <div class="relative shrink-0">
       <ListFilterDropdown
         grouped
+        size="icon-md"
         label="Filter projects"
         groups={filters()}
         open={openMenu() === 'filters'}
@@ -593,11 +597,11 @@ export function ProjectsCollection(props: {
             }
           >
             <ProjectSavedViewActions />
-            <HeaderActionGroup label="Project filters">
+            <HeaderActionGroup label="Project filters" size="md">
               {filterControl()}
               {dueDateControl()}
             </HeaderActionGroup>
-            <HeaderActionGroup label="Project view options">
+            <HeaderActionGroup label="Project view options" size="md">
               {layoutControl()}
               {sortControl()}
               {groupControl()}

@@ -19,6 +19,20 @@ export type ListColumnHeaderProps = {
 export function ListColumnHeader(props: ListColumnHeaderProps) {
   const alignment = () =>
     props.align === 'end' ? 'justify-end' : 'justify-start';
+  const measureWidth = (element: HTMLElement) => {
+    if (props.onWidthChange)
+      createResizeObserver(element, ({ width }) =>
+        props.onWidthChange?.(width)
+      );
+  };
+  const arrow = () => (
+    <ArrowDownIcon
+      class={cn(
+        'size-3 shrink-0 transition-transform',
+        props.reversed && 'rotate-180'
+      )}
+    />
+  );
   const label = () => (
     <>
       <span class={props.narrowIcon ? '@max-[840px]/u-list:hidden' : undefined}>
@@ -55,12 +69,7 @@ export function ListColumnHeader(props: ListColumnHeaderProps) {
         <Match when={props.onClick}>
           {(onClick) => (
             <button
-              ref={(element) => {
-                if (props.onWidthChange)
-                  createResizeObserver(element, ({ width }) =>
-                    props.onWidthChange?.(width)
-                  );
-              }}
+              ref={measureWidth}
               type="button"
               aria-label={props.label}
               data-blocks-navigation
@@ -71,14 +80,18 @@ export function ListColumnHeader(props: ListColumnHeaderProps) {
               onClick={onClick()}
             >
               {label()}
-              <ArrowDownIcon
-                class={cn(
-                  'size-3 shrink-0 transition-transform',
-                  props.reversed && 'rotate-180'
-                )}
-              />
+              {arrow()}
             </button>
           )}
+        </Match>
+        <Match when={props.active}>
+          <span
+            ref={measureWidth}
+            class="flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink"
+          >
+            {label()}
+            {arrow()}
+          </span>
         </Match>
         <Match when={true}>
           <span class="truncate">{label()}</span>

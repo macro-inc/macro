@@ -34,6 +34,7 @@ function Fixture() {
   const context: ProjectsContext = {
     userId: () => 'owner',
     createCollectionSource: unavailable,
+    createProjectIdentitySource: unavailable,
     createProjectSource: unavailable,
     createPropertyDefinitionsSource: unavailable,
     createCommands: () => ({

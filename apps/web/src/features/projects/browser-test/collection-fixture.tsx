@@ -185,6 +185,7 @@ export function CollectionFixture() {
       loadMore: async () => {},
       refresh: async () => {},
     }),
+    createProjectIdentitySource: unavailable,
     createProjectSource: unavailable,
     createPropertyDefinitionsSource: () => ({
       properties: () => [status, priority],

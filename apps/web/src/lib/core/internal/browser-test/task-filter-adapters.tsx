@@ -41,6 +41,7 @@ export function useTasksView() {
       !taskState.singleProject &&
       (taskState.projectsEnabled || Boolean(taskState.facets.project?.length)),
     projectsEnabled: () => taskState.projectsEnabled,
+    source: { sortsSearchResults: false },
     setPrimarySort: (id: string) =>
       setTaskState('sort', [{ id, reversed: false }]),
   };

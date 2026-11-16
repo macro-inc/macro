@@ -48,34 +48,41 @@ export function EntityConversationComposer(props: {
   const parentKey = () => `${props.parent.type}:${props.parent.id}`;
   const send = useSendMessageMutation();
   const userId = useUserId();
-  const bots = useMessageBotMentionUsers(() => props.parent);
+  const [writing, setWriting] = createSignal(false);
+  const bots = useMessageBotMentionUsers(() => props.parent, writing);
   return (
-    <ChannelInput
-      parent={props.parent}
-      bots={bots}
-      input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-      autofocus={false}
-      collapsible={props.collapsible}
-      onChange={props.onChange}
-      onReady={props.onReady}
-      onSend={async (snapshot) => {
-        const senderId = userId();
-        if (!senderId) return;
-        const sendingParent = parentKey();
-        await send.mutateAsync({
-          parent: props.parent,
-          senderId,
-          optimisticId: newMessageId(),
-          ...buildPostMessageSendPayload({ snapshot }),
-        });
-        if (parentKey() !== sendingParent) return;
-        // ChannelInput clears optimistically and restores failures itself.
-        // Clearing again here would discard text typed during delivery.
-        props.onSent?.();
-        if (props.blurOnSend && document.activeElement instanceof HTMLElement)
-          document.activeElement.blur();
-      }}
-    />
+    <div
+      class="contents"
+      onPointerEnter={() => setWriting(true)}
+      onFocusIn={() => setWriting(true)}
+    >
+      <ChannelInput
+        parent={props.parent}
+        bots={bots}
+        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        autofocus={false}
+        collapsible={props.collapsible}
+        onChange={props.onChange}
+        onReady={props.onReady}
+        onSend={async (snapshot) => {
+          const senderId = userId();
+          if (!senderId) return;
+          const sendingParent = parentKey();
+          await send.mutateAsync({
+            parent: props.parent,
+            senderId,
+            optimisticId: newMessageId(),
+            ...buildPostMessageSendPayload({ snapshot }),
+          });
+          if (parentKey() !== sendingParent) return;
+          // ChannelInput clears optimistically and restores failures itself.
+          // Clearing again here would discard text typed during delivery.
+          props.onSent?.();
+          if (props.blurOnSend && document.activeElement instanceof HTMLElement)
+            document.activeElement.blur();
+        }}
+      />
+    </div>
   );
 }
 

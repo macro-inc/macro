@@ -93,6 +93,7 @@ pub(super) async fn guests(pool: &PgPool) -> Guests {
             name: "Offsite".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -466,6 +467,7 @@ async fn a_refused_op_leaves_nothing_of_its_batch_behind(pool: PgPool) {
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

@@ -131,6 +131,7 @@ function Fixture() {
   const context: ProjectsContext = {
     userId: () => 'owner',
     createCollectionSource: unavailable,
+    createProjectIdentitySource: unavailable,
     createProjectSource: () => source,
     createPropertyDefinitionsSource: () => ({
       properties: () => (definitionsLoaded() ? [status, priority] : []),

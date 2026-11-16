@@ -1,7 +1,5 @@
-import {
-  ProjectBreadcrumb,
-  ProjectDetail,
-} from '@app/features/projects/project-detail';
+import { ProjectBreadcrumb } from '@app/features/projects/project-breadcrumb';
+import { ProjectDetail } from '@app/features/projects/project-detail';
 import { ProjectTasksProvider } from '@app/features/projects/project-tasks-provider';
 import { Projects } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';

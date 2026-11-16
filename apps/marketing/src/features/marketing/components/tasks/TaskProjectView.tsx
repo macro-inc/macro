@@ -147,7 +147,7 @@ export function TaskProjectView(props: {
             sharingDescription="Shared with #sales"
             relatedContent={
               <div class="mt-6 md">
-                <h2 class="text-[1.125em] font-semibold mb-2">Next step</h2>
+                <h2 class="text-[1.125em] font-medium mb-2">Next step</h2>
                 <For each={w.data.tasks}>
                   {(task) => (
                     <p>

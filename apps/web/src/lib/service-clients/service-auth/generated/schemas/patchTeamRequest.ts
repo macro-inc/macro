@@ -6,6 +6,7 @@
  */
 import type { PatchTeamRequestDefaultLinkShare } from './patchTeamRequestDefaultLinkShare';
 import type { PatchTeamRequestLanguage } from './patchTeamRequestLanguage';
+import type { PatchTeamRequestMemberCrmAccess } from './patchTeamRequestMemberCrmAccess';
 import type { PatchTeamRequestName } from './patchTeamRequestName';
 import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
 import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
@@ -16,6 +17,7 @@ import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRole
 export interface PatchTeamRequest {
   default_link_share?: PatchTeamRequestDefaultLinkShare;
   language?: PatchTeamRequestLanguage;
+  member_crm_access?: PatchTeamRequestMemberCrmAccess;
   /** The new name for the team */
   name?: PatchTeamRequestName;
   /** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. */

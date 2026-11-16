@@ -28,6 +28,7 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
     <ProjectWorkspaceLayout {...props}>
       <ProjectTasksProvider
         projectId={props.project.id}
+        source={props.source}
         onOpenTask={props.onOpenTask}
         onCreateTask={
           canEditProject(props.project) ? props.onCreateTask : undefined

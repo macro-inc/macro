@@ -468,24 +468,33 @@ await macro.channels
 
 ### Routines
 
-Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+Create scheduled or event-triggered routines through `macro.routines`. A
+routine runs `steps` in order: an `agent` ("Ask AI") step hands the run to a
+model or agent, and `code` steps run TypeScript against this SDK as the owner,
+type-checked when saved. Routine configuration takes typed agent and event
+resource handles:
 
 ```ts
 const routine = await macro.routines.create({
   name: 'Daily summary',
-  prompt: 'Summarize my open tasks.',
-  userPrompt: 'A daily task summary',
-  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+  trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'America/New_York' },
+  steps: [
+    {
+      type: 'agent',
+      instructions: 'Summarize my open tasks.',
+      model: 'anthropic/claude-sonnet-5-5',
+    },
+  ],
 });
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
-A routine can instead run `steps` in order: `code` steps run TypeScript against
-this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
-hands the run to a model or agent. Code steps' writes are attributed to Macro's
+A cron `schedule` has 6 fields (second minute hour day-of-month month
+day-of-week) or 7 with a year. The older single agent task (`prompt` and
+`userPrompt`, with `model`, `agent` or both, instead of `steps`) still saves
+and runs as one Ask AI step. Code steps' writes are attributed to Macro's
 agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
 user explicitly asks for the routine to act, send or post as them:
 
@@ -625,6 +634,18 @@ fails with a 409 conflict instead of being overwritten, and `view.refresh()`
 picks up the current revision. Order is personal; `reorder` sets yours for one
 kind.
 
+### CRM member access
+
+`macro.crm.access()` reads the caller's current team and effective CRM access,
+even when access is denied. `team.members()` includes `crmAccess` for each member.
+Admins and owners use `team.setMemberCrmAccess(user, enabled)` to deny or restore
+an ordinary member; admins and owners cannot be denied. This never changes the
+member's mailbox contribution consent. The mutation returns 503 until the
+server rollout enables access changes; existing denials remain enforced while
+changes are disabled. Record, search, email and tool requests
+recheck access on the server. A separately shared pipeline still exposes its own
+rows and cell values, while its CRM record references need separate access.
+
 ### CRM contact fields
 
 A contact holds several addresses, one of them primary: `contact.emails()` lists
@@ -654,6 +675,14 @@ order through pipeline permissions.
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won` or `Lost`, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
 
 `macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and

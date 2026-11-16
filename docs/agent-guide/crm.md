@@ -322,7 +322,9 @@ Team rows show a profile photo when available, otherwise a
 letter avatar at the same 16px size as channel list icons. Team uses the same Soup
 row component as Emails, Files, and Calls: the avatar, name, and email are inline,
 the last-contacted timestamp sits at the right, and the side gutters and row
-spacing match. There is no column-heading row.
+spacing match. There is no column-heading row. Team loads 50 contacts at a time
+(name, else email, A to Z) and fetches the next page as you scroll to the end;
+its search asks the server, so it finds people on pages not yet loaded.
 Emails, Files, and Calls search the loaded row titles and supporting text and
 continue loading pages when the current pages have no match.
 Emails, Files, Calls, and References rows open their items without selection
@@ -335,13 +337,22 @@ Touch headers use the section drawer described above. Overview shows the name, p
 for each domain and `Last interacted`, the generated description, a
 **Pipelines** section and the Discussion. Pipelines stacks one full-width card
 per row of a pipeline you can open that references the record. A card's header
-strip names the pipeline (a lock marks a private one); below it, the row's first
-four fields sit side by side, label over value (two per row on a narrow card),
-and the rest wait behind `Show N more` in the card's footer. Expanded, text
-values wrap to their full length instead of truncating, the footer's
-`Show less` stays pinned to the bottom of the view while the card runs past it,
-and collapsing scrolls the card back into view. Cells edit like the pipeline
-table's when you can edit that pipeline. Inside Customers, the header's
+strip names the pipeline (a lock marks a private one); below it, the row's fields
+are a list, one field per row with its label in a left column and its value
+beside it. On a narrow card (under 520px, as on a phone) the label column
+narrows, and prose (text with a line break, or longer than a short phrase)
+drops below its label to take the full width. Collapsed, the card lists the
+first six filled fields, cuts prose to two lines and offers `Show N more` in its
+footer. Expanded, it lists every filled field in column order with prose in
+full, paragraphs kept, then folds the empty ones into one `N empty fields` row
+naming them; opening that row lists them in place, each saying `Empty`, and
+moves focus to the first. A card with six filled fields or fewer shows them
+all, prose in full, with its empty ones folded below, and has no footer until
+that row opens. Emails and other single-line values stay on one line and end
+in an ellipsis when cut. A value cleared in place keeps its row until the card
+folds again; a folded field that gets a value leaves the fold at once. The footer's `Show less` stays pinned to the bottom
+of the view while the card runs past it, and collapsing scrolls the card back
+into view. Cells edit like the pipeline table's when you can edit that pipeline. Inside Customers, the header's
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
 header; both start expanded on each visit. The
 section is absent when the record is in no pipeline.
@@ -434,13 +445,13 @@ team definition rather than opening an editor with system defaults. Check both
 the entity actions menu and command menu with stage requests delayed; cancel the
 editors without changing hosted data.
 
-`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
-At narrow widths, `Show CRM navigation` opens the same navigation in a menu
-without **Close** or `Collapse CRM sidebar`; picking a destination or clicking
-outside closes it.
-While the sidebar is collapsed or shown as a menu, the split's **Close** sits
-before either toggle, including on a pipeline, and stays hidden when the split
-cannot close.
+The CRM sidebar collapses and expands like every other workspace's: `Hide
+navigation`, `Show navigation` and `Cmd+.` animate it, and the choice persists
+across visits. At narrow widths `Show navigation` slides it in as an overlay
+that the backdrop, Escape or `Hide navigation` dismisses.
+While the sidebar is collapsed, the split's **Close** sits before
+`Show navigation` in every CRM header, including on a pipeline, a record and
+CRM settings, and stays hidden when the split cannot close.
 The sidebar's Records and Lists sections can also collapse independently.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
@@ -486,6 +497,28 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
+Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, or **Lost**, independent
+of Stage. Edit it from the table, a board card, a record's Pipelines card, or
+Add deal; select it in filters or board grouping like any other select. New
+entries start Open. Existing exact “Closed won” and “Closed lost” stage labels
+seed the outcome once, with the stages themselves retained.
+
+**Revenue currency** (and the corresponding field for a migrated Amount column)
+sets the denomination per entry. Existing amounts and new rows default to **USD**;
+no conversion is performed. Amounts display their currency code. Summary sums,
+averages and extrema keep currencies separate; agent `FindPipelineEntries`
+totals carry a currency code for the same reason. Outcome and currency options
+are fixed. Changing an amount's name preserves its currency association. Agent
+result cards show the currency beside each displayed amount, including the old
+and new currencies when updating a monetary value.
+A generic pipeline has neither field; it is a free-form table.
+
+Money editors accept locale-formatted amounts and canonical dot-decimal input;
+opening an editor retains the exact raw value. In a German browser, enter
+`2.345,6789` and verify `2345.6789` is retained when reopening the editor.
+Selecting Notes through Revenue currency and pressing Delete clears the optional
+values while retaining Outcome and currency.
+
 A pipeline page uses the database page's styling with one table and no table
 tabs. Its header shows the name, edited in place by editors, a **Pipeline
 actions** menu (**Rename** and **Import CSV** for editors, **Export CSV** for
@@ -499,7 +532,7 @@ above a full-width bordered box: **Company** (or the contact column) first, with
 a **Find or add a company…** (or contact) search, then every pipeline field with
 the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
-fields can create a new option. Choosing **Add company “…”** creates the company
+fields other than Outcome and currency can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
 works the same way. A new company may omit its domain. A new contact accepts a
 full email address and an explicit company choice, including a name-only company.
@@ -557,7 +590,10 @@ companies or contacts, then returns to Companies.
 CSV** reads the same shape, so an export imports into another team's pipeline.
 Rows match companies by domain and contacts by email, creating missing ones
 (personal domains such as gmail.com cannot be created); other headers fill the
-pipeline columns of the same name, adding missing select options. A record
+pipeline columns of the same name, adding missing custom select options. Monetary
+amounts and currency codes occupy separate CSV columns; omitted currencies
+default to USD, and unsupported currency or Outcome labels refuse the affected
+row. Outcome exports and imports as Open, Won or Lost. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
@@ -678,3 +714,32 @@ sections and reopen a record: each restarts the `crm.company` / `crm.contact`
 flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
+
+## Member access API
+
+Existing and new members start with CRM access. An admin or owner can patch a
+team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
+change this setting, and admins and owners cannot be denied. Mailbox contribution
+consent stays unchanged. Preference mutations return 503 while the deployment
+rollout is disabled; existing access checks continue to enforce stored denials.
+`GET /crm/member-access` reports current access even
+when record routes return access denied. Clients holding CRM caches may request
+the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
+server memoization never applies to record checks or this fresh endpoint. The
+next opted-in request after expiry observes the change (or a missing hint that
+requires a fresh proof); idle/offline clients have no fixed retirement deadline.
+Settings controls and retirement of already-cached client content follow
+separately.
+
+After denial, company/contact routes and contact pages, CRM lists, search, CRM
+activity, references, and CRM-derived email thread grants require current access
+on each request. Batched record previews omit denied records too.
+Whole-team pipeline grants no longer apply. Individually or channel-shared
+pipelines retain their own values and opaque company/contact IDs, but resolving
+record names or opening records requires separate CRM access. Text previously
+copied into a pipeline cell remains visible as pipeline content.
+
+Delivered CRM discussion notifications retain their text, and a queued one can
+still arrive under the existing notification policy. Opening the record requires
+current access. Exercise denial and regrant through direct API and agent requests
+as well as the UI once the client follow-up is installed.

@@ -10,6 +10,7 @@ mod join_requests;
 mod outlook;
 mod replacement;
 mod source_access;
+mod sync_health;
 
 use change_log::ChangeLogBatch;
 
@@ -35,14 +36,14 @@ use crate::domain::{
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantBinding, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarMentionViewerCopy, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncStatus,
-        CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar, DueCalendarReminder,
-        EventDetails, EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel, GuestPolicy, MeetingCopy,
-        OccurrenceException, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
-        StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities, VisibleCalendar,
-        is_system_calendar,
+        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncFailure,
+        CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar,
+        DueCalendarReminder, EventDetails, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        GuestPolicy, MeetingCopy, OccurrenceException, OccurrenceListing, OccurrenceRange,
+        OwnedInbox, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities,
+        VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1910,6 +1911,7 @@ impl CalendarRepository for PgCalendarRepository {
                 synced_at = now(),
                 last_sync_error = NULL,
                 last_sync_error_at = NULL,
+                last_sync_error_kind = NULL,
                 consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
@@ -1976,6 +1978,7 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
@@ -1985,6 +1988,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             UPDATE calendars
             SET last_sync_error = $3,
+                last_sync_error_kind = $4,
                 last_sync_error_at = now(),
                 consecutive_sync_failures = consecutive_sync_failures + 1,
                 updated_at = now()
@@ -1996,6 +2000,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id,
             account_id,
             message,
+            sync_health::stored_sync_failure(kind),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -3105,6 +3110,10 @@ async fn upsert_calendar_tx(
             last_sync_error_at = CASE
                 WHEN calendars.is_deleted THEN NULL
                 ELSE calendars.last_sync_error_at
+            END,
+            last_sync_error_kind = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_kind
             END,
             consecutive_sync_failures = CASE
                 WHEN calendars.is_deleted THEN 0

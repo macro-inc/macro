@@ -2,6 +2,11 @@ import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmC
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import type { Query, QueryClient } from '@tanstack/solid-query';
 import { contactEmails } from '../core/contact';
+import {
+  companyContactsHold,
+  isCompanyContactsQuery,
+  patchCompanyContacts,
+} from './company-contacts';
 import { crmKeys } from './keys';
 
 /** Whether two snapshots agree on the fields a contact edit owns. */
@@ -46,11 +51,24 @@ export function contactEditDetailsFilter(
     if (company?.contacts?.some((contact) => contact.id === after.id))
       companyIds.add(company.id);
   }
+  for (const query of client
+    .getQueryCache()
+    .findAll({ queryKey: crmKeys.companyContacts._def })) {
+    const companyId = query.queryKey[2];
+    if (
+      typeof companyId === 'string' &&
+      companyContactsHold(query.state.data, after.id)
+    )
+      companyIds.add(companyId);
+  }
   return (query: Query): boolean => {
     const key = query.queryKey;
     if (key[0] !== 'crm') return false;
     if (key[1] === 'contact') return key[2] === after.id;
     if (key[1] === 'company')
+      return typeof key[2] === 'string' && companyIds.has(key[2]);
+    // The Team lists of the companies the contact left or joined.
+    if (isCompanyContactsQuery(key))
       return typeof key[2] === 'string' && companyIds.has(key[2]);
     if (key[1] !== 'contactByEmail') return false;
     const data = query.state.data;
@@ -116,6 +134,12 @@ export async function updateContactEditDetails(
       return { ...company, contacts };
     }
   );
+  // A Team list keeps the row only under its new company; the list it joins
+  // learns of it, in order, from the invalidation below.
+  patchCompanyContacts(client, (contact, companyId) => {
+    if (contact.id !== after.id) return contact;
+    return companyId === after.companyId ? patch(contact) : undefined;
+  });
   // A lookup is keyed by the address it resolved. It keeps naming this contact
   // only while the contact still holds that address.
   const held = new Set(contactEmails(after));

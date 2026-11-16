@@ -20,6 +20,12 @@ stacks. Process isolation belongs to
 - `SKILL.md`: the agent-facing JavaScript contract and examples.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  A session program may return up to two SDK images (`images: [await
+  canvas.render()]`); records keep only their static file ids, and every
+  receipt (a saved retry too) loads their PNGs through the `ModelImages` port
+  into a top-level `modelMedia`, which `agent::tool_media` turns into image
+  blocks as it does for `RenderCanvas`. The harness adapter is
+  `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
@@ -81,8 +87,13 @@ stacks. Process isolation belongs to
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
   reads symbol references (32 KiB). `Guidance::Selected` (owners with
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
-  carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
-  carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+  carry `inline_guides`. The routines guide carries the Compose Routines system
+  skill after it (`attached_skill`): code mode its code form
+  (`compose_routines::CODE`), inline, routed or in a `DescribeCodeTools`
+  result; direct hosts inline its routine-tools form
+  (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
+  takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
+  hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared

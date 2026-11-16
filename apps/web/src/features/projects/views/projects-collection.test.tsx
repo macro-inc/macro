@@ -247,6 +247,7 @@ function setup(
       refresh: async () => {},
     }),
     createProjectSource: unused,
+    createProjectIdentitySource: unused,
     createPropertyDefinitionsSource: () => ({
       properties: () => options.properties ?? [status, priority],
       loading: () => false,

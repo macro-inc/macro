@@ -24,11 +24,14 @@ impl CustomerRepositoryImpl {
 
     /// Serialize a mutation of subscription `id` with every other one. A
     /// change an earlier holder left pending (its outcome never learned) is
-    /// settled first, by the provider's marker, so it can never wedge the
-    /// subscription. Its sender's request may outlive the guard (a dropped
-    /// request future), so a change younger than [`PENDING_SETTLE_AFTER`] is
-    /// treated as still in flight and refused for now rather than settled.
-    /// `operation` is the caller's own change, which it replays.
+    /// finished first, so it can never wedge the subscription. Its sender no
+    /// longer holds the guard, but its request may outlive it (a dropped
+    /// request future, or a sender that died mid-send), so a change younger
+    /// than [`PENDING_SETTLE_AFTER`] is not abandoned: its exact request is
+    /// sent again under its own `Idempotency-Key` (see
+    /// [`Self::finish_in_flight_locked`]). An older one is settled by the
+    /// provider's marker. `operation` is the caller's own change, which it
+    /// replays.
     pub(super) async fn subscription_guard(
         &self,
         id: &stripe::SubscriptionId,
@@ -49,10 +52,12 @@ impl CustomerRepositoryImpl {
             if Some(key.as_str()) == operation {
                 continue;
             }
+            let Some(change) = self.item_change(&key).await? else {
+                continue;
+            };
             if row.in_flight {
-                return Err(CustomerError::ItemChangeInFlight);
-            }
-            if let Some(change) = self.item_change(&key).await? {
+                self.finish_in_flight_locked(&key, change).await?;
+            } else {
                 self.settle_pending_locked(&key, change).await?;
             }
         }

@@ -1,5 +1,6 @@
 import { ListFilterDropdown } from '@app/components/view-shell/ListDropdowns';
 import { TasksFilterDrawer } from '@app/features/tasks-view/components/TasksFilterDrawer';
+import { TaskListHeader } from '@app/features/tasks-view/components/task-list/TaskListHeader';
 import { taskMatchesView } from '@app/features/tasks-view/filters/task-predicates';
 import {
   captureTaskSavedView,
@@ -64,15 +65,30 @@ export function TaskFilterFixture() {
       <Show
         when={matchMedia('(pointer: coarse)').matches}
         fallback={
-          <ListFilterDropdown
-            label="Filter tasks"
-            groups={filters.groups()}
-            isSelected={filters.isSelected}
-            selectedIds={filters.selectedIds}
-            onSelectionChange={filters.setSelected}
-            onClear={filters.clear}
-            aiFilter={{ onSubmit: filters.applyDescription }}
-          />
+          <>
+            <ListFilterDropdown
+              label="Filter tasks"
+              groups={filters.groups()}
+              isSelected={filters.isSelected}
+              selectedIds={filters.selectedIds}
+              onSelectionChange={filters.setSelected}
+              onClear={filters.clear}
+              aiFilter={{ onSubmit: filters.applyDescription }}
+            />
+            <div role="grid" aria-label="Tasks" class="mt-4">
+              <TaskListHeader
+                columns={[
+                  'indicator',
+                  'content',
+                  'dueDate',
+                  'initiative',
+                  'assignees',
+                  'timestamp',
+                  'createdBy',
+                ]}
+              />
+            </div>
+          </>
         }
       >
         <TasksFilterDrawer />
@@ -104,6 +120,7 @@ export function TaskFilterFixture() {
         <button onClick={() => setTaskState('search', 'brief')}>
           Search tasks
         </button>
+        <button onClick={() => setTaskState('search', '')}>Clear search</button>
         <button onClick={() => setNavigation({ id: 'other-tasks' })}>
           Navigate away
         </button>
@@ -128,6 +145,9 @@ export function TaskFilterFixture() {
           {(task) => <li>{task.name}</li>}
         </For>
       </ul>
+      <output hidden data-testid="task-sort">
+        {JSON.stringify(taskState.sort)}
+      </output>
       <output hidden data-testid="task-facets">
         {JSON.stringify(taskState.facets)}
       </output>

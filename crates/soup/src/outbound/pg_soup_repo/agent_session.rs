@@ -15,6 +15,7 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
+use recursion::CollapsibleExt;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -98,6 +99,18 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
     out.include || out.named
 }
 
+/// Whether the filter can only match the nil session id, which is how
+/// confined Soup views (Home) leave sessions out while naming them.
+fn names_only_the_nil_id(expr: &Expr<AgentSessionLiteral>) -> bool {
+    expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => a || b,
+        filter_ast::ExprFrame::Or(a, b) => a && b,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(AgentSessionLiteral::Id(id)) => id.is_nil(),
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 #[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
@@ -106,7 +119,11 @@ pub(super) async fn cursor_soup(
     let Some(parts) = cursor_parts(req.cursor) else {
         return Ok(Vec::new());
     };
-    let Some(filter) = parts.filter.as_ref().filter(|filter| opted_in(filter)) else {
+    let Some(filter) = parts
+        .filter
+        .as_ref()
+        .filter(|filter| opted_in(filter) && !names_only_the_nil_id(filter))
+    else {
         return Ok(Vec::new());
     };
     // Agent sessions carry no properties, so a property constraint that a

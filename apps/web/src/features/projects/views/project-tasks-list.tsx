@@ -22,6 +22,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
   return (
     <ProjectTasksProvider
       projectId={props.projectId}
+      source={props.source}
       onOpenTask={props.onOpenTask}
       onCreateTask={props.onCreateTask}
     >

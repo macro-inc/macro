@@ -91,16 +91,21 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
-    read: 'getScheduledAction getScheduledActionTemplate',
-    created: 'createScheduledAction',
+    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
+    created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
     edited:
-      'updateScheduledAction setScheduledActionAppearance detachScheduledAction',
+      'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
+    archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
+    approved: 'acceptSuggestion',
+    rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -110,7 +115,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendReferralCode',
     invited: 'inviteToTeam',
     deleted: 'deleteTeamInviteHandler',
-    edited: 'putUserName putProfilePictureFile',
+    edited: 'putUserName putProfilePictureFile patchTeam',
     uploaded: 'createProfilePictureUpload',
   },
   calendar: {
@@ -220,7 +225,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
-      getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
+      getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
       getDocumentShortId getSkillDescription getDocumentTeamShare getDocumentTextContent
