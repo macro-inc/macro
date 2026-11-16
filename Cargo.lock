@@ -351,6 +351,7 @@ dependencies = [
  "futures",
  "import",
  "jev",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -776,6 +777,7 @@ dependencies = [
  "onboarding",
  "opentelemetry",
  "pipedream_mcp",
+ "png",
  "prompt",
  "properties",
  "rate_limit",
@@ -15423,6 +15425,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "password_import_wasm"
+version = "0.1.0"
+dependencies = [
+ "password_import",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "passwords"
 version = "0.1.0"
 dependencies = [
@@ -15441,9 +15454,11 @@ dependencies = [
  "model_user",
  "openbao_client",
  "opentelemetry",
+ "password_import",
  "rootcause",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
