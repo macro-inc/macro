@@ -251,6 +251,12 @@ pub trait SequenceRepo: Send + Sync + 'static {
         team_id: Uuid,
         emails: &[String],
     ) -> impl Future<Output = Result<Vec<(String, RecipientState)>, Self::Err>> + Send;
+    /// How many enrollments the sequence has, in any status.
+    fn enrollment_count(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> impl Future<Output = Result<usize, Self::Err>> + Send;
     /// Insert an enrollment; `None` if the address is already in the sequence.
     fn insert_enrollment(
         &self,
@@ -312,14 +318,15 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Steps scheduled from the inbox after `since`, sent or not. Read under
-    /// the inbox's send-slot lock, so the count can't race a new step.
-    fn steps_since(
+    /// The inbox's steps scheduled after `since`, sent or not: how many, and
+    /// the latest send time among them. Call it under
+    /// [`Self::lock_send_slot`].
+    fn slots_since(
         &self,
         tx: &mut Self::Tx,
         link_id: Uuid,
         since: DateTime<Utc>,
-    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(u32, Option<DateTime<Utc>>), Self::Err>> + Send;
     /// Whether the inbox has any live enrollment.
     fn has_live_enrollments(
         &self,
@@ -337,13 +344,12 @@ pub trait OwnerAccess: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The user's team.
-    fn team_of(
+    /// The team whose Customers the user can use now: their team, with CRM on
+    /// and their access to it not revoked.
+    fn customers_team(
         &self,
         user_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
-    /// Whether the team has CRM on.
-    fn crm_enabled(&self, team_id: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     /// The CRM people the user can see among `ids`.
     fn people(
         &self,

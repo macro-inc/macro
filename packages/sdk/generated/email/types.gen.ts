@@ -1161,7 +1161,7 @@ export type EnrollResult = {
 /**
  * Why a contact wasn't enrolled.
  */
-export type EnrollSkip = 'not_found' | 'no_email' | 'unsubscribed' | 'already_enrolled';
+export type EnrollSkip = 'not_found' | 'no_email' | 'unsubscribed' | 'already_enrolled' | 'sequence_full';
 
 /**
  * What an owner can do to an enrollment.
@@ -2077,7 +2077,7 @@ export type SequenceDetailResponse = {
 /**
  * What went wrong, for the client to show.
  */
-export type SequenceErrorCode = 'not_found' | 'invalid_sequence' | 'invalid_request' | 'action_unavailable' | 'crm_unavailable' | 'internal';
+export type SequenceErrorCode = 'not_found' | 'invalid_sequence' | 'invalid_request' | 'action_unavailable' | 'crm_unavailable' | 'person_required' | 'internal';
 
 /**
  * An error response.

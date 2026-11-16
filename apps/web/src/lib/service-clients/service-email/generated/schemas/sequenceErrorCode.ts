@@ -18,5 +18,6 @@ export const SequenceErrorCode = {
   invalid_request: 'invalid_request',
   action_unavailable: 'action_unavailable',
   crm_unavailable: 'crm_unavailable',
+  person_required: 'person_required',
   internal: 'internal',
 } as const;

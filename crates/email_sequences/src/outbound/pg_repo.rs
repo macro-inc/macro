@@ -643,6 +643,20 @@ impl SequenceRepo for PgSequenceRepo {
             .collect()
     }
 
+    async fn enrollment_count(
+        &self,
+        tx: &mut Self::Tx,
+        sequence_id: Uuid,
+    ) -> Result<usize, PgSequenceError> {
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_sequence_enrollments WHERE sequence_id = $1"#,
+            sequence_id,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(usize::try_from(count).unwrap_or(usize::MAX))
+    }
+
     async fn insert_enrollment(
         &self,
         tx: &mut Self::Tx,
@@ -853,14 +867,15 @@ impl SequenceRepo for PgSequenceRepo {
         Ok(())
     }
 
-    async fn steps_since(
+    async fn slots_since(
         &self,
         tx: &mut Self::Tx,
         link_id: Uuid,
         since: DateTime<Utc>,
-    ) -> Result<u32, PgSequenceError> {
-        let count = sqlx::query_scalar!(
-            r#"SELECT count(*) AS "count!" FROM email_sequence_steps h
+    ) -> Result<(u32, Option<DateTime<Utc>>), PgSequenceError> {
+        let row = sqlx::query!(
+            r#"SELECT count(*) AS "count!", max(h.scheduled_at) AS latest
+               FROM email_sequence_steps h
                JOIN email_sequence_enrollments e ON e.id = h.enrollment_id
                WHERE e.link_id = $1 AND h.scheduled_at > $2"#,
             link_id,
@@ -868,7 +883,7 @@ impl SequenceRepo for PgSequenceRepo {
         )
         .fetch_one(&mut **tx)
         .await?;
-        Ok(u32::try_from(count).unwrap_or(u32::MAX))
+        Ok((u32::try_from(row.count).unwrap_or(u32::MAX), row.latest))
     }
 
     async fn has_live_enrollments(&self, link_id: Uuid) -> Result<bool, PgSequenceError> {

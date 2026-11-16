@@ -730,13 +730,17 @@ CRM on for the team, the section and its links behave the same way.
   can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
   `{{email}}` at the caret) and the footer; the server adds an unsubscribe
   link. **Only send on weekdays** (on by default) moves weekend sends to
-  Monday. Edits save on their own (**Saving…** shows beside the status), and
-  **Activate** starts it; Delete is in the ⋯ menu. A sequence can be edited
-  while active; edits reach every email not yet created (each is rendered
-  about a minute before it sends). A save that would leave an active sequence
-  incomplete (an emptied subject, say) is refused: the message shows above the
-  editor and the local edits stay. Pending emails stay out of Mail; a failed one
-  shows there like any failed send.
+  Monday. A draft or paused sequence saves on its own (**Saving…** shows beside
+  the status), and **Activate** starts it; Delete is in the ⋯ menu. An active
+  sequence can be edited too, but its emails keep using the saved version
+  until you press **Save changes** (**Discard** drops the edits, and so does
+  leaving); a saved edit reaches every email not yet created (each is
+  rendered about a minute before it sends). A save that would leave an active
+  sequence incomplete (an emptied subject or an unknown `{{token}}`, say) is
+  refused: the message shows above the editor and the local edits stay.
+  Pending emails stay out of Mail; a failed one shows there like any failed
+  send. One inbox sends a sequence email at most every 3 minutes and 100 in
+  any 24 hours.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
   takes a start time in your time zone, by default in a few minutes during
   working hours (9:00 to 17:00 on weekdays) or else 9:00 the next working day.
@@ -746,8 +750,8 @@ CRM on for the team, the section and its links behave the same way.
   Companies rows also offer **Add to sequence** in their right-click and
   selection command menus; a company brings all its people, so filter or group
   Companies by Stage to add a pipeline stage. Past 50 people, only the first
-  50 are selected. Skipped people (no email, unsubscribed, already added) are
-  listed with why.
+  50 are selected. Skipped people (no email, unsubscribed, already added, or
+  the sequence already holds 1,000 people) are listed with why.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused
   (also while the sequence is a draft or paused), Needs attention (an email
   didn't go out: check it in Mail, then resume or stop; sending it from Mail
@@ -761,3 +765,32 @@ CRM on for the team, the section and its links behave the same way.
 - **Contact card:** a contact's Overview lists its sequences for every teammate:
   sequence, owner, status, last and next send. The owner's sequence name
   opens it.
+
+## Member access API
+
+Existing and new members start with CRM access. An admin or owner can patch a
+team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
+change this setting, and admins and owners cannot be denied. Mailbox contribution
+consent stays unchanged. Preference mutations return 503 while the deployment
+rollout is disabled; existing access checks continue to enforce stored denials.
+`GET /crm/member-access` reports current access even
+when record routes return access denied. Clients holding CRM caches may request
+the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
+server memoization never applies to record checks or this fresh endpoint. The
+next opted-in request after expiry observes the change (or a missing hint that
+requires a fresh proof); idle/offline clients have no fixed retirement deadline.
+Settings controls and retirement of already-cached client content follow
+separately.
+
+After denial, company/contact routes and contact pages, CRM lists, search, CRM
+activity, references, and CRM-derived email thread grants require current access
+on each request. Batched record previews omit denied records too.
+Whole-team pipeline grants no longer apply. Individually or channel-shared
+pipelines retain their own values and opaque company/contact IDs, but resolving
+record names or opening records requires separate CRM access. Text previously
+copied into a pipeline cell remains visible as pipeline content.
+
+Delivered CRM discussion notifications retain their text, and a queued one can
+still arrive under the existing notification policy. Opening the record requires
+current access. Exercise denial and regrant through direct API and agent requests
+as well as the UI once the client follow-up is installed.

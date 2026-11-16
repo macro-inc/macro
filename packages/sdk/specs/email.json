@@ -6440,7 +6440,13 @@
       "EnrollSkip": {
         "type": "string",
         "description": "Why a contact wasn't enrolled.",
-        "enum": ["not_found", "no_email", "unsubscribed", "already_enrolled"]
+        "enum": [
+          "not_found",
+          "no_email",
+          "unsubscribed",
+          "already_enrolled",
+          "sequence_full"
+        ]
       },
       "EnrollmentAction": {
         "type": "string",
@@ -8178,6 +8184,7 @@
           "invalid_request",
           "action_unavailable",
           "crm_unavailable",
+          "person_required",
           "internal"
         ]
       },

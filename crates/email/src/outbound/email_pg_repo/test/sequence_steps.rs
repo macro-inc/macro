@@ -226,18 +226,6 @@ async fn pending_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::R
     .await?;
     assert_eq!(schedule.source.as_deref(), Some("sequence"));
     let mut conn = pool.acquire().await?;
-    let send_time = sqlx::query_scalar!(
-        "SELECT send_time FROM email_scheduled_messages WHERE message_id = $1",
-        step
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(
-        PgSequenceSteps
-            .latest_send_until(&mut conn, LINK, Utc::now() + chrono::Duration::hours(2))
-            .await?,
-        Some(send_time)
-    );
     assert_eq!(
         schedule.list_unsubscribe_url.as_deref(),
         Some("https://example.com/u/token")

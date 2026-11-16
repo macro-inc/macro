@@ -27,6 +27,10 @@ pub(super) const STUCK_AFTER: Duration = Duration::minutes(30);
 /// Most contacts one enroll request may add.
 const MAX_ENROLL: usize = 50;
 
+/// Most people one sequence holds, in any status, so that listing it and
+/// pausing or re-timing everyone in it stay a bounded amount of work.
+pub(crate) const MAX_PEOPLE: usize = 1_000;
+
 /// Changes to a sequence; `None` leaves a field as it is.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema), schema(as = UpdateSequenceRequest))]
@@ -116,8 +120,10 @@ pub(super) fn in_flight(history: &[HistoryRow]) -> Option<&HistoryRow> {
 }
 
 /// The step an enrollment sends next and its position: the one after the last
-/// step it reached that is still in the sequence, or the first when it reached
-/// none of them. `None` once it is past the last.
+/// step it reached that is still in the sequence. When every step it reached
+/// was removed, it continues at the position after as many emails as it has
+/// had, so a rewritten opener never goes to someone who already got one.
+/// `None` once it is past the last.
 pub(super) fn next_step<'a>(
     steps: &'a [Step],
     history: &[HistoryRow],
@@ -125,7 +131,7 @@ pub(super) fn next_step<'a>(
     let reached = steps
         .iter()
         .rposition(|step| history.iter().any(|row| row.step_id == step.id));
-    let index = reached.map_or(0, |at| at + 1);
+    let index = reached.map_or(history.len(), |at| at + 1);
     steps.get(index).map(|step| (index, step))
 }
 
@@ -172,17 +178,15 @@ where
         }
     }
 
-    /// The caller as a sequence owner: in a team that has CRM on.
+    /// The caller as a sequence owner: someone who can use their team's
+    /// Customers.
     async fn owner(&self, user_id: &str) -> Result<Owner, SequenceError> {
         let team_id = self
             .access
-            .team_of(user_id)
+            .customers_team(user_id)
             .await
             .map_err(internal)?
             .ok_or(SequenceError::CrmUnavailable)?;
-        if !self.access.crm_enabled(team_id).await.map_err(internal)? {
-            return Err(SequenceError::CrmUnavailable);
-        }
         Ok(Owner {
             user_id: user_id.to_owned(),
             team_id,
@@ -741,16 +745,26 @@ where
         let now = Utc::now();
         let clock = timing::send_clock(request.start, timezone, sequence.weekdays_only);
         let due_at = timing::first_due(request.start, clock, now);
+        let mut room = MAX_PEOPLE.saturating_sub(
+            self.repo
+                .enrollment_count(&mut tx, sequence.id)
+                .await
+                .map_err(internal)?,
+        );
         for (crm_contact_id, email, name) in accepted {
             let unsubscribed = recipients
                 .iter()
                 .find(|(address, _)| *address == email)
                 .is_some_and(|(_, recipient)| recipient.unsubscribed);
-            if unsubscribed {
+            if unsubscribed || room == 0 {
                 results.push(EnrollResult {
                     crm_contact_id,
                     enrollment_id: None,
-                    skipped: Some(EnrollSkip::Unsubscribed),
+                    skipped: Some(if unsubscribed {
+                        EnrollSkip::Unsubscribed
+                    } else {
+                        EnrollSkip::SequenceFull
+                    }),
                 });
                 continue;
             }
@@ -771,6 +785,7 @@ where
                 )
                 .await
                 .map_err(internal)?;
+            room -= usize::from(enrollment_id.is_some());
             results.push(EnrollResult {
                 crm_contact_id,
                 skipped: enrollment_id
@@ -881,3 +896,6 @@ where
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod test;

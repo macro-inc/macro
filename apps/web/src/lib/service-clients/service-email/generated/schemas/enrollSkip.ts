@@ -16,4 +16,5 @@ export const EnrollSkip = {
   no_email: 'no_email',
   unsubscribed: 'unsubscribed',
   already_enrolled: 'already_enrolled',
+  sequence_full: 'sequence_full',
 } as const;

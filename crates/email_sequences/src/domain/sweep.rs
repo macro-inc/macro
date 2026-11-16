@@ -27,8 +27,9 @@ const PAGE: i64 = 100;
 /// The soonest a new step may send: its send time is in the future when
 /// committed, and a reply or unsubscribe in that minute can still withdraw it.
 const MIN_LEAD: Duration = Duration::seconds(60);
-/// Sends from one inbox are at least this far apart, so it never bursts.
-const SPACING: Duration = Duration::seconds(30);
+/// Sequence emails from one inbox are at least this far apart: 20 an hour, the
+/// pace of someone writing them by hand.
+const SPACING: Duration = Duration::minutes(3);
 /// A step is created only when its slot is this close; later ones wait.
 const MAX_LEAD: Duration = Duration::seconds(90);
 /// Most steps one inbox sends in any 24 hours, well under Gmail's daily
@@ -41,9 +42,12 @@ pub(super) enum Creation {
     Created,
     Skipped,
     /// Nothing can go from the inbox in this pass: its next slot isn't near,
-    /// it sent its [`DAILY_LIMIT`], it can't send, or its owner lost access.
-    /// Its enrollments stay due.
+    /// it sent its [`DAILY_LIMIT`], or it can't send. Its enrollments stay due.
     InboxWaits(Uuid),
+    /// The owner can't use the enrollment's team's Customers now: they left
+    /// it, it is off, or their access was revoked. Their enrollments in that
+    /// team stay due.
+    OwnerWaits,
 }
 
 /// What one sweep did.
@@ -279,10 +283,12 @@ where
     }
 
     async fn create_due(&self, report: &mut SweepReport) {
-        // An inbox that can't take a step now is skipped for the rest of the
-        // pass, so a backlog or outage costs one check, not one per enrollment,
-        // and doesn't hold up the others.
+        // An inbox that can't take a step now, or an owner without access to a
+        // team, is skipped for the rest of the pass, so a backlog or outage
+        // costs one check, not one per enrollment, and doesn't hold up the
+        // others.
         let mut waiting = std::collections::HashSet::new();
+        let mut locked_out = std::collections::HashSet::new();
         let mut after = None;
         loop {
             let skip: Vec<Uuid> = waiting.iter().copied().collect();
@@ -295,7 +301,8 @@ where
                 }
             };
             for due in &page {
-                if waiting.contains(&due.link_id) {
+                let owner = (due.owner_id.clone(), due.team_id);
+                if waiting.contains(&due.link_id) || locked_out.contains(&owner) {
                     continue;
                 }
                 match self.create_step(due).await {
@@ -303,6 +310,9 @@ where
                     Ok(Creation::Skipped) => {}
                     Ok(Creation::InboxWaits(link_id)) => {
                         waiting.insert(link_id);
+                    }
+                    Ok(Creation::OwnerWaits) => {
+                        locked_out.insert(owner);
                     }
                     Err(error) => {
                         tracing::warn!(enrollment_id = %due.id, error = ?error, "failed to create a sequence step");
@@ -317,22 +327,48 @@ where
         }
     }
 
+    /// When the inbox may send its next sequence email, or `None` while it
+    /// has sent its [`DAILY_LIMIT`] or that time is too far off to create a
+    /// step for. Authoritative only under the inbox's send-slot lock.
+    async fn next_slot(
+        &self,
+        tx: &mut R::Tx,
+        link_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, SequenceError> {
+        let (in_a_day, latest) = self
+            .repo
+            .slots_since(tx, link_id, now - Duration::days(1))
+            .await
+            .map_err(internal)?;
+        if in_a_day >= DAILY_LIMIT {
+            return Ok(None);
+        }
+        let slot = latest.map_or(now + MIN_LEAD, |latest| {
+            (latest + SPACING).max(now + MIN_LEAD)
+        });
+        Ok((slot <= now + MAX_LEAD).then_some(slot))
+    }
+
     /// Create an enrollment's next step, rendered from the sequence as it is
     /// now and the CRM person's current name, if every check passes.
     pub(super) async fn create_step(&self, due: &DueEnrollment) -> Result<Creation, SequenceError> {
         // A long pass must not schedule against a stale clock.
         let now = Utc::now();
-        let has_access = self.access.team_of(&due.owner_id).await.map_err(internal)?
-            == Some(due.team_id)
-            && self
-                .access
-                .crm_enabled(due.team_id)
-                .await
-                .map_err(internal)?;
-        if !has_access {
+        let mut tx = self.repo.begin().await.map_err(internal)?;
+        // The cheap check first: an inbox pacing a backlog spends most passes
+        // waiting for its slot.
+        if self.next_slot(&mut tx, due.link_id, now).await?.is_none() {
             return Ok(Creation::InboxWaits(due.link_id));
         }
-        let mut tx = self.repo.begin().await.map_err(internal)?;
+        let team = self
+            .access
+            .customers_team(&due.owner_id)
+            .await
+            .map_err(internal)?;
+        if team != Some(due.team_id) {
+            return Ok(Creation::OwnerWaits);
+        }
         let Some(inbox) = self
             .usable_inbox(&mut tx, due.link_id, &due.owner_id)
             .await?
@@ -422,17 +458,9 @@ where
             .lock_send_slot(&mut tx, inbox.link_id)
             .await
             .map_err(internal)?;
-        let latest = self
-            .steps
-            .latest_send_until(R::conn(&mut tx), inbox.link_id, now + MAX_LEAD)
-            .await
-            .map_err(internal)?;
-        let slot = latest.map_or(now + MIN_LEAD, |latest| {
-            (latest + SPACING).max(now + MIN_LEAD)
-        });
-        if slot > now + MAX_LEAD {
+        let Some(slot) = self.next_slot(&mut tx, inbox.link_id, now).await? else {
             return Ok(Creation::InboxWaits(inbox.link_id));
-        }
+        };
         // A step held back by the daily limit waits out the weekend.
         let weekday = timing::on_weekday(slot, row.clock);
         if weekday != slot {
@@ -443,15 +471,6 @@ where
                 .map_err(internal)?;
             self.repo.commit(tx).await.map_err(internal)?;
             return Ok(Creation::Skipped);
-        }
-        if self
-            .repo
-            .steps_since(&mut tx, inbox.link_id, now - Duration::days(1))
-            .await
-            .map_err(internal)?
-            >= DAILY_LIMIT
-        {
-            return Ok(Creation::InboxWaits(inbox.link_id));
         }
 
         let recipient = self

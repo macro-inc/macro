@@ -35,12 +35,9 @@ struct Access {
 impl OwnerAccess for Access {
     type Err = std::convert::Infallible;
 
-    async fn team_of(&self, _: &str) -> Result<Option<Uuid>, Self::Err> {
-        Ok(self.member.load(Ordering::SeqCst).then_some(TEAM))
-    }
-
-    async fn crm_enabled(&self, _: Uuid) -> Result<bool, Self::Err> {
-        Ok(self.crm_on.load(Ordering::SeqCst))
+    async fn customers_team(&self, _: &str) -> Result<Option<Uuid>, Self::Err> {
+        let usable = self.member.load(Ordering::SeqCst) && self.crm_on.load(Ordering::SeqCst);
+        Ok(usable.then_some(TEAM))
     }
 
     async fn people(&self, _: &str, ids: &[Uuid]) -> Result<Vec<CrmPerson>, Self::Err> {
@@ -266,7 +263,7 @@ async fn incoming(
     message
 }
 
-/// Create the first step and record it sent.
+/// Create the first step and record it sent, a few minutes ago.
 async fn first_step_sent(svc: &Svc, pool: &PgPool, enrollment: Uuid) -> Uuid {
     make_due(pool, enrollment).await;
     svc.sweep(Utc::now()).await;
@@ -278,13 +275,14 @@ async fn first_step_sent(svc: &Svc, pool: &PgPool, enrollment: Uuid) -> Uuid {
         1,
         "first step recorded sent"
     );
+    free_slot(pool, message).await;
     message
 }
 
-/// Free the inbox's send slot, as time passing would.
+/// Free the inbox's send slot, as a few minutes passing would.
 async fn free_slot(pool: &PgPool, message: Uuid) {
     sqlx::query!(
-        "UPDATE email_scheduled_messages SET send_time = now() - interval '1 minute' WHERE message_id = $1",
+        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '4 minutes' WHERE message_id = $1",
         message
     )
     .execute(pool)
@@ -586,6 +584,7 @@ async fn i4_stop_withdraws_a_new_step_and_records_one_already_sending(pool: PgPo
         ("stopped".into(), Some("manual".into()), 1)
     );
     assert_eq!(in_flight(&pool, late).await, None);
+    free_slot(&pool, sending).await;
 
     // One the owner rescheduled themselves in Mail is theirs: a stop leaves it.
     let third = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
@@ -629,7 +628,7 @@ async fn i5_every_email_that_did_not_go_out_needs_attention(pool: PgPool) {
         enrollments.push(enroll(&svc, OWNER, sequence, ADA).await);
         enrollments.push(enroll(&svc, OWNER, sequence, BOB).await);
     }
-    // One inbox sends 30 s apart and steps are created only when their slot is
+    // One inbox sends 3 minutes apart and steps are created only when their slot is
     // near, so create them one sweep at a time, freeing the slot after each.
     let mut steps = Vec::new();
     for enrollment in &enrollments {
@@ -980,6 +979,7 @@ async fn edits_reach_every_email_not_yet_created(pool: PgPool) {
 
     deliver(&pool, note).await;
     svc.sweep(Utc::now()).await;
+    free_slot(&pool, note).await;
     make_due(&pool, ada).await;
     svc.sweep(Utc::now()).await;
     let last_email = in_flight(&pool, ada).await.unwrap();
@@ -1088,4 +1088,122 @@ async fn an_enrollment_with_no_inbox_holds_back_only_itself(pool: PgPool) {
     assert!(in_flight(&pool, bob).await.is_some());
     assert_eq!(in_flight(&pool, stranded).await, None);
     assert_eq!(status(&pool, stranded).await.0, "active");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn an_inbox_spaces_its_emails_even_after_one_is_sent(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    let bob = enroll(&svc, OWNER, sequence, BOB).await;
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET due_at = now() + interval '1 hour' WHERE id = $1",
+        bob
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    let sent = in_flight(&pool, ada).await.unwrap();
+    deliver(&pool, sent).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(status(&pool, ada).await.2, 1);
+
+    make_due(&pool, bob).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(
+        in_flight(&pool, bob).await,
+        None,
+        "the inbox sent a moment ago"
+    );
+    assert_eq!(status(&pool, bob).await.0, "active");
+
+    free_slot(&pool, sent).await;
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, bob).await.is_some());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn an_owner_who_left_a_team_still_sends_from_the_inbox_in_their_new_one(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    // The owner built a sequence in a team they have since left.
+    let former_team = Uuid::from_u128(0x7e2);
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Former', $2)",
+        former_team,
+        MATE,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let left_behind = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let stranded = enroll(&svc, OWNER, left_behind, ADA).await;
+    sqlx::query!(
+        "UPDATE email_sequences SET team_id = $2 WHERE id = $1",
+        left_behind,
+        former_team,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET team_id = $2, due_at = now() - interval '1 hour' WHERE id = $1",
+        stranded,
+        former_team,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let current = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let bob = enroll(&svc, OWNER, current, BOB).await;
+    make_due(&pool, bob).await;
+
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, bob).await.is_some());
+    assert_eq!(in_flight(&pool, stranded).await, None);
+    assert_eq!(status(&pool, stranded).await.0, "active");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn a_full_sequence_takes_no_more_people(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    // One place is left.
+    let filled = i32::try_from(crate::domain::service::MAX_PEOPLE - 1).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_sequence_enrollments (id, sequence_id, team_id, email, status, timezone, send_time)
+           SELECT gen_random_uuid(), $1, $2, 'person' || n || '@example.com', 'completed', 'UTC', '09:00'
+           FROM generate_series(1, $3::int) AS n"#,
+        sequence,
+        TEAM,
+        filled,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let results = svc
+        .enroll(
+            OWNER,
+            sequence,
+            EnrollRequest {
+                crm_contact_ids: vec![ADA, BOB],
+                start: Utc::now(),
+                timezone: "America/New_York".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(results[0].enrollment_id.is_some());
+    assert_eq!(results[1].skipped, Some(EnrollSkip::SequenceFull));
 }

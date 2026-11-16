@@ -15,6 +15,11 @@ people. The server owns all state; the browser only calls the API.
 - An enrollment has at most one unsent step (a partial unique index). History
   rows are keyed by the step's stable `id`; the next step is the one after the
   last step reached that is still in the sequence.
+- One inbox's sequence emails are at least 3 minutes apart (`SPACING`), read
+  from step history under the inbox's send-slot lock, so the gap holds after
+  an email is sent.
+- Routes that change a sequence refuse an agent's program (`Person` in
+  `inbound/axum_router.rs`): a sequence emails people with no further review.
 - Steps are scheduled sends (`source = 'sequence'`) that stay out of Mail until
   they are sent or fail, created and withdrawn through the email crate's
   `SequenceStepStore` port on the sweep's own connection. One the owner
@@ -42,7 +47,7 @@ people. The server owns all state; the browser only calls the API.
 ## Boundaries
 
 - Depends on: `email` (ports: `sequence_steps`), `entity_access` and `crm` (team
-  membership, `crm_enabled`, CRM people).
+  membership and the owner's own access to Customers, CRM people).
 - Used by: `services/email_service` (API, workers, inbox sync).
 
 ## Checks

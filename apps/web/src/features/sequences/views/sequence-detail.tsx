@@ -149,6 +149,24 @@ function SequenceDetailContent(props: {
                 </Dropdown.Group>
               </Dropdown.Content>
             </Dropdown>
+            <Show when={draft.unsaved()}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy() || draft.saving()}
+                onClick={draft.discard}
+              >
+                {t('sequences.discardChanges')}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={busy() || draft.saving()}
+                onClick={() => fireAndForget(draft.save(), SURFACE)}
+              >
+                {t('sequences.saveChanges')}
+              </Button>
+            </Show>
             <Show
               when={!sending()}
               fallback={
@@ -200,6 +218,14 @@ function SequenceDetailContent(props: {
             {failureMessage(failure())}
           </p>
         )}
+      </Show>
+      <Show when={draft.unsaved()}>
+        <p
+          class="mx-4 mb-2 rounded-lg bg-panel px-4 py-2 text-xs"
+          role="status"
+        >
+          {t('sequences.unsavedChanges')}
+        </p>
       </Show>
       <Show when={senderUnavailable()}>
         <p class="mx-4 mb-2 rounded-lg bg-panel px-4 py-2 text-xs">

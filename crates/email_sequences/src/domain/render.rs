@@ -59,8 +59,8 @@ impl InvalidSequence {
     }
 }
 
-/// Checks that hold on every save: limits and tokens. A draft may still be
-/// incomplete.
+/// The size limits, which hold on every save. A draft may still be incomplete
+/// or hold a half-typed token, so that saving it is never refused mid-edit.
 pub fn check_limits(name: &str, footer: &str, steps: &[Step]) -> Result<(), InvalidSequence> {
     if name.chars().count() > MAX_NAME
         || footer.chars().count() > MAX_FOOTER
@@ -68,19 +68,16 @@ pub fn check_limits(name: &str, footer: &str, steps: &[Step]) -> Result<(), Inva
     {
         return Err(InvalidSequence::new(Problem::OverLimit, None));
     }
-    check_tokens(footer, None)?;
     for (index, step) in steps.iter().enumerate() {
-        let position = Some(index + 1);
         if step.subject.chars().count() > MAX_SUBJECT || step.body.chars().count() > MAX_BODY {
-            return Err(InvalidSequence::new(Problem::OverLimit, position));
+            return Err(InvalidSequence::new(Problem::OverLimit, Some(index + 1)));
         }
-        check_tokens(&step.subject, position)?;
-        check_tokens(&step.body, position)?;
     }
     Ok(())
 }
 
-/// Checks a sequence must also pass before it can send.
+/// Checks a sequence must also pass before it can send: nothing missing, and
+/// every token one a contact can fill in.
 pub fn check_complete(name: &str, footer: &str, steps: &[Step]) -> Result<(), InvalidSequence> {
     check_limits(name, footer, steps)?;
     if name.trim().is_empty() {
@@ -89,6 +86,7 @@ pub fn check_complete(name: &str, footer: &str, steps: &[Step]) -> Result<(), In
     if steps.is_empty() {
         return Err(InvalidSequence::new(Problem::StepsRequired, None));
     }
+    check_tokens(footer, None)?;
     for (index, step) in steps.iter().enumerate() {
         let position = Some(index + 1);
         if !step.as_reply && step.subject.trim().is_empty() {
@@ -97,6 +95,8 @@ pub fn check_complete(name: &str, footer: &str, steps: &[Step]) -> Result<(), In
         if step.body.trim().is_empty() {
             return Err(InvalidSequence::new(Problem::BodyRequired, position));
         }
+        check_tokens(&step.subject, position)?;
+        check_tokens(&step.body, position)?;
     }
     Ok(())
 }

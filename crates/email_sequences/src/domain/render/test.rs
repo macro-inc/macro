@@ -150,9 +150,11 @@ fn validation_table() {
             .map(|e| (e.problem, e.position));
         assert_eq!(result, expected, "{name}");
     }
-    // A draft may be incomplete but not malformed.
+    // A draft may be incomplete.
     assert!(check_limits("", "", &[step("", "", false)]).is_ok());
-    assert!(check_limits("Name", "{{nope}}", &ok()).is_err());
+    // A draft saves with a token nobody can fill in; it can't send with one.
+    assert!(check_limits("Name", "{{nope}}", &ok()).is_ok());
+    assert!(check_complete("Name", "{{nope}}", &ok()).is_err());
 }
 
 #[test]
