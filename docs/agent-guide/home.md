@@ -290,8 +290,7 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Suggestions on Home
 
-With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
-and in place of the recommended actions:
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer:
 
 - **Today**: the day's timed events across working hours (8am to 8pm) as
   neutral chips with a thin line at now; a chip opens the event in Calendar.
