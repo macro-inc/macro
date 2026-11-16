@@ -948,6 +948,29 @@ fn ephemeral_text_clones_fail_closed_outside_their_owned_text_methods()
         error.to_string(),
         "unsupported use of an ephemeral text clone: TextNode.getTextContent"
     );
+    // As an argument the clone would stand in for the live node by key.
+    let original = owner.node(tx.view(), text)?;
+    let error = api::call(
+        &mut owner,
+        &mut tx,
+        &json!({"fn":"lexical.$copyNode","args":[clone]}),
+    )
+    .expect_err("ephemeral clone argument");
+    assert_eq!(
+        error.to_string(),
+        "unsupported ephemeral text clone argument: lexical.$copyNode"
+    );
+    // Not even key comparisons accept a clone argument.
+    let error = api::call(
+        &mut owner,
+        &mut tx,
+        &json!({"fn":"LexicalNode.is","this":original,"args":[clone]}),
+    )
+    .expect_err("ephemeral clone argument to is");
+    assert_eq!(
+        error.to_string(),
+        "unsupported ephemeral text clone argument: LexicalNode.is"
+    );
     assert_eq!(tx.text_content(text), "01234");
     Ok(())
 }

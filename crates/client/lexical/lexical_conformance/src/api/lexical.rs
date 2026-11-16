@@ -44,6 +44,13 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             "unsupported use of an ephemeral text clone: {name}"
         )));
     }
+    // As an argument a clone would resolve to the live node by key; no replayed API
+    // takes one.
+    if contains_ephemeral_node(r, &args)? {
+        return Err(fail(format!(
+            "unsupported ephemeral text clone argument: {name}"
+        )));
+    }
     if receiver.get("$caretValue").is_some()
         || short.contains("Caret")
         || short == "$caretRangeFromSelection"
@@ -762,4 +769,33 @@ pub(crate) fn u32_arg(args: &[Value], n: usize, default: u32) -> Result<u32> {
         .filter(|v| v.get("$undef").is_none())
         .map(|v| integer(v).and_then(|n| u32::try_from(n).map_err(|_| fail("offset overflow"))))
         .unwrap_or(Ok(default))
+}
+
+/// Whether `value` holds a node handle for an ephemeral clone, at any depth.
+fn contains_ephemeral_node(r: &Replayer, value: &Value) -> Result<bool> {
+    match value {
+        Value::Object(object) => {
+            if object.contains_key("$node")
+                && let Some(identity) = object.get("identity").and_then(Value::as_u64)
+                && r.record_ids.is_ephemeral(identity)?
+            {
+                return Ok(true);
+            }
+            for nested in object.values() {
+                if contains_ephemeral_node(r, nested)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        Value::Array(items) => {
+            for item in items {
+                if contains_ephemeral_node(r, item)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        _ => Ok(false),
+    }
 }
