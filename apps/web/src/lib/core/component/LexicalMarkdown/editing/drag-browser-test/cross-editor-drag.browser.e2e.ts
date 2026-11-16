@@ -3,10 +3,10 @@ import { installBrowserHooks } from './browser-hooks';
 
 installBrowserHooks('/?drag&second');
 
-// Source's handle writes only its internal block key. In another editor with the app's
-// drag plugins the drop fires and is consumed (drag-insert cancels every dragover and
-// hides its indicator on drop), but nothing there owns the key or can paste it: neither
-// document changes.
+// The block handle writes only its editor's internal block key. In another editor with
+// the app's drag handling (Source dragInsertPlugin; native createNativeEditorDrop) the
+// drop fires and is consumed with its indicator hidden, but nothing there owns the key or
+// can paste it: neither document changes. Runs for both engines (DRAG_ENGINE=native).
 test('a block handle dropped into another editor changes neither document', async ({
   page,
 }) => {
@@ -42,7 +42,8 @@ test('a block handle dropped into another editor changes neither document', asyn
     targetPosition: { x: 30, y: 10 },
   });
   await expect(page.locator('body')).toHaveAttribute('data-second-drops', '1');
-  await expect(second).toHaveAttribute('data-insert-visible', 'false');
+  // Both fixtures render the real drag-insert indicator for the second editor.
+  await expect(page.locator('.bg-accent\\/60.visible')).toHaveCount(0);
   await expect(second.locator('li')).toHaveCount(0);
   await expect(second).toHaveText('destination');
   expect(await blocks.allInnerTexts()).toEqual(before);

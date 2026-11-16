@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: directory,
   testMatch:
     process.env.DRAG_ENGINE === 'native'
-      ? 'drag-blocks.browser.e2e.ts'
+      ? ['drag-blocks.browser.e2e.ts', 'cross-editor-drag.browser.e2e.ts']
       : '*.browser.e2e.ts',
   workers: 1,
   retries: 0,

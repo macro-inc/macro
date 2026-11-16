@@ -66,7 +66,9 @@ export function installBrowserHooks(path = '/') {
       return route.abort();
     });
     await page.goto(
-      process.env.DRAG_ENGINE === 'native' ? '/native.html?drag' : path
+      process.env.DRAG_ENGINE === 'native'
+        ? `/native.html${new URL(path, 'http://fixture').search}`
+        : path
     );
     await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
   });

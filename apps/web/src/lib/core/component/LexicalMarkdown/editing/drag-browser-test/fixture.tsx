@@ -48,7 +48,7 @@ import {
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
-import { createEffect, createRoot, createSignal, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { DecoratorRenderer } from '../../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRenderer';
@@ -63,6 +63,7 @@ import { FloatingGifMenu } from '../../component/menu/FloatingGifMenu';
 import { FloatingLinkMenu } from '../../component/menu/FloatingLinkMenu';
 import { FloatingTableMenu } from '../../component/menu/FloatingTableMenu';
 import { DraggableBlockMenu } from '../../component/misc/DraggableBlockMenu';
+import { DragInsertIndicator } from '../../component/misc/DragInsertIndicator';
 import { TableCellResizer } from '../../component/misc/TableCellResizer';
 import { TableDeleteButtons } from '../../component/misc/TableDeleteButtons';
 import { TableInsertButton } from '../../component/misc/TableInsertButton';
@@ -241,10 +242,9 @@ if (new URLSearchParams(location.search).has('second')) {
   );
   const [insert, setInsert] = createDragInsertStore();
   dragInsertPlugin({ setState: setInsert, dragListenerRef: container })(second);
-  createRoot(() =>
-    createEffect(() => {
-      host.dataset.insertVisible = String(insert.visible);
-    })
+  render(
+    () => <DragInsertIndicator state={insert} active editor={second} />,
+    element('menus')
   );
   second.update(
     () =>

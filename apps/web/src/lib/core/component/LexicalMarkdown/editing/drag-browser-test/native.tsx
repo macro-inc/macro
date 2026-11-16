@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { createNativeEditorDrop } from '@block-md/component/native-editor-drop';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ABI_MAJOR,
@@ -9,7 +10,7 @@ import {
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
-import { createSignal } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import * as native from '../../../../document-session/wasm/document_session_wasm';
 import { theme } from '../../theme';
@@ -101,4 +102,70 @@ window.addEventListener(
   { once: true }
 );
 await setState(paragraph);
+if (new URLSearchParams(location.search).has('second')) {
+  // A second native editor with the app's body drop owner (RustMarkdownEditor's
+  // createNativeEditorDrop), as two documents open side by side, to observe the
+  // cross-editor block-handle drop.
+  const host = document.createElement('div');
+  host.id = 'second';
+  host.setAttribute('role', 'textbox');
+  host.setAttribute('aria-label', 'Second');
+  host.setAttribute('aria-multiline', 'true');
+  element('body').after(host);
+  const secondNamespace = 'native-block-drag-fixture-second';
+  const second = mountLocalSessionView(
+    host,
+    registerMacroElementViews(createBuiltinRegistry()),
+    {
+      namespace: secondNamespace,
+      theme,
+      editable: true,
+      preset: 'rich',
+      onError: report,
+    },
+    {
+      viewEngine: 1,
+      viewOs: 0,
+      nativeCommands: native,
+      create: (config, now, wall) =>
+        native.EditorSession.createMacroWithNamespace(
+          ABI_MAJOR,
+          config,
+          now,
+          wall,
+          secondNamespace
+        ),
+    }
+  );
+  createRoot(() => {
+    const drop = createNativeEditorDrop({
+      view: () => second.view,
+      canEdit: () => true,
+      sourceId: () => 'second-document',
+      droppableId: secondNamespace,
+      dropFiles: () => {},
+    });
+    drop.bindView(second.view);
+    render(() => <drop.Indicator />, element('menus'));
+  });
+  const outcome = await second.port.inputSettled(
+    EditorInputMsg.fromEditorSetState({
+      json: JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'destination' }],
+            },
+          ],
+        },
+      }),
+    })
+  );
+  if (outcome.status !== 'success')
+    throw new Error(`Second SetState ${outcome.status}`);
+}
 document.documentElement.dataset.ready = 'true';
