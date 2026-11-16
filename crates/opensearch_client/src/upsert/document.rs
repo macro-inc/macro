@@ -74,6 +74,9 @@ pub struct UpsertDocumentArgs {
     /// custom) used for search filtering. Empty for documents without
     /// properties.
     pub properties: Vec<IndexedProperty>,
+    /// Whether a `document_email` row links the document to an email
+    /// attachment. Written on the parent only.
+    pub is_email_attachment: bool,
 }
 
 /// Resolve `index_override` to the physical/alias name we'll write to.
@@ -92,6 +95,7 @@ fn parent_doc_body(any_chunk: &UpsertDocumentArgs) -> serde_json::Value {
         "owner_id": &any_chunk.owner_id,
         "file_type": &any_chunk.file_type,
         "updated_at_millis": any_chunk.updated_at_millis,
+        "is_email_attachment": any_chunk.is_email_attachment,
         "document_relation": PARENT_RELATION,
     });
     if let Some(sub_type) = &any_chunk.sub_type {

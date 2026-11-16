@@ -13,6 +13,7 @@ fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
         updated_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         sub_type: None,
         properties: vec![],
+        is_email_attachment: false,
     }
 }
 
@@ -30,6 +31,27 @@ fn parent_doc_body_has_metadata_no_chunk_fields() {
     assert!(doc.get("content").is_none());
     assert!(doc.get("node_id").is_none());
     assert!(doc.get("raw_content").is_none());
+}
+
+#[test]
+fn parent_doc_body_writes_the_email_attachment_flag_either_way() {
+    // A full `index` overwrite drops any field it omits, so `false` is
+    // written explicitly: an unlinked document must not keep a stale `true`.
+    let doc = parent_doc_body(&args("doc1", "n1"));
+    assert_eq!(doc["is_email_attachment"], false);
+
+    let mut a = args("doc1", "n1");
+    a.is_email_attachment = true;
+    let doc = parent_doc_body(&a);
+    assert_eq!(doc["is_email_attachment"], true);
+}
+
+#[test]
+fn child_doc_body_omits_the_email_attachment_flag() {
+    let mut a = args("doc1", "n1");
+    a.is_email_attachment = true;
+    let doc = child_doc_body(&a);
+    assert!(doc.get("is_email_attachment").is_none());
 }
 
 #[test]
@@ -112,6 +134,7 @@ fn parent_only_bulk_body_writes_parent_and_no_children() {
         values: vec!["opt-1".to_string()],
         ..Default::default()
     }];
+    a.is_email_attachment = true;
     let body = parent_only_bulk_body(&a);
 
     assert_eq!(body.len(), 2);
@@ -129,6 +152,7 @@ fn parent_only_bulk_body_writes_parent_and_no_children() {
     assert_eq!(doc["sub_type"], "task");
     assert_eq!(doc["properties"][0]["definition_id"], "tag-def");
     assert_eq!(doc["properties"][0]["values"][0], "opt-1");
+    assert_eq!(doc["is_email_attachment"], true);
     // No chunk is written and no chunk fields leak onto the parent.
     assert!(doc.get("content").is_none());
     assert!(doc.get("node_id").is_none());
