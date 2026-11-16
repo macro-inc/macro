@@ -24,7 +24,8 @@ use uuid::Uuid;
 mod test;
 
 /// Whether `principal_id` holds a direct `user` grant, is an active
-/// participant of a granting channel, or is a member of a granting team.
+/// participant of a granting channel, or is a member of a granting team (for
+/// a CRM pipeline, one with CRM access, as `entity_audiences` lists them).
 ///
 /// The exact id is probed first: stored ids are normally canonical, so a hit
 /// is one index probe per arm. Only a miss also tries the case-folded
@@ -55,6 +56,7 @@ pub async fn is_entity_user(
                 SELECT 1 FROM entity_access ea
                 JOIN team_user tu ON tu.team_id = ea.source_id::uuid AND tu.user_id = $3
                 WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
+                  AND ($2 <> 'crm_pipeline' OR tu.crm_access OR tu.team_role <> 'member')
             )
         ) AS "is_user!"
         "#,
@@ -87,6 +89,7 @@ pub async fn is_entity_user(
                 JOIN team_user tu ON tu.team_id = ea.source_id::uuid
                 WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
                   AND tu.user_id LIKE 'macro|%' AND lower(tu.user_id) = $3
+                  AND ($2 <> 'crm_pipeline' OR tu.crm_access OR tu.team_role <> 'member')
             )
         ) AS "is_user!"
         "#,
@@ -165,7 +168,8 @@ pub async fn is_channel_user(
 
 /// Explicit accessors whose grant is at least `min_level`: direct user
 /// grants, active participants of granting channels and members of granting
-/// teams, each counted only through a grant at that level or above. One
+/// teams (for a CRM pipeline, those with CRM access), each counted only
+/// through a grant at that level or above. One
 /// set-based read; link-share access never counts.
 #[tracing::instrument(err, skip(pool))]
 pub async fn entity_users_at_least(
@@ -195,6 +199,7 @@ pub async fn entity_users_at_least(
             JOIN team_user tu ON tu.team_id = ea.source_id::uuid
             WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
               AND ea.access_level >= $3::text::"AccessLevel"
+              AND ($2 <> 'crm_pipeline' OR tu.crm_access OR tu.team_role <> 'member')
         ) AS granted
         "#,
         entity_id,

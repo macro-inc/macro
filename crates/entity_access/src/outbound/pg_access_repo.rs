@@ -973,8 +973,13 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        // The CRM listing has no process cache.
-        if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
+        // The CRM listings have no process cache, and a pipeline's team
+        // grants reach only members with CRM access, as the cached listing
+        // decides.
+        if matches!(
+            entity_type,
+            EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline
+        ) {
             return self.get_entity_users(entity_id, entity_type).await;
         }
         queries::get_entity_users_uncached(&self.pool, entity_id, entity_type)

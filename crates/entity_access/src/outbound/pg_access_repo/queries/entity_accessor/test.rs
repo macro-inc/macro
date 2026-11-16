@@ -495,3 +495,62 @@ async fn accessors_at_least_follow_the_grant_levels(pool: PgPool) {
     );
     assert!(!commenters.contains(&USER_C.to_owned()), "left the channel");
 }
+
+/// A pipeline's team grant reaches only members with CRM access, on every
+/// path: the uncached listing, the exact check and the level floor all agree
+/// with the cached listing (`entity_audiences`).
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_pipeline_team_grant_needs_crm_access(pool: PgPool) {
+    seed(&pool).await;
+    let service = service(&pool);
+    let pipeline = Uuid::now_v7();
+    grant(
+        &pool,
+        pipeline,
+        "crm_pipeline",
+        &TEAM_ALPHA.to_string(),
+        "team",
+    )
+    .await;
+    let pipeline = pipeline.to_string();
+    let at_least = |service: &Service| {
+        let service = service.clone();
+        let pipeline = pipeline.clone();
+        async move {
+            service
+                .get_users_by_entity_at_least(&pipeline, EntityType::CrmPipeline, AccessLevel::View)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|user| user.as_ref().to_owned())
+                .collect::<Vec<_>>()
+        }
+    };
+
+    assert!(
+        accessor_matches_listing(&service, TEAM_MEMBER, &pipeline, EntityType::CrmPipeline).await
+    );
+    assert_eq!(at_least(&service).await, vec![TEAM_MEMBER.to_owned()]);
+
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = false WHERE user_id = $1",
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        !accessor_matches_listing(&service, TEAM_MEMBER, &pipeline, EntityType::CrmPipeline).await,
+        "a member without CRM access does not see the team's pipeline"
+    );
+    assert!(at_least(&service).await.is_empty());
+    let cached: Vec<String> = service
+        .get_users_by_entity(&pipeline, EntityType::CrmPipeline)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|user| user.as_ref().to_owned())
+        .collect();
+    assert!(cached.is_empty(), "the cached listing agrees");
+}
