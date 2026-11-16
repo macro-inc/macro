@@ -31,7 +31,8 @@ export function createChannelUnreadNavigation(options: {
 }) {
   const notificationSource = useGlobalNotificationSource();
   const channelNotifications = createChannelNotificationsQuery(
-    options.channelId
+    options.channelId,
+    () => true
   );
   const notifications = createMemo(() => {
     if (channelNotifications.isPending) return [];

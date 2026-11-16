@@ -44,7 +44,7 @@ function setup(query: { isSuccess?: boolean; data?: { id: string }[] } = {}) {
   mocks.createQuery.mockReturnValue({ refetch: mocks.refetch, ...query });
   return createRoot((cleanup) => {
     dispose = cleanup;
-    createChannelNotificationsQuery('channel');
+    createChannelNotificationsQuery('channel', () => true);
     const patch = (entityId = 'channel', kind = 'GraphqlNewNotification') => {
       channelNotificationRefresh(mocks.client as never).onPatch(
         {
