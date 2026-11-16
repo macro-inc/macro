@@ -1,0 +1,50 @@
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_teams.rs
+  s_c40fd2f0323f22::t_81becdbc4b4518 17-19,29-32,34-36,40-42
+  s_c40fd2f0323f22::t_19111297093e80 1-16,20-28,33,37-39,43-99
+crates/entity_access/src/domain/service.rs
+  s_c40fd2f0323f22::t_15eba01b119f9c 14,1193-1204,1206-1266
+  s_c40fd2f0323f22::t_aec3bdec781a3a 1205,1267
+crates/entity_access/src/domain/ports.rs
+  s_c40fd2f0323f22::t_dfe3c17a78859f 382-405,1028-1047
+  s_c40fd2f0323f22::t_a8b0e53f4c97b7 1048-1049
+crates/entity_access/src/outbound/pg_access_repo/queries.rs
+  s_c40fd2f0323f22::t_dfe3c17a78859f 40
+crates/entity_access/src/outbound/pg_access_repo.rs
+  s_c40fd2f0323f22::t_a76018e9db4b6b 994-1002,1004-1020
+  s_c40fd2f0323f22::t_4ae9420a4f06ea 1003
+crates/entity_access/AGENTS.md
+  s_c40fd2f0323f22::t_ef45ab3c498bca 78-82
+crates/entity_access/src/domain/service/test.rs
+  s_c40fd2f0323f22::t_a76018e9db4b6b 743-763
+  s_c40fd2f0323f22::t_56afed68037577 3252-3292
+  s_c40fd2f0323f22::t_2374464fcffead 82-83,146-147
+  s_c40fd2f0323f22::t_9d9d342883c586 15
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_teams/test.rs
+  s_c40fd2f0323f22::t_3694abd97a39e0 128-142
+  s_c40fd2f0323f22::t_765e83b002ef09 1-28,31-33,35-94,96-102,104-127,143-223
+  s_c40fd2f0323f22::t_288baa24b22b3c 29-30,34,95,103
+.sqlx/query-4b0a707831b1e07ce4ea0621eb70aad1deaf17a10c7fef5f9c9aced8b633e95f.json
+  s_c40fd2f0323f22::t_8c5ee4319bda29 3,8-9,14,18,21
+.sqlx/query-5febc530d29a8185ecf3a6f3475472bc60a5090fc2ff87ddb67f23097f4173f8.json
+  s_c40fd2f0323f22::t_1f872604ed7258 1-22
+.sqlx/query-7fd6cbf3b3fafae5e6875b70a8d9724eb30f0efe1765e125898dade391825e29.json
+  s_c40fd2f0323f22::t_4858060ea3eff9 1-22
+.sqlx/query-a2ac5c6e7edba24f44ecae366ec3f4debb300677628ca7283d0fc374a590aa50.json
+  s_c40fd2f0323f22::t_c57b3043b69bed 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "92335403e496b610a73ed5c48f287b6a7ac7fecb",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
