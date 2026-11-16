@@ -69,7 +69,5 @@ if (!sessions.length) {
   );
   if (!desktopIncludesSession(desktop))
     throw new Error('Desktop coreWasmPackages omits document_session_wasm');
-  console.log(
-    `Session wasm size/desktop contract passed: ${size}`
-  );
+  console.log(`Session wasm size/desktop contract passed: ${size}`);
 }
