@@ -1,6 +1,28 @@
 {
   "catalog": [
     {
+      "name": "DETAILS_INTERNAL",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "details",
+        "details-summary"
+      ],
+      "regExpStart": {
+        "source": "^\\s*<details(\\s[^>]*)?>(.*)$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^(.*?)<\\/details>\\s*$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
       "name": "I_DATABASE_QUERY_BLOCK",
       "builtin": false,
       "type": "element",
@@ -1046,6 +1068,7 @@
       "builtin": false,
       "type": "text-match",
       "dependencies": [
+        "link",
         "unlinked-text"
       ],
       "regExp": {
@@ -1119,6 +1142,28 @@
       "importRegExp": {
         "source": "<(m-[a-zA-Z0-9_-]+)>(.*?)<\\/\\1>",
         "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "DETAILS_EXTERNAL",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "details",
+        "details-summary"
+      ],
+      "regExpStart": {
+        "source": "^\\s*<details(\\s[^>]*)?>(.*)$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^(.*?)<\\/details>\\s*$",
+        "flags": "i",
         "matcher": "RegExp"
       },
       "conversionOnly": false,
@@ -1644,6 +1689,28 @@
       "hasReplace": true
     },
     {
+      "name": "DETAILS_ALL",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "details",
+        "details-summary"
+      ],
+      "regExpStart": {
+        "source": "^\\s*<details(\\s[^>]*)?>(.*)$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^(.*?)<\\/details>\\s*$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
       "name": "LIST_ITEM_IMAGE_ALL",
       "builtin": false,
       "type": "text-match",
@@ -1699,6 +1766,7 @@
   ],
   "lists": {
     "internal": [
+      "DETAILS_INTERNAL",
       "I_DATABASE_QUERY_BLOCK",
       "I_DATABASE_QUERY",
       "I_SNAPSHOT_NODE",
@@ -1764,6 +1832,7 @@
       "UNKNOWN_MENTION"
     ],
     "external": [
+      "DETAILS_EXTERNAL",
       "UNLINKED_TEXT",
       "I_DATABASE_QUERY_BLOCK",
       "I_DATABASE_QUERY",
@@ -1832,6 +1901,7 @@
       "UNKNOWN_MENTION"
     ],
     "all": [
+      "DETAILS_ALL",
       "I_DATABASE_QUERY_BLOCK",
       "I_DATABASE_QUERY",
       "I_SNAPSHOT_NODE",

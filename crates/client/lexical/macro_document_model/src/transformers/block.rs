@@ -213,10 +213,20 @@ impl MultilineElementTransformer for Callback {
         index: usize,
         start: &Match,
     ) -> Result<AfterStartMatch> {
-        if self.entry.name == "HTML_BLOCKQUOTE" {
-            super::quote::after_start(tx, opts, lines, root, index, start, &self.options)
-        } else {
-            Ok(AfterStartMatch::Default)
+        match self.entry.name {
+            "HTML_BLOCKQUOTE" => {
+                super::quote::after_start(tx, opts, lines, root, index, start, &self.options)
+            }
+            // Source imports `<details>` only where DetailsNode is registered, which is
+            // read-only rendering; no native registry has it, so the lines stay text.
+            "DETAILS_INTERNAL" | "DETAILS_EXTERNAL" | "DETAILS_ALL" => {
+                if tx.view().has_node_type("details") {
+                    Err(Error::InvalidArgument("DetailsNode import is not ported"))
+                } else {
+                    Ok(AfterStartMatch::Skip)
+                }
+            }
+            _ => Ok(AfterStartMatch::Default),
         }
     }
     fn reg_exp_start(&self) -> &dyn Matcher {
@@ -255,6 +265,10 @@ impl MultilineElementTransformer for Callback {
                 let node = tx.create(data)?;
                 tx.append(root, &[node.key()])?;
                 Ok(ReplaceResult::Handled)
+            }
+            // Source `replace: () => false`: never a typing shortcut.
+            "DETAILS_INTERNAL" | "DETAILS_EXTERNAL" | "DETAILS_ALL" => {
+                Ok(ReplaceResult::NotHandled)
             }
             "HTML_BLOCKQUOTE" => {
                 super::quote::replace(tx, opts, root, children, start, end, lines, &self.options)

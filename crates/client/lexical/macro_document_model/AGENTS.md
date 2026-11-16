@@ -99,6 +99,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep source object order and regex metadata in transformers/catalog.json generated from TS.
+- Keep the DETAILS_* transformers a Source no-op: skip import and never replace, because only Source's read-only renderer registers DetailsNode and no native registry does (tests/details.rs).
 - Match transformer constructor arguments independently of static JSON import policy.
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.

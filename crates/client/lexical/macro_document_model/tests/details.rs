@@ -43,3 +43,36 @@ fn an_editor_rejects_a_serialized_details_node_like_source() {
     let state = r#"{"root":{"type":"root","version":1,"children":[{"type":"details","version":1,"open":false,"children":[{"type":"details-summary","version":1,"children":[]}]}]}}"#;
     assert!(editor.parse_editor_state_str(state).is_err());
 }
+
+#[test]
+fn every_source_list_starts_with_its_details_transformer() -> Result<()> {
+    for (list, name) in [
+        ("internal", "DETAILS_INTERNAL"),
+        ("external", "DETAILS_EXTERNAL"),
+        ("all", "DETAILS_ALL"),
+    ] {
+        assert_eq!(
+            transformers::list_names(list).map(|names| names[0]),
+            Some(name)
+        );
+    }
+    let options = transformers::MacroMarkdownOptions::default();
+    let resolved = transformers::from_source_reference(
+        "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0",
+        &options,
+    )?;
+    assert!(matches!(
+        resolved,
+        lexical_markdown::Transformer::MultilineElement(_)
+    ));
+    Ok(())
+}
+
+#[test]
+fn unclosed_and_nested_details_stay_text_in_every_list() -> Result<()> {
+    let markdown = "<details open>\n<summary>A</summary>\n<details>\ninner\n</details>\n</details>\n\n<details>\nunclosed";
+    let state = markdown::markdown_to_serialized_editor_state_with_ids(markdown, &context())?;
+    let json = serde_json::to_string(&state)?;
+    assert!(!json.contains(r#""type":"details"#), "{json}");
+    Ok(())
+}

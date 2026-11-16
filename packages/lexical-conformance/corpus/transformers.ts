@@ -11,6 +11,9 @@ const index = await import(directory + 'index.ts');
 const custom = await import(directory + 'customTransformers.ts');
 const entities = await import(directory + 'transformers.ts');
 const formats = await import(directory + 'htmlTextFormats.ts');
+const { DetailsNode } = await import(
+  root + 'packages/lexical-core/nodes/DetailsNode.ts'
+);
 type TransformerObject = {
   type: string;
   dependencies?: Array<{ getType(): string }>;
@@ -65,9 +68,12 @@ const lists: Record<string, TransformerObject[]> = {
   all: index.ALL_TRANSFORMERS,
   custom: custom.CUSTOM_TRANSFORMERS,
 };
+// Each list builds its own unexported details transformer over itself.
 for (const [name, list] of Object.entries(lists)) {
   for (const value of list) {
-    if (!names.has(value))
+    if (value.dependencies?.includes(DetailsNode))
+      names.set(value, `DETAILS_${name.toUpperCase()}`);
+    else if (!names.has(value))
       names.set(value, `LIST_ITEM_IMAGE_${name.toUpperCase()}`);
   }
 }
