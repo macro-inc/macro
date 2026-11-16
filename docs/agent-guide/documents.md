@@ -2775,9 +2775,10 @@ Editing a message keeps the attachment and send controls. Deleting a root messag
 removes its thread; deleting a reply removes only that reply.
 
 On phones, tasks show the shared newest-message card below their full description.
-View discussion opens the full-height Discussion sheet. Empty tasks show Start a
-discussion, opening the sheet with keyboard focus. The thread shrinks and only its
-pinned input rises when the keyboard opens. Send appears only with text.
+View discussion opens Discussion at half height; drag its handle or heading to
+full height, half height, or down to dismiss. Empty tasks show Start a discussion,
+opening the sheet with keyboard focus. Typing expands it to full height, retained
+after keyboard dismissal; the thread shrinks and only its pinned input rises. Send appears only with text.
 Closing/reopening retains an unsent draft. Desktop tasks keep inline discussion;
 ordinary documents and tablet tasks retain the docked composer described below.
 On those touch surfaces, the message composer sits above the navigation bar,

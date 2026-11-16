@@ -1,5 +1,6 @@
 import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileDrawer } from './MobileDrawer';
 
@@ -25,6 +26,7 @@ afterEach(() => {
   drawerStyles.remove();
   setVirtualKeyboardVisible(false);
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('mobile drawer keyboard layouts', () => {
@@ -103,5 +105,132 @@ describe('mobile drawer keyboard layouts', () => {
     setVirtualKeyboardVisible(false);
     expect(sheet.style.getPropertyValue('--drawer-keyboard-inset')).toBe('0px');
     unmount();
+  });
+
+  it('resizes the visible body with controlled snap points without remounting or scrolling it', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(800);
+    const [point, setPoint] = createSignal<number>(0.5);
+    render(() => (
+      <MobileDrawer
+        initialOpen
+        snapPoints={[0, 0.5, 1]}
+        defaultSnapPoint={0.5}
+        activeSnapPoint={point()}
+        onActiveSnapPointChange={(value) => {
+          if (typeof value === 'number') setPoint(value);
+        }}
+        preventScroll={false}
+        preventScrollbarShift={false}
+      >
+        <MobileDrawer.FixedContent
+          aria-label="Snapping"
+          targetHeight={100}
+          fitSnapPoint
+        >
+          <MobileDrawer.Handle data-testid="grabber" />
+          <MobileDrawer.Title>Thread</MobileDrawer.Title>
+          <MobileDrawer.ScrollBody>Messages</MobileDrawer.ScrollBody>
+          <MobileDrawer.KeyboardFooter>Input</MobileDrawer.KeyboardFooter>
+        </MobileDrawer.FixedContent>
+      </MobileDrawer>
+    ));
+    const sheet = screen.getByRole('dialog', { name: 'Thread' });
+    const thread = sheet.querySelector<HTMLElement>(
+      '[data-drawer-scroll-body]'
+    )!;
+    const footer = sheet.querySelector('[data-drawer-keyboard-footer]');
+    thread.scrollTop = 120;
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('400px');
+    setPoint(1);
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('0px');
+    expect(thread.scrollTop).toBe(120);
+    setVirtualKeyboardVisible(true);
+    expect(sheet.style.getPropertyValue('--drawer-keyboard-inset')).not.toBe(
+      '0px'
+    );
+    expect(sheet.querySelector('[data-drawer-keyboard-footer]')).toBe(footer);
+    setVirtualKeyboardVisible(false);
+    setPoint(0.5);
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('400px');
+    expect(sheet.querySelector('[data-drawer-scroll-body]')).toBe(thread);
+    expect(thread.scrollTop).toBe(120);
+  });
+
+  it('snaps header drags in both directions and restores a rejected dismiss to the last open point', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(800);
+    vi.stubGlobal('PointerEvent', MouseEvent);
+    const onOpenChange = vi.fn();
+    render(() => (
+      <MobileDrawer
+        open
+        snapPoints={[0, 0.5, 1]}
+        defaultSnapPoint={0.5}
+        onOpenChange={onOpenChange}
+        velocityFunction={() => 1}
+        preventScroll={false}
+        preventScrollbarShift={false}
+      >
+        {() => {
+          const drawer = MobileDrawer.useContext();
+          return (
+            <MobileDrawer.FixedContent
+              aria-label="Draggable"
+              targetHeight={100}
+              fitSnapPoint
+            >
+              <MobileDrawer.Handle data-testid="drag-handle" />
+              <MobileDrawer.Title
+                onClick={() => drawer.setActiveSnapPoint(0.5)}
+              >
+                Drag header
+              </MobileDrawer.Title>
+              <MobileDrawer.ScrollBody>Messages</MobileDrawer.ScrollBody>
+            </MobileDrawer.FixedContent>
+          );
+        }}
+      </MobileDrawer>
+    ));
+    const sheet = screen.getByRole('dialog', { name: 'Drag header' });
+    const header = screen.getByText('Drag header');
+    const handle = screen.getByTestId('drag-handle');
+    fireEvent.click(header);
+    fireEvent.pointerDown(handle, {
+      button: 0,
+      pointerType: 'mouse',
+      clientY: 500,
+    });
+    fireEvent.pointerMove(handle, { clientY: 490 });
+    fireEvent.pointerMove(handle, { clientY: 180 });
+    fireEvent.pointerUp(handle, { pointerType: 'mouse' });
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('0px');
+    const thread = screen.getByText('Messages');
+    thread.style.overflowY = 'auto';
+    Object.defineProperty(thread, 'scrollHeight', { value: 1600 });
+    thread.scrollTop = 120;
+    fireEvent.pointerDown(thread, { button: 0, clientY: 100 });
+    fireEvent.pointerMove(thread, { clientY: 110 });
+    fireEvent.pointerMove(thread, { clientY: 420 });
+    fireEvent.pointerUp(thread);
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('0px');
+    thread.scrollTop = 0;
+    fireEvent.pointerDown(header, {
+      button: 0,
+      pointerType: 'mouse',
+      clientY: 100,
+    });
+    fireEvent.pointerMove(header, { clientY: 110 });
+    fireEvent.pointerMove(header, { clientY: 420 });
+    fireEvent.pointerUp(header, { pointerType: 'mouse' });
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('400px');
+    fireEvent.pointerDown(header, {
+      button: 0,
+      pointerType: 'mouse',
+      clientY: 420,
+    });
+    fireEvent.pointerMove(header, { clientY: 430 });
+    fireEvent.pointerMove(header, { clientY: 750 });
+    fireEvent.pointerUp(header, { pointerType: 'mouse' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(sheet.style.getPropertyValue('--drawer-snap-inset')).toBe('400px');
   });
 });

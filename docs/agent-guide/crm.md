@@ -434,8 +434,10 @@ desktop the record opens in Customers with the message in the pane search
 `sN.crm-record.commentId`, which the next record or list you open drops.
 Deleting a thread's first message deletes the thread.
 On phones, company Overview replaces inline Discussion with the shared newest-message
-card, avatar group, and View discussion action. Tap it to open a full-height Discussion
-sheet; Start a discussion opens an empty thread with keyboard focus. The Add to the
+card, avatar group, and View discussion action. Tap it to open a half-height Discussion
+sheet; drag the handle or heading to full height, back to half, or down to dismiss.
+Start a discussion opens an empty thread with keyboard focus. Typing expands to
+full height and retains that height after the keyboard closes. The Add to the
 discussion… input uses the same message composer on desktop and phone. The sheet stays in place
 while the pinned composer rises above the keyboard. The company description keeps
 its existing clamp, and desktop discussion remains inline.

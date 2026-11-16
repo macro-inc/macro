@@ -1,7 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import type { InputHandle, InputSnapshot } from '@channel/Input/types';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import {
+  type DrawerSnapPoint,
+  MobileDrawer,
+} from '@components/app/mobile/MobileDrawer';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import {
@@ -33,7 +36,15 @@ export function MobileDiscussion(props: {
   parent: MessageParent;
   canWrite: boolean;
 }) {
-  const [state, setState] = createStore({ open: false, focusComposer: false });
+  const [state, setState] = createStore<{
+    open: boolean;
+    focusComposer: boolean;
+    snapPoint: DrawerSnapPoint;
+  }>({
+    open: false,
+    focusComposer: false,
+    snapPoint: 0,
+  });
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   const [thread, setThread] = createSignal<HTMLDivElement>();
   const [footer, setFooter] = createSignal<HTMLDivElement>();
@@ -89,9 +100,16 @@ export function MobileDiscussion(props: {
   // The keyboard consumes only the sheet's bottom content. Keep the newest
   // comment visible after that external viewport change, unless following a link.
   createEffect(
-    on([virtualKeyboardHeight, virtualKeyboardVisible], scrollToEnd, {
-      defer: true,
-    })
+    on(
+      [virtualKeyboardHeight, virtualKeyboardVisible],
+      () => {
+        // A full sheet leaves room for both the thread and the pinned input.
+        // Keep it full after typing; dragging can return it to half height.
+        if (state.open && virtualKeyboardVisible()) setState('snapPoint', 1);
+        scrollToEnd();
+      },
+      { defer: true }
+    )
   );
   // Safari changes the visual viewport while its keyboard animates without
   // publishing a native keyboard-height signal. Content resizes are unrelated.
@@ -139,6 +157,13 @@ export function MobileDiscussion(props: {
       </div>
       <MobileDrawer
         open={state.open}
+        snapPoints={virtualKeyboardVisible() ? [0, 1] : [0, 0.5, 1]}
+        defaultSnapPoint={virtualKeyboardVisible() ? 1 : 0.5}
+        activeSnapPoint={state.snapPoint}
+        onActiveSnapPointChange={(point) => {
+          setState('snapPoint', point);
+        }}
+        allowSkippingSnapPoints={false}
         onOpenChange={(open) => {
           if (!open) draft = input?.snapshot() ?? draft;
           setState('open', open);
@@ -153,12 +178,19 @@ export function MobileDiscussion(props: {
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
-          <MobileDrawer.FixedContent targetHeight={100}>
-            <MobileDrawer.Handle />
-            <MobileDrawer.Title class="shrink-0 px-5 pb-3 text-lg font-semibold">
+          <MobileDrawer.FixedContent targetHeight={100} fitSnapPoint>
+            <MobileDrawer.Handle class="touch-none" />
+            <MobileDrawer.Title class="shrink-0 touch-none select-none px-5 pb-3 text-lg font-semibold">
               {t('common.discussion')}
             </MobileDrawer.Title>
             <MobileDrawer.ScrollBody
+              onPointerDown={(
+                event: PointerEvent & { currentTarget: HTMLDivElement }
+              ) => {
+                // Corvu also hands off at the bottom; this thread hands off only
+                // at its top so paging through messages never resizes the sheet.
+                if (event.currentTarget.scrollTop > 0) event.stopPropagation();
+              }}
               ref={(element: HTMLDivElement) => {
                 setThread(element);
                 queueMicrotask(scrollToEnd);
@@ -168,7 +200,11 @@ export function MobileDiscussion(props: {
               {props.conversation.content()}
             </MobileDrawer.ScrollBody>
             <Show when={props.canWrite && !props.conversation.unavailable()}>
-              <MobileDrawer.KeyboardFooter ref={setFooter} class="px-3">
+              <MobileDrawer.KeyboardFooter
+                ref={setFooter}
+                class="px-3"
+                data-corvu-no-drag
+              >
                 <StaticMarkdownContext>
                   <EntityConversationComposer
                     parent={props.parent}

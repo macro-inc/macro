@@ -1,3 +1,4 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { ConversationPresentation } from '@core/messages/EntityConversation';
 import {
   setVirtualKeyboardHeight,
@@ -80,10 +81,13 @@ afterEach(() => {
   setVirtualKeyboardHeight(0);
   resizeObservers.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 // Geometry delivery is explicit; browser scroll anchoring still needs device verification.
 it('preserves paging and linked-comment positions while keeping keyboard scrolling', async () => {
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(800);
+  vi.stubGlobal('PointerEvent', MouseEvent);
   const newest: MessageListItem = {
     id: 'newest',
     parent: { type: 'initiative', id: 'project' },
@@ -112,6 +116,20 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
     state: { ...newest.state, root_id: 'older' },
   };
   const [messages, setMessages] = createSignal([newest]);
+  let drawer: ReturnType<typeof MobileDrawer.useContext> | undefined;
+  const Thread = () => {
+    drawer = MobileDrawer.useContext();
+    return (
+      <>
+        <button onClick={() => setMessages([older, newest])}>
+          Load earlier messages
+        </button>
+        <For each={messages()}>
+          {(message) => <p data-message-id={message.id}>{message.content}</p>}
+        </For>
+      </>
+    );
+  };
   const [target, setTarget] = createSignal<string | null>(null);
   const conversation: ConversationPresentation = {
     messages,
@@ -121,16 +139,7 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
     unavailable: () => false,
     failed: () => false,
     retry: () => {},
-    content: () => (
-      <>
-        <button onClick={() => setMessages([older, newest])}>
-          Load earlier messages
-        </button>
-        <For each={messages()}>
-          {(message) => <p data-message-id={message.id}>{message.content}</p>}
-        </For>
-      </>
-    ),
+    content: () => <Thread />,
   };
   render(() => (
     <MobileDiscussion
@@ -141,11 +150,28 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   ));
   fireEvent.click(screen.getByRole('button', { name: /Newest comment/ }));
   const sheet = await screen.findByRole('dialog');
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  expect(drawer?.activeSnapPoint()).toBe(0.5);
   const thread = sheet.querySelector<HTMLElement>('[data-drawer-scroll-body]')!;
   Object.defineProperty(thread, 'scrollHeight', {
     get: () => messages().length * 1000,
   });
   thread.scrollTop = 240;
+  // Snap changes resize the viewport without replacing or scrolling the thread.
+  drawer?.setActiveSnapPoint(0.5);
+  expect(drawer?.activeSnapPoint()).toBe(0.5);
+  drawer?.setActiveSnapPoint(1);
+  expect(thread.scrollTop).toBe(240);
+  drawer?.setActiveSnapPoint(0.5);
+  expect(thread.scrollTop).toBe(240);
+  thread.style.overflowY = 'auto';
+  fireEvent.pointerDown(thread, { button: 0, clientY: 500 });
+  fireEvent.pointerMove(thread, { clientY: 490 });
+  fireEvent.pointerMove(thread, { clientY: 100 });
+  fireEvent.pointerUp(thread);
+  expect(drawer?.activeSnapPoint()).toBe(0.5);
 
   fireEvent.click(
     screen.getByRole('button', { name: 'Load earlier messages' })
@@ -165,6 +191,8 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   setVirtualKeyboardVisible(true);
   await Promise.resolve();
   expect(thread.scrollTop).toBe(thread.scrollHeight);
+  expect(drawer?.activeSnapPoint()).toBe(1);
+  expect(drawer?.snapPoints()).toEqual([0, 1]);
   thread.scrollTop = 240;
   window.visualViewport?.dispatchEvent(new Event('resize'));
   expect(thread.scrollTop).toBe(thread.scrollHeight);
@@ -188,6 +216,7 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   });
   expect(thread.scrollTop).toBe(240);
   setVirtualKeyboardHeight(0);
+  expect(drawer?.activeSnapPoint()).toBe(1);
   setVirtualKeyboardVisible(false);
   await Promise.resolve();
   setVirtualKeyboardVisible(true);
@@ -195,4 +224,11 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   window.visualViewport?.dispatchEvent(new Event('resize'));
   await Promise.resolve();
   expect(thread.scrollTop).toBe(240);
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  expect(drawer?.activeSnapPoint()).toBe(0);
+  setVirtualKeyboardHeight(200);
+  expect(drawer?.activeSnapPoint()).toBe(0);
 });

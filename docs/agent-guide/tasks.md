@@ -1274,10 +1274,12 @@ collapses the section, and Load earlier messages adds older messages at the top.
 On phones, the newest root appears in a two-line card above an avatar group,
 View discussion, and a caret. Avatars come from loaded messages; neither the entry
 nor the Discussion sheet heading shows an overall count. Empty discussions show
-Start a discussion without avatars. Tap to open the full-height Discussion sheet;
-Start a discussion also raises the keyboard. The sheet stays fixed while only the
-pinned Add to the discussion… composer rises above the keyboard and the thread
-shrinks. The send action appears with text. Closing/reopening retains the draft.
+Start a discussion without avatars. Tap to open Discussion at half height; drag
+the handle or heading up to full height, back to half, or down to dismiss. The
+thread scrolls independently until its top. Start a discussion also raises the
+keyboard. Typing expands the sheet to full height and keeps it there after the
+keyboard closes; the pinned Add to the discussion… composer rises while the
+thread shrinks. Dragging can return to half height after typing. The send action appears with text. Closing/reopening retains the draft.
 Messages, replies, and reactions stay attached to the project identity.
 Notification links open Overview at the relevant discussion. Existing `activity`
 URLs also open Overview and preserve the target discussion. Project history is
