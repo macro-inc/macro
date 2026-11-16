@@ -17,7 +17,7 @@ imbl = { workspace = true }
 rustc-hash = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
-serde_json = { workspace = true, features = ["preserve_order"] }
+serde_json = { workspace = true, features = ["preserve_order", "unbounded_depth"] }
 thiserror = { workspace = true }
 bitflags = { workspace = true }
 strum = { workspace = true }

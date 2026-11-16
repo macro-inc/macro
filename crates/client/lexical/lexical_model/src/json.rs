@@ -5,6 +5,44 @@ mod write;
 pub use coercion::{js_string, js_to_number};
 /// Serialized field containing extensible node state.
 pub const NODE_STATE_KEY: &str = "$";
+/// Deepest JSON nesting accepted on import, about 500 nested elements. Upstream
+/// `JSON.parse` has no 128-level cap; this bound keeps hostile input off the stack.
+pub const MAX_JSON_DEPTH: usize = 1024;
+/// Deserialize document JSON past serde_json's 128-level default, up to `MAX_JSON_DEPTH`.
+pub fn from_json_str<'input, T: serde::Deserialize<'input>>(text: &'input str) -> Result<T, Error> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for byte in text.bytes() {
+        if in_string {
+            match byte {
+                _ if escaped => escaped = false,
+                b'\\' => escaped = true,
+                b'"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match byte {
+            b'"' => in_string = true,
+            b'[' | b'{' => {
+                depth += 1;
+                if depth > MAX_JSON_DEPTH {
+                    return Err(Error::Json(serde::de::Error::custom(format!(
+                        "JSON nesting deeper than {MAX_JSON_DEPTH} levels"
+                    ))));
+                }
+            }
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    deserializer.disable_recursion_limit();
+    let value = T::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(value)
+}
 /// Controls which fields a custom node importer accepts.
 #[derive(Clone, Copy, Debug)]
 pub struct JsonImport {
@@ -149,7 +187,7 @@ impl Editor {
         &mut self,
         document: &str,
     ) -> Result<EditorState, Error> {
-        self.state_from_serialized_document(&serde_json::from_str(document)?)
+        self.state_from_serialized_document(&from_json_str(document)?)
     }
 }
 /// Match JavaScript truthiness for JSON-representable values.

@@ -316,7 +316,7 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
             }
         }
         wire::EditorInputMsg::EditorSetState { json } => Input::SetState {
-            state: serde_json::from_str(&json)?,
+            state: lexical_model::json::from_json_str(&json)?,
             tags: TagSet::default(),
         },
         wire::EditorInputMsg::EditorSelection {

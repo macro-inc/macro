@@ -260,7 +260,7 @@ pub fn cognition_from_presigned_body(
     context: &crate::DocumentContext,
 ) -> Vec<CognitionNode> {
     let converted = (|| -> Result<Vec<CognitionNode>> {
-        let raw: SerializedEditorState = serde_json::from_str(body)?;
+        let raw: SerializedEditorState = lexical_model::json::from_json_str(body)?;
         let state = parse_export_state(&raw, context)?;
         to_cognition_text(&state)
     })();

@@ -293,3 +293,39 @@ fn flat_and_late_bound_state_preserve_generic_import_and_export() -> Result<(), 
     );
     Ok(())
 }
+
+// Upstream JSON.parse has no 128-level cap, so a deep document that exports must import
+// again.
+#[test]
+fn deeply_nested_export_imports_again() {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| -> Result<(), Error> {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("builder");
+            editor.update(|tx| {
+                let mut parent = NodeKey::ROOT;
+                for _ in 0..200 {
+                    let child = tx.create(Paragraph::default())?;
+                    tx.append(parent, &[child.key()])?;
+                    parent = child.key();
+                }
+                Ok(())
+            })?;
+            let text = editor.state().to_json_string()?;
+            let parsed = editor.parse_editor_state_str(&text)?;
+            assert_eq!(parsed.to_json_string()?, text);
+            let too_deep = format!(
+                "{{\"root\":{{\"type\":\"root\",\"children\":[],\"x\":{}{}}}}}",
+                "[".repeat(100_000),
+                "]".repeat(100_000)
+            );
+            assert!(editor.parse_editor_state_str(&too_deep).is_err());
+            Ok(())
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow")
+        .expect("round trip");
+}

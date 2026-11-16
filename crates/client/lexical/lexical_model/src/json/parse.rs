@@ -51,7 +51,7 @@ impl<'input> Deserialize<'input> for Document<'input> {
 }
 
 pub(super) fn editor_state(editor: &mut Editor, text: &str) -> Result<EditorState, Error> {
-    let document: Document<'_> = serde_json::from_str(text)?;
+    let document: Document<'_> = super::from_json_str(text)?;
     if document.root.string("type") != Some("root") {
         return Err(Error::ExpectedSerializedRoot);
     }

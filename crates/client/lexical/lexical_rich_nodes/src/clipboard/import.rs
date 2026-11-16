@@ -129,7 +129,8 @@ pub fn insert_data_transfer_for_rich_text(
         match entry.mime {
             MIME_LEXICAL => {
                 let imported = (|| -> Result<bool, Error> {
-                    let payload = serde_json::from_str::<LexicalClipboardPayload>(entry.data)?;
+                    let payload =
+                        lexical_model::json::from_json_str::<LexicalClipboardPayload>(entry.data)?;
                     if payload.namespace != namespace {
                         return Ok(false);
                     }
