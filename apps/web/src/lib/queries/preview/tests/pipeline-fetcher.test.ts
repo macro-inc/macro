@@ -30,7 +30,7 @@ it('previews a pipeline by name, and a trashed or missing one as deleted', async
     { type: 'crm_pipeline', id: 'sales' },
   ]);
   expect(getCrmPipeline).toHaveBeenCalledWith('sales');
-  expect(visible.get('sales')).toEqual({
+  expect(visible.previews.get('sales')).toEqual({
     id: 'sales',
     type: 'crm_pipeline',
     access: 'access',
@@ -46,7 +46,9 @@ it('previews a pipeline by name, and a trashed or missing one as deleted', async
   const trashed = await fetchRestPreviewBatch([
     { type: 'crm_pipeline', id: 'sales' },
   ]);
-  expect(trashed.get('sales')).toMatchObject({ access: 'does_not_exist' });
+  expect(trashed.previews.get('sales')).toMatchObject({
+    access: 'does_not_exist',
+  });
 
   getCrmPipeline.mockResolvedValueOnce(
     err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
@@ -54,7 +56,9 @@ it('previews a pipeline by name, and a trashed or missing one as deleted', async
   const missing = await fetchRestPreviewBatch([
     { type: 'crm_pipeline', id: 'gone' },
   ]);
-  expect(missing.get('gone')).toMatchObject({ access: 'does_not_exist' });
+  expect(missing.previews.get('gone')).toMatchObject({
+    access: 'does_not_exist',
+  });
 });
 
 it('previews a pipeline the viewer cannot read as no access', async () => {
@@ -64,7 +68,7 @@ it('previews a pipeline the viewer cannot read as no access', async () => {
   const denied = await fetchRestPreviewBatch([
     { type: 'crm_pipeline', id: 'private' },
   ]);
-  expect(denied.get('private')).toEqual({
+  expect(denied.previews.get('private')).toEqual({
     id: 'private',
     type: 'crm_pipeline',
     access: 'no_access',
