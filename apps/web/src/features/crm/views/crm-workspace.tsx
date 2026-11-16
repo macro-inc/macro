@@ -163,7 +163,7 @@ function CrmHeaderSearch(props: {
       label={props.label}
       value={props.value}
       onValueChange={props.onValueChange}
-      onEscape={view.host.focus}
+      focusResults={view.host.focus}
       registerFocus={(focus) => (focusSearch = focus)}
     />
   );

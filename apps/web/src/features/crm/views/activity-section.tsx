@@ -85,7 +85,7 @@ export function ActivitySection(
             label={props.searchLabel}
             value={props.search}
             onValueChange={props.onSearchChange}
-            onEscape={view.host.focus}
+            focusResults={view.host.focus}
             registerFocus={(focus) => (focusSearch = focus)}
           />
         </ListHeader>

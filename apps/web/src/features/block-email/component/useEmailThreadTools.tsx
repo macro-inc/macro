@@ -32,17 +32,16 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
-import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CalendarPlusIcon from '@icon/system/regular/calendar-plus.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
-import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -251,14 +250,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   const actions = {
     markDone: {
       label: 'Mark Done',
-      icon: CheckIcon,
+      icon: CheckCircleIcon,
       action: toggleMarkDone,
       condition: () => isOwnThread() && !isDone(),
       hotkeyToken: TOKENS.entity.action.markDone,
     },
     markNotDone: {
       label: 'Mark Not Done',
-      icon: CheckBoldIcon,
+      icon: ArrowCounterClockwise,
       action: toggleMarkDone,
       condition: () =>
         isOwnThread() && isDone() && emailCtx.canMarkThreadNotDone(),
@@ -266,14 +265,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     },
     markUnread: {
       label: 'Mark Unread',
-      icon: EnvelopeSimpleOpenIcon,
+      icon: EnvelopeIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markUnread,
     },
     markRead: {
       label: 'Mark Read',
-      icon: EnvelopeSimpleIcon,
+      icon: EnvelopeOpenIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markRead,
@@ -314,7 +313,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     moveToFolder: {
       group: 'file',
       label: 'Move to folder',
-      icon: ArrowRightIcon,
+      icon: FolderIcon,
       action: moveToFolder,
       condition: () => {
         const entity = emailEntity();
