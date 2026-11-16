@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT membership.user_id FROM team_user membership JOIN \"User\" profile ON profile.id=membership.user_id\n            WHERE membership.team_id=$1 AND NOT profile.\"isAgent\" AND (membership.team_role IN ('owner','admin') OR membership.user_id=$2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3e62304de5814ab5764ce4a4e03ec53fcdcc233160ed59328673a259429a64c0"
+}

@@ -509,6 +509,7 @@ export function VaultSidebar(
   props: Parameters<typeof VaultSidebarContent>[0] & {
     destination: string;
     onCreate: (kind: PasswordKind) => void;
+    onImport: () => void;
   }
 ) {
   return (
@@ -524,6 +525,7 @@ export function VaultSidebar(
           presentation="sidebar"
           destination={props.destination}
           onCreate={props.onCreate}
+          onImport={props.onImport}
         />
       </ViewSidebar.Primary>
       <ViewSidebar.Content>

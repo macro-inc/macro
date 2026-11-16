@@ -167,3 +167,15 @@ fn result_budget_must_fit_in_a_frame() {
         .is_ok()
     );
 }
+
+#[test]
+fn every_operation_gets_at_least_one_call() {
+    assert!(matches!(
+        Limits {
+            max_calls_per_operation: 0,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+}

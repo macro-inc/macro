@@ -42,8 +42,9 @@ export type QueueController = {
   /** Whether the server queue still holds this action, shown or not. */
   waiting: (actionId: string) => boolean;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
-   *  the gateway's snapshot reconciles it, not an error. */
-  edit: (actionId: string, prompt: string) => Promise<void>;
+   *  the gateway's snapshot reconciles it, not an error — and resolves
+   *  true; false means the server kept the old text. */
+  edit: (actionId: string, prompt: string) => Promise<boolean>;
   /** Remove a queued action. Same 404 semantics as `edit`. */
   remove: (actionId: string) => Promise<void>;
   /**
@@ -135,15 +136,17 @@ export function createQueueController(options: {
   // No refetch after either mutation: the server publishes a snapshot for
   // every accepted change, and a 404 means the entry dispatched — the
   // dispatch's own snapshot (and the fold dedupe) already retire the row.
-  const edit = async (actionId: string, prompt: string) => {
+  const edit = async (actionId: string, prompt: string): Promise<boolean> => {
     const sessionId = untrack(options.sessionId);
-    if (!sessionId) return;
+    if (!sessionId) return false;
     const result = await agentHarnessServiceClient
       .editQueued(sessionId, actionId, prompt)
       .catch(() => undefined);
     if (result === undefined || (result.isErr() && !isDispatched(result))) {
       toast.failure('The queued message could not be edited');
+      return false;
     }
+    return true;
   };
 
   const remove = async (actionId: string) => {

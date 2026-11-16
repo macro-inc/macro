@@ -1,4 +1,7 @@
-import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import {
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
 import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
@@ -59,6 +62,7 @@ export function ChannelTitleMenu(props: { channelId: string }) {
               {(seed) => (
                 <MenuItem
                   text={t('entityActions.askMacro')}
+                  icon={ChatWithAgentIcon}
                   onClick={() =>
                     fireAndForget(
                       openChatWithAgent(seed()),
