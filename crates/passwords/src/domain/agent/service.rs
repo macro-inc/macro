@@ -1,6 +1,8 @@
 //! Agent vault use cases. Every agent call runs under one 30-second deadline and
 //! admits in a fixed order: flags, directory, wake, provider presence, then the
-//! catalog, policy, kind and selector checks, provider I/O and post-I/O rechecks.
+//! catalog, policy, kind and selector checks and provider I/O. Authority is
+//! rechecked after the provider reads of disclosure, verification codes and an
+//! update's own read; writes are authorized when staged and are not retroactive.
 use super::{
     AccessRequestBody, AdmittedAgent, AgentAccessRequestState, AgentAction, AgentCreateItem,
     AgentError, AgentKind, AgentPatchItem, AgentPolicy, AgentSearchHit, AgentSearchPage,
@@ -11,6 +13,7 @@ use crate::domain::{
     models::{
         Grant, GranteeKind, ItemId, ItemKind, ItemMetadata, Permission, Record, TeamId, TotpKeyId,
     },
+    ports::IntentOrigin,
     service::PasswordService,
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -619,6 +622,23 @@ impl AgentVaultService {
                     && operation == body.operation_id
                     && version == expected
                 {
+                    // Only this agent's own update replays: never a human's write,
+                    // another agent's, or its own create.
+                    let own = self
+                        .vault
+                        .repository
+                        .intent_origin(team, item, body.operation_id)
+                        .await?
+                        .is_some_and(|origin| {
+                            origin
+                                == IntentOrigin::Agent {
+                                    agent: agent.agent_user_id.clone(),
+                                    action: AgentAction::AgentUpdate,
+                                }
+                        });
+                    if !own {
+                        return Err(AgentError::Conflict);
+                    }
                     tracing::Span::current().record("replayed", true);
                     return self
                         .written(&agent, record, body.operation_id, AgentAction::AgentUpdate)

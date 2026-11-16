@@ -441,6 +441,10 @@ pub struct AgentItemAccess {
     pub permission_revision: i64,
     /// Live request awaiting review.
     pub pending_request_id: Option<Uuid>,
+    /// The agent's current Agent grant on the item, if any. It shows what a
+    /// reviewer can remove and is no authority: use also needs creator
+    /// attribution or standing approval (`status`).
+    pub grant_permission: Option<Permission>,
 }
 
 /// Metadata-only search hit; never values, usernames, notes or custom fields.
@@ -627,7 +631,7 @@ pub struct RevokeBody {
 }
 
 /// Fixed agent audit actions; never derived from values.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentAction {
     /// Item metadata returned by search.
@@ -767,7 +771,8 @@ impl AgentPolicy {
                 UseBasis::ApprovedGrant
             });
         }
-        if self.pending_request.is_some() || self.grant.is_some() {
+        // Pending only while a request awaits review, as `access()` reports it.
+        if self.pending_request.is_some() {
             return Err(AgentError::Pending);
         }
         Err(AgentError::NotGranted)
@@ -806,6 +811,7 @@ impl AgentPolicy {
             can_set_totp: edit && self.creator,
             permission_revision: self.permission_revision,
             pending_request_id: if usable { None } else { self.pending_request },
+            grant_permission: self.grant,
         }
     }
 }

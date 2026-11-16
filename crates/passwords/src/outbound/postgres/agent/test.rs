@@ -479,3 +479,306 @@ async fn staging_refuses_an_operation_id_already_naming_an_audit_entry(pool: PgP
         .await
         .expect("fresh operation stages");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn human_and_agent_publication_never_share_an_enrollment_or_intent_id(pool: PgPool) {
+    let (repository, owner, record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let item = record.metadata.id;
+    let agent = account(&pool, "macro|agent@example.test", true).await;
+    let setup = IntentAgent {
+        agent: agent.clone(),
+        wake: crate::domain::agent::WakeId(Uuid::now_v7()),
+        action: AgentAction::AgentTotpSetup,
+    };
+    let enrolled = TotpKeyId(Uuid::now_v7());
+    AgentRepository::stage_totp(&repository, team, item, enrolled, &setup)
+        .await
+        .expect("stage");
+    let revision = repository.get(team, item).await.expect("item").revision;
+    repository
+        .activate_totp(team, item, enrolled, revision)
+        .await
+        .expect("activate");
+    let mut next = repository.get(team, item).await.expect("item");
+    next.metadata.version = 2;
+
+    // A human update named by the agent's enrollment id would lose its audit.
+    let aliased = Repository::stage(&repository, enrolled.0, &next, &owner.user_id).await;
+    assert!(matches!(aliased, Err(Error::Conflict)));
+    let intents = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_write_intents WHERE operation_id=$1",
+        enrolled.0
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("intents");
+    assert_eq!(intents, 0);
+
+    // A human intent's id cannot become an enrollment, even without the lease.
+    let staged = Uuid::now_v7();
+    Repository::stage(&repository, staged, &next, &owner.user_id)
+        .await
+        .expect("human stage");
+    let inverse =
+        AgentRepository::stage_totp(&repository, team, item, TotpKeyId(staged), &setup).await;
+    assert!(matches!(inverse, Err(Error::Conflict)));
+    let enrollments = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$2",
+        team.0,
+        staged
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("enrollments");
+    assert_eq!(enrollments, 0);
+
+    // The human's own audited update still replays.
+    Repository::audit(&repository, team, item, &owner, Action::Update, staged)
+        .await
+        .expect("audit");
+    Repository::stage(&repository, staged, &next, &owner.user_id)
+        .await
+        .expect("own replay");
+}
+
+/// Which lock a staging writer is seen waiting on in this test's database.
+#[derive(Clone, Copy)]
+enum Wait {
+    /// A relation lock on `password_write_intents`.
+    Intents,
+    /// A relation lock on `password_totp_enrollments`.
+    Enrollments,
+    /// An advisory lock.
+    Advisory,
+}
+
+async fn waiting(pool: &PgPool, wait: Wait) -> bool {
+    match wait {
+        Wait::Intents | Wait::Enrollments => {
+            let relation = match wait {
+                Wait::Intents => "password_write_intents",
+                _ => "password_totp_enrollments",
+            };
+            sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM pg_locks l JOIN pg_class c ON c.oid=l.relation
+                    WHERE l.database=(SELECT oid FROM pg_database WHERE datname=current_database())
+                    AND c.relname=$1 AND NOT l.granted) AS "waiting!""#,
+                relation
+            )
+            .fetch_one(pool)
+            .await
+            .expect("pg_locks")
+        }
+        Wait::Advisory => sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM pg_locks l
+                WHERE l.database=(SELECT oid FROM pg_database WHERE datname=current_database())
+                AND l.locktype='advisory' AND NOT l.granted) AS "waiting!""#
+        )
+        .fetch_one(pool)
+        .await
+        .expect("pg_locks"),
+    }
+}
+
+/// Bounded barrier: returns once `wait` is observed, or once `done` reports the
+/// writer already finished without waiting. Fails after five seconds; no fixed sleep
+/// decides the outcome, only the observed lock state does.
+async fn until_waiting(pool: &PgPool, wait: Wait, done: impl Fn() -> bool) {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !done() && !waiting(pool, wait).await {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("writer neither waited nor finished");
+}
+
+async fn reservations(pool: &PgPool, team: TeamId, operation: Uuid) -> (i64, i64) {
+    let intents = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_write_intents WHERE operation_id=$1",
+        operation
+    )
+    .fetch_one(pool)
+    .await
+    .expect("intents");
+    let enrollments = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$2",
+        team.0,
+        operation
+    )
+    .fetch_one(pool)
+    .await
+    .expect("enrollments");
+    (intents, enrollments)
+}
+
+/// The writer of `first` is held inside its INSERT by a table lock; `second`
+/// runs meanwhile with the same operation id. At most one may reserve it, and
+/// the other is refused (Conflict, or Busy when it waited past the lock budget).
+async fn overlap<First, Second>(
+    pool: &PgPool,
+    team: TeamId,
+    operation: Uuid,
+    held: Wait,
+    first: First,
+    second: Second,
+) where
+    First: std::future::Future<Output = Result<(), Error>> + Send + 'static,
+    Second: std::future::Future<Output = Result<(), Error>> + Send + 'static,
+{
+    let mut blocker = pool.begin().await.expect("blocker");
+    match held {
+        Wait::Intents => sqlx::query!("LOCK TABLE password_write_intents IN SHARE MODE")
+            .execute(&mut *blocker)
+            .await
+            .expect("lock intents"),
+        _ => sqlx::query!("LOCK TABLE password_totp_enrollments IN SHARE MODE")
+            .execute(&mut *blocker)
+            .await
+            .expect("lock enrollments"),
+    };
+    let first = tokio::spawn(first);
+    until_waiting(pool, held, || first.is_finished()).await;
+    assert!(
+        !first.is_finished(),
+        "the first writer must be held in its insert"
+    );
+    let second = tokio::spawn(second);
+    until_waiting(pool, Wait::Advisory, || second.is_finished()).await;
+    blocker.rollback().await.expect("release");
+    let first = first.await.expect("first writer");
+    let second = second.await.expect("second writer");
+    let (intents, enrollments) = reservations(pool, team, operation).await;
+    eprintln!(
+        "overlap: first={first:?} second={second:?} intents={intents} enrollments={enrollments}"
+    );
+    assert!(
+        intents + enrollments <= 1,
+        "one operation id reserved twice: {intents} intents, {enrollments} enrollments"
+    );
+    let refused = [&first, &second]
+        .into_iter()
+        .filter(|result| matches!(result, Err(Error::Conflict | Error::Busy)))
+        .count();
+    assert_eq!(refused, 1, "exactly one writer is refused");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_overlapping_human_intent_and_enrollment_reserve_one_operation(pool: PgPool) {
+    let (repository, owner, record) = folder_fixture(pool.clone()).await;
+    let repository = Arc::new(repository);
+    let team = record.metadata.team_id;
+    let item = record.metadata.id;
+    let agent = account(&pool, "macro|agent@example.test", true).await;
+    let setup = IntentAgent {
+        agent,
+        wake: crate::domain::agent::WakeId(Uuid::now_v7()),
+        action: AgentAction::AgentTotpSetup,
+    };
+    let mut next = record.clone();
+    next.metadata.version = 2;
+
+    // Human intent held in its insert, enrollment of the same id meanwhile.
+    let operation = Uuid::now_v7();
+    let (human, totp) = (repository.clone(), repository.clone());
+    let (publisher, staged) = (owner.user_id.clone(), next.clone());
+    let key_setup = setup.clone();
+    overlap(
+        &pool,
+        team,
+        operation,
+        Wait::Intents,
+        async move { Repository::stage(&*human, operation, &staged, &publisher).await },
+        async move {
+            AgentRepository::stage_totp(&*totp, team, item, TotpKeyId(operation), &key_setup).await
+        },
+    )
+    .await;
+
+    // Enrollment held in its insert, human intent of the same id meanwhile.
+    let operation = Uuid::now_v7();
+    let (human, totp) = (repository.clone(), repository.clone());
+    let (publisher, staged) = (owner.user_id.clone(), next.clone());
+    overlap(
+        &pool,
+        team,
+        operation,
+        Wait::Enrollments,
+        async move {
+            AgentRepository::stage_totp(&*totp, team, item, TotpKeyId(operation), &setup).await
+        },
+        async move { Repository::stage(&*human, operation, &staged, &publisher).await },
+    )
+    .await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_overlapping_agent_update_and_enrollment_reserve_one_operation(pool: PgPool) {
+    let (repository, _, mut record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let agent = account(&pool, "macro|agent@example.test", true).await;
+    // An item the agent created, with the agent's own Edit grant.
+    record.metadata.id = ItemId(Uuid::now_v7());
+    record.user_id = agent.clone();
+    record.grants = vec![Grant {
+        kind: GranteeKind::Agent,
+        id: agent.to_string(),
+        permission: Permission::Edit,
+    }];
+    repository.save(&record, None).await.expect("agent item");
+    let item = record.metadata.id;
+    let current = repository.get(team, item).await.expect("item");
+    let mut next = current.clone();
+    next.metadata.version = current.metadata.version + 1;
+    let update = IntentAgent {
+        agent: agent.clone(),
+        wake: crate::domain::agent::WakeId(Uuid::now_v7()),
+        action: AgentAction::AgentUpdate,
+    };
+    let setup = IntentAgent {
+        action: AgentAction::AgentTotpSetup,
+        ..update.clone()
+    };
+    let repository = Arc::new(repository);
+    let operation = Uuid::now_v7();
+    let (stager, totp) = (repository.clone(), repository.clone());
+    overlap(
+        &pool,
+        team,
+        operation,
+        Wait::Intents,
+        async move { AgentRepository::stage(&*stager, operation, &next, &update).await },
+        async move {
+            AgentRepository::stage_totp(&*totp, team, item, TotpKeyId(operation), &setup).await
+        },
+    )
+    .await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_held_operation_lock_is_busy_after_the_lock_budget_with_no_journal(pool: PgPool) {
+    let (repository, owner, record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let operation = Uuid::now_v7();
+    let mut holder = pool.begin().await.expect("holder");
+    let key = format!("passwords/operation/{operation}");
+    sqlx::query!(
+        r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+        key
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .expect("hold operation lock");
+    let mut next = record.clone();
+    next.metadata.version = 2;
+    let started = std::time::Instant::now();
+    let staged = Repository::stage(&repository, operation, &next, &owner.user_id).await;
+    let waited = started.elapsed();
+    eprintln!("held operation lock: {staged:?} after {waited:?}");
+    assert!(matches!(staged, Err(Error::Busy)), "{staged:?}");
+    // The 2s lock budget, not the 5s statement budget, ended the wait.
+    assert!(waited < std::time::Duration::from_secs(5), "{waited:?}");
+    holder.rollback().await.expect("release");
+    assert_eq!(reservations(&pool, team, operation).await, (0, 0));
+}

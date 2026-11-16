@@ -284,8 +284,16 @@ impl AgentVaultService {
             .await?
             .into_iter()
             .next()
-            .map(|(_, row)| row)
-            .unwrap_or_default();
+            .map(|(_, row)| row);
+        // Only an agent this item knows can be revoked: one with an access row
+        // or a retained Agent grant. Anything else would write a row for it.
+        let granted = record
+            .grants
+            .iter()
+            .any(|grant| matches!(grant.kind, GranteeKind::Agent) && grant.id == agent.as_ref());
+        let Some(row) = row.or_else(|| granted.then(AgentAccessRow::default)) else {
+            return Err(AgentError::NotFound);
+        };
         if body.scope == RevokeScope::GrantAndApproval {
             Self::set_agent_grant(&mut record, &agent, None);
         }

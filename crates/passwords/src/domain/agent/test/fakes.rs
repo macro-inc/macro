@@ -3,8 +3,7 @@ use crate::domain::{
         AgentAccessRow, AgentAction, DirectoryAgent, StoredRequest, StoredRequestStatus, ports::*,
     },
     models::*,
-    ports::Repository,
-    service::test::fakes::FakeRepository,
+    service::test::fakes::{FakeEnrollment, FakeRepository},
 };
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -110,6 +109,7 @@ impl AgentRepository for FakeAgents {
         {
             return Err(Error::NotFound);
         }
+        let _reserved = self.items.reservations.lock().unwrap();
         if publisher.action == crate::domain::agent::AgentAction::AgentUpdate
             && self.audit_identity_taken(record.metadata.id, operation, publisher)
         {
@@ -127,6 +127,11 @@ impl AgentRepository for FakeAgents {
         } else {
             staged.insert(operation, record.clone());
             publishers.insert(operation, (publisher.agent.to_string(), publisher.action));
+            self.items
+                .intent_agents
+                .lock()
+                .unwrap()
+                .insert(operation, (publisher.agent.to_string(), publisher.action));
         }
         Ok(())
     }
@@ -137,7 +142,10 @@ impl AgentRepository for FakeAgents {
         key: TotpKeyId,
         publisher: &IntentAgent,
     ) -> Result<(), Error> {
-        if self.audit_identity_taken(item, key.0, publisher) {
+        let _reserved = self.items.reservations.lock().unwrap();
+        if self.audit_identity_taken(item, key.0, publisher)
+            || self.items.staged.lock().unwrap().contains_key(&key.0)
+        {
             return Err(Error::Conflict);
         }
         let existing = self
@@ -169,7 +177,18 @@ impl AgentRepository for FakeAgents {
             }
             return Ok(());
         }
-        self.items.stage_totp(team, item, key).await?;
+        // The human fake's staging, inline so the reservation guard spans no await.
+        self.items.calls.fetch_add(1, Ordering::SeqCst);
+        self.items.enrollments.lock().unwrap().insert(
+            key.0,
+            FakeEnrollment {
+                team_id: team,
+                item_id: item,
+                active: false,
+                grace_elapsed: false,
+                cleanup_started: false,
+            },
+        );
         self.publishers
             .lock()
             .unwrap()

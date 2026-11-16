@@ -368,6 +368,15 @@ impl PasswordService {
                 && operation == command.operation_id
                 && version == record.metadata.version
             {
+                // Never an agent's write. A human intent names no publisher, so a
+                // replay of another human's id keeps the legacy behavior.
+                if let Some(IntentOrigin::Agent { .. }) = self
+                    .repository
+                    .intent_origin(team, item, command.operation_id)
+                    .await?
+                {
+                    return Err(Error::Conflict);
+                }
                 self.repository
                     .audit(team, item, actor, Action::Update, command.operation_id)
                     .await?;

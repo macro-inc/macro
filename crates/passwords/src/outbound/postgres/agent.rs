@@ -181,7 +181,8 @@ impl AgentRepository for PgRepository {
         publisher: &IntentAgent,
     ) -> Result<(), Error> {
         let agent = &publisher.agent;
-        let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
+        let mut transaction = self.bounded_transaction().await?;
+        super::reserve_operation(&mut transaction, operation).await?;
         // Serialize with team closure exactly like human publication; the
         // publisher must be an agent account, so this never admits a human.
         let admitted = sqlx::query_scalar!(
@@ -193,7 +194,7 @@ impl AgentRepository for PgRepository {
         )
         .fetch_one(&mut *transaction)
         .await
-        .map_err(|_| Error::Unavailable)?;
+        .map_err(database_error)?;
         if !admitted {
             tracing::Span::current().record("outcome", "admission_revoked");
             return Err(Error::NotFound);
@@ -244,7 +245,7 @@ impl AgentRepository for PgRepository {
             }),
         )
         .await?;
-        transaction.commit().await.map_err(|_| Error::Unavailable)?;
+        transaction.commit().await.map_err(database_error)?;
         tracing::Span::current().record("outcome", "published");
         Ok(())
     }
@@ -692,12 +693,15 @@ impl AgentRepository for PgRepository {
         // A new generation, or this same agent's own pending setup of this item
         // (whose original wake is kept). Any other existing key is a conflict, so
         // a stale caller can never proceed to overwrite another enrollment's seed.
-        // A key already naming another audit entry of the item is refused too.
-        let staged = sqlx::query!(r#"INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after,agent_user_id,wake_id) SELECT $1,$2,$3,'pending',now()+interval '180 seconds',$4,$5 WHERE NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3 AND NOT (action='agent_totp_setup' AND user_id=$4)) ON CONFLICT(team_id,key_id) DO UPDATE SET key_id=password_totp_enrollments.key_id WHERE password_totp_enrollments.item_id=excluded.item_id AND password_totp_enrollments.state='pending' AND password_totp_enrollments.agent_user_id=excluded.agent_user_id"#,team.0,item.0,key.0,publisher.agent.as_ref(),publisher.wake.0).execute(&self.pool).await.map_err(database_error)?;
+        // A key already naming another audit entry of the item, or any write
+        // intent, is refused too. The operation lock comes first.
+        let mut transaction = self.bounded_transaction().await?;
+        super::reserve_operation(&mut transaction, key.0).await?;
+        let staged = sqlx::query!(r#"INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after,agent_user_id,wake_id) SELECT $1,$2,$3,'pending',now()+interval '180 seconds',$4,$5 WHERE NOT EXISTS(SELECT 1 FROM password_write_intents WHERE operation_id=$3) AND NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3 AND NOT (action='agent_totp_setup' AND user_id=$4)) ON CONFLICT(team_id,key_id) DO UPDATE SET key_id=password_totp_enrollments.key_id WHERE password_totp_enrollments.item_id=excluded.item_id AND password_totp_enrollments.state='pending' AND password_totp_enrollments.agent_user_id=excluded.agent_user_id"#,team.0,item.0,key.0,publisher.agent.as_ref(),publisher.wake.0).execute(&mut *transaction).await.map_err(database_error)?;
         if staged.rows_affected() != 1 {
             return Err(Error::Conflict);
         }
-        Ok(())
+        transaction.commit().await.map_err(database_error)
     }
 
     async fn enrollment(

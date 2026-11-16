@@ -62,6 +62,13 @@ pub trait Repository: Send + Sync {
         record: &Record,
         publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), Error>;
+    /// Who published the intent of this team, item and operation, if one exists.
+    async fn intent_origin(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        operation: uuid::Uuid,
+    ) -> Result<Option<IntentOrigin>, Error>;
     /// Load the metadata intent belonging to this team, item, and operation.
     async fn staged(
         &self,
@@ -178,4 +185,19 @@ pub trait Availability: Send + Sync {
     async fn require_enabled(&self, actor: &Actor) -> Result<(), Error>;
     /// Require provider configuration before lifecycle side effects, without evaluating flags.
     fn require_provider(&self) -> Result<(), Error>;
+}
+
+/// Who published a write intent. Human intents name no publisher, only that no
+/// agent published them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntentOrigin {
+    /// A human's create or update.
+    Human,
+    /// An agent's write, with its stored action.
+    Agent {
+        /// The publishing agent account.
+        agent: macro_user_id::user_id::MacroUserIdStr<'static>,
+        /// The action it staged.
+        action: super::agent::AgentAction,
+    },
 }

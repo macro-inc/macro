@@ -439,11 +439,12 @@ async fn shared_grant_needs_standing_approval_and_approval_grants_it() {
         vec![team_edit(), agent_grant(Permission::View)],
         values("key-1", "secret-1"),
     );
+    // A grant without approval and no request is not granted, not pending.
     let result = vault
         .service
         .disclose(call(), item, disclose_password())
         .await;
-    assert!(matches!(result, Err(AgentError::Pending)));
+    assert!(matches!(result, Err(AgentError::NotGranted)));
 
     let Requested::Pending(state) = vault
         .service
@@ -539,12 +540,12 @@ async fn unsupported_kinds_are_requestable_but_never_disclosed_or_updated() {
         vec![team_edit(), agent_grant(Permission::Edit)],
         values("4111", "123"),
     );
-    // Policy errors precede kind errors.
-    let pending = vault
+    // Policy errors precede kind errors; nothing awaits review, so not granted.
+    let unapproved = vault
         .service
         .disclose(call(), item, disclose_password())
         .await;
-    assert!(matches!(pending, Err(AgentError::Pending)));
+    assert!(matches!(unapproved, Err(AgentError::NotGranted)));
     vault.agents.rows.lock().unwrap().insert(
         (item.0, AGENT.into()),
         AgentAccessRow {
@@ -1474,4 +1475,339 @@ fn a_patch_clears_the_optional_identifier_but_never_the_secret() {
         ));
         assert_eq!(stored.password.0, "secret");
     }
+}
+
+fn human_write(operation: Uuid, expected_version: i32) -> WriteItem {
+    WriteItem {
+        operation_id: operation,
+        name: "Item".into(),
+        kind: ItemKind::Login,
+        url: None,
+        folder_id: None,
+        favorite: false,
+        private: false,
+        expected_version: Some(expected_version),
+        values: values("u", "human"),
+    }
+}
+
+fn agent_patch(operation: Uuid, expected_version: i32) -> Result<AgentPatchItem, AgentError> {
+    serde_json::from_value(serde_json::json!({
+        "operationId": operation,
+        "expectedVersion": expected_version,
+        "secretPatch": {"kind": "login", "password": "agent"},
+    }))
+    .map_err(|_| AgentError::Invalid)
+}
+
+#[tokio::test]
+async fn an_agent_update_never_replays_a_human_write() {
+    let vault = vault();
+    let item = creator_login(&vault, 1);
+    let human = Actor {
+        user_id: user(HUMAN),
+    };
+    let operation = Uuid::now_v7();
+    vault
+        .service
+        .vault
+        .update(&human, TEAM, item, human_write(operation, 1))
+        .await
+        .unwrap();
+    let replayed = vault
+        .service
+        .update(call(), item, agent_patch(operation, 1))
+        .await;
+    assert!(matches!(replayed, Err(AgentError::Conflict)));
+}
+
+#[tokio::test]
+async fn a_human_update_never_replays_an_agent_write() {
+    let vault = vault();
+    let item = creator_login(&vault, 1);
+    let operation = Uuid::now_v7();
+    vault
+        .service
+        .update(call(), item, agent_patch(operation, 1))
+        .await
+        .unwrap();
+    let human = Actor {
+        user_id: user(HUMAN),
+    };
+    let replayed = vault
+        .service
+        .vault
+        .update(&human, TEAM, item, human_write(operation, 1))
+        .await;
+    assert!(matches!(replayed, Err(Error::Conflict)));
+}
+
+#[tokio::test]
+async fn an_agent_update_never_replays_its_own_create() {
+    let vault = vault();
+    let operation = Uuid::now_v7();
+    let Written::Created(created) = vault
+        .service
+        .create(
+            call(),
+            serde_json::from_value(serde_json::json!({
+                "operationId": operation,
+                "name": "Example",
+                "secret": {"kind": "login", "password": "hunter2"},
+            }))
+            .map_err(|_| AgentError::Invalid),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new item");
+    };
+    let replayed = vault
+        .service
+        .update(call(), created.item.id, agent_patch(operation, 0))
+        .await;
+    assert!(matches!(replayed, Err(AgentError::Conflict)));
+}
+
+#[tokio::test]
+async fn a_grant_whose_approval_was_revoked_reports_and_fails_as_not_granted() {
+    let vault = vault();
+    let item = insert(
+        &vault,
+        1,
+        HUMAN,
+        ItemKind::Login,
+        vec![team_edit()],
+        values("u", "p"),
+    );
+    approved_request(&vault, item).await;
+    let revision = vault
+        .agents
+        .rows
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .unwrap()
+        .permission_revision;
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+    vault
+        .service
+        .revoke(
+            &admin,
+            TEAM,
+            item,
+            Ok(user(AGENT)),
+            Ok(RevokeBody {
+                expected_permission_revision: revision,
+                scope: RevokeScope::Approval,
+            }),
+        )
+        .await
+        .unwrap();
+    let hit = vault
+        .service
+        .search(call(), SearchQuery::parse(None, None, None))
+        .await
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|hit| hit.id == item)
+        .unwrap();
+    assert_eq!(hit.access.status, AccessStatus::RequestAccess);
+    let result = vault
+        .service
+        .disclose(call(), item, disclose_password())
+        .await;
+    assert!(matches!(result, Err(AgentError::NotGranted)));
+}
+
+#[tokio::test]
+async fn revoking_an_agent_with_no_access_row_or_grant_is_not_found() {
+    let vault = vault();
+    let item = insert(
+        &vault,
+        1,
+        HUMAN,
+        ItemKind::Login,
+        vec![team_edit()],
+        values("u", "p"),
+    );
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+    let revoked = vault
+        .service
+        .revoke(
+            &admin,
+            TEAM,
+            item,
+            Ok(user("macro|stranger@example.test")),
+            Ok(RevokeBody {
+                expected_permission_revision: 0,
+                scope: RevokeScope::GrantAndApproval,
+            }),
+        )
+        .await;
+    assert!(matches!(revoked, Err(AgentError::NotFound)));
+    assert!(vault.agents.rows.lock().unwrap().is_empty());
+    assert!(vault.agents.audits.lock().unwrap().is_empty());
+}
+
+/// The `access` JSON a reviewer reads for the agent on `item`.
+async fn reviewed_access(vault: &Vault, item: ItemId) -> serde_json::Value {
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+    let page = vault
+        .service
+        .pending_requests(
+            &admin,
+            TEAM,
+            service::review::ReviewQuery::parse(Some(item.0.to_string()), None, None),
+        )
+        .await
+        .unwrap();
+    let state = page
+        .requests
+        .into_iter()
+        .find(|state| state.agent_account_id.as_ref() == AGENT)
+        .unwrap();
+    serde_json::to_value(&state.access).unwrap()
+}
+
+#[tokio::test]
+async fn access_reports_the_current_grant_apart_from_authority() {
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+
+    // A creator grant is named with its permission.
+    let vault = vault();
+    let created = creator_login(&vault, 1);
+    let access = reviewed_access(&vault, created).await;
+    assert_eq!(access["grantPermission"], "edit");
+    assert_eq!(access["status"], "usable");
+
+    // An approval-only revoke keeps the grant: named, but not usable.
+    let item = insert(
+        &vault,
+        2,
+        HUMAN,
+        ItemKind::Login,
+        vec![team_edit()],
+        values("u", "p"),
+    );
+    approved_request(&vault, item).await;
+    let revision = reviewed_access(&vault, item).await["permissionRevision"]
+        .as_i64()
+        .unwrap();
+    vault
+        .service
+        .revoke(
+            &admin,
+            TEAM,
+            item,
+            Ok(user(AGENT)),
+            Ok(RevokeBody {
+                expected_permission_revision: revision,
+                scope: RevokeScope::Approval,
+            }),
+        )
+        .await
+        .unwrap();
+    let access = reviewed_access(&vault, item).await;
+    assert_eq!(access["grantPermission"], "edit");
+    assert_eq!(access["status"], "request_access");
+    assert!(access["useBasis"].is_null());
+
+    // Removing the grant too clears it.
+    let revision = access["permissionRevision"].as_i64().unwrap();
+    vault
+        .service
+        .revoke(
+            &admin,
+            TEAM,
+            item,
+            Ok(user(AGENT)),
+            Ok(RevokeBody {
+                expected_permission_revision: revision,
+                scope: RevokeScope::GrantAndApproval,
+            }),
+        )
+        .await
+        .unwrap();
+    assert!(reviewed_access(&vault, item).await["grantPermission"].is_null());
+
+    // A grant kept through a pending, then a denied, request is still named.
+    let shared = insert(
+        &vault,
+        3,
+        HUMAN,
+        ItemKind::Login,
+        vec![team_edit(), agent_grant(Permission::View)],
+        values("u", "p"),
+    );
+    let Requested::Pending(state) = vault
+        .service
+        .request_access(
+            call(),
+            shared,
+            Ok(AccessRequestBody {
+                permission: Permission::Edit,
+            }),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a pending request");
+    };
+    let access = reviewed_access(&vault, shared).await;
+    assert_eq!(access["grantPermission"], "view");
+    assert_eq!(access["status"], "pending");
+    vault
+        .service
+        .resolve(
+            &admin,
+            TEAM,
+            shared,
+            state.request_id.unwrap(),
+            Ok(ResolveRequest::Deny {
+                revision: state.revision,
+            }),
+        )
+        .await
+        .unwrap();
+    let access = reviewed_access(&vault, shared).await;
+    assert_eq!(access["grantPermission"], "view");
+    assert_eq!(access["status"], "request_access");
+
+    // The agent sees the same field on its own hits, and nothing more.
+    let hit = vault
+        .service
+        .search(call(), SearchQuery::parse(None, None, None))
+        .await
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|hit| hit.id == shared)
+        .unwrap();
+    let own = serde_json::to_value(&hit.access).unwrap();
+    assert_eq!(own["grantPermission"], "view");
+    let mut keys: Vec<_> = own.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "canSetTotp",
+            "canUpdate",
+            "grantPermission",
+            "pendingRequestId",
+            "permissionRevision",
+            "status",
+            "useBasis"
+        ]
+    );
 }
