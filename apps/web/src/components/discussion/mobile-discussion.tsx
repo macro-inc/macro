@@ -16,8 +16,9 @@ import {
   virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
+import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
 import type { MessageParent } from '@service-storage/messages';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -197,6 +198,24 @@ export function MobileDiscussion(props: {
               }}
               class="px-4"
             >
+              <Show
+                when={
+                  !props.conversation.pending() &&
+                  !props.conversation.failed() &&
+                  !props.conversation.unavailable() &&
+                  !props.conversation.targetId() &&
+                  !preview().hasComments
+                }
+              >
+                <EmptyStatePanel
+                  centered
+                  graphic={ChatCircleIcon}
+                  graphicClass="size-12"
+                  title={t('common.startDiscussion')}
+                  topSpacerClass="basis-0 mobile:basis-0 grow"
+                  class="min-h-0 shrink-0 flex-1 px-4 @4xl:px-4 pb-4 touch:pt-0"
+                />
+              </Show>
               {props.conversation.content()}
             </MobileDrawer.ScrollBody>
             <Show when={props.canWrite && !props.conversation.unavailable()}>

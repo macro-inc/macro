@@ -17,6 +17,7 @@ The owning surface supplies `EntityConversation` presentation and permissions.
 - Use loaded commenters for the avatar group beside View discussion; never show an overall comment count in the entry or sheet.
 - Render newest-message and participant avatars through channel `SenderIcon` with `MessageProvider` and `interactive={false}`; preserve shared profile photos, bot marks, guest/imported identities, and neutral fallbacks.
 - Keep surviving replies reachable even when every root message is deleted; use Start a discussion without avatars only when no messages remain.
+- Center the shared icon-and-title empty state above the pinned sheet input; hide it during loading, failures, or linked-message navigation.
 - Call entity conversation content messages and replies, with Add to the discussion… for the composer; preserve comment wording in anchored annotations and the legacy PR review renderer.
 - Keep the composer draft when closing the sheet, and focus only after a user opens an empty discussion.
 - Open at the half-height snap point with `MobileDrawer.FixedContent fitSnapPoint` and `KeyboardFooter`; drag the handle/header between half, full, and dismissed without remounting the thread.

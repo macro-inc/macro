@@ -1279,7 +1279,8 @@ the handle or heading up to full height, back to half, or down to dismiss. The
 thread scrolls independently until its top. Start a discussion also raises the
 keyboard. Typing expands the sheet to full height and keeps it there after the
 keyboard closes; the pinned Add to the discussion… composer rises while the
-thread shrinks. Dragging can return to half height after typing. The send action appears with text. Closing/reopening retains the draft.
+thread shrinks. Dragging can return to half height after typing. Empty threads show
+a centered discussion icon and Start a discussion above the pinned input. The send action appears with text. Closing/reopening retains the draft.
 Messages, replies, and reactions stay attached to the project identity.
 Notification links open Overview at the relevant discussion. Existing `activity`
 URLs also open Overview and preserve the target discussion. Project history is

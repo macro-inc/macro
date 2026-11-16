@@ -25,7 +25,7 @@ vi.mock('@core/user', () => ({
   getInitialsFromName: () => 'M',
 }));
 vi.mock('@core/messages/EntityConversation', () => ({
-  EntityConversationComposer: () => null,
+  EntityConversationComposer: () => <textarea aria-label="Discussion input" />,
 }));
 
 let drawerStyles: HTMLStyleElement;
@@ -231,4 +231,73 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   expect(drawer?.activeSnapPoint()).toBe(0);
   setVirtualKeyboardHeight(200);
   expect(drawer?.activeSnapPoint()).toBe(0);
+});
+it('centers an empty discussion above the retained input and replaces it when a message arrives', async () => {
+  const [messages, setMessages] = createSignal<MessageListItem[]>([]);
+  const [pending, setPending] = createSignal(false);
+  const [failed, setFailed] = createSignal(false);
+  const conversation: ConversationPresentation = {
+    messages,
+    targetId: () => null,
+    targetRequestKey: () => undefined,
+    pending,
+    failed,
+    unavailable: () => false,
+    retry: () => {},
+    content: () => (
+      <For each={messages()}>{(message) => <p>{message.content}</p>}</For>
+    ),
+  };
+  render(() => (
+    <MobileDiscussion
+      conversation={conversation}
+      parent={{ type: 'initiative', id: 'project' }}
+      canWrite
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Start a discussion' }));
+  const sheet = await screen.findByRole('dialog');
+  const empty = within(sheet).getByRole('status');
+  const input = within(sheet).getByRole('textbox', {
+    name: 'Discussion input',
+  });
+  expect(
+    within(empty).getByRole('heading', { name: 'Start a discussion' })
+  ).toBeTruthy();
+  expect(empty.querySelector('svg')).toBeTruthy();
+  input.focus();
+  setVirtualKeyboardVisible(true);
+  expect(document.activeElement).toBe(input);
+  expect(within(sheet).getByRole('status')).toBe(empty);
+  setPending(true);
+  expect(within(sheet).queryByRole('status')).toBeNull();
+  setPending(false);
+  setFailed(true);
+  expect(within(sheet).queryByRole('status')).toBeNull();
+  setFailed(false);
+  setMessages([
+    {
+      id: 'first',
+      parent: { type: 'initiative', id: 'project' },
+      sender_id: 'member',
+      content: 'First message',
+      created_at: '2026-10-02T12:00:00Z',
+      updated_at: '2026-10-02T12:00:00Z',
+      mentions: [],
+      attachments: [],
+      reactions: [],
+      state: {
+        root_id: 'first',
+        user_id: 'member',
+        anchor: null,
+        resolved: false,
+        created_at: '',
+        updated_at: '',
+      },
+      thread: { reply_count: 0, preview: [], latest_reply_at: null },
+    },
+  ]);
+  expect(within(sheet).queryByRole('status')).toBeNull();
+  expect(within(sheet).getByText('First message')).toBeTruthy();
+  expect(within(sheet).getByRole('textbox')).toBe(input);
 });
