@@ -177,9 +177,10 @@ skips the turn before any model call; unset or unreadable, summaries run.
 
 - MCP credentials never enter the log. `Message`'s serialization applies
   `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
-  go through, and `LiveSessionLogWriter` also redacts the frame it holds. Rows
-  stored before this keep what they were written with. The session's live server list
-  (`attached_mcp_servers`) and the frame sent to the runtime keep them. A new
+  go through, and `LiveSessionLogWriter` also redacts the frame it holds. Older
+  rows are not rewritten; readers that serialize `Message` redact them. The
+  session's live server list (`attached_mcp_servers`) and the frame sent to the
+  runtime keep them. A new
   server-to-runtime method is stored without params until it is added to
   `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
   credential.
