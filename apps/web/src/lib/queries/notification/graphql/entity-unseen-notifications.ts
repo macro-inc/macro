@@ -24,6 +24,7 @@ import {
   createSignal,
   onCleanup,
   type Setter,
+  untrack,
 } from 'solid-js';
 import { createChannelNotificationsQuery } from '../../channel/notifications';
 import {
@@ -98,6 +99,8 @@ function createEntityUnseenNotificationsQuery(
           requestPolicy: 'network-only',
           throwOnError: true,
         });
+        // A later read supersedes an earlier failure.
+        failure = undefined;
       } catch (error) {
         failure = { error };
       }
@@ -159,16 +162,25 @@ function createEntityUnseenNotificationsQuery(
 type UnseenNotificationsHolder = { enabled: Accessor<boolean> };
 type SharedUnseenNotifications = {
   notifications: Accessor<readonly UnifiedNotification[]>;
+  holders: Accessor<readonly UnseenNotificationsHolder[]>;
   setHolders: Setter<readonly UnseenNotificationsHolder[]>;
   dispose: () => void;
+  release?: ReturnType<typeof setTimeout>;
 };
+
+/**
+ * How long a query outlives its last reader. A virtualized card scrolling out
+ * and back in reads the live query again instead of the network.
+ */
+const UNSEEN_NOTIFICATIONS_RELEASE_MS = 30_000;
 
 const sharedReads = new Map<string, SharedUnseenNotifications>();
 
 /**
  * One entity's unseen notifications, from one live query however many threads
  * show its messages. A channel reads the unread edge its open view and detail
- * share. Empty until the first read lands; the query ends with its last reader.
+ * share. Empty until the first read lands; the query ends
+ * `UNSEEN_NOTIFICATIONS_RELEASE_MS` after its last reader leaves.
  */
 export function useEntityUnseenNotifications(
   entityType: SoupEntityRef['entityType'],
@@ -197,20 +209,30 @@ export function useEntityUnseenNotifications(
         if (query.error && !isTransientRequestError(query.error)) return [];
         return query.data ?? [];
       });
-      return { notifications, setHolders, dispose };
+      return { notifications, holders, setHolders, dispose };
     });
     sharedReads.set(key, shared);
   }
   const entry = shared;
   const holder = { enabled };
-  entry.setHolders((holders) => [...holders, holder]);
+  if (entry.release === undefined) {
+    entry.setHolders((holders) => [...holders, holder]);
+  } else {
+    // The released reader kept the query enabled and live until now.
+    clearTimeout(entry.release);
+    entry.release = undefined;
+    entry.setHolders([holder]);
+  }
   onCleanup(() => {
-    const remaining = entry.setHolders((holders) =>
-      holders.filter((other) => other !== holder)
-    );
-    if (remaining.length > 0) return;
-    sharedReads.delete(key);
-    entry.dispose();
+    const holders = untrack(entry.holders);
+    if (holders.length > 1) {
+      entry.setHolders(holders.filter((other) => other !== holder));
+      return;
+    }
+    entry.release = setTimeout(() => {
+      sharedReads.delete(key);
+      entry.dispose();
+    }, UNSEEN_NOTIFICATIONS_RELEASE_MS);
   });
   return entry.notifications;
 }

@@ -1,15 +1,24 @@
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { disposeChannelNotificationRefresh } from '@queries/channel/notification-refresh';
+import { revalidateNotificationReaders } from '@queries/notification/revalidation';
 import {
   ChannelDetailSoupDocument,
   SoupUnseenNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import type { MessageParent } from '@service-storage/messages';
-import { render, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createMemo, createSignal, For, type Setter } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from 'vitest';
 import { MessageNotificationIndexContext } from '../components/MarkMessageNotifications';
 import { MessageNotificationIndexProvider } from '../components/MessageNotificationIndexProvider';
 import { indexUnreadMessageNotifications } from '../unread-message-notifications';
@@ -34,6 +43,7 @@ const mocks = vi.hoisted(() => ({
     (_listener: (patch: GraphqlNotificationPatch) => void) => () => {}
   ),
   client: { query: vi.fn() },
+  cacheHost: true,
 }));
 
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -45,7 +55,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@app/lib/urql-solid', () => ({ createUrqlQuery: mocks.createQuery }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.client,
-  hasGraphqlCacheHost: () => true,
+  hasGraphqlCacheHost: () => mocks.cacheHost,
   mapGraphqlNotification: (n: unknown) => n,
   subscribeGraphqlSoupReconnected: () => () => {},
 }));
@@ -99,11 +109,16 @@ const notificationsByEntity = vi.fn<
 >(() => ({}));
 
 describe('MessageNotificationIndexProvider', () => {
-  let queries: { options: () => QueryOptions; refetch: () => unknown }[];
+  let queries: {
+    options: () => QueryOptions;
+    refetch: Mock<() => Promise<void>>;
+  }[];
   let setEdges: Setter<Edges>;
   let intersect: ReturnType<typeof installMessageIntersectionObserver>;
 
   beforeEach(() => {
+    // Only the registry's release timers; visibility checks poll on intervals.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     intersect = installMessageIntersectionObserver();
     bulkMarkAsRead.mockResolvedValue(undefined);
     notificationsByEntity.mockReturnValue({});
@@ -111,6 +126,7 @@ describe('MessageNotificationIndexProvider', () => {
     const [edges, set] = createSignal<Edges>({});
     setEdges = set;
     mocks.graphqlSoup = () => ({ enabled: true, loading: false });
+    mocks.cacheHost = true;
     mocks.source = {
       notificationsByEntity,
       bulkMarkAsRead,
@@ -119,7 +135,7 @@ describe('MessageNotificationIndexProvider', () => {
     } as unknown as NotificationSource;
     // The normalized cache's answer for each entity's edge, by entity id.
     mocks.createQuery.mockImplementation((options: () => QueryOptions) => {
-      const refetch = vi.fn(async () => {});
+      const refetch = vi.fn(async (): Promise<void> => {});
       queries.push({ options, refetch });
       return {
         get isEnabled() {
@@ -144,6 +160,10 @@ describe('MessageNotificationIndexProvider', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    // End every query its last reader released.
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
     disposeChannelNotificationRefresh(mocks.client as never);
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -393,5 +413,104 @@ describe('MessageNotificationIndexProvider', () => {
     );
     expect(queries).toHaveLength(0);
     expect(notificationsByEntity).not.toHaveBeenCalled();
+  });
+
+  it("keeps a parent's query through a release and ends it 30 s after its last reader", () => {
+    setEdges({ 'document-1': [] });
+    const first = render(() => <Thread parent={DOCUMENT} messageIds={['a']} />);
+    const second = render(() => (
+      <Thread parent={DOCUMENT} messageIds={['b']} />
+    ));
+    first.unmount();
+    second.unmount();
+    vi.advanceTimersByTime(29_999);
+
+    const returning = render(() => (
+      <Thread parent={DOCUMENT} messageIds={['a']} />
+    ));
+    expect(queries).toHaveLength(1);
+    expect(queries[0].options().enabled).toBe(true);
+    expect(queries[0].refetch).not.toHaveBeenCalled();
+
+    returning.unmount();
+    vi.advanceTimersByTime(30_000);
+    render(() => <Thread parent={DOCUMENT} messageIds={['a']} />);
+    expect(queries).toHaveLength(2);
+  });
+
+  it('reads again for a delivery during a read, failing only when the last read fails', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    setEdges({ 'document-1': [] });
+    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
+    const deliver = mocks.subscribe.mock.calls[0][0];
+    let failFirstRead = (_error: Error) => {};
+    queries[0].refetch.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failFirstRead = reject;
+        })
+    );
+
+    deliver({
+      __typename: 'GraphqlNewNotification',
+      notification: { id: 'first', entityId: 'document-1' },
+    } as GraphqlNotificationPatch);
+    const reconciled = revalidateNotificationReaders(mocks.client as never);
+    expect(queries[0].refetch).toHaveBeenCalledOnce();
+    failFirstRead(new Error('first read failed'));
+    await reconciled;
+    expect(queries[0].refetch).toHaveBeenCalledTimes(2);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    queries[0].refetch.mockRejectedValueOnce(new Error('last read failed'));
+    await revalidateNotificationReaders(mocks.client as never);
+    expect(consoleError).toHaveBeenCalledOnce();
+  });
+
+  it('reads again for an update to a held row only when no cache keeps it current', async () => {
+    mocks.cacheHost = false;
+    setEdges({ 'document-1': [notification('held', { messageId: 'root' })] });
+    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
+    const deliver = mocks.subscribe.mock.calls[0][0];
+
+    await revalidateNotificationReaders(mocks.client as never, {
+      unmaintainedOnly: true,
+    });
+    expect(queries[0].refetch).toHaveBeenCalledOnce();
+    deliver({
+      __typename: 'GraphqlUpdatedNotification',
+      notification: { id: 'held', entityId: 'document-1', state: 'SEEN' },
+    } as GraphqlNotificationPatch);
+    await waitFor(() => expect(queries[0].refetch).toHaveBeenCalledTimes(2));
+
+    mocks.cacheHost = true;
+    await revalidateNotificationReaders(mocks.client as never, {
+      unmaintainedOnly: true,
+    });
+    deliver({
+      __typename: 'GraphqlUpdatedNotification',
+      notification: { id: 'held', entityId: 'document-1', state: 'SEEN' },
+    } as GraphqlNotificationPatch);
+    expect(queries[0].refetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads again when a held notification is deleted, and for no other deletion', () => {
+    setEdges({ 'document-1': [notification('held', { messageId: 'root' })] });
+    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
+    const deliver = mocks.subscribe.mock.calls[0][0];
+    const deletion = (graphqlTypeName: string, entityId: string) =>
+      deliver({
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName,
+        entityId,
+      });
+
+    deletion('GraphqlNotification', 'not-held');
+    deletion('GraphqlSoupDocument', 'document-1');
+    expect(queries[0].refetch).not.toHaveBeenCalled();
+    deletion('GraphqlNotification', 'held');
+    expect(queries[0].refetch).toHaveBeenCalledOnce();
   });
 });
