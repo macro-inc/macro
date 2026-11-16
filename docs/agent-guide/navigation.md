@@ -697,6 +697,15 @@ Agents. Click it to reveal the search field between the title and New, at the
 same height as the New button; click again to hide it. The field focuses when
 opened. Every other view searches from the expandable Search icon in its list
 header.
+That header field hands the keyboard to the results: `ArrowDown` or `Enter`
+moves to the first row, where `j`/`k` and the arrows continue, and `Escape`
+leaves the field with the search still on screen. `Escape` in the list then
+steps back one level at a time: it clears a selection first, then the search.
+`Cmd/Ctrl+F` (and `/` in Email) returns to the field with the query selected;
+only the field's X clears from inside it. An empty field collapses on `Escape`.
+Check it in Email, Tasks, Drive, and Projects, which land on the first row;
+the other list views move to the list where it was. Passwords and the booking
+lists have no keyboard list, so there `ArrowDown` and `Enter` stay in the field.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
