@@ -115,6 +115,16 @@ const withVersion = <
     ...value,
   }) as unknown as T;
 
+function terminalError(
+  message: Extract<CoordinatorToTabEnvelope, { kind: 'terminal-error' }>
+): Error {
+  if (!message.storageUntouched) return new Error(message.error);
+  if (message.assetsUnavailable) {
+    return new CacheAssetsUnavailableError(message.error);
+  }
+  return new CacheBootstrapExhaustedError(message.error);
+}
+
 const defaultSharedWorkerFactory = (
   scope: string,
   buildTime: number
@@ -682,13 +692,7 @@ export class CacheCoordinatorPageAdapter {
         break;
       }
       case 'terminal-error':
-        this.failTerminal(
-          message.storageUntouched
-            ? message.assetsUnavailable
-              ? new CacheAssetsUnavailableError(message.error)
-              : new CacheBootstrapExhaustedError(message.error)
-            : new Error(message.error)
-        );
+        this.failTerminal(terminalError(message));
         break;
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(message.reason);

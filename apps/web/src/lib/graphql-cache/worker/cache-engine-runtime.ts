@@ -14,9 +14,11 @@ import {
 } from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import {
+  type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
+  type DatabaseAction,
   type EngineFatalCode,
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
@@ -535,18 +537,27 @@ async function activate(
               tabId: activation.tabId,
               ownerEpoch: activation.ownerEpoch,
               reason: errorMessage(error),
-              failureCode: storageBusy
-                ? 'storage-busy'
-                : error instanceof CacheWasmUnavailableError
-                  ? 'assets-unavailable'
-                  : activation.databaseAction === 'wipe-before-open'
-                    ? 'recovery-open-failed'
-                    : 'initialization-failed',
+              failureCode: activationFailureCode(
+                error,
+                storageBusy,
+                activation.databaseAction
+              ),
             })
       );
     }
     await closeLifecycle();
   }
+}
+
+function activationFailureCode(
+  error: unknown,
+  storageBusy: boolean,
+  databaseAction: DatabaseAction
+): ActivationFailureCode {
+  if (storageBusy) return 'storage-busy';
+  if (error instanceof CacheWasmUnavailableError) return 'assets-unavailable';
+  if (databaseAction === 'wipe-before-open') return 'recovery-open-failed';
+  return 'initialization-failed';
 }
 
 /** Deletes this scope's stale databases in a worker used for nothing else,
