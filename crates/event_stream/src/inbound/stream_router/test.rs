@@ -98,6 +98,7 @@ mod principals {
             origin,
             agent_id: None,
             agent_via: None,
+            routine_id: None,
             macro_user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(USER)
                 .unwrap()
                 .into_owned(),
