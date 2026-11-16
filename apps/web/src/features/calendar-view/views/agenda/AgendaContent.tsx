@@ -12,8 +12,9 @@ export function AgendaContent() {
   const date = createMemo(() =>
     agendaDay(navigation.navigationDate() ?? new Date())
   );
-  const session = createMemo(
-    () => account() && `${account()}|${date().toDateString()}`
+  // Preserve navigation requests, including Today when the day is unchanged.
+  const session = createMemo(() =>
+    account() ? { account: account(), date: date() } : undefined
   );
 
   return (
@@ -22,7 +23,7 @@ export function AgendaContent() {
       keyed
       fallback={<p class="p-5">{t('calendar.agendaSignIn')}</p>}
     >
-      {(_session) => <AgendaWindowList date={date()} />}
+      {(session) => <AgendaWindowList date={session.date} />}
     </Show>
   );
 }

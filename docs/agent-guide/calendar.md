@@ -69,13 +69,17 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
-Agenda uses an hourly list with sticky stacked day headers and all-day events
-first. Its period arrows step one week; it has no single-letter view shortcut.
+Agenda lists occurrences chronologically with sticky stacked day headers and
+all-day events first. Its period arrows step one week; it has no single-letter
+view shortcut.
 Scrolling loads earlier or later two-week windows, with five windows mounted at
 once. Reads stop at the supported occurrence-range boundaries without hiding
 supported days in a partially covered window. Loading, failed, unsupported, and
 empty days remain distinct. Choosing an occurrence opens the same event details
 as the grid; event links retain occurrence identity and focus their list row.
+Today and date selection return to the requested day even when it is already
+selected. Late event data preserves the visible day's offset instead of shifting
+the list to a different date.
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid

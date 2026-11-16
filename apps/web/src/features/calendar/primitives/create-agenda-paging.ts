@@ -1,5 +1,9 @@
 import { beginInteraction } from '@app/observability/flow';
-import { createSignal, onCleanup } from 'solid-js';
+import {
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
+import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { agendaDay, agendaWindowIndices } from './agenda-window';
 
 const DAY_SELECTOR = '[data-agenda-day]';
@@ -21,6 +25,53 @@ export function createAgendaPaging(
   const indices = () => agendaWindowIndices(first());
   let frame: number | undefined;
   let interaction: ReturnType<typeof beginInteraction> | undefined;
+  let anchor: ScrollAnchor | undefined;
+  let anchoredScrollTop = 0;
+  let observeWindows: (() => void) | undefined;
+
+  const captureAnchor = (element: HTMLElement) => {
+    anchoredScrollTop = element.scrollTop;
+    const day = visibleDay(element);
+    if (!day) {
+      anchor = undefined;
+      return;
+    }
+    anchor = {
+      top:
+        day.getBoundingClientRect().top - element.getBoundingClientRect().top,
+      measure: () => {
+        if (!element.contains(day)) return undefined;
+        return (
+          day.getBoundingClientRect().top - element.getBoundingClientRect().top
+        );
+      },
+    };
+  };
+
+  createEffect(
+    on(viewport, (element) => {
+      if (!element) return;
+      // Late query results change earlier days' heights. Keep the reader's day
+      // stable instead of letting the browser choose an unrelated text anchor.
+      const observer = new ResizeObserver(() => {
+        if (interaction || !anchor) return;
+        restoreScrollAnchor(element, anchor);
+        anchoredScrollTop = element.scrollTop;
+        updateActiveWindow(element);
+      });
+      observeWindows = () => {
+        observer.disconnect();
+        for (const window of element.querySelectorAll('[data-agenda-window]')) {
+          observer.observe(window);
+        }
+      };
+      observeWindows();
+      onCleanup(() => {
+        observer.disconnect();
+        observeWindows = undefined;
+      });
+    })
+  );
 
   const updateActiveWindow = (element: HTMLElement) => {
     const window = visibleDay(element)?.closest<HTMLElement>(
@@ -40,6 +91,7 @@ export function createAgendaPaging(
       element.scrollTop +=
         day.getBoundingClientRect().top - element.getBoundingClientRect().top;
     updateActiveWindow(element);
+    captureAnchor(element);
   };
 
   const move = (direction: -1 | 1) => {
@@ -63,6 +115,8 @@ export function createAgendaPaging(
           match.getBoundingClientRect().top -
           element.getBoundingClientRect().top -
           top;
+      captureAnchor(element);
+      observeWindows?.();
       interaction?.end();
       interaction = undefined;
     });
@@ -73,6 +127,7 @@ export function createAgendaPaging(
     if (!element) return;
     updateActiveWindow(element);
     if (interaction) return;
+    if (element.scrollTop !== anchoredScrollTop) captureAnchor(element);
     if (element.scrollTop < 320) move(-1);
     else if (
       element.scrollHeight - element.clientHeight - element.scrollTop <

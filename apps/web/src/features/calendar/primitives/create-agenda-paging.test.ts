@@ -135,4 +135,66 @@ describe('agenda paging', () => {
       expect(end).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('preserves the requested day through late data and subsequent user scrolling', () => {
+    const resize: Array<() => void> = [];
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resize.push(callback);
+        }
+        observe() {}
+        disconnect = disconnect;
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 100 }) as DOMRect;
+    Object.defineProperty(viewport, 'scrollHeight', { value: 9000 });
+    Object.defineProperty(viewport, 'clientHeight', { value: 400 });
+    let earlierHeight = 1000;
+    for (const index of [-1, 0]) {
+      const window = document.createElement('section');
+      window.dataset.agendaWindow = String(index);
+      const day = document.createElement('section');
+      day.dataset.agendaDay = new Date(
+        2026,
+        10,
+        16 + index * 14
+      ).toDateString();
+      day.getBoundingClientRect = () => {
+        const offset = index === -1 ? 0 : earlierHeight;
+        const height = index === -1 ? earlierHeight : 600;
+        return {
+          top: 100 + offset - viewport.scrollTop,
+          bottom: 100 + offset + height - viewport.scrollTop,
+        } as DOMRect;
+      };
+      window.append(day);
+      viewport.append(window);
+    }
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, new Date(2026, 10, 16)),
+      dispose,
+    }));
+    paging.positionInitial();
+    expect(viewport.scrollTop).toBe(1000);
+
+    earlierHeight = 1500;
+    // A queued initial scroll event must not adopt a different, now-visible day.
+    paging.onScroll();
+    resize[0]?.();
+    expect(viewport.scrollTop).toBe(1500);
+    expect(paging.activeWindow()).toBe(0);
+
+    viewport.scrollTop = 1600;
+    paging.onScroll();
+    earlierHeight = 1900;
+    resize[0]?.();
+    expect(viewport.scrollTop).toBe(2000);
+    expect(paging.activeWindow()).toBe(0);
+    dispose();
+    expect(disconnect).toHaveBeenCalled();
+  });
 });

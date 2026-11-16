@@ -17,7 +17,7 @@ export function AgendaWindowList(props: { date: Date }) {
         ref={setViewport}
         role="region"
         aria-label={t('calendar.agendaEvents')}
-        class="min-h-0 flex-1 overflow-y-auto"
+        class="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
         onScroll={paging.onScroll}
       >
         <For each={paging.indices()}>

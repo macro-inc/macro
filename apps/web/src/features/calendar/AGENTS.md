@@ -44,6 +44,9 @@ host lives in `../block-calendar/`.
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
+- Keep the visible Agenda day anchored through late data and window rotation;
+  `create-agenda-paging.ts` owns resize observation, and each explicit date request
+  starts a fresh list even when its calendar day is unchanged.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,
   and REST/GraphQL handoff; never add a parallel event cache.
 
