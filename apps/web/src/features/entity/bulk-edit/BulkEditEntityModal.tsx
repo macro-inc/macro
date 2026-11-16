@@ -6,6 +6,7 @@ import { ShareDialog } from '@core/component/TopBar/ShareDialog';
 import { isMobile } from '@core/mobile/isMobile';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
+import { raiseKeyboardForRenameField } from '@entity/utils/rename-field-focus';
 import {
   ActionDialogShell,
   Dialog,
@@ -142,6 +143,7 @@ const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
 });
 
 export const openBulkEditModal = (session: BulkEditSession) => {
+  if (session.view === 'rename') raiseKeyboardForRenameField();
   setModalOpen(true);
   setGlobalSession(session);
 };
@@ -203,6 +205,7 @@ export function openOwnedBulkEditModal(
   session: BulkEditSession,
   owner: Owner | null
 ) {
+  if (session.view === 'rename') raiseKeyboardForRenameField();
   return openDialog<OwnedBulkEditProps>(
     OwnedBulkEditModal,
     { session },
