@@ -721,11 +721,9 @@ impl EditorSurface {
             self.init(doc, now, access, view)?;
             return Ok(false);
         }
-        let cursors = if browser_history.is_some() && self.core.state().selection().is_none() {
-            None
-        } else {
-            self.selection_cursors()
-        };
+        // Source restores the local awareness after every from-Loro update,
+        // whatever the model selection (CollabProvider.tsx:243-262).
+        let cursors = self.selection_cursors();
         let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
         let changes = projection.take_remote(doc, self.core.state())?;
 

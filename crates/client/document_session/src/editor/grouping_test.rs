@@ -492,6 +492,13 @@ fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
     }
 }
 
+/// Undo removes the code block and its caret: the awareness cannot resolve, so
+/// the selection stays cleared until the browser reports one. Redo recreates
+/// the block, and Source's awareness restore then resolves again: its Loro
+/// cursor into the deleted text still yields its offset (loro-crdt 1.16.3), and
+/// the recreated node keeps its id (CollabProvider.tsx:243-262, cursor.ts:303).
+/// Browser feedback after undo replaces the awareness with a paragraph point
+/// that redo removes, so that redo restores nothing.
 #[test]
 fn browser_code_history_waits_for_an_actual_selection_after_the_cursor_disappears() {
     for feedback in [false, true] {
@@ -507,7 +514,26 @@ fn browser_code_history_waits_for_an_actual_selection_after_the_cursor_disappear
                     .expect("actual history")
             );
             assert_eq!(surface.state().root_text_content().as_ref(), expected);
-            assert_eq!(surface.state().selection(), None);
+            let restored = time == 101 && !feedback;
+            if restored {
+                let code_text = surface
+                    .state()
+                    .view()
+                    .all_text_nodes(NodeKey::ROOT)
+                    .next()
+                    .expect("recreated code text");
+                let caret = Point::text(code_text, Utf16Offset(31));
+                assert_eq!(
+                    view_selection(surface.state().selection()),
+                    ViewSelection::Range {
+                        anchor: caret,
+                        focus: caret,
+                        resolution_dirty: false,
+                    }
+                );
+            } else {
+                assert_eq!(surface.state().selection(), None);
+            }
             assert!(view.iter().any(|effect| matches!(effect,
                 ViewEffect::CommitTags(tags) if tags.iter().any(|tag| tag == "skip-dom-selection")
             )));
@@ -518,10 +544,10 @@ fn browser_code_history_waits_for_an_actual_selection_after_the_cursor_disappear
                     ..
                 })
             )));
-            assert!(
-                !view
-                    .iter()
-                    .any(|effect| matches!(effect, ViewEffect::HistoryAwarenessSelection { .. }))
+            assert_eq!(
+                view.iter()
+                    .any(|effect| matches!(effect, ViewEffect::HistoryAwarenessSelection { .. })),
+                restored
             );
             if feedback && time == 100 {
                 let paragraph = surface
@@ -1580,5 +1606,95 @@ fn an_unconvertible_range_keeps_the_previous_awareness() -> Result<(), Box<dyn s
     assert_eq!((range.anchor, range.focus), (completion, completion));
     // Presence publishes these cursors: peers keep seeing the earlier caret.
     assert_eq!(surface.selection_cursors(), caret_awareness);
+    Ok(())
+}
+
+/// Source's from-Loro update clears the selection, then its queued update
+/// rebuilds a range from the local awareness whenever it resolves, whatever the
+/// model selection was (CollabProvider.tsx:243-262). A null selection keeps the
+/// awareness (:291), so undo restores the caret from before it.
+#[test]
+fn browser_history_restores_awareness_over_a_null_selection()
+-> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::application::application_editor_config(
+        EditorConfig {
+            view_host: ViewHost {
+                engine: ViewEngine::Chromium,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0))?;
+    let doc = lexical_loro::new_doc(7)?;
+    let mut view = Vec::new();
+    surface.init(&doc, now(0), Access::Edit, &mut view)?;
+    surface.apply(
+        &doc,
+        Input::SetState {
+            state: serde_json::from_value(
+                json!({"root":{"type":"root","$":{"id":"root-id"},"children":[
+                    {"type":"paragraph","children":[{"type":"text","text":"abc"}]}
+                ]}}),
+            )?,
+            tags: TagSet::default(),
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    surface.apply(
+        &doc,
+        Input::Command {
+            command: Command::ClearHistory,
+            selection: ViewSelection::KeepModel,
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    let text = surface
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .expect("text");
+    let at = |offset| {
+        let point = Point::text(text, Utf16Offset(offset));
+        ViewSelection::Range {
+            anchor: point,
+            focus: point,
+            resolution_dirty: false,
+        }
+    };
+    surface.apply(
+        &doc,
+        Input::Command {
+            command: Command::InsertText("X".into()),
+            selection: at(2),
+        },
+        now(500),
+        Access::Edit,
+        &mut view,
+    )?;
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::None,
+            change: None,
+        },
+        now(510),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert_eq!(surface.state().selection(), None);
+    assert!(surface.selection_cursors().is_some());
+
+    surface.apply(&doc, Input::Undo, now(600), Access::Edit, &mut view)?;
+    assert_eq!(surface.state().root_text_content().as_ref(), "abc");
+    // The awareness caret after X, at 3 in "abXc", follows its Loro cursor to 2.
+    assert_eq!(view_selection(surface.state().selection()), at(2));
     Ok(())
 }
