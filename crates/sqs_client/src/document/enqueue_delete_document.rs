@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use std::collections::HashMap;
 
@@ -53,13 +56,23 @@ pub(crate) async fn bulk_enqueue_document_delete(
     for chunk in entries.chunks(MAX_BATCH_SIZE) {
         let chunk_to_send = chunk.to_vec();
 
-        // Send the batch
-        sqs_client
+        // Send the batch. SQS answers a batch with some rejected entries with
+        // success and lists those entries under `Failed`.
+        let output = sqs_client
             .send_message_batch()
             .set_entries(Some(chunk_to_send))
             .queue_url(queue_url)
             .send()
             .await?;
+
+        if let Some(rejected) = output.failed().first() {
+            anyhow::bail!(
+                "SQS rejected {} of {} document delete messages: {}",
+                output.failed().len(),
+                chunk.len(),
+                rejected.code()
+            );
+        }
     }
 
     Ok(())

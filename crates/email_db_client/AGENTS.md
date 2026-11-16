@@ -107,6 +107,11 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   claims: read optional columns such as the sender through a `LEFT JOIN`. A
   claimed attachment the caller never sees is never uploaded, and the Outlook
   projection waits on its claim forever.
+- The document auto-import (`attachments/provider/upload.rs`: the new-mail
+  claims and both backfill queries) skips drafts. A draft's row is deleted
+  when it is saved again, sent or discarded, and `document_email` cascades
+  with it, so an imported draft attachment would stay in Drive as a plain
+  file. Media uploads to static files still include drafts.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its

@@ -19,8 +19,14 @@ pub struct FakeEnrollment {
 pub struct FakeRepository {
     pub records: Mutex<HashMap<Uuid, Record>>,
     pub staged: Mutex<HashMap<Uuid, Record>>,
+    /// Held across every staging check and insert, like the operation-id lock:
+    /// an intent and an enrollment never reserve the same id.
+    pub reservations: Mutex<()>,
+    /// The agent and action of each agent-published intent; absent means human.
+    pub intent_agents: Mutex<HashMap<Uuid, (String, crate::domain::agent::AgentAction)>>,
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
+    pub fail_import_audit: AtomicBool,
     pub lock_calls: AtomicUsize,
     pub calls: AtomicUsize,
     pub closed_teams: Mutex<HashSet<Uuid>>,
@@ -29,15 +35,28 @@ pub struct FakeRepository {
     pub cleanup_calls: AtomicUsize,
     pub erased_items: Mutex<HashSet<Uuid>>,
     pub audits: Mutex<Vec<Action>>,
+    pub folders: Mutex<HashMap<(TeamId, Uuid), Folder>>,
+    pub imports: Mutex<Vec<(TeamId, Uuid, ImportFormat, ImportCounts)>>,
+    pub busy_items: Mutex<HashSet<Uuid>>,
     pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
+    /// Operations whose intents completed through `save_reconciled`.
+    pub reconciled: Mutex<Vec<Uuid>>,
+    /// Membership lookups (`teams`), to count admission work.
+    pub team_lookups: AtomicUsize,
+    /// Answer `ensure_folder` without keeping the folder, as if it were
+    /// deleted right after.
+    pub forget_ensured_folders: AtomicBool,
 }
 impl FakeRepository {
     pub fn new() -> Self {
         Self {
             records: Mutex::new(HashMap::new()),
             staged: Mutex::new(HashMap::new()),
+            reservations: Mutex::new(()),
+            intent_agents: Mutex::new(HashMap::new()),
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
+            fail_import_audit: AtomicBool::new(false),
             lock_calls: AtomicUsize::new(0),
             calls: AtomicUsize::new(0),
             closed_teams: Mutex::new(HashSet::new()),
@@ -46,12 +65,23 @@ impl FakeRepository {
             cleanup_calls: AtomicUsize::new(0),
             erased_items: Mutex::new(HashSet::new()),
             audits: Mutex::new(vec![]),
+            folders: Mutex::new(HashMap::new()),
+            imports: Mutex::new(vec![]),
+            busy_items: Mutex::new(HashSet::new()),
             enrollments: Mutex::new(HashMap::new()),
+            reconciled: Mutex::new(vec![]),
+            team_lookups: AtomicUsize::new(0),
+            forget_ensured_folders: AtomicBool::new(false),
         }
     }
 }
 struct FakeLock;
-impl ItemLock for FakeLock {}
+#[async_trait]
+impl ItemLock for FakeLock {
+    async fn release(self: Box<Self>) -> Result<(), Error> {
+        Ok(())
+    }
+}
 #[async_trait]
 impl Repository for FakeRepository {
     async fn is_human(
@@ -93,7 +123,14 @@ impl Repository for FakeRepository {
                 .unwrap()
                 .values()
                 .any(|entry| entry.team_id == team)
-            || self.closed_teams.lock().unwrap().contains(&team.0))
+            || self.closed_teams.lock().unwrap().contains(&team.0)
+            || self
+                .imports
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|entry| entry.0 == team)
+            || self.folders.lock().unwrap().keys().any(|key| key.0 == team))
     }
 
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {
@@ -107,6 +144,8 @@ impl Repository for FakeRepository {
             .lock()
             .unwrap()
             .retain(|_, record| record.metadata.team_id != team);
+        self.imports.lock().unwrap().retain(|entry| entry.0 != team);
+        self.folders.lock().unwrap().retain(|key, _| key.0 != team);
         Ok(())
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
@@ -252,9 +291,12 @@ impl Repository for FakeRepository {
         Ok(())
     }
 
-    async fn lock(&self, _: TeamId, _: ItemId) -> Result<Box<dyn ItemLock>, Error> {
+    async fn lock(&self, _: TeamId, item: ItemId) -> Result<Box<dyn ItemLock>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.lock_calls.fetch_add(1, Ordering::SeqCst);
+        if self.busy_items.lock().unwrap().contains(&item.0) {
+            return Err(Error::Busy);
+        }
         Ok(Box::new(FakeLock))
     }
     async fn stage(
@@ -278,6 +320,15 @@ impl Repository for FakeRepository {
         {
             return Err(Error::NotFound);
         }
+        let _reserved = self.reservations.lock().expect("fixture lock");
+        if self
+            .enrollments
+            .lock()
+            .expect("fixture lock")
+            .contains_key(&operation)
+        {
+            return Err(Error::Conflict);
+        }
         let mut staged = self.staged.lock().expect("fixture lock");
         if let Some(previous) = staged.get(&operation) {
             if previous.metadata.id != record.metadata.id
@@ -291,6 +342,38 @@ impl Repository for FakeRepository {
             staged.insert(operation, record.clone());
         }
         Ok(())
+    }
+    async fn intent_origin(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        operation: Uuid,
+    ) -> Result<Option<crate::domain::ports::IntentOrigin>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let staged = self.staged.lock().expect("fixture lock");
+        let Some(record) = staged.get(&operation) else {
+            return Ok(None);
+        };
+        if record.metadata.team_id != team || record.metadata.id != item {
+            return Ok(None);
+        }
+        Ok(Some(
+            match self
+                .intent_agents
+                .lock()
+                .expect("fixture lock")
+                .get(&operation)
+            {
+                None => crate::domain::ports::IntentOrigin::Human,
+                Some((agent, action)) => crate::domain::ports::IntentOrigin::Agent {
+                    agent: macro_user_id::cowlike::CowLike::into_owned(
+                        macro_user_id::user_id::MacroUserIdStr::parse_from_str(agent)
+                            .expect("fixture agent"),
+                    ),
+                    action: *action,
+                },
+            },
+        ))
     }
     async fn staged(&self, team: TeamId, item: ItemId, operation: Uuid) -> Result<Record, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
@@ -306,12 +389,22 @@ impl Repository for FakeRepository {
         }
         Ok(record)
     }
-    async fn finish(&self, _: Uuid) -> Result<(), Error> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected: Option<i32>,
+        operation: Uuid,
+    ) -> Result<(), Error> {
+        self.save(record, expected).await?;
+        self.reconciled
+            .lock()
+            .expect("fixture lock")
+            .push(operation);
         Ok(())
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.team_lookups.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .memberships
             .lock()
@@ -331,6 +424,27 @@ impl Repository for FakeRepository {
             .expect("fixture lock")
             .values()
             .filter(|record| record.metadata.team_id == team && !record.deleting)
+            .cloned()
+            .collect())
+    }
+    async fn matching(
+        &self,
+        _: &Actor,
+        team: TeamId,
+        names: &[String],
+    ) -> Result<Vec<Record>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
+        Ok(self
+            .records
+            .lock()
+            .expect("fixture lock")
+            .values()
+            .filter(|record| {
+                record.metadata.team_id == team
+                    && !record.deleting
+                    && wanted.contains(record.metadata.name.to_lowercase().as_str())
+            })
             .cloned()
             .collect())
     }
@@ -389,9 +503,62 @@ impl Repository for FakeRepository {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![])
     }
-    async fn folders(&self, _: TeamId) -> Result<Vec<Folder>, Error> {
+    async fn folders(&self, team: TeamId) -> Result<Vec<Folder>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(vec![])
+        Ok(self
+            .folders
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|folder| folder.team_id == team)
+            .cloned()
+            .collect())
+    }
+    async fn ensure_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut folders = self.folders.lock().unwrap();
+        if self.forget_ensured_folders.load(Ordering::SeqCst) {
+            return Ok(Folder {
+                id,
+                team_id: team,
+                name: name.into(),
+                parent_id,
+            });
+        }
+        Ok(folders
+            .entry((team, id))
+            .or_insert_with(|| Folder {
+                id,
+                team_id: team,
+                name: name.into(),
+                parent_id,
+            })
+            .clone())
+    }
+    async fn audit_import(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        _: &Actor,
+        format: ImportFormat,
+        counts: ImportCounts,
+    ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.fail_import_audit.load(Ordering::SeqCst) {
+            return Err(Error::Unavailable);
+        }
+
+        self.imports
+            .lock()
+            .unwrap()
+            .push((team, id, format, counts));
+        Ok(())
     }
     async fn save_folder(&self, _: &Folder) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);

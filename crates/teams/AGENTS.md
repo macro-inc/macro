@@ -153,3 +153,9 @@ event contract (schema, sanitization, delivery semantics).
   Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
 - Keep membership removal and rollback unchanged: vault items belong to the team,
   retain their creator, and lose departing members through current membership checks.
+
+- `PATCH /team` accepts `member_crm_access` for a current admin/owner to change a plain member. Lock actor and target memberships before checking current roles; never deny admins/owners or combine this operation with role changes. `GET /team` returns effective `crm_member_access` separately from contribution consent. Removal compensation restores the stored CRM preference captured by `DELETE ... RETURNING`, including denials masked by an admin role.
+
+- CRM preference writes require `CrmAccessRollout`; unwired services refuse them.
+  The flag never affects read enforcement or removal compensation. Enable changes
+  only after every old membership writer has drained.
