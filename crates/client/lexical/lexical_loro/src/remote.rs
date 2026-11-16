@@ -203,7 +203,6 @@ impl LoroProjection {
             fields.swap_remove(&key);
             text.swap_remove(&key);
         }
-        let touched: Vec<NodeKey> = fields.iter().copied().collect();
         let mut building = Building {
             doc,
             state,
@@ -229,6 +228,8 @@ impl LoroProjection {
             }
             self.build_children(&mut building, NodeTarget::Key(key), &map)?;
         }
+        // After building, so keys a remote move re-bound to a new map count as touched.
+        let touched: Vec<NodeKey> = building.fields.iter().copied().collect();
         // Source's collab reconcile compares every node's stored own JSON, `$` included, on
         // each Loro-driven update, so blocks whose stored search text this peer wrote are
         // imported too, whether or not this update changed them.

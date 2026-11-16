@@ -342,3 +342,42 @@ fn importing_batches_individually_together_or_permuted_produces_identical_editor
     }
     Ok(())
 }
+// A Source peer moves a node by deleting its map and creating a new one with the same `$.id`;
+// the reused key must be reported as touched so the host rescans its stored drift.
+#[test]
+fn cross_parent_remote_move_reports_the_reused_key_as_touched() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((left, right, text), _) = editor.update(|tx| {
+        let left = tx.create(Paragraph::default())?;
+        let right = tx.create(Paragraph::default())?;
+        let text = tx.create_text("moving")?;
+        tx.set_state(left, &ID, "left".into())?;
+        tx.set_state(right, &ID, "right".into())?;
+        tx.set_state(text, &ID, "text".into())?;
+        tx.append(left, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[left.key(), right.key()])?;
+        Ok((left, right, text))
+    })?;
+    let doc = new_doc(1)?;
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PLAIN, 0)?;
+    let peer = fork_doc(&doc, 2)?;
+    let before = peer.oplog_vv();
+    let parent = projection.index.map(&peer, left.key())?;
+    let list = schema::children(&parent)?.expect("children");
+    let value = schema::read_node(&schema::map_at(list.get(0), "text")?, &PLAIN)?;
+    list.delete(0, 1)?;
+    let destination = projection.index.map(&peer, right.key())?;
+    let list = schema::children(&destination)?.expect("children");
+    let replacement = list.insert_container(0, LoroMap::new())?;
+    schema::initialize_map(&replacement, &value, schema::MapSchema::Node)?;
+    peer.commit_with(loro::CommitOptions::new().timestamp(1));
+    let (_, changes) = projection.remote(
+        &doc,
+        editor.state(),
+        &peer.export(ExportMode::updates(&before))?,
+    )?;
+    assert!(changes.touched.contains(&text.key()));
+    Ok(())
+}
