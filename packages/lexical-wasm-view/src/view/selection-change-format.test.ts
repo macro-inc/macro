@@ -257,9 +257,10 @@ test.each([
     name: 'a non-empty element keeps the format and clears the style',
     children: [
       { type: 'linebreak', version: 1 },
-      { type: 'text', version: 1, text: 'y' },
+      { type: 'text', version: 1, text: 'y', format: 0 },
     ],
-    // The reconciled text-format cache follows the plain child (Lexical.dev.mjs 2430).
+    // The cache follows an explicit plain format (Lexical.dev.mjs 2430).
+    // An omitted format is undefined and leaves the element cache unchanged.
     format: 0,
     style: '',
   },
