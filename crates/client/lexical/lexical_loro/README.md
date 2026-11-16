@@ -39,7 +39,8 @@ NodeState keys round-trip. Recovery remains an explicit caller decision.
 The current mirror's string-id list diff also retains unmatched old items when
 the requested list is exhausted or an id is empty. Literal tests preserve that
 quirk. The child-list implementation intentionally fixes stale move indices and
-uses native container identity when ids change or are absent (S11 Δ-1/Δ-2).
+uses native container identity when ids change or are absent; the differential
+test keeps the mirror oracle unchanged and allows only these divergences.
 A touched persisted transparent wrapper containing adopted children is flattened
 into fresh child containers; unrelated foreign containers remain untouched.
 Numbers follow JavaScript's JSON representation, including integral floats.
@@ -63,4 +64,4 @@ A half-megabyte typing test asserts bounded node visits and zero sibling scans.
 subtree; `children_scanned` and `nodes_visited` expose incremental work.
 
 See AGENTS.md for commands. Application golden snapshots/plugins and session
-history grouping are owned by WP-29/WP-49.
+history grouping belong to `macro_document_model` and `document_session`.

@@ -1,26 +1,21 @@
 # User mention insertion
 
-`group-a.insert-user-mention` uses the existing application envelope and the
-current actual selection. Its payload is `{userId, email, displayName?,
-mentionUuid?}`. `displayName` accepts string or null; a missing, null or empty name
-uses the Source email-local-part/full-email fallback. UUID missing, null and empty
-remain distinct through the existing `Maybe` representation. Other non-string
-name shapes are unsupported typed input, not a claim about Source runtime errors.
+`group-a.insert-user-mention` takes `{userId, email, displayName?, mentionUuid?}`
+through the application envelope and uses the current selection. `displayName`
+accepts string or null; a missing, null or empty name falls back to the email
+local part, then the full email. Missing, null and empty UUIDs stay distinct
+through `Maybe`.
 
-The Normal-priority handler creates the actual node, inserts it, wraps an actual
-root/shadow parent in the configured paragraph when needed, and selects the next text at UTF-16 zero or the parent end, matching Source
-DecoratorNode.selectEnd → selectNext(0, 0).
-It adds no collapsed, code-format, composing, UI-editability or old-range gate.
-Generation and current Session admission remain authoritative.
+The Normal-priority handler creates the node, inserts it, wraps a root/shadow-root
+parent in the configured paragraph when needed, and calls `select_next(0, 0)`,
+matching `DecoratorNode.selectEnd`. It adds no collapsed, code-format, composing,
+editability or old-range gate.
 
-The web workflow removes search first, then invokes actual notification/tracking
-I/O, and inserts afterward using the then-current selection, generation and
-access. It must not combine removal and insertion atomically, restore an earlier
-caret, or reuse strict `menu-select` as proof of this contract. Menu UI close is
-separate from Session/installation disposal.
+The web workflow removes the search text first, then runs notification and
+tracking I/O, then inserts with the then-current selection and generation.
+Never combine removal and insertion atomically, restore an earlier caret, or
+reuse strict `menu-select` admission.
 
-The isolated Source selection controls install the actual mention plugin without
-production table structure transforms. The native production preset already has
-a trailing paragraph after the shadow-root table before insertion; the raw native
-before/after pair retains that paragraph. This fixture difference is recorded,
-not removed from either JSON or counted as full-document equality.
+Selection-control fixtures differ from the native preset by a trailing paragraph
+after a root-level table; tests compare the native before/after pair, not full
+documents.

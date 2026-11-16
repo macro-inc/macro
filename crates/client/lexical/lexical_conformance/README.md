@@ -1,10 +1,10 @@
 
-`d6_collapse_code_highlight` is selected only when a fixture registers
-`@lexical/code-prism.registerCodeHighlighting` (S4 §1.7, `codeHighlight`, D6).
-The admitted legacy corpus uses `codeHighlight` for 69 of these fixtures and
-no highlight declaration for five that start with empty code. GOALS round 3
-explicitly authorizes this named replacement policy for all 74; activation
-requires the pinned `LexicalCodeNodeTabs.test.ts` source and the registration
+The `d6_collapse_code_highlight` snapshot projection is selected only when a
+fixture registers `@lexical/code-prism.registerCodeHighlighting`: the Rust model
+never tokenizes code, so Prism highlight runs cannot match exactly. The legacy
+corpus uses `codeHighlight` for 69 of these fixtures and no highlight
+declaration for five that start with empty code; the projection applies to all
+74. Activation requires the pinned `LexicalCodeNodeTabs.test.ts` source and the registration
 having executed. Future fixtures may declare the new name explicitly. Other
 sources retain strict comparison even if they register Prism.
 It currently admits exactly one code block with text/highlight, tab and linebreak

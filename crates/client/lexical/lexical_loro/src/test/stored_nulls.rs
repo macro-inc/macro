@@ -113,7 +113,7 @@ fn a_stored_null_direction_on_a_non_paragraph_element_does_not_match_a_model_abs
     ));
 }
 
-// ---- C-HISTORY-RECONCILE-NULLS-ALL-01 ---------------------------------------
+// ---- Loro-driven imports restore stored nulls on untouched nodes -----------
 // Source's reconcile walks the whole tree on every Loro-driven update and gives
 // each node its stored value, so an untouched node whose model field is
 // undefined takes the stored null (Source undo/redo probe a5c2a8e1, row 1:

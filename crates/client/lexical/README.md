@@ -29,8 +29,8 @@ sync policy and session orchestration remain outside the projection.
 
 `lexical_conformance` interprets the recorder's schema-2 fixtures against this
 model. It checks call results, versioned identities, strict core key allocation,
-commits and final snapshots. Its exact expected-failure ledger keeps later work
-packages visible; ledgered trials do not count as passing fixtures. Run
+commits and final snapshots. Its exact expected-failure ledger lists every known
+gap; ledgered trials do not count as passing fixtures. Run
 `cargo test -p lexical_conformance --test replay -- --report-coverage` for
 per-package pass/fail/ledger counts and blocking APIs. The native `flat_diff` integration
 test runs Bun against an independent TypeScript decoder for every opcode and malformed
@@ -75,5 +75,5 @@ The conformance test covers this distinction over the complete BMP input.
 The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; `lexical_html` supplies export-only DOM construction and linkedom serialization; rich-node exporters and clipboard HTML are behind the rich package’s `html` feature.
 
 `lexical_markdown` provides portable markdown import/export, ordered transformer
-contracts, standard block/inline groups and sans-IO insertion/Enter shortcuts. The Tier A interpreter routes markdown
+contracts, standard block/inline groups and sans-IO insertion/Enter shortcuts. The conformance replay routes markdown
 conversion through this engine; the regex corpus is checked against pinned V8.

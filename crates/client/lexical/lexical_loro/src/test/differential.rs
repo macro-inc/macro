@@ -91,7 +91,8 @@ fn stream(script: &[(u8, u8)]) -> Result<(Value, Vec<Value>)> {
     let mut observations = Vec::new();
     // Adapt the collab fuzzer's weighted per-peer key stream and end-of-block
     // precondition (apps/web/.../LexicalMarkdown/fuzz/{commands,model}.ts).
-    // Shortcut/code inputs remain literal text: application transforms are WP-29.
+    // Shortcut/code inputs remain literal text: application transforms live in
+    // macro_document_model.
     for (i, (weight, glyph)) in script.iter().enumerate() {
         let (_, commit) = editor.update(|tx| match weight % 100 {
             0..=44 => tx.insert_text(["a", "é", "😀", "中", "\u{301}"][usize::from(*glyph) % 5]),
@@ -480,8 +481,8 @@ fn documented_move_after_delete_exception_fixes_the_current_mirror_out_of_bounds
         .write_all(input.to_string().as_bytes())
         .expect("input");
     let output = child.wait_with_output().expect("mirror completion");
-    // S11 Δ-2 explicitly permits this divergence. The oracle remains unchanged:
-    // today's mirror issues move(2,0) after deleting index0 from a three-item list.
+    // An intended divergence: the projection fixes stale move indices. The oracle
+    // remains unchanged: today's mirror issues move(2,0) after deleting index0 from a three-item list.
     assert!(!output.status.success());
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("The given pos is 2, but the length is 2")

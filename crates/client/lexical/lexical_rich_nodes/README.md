@@ -67,7 +67,7 @@ additional literal checks. Its read-only test is a DOM claim test and remains in
 the view. RichTextImportExtension tests are DOM import tests, outside this model
 package. The heading Backspace test involving an empty ListItem inside ListNode is also
 ported now that list nodes are available.
-Tier A rich-text/hashtag fixtures are replayed through `lexical_conformance`;
+Recorded rich-text/hashtag fixtures are replayed through `lexical_conformance`;
 these literal unit ports also exercise the model directly.
 
 
@@ -84,8 +84,8 @@ payloads use the same integer contract rather than the later JsNumber sketch.
 
 The literal list tests port model assertions from LexicalListNode,
 LexicalListItemNode, formatList and utils suites, and cover strict-indent and
-checklist model branches. They include S4 R2-35's nested collapse (content is
-intentionally dropped), orphan grouping/lifting, element-point remapping,
+checklist model branches. They include upstream's nested-list collapse (content is
+intentionally dropped, as upstream does), orphan grouping/lifting, element-point remapping,
 subclass dispatch, check-state reset/copy, numbering and every package command.
 DOM classes, HTML import/export, focus/hit testing and fractional JS indent input
 remain view/HTML concerns or use the core's typed unsigned indent boundary.

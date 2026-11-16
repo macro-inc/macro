@@ -185,7 +185,7 @@ pub(crate) fn stored_matches(
 }
 /// stored_matches, also collecting every node whose model holds a storage-null
 /// key absent while the store holds null: the nodes a Loro-driven import must
-/// give that null (C-HISTORY-RECONCILE-NULLS-ALL-01).
+/// give that null.
 pub(crate) fn stored_matches_collecting(
     view: StateRef<'_>,
     key: NodeKey,

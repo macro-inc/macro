@@ -98,7 +98,7 @@ fn cross_parent_remote_move_reuses_the_id_key_and_preserves_selection() -> Resul
     assert!(!apply_remote(&mut projection, &doc, &mut core, changes, 1)?.changed);
     assert_eq!(core.state().view().parent(text), Some(right.key()));
     assert_ne!(projection.container_of(text.key()), Some(&old));
-    // Session restoration follows raw model fixups, as S11 §4.4 specifies.
+    // Session restoration follows raw model fixups.
     let anchor = projection
         .point(&doc, core.state(), &cursors.anchor)
         .expect("resolved anchor");

@@ -17,8 +17,8 @@ selection slicing and custom-callback assertions from upstream model tests.
 The supplementary fixed corpus runs all 18 live expression statics against Node
 and the delimiter selector against the unmodified upstream TypeScript function.
 `build.rs` inventories source statics so an added expression cannot silently
-escape that comparison. Known lone-surrogate input/capture cases retain explicit
-S3 R-5 ledger entries; captures decode to U+FFFD at the Rust string boundary.
+escape that comparison. Known lone-surrogate input/capture cases are explicitly
+expected to differ; captures decode to U+FFFD at the Rust string boundary.
 
 Regenerate with Node 24 and the pinned upstream source checkout:
 
@@ -26,8 +26,8 @@ Regenerate with Node 24 and the pinned upstream source checkout:
 node crates/client/lexical/lexical_markdown/tests/record-regex.mjs /path/to/lexical
 ```
 
-The corpus includes every markdown-string argument in the recorded Tier A
-markdown fixtures plus the S4 case-folding, Unicode and punctuation probes.
+The corpus includes every markdown-string argument in the recorded upstream
+markdown fixtures plus case-folding, Unicode and punctuation probes.
 Future Macro-specific transformer statics belong to their owning package's
 inventory. Lexical code is MIT licensed; see LICENSE-LEXICAL.
 
@@ -49,7 +49,7 @@ Ordered-list starts outside the model's `i32` range return a typed error.
 
 The oracle records 1,134 comparisons over 63 UTF-8 inputs, 63 upstream delimiter
 selections and 36 actual V8-only lone-surrogate input runs. The latter and two
-split-surrogate captures are explicitly ledgered under R-5.
+split-surrogate captures are expected differences: V8 keeps lone surrogates, Rust strings cannot.
 
 ## Shortcuts
 

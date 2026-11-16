@@ -5,7 +5,7 @@
 `application_query(name, payload, generation)` bridge. Both reject a retired
 model generation before decoding the payload. The GroupB child repeats the
 current-state generation check for direct callers. Unknown names remain available
-to other query children. No BOP, binding method, callback or UI is added.
+to other query children.
 
 The request is strictly decoded JSON (unknown fields and wrong types reject):
 
@@ -51,8 +51,6 @@ coverage. A successful response includes `listKey:{index,generation}` and one ta
   fields), or missingDueObservation (due). Invalid representations or missing
   required parse facts never silently become an undated item.
 
-No native task fetching, parsing clock, timer, facts cache or consumer activation
-is installed. This query must not be called once per list after every edit.
-Initial mount may query all mounted lists once. Steady plan delivery needs a
-separate explicit facts-revision input and native publication sidecar; that
-producer and its measured crossing budget are not established by this query.
+No task fetching, clock, timer or facts cache is installed. Query once per list on
+initial mount or on demand, never after every edit; steady updates come from
+`group-b.set-checklist-facts` (see `checklist_updates/README.md`).

@@ -113,7 +113,7 @@ pub struct LoroProjection {
     search_text: Option<search_text::SearchText>,
     /// Nodes whose model holds a storage-null key absent while the store holds
     /// null. Every Loro-driven import (remote or history) revisits them, as
-    /// Source's whole-tree reconcile does (C-HISTORY-RECONCILE-NULLS-ALL-01).
+    /// Source's whole-tree reconcile does.
     pending_nulls: OrderedSet<NodeKey>,
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,

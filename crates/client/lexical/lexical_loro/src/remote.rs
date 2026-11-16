@@ -165,8 +165,8 @@ impl LoroProjection {
         }
         // Every Loro-driven import (remote or history) revisits each node whose
         // model holds a storage-null key absent over a stored null, as Source's
-        // whole-tree reconcile does; local commits never come here
-        // (C-HISTORY-RECONCILE-NULLS-ALL-01). Each is visited once.
+        // whole-tree reconcile does; local commits never come here. Each is
+        // visited once.
         // Cleared only once the batch projects successfully (below): a diverged
         // projection keeps them for the recovery path.
         let visited_pending: Vec<NodeKey> = if count > 0 {
