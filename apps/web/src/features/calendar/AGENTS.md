@@ -40,6 +40,9 @@ host lives in `../block-calendar/`.
   its temporary year/date state in `primitives/create-month-picker.ts`; navigation
   uses the workspace navigation context. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`.
+- Compose the desktop date-navigation/tabs/search row above the 22px month title
+  and creation actions; retain the existing touch header and matching skeleton.
+  The month picker uses 304px width and 64×40px choices.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped

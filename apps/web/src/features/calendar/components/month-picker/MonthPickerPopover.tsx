@@ -39,9 +39,12 @@ export function MonthPickerPopover(props: MonthPickerPopoverProps) {
         as={Button}
         variant="ghost"
         size="md"
+        class="max-w-full min-w-0 justify-start"
         aria-label={t('calendar.chooseMonth')}
       >
-        <span>{title()}</span>
+        <span class="min-w-0 truncate text-[22px] font-semibold leading-7 text-ink">
+          {title()}
+        </span>
         <CaretDownIcon class="size-3 text-ink-muted" />
       </Popover.Trigger>
       {/* The focus scope must mount with real content, not a closed portal. */}
@@ -49,7 +52,7 @@ export function MonthPickerPopover(props: MonthPickerPopoverProps) {
         <ScopedPortal scope="local">
           <Popover.Content
             ref={content}
-            class="menu-surface z-action-menu w-72 max-w-[calc(100vw-1rem)] p-3"
+            class="menu-surface z-action-menu w-[304px] max-w-[calc(100vw-1rem)] p-3"
             onOpenAutoFocus={(event) => {
               if (!props.focusDateEntry) return;
               event.preventDefault();

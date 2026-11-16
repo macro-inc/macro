@@ -1,6 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { Button, cn } from '@ui';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useMonthPicker } from './month-picker-context';
 
 export interface MonthPickerGridProps {
@@ -47,14 +47,14 @@ export function MonthPickerGrid(props: MonthPickerGridProps) {
     <div
       role="group"
       aria-label={t('calendar.chooseMonth')}
-      class={cn('grid gap-1', columns() === 4 ? 'grid-cols-4' : 'grid-cols-3')}
+      class={cn('grid gap-2', columns() === 4 ? 'grid-cols-4' : 'grid-cols-3')}
       onKeyDown={move}
     >
       <For each={months}>
         {(month) => (
           <div
             class={cn(
-              'rounded-xl',
+              'rounded-lg',
               isSelected(month)
                 ? 'bg-accent/20 text-accent'
                 : 'text-ink hover:bg-hover'
@@ -74,7 +74,15 @@ export function MonthPickerGrid(props: MonthPickerGridProps) {
               onFocus={() => picker.setFocusedMonth(month)}
               onClick={() => picker.chooseMonth(month)}
             >
-              {monthLabel(month, 'short')}
+              <span class="relative min-w-0 text-sm">
+                <span class="block truncate">{monthLabel(month, 'short')}</span>
+                <Show when={isSelected(month)}>
+                  <span
+                    aria-hidden="true"
+                    class="absolute top-full left-1/2 mt-0.5 size-1 -translate-x-1/2 rounded-full bg-current"
+                  />
+                </Show>
+              </span>
             </Button>
           </div>
         )}

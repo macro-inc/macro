@@ -467,18 +467,16 @@ occurrence details before showing Join. Selecting a result preserves the search
 text. Availability lives in the desktop sidebar's Needs reply section and
 in the mobile header.
 
-Desktop Day, Week, Month, and Agenda tabs sit beside the title. The period
-controls use a dropdown and move into a separate row below 880px of calendar-pane width.
-The shared outlined `New` menu remains at the right end, even with the sidebar
-open; the sidebar places its full-width version below the title. With a docked
-sidebar, the header stays inline down to 860px. This avoids wrapping
-and immediately unwrapping when the sidebar hides. Expanded search does not
-force early wrapping; its results popup stays directly below the search field.
-Below 1040px, search slides over the month title without moving any controls or
-changing the header height. `New` stays outside the search overlay. Resizing the
-pane keeps the search field mounted and preserves its query and focus. Today
-retains its text label until the controls row runs out of room, then becomes an
-icon button. Desktop `New` keeps its label.
+Desktop date navigation, Day/Week/Month/Agenda tabs, and search occupy the first
+header row. The 22px month title sits below them, beside Booking links and New.
+The month title opens a 304px picker with 64×40px month choices; the selected month
+has an accent dot. G focuses Go to date, and Escape restores the title's focus.
+The desktop search field stays visible without taking focus when the view opens.
+Below 760px of calendar-pane width, the view tabs become the existing dropdown
+and search expands over the first row. The title and New remain available below
+it. Resizing preserves the mounted search field and query. Today keeps its label
+while room allows, then becomes an icon. The loading skeleton uses the same
+two-row desktop geometry.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar has no search of its own; event search is the header's

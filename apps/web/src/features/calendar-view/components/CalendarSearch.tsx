@@ -17,6 +17,7 @@ import {
   macroCallUrl,
 } from '@app/features/calendar/utils/macro-call-link';
 import { formatCalendarTime } from '@app/features/calendar/utils/time-format';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -732,7 +733,7 @@ function CalendarSearchControl(props: {
                 onKeyDown={handleSearchKeyDown}
                 onEscape={dismissSearch}
                 hotkey="cmd+f"
-                placeholder="Search events"
+                placeholder={t('common.search')}
               />
             </div>
           </Popover.Anchor>

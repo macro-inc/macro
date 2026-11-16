@@ -1,14 +1,19 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
 
+type SearchProps = {
+  expanded?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
 const state = vi.hoisted(() => ({
   touch: false,
   previous: vi.fn(),
   next: vi.fn(),
   today: vi.fn(),
   changeView: vi.fn(),
+  width: (): number => 1200,
 }));
 
 vi.mock('@ui', async () => ({
@@ -58,7 +63,12 @@ vi.mock('@app/features/calendar/hooks/use-calendar-hotkeys', () => ({
   useCalendarHotkeys: () => {},
 }));
 vi.mock('@solid-primitives/resize-observer', () => ({
-  createElementSize: () => ({ width: 1200, height: 60 }),
+  createElementSize: () => ({
+    get width() {
+      return state.width();
+    },
+    height: 60,
+  }),
 }));
 vi.mock('@app/features/calendar/components/MonthDrawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
@@ -89,7 +99,15 @@ vi.mock('@app/features/scheduling/calendar-actions', () => ({
   CalendarSchedulingActions: () => <button>Booking links</button>,
 }));
 vi.mock('./CalendarSearch', () => ({
-  CalendarSearch: () => <button>Search events</button>,
+  CalendarSearch: (props: SearchProps) => (
+    <button
+      data-expanded={props.expanded}
+      onClick={() => props.onOpenChange?.(true)}
+      onBlur={() => props.onOpenChange?.(false)}
+    >
+      Search events
+    </button>
+  ),
 }));
 vi.mock('./CalendarCreateItems', () => ({
   CalendarCreateEventItem: () => null,
@@ -110,6 +128,8 @@ vi.mock('../tour', () => ({
 afterEach(() => {
   cleanup();
   state.touch = false;
+  state.width = () => 1200;
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -146,6 +166,22 @@ describe('calendar headers', () => {
       expect(state.changeView).toHaveBeenCalledWith('agenda');
     }
   );
+
+  it('keeps an active search expanded when the pane becomes compact', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const [width, setWidth] = createSignal(1200);
+    state.width = width;
+    render(() => <Header presentation="workspace" />);
+    const search = screen.getByRole('button', { name: 'Search events' });
+    expect(search.getAttribute('data-expanded')).toBeNull();
+
+    fireEvent.click(search);
+    setWidth(640);
+    expect(search.getAttribute('data-expanded')).toBe('true');
+
+    fireEvent.blur(search);
+    expect(search.getAttribute('data-expanded')).toBe('false');
+  });
 
   it('retains the touch preview month picker and settings', () => {
     state.touch = true;

@@ -92,21 +92,14 @@ export function Header(props: {
   const paneSize = createElementSize(() =>
     headerElement()?.closest<HTMLElement>('[data-view-shell-main]')
   );
-  // Measure the parent pane so toolbar content cannot affect its own breakpoint.
-  // A docked sidebar hides the navigation toggle, so its toolbar fits sooner.
-  const hasDockedSidebar = () =>
-    !!shell && !shell.aside.isCollapsed() && !shell.aside.isOverlay();
-  const breakpoints = createSizeBreakpoints(
-    () => paneSize.width ?? 0,
-    () => ({
-      fullHeader: { min: hasDockedSidebar() ? 860 : 880 },
-      inlineSearch: { min: 1040 },
-      labeledNew: { min: 360 },
-      labeledToday: { min: 304 },
-    })
-  );
+  // Measure the pane, not the controls: opening search must not change modes.
+  const breakpoints = createSizeBreakpoints(() => paneSize.width ?? 0, {
+    fullHeader: { min: 760 },
+    labeledNew: { min: 360 },
+    labeledToday: { min: 304 },
+  });
   const isCompactHeader = () => !breakpoints.fullHeader();
-  const searchOverlaysControls = () => !breakpoints.inlineSearch();
+  const searchOverlaysControls = isCompactHeader;
   const today = createLocalToday();
   const [searchExpanded, setSearchExpandedInternal] = createSignal(false);
   const [searchPopupReady, setSearchPopupReady] = createSignal(false);
@@ -246,10 +239,6 @@ export function Header(props: {
   };
   const todayButton = (mobile: boolean, compact = false) => {
     const Control = compact ? ButtonGroup.Button : Button;
-    const size = () => {
-      if (compact) return mobile ? 'icon-md' : 'md';
-      return mobile ? 'icon-md' : 'lg';
-    };
     return (
       <Control
         aria-label="Go to today"
@@ -258,7 +247,7 @@ export function Header(props: {
           hotkey: TOKENS.calendar.period.today,
         }}
         variant={mobile || compact ? 'ghost' : 'secondary'}
-        size={size()}
+        size={mobile ? 'icon-md' : 'md'}
         class={cn(
           mobile && 'relative',
           !mobile && 'bg-transparent text-sm',
@@ -348,78 +337,50 @@ export function Header(props: {
       <Match when={!usesSplitHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
-          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"
+          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2 [--view-search-height:2rem]"
         >
-          <div class="relative flex min-w-0 flex-1 items-center gap-2">
-            {props.leading}
-            <h1 class="min-w-0 truncate px-1 text-sm font-semibold text-ink">
-              <MonthPickerPopover
-                date={currentDate()}
-                open={monthPicker.open}
-                focusDateEntry={monthPicker.focusDateEntry}
-                onOpenChange={(open) =>
-                  setMonthPicker({ open, focusDateEntry: false })
-                }
-                onSelect={selectDate}
-              />
-            </h1>
-            <Show when={!isCompactHeader()}>
-              <CalendarViewTabs
-                value={navigation.periodView()}
-                onChange={navigation.changeView}
-              />
-            </Show>
-          </div>
           <div
-            class={cn(
-              'relative flex shrink-0 items-center justify-end gap-2',
-              isCompactHeader() && 'basis-full'
-            )}
+            class="relative flex min-w-0 flex-1 items-center gap-2"
             data-calendar-period-controls=""
             ref={tourTarget(CALENDAR_TOUR.period)}
             onClick={() => setSearchExpanded(false)}
           >
             <div
-              class="flex items-center gap-2"
+              class="flex min-w-0 flex-1 items-center gap-2"
               classList={{
                 invisible: searchOverlaysControls() && searchExpanded(),
                 'pointer-events-none':
                   searchOverlaysControls() && searchExpanded(),
               }}
             >
-              <Show when={showBookingLinks()}>
-                <CalendarSchedulingActions compact />
-              </Show>
+              {props.leading}
               <HeaderActionGroup label="Calendar navigation" size="md">
-                {todayButton(!breakpoints.labeledToday(), true)}
                 {previous(true)}
                 {next(true)}
               </HeaderActionGroup>
-              <Show when={isCompactHeader()}>
-                <HeaderActionGroup label="Calendar view" size="md">
-                  <PeriodSelector isNarrow={isNarrow()} compact grouped />
-                </HeaderActionGroup>
+              {todayButton(!breakpoints.labeledToday())}
+              <div class="flex-1" />
+              <Show
+                when={!isCompactHeader()}
+                fallback={
+                  <HeaderActionGroup label="Calendar view" size="md">
+                    <PeriodSelector isNarrow={isNarrow()} compact grouped />
+                  </HeaderActionGroup>
+                }
+              >
+                <CalendarViewTabs
+                  value={navigation.periodView()}
+                  onChange={navigation.changeView}
+                />
               </Show>
-              {headerCreateMenu()}
             </div>
             <div
               onTransitionEnd={handleSearchTransitionEnd}
               onClick={(event) => event.stopPropagation()}
               class={cn(
                 'h-8 shrink-0',
-                searchOverlaysControls()
-                  ? 'w-8'
-                  : 'transition-[width] duration-200 ease-out motion-reduce:transition-none'
+                searchOverlaysControls() ? 'w-8' : 'w-52'
               )}
-              style={
-                searchOverlaysControls()
-                  ? undefined
-                  : {
-                      width: searchExpanded()
-                        ? 'clamp(22rem, 40cqw, 28rem)'
-                        : '2rem',
-                    }
-              }
             >
               <div
                 onTransitionEnd={handleSearchTransitionEnd}
@@ -439,12 +400,41 @@ export function Header(props: {
                 <CalendarSearch
                   inline
                   compact={searchOverlaysControls()}
-                  expanded={searchExpanded()}
-                  popupReady={searchPopupReady()}
+                  expanded={
+                    searchOverlaysControls() ? searchExpanded() : undefined
+                  }
+                  popupReady={!searchOverlaysControls() || searchPopupReady()}
                   onExpand={() => setSearchExpanded(true)}
-                  onDismiss={() => setSearchExpanded(false)}
+                  onOpenChange={setSearchExpanded}
+                  onDismiss={
+                    searchOverlaysControls()
+                      ? () => setSearchExpanded(false)
+                      : undefined
+                  }
                 />
               </div>
+            </div>
+          </div>
+          <div class="flex min-h-9 min-w-0 basis-full items-center gap-2">
+            <h1 class="-ml-1 min-w-0 flex-1">
+              <MonthPickerPopover
+                date={currentDate()}
+                open={monthPicker.open}
+                focusDateEntry={monthPicker.focusDateEntry}
+                onOpenChange={(open) =>
+                  setMonthPicker({ open, focusDateEntry: false })
+                }
+                onSelect={selectDate}
+              />
+            </h1>
+            <div
+              class="flex shrink-0 items-center gap-2"
+              onClick={() => setSearchExpanded(false)}
+            >
+              <Show when={showBookingLinks()}>
+                <CalendarSchedulingActions compact />
+              </Show>
+              {headerCreateMenu()}
             </div>
           </div>
         </ViewShell.TopBar>

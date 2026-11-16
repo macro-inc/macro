@@ -3,9 +3,9 @@ import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-
 import { AgendaSkeleton } from '@app/features/calendar/components/agenda/skeleton/AgendaSkeleton';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { isMobile } from '@core/mobile/isMobile';
 import { Show } from 'solid-js';
+import { CalendarMainSkeleton } from './views/calendar-header/CalendarMainSkeleton';
 
 const monthTitle = () =>
   new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(
@@ -21,16 +21,7 @@ export function CalendarViewSkeleton(props: { period?: CalendarPeriodView }) {
       aside={isMobile() ? false : { preserveDuringResize: false }}
     >
       <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
-      <ViewSkeleton.Main
-        title={monthTitle()}
-        controls={[
-          'Booking links ⌄',
-          'Today ‹ ›',
-          `${calendarPeriodLabel(period())} ⌄`,
-          '+ New ⌄',
-          1,
-        ]}
-      >
+      <CalendarMainSkeleton title={monthTitle()} period={period()}>
         <div class="flex min-h-0 flex-1">
           <Show
             when={period() === 'agenda'}
@@ -45,7 +36,7 @@ export function CalendarViewSkeleton(props: { period?: CalendarPeriodView }) {
             <AgendaSkeleton />
           </Show>
         </div>
-      </ViewSkeleton.Main>
+      </CalendarMainSkeleton>
     </ViewSkeleton.Root>
   );
 }
