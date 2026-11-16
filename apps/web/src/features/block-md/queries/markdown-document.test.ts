@@ -93,7 +93,7 @@ describe('markdown document loading with the rust-editor-model flag off', () => 
   it('loads the md block without waiting for PostHog flags', async () => {
     const loaded = definition.load(
       { type: 'sync-service', id: 'doc-1' },
-      'load'
+      'initial'
     );
     await vi.advanceTimersByTimeAsync(0);
 
