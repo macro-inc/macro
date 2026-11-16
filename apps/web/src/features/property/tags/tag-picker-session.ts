@@ -53,6 +53,8 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 export function createTagPickerSession(props: {
   docTags: DocTags;
   onClose: () => void;
+  /** Dismiss an enclosing menu when opening the tag's item list. */
+  onNavigate?: () => void;
   onOpenEditEditor: (
     mode: Extract<TagEditorDialogMode, { type: 'edit' }>
   ) => void;
@@ -62,6 +64,8 @@ export function createTagPickerSession(props: {
    * and Escape saves.
    */
   confirmsWithDone: boolean;
+  /** Embedded menus handle keys locally so their parent cannot intercept them. */
+  keyboardTarget?: 'document' | 'local';
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -181,7 +185,7 @@ export function createTagPickerSession(props: {
     await savePromise;
   };
 
-  /** Toggle a tag; a picker that closes on pick saves unless Shift is held. */
+  /** Row picks save and close on desktop; checkbox toggles stay in the session. */
   const pick = (item: TagOptionItem, event?: { shiftKey?: boolean }) => {
     toggleSelected(item.option.id);
     if (!props.confirmsWithDone && !event?.shiftKey) {
@@ -267,10 +271,14 @@ export function createTagPickerSession(props: {
   const beginCreate = () => {
     const label = createLabel();
     if (!showCreateRow() || !label) return;
+    // Returning to edit the name must retain the chosen color and sharing option.
     setCreateDraftLabel(label);
-    setSelectedColorIndex(0);
-    setSelectedScopeIndex(0);
     setCreateStep('color');
+  };
+
+  const backFromCreate = () => {
+    if (addOption.isPending || ensureTagSet.isPending) return;
+    setCreateStep((step) => (step === 'scope' ? 'color' : null));
   };
 
   const editableTagForItem = (item: TagOptionItem): EditableTag => ({
@@ -290,6 +298,7 @@ export function createTagPickerSession(props: {
   const openTaggedItems = async (item: TagOptionItem) => {
     if (!(await persistSelection())) return;
     props.onClose();
+    props.onNavigate?.();
     navigateToTag(
       split.openWithSplit,
       {
@@ -332,15 +341,18 @@ export function createTagPickerSession(props: {
   const handleCreateKeyDown = (event: KeyboardEvent) => {
     const step = createStep();
     if (!step) return;
+    // Native buttons own activation; Enter on Back must not advance the flow.
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button') &&
+      (event.key === 'Enter' || event.key === ' ')
+    )
+      return;
 
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      if (step === 'scope') {
-        setCreateStep('color');
-        return;
-      }
-      setCreateStep(null);
+      backFromCreate();
       return;
     }
 
@@ -426,20 +438,24 @@ export function createTagPickerSession(props: {
     dropdown.handleKeyDown(event);
   };
 
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
-  });
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
-  });
+  if (props.keyboardTarget !== 'local') {
+    onMount(() => {
+      document.addEventListener('keydown', handleKeyDown);
+    });
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown);
+    });
+  }
 
   return {
+    handleKeyDown,
     search,
     setSearch: (value: string) => {
       setSearch(value);
       dropdown.setSearchQuery(value);
     },
     isSelected,
+    toggleSelected,
     pick,
     clearAll,
     persistSelection,
@@ -466,6 +482,7 @@ export function createTagPickerSession(props: {
     setSelectedScopeIndex,
     creating: () => addOption.isPending || ensureTagSet.isPending,
     beginCreate,
+    backFromCreate,
     beginEdit,
     openTaggedItems,
     createTag,

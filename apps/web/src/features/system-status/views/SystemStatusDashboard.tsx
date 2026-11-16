@@ -297,9 +297,8 @@ function ApiDocs() {
             class="absolute top-2 right-2"
             aria-label="Copy example"
             onClick={() => navigator.clipboard.writeText(example())}
-          >
-            <CopyIcon class="size-4" />
-          </CopyButton>
+            icon={<CopyIcon class="size-4" />}
+          ></CopyButton>
         </div>
       </div>
     </Section>
