@@ -342,11 +342,12 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 ///
 /// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
 ///   plan an import review presents.
-/// - `SelfKnowledge`, and `SearchTools` / `LoadTools`, which also load the
-///   session's connected MCP tools.
+/// - `SearchTools` / `LoadTools`, which also load the session's connected
+///   MCP tools.
+///
+/// `SelfKnowledge`'s about page is code mode's `about_macro` guide.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
-        .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()

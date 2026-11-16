@@ -43,7 +43,7 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
     .compose(&citations::PROMPT)
     .compose(&mentions::PROMPT)
     .compose(&do_not::PROMPT)
-    .compose(&about_macro::PROMPT);
+    .compose(&about_macro::CODE_MODE_PROMPT);
 
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with

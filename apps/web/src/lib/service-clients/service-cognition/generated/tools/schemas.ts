@@ -20707,6 +20707,7 @@ export const DescribeCodeTools = z
             z.literal('ai'),
             z.literal('templates'),
             z.literal('examples'),
+            z.literal('about_macro'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>
@@ -20779,6 +20780,7 @@ export const CodeToolsDescription = z.object({
           z.literal('ai'),
           z.literal('templates'),
           z.literal('examples'),
+          z.literal('about_macro'),
         ];
         const errors = schemas.reduce<z.ZodError[]>(
           (errors, schema) =>

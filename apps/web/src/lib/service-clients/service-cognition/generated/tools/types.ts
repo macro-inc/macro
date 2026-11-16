@@ -4843,7 +4843,12 @@ export type WebSearchTopic = 'general' | 'news';
 /**
  * Available SDK workflow guides.
  */
-export type CodeGuideTopic = 'search' | 'ai' | 'templates' | 'examples';
+export type CodeGuideTopic =
+  | 'search'
+  | 'ai'
+  | 'templates'
+  | 'examples'
+  | 'about_macro';
 /**
  * How the Jev relevance pass ended.
  */
