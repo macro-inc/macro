@@ -175,7 +175,11 @@ function verifyServedBody(
     deepStrictEqual([...scriptURL.searchParams.keys()], ['v']);
     if (!scriptURL.searchParams.get('v'))
       throw new Error('Missing Vite dependency version');
-    deepStrictEqual(importURL.search, scriptURL.search);
+    // Vite's optimizer may or may not repeat the dependency version on a
+    // rewritten chunk import (CI's fresh optimizer cache omits it). Either way
+    // it must name the same version and serve the same file checked below.
+    if (importURL.search !== '')
+      deepStrictEqual(importURL.search, scriptURL.search);
     const actualFile = servedFile(importURL.href);
     deepStrictEqual(actualFile, expectedFile);
     return {
