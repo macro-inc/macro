@@ -41,10 +41,10 @@ impl MacroUserAuthentication {
     /// program running with their access.
     #[must_use]
     pub fn attribution(&self) -> CredentialAttribution {
-        if self.agent_id.is_some() {
-            CredentialAttribution::Agent
-        } else {
-            CredentialAttribution::Person
+        match (self.agent_id, self.routine_id) {
+            (Some(_), _) => CredentialAttribution::Agent,
+            (None, Some(_)) => CredentialAttribution::Routine,
+            (None, None) => CredentialAttribution::Person,
         }
     }
 }

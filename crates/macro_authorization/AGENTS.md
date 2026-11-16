@@ -58,7 +58,13 @@ that assumes a session. Session-only fakes use `ValidatedCredential::session`. T
 production `MacroAuthJwtValidator` derives origin from the verified token enum in
 one decode.
 Personal-session-only capabilities match `origin == Session` (and no agent
-attribution) instead of sniffing request headers. `authorize_identity` retains
+attribution) instead of sniffing request headers. A Macro API token's signed
+`agent_id` and `routine_id` reach `MacroUserAuthentication`;
+`attribution()` reads them as `CredentialAttribution`, and routes only a person
+may drive refuse anything but `Person` through `is_agent_run(attribution,
+headers)`. A routine code step running as its owner signs only `routine_id`,
+so never test `agent_id` alone for "is this a person", and never rely on the
+code-execution header alone. `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 

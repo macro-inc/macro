@@ -37,7 +37,7 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialOrigin, MacroAuthorizationExtractor,
+    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
