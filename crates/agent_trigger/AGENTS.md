@@ -68,3 +68,6 @@ session that results.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.

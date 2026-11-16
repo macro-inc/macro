@@ -10,3 +10,8 @@ lexical_client = { path = "../lexical_client" }
 messages = { path = "../messages", features = ["ports"] }
 rootcause = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+lexical_client = { path = "../lexical_client", features = ["test-utils"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serde_json.workspace = true

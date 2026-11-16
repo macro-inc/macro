@@ -44,7 +44,7 @@ use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
     AiEditingWorkerUrl, AppServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -171,6 +171,8 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// [`crate::ImportJobs::hand_over`] on shutdown so they move to another
 /// process instead of waiting for their leases to lapse.
 ///
+/// `lexical_client` is configured once by the host and reused here.
+///
 /// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
 /// reads as connected for a linked user; `None` where the host cannot reach
 /// the authentication service.
@@ -185,7 +187,8 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
         import_jobs,
         recorder,
         linked_github,
-        sender_provider
+        sender_provider,
+        lexical_client
     ),
     err
 )]
@@ -202,6 +205,7 @@ pub async fn build_tool_service_context_from_env(
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
     sender_provider: impl email::domain::senders::EmailSenderProvider,
+    lexical_client: LexicalClient,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -210,7 +214,6 @@ pub async fn build_tool_service_context_from_env(
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
     let calendar_service_url = CalendarServiceUrl::new()?;
-    let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
@@ -283,8 +286,8 @@ pub async fn build_tool_service_context_from_env(
         sync_service_auth_key.clone(),
         sync_service_url,
     ));
+    let lexical_client = lexical_client.with_document_source(sync_client.clone());
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
-    let lexical_client = LexicalClient::new(env.internal_api_key.to_string(), lexical_service_url);
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());

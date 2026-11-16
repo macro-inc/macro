@@ -90,3 +90,26 @@ fn a_sync_service_conflict_is_a_surface_conflict() {
         }
     );
 }
+
+#[tokio::test]
+async fn surface_markdown_uses_the_selected_route_in_every_mode() {
+    use lexical_client::test_utils::{FakeLexical, HELLO_DOCUMENT};
+    for mode in ["http", "in_process", "shadow"] {
+        let backend = FakeLexical::new(
+            HELLO_DOCUMENT,
+            vec![(
+                "GET",
+                "/markdown/surface-test?target=external",
+                serde_json::json!({"data":"Hello"}),
+            )],
+        )
+        .await;
+        let initializer = LexicalSyncSurfaceInitializer::new(
+            backend.client(&format!("markdown={mode}")),
+            SyncServiceClient::new("test-key".into(), backend.url().into()),
+        );
+        assert_eq!(initializer.markdown("surface-test").await.unwrap(), "Hello");
+        assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+        assert_eq!(backend.raw_reads(), usize::from(mode != "http"));
+    }
+}

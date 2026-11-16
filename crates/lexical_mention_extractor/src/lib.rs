@@ -51,3 +51,29 @@ impl MessageMentionExtractor for LexicalMentionExtractor {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use lexical_client::test_utils::FakeLexical;
+
+    #[tokio::test]
+    async fn message_mentions_use_the_selected_route_in_every_mode() {
+        let markdown = r#"<m-document-mention>{"blockName":"channel","documentId":"reference","documentName":"Name"}</m-document-mention>"#;
+        for mode in ["http", "in_process", "shadow"] {
+            let backend = FakeLexical::new("", vec![("POST", "/mentions", serde_json::json!({"mentions":[{"entityType":"channel","entityId":"reference"}]}))]).await;
+            let extractor =
+                LexicalMentionExtractor::new(Arc::new(backend.client(&format!("snapshot={mode}"))));
+            let mentions = extractor.extract(markdown).await.unwrap();
+            assert_eq!(mentions.len(), 1);
+            assert_eq!(mentions[0].entity_type, "channel");
+            assert_eq!(mentions[0].entity_id, "reference");
+            let requests = backend.requests();
+            assert_eq!(requests.len(), usize::from(mode != "in_process"));
+            if let Some(request) = requests.first() {
+                assert_eq!(request.body, serde_json::json!({"markdown":markdown}));
+            }
+            assert_eq!(backend.raw_reads(), 0);
+        }
+    }
+}

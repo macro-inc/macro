@@ -14,7 +14,7 @@ updates over WebSocket.
   it before changing this service.
 - `../../crates/sync_server_core/src/domain/room/http.rs`: initialization, reads and source-request gate policy; handlers retain deferred body reads.
 - `../../crates/sync_server_core/src/domain/room/alarm.rs`: persistence alarms and blame flushing; callbacks map its empty/ok outcomes.
-- `../../crates/sync_server_core/src/domain/room/frame.rs`: inbound frame policy and message telemetry, including the fail-closed HTTP comment gate.
+- `../../crates/sync_server_core/src/domain/room/frame.rs`: inbound frame policy and message telemetry, including the fail-closed configured comment gate.
 - `src/inbound/durable_object.rs` + `src/inbound/durable_object/document_api.rs`: the Durable
   Object — WebSocket handling, loro document state, alarm-driven snapshotting.
 - `src/inbound/durable_object/surface_api.rs`, `surface_migration.rs`: non-document
@@ -76,6 +76,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   disposal remains safe and is shared with transcript finalization.
 - Use Node.js 22.12+/24.x/26+ for Vitest 5; install JS deps with `npm ci`
   (`package-lock.json` is authoritative, not `bun.lock`).
+
+- `COMMENT_GATE_MODE` is required per room (`http`, `in_process`, `shadow`); every checked-in environment defaults to HTTP. Invalid configuration refuses gate checks; shadow returns HTTP and reports equality. The gate span records the `gate.comment_only` verdict alongside mode, sizes and timing.
 
 ## Gotchas
 

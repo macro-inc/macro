@@ -30,6 +30,10 @@ pub async fn build_tool_service_context(
         // and the email tools cannot look up send-as aliases.
         None,
         email::domain::senders::UnavailableEmailSenderProvider,
+        lexical_client::LexicalClient::from_env(
+            macro_auth::InternalApiKey::new()?.to_string(),
+            macro_service_urls::LexicalServiceUrl::new()?.to_string(),
+        )?,
     )
     .await
 }

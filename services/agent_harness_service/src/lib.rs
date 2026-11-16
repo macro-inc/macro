@@ -642,6 +642,11 @@ pub async fn run() -> anyhow::Result<()> {
     // Notion imports started from sessions, public MCP, and the cognition
     // routes share these jobs and hand their runs over on shutdown.
     let import_jobs = ai_tools::ImportJobs::new();
+    let lexical = LexicalClient::new(
+        config.internal_api_key.clone(),
+        LexicalServiceUrl::new()?.to_string(),
+    )
+    .with_route_modes(config.lexical_route_modes.clone());
     let tool_context = ai_tools::build_tool_service_context_from_env(
         pool.clone(),
         event_broker_tracker.clone(),
@@ -658,9 +663,15 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::new(config.auth_service_client()?),
             ),
         ),
+        lexical.clone(),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    let lexical = tool_context
+        .document_tool_context
+        .lexical_client
+        .as_ref()
+        .clone();
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
         pool.clone(),
@@ -753,15 +764,18 @@ pub async fn run() -> anyhow::Result<()> {
             .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
             .await
             .context("failed to resolve scheduling secrets")?,
-        pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
-        routine_code,
         http_ready,
-        Arc::clone(&notifications),
-        search_service_client::SearchServiceClient::new(
-            config.document_storage_service_auth_key.clone(),
-            macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
-        ),
+        scheduling::SchedulingDependencies {
+            db: pool.clone(),
+            code: routine_code,
+            notifications: Arc::clone(&notifications),
+            search: search_service_client::SearchServiceClient::new(
+                config.document_storage_service_auth_key.clone(),
+                macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
+            ),
+            lexical: lexical.clone(),
+        },
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -1302,10 +1316,6 @@ pub async fn run() -> anyhow::Result<()> {
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(broker.clone());
-    let lexical = LexicalClient::new(
-        config.internal_api_key.clone(),
-        LexicalServiceUrl::new()?.to_string(),
-    );
     let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         connection_gateway.clone(),
     );
@@ -1376,7 +1386,7 @@ pub async fn run() -> anyhow::Result<()> {
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
     let prompt_composer = LexicalAgentPromptComposer::new(
-        lexical,
+        lexical.clone(),
         PrimaryCalendarTimeZones::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
         )),
@@ -2330,7 +2340,7 @@ pub async fn run() -> anyhow::Result<()> {
     let mut trigger = tokio::spawn(trigger::supervise(
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
-        config.internal_api_key.clone(),
+        lexical.clone(),
         config.document_storage_service_auth_key.clone(),
         trigger::TriggerServices {
             classifier: trigger_classifier,

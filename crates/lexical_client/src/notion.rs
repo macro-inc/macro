@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use base64::Engine;
 
-use super::LexicalClient;
+use super::HttpLexicalClient;
 use crate::parse_markdown::check_response;
 
 /// A Notion page body and what its references resolve to.
@@ -48,7 +48,7 @@ pub struct NotionSnapshotUser {
 }
 
 /// A converted Notion page.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct NotionSnapshot {
     /// The new document's Loro snapshot.
     pub snapshot: Vec<u8>,
@@ -62,27 +62,15 @@ struct NotionSnapshotResponse {
     markdown: String,
 }
 
-impl LexicalClient {
-    /// Convert a Notion page to a new document's Loro snapshot.
-    #[tracing::instrument(
-        skip(self, request),
-        fields(
-            markdown_bytes = request.markdown.len(),
-            pages = request.links.pages.len(),
-            users = request.links.users.len()
-        ),
-        err
-    )]
+impl HttpLexicalClient {
     pub async fn notion_to_loro_snapshot(
         &self,
         request: &NotionSnapshotRequest<'_>,
     ) -> Result<NotionSnapshot> {
-        let mut headers = reqwest::header::HeaderMap::new();
-        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = check_response(
             self.client
                 .post(format!("{}/snapshot/notion", self.url))
-                .headers(headers)
+                .headers(crate::trace_headers())
                 .json(request)
                 .send()
                 .await?,

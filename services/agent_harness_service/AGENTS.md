@@ -338,6 +338,9 @@ produce events, independently of public session control.
 
 - `RenderCanvas` promotes only its explicit top-level `modelMedia` contract to at most two bounded native PNG blocks; pixels are removed from text and structured JSON, nested scene media is never promoted, and this adapter never fetches image URLs.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
@@ -463,6 +466,8 @@ bridge hostname, preserving Host validation for other origins.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
 
 - Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.
+
+Share the AI tools' configured Lexical client with scheduling and prompt/trigger adapters; pass it with the host-owned scheduling services through `SchedulingDependencies`. Its live sync source already uses the host-resolved credential.
 
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
 

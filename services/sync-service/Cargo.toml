@@ -38,6 +38,8 @@ release = false
 wasm-opt = true
 
 [dependencies]
+macro_document_model = { workspace = true, default-features = false }
+strum.workspace = true
 worker = { workspace = true, features = ['d1', 'http', 'axum'] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = [
@@ -48,7 +50,7 @@ web-time.workspace = true
 time = { workspace = true, features = ['wasm-bindgen'] }
 bebop.workspace = true
 sync_protocol = { workspace = true }
-sync_server_core.workspace = true
+sync_server_core = { workspace = true, features = ["in-process-gate"] }
 serde_json.workspace = true
 serde.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -73,6 +75,5 @@ utoipa = { version = "5.4.0", optional = true }
 workspace = true
 
 [package.metadata.cargo-shear]
-# Feature activation for wasm32, never named in code: getrandom's `wasm_js`
-# backend, and `time`'s `wasm-bindgen` clock for `OffsetDateTime::now_utc`.
-ignored = ["getrandom", "time"]
+# `time` activates the wasm-bindgen clock for OffsetDateTime::now_utc.
+ignored = ["time"]

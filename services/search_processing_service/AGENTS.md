@@ -27,6 +27,9 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - Not here: OpenSearch client/index mapping primitives → `crates/opensearch_client`;
   agent-session fold/transcript assembly → `crates/folds/agent_fold`.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md).
+
 ## Checks
 
 - From repo root, `SQLX_OFFLINE` unset:
@@ -49,3 +52,6 @@ OpenSearch, and exposes backfill HTTP routes for each.
 ## Related
 
 - Docs: this directory's `README.md` · Rules: `.agents/rules/rust/architecture.md`
+
+The sync-indexing mode regression uses real local database metadata plus
+hand-written Lexical/raw-source and storage boundaries, and rejects S3 fallback.

@@ -45,6 +45,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+lexical_client = { path = "../lexical_client", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 reqwest = { workspace = true }

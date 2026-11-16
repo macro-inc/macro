@@ -167,3 +167,59 @@ async fn a_prompt_without_a_trigger_sends_none() {
     );
     server.abort();
 }
+
+#[tokio::test]
+async fn agent_prompt_composition_uses_the_selected_route_in_every_mode() {
+    use lexical_client::test_utils::FakeLexical;
+    for mode in ["http", "in_process", "shadow"] {
+        let backend = FakeLexical::new(
+            "",
+            vec![(
+                "POST",
+                "/agent-context",
+                serde_json::json!({"markdown":"HTTP-composed prompt"}),
+            )],
+        )
+        .await;
+        let composer =
+            LexicalAgentPromptComposer::new(backend.client(&format!("composers={mode}")), Unknown)
+                .with_clock(afternoon_in_new_york);
+        let prompt = composer
+            .compose("Raw prompt", None, None, None)
+            .await
+            .unwrap();
+        if mode == "in_process" {
+            assert!(prompt.starts_with("<m-agent-context>"));
+            assert!(prompt.contains("2026-09-24T20:03:36+00:00"));
+            assert!(prompt.ends_with("Raw prompt"));
+        } else {
+            assert_eq!(prompt, "HTTP-composed prompt");
+            assert_eq!(
+                backend.requests()[0].body,
+                serde_json::json!({"promptMarkdown":"Raw prompt","currentTime":{"iso":"2026-09-24T20:03:36+00:00","local":"Thursday, September 24, 2026, 8:03 PM"}})
+            );
+        }
+        assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+        assert_eq!(backend.raw_reads(), 0);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires explicitly configured isolated local stack and OTLP collector"]
+async fn local_stack_agent_context() -> anyhow::Result<()> {
+    use lexical_client::test_utils::{LocalStack, trace_local};
+    let stack = LocalStack::load()?;
+    let composer =
+        LexicalAgentPromptComposer::new(stack.lexical, Unknown).with_clock(afternoon_in_new_york);
+    let (_, trace_id) = trace_local("agent_harness.compose", async {
+        let composed = composer
+            .compose("Work on **this**", Some("Be brief."), None, None)
+            .await?;
+        assert!(composed.contains("2026-09-24T20:03:36+00:00"));
+        assert!(composed.ends_with("Work on **this**"));
+        Ok(())
+    })
+    .await?;
+    println!("agent context local Tempo trace: {trace_id}");
+    Ok(())
+}

@@ -32,6 +32,18 @@ impl<D, A> DocumentSkillReader<D, A> {
             lexical,
         }
     }
+
+    // Content reads need only the granted receipt and the configured exporter;
+    // metadata and access services are separate capabilities of this adapter.
+    async fn read_markdown(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, SkillError> {
+        self.lexical
+            .get_markdown(&receipt.entity().entity_id, MarkdownTarget::Internal)
+            .await
+            .map_err(SkillError::ReadFailed)
+    }
 }
 
 impl<D: DocumentService, A: EntityAccessService> SkillReader for DocumentSkillReader<D, A> {
@@ -90,9 +102,47 @@ impl<D: DocumentService, A: EntityAccessService> SkillReader for DocumentSkillRe
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, SkillError> {
-        self.lexical
-            .get_markdown(&receipt.entity().entity_id, MarkdownTarget::Internal)
-            .await
-            .map_err(SkillError::ReadFailed)
+        self.read_markdown(receipt).await
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
+    use lexical_client::test_utils::{FakeLexical, HELLO_DOCUMENT};
+
+    #[tokio::test]
+    async fn granted_skill_content_uses_the_selected_route_in_every_mode() {
+        for mode in ["http", "in_process", "shadow"] {
+            let backend = FakeLexical::new(
+                HELLO_DOCUMENT,
+                vec![(
+                    "GET",
+                    "/markdown/document-test?target=internal",
+                    serde_json::json!({"data":"Hello"}),
+                )],
+            )
+            .await;
+            let reader = DocumentSkillReader::new(
+                Arc::new(()),
+                Arc::new(()),
+                Arc::new(backend.client(&format!("markdown={mode}"))),
+            );
+            let receipt = EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+                Entity {
+                    entity_id: "document-test".into(),
+                    entity_type: EntityType::Document,
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
+            )
+            .unwrap();
+            assert_eq!(reader.read_markdown(receipt).await.unwrap(), "Hello");
+            assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+            assert_eq!(backend.raw_reads(), usize::from(mode != "http"));
+        }
     }
 }

@@ -38,6 +38,9 @@ LLM.
 - Add an eval case: drop a file under `tests/eval/cases/` (auto-discovered by
   `tests/eval/main.rs`) → `just crates/task_dedup/eval [name]`.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p task_dedup` (`SQLX_OFFLINE` unset).
@@ -49,3 +52,6 @@ LLM.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.
