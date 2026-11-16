@@ -8,6 +8,11 @@ import {
   useMessageUnsent,
 } from '../unsent';
 
+const { channelCacheHost } = vi.hoisted(() => ({
+  channelCacheHost: vi.fn((): object | undefined => ({})),
+}));
+vi.mock('../local/flag', () => ({ channelCacheHost }));
+
 function Probe(props: { id: string }) {
   const unsent = useMessageUnsent(() => props.id);
   return <output>{unsent() ? 'unsent' : 'ok'}</output>;
@@ -15,7 +20,10 @@ function Probe(props: { id: string }) {
 
 describe('useMessageUnsent', () => {
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    channelCacheHost.mockReturnValue({});
+  });
 
   it('marks only a send that has stayed pending, until it settles', async () => {
     const client = new QueryClient();
@@ -48,4 +56,30 @@ describe('useMessageUnsent', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(mine.container.textContent).toBe('ok');
   });
+
+  it('marks nothing while channels send over REST', async () => {
+    channelCacheHost.mockReturnValue(undefined);
+    const client = new QueryClient();
+    const observer = new MutationObserver(client, {
+      mutationKey: SEND_MESSAGE_MUTATION_KEY,
+      mutationFn: (_vars: { optimisticId: string }) =>
+        new Promise<null>(() => {}),
+    });
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Probe id="m1" />
+      </QueryClientProvider>
+    ));
+
+    fireAndForgetMutate(observer);
+    await vi.advanceTimersByTimeAsync(UNSENT_AFTER_MS + 1);
+
+    expect(view.container.textContent).toBe('ok');
+  });
 });
+
+function fireAndForgetMutate(
+  observer: MutationObserver<null, Error, { optimisticId: string }>
+): void {
+  observer.mutate({ optimisticId: 'm1' }).catch(() => {});
+}

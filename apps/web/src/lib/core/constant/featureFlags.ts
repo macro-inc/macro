@@ -715,6 +715,18 @@ export const enableGraphqlSoup = defineFlag({
   env: 'ENABLE_GRAPHQL_SOUP',
 });
 
+/**
+ * Channel messages read from the device cache and are written through its
+ * queue (`queries/messages/local`); off, channels use REST. Needs the GraphQL
+ * cache. No default, dev included: off until PostHog answers on, because the
+ * rollout moves where messages are stored and sent. A local or CI bundle has
+ * no PostHog and sets `VITE_ENABLE_CHANNEL_LOCAL_SYNC` at build time.
+ */
+export const enableChannelLocalSync = defineFlag({
+  key: 'enable-channel-local-sync',
+  env: 'ENABLE_CHANNEL_LOCAL_SYNC',
+});
+
 /** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
 export const enableGraphqlCalendar = defineFlag({
   key: 'enable-graphql-calendar',
