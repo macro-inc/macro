@@ -1,7 +1,11 @@
 import { brotliCompressSync, constants } from 'node:zlib';
 
-/** Advisory budget: a measured speed gain may justify a larger module. */
-export const SESSION_BROTLI_SOFT_CEILING = 1_600_000;
+/**
+ * Advisory budget: the measured 2.1 MB module plus a small margin. Only users
+ * with the native editor flag on fetch it (a streaming preload); flag-OFF
+ * users never request it.
+ */
+export const SESSION_BROTLI_SOFT_CEILING = 2_200_000;
 
 export function inspectSessionSize(bytes: Uint8Array) {
   if (!WebAssembly.validate(bytes)) throw new Error('Invalid session wasm artifact');

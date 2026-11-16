@@ -4,14 +4,14 @@ import { inspectSessionSize } from './document-session-size';
 
 test('valid wasm over the soft ceiling remains eligible for measured speed gains', () => {
   // Valid custom section with incompressible bytes exercises real compression.
-  const payload = randomBytes(1_700_000);
-  const bytes = new Uint8Array(1_700_013);
-  bytes.set([0, 97, 115, 109, 1, 0, 0, 0, 0, 161, 225, 103, 0]);
-  bytes.set(payload, 13);
+  const payload = randomBytes(2_300_000);
+  const bytes = new Uint8Array(2_300_014);
+  bytes.set([0, 97, 115, 109, 1, 0, 0, 0, 0, 225, 176, 140, 1, 0]);
+  bytes.set(payload, 14);
   const size = inspectSessionSize(bytes);
-  expect(size.raw).toBe(1_700_013);
-  expect(size.brotliSoftCeiling).toBe(1_600_000);
-  expect(size.brotli).toBeGreaterThan(1_600_000);
+  expect(size.raw).toBe(2_300_014);
+  expect(size.brotliSoftCeiling).toBe(2_200_000);
+  expect(size.brotli).toBeGreaterThan(2_200_000);
   expect(size.aboveSoftCeiling).toBe(true);
 });
 

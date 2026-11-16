@@ -95,7 +95,7 @@ Decode legacy EditorPaste tag 4 with default-false PasteIntent and additive tag 
 
 Set TMPDIR for cargo. Never edit generated files by hand. Keep package registration,
 preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/justfile.
-Treat 1.6 MB Brotli as an advisory ceiling; retain nonblocking preload and strict startup/document-open latency gates, plus composer regression checks.
+Treat 2.2 MB Brotli (measured 2.1 MB plus margin; only flag-ON users fetch it) as an advisory ceiling; retain nonblocking preload and strict startup/document-open latency gates, plus composer regression checks.
 
 Generate compatibility_generated.rs and collaboration/session/compatibility.generated.ts from abi/compatibility.bop plus the shared foreign-host schemas using generate-compatibility-schema.ts. Compatibility requests use exact captured record references and separate typed render metadata; preserve the session and flat Diff ABIs. These envelopes do not themselves provide a working production initializer.
 
