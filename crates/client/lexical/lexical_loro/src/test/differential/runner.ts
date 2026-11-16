@@ -70,16 +70,16 @@ if (input.pair) {
 		),
 	).json();
 	if (
-		catalog.workspaces.catalog["loro-crdt"] !== "1.17.1" ||
-		installed.version !== "1.17.1" ||
-		// The frozen Worker transcript driver uses its preserved server version;
-		// this differential runs the workspace editor mirror on 1.17.1.
-		sync.packages["node_modules/loro-crdt"].version !== "1.16.3" ||
+		// The shipped pairing: the native editor's Rust Loro 1.17.1 against the
+		// web catalog's JS Loro 1.16.3, with the deployed worker on main's npm Loro.
+		catalog.workspaces.catalog["loro-crdt"] !== "1.16.3" ||
+		installed.version !== "1.16.3" ||
+		sync.packages["node_modules/loro-crdt"].version !== "1.13.7" ||
 		!cargo.includes('loro = "=1.17.1"') ||
 		!cargo.includes('loro_server = { package = "loro", path = "vendor/loro-server/loro" }') ||
 		!rustLock.includes('name = "loro"\nversion = "1.17.1"') ||
-		!bunLock.includes('"loro-crdt": "1.17.1"') ||
-		!bunLock.includes('"loro-crdt@1.17.1"')
+		!bunLock.includes('"loro-crdt": "1.16.3"') ||
+		!bunLock.includes('"loro-crdt@1.16.3"')
 	)
 		throw new Error("Loro versions differ");
 	const doc = new LoroDoc();
