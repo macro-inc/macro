@@ -396,6 +396,9 @@ fn frontend_schemas_build() {
     }
     assert!(names.contains("QueryDatabase"));
     assert!(names.contains("DiscoverConnectors"));
+    // Saved agent sessions call RenderCanvas, which only Chat still offers.
+    // If Chat drops it, give it a legacy schema here.
+    assert!(names.contains("RenderCanvas"));
     // DisplayResults renders from the fold's decoded view, not a tool schema.
     for name in tools_for(AiHost::Chat).toolset.tools.keys() {
         if name == "DisplayResults" {

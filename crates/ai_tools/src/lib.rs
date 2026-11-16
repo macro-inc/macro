@@ -412,12 +412,6 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         .merge(&schemas::subagent::subagent())
         .merge(&schemas::read_activity::read_activity())
         .merge(&schemas::discover_connectors::discover_connectors())
-        // Agent sessions render through `canvas.render()` in code now; saved
-        // RenderCanvas calls still need the schema whichever host keeps it.
-        .merge(
-            &AsyncToolCollection::new()
-                .add_tool::<documents::inbound::toolset::RenderCanvas, ToolDocumentToolContext>(),
-        )
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }
