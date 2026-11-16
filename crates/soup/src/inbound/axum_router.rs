@@ -1259,7 +1259,6 @@ enum GroupedSoupRequestMode {
 pub async fn post_grouped_soup_ast_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    _team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>,
     Query(GroupedSoupCursorParams { cursor }): Query<GroupedSoupCursorParams>,
     Json(request): Json<PostGroupedSoupAstRequest>,
 ) -> Result<Json<GroupedSoupPage>, SoupHandlerErr>

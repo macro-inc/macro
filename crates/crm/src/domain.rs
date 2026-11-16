@@ -56,6 +56,9 @@ pub mod pipeline_workflows;
 /// CRM pipelines and their lifecycle.
 #[cfg(feature = "ports")]
 pub mod pipelines;
+/// Company and contact chip titles, read many at a time.
+#[cfg(feature = "ports")]
+pub mod previews;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]

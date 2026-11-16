@@ -3,7 +3,7 @@
 //! `code_mode_assets`.
 
 use serde::Deserialize;
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::{collections::BTreeMap, ops::Bound, sync::LazyLock};
 
 /// One generated SDK operation.
 #[derive(Debug, Clone, Deserialize)]
@@ -72,4 +72,15 @@ pub fn sdk_declarations(names: &[&str], budget: usize) -> Vec<(&'static str, &'s
         }
     }
     found
+}
+
+/// The SDK declaration files directly in `directory`, such as
+/// `src/entities/tasks/`, by path, without its tests' declarations.
+pub fn sdk_declaration_files(directory: &str) -> Vec<(&'static str, &'static str)> {
+    SDK.files
+        .range::<str, _>((Bound::Included(directory), Bound::Unbounded))
+        .map_while(|(path, text)| Some((path, path.strip_prefix(directory)?, text)))
+        .filter(|(_, rest, _)| !rest.contains('/') && !rest.ends_with(".test.d.ts"))
+        .map(|(path, _, text)| (path.as_str(), text.as_str()))
+        .collect()
 }
