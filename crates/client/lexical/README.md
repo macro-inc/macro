@@ -20,7 +20,7 @@ priority-indexed plugins; extension state stages with transactions, and post-com
 share bounded follow-up rounds. History supplies snapshot undo/redo and independent merge
 classification. EditorCore consumes explicit inputs and returns commits, structural diffs
 and host effects, including DOM-first text suppression. Diffs encode the versioned
-11-opcode word/UTF-8 ABI without wire derives on model inputs.
+12-opcode word/UTF-8 ABI without wire derives on model inputs.
 
 `lexical_loro` incrementally projects editor commits into Loro 1.17.1 and native
 events back into raw editor changes, with schema-compatible container inference,
