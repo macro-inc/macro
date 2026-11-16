@@ -214,11 +214,18 @@ How it finds operations:
 
 It refuses (cannot analyze) what can reach an operation without naming it:
 `external` declarations, `Obj`, `Marshal`, `input_value`, `Camlinternal*`,
-`unsafe_*` functions and primitives, programs compiled with `-unsafe`, a
-`Request.t` built or updated by hand, and any value outside the table whose
-type can hand out a request. Libraries other than the SDK are trusted not to
-send SDK requests on their own; raw HTTP through another client is not an
-SDK call and is not reported.
+`unsafe_*` functions and primitives, `%identity` externals outside the
+standard library, programs compiled with `-unsafe`, a `Request.t` built or
+updated by hand, and any value outside the table whose type can hand out a
+request. It also refuses any reference to a unit outside the standard
+library, the SDK, its transport and the libraries their interfaces expose
+(`Analyze.default_libraries`; add more with `--allow-library UNIT`): another
+unit of the program, `Dynlink` or a third-party library could call the SDK
+where the analysis cannot see. Those libraries are trusted, not analyzed.
+
+The list is the SDK operations the program may call, not a permission
+boundary: a program holds its credential (`Config.t` is readable) and can
+send raw HTTP through another client, which this tool does not report.
 
 `analyzer/test/corpus/` holds the programs it is tested on, each stating its
 expected answer on its first line; `test_coverage` checks that the table

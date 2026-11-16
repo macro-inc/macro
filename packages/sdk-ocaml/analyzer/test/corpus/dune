@@ -4,6 +4,6 @@
 (library
  (name corpus)
  (wrapped false)
- (libraries macro_sdk macro_sdk_eio unix)
+ (libraries macro_sdk macro_sdk_eio unix dynlink)
  (flags
   (:standard -w -a)))

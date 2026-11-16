@@ -67,6 +67,14 @@ let operations file =
       | _ -> [])
     structure
 
+(* A rebinding of an operation's name would make the table name the wrong
+   value. *)
+let check_unique file operations =
+  let names = List.map (fun (_, name, _, _) -> name) operations in
+  if List.length (List.sort_uniq compare names) <> List.length names then
+    Printf.ksprintf failwith "%s: an operation name is bound twice" file;
+  operations
+
 let () =
   let files =
     Array.to_list Sys.argv |> List.tl
@@ -83,6 +91,6 @@ let () =
       List.iter
         (fun (unit, value, service, operation) ->
           Printf.printf "  (%S, %S, %S, %S);\n" unit value service operation)
-        (operations file))
+        (check_unique file (operations file)))
     files;
   print_endline "]"

@@ -1,11 +1,14 @@
-(* macro_sdk_calls [--json] [--root DIR] [-I DIR]... main.cmt
+(* macro_sdk_calls [--json] [--root DIR] [--allow-library UNIT]... [-I DIR]... main.cmt
 
    Lists the Macro SDK operations a compiled program may call. Exit 0 when
    analyzed, 1 when the program cannot be analyzed, 2 on a usage error. *)
 
-let usage = "usage: macro_sdk_calls [--json] [--root DIR] [-I DIR]... main.cmt"
+let usage =
+  "usage: macro_sdk_calls [--json] [--root DIR] [--allow-library UNIT]... [-I \
+   DIR]... main.cmt"
 
 let () =
+  let libraries = ref Macro_sdk_analyzer.Analyze.default_libraries in
   let json = ref false
   and include_dirs = ref []
   and root = ref None
@@ -37,7 +40,10 @@ let () =
       let load_path =
         match !include_dirs with [] -> None | dirs -> Some (List.rev dirs)
       in
-      match Macro_sdk_analyzer.Analyze.cmt ?load_path ?root:!root file with
+      match
+        Macro_sdk_analyzer.Analyze.cmt ?load_path ?root:!root
+          ~libraries:!libraries file
+      with
       | Error message ->
           prerr_endline ("macro_sdk_calls: " ^ message);
           exit 2

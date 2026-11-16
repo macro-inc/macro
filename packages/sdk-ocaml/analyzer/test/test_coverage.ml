@@ -75,38 +75,58 @@ let cmi_files dir =
   |> List.sort compare
   |> List.map (Filename.concat dir)
 
+(* Values are read through an environment, so their types name other
+   units properly and abbreviations expand; submodules are walked too. *)
 let check_interfaces () =
   let root = "../.." in
-  let files =
-    List.concat_map
-      (fun dir -> cmi_files (Filename.concat root dir))
+  let dirs =
+    List.map (Filename.concat root)
       [
         "generated/.macro_sdk.objs/byte";
         "runtime/.macro_sdk_runtime.objs/byte";
         "eio/.macro_sdk_eio.objs/byte";
       ]
   in
+  Clflags.include_dirs := dirs;
+  Compmisc.init_path ();
+  let env = Compmisc.initial_env () in
+  let files = List.concat_map cmi_files dirs in
   let seen = ref [] in
+  let rec check_items unit parent items =
+    List.iter
+      (function
+        | Types.Sig_value (id, _, _) -> (
+            let name = Ident.name id in
+            let path = Path.Pdot (parent, name) in
+            let type_ = (Env.find_value path env).val_type in
+            let env = lazy env in
+            match
+              if
+                Path.Pdot (Path.Pident (Ident.create_persistent unit), name)
+                = path
+              then Analyze.operation_of ~unit name
+              else None
+            with
+            | Some operation ->
+                seen := operation.path :: !seen;
+                if not (Analyze.returns_request ~env type_) then
+                  fail "%s is in the table but does not return a request"
+                    (Path.name path)
+            | None ->
+                if Analyze.yields_request ~env type_ then
+                  fail "%s can hand out a request but is not in the table"
+                    (Path.name path))
+        | Types.Sig_module (id, _, { md_type = Mty_signature items; _ }, _, _)
+          ->
+            check_items unit (Path.Pdot (parent, Ident.name id)) items
+        | _ -> ())
+      items
+  in
   List.iter
     (fun file ->
       let cmi = Cmi_format.read_cmi file in
-      let unit = cmi.cmi_name in
-      List.iter
-        (function
-          | Types.Sig_value (id, description, _) -> (
-              let name = Ident.name id in
-              let type_ = description.val_type in
-              match Analyze.operation_of ~unit name with
-              | Some operation ->
-                  seen := operation.path :: !seen;
-                  if not (Analyze.returns_request type_) then
-                    fail "%s.%s is in the table but does not return a request"
-                      unit name
-              | None ->
-                  if Analyze.yields_request type_ then
-                    fail "%s.%s can hand out a request but is not in the table"
-                      unit name)
-          | _ -> ())
+      check_items cmi.cmi_name
+        (Path.Pident (Ident.create_persistent cmi.cmi_name))
         cmi.cmi_sign)
     files;
   List.iter

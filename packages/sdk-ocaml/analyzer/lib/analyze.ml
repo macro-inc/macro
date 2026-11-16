@@ -64,9 +64,24 @@ let is_request_path path =
   || String.starts_with ~prefix:"Macro_sdk" name
      && ends_with ~suffix:".Request.t" name
 
-let returns_request type_ =
-  match Types.get_desc (final_result type_) with
-  | Tconstr (path, _, _) -> is_request_path path
+(* Expands a type abbreviation one step, if [env] knows it. *)
+let expand env type_ =
+  match env with
+  | None -> None
+  | Some env -> (
+      match Ctype.expand_head_opt (Lazy.force env) type_ with
+      | expanded when not (Types.eq_type expanded type_) -> Some expanded
+      | _ -> None
+      | exception _ -> None)
+
+let rec returns_request ?env type_ =
+  let result = final_result type_ in
+  match Types.get_desc result with
+  | Tconstr (path, _, _) when is_request_path path -> true
+  | Tconstr _ -> (
+      match expand env result with
+      | Some expanded -> returns_request ?env expanded
+      | None -> false)
   | _ -> false
 
 (* Whether a value of this type can hand out a request: the request type
@@ -74,7 +89,7 @@ let returns_request type_ =
    constructor arguments count both ways, since their variance is unknown
    here. Operations yield requests; any other value that does is a way to
    reach one the table does not know. *)
-let yields_request type_ =
+let yields_request ?env type_ =
   let seen = Hashtbl.create 16 in
   let rec go positive type_ =
     let key = (Types.get_id type_, positive) in
@@ -84,11 +99,15 @@ let yields_request type_ =
       match Types.get_desc type_ with
       | Tarrow (_, argument, result, _) ->
           go (not positive) argument || go positive result
-      | Tconstr (path, arguments, _) ->
+      | Tconstr (path, arguments, _) -> (
           (positive && is_request_path path)
           || List.exists
                (fun argument -> go true argument || go false argument)
                arguments
+          ||
+          match expand env type_ with
+          | Some expanded -> go positive expanded
+          | None -> false)
       | Ttuple elements ->
           List.exists (fun (_, element) -> go positive element) elements
       | Tpoly (inner, _) -> go positive inner
@@ -108,6 +127,7 @@ type sdk_value = Operation of operation | Unknown_operation of string
 
 type state = {
   current_unit : string;
+  libraries : string list;  (** unit name prefixes the program may use *)
   source_file : string;
   sdk : sdk_value Shape.Uid.Tbl.t;
       (** every SDK service value that returns a request *)
@@ -153,6 +173,33 @@ let contains ~fragment text =
   in
   search 0
 
+(* Libraries a program may use by default: the standard library, the SDK
+   and its transport, and what their interfaces expose. Their code is not
+   analyzed; they are trusted not to build SDK requests or cast values. Any
+   other unit (another unit of the program, Dynlink, a third-party library)
+   could call the SDK out of sight. *)
+let default_libraries =
+  [
+    "Stdlib";
+    "Macro_sdk";
+    "Macro_sdk_runtime";
+    "Macro_sdk_eio";
+    "Yojson";
+    "Uri";
+    "Eio";
+    "Eio_main";
+    "X509";
+    "Ptime";
+    "Mirage_crypto_rng";
+    "Mirage_crypto_rng_unix";
+  ]
+
+let in_libraries libraries unit =
+  List.exists
+    (fun library ->
+      unit = library || String.starts_with ~prefix:(library ^ "__") unit)
+    libraries
+
 (* Primitives that read arbitrary memory or build values of any type. *)
 let denied_primitive name =
   contains ~fragment:"unsafe" name
@@ -164,11 +211,22 @@ type verdict = Plain | Calls of operation | Refused of string
 
 (* [name] is the value's own name (names survive aliases, include, open and
    signature constraints unchanged). *)
-let judge state name (description : Types.value_description) =
+let judge state env name (description : Types.value_description) =
+  let unit =
+    match description.val_uid with
+    | Item { comp_unit; _ } -> Some comp_unit
+    | _ -> None
+  in
   let primitive =
     match description.val_kind with
     | Val_prim primitive when denied_primitive primitive.prim_name ->
         Some (Printf.sprintf "uses the primitive %s" primitive.prim_name)
+    (* The standard library's identity externals are typed safely; anyone
+       else's can be a cast. *)
+    | Val_prim { prim_name = "%identity"; _ }
+      when not (Option.fold ~none:false ~some:(in_libraries [ "Stdlib" ]) unit)
+      ->
+        Some "uses the primitive %identity, which can cast any value"
     | _ -> None
   in
   match (primitive, description.val_uid) with
@@ -182,6 +240,12 @@ let judge state name (description : Types.value_description) =
         Refused "skips bounds checks, so it can read any value"
       else if comp_unit = "Stdlib" && name = "input_value" then
         Refused "unmarshals, so it can build any value"
+      else if not (in_libraries state.libraries comp_unit) then
+        Refused
+          (Printf.sprintf
+             "belongs to %s, whose code the analysis cannot see (only the \
+              standard library and the SDK's libraries are allowed)"
+             comp_unit)
       else
         match Shape.Uid.Tbl.find_opt state.sdk description.val_uid with
         | Some (Operation operation) -> Calls operation
@@ -192,7 +256,7 @@ let judge state name (description : Types.value_description) =
                   table"
                  path)
         | None ->
-            if yields_request description.val_type then
+            if yields_request ~env description.val_type then
               Refused
                 "returns a request but is not an operation this analyzer knows"
             else Plain)
@@ -201,8 +265,8 @@ let judge state name (description : Types.value_description) =
 let longident_name (lid : Longident.t Location.loc) =
   String.concat "." (Longident.flatten lid.txt)
 
-let check_value state location written name description =
-  match judge state name description with
+let check_value state env location written name description =
+  match judge state env name description with
   | Plain -> ()
   | Calls operation -> record state location Reference operation
   | Refused reason ->
@@ -230,14 +294,38 @@ let head_unit path =
    constraint, nested alias) gives access to its contents without naming
    them. [view] is the signature it is seen through: every value [view] lets
    through is looked up in the real module and judged as if named here. *)
-let rec module_contents state env location written source view =
+let rec module_contents ?(fallback = true) state env location written source
+    view =
   let source =
     try Env.normalize_module_path None env source with Not_found -> source
   in
   match Env.scrape_alias env (Mtype.scrape env view) with
   | Types.Mty_signature items ->
       List.iter (module_item state env location written source) items
-  | Types.Mty_functor _ | Types.Mty_ident _ | Types.Mty_alias _ -> ()
+  | Types.Mty_functor _ -> ()
+  | Types.Mty_ident _ | Types.Mty_alias _ -> (
+      (* An abstract view hides the contents here, but they can resurface
+         later (a functor result naming its argument): count the module as
+         it really is. *)
+      let real =
+        if fallback then
+          match Env.find_module source env with
+          | declaration -> Some declaration.md_type
+          | exception Not_found -> None
+        else None
+      in
+      match real with
+      | Some real ->
+          module_contents ~fallback:false state env location written source real
+      | None when head_unit source = None ->
+          (* A functor parameter or an unpacked module of abstract type:
+             what it holds was counted where it was passed or packed. *)
+          ()
+      | None ->
+          refuse state location
+            (Printf.sprintf
+               "`%s` is used as a module whose contents cannot be resolved"
+               written))
 
 and module_item state env location written source = function
   | Types.Sig_value (id, _, _) -> (
@@ -245,7 +333,7 @@ and module_item state env location written source = function
       let path = Path.Pdot (source, name) in
       match Env.find_value path env with
       | description -> (
-          match judge state name description with
+          match judge state (lazy env) name description with
           | Plain -> ()
           | Calls operation -> record state location Module operation
           | Refused reason ->
@@ -275,6 +363,14 @@ let check_module_name state env location written path =
       refuse state location
         (Printf.sprintf "`%s` names %s, which can forge any value" written
            (display_unit unit))
+  | Some unit
+    when unit <> state.current_unit && not (in_libraries state.libraries unit)
+    ->
+      refuse state location
+        (Printf.sprintf
+           "`%s` names %s, whose code the analysis cannot see (only the \
+            standard library and the SDK's libraries are allowed)"
+           written unit)
   | _ -> ()
 
 let functor_parameter env (functor_expression : module_expr) =
@@ -379,15 +475,18 @@ let iterator state =
   let expr sub (expression : expression) =
     (match expression.exp_desc with
     | Texp_ident (path, lid, description) ->
-        check_value state expression.exp_loc (longident_name lid)
-          (Path.last path) description
+        check_value state
+          (lazy (environment expression.exp_env))
+          expression.exp_loc (longident_name lid) (Path.last path) description
     | Texp_letmodule (_, _, _, module_expression, _)
       when is_alias module_expression ->
         exempt module_expression
     | Texp_letop { let_; ands; _ } ->
         List.iter
           (fun (operator : binding_op) ->
-            check_value state operator.bop_loc operator.bop_op_name.txt
+            check_value state
+              (lazy (environment expression.exp_env))
+              operator.bop_loc operator.bop_op_name.txt
               (Path.last operator.bop_op_path)
               operator.bop_op_val)
           (let_ :: ands)
@@ -489,11 +588,12 @@ let absolute base path =
 let compare_location (a : location) (b : location) =
   compare (a.file, a.line, a.column) (b.file, b.line, b.column)
 
-let analyze (cmt : Cmt_format.cmt_infos) sdk structure =
+let analyze ~libraries (cmt : Cmt_format.cmt_infos) sdk structure =
   let file = Option.value ~default:"<unknown>" cmt.cmt_sourcefile in
   let state =
     {
       current_unit = cmt.cmt_modname;
+      libraries;
       source_file = file;
       sdk;
       found = Hashtbl.create 64;
@@ -528,7 +628,10 @@ let analyze (cmt : Cmt_format.cmt_infos) sdk structure =
                operation;
                locations =
                  List.sort_uniq
-                   (fun (a, _) (b, _) -> compare_location a b)
+                   (fun (a, via) (b, via') ->
+                     match compare_location a b with
+                     | 0 -> compare via via'
+                     | c -> c)
                    locations;
              }
              :: all)
@@ -541,7 +644,7 @@ let analyze (cmt : Cmt_format.cmt_infos) sdk structure =
              match compare_location a b with 0 -> compare m n | c -> c)
            refusals)
 
-let cmt ?load_path ?root file =
+let cmt ?load_path ?root ?(libraries = default_libraries) file =
   match Cmt_format.read_cmt file with
   | exception Sys_error message -> Error message
   | exception Cmt_format.Error _ -> Error (file ^ " is not a .cmt file")
@@ -569,7 +672,7 @@ let cmt ?load_path ?root file =
           Envaux.reset_cache ();
           match load_sdk cmt.cmt_imports with
           | Error message -> Error message
-          | Ok sdk -> Ok (analyze cmt sdk structure))
+          | Ok sdk -> Ok (analyze ~libraries cmt sdk structure))
       | Partial_implementation _ ->
           Error (file ^ " is from a program that did not type-check")
       | Interface _ | Partial_interface _ | Packed _ ->
