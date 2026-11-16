@@ -43,6 +43,7 @@ function state(
     access: {
       status: 'request_access',
       useBasis: null,
+      grantPermission: null,
       canUpdate: false,
       canSetTotp: false,
       permissionRevision: 0,
@@ -74,6 +75,7 @@ const APPROVED = state({
   access: {
     status: 'usable',
     useBasis: 'approved_grant',
+    grantPermission: 'view',
     canUpdate: false,
     canSetTotp: false,
     permissionRevision: 7,
@@ -84,6 +86,7 @@ const CREATOR = state({
   access: {
     status: 'usable',
     useBasis: 'creator_grant',
+    grantPermission: 'edit',
     canUpdate: true,
     canSetTotp: true,
     permissionRevision: 2,
@@ -216,6 +219,122 @@ it('revokes an approved agent by approval or grant, and a creator only by grant'
     {
       agent: AGENT,
       body: { expectedPermissionRevision: 7, scope: 'approval' },
+    },
+  ]);
+});
+
+it('keeps an approval-revoked grant removable until access is removed', async () => {
+  const user = userEvent.setup();
+  const retained = state({
+    ...APPROVED,
+    status: 'revoked',
+    revision: 5,
+    access: {
+      ...APPROVED.access,
+      status: 'request_access',
+      useBasis: null,
+      grantPermission: 'view',
+      permissionRevision: 8,
+    },
+  });
+  const removed = state({
+    ...retained,
+    access: {
+      ...retained.access,
+      grantPermission: null,
+      permissionRevision: 9,
+    },
+  });
+  const { source, calls } = fakeSource([
+    [PENDING],
+    [APPROVED],
+    [retained],
+    [removed],
+  ]);
+  mount(source);
+  await user.click(await screen.findByRole('button', { name: 'Allow view' }));
+  await screen.findByText(/can view this item/);
+  await user.click(screen.getByRole('button', { name: /^Revoke access for/ }));
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Remove approval' })
+  );
+  await screen.findByText(/requires approval to use this item/);
+  expect(screen.queryByText(/can view this item/)).toBeNull();
+  const row = screen.getByRole('region', { name: 'Agent access' });
+  await user.click(screen.getByRole('button', { name: /^Revoke access for/ }));
+  expect(
+    screen.queryByRole('menuitem', { name: 'Remove approval' })
+  ).toBeNull();
+  const hidden = waitForElementToBeRemoved(row);
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Remove access' })
+  );
+  await hidden;
+  expect(calls.revokes).toEqual([
+    {
+      agent: AGENT,
+      body: { expectedPermissionRevision: 7, scope: 'approval' },
+    },
+    {
+      agent: AGENT,
+      body: { expectedPermissionRevision: 8, scope: 'grant_and_approval' },
+    },
+  ]);
+  expect(calls.lists).toBe(4);
+});
+
+it('keeps a retained grant removable while a request is pending and after denial', async () => {
+  const user = userEvent.setup();
+  const pending = state({
+    ...PENDING,
+    access: {
+      ...PENDING.access,
+      grantPermission: 'view',
+      permissionRevision: 8,
+    },
+  });
+  const denied = state({
+    ...pending,
+    status: 'denied',
+    revision: 4,
+    access: {
+      ...pending.access,
+      status: 'request_access',
+      pendingRequestId: null,
+    },
+  });
+  const removed = state({
+    ...denied,
+    access: { ...denied.access, grantPermission: null, permissionRevision: 9 },
+  });
+  const { source, calls } = fakeSource([[pending], [denied], [removed]]);
+  mount(source);
+  await screen.findByRole('button', { name: 'Allow view' });
+  expect(screen.getByRole('button', { name: 'Allow edit' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: /^Revoke access for/ }));
+  expect(
+    screen.queryByRole('menuitem', { name: 'Remove approval' })
+  ).toBeNull();
+  const remove = await screen.findByRole('menuitem', { name: 'Remove access' });
+  const closed = waitForElementToBeRemoved(remove);
+  await user.keyboard('{Escape}');
+  await closed;
+  await user.click(screen.getByRole('button', { name: 'Deny' }));
+  await screen.findByText(/requires approval to use this item/);
+  const row = screen.getByRole('region', { name: 'Agent access' });
+  await user.click(screen.getByRole('button', { name: /^Revoke access for/ }));
+  const hidden = waitForElementToBeRemoved(row);
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Remove access' })
+  );
+  await hidden;
+  expect(calls.resolves).toEqual([
+    { requestId: REQUEST, body: { decision: 'deny', revision: 3 } },
+  ]);
+  expect(calls.revokes).toEqual([
+    {
+      agent: AGENT,
+      body: { expectedPermissionRevision: 8, scope: 'grant_and_approval' },
     },
   ]);
 });

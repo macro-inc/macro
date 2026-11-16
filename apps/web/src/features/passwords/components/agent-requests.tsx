@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
 import type { PasswordAgentRevokeScope } from '@service-storage/generated/schemas/passwordAgentRevokeScope';
 import { Button, Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import type { AgentRequestDecision } from '../core/types';
 
 /**
@@ -50,53 +50,64 @@ export function AgentRequests(props: {
             return (
               <div class="flex flex-wrap items-center gap-2 text-sm">
                 <span class="min-w-0 flex-1">
-                  {state.status === 'pending'
-                    ? t(
+                  <Switch
+                    fallback={t('passwords.agentApprovalRequired', {
+                      name: name(),
+                    })}
+                  >
+                    <Match when={state.status === 'pending'}>
+                      {t(
                         `passwords.agentRequested_${state.permission ?? 'view'}`,
-                        {
-                          name: name(),
-                        }
-                      )
-                    : state.access.useBasis === 'creator_grant'
-                      ? t('passwords.agentCreator', { name: name() })
-                      : t(
-                          `passwords.agentCanUse_${state.access.canUpdate ? 'edit' : 'view'}`,
-                          { name: name() }
-                        )}
+                        { name: name() }
+                      )}
+                    </Match>
+                    <Match when={state.access.useBasis === 'creator_grant'}>
+                      {t('passwords.agentCreator', { name: name() })}
+                    </Match>
+                    <Match when={state.access.useBasis != null}>
+                      {t(
+                        `passwords.agentCanUse_${state.access.canUpdate ? 'edit' : 'view'}`,
+                        { name: name() }
+                      )}
+                    </Match>
+                  </Switch>
                 </span>
                 <Show
-                  when={state.status === 'pending'}
-                  fallback={
-                    <Dropdown placement="bottom-end">
-                      <Dropdown.Trigger
-                        variant="secondary"
-                        size="sm"
-                        disabled={props.busy}
-                        aria-label={t('passwords.agentRevoke', {
-                          name: name(),
-                        })}
-                      >
-                        {t('passwords.revoke')}
-                      </Dropdown.Trigger>
-                      <Dropdown.Content>
-                        <Show when={state.access.useBasis === 'approved_grant'}>
-                          <Dropdown.Item
-                            onSelect={() => props.onRevoke(state, 'approval')}
-                          >
-                            {t('passwords.agentRevokeApproval')}
-                          </Dropdown.Item>
-                        </Show>
-                        <Dropdown.Item
-                          onSelect={() =>
-                            props.onRevoke(state, 'grant_and_approval')
-                          }
-                        >
-                          {t('passwords.agentRevokeGrant')}
-                        </Dropdown.Item>
-                      </Dropdown.Content>
-                    </Dropdown>
+                  when={
+                    state.status !== 'pending' ||
+                    state.access.grantPermission != null
                   }
                 >
+                  <Dropdown placement="bottom-end">
+                    <Dropdown.Trigger
+                      variant="secondary"
+                      size="sm"
+                      disabled={props.busy}
+                      aria-label={t('passwords.agentRevoke', {
+                        name: name(),
+                      })}
+                    >
+                      {t('passwords.revoke')}
+                    </Dropdown.Trigger>
+                    <Dropdown.Content>
+                      <Show when={state.access.useBasis === 'approved_grant'}>
+                        <Dropdown.Item
+                          onSelect={() => props.onRevoke(state, 'approval')}
+                        >
+                          {t('passwords.agentRevokeApproval')}
+                        </Dropdown.Item>
+                      </Show>
+                      <Dropdown.Item
+                        onSelect={() =>
+                          props.onRevoke(state, 'grant_and_approval')
+                        }
+                      >
+                        {t('passwords.agentRevokeGrant')}
+                      </Dropdown.Item>
+                    </Dropdown.Content>
+                  </Dropdown>
+                </Show>
+                <Show when={state.status === 'pending'}>
                   <Button
                     variant="secondary"
                     size="sm"

@@ -2237,6 +2237,7 @@ export * from './passwordAgentErrorCode';
 export * from './passwordAgentFailure';
 export * from './passwordAgentFailureRetryAfterMs';
 export * from './passwordAgentItemAccess';
+export * from './passwordAgentItemAccessGrantPermission';
 export * from './passwordAgentItemAccessPendingRequestId';
 export * from './passwordAgentItemAccessUseBasis';
 export * from './passwordAgentLoginField';

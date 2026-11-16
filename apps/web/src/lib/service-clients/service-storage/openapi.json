@@ -54644,6 +54644,17 @@
             "type": "boolean",
             "description": "Whether the agent may update values and metadata."
           },
+          "grantPermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordPermission",
+                "description": "The agent's current Agent grant on the item, if any. It shows what a\nreviewer can remove and is no authority: use also needs creator\nattribution or standing approval (`status`)."
+              }
+            ]
+          },
           "pendingRequestId": {
             "type": ["string", "null"],
             "format": "uuid",

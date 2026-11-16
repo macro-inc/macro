@@ -6,6 +6,7 @@
  */
 
 import type { PasswordAgentAccessStatus } from './passwordAgentAccessStatus';
+import type { PasswordAgentItemAccessGrantPermission } from './passwordAgentItemAccessGrantPermission';
 import type { PasswordAgentItemAccessPendingRequestId } from './passwordAgentItemAccessPendingRequestId';
 import type { PasswordAgentItemAccessUseBasis } from './passwordAgentItemAccessUseBasis';
 
@@ -17,6 +18,7 @@ export interface PasswordAgentItemAccess {
   canSetTotp: boolean;
   /** Whether the agent may update values and metadata. */
   canUpdate: boolean;
+  grantPermission?: PasswordAgentItemAccessGrantPermission;
   /** Live request awaiting review. */
   pendingRequestId?: PasswordAgentItemAccessPendingRequestId;
   /** Revision of this agent's grant/approval on the item. */

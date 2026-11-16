@@ -78007,6 +78007,12 @@ export const passwordsAgentSearchResponse = zod
                   .describe(
                     'Whether the agent may update values and metadata.'
                   ),
+                grantPermission: zod
+                  .union([
+                    zod.null(),
+                    zod.enum(['view', 'edit']).describe('Grant capability.'),
+                  ])
+                  .optional(),
                 pendingRequestId: zod
                   .uuid()
                   .nullish()
@@ -78151,6 +78157,12 @@ export const passwordsAgentCreateResponse = zod
             canUpdate: zod
               .boolean()
               .describe('Whether the agent may update values and metadata.'),
+            grantPermission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
             pendingRequestId: zod
               .uuid()
               .nullish()
@@ -78312,6 +78324,12 @@ export const passwordsAgentUpdateResponse = zod
             canUpdate: zod
               .boolean()
               .describe('Whether the agent may update values and metadata.'),
+            grantPermission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
             pendingRequestId: zod
               .uuid()
               .nullish()
@@ -78389,6 +78407,12 @@ export const passwordsAgentRequestAccessResponse = zod
         canUpdate: zod
           .boolean()
           .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
         pendingRequestId: zod
           .uuid()
           .nullish()
@@ -78451,6 +78475,12 @@ export const passwordsAgentMyRequestResponse = zod
         canUpdate: zod
           .boolean()
           .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
         pendingRequestId: zod
           .uuid()
           .nullish()
@@ -78706,6 +78736,12 @@ export const passwordsAgentAccessRequestsResponse = zod
                   .describe(
                     'Whether the agent may update values and metadata.'
                   ),
+                grantPermission: zod
+                  .union([
+                    zod.null(),
+                    zod.enum(['view', 'edit']).describe('Grant capability.'),
+                  ])
+                  .optional(),
                 pendingRequestId: zod
                   .uuid()
                   .nullish()
@@ -79647,6 +79683,12 @@ export const passwordsAgentResolveRequestResponse = zod
         canUpdate: zod
           .boolean()
           .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
         pendingRequestId: zod
           .uuid()
           .nullish()
@@ -79719,6 +79761,12 @@ export const passwordsAgentRevokeResponse = zod
     canUpdate: zod
       .boolean()
       .describe('Whether the agent may update values and metadata.'),
+    grantPermission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
     pendingRequestId: zod
       .uuid()
       .nullish()

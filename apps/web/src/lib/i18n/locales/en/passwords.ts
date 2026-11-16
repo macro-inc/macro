@@ -186,6 +186,7 @@ export default {
   agentRequested_edit: '{{name}} asked to edit this item',
   agentCanUse_view: '{{name}} can view this item',
   agentCanUse_edit: '{{name}} can edit this item',
+  agentApprovalRequired: '{{name}} requires approval to use this item',
   agentCreator: '{{name}} created this item',
   agentAllowView: 'Allow view',
   agentAllowEdit: 'Allow edit',

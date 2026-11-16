@@ -431,6 +431,42 @@ test.describe('tablet device', () => {
   });
 });
 
+test('retained agent access remains removable after approval is removed', async ({
+  page,
+}) => {
+  await page.setViewportSize(VIEWPORTS[0]);
+  test.setTimeout(360_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(
+    '/src/features/passwords/browser-test/vault.html?focus=019a0000-0000-7000-8000-0000000000bb',
+    { timeout: 240_000 }
+  );
+  const section = page.getByRole('region', { name: 'Agent access' });
+  await section.getByRole('button', { name: 'Allow edit' }).click();
+  await expect(
+    section.getByText('deploy-agent@example.test can edit this item')
+  ).toBeVisible();
+  await section.getByRole('button', { name: /^Revoke access for/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove approval' }).click();
+  await expect(
+    section.getByText(
+      'deploy-agent@example.test requires approval to use this item'
+    )
+  ).toBeVisible();
+  await expect(section.getByText(/can (view|edit) this item/)).toHaveCount(0);
+  await section.getByRole('button', { name: /^Revoke access for/ }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Remove approval' })
+  ).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Remove access' }).click();
+  await expect(section).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login' })
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test.describe('desktop agent access', () => {
   test('agent access: a notification opens the item, approve edit, revoke, stale decisions refetch', async ({
     page,

@@ -15674,6 +15674,7 @@ export type PasswordAgentItemAccess = {
      * Whether the agent may update values and metadata.
      */
     canUpdate: boolean;
+    grantPermission?: null | PasswordPermission;
     /**
      * Live request awaiting review.
      */

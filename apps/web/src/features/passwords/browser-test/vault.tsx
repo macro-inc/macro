@@ -95,6 +95,7 @@ let agentState: PasswordAgentAccessRequestState = {
   access: {
     status: 'pending',
     useBasis: null,
+    grantPermission: null,
     canUpdate: false,
     canSetTotp: false,
     permissionRevision: 1,
@@ -113,6 +114,7 @@ function approved(
     access: {
       status: 'usable',
       useBasis: 'approved_grant',
+      grantPermission: permission,
       canUpdate: permission === 'edit',
       canSetTotp: false,
       permissionRevision: agentState.access.permissionRevision + 1,
@@ -167,14 +169,20 @@ const agentRequests: AgentRequestSource = {
     const removesGrant = body.scope === 'grant_and_approval';
     agentState = {
       ...agentState,
-      status: removesGrant ? 'revoked' : agentState.status,
+      status: agentState.status === 'approved' ? 'revoked' : agentState.status,
+      revision:
+        agentState.revision + (agentState.status === 'approved' ? 1 : 0),
       access: {
-        status: removesGrant ? 'request_access' : 'pending',
+        status: agentState.status === 'pending' ? 'pending' : 'request_access',
         useBasis: null,
+        grantPermission: removesGrant
+          ? null
+          : agentState.access.grantPermission,
         canUpdate: false,
         canSetTotp: false,
         permissionRevision: agentState.access.permissionRevision + 1,
-        pendingRequestId: null,
+        pendingRequestId:
+          agentState.status === 'pending' ? agentState.requestId : null,
       },
     };
     return ok(agentState.access);

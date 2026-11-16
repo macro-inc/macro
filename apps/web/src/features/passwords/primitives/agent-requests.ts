@@ -37,7 +37,9 @@ export function createAgentRequests(
     states.isSuccess && !pending()
       ? states.data.filter(
           (state) =>
-            state.status === 'pending' || state.access.useBasis !== null
+            state.status === 'pending' ||
+            state.access.useBasis != null ||
+            state.access.grantPermission != null
         )
       : [];
 
