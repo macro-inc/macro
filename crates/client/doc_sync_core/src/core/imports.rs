@@ -701,7 +701,7 @@ impl SyncCore {
         );
     }
 
-    fn recovery_snapshot(
+    pub(super) fn recovery_snapshot(
         &self,
         bytes: &[u8],
         peer: u64,
@@ -717,7 +717,9 @@ impl SyncCore {
         }
         let confirmed_base = recovered.oplog_frontiers();
         for entry in &self.wal.entries {
-            if entry.superseded || matches!(entry.park, Some(ParkReason::Poison)) {
+            // A held Gap row's parents are missing everywhere, so it can never be
+            // covered; it stays in the WAL and replays once they arrive.
+            if entry.superseded || matches!(entry.park, Some(ParkReason::Poison | ParkReason::Gap)) {
                 continue;
             }
             // Validate every retained row before it can contribute recovery history.

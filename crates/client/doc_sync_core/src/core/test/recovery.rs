@@ -1173,3 +1173,28 @@ fn a_routed_subscription_without_an_initial_sync_reconnects_at_its_deadline() {
             .any(|e| matches!(e, IoEffect::RouteReconnect { .. }))
     );
 }
+#[test]
+fn a_held_gap_row_does_not_block_recovery_coverage() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    let other = loro::LoroDoc::new();
+    other.set_peer_id(9).unwrap();
+    other.get_text("text").insert(0, "a").unwrap();
+    other.commit();
+    let parent = other.oplog_vv();
+    other.get_text("text").insert(1, "b").unwrap();
+    other.commit();
+    let orphan = other.export(loro::ExportMode::updates(&parent)).unwrap();
+    h.core.wal.entries.push_back(WalEntry {
+        seq: WalSeq(99),
+        created_at: UnixMillis(0),
+        foreign: true,
+        bytes: orphan.into(),
+        state: EntryState::Logged,
+        not_acked: 0,
+        vv_before: loro::VersionVector::default(),
+        park: Some(ParkReason::Gap),
+        superseded: false,
+    });
+    assert!(h.core.recovery_snapshot(&[], 5, &h.doc).is_some());
+}
