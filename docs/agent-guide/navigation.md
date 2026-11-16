@@ -248,6 +248,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -1236,6 +1237,22 @@ was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
 with the list. Click a row to open it in the same
 pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
+
+Right-clicking a row (a long press on a tablet) opens its menu, and the row
+stays highlighted while it is open: **Open in new split** (disabled without
+room for another split) and **Open in new tab** (with desktop tabs); **Run
+now** (disabled while it runs or a run is starting; a toast says **Run
+started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
+(the routine page's copy: same steps, triggers, description, run visibility and
+on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
+toast whose **Open** opens the copy) and, on a sub-routine, **Keep as my
+routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
+**Share**; then **Delete**, which confirms first and names the sub-routines
+deleted with it. A routine someone else owns offers the open entries, **Copy
+Link** and **Copy ID**. On a phone a long press opens the same actions in a
+drawer under the routine's name, without the split and tab entries, in Agents
+and in **Settings → Routines** alike. Renaming and changing the icon stay on the
+routine's page.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's

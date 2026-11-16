@@ -12,7 +12,8 @@ use crate::model::{CodeStep, RoutineProgram, SdkFingerprint, Step, StepId};
 mod test;
 
 /// How to write a code step, for whoever writes one: the agent tool that
-/// creates routines and the routine drafter read the same text.
+/// creates routines, the routine drafter and the Compose Routines skill read
+/// the same text.
 pub const CODE_STEPS: &str = include_str!("code_steps.md");
 
 /// The ambient declarations code steps are type-checked with: what `main`

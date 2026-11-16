@@ -39,9 +39,6 @@ export default {
     'This change is unavailable. Check the value and try again.',
 
   navigation: 'CRM navigation',
-  collapseSidebar: 'Collapse CRM sidebar',
-  expandSidebar: 'Expand CRM sidebar',
-  showNavigation: 'Show CRM navigation',
   records: 'Records',
   recordsNavigation: 'CRM records',
   viewsNavigation: 'CRM views',
