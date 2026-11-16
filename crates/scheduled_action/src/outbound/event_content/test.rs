@@ -115,6 +115,7 @@ fn message(content: &str) -> Message {
     let at = Utc.with_ymd_and_hms(2026, 10, 5, 9, 30, 0).unwrap();
     Message {
         kind: messages::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         id: Uuid::nil(),
         parent: MessageParent::Channel(Uuid::nil()),
         thread_id: None,

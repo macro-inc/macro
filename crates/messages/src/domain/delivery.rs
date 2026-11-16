@@ -170,12 +170,16 @@ impl<
         // Run notification delivery even if the transient transport is unavailable.
         let realtime = async {
             let candidates = self.realtime.subscribers(&event.parent).await?;
+            let candidates = candidates
+                .into_iter()
+                .filter(|user| event.visibility().permits(user))
+                .collect();
             let viewers = self.access.viewers(&event.parent, candidates).await?;
             self.realtime.send(&event, viewers).await
         }
         .await;
         // Call chat is delivered in the live sidebar, without document comment notifications.
-        if matches!(event.parent, MessageParent::Call(_)) {
+        if matches!(event.parent, MessageParent::Call(_)) || !event.visibility().is_public() {
             return realtime;
         }
         let notification = match &event.change {

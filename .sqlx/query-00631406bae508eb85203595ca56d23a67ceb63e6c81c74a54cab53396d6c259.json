@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bot_id FROM agent_configs WHERE bot_id = ANY($1) AND is_ephemeral",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "00631406bae508eb85203595ca56d23a67ceb63e6c81c74a54cab53396d6c259"
+}

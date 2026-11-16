@@ -186,6 +186,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   one row comes back. Detail joins compare the bare uuid
   (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id` read the table once per
   page row.
+- Keep private message roots out of shared channel-thread candidates and out of the parent-thread grant that opens agent sessions; private channel history is read through `messages`.
 
 ## Related
 

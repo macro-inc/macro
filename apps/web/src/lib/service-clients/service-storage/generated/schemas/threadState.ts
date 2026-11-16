@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { MessageVisibility } from './messageVisibility';
 import type { ThreadStateAnchor } from './threadStateAnchor';
 import type { ThreadStateDeletedAt } from './threadStateDeletedAt';
 
@@ -24,4 +26,6 @@ export interface ThreadState {
   updated_at: string;
   /** User who owns this discussion, including imported discussions. */
   user_id: string;
+  /** Immutable audience inherited from the root message. */
+  visibility?: MessageVisibility;
 }

@@ -26,7 +26,7 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
         EntityType::Project => sqlx::query!(r#"SELECT "userId" AS owner, name FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL FOR SHARE"#, id_text)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
-        EntityType::AgentSession => sqlx::query!("SELECT owner_id, name FROM agent_session WHERE id = $1 FOR SHARE", id)
+        EntityType::AgentSession => sqlx::query!("SELECT owner_id, name FROM agent_session WHERE id = $1 AND message_visibility->>'type' = 'public' FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_id, r.name, None)),
         EntityType::ExternalChat => sqlx::query!("SELECT user_id, name FROM external_chat WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),

@@ -63,6 +63,7 @@ fn message(id: Uuid, deleted: bool) -> Message {
     let now = chrono::Utc::now();
     Message {
         kind: messages::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         id,
         parent: parent(),
         thread_id: (id != root()).then_some(root()),
@@ -98,6 +99,7 @@ async fn reads_the_bound_actor_parent_and_root_and_omits_tombstones() {
         .return_once(|_, _| {
             Ok(MessageThread {
                 state: ThreadState {
+                    visibility: Default::default(),
                     root_id: root(),
                     user_id: user().to_string(),
                     created_at: chrono::Utc::now(),
@@ -138,6 +140,7 @@ async fn a_sender_known_only_by_email_is_left_unnamed() {
                 resolved: false,
                 deleted_at: None,
                 anchor: None,
+                visibility: Default::default(),
             },
             root: message(root(), false),
             replies: vec![],

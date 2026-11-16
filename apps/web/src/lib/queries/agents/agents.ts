@@ -43,6 +43,8 @@ export type CreateAgentParams = {
    * thread.
    */
   isCoding: boolean;
+  /** Mentions start a private, durable exchange with the sender. */
+  isEphemeral?: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -108,6 +110,7 @@ export function useCreateAgentMutation() {
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
           is_coding: vars.isCoding,
+          is_ephemeral: vars.isEphemeral ?? false,
         })
       ),
     onSuccess: async (agent) => {
@@ -149,6 +152,7 @@ export function useUpdateAgentMutation() {
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
           is_coding: vars.isCoding,
+          is_ephemeral: vars.isEphemeral,
         })
       ),
     onSuccess: async (updated) => {

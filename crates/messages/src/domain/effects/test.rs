@@ -38,6 +38,7 @@ async fn every_committed_target_is_attempted_even_if_any_or_all_fail() {
         let result = effects
             .publish(event(MessageChange::ThreadUpdated {
                 state: crate::domain::models::ThreadState {
+                    visibility: Default::default(),
                     root_id: uuid::Uuid::from_u128(1),
                     user_id: "macro|author@example.com".into(),
                     resolved: true,
@@ -62,6 +63,7 @@ async fn typing_only_reaches_the_parent_transport() {
     };
     MessageEffects::new(target(0), target(1), target(2))
         .publish(event(MessageChange::Typing {
+            visibility: Default::default(),
             thread_id: None,
             active: true,
             agent: None,
@@ -81,6 +83,7 @@ async fn call_chat_reaches_both_agent_targets_and_the_parent_transport() {
     };
     let mut event = event(MessageChange::ThreadUpdated {
         state: crate::domain::models::ThreadState {
+            visibility: Default::default(),
             root_id: uuid::Uuid::from_u128(1),
             user_id: "macro|author@example.com".into(),
             resolved: false,

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(t) || jsonb_build_object('visibility', m.visibility) AS \"state!: Json<ThreadState>\" FROM comms_message_threads t JOIN comms_messages m ON m.id = t.root_id\n               WHERE t.root_id = $1 AND t.parent_entity_type = $2 AND t.parent_entity_id = $3\n                   AND t.deleted_at IS NULL FOR UPDATE OF t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: Json<ThreadState>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ed233a6168a64361fbc224034529057bae0a52a4418e7af50fcab5a5961b4ab9"
+}

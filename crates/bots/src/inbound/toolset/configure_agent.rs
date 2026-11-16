@@ -231,6 +231,7 @@ impl ConfigureAgent {
             mcp,
             auto_accept_permissions: self.auto_accept_permissions,
             is_coding: self.is_coding,
+            is_ephemeral: None,
         };
         if patch == PatchAgentRequest::default() {
             return Err(invalid_arguments(

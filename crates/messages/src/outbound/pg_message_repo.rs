@@ -29,6 +29,8 @@ struct StoredMessage {
     kind: MessageKind,
     sender_id: String,
     guest_name: Option<String>,
+    #[serde(default)]
+    visibility: MessageVisibility,
     imported_author: Option<String>,
     triggered_by_user_id: Option<String>,
     triggered_via: Option<String>,
@@ -263,6 +265,7 @@ impl PgMessageRepository {
                     imported_author: r.imported_author.map(|name| ImportedAuthor { name }),
                     kind: r.kind,
                     guest_name: r.guest_name,
+                    visibility: r.visibility,
                     triggered_by: r.triggered_by_user_id,
                     triggered_via: r.triggered_via,
                     content: if deleted { String::new() } else { r.content },
@@ -495,9 +498,9 @@ impl PgMessageRepository {
         delete: bool,
     ) -> Result<ThreadState, MessageError> {
         let state = sqlx::query_scalar!(
-            r#"SELECT to_jsonb(t) AS "state!: Json<ThreadState>" FROM comms_message_threads t
+            r#"SELECT to_jsonb(t) || jsonb_build_object('visibility', m.visibility) AS "state!: Json<ThreadState>" FROM comms_message_threads t JOIN comms_messages m ON m.id = t.root_id
                WHERE t.root_id = $1 AND t.parent_entity_type = $2 AND t.parent_entity_id = $3
-                   AND t.deleted_at IS NULL FOR UPDATE"#,
+                   AND t.deleted_at IS NULL FOR UPDATE OF t"#,
             root_id,
             parent.entity_type(),
             parent.entity_id(),
@@ -535,6 +538,7 @@ impl PgMessageRepository {
                WHERE root_id = $1 RETURNING to_jsonb(t) AS "state!: Json<ThreadState>""#,
             root_id, patch.resolved, delete, patch.detach_anchor,
         ).fetch_one(&mut **tx).await.map_err(database_error)?;
+        result.visibility = state.visibility.clone();
         Self::resolve_highlight_text(&mut **tx, [&mut result.0]).await?;
         Ok(result.0)
     }
@@ -711,7 +715,7 @@ impl MessageRepository for PgMessageRepository {
         root: Uuid,
     ) -> Result<Option<ThreadState>, MessageError> {
         let mut state = sqlx::query_scalar!(
-            r#"SELECT to_jsonb(t) AS "state!: Json<ThreadState>" FROM comms_message_threads t
+            r#"SELECT to_jsonb(t) || jsonb_build_object('visibility', m.visibility) AS "state!: Json<ThreadState>" FROM comms_message_threads t JOIN comms_messages m ON m.id = t.root_id
                WHERE t.root_id = $1 AND t.parent_entity_type = $2 AND t.parent_entity_id = $3"#,
             root,
             parent.entity_type(),
@@ -730,6 +734,7 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         message_id: Uuid,
         limit: u16,
+        viewer: Option<&str>,
     ) -> Result<Vec<Message>, MessageError> {
         let rows = sqlx::query_scalar!(
             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>"
@@ -740,12 +745,16 @@ impl MessageRepository for PgMessageRepository {
                WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
                  AND m.deleted_at IS NULL AND t.deleted_at IS NULL
                  AND (m.created_at, m.id) < (target.created_at, target.id)
+                 AND (m.visibility->>'type' = 'public' OR (
+                     COALESCE(m.thread_id, m.id) = COALESCE(target.thread_id, target.id)
+                     AND (m.visibility->>'user_id' = $5 OR m.visibility->'bot_ids' ? $5)))
                  AND ($1 = 'channel' OR COALESCE(m.thread_id, m.id) = COALESCE(target.thread_id, target.id))
                ORDER BY m.created_at DESC, m.id DESC LIMIT $4"#,
             parent.entity_type(),
             parent.entity_id(),
             message_id,
             i64::from(limit.clamp(1, 100)),
+            viewer,
         ).fetch_all(&self.pool).await.map_err(database_error)?;
         let mut messages = self.hydrate(rows).await?;
         messages.reverse();
@@ -827,8 +836,8 @@ impl MessageRepository for PgMessageRepository {
         sqlx::query!(
             r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
                     sender_id, triggered_by_user_id, triggered_via, content, client_message_id,
-                    guest_name, kind)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"#,
+                    guest_name, kind, visibility)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
@@ -843,6 +852,7 @@ impl MessageRepository for PgMessageRepository {
                 MessageKind::Message => "message",
                 MessageKind::CallRoot => "call_root",
             },
+            Json(&command.visibility) as _,
         )
         .execute(&mut *tx)
         .await

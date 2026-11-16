@@ -148,7 +148,7 @@ impl<R: SessionSharingRepo> SessionSharing for SessionSharingService<R> {
         let id = session_id(access)?;
         if self.repo.is_private_conversation(id).await? {
             return Err(AgentSessionError::InvalidSharing(
-                "an agent DM is private to its owner and cannot be shared",
+                "a private agent exchange cannot be shared",
             ));
         }
         validate(&request)?;

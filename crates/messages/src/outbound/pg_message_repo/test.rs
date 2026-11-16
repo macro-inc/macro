@@ -9,6 +9,7 @@ use std::sync::Arc;
 const USER: &str = "macro|message-test@example.com";
 
 mod initiative;
+mod privacy;
 mod schema_drop;
 
 async fn setup(pool: &PgPool) {
@@ -38,6 +39,7 @@ async fn setup(pool: &PgPool) {
 fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
     CreateMessage {
         kind: MessageKind::Message,
+        visibility: Default::default(),
         guest_name: None,
         canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),
@@ -765,7 +767,10 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     repo.create(command("message-doc-a", Some(root.id), "later response"))
         .await
         .unwrap();
-    let history = repo.preceding(&root.parent, reply.id, 10).await.unwrap();
+    let history = repo
+        .preceding(&root.parent, reply.id, 10, None)
+        .await
+        .unwrap();
     assert_eq!(
         history
             .iter()
@@ -777,7 +782,8 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
         repo.preceding(
             &MessageParent::parse("document", "message-doc-b").unwrap(),
             reply.id,
-            10
+            10,
+            None
         )
         .await
         .unwrap()
@@ -785,7 +791,7 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     );
     repo.delete_thread(&root.parent, root.id).await.unwrap();
     assert!(
-        repo.preceding(&root.parent, reply.id, 10)
+        repo.preceding(&root.parent, reply.id, 10, None)
             .await
             .unwrap()
             .is_empty()

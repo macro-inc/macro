@@ -147,6 +147,7 @@ threads, pins, recents, notifications, folders, activity.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Every shared message writer supplies the bots-owned ephemeral settings reader; private thread delivery and reads follow `docs/architecture/private-message-threads.md`.
 - Thread edits (`api/threads/edit_thread.rs`) and saved view definition
   creates and updates refuse sharing changes from a scoped agent session
   (`agent_correlation::context::refuse_sharing`, 403); a new sharing field

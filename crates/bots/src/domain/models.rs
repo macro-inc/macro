@@ -339,6 +339,9 @@ pub struct Agent {
     /// session, a chat agent replies in the thread. Chosen in the agent's
     /// settings; the persona's word, not the runtime's.
     pub is_coding: bool,
+    /// Mentions start a durable thread visible only to the invoking user.
+    #[serde(default)]
+    pub is_ephemeral: bool,
     /// Why the agent cannot run right now, or `None` while it can.
     #[serde(default)]
     pub stopped_reason: Option<AgentStoppedReason>,
@@ -394,6 +397,9 @@ pub struct CreateAgentRequest {
     /// Whether the agent is a coding agent: a mention is answered with a magic
     /// chip into its live session (`true`) or a reply in the thread (`false`).
     pub is_coding: bool,
+    /// Mentions start a durable thread visible only to the invoking user.
+    #[serde(default)]
+    pub is_ephemeral: bool,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -435,6 +441,9 @@ pub struct UpdateAgentRequest {
     /// Whether the agent is a coding agent: a mention is answered with a magic
     /// chip into its live session (`true`) or a reply in the thread (`false`).
     pub is_coding: bool,
+    /// New mention privacy. Omit to preserve the saved setting.
+    #[serde(default)]
+    pub is_ephemeral: Option<bool>,
 }
 
 #[cfg(test)]
@@ -502,6 +511,10 @@ pub struct PatchAgentRequest {
     /// Replacement coding choice.
     #[serde(default)]
     pub is_coding: Option<bool>,
+    /// Replacement privacy choice: mentions start private threads (`true`)
+    /// or shared ones (`false`).
+    #[serde(default)]
+    pub is_ephemeral: Option<bool>,
 }
 
 impl PatchAgentRequest {
@@ -520,6 +533,7 @@ impl PatchAgentRequest {
             None => (current.channel_scope, current.channel_ids.clone()),
         };
         UpdateAgentRequest {
+            is_ephemeral: Some(self.is_ephemeral.unwrap_or(current.is_ephemeral)),
             team_id: match &current.bot.owner {
                 Some(BotOwner::Team { team_id }) => Some(*team_id),
                 Some(BotOwner::User { .. }) | None => None,

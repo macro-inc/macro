@@ -480,6 +480,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
     let at = |minute| Utc.with_ymd_and_hms(2026, 10, 8, 14, minute, 0).unwrap();
     let prompt = Message {
         kind: messages::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         id: prompt_id,
         parent: MessageParent::Channel(channel_id),
         thread_id: Some(root_id),
@@ -507,6 +508,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
             message: prompt.clone(),
             thread: Some(MessageThread {
                 state: ThreadState {
+                    visibility: Default::default(),
                     root_id,
                     user_id: "macro|ana@example.com".into(),
                     resolved: false,
@@ -517,6 +519,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                 },
                 root: Message {
                     kind: messages::domain::models::MessageKind::Message,
+                    visibility: Default::default(),
                     id: root_id,
                     parent: MessageParent::Channel(channel_id),
                     thread_id: None,
@@ -538,6 +541,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                 replies: vec![
                     Message {
                         kind: messages::domain::models::MessageKind::Message,
+                        visibility: Default::default(),
                         id: answer_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -558,6 +562,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     },
                     Message {
                         kind: messages::domain::models::MessageKind::Message,
+                        visibility: Default::default(),
                         id: deleted_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -579,6 +584,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     prompt,
                     Message {
                         kind: messages::domain::models::MessageKind::Message,
+                        visibility: Default::default(),
                         id: later_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),

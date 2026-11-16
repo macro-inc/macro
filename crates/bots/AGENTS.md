@@ -74,6 +74,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 - A new way a bot's name or picture becomes visible to more people (a new
   surface or audience) must be added to `bot_audience`, or those viewers miss
   live updates.
+- Persist ephemeral mention defaults in `agent_configs.is_ephemeral`; preserve omitted values in updates and unrelated patches. The bots-owned `EphemeralAgentReader` adapter supplies message audience facts.
 
 ## Related
 

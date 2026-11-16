@@ -126,6 +126,7 @@ data checks and explicit vault purge. It does not depend on a successful item.
   viewer's personal order and cascades with both the view and the user.
 
 - External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
+- Private message visibility is additive and immutable. Deploy all audience-aware readers/consumers before enabling private writes; see `docs/architecture/private-message-threads.md`.
 
 ## Related
 

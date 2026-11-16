@@ -42,6 +42,7 @@ fn sender() -> ChannelSender<'static> {
 #[test]
 fn the_message_source_carries_the_persisted_parent_through() {
     let posted = MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::parse("document", "doc-1").unwrap(),
         message_id: Uuid::from_u128(2),
         thread_id: None,
@@ -136,6 +137,7 @@ fn a_task_joining_a_project_decodes_as_a_project_addition() {
 #[test]
 fn completed_bot_reply_mentions_reach_the_existing_trigger_path() {
     let posted = MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),

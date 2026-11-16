@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\"\n               FROM comms_messages m\n               JOIN comms_message_threads t ON t.root_id = COALESCE(m.thread_id, m.id)\n               JOIN comms_messages target ON target.id = $3\n                 AND target.parent_entity_type = $1 AND target.parent_entity_id = $2\n               WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2\n                 AND m.deleted_at IS NULL AND t.deleted_at IS NULL\n                 AND (m.created_at, m.id) < (target.created_at, target.id)\n                 AND (m.visibility->>'type' = 'public' OR (\n                     COALESCE(m.thread_id, m.id) = COALESCE(target.thread_id, target.id)\n                     AND (m.visibility->>'user_id' = $5 OR m.visibility->'bot_ids' ? $5)))\n                 AND ($1 = 'channel' OR COALESCE(m.thread_id, m.id) = COALESCE(target.thread_id, target.id))\n               ORDER BY m.created_at DESC, m.id DESC LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fb6928a22352aa83e369652e7664f5265df6db5889db16818546237655a650f4"
+}

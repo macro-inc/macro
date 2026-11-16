@@ -53,6 +53,7 @@ fn settled() -> AgentSessionLifecycleEvent {
         identity: SessionIdentity {
             session_id: AgentSessionId::new_from_uuid(Uuid::from_u128(0xA)),
             session_name: "Fix the flaky test".to_owned(),
+            visibility: Default::default(),
             bot_id: BotId::new_from_uuid(Uuid::from_u128(0xB07)),
             bot_name: "Macro Coder".to_owned(),
             owner_id: owner(),

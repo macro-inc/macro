@@ -747,6 +747,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
     let channel = MessageParent::Channel(CHANNEL_ID);
     let document = MessageParent::parse("document", "doc-1").unwrap();
     let posted = |parent: MessageParent| MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id: MESSAGE_ID,
         thread_id: None,
@@ -1633,6 +1634,7 @@ fn agent_session_lifecycle_decodes_and_routes_by_session() {
     let identity = SessionIdentity {
         session_id: id,
         session_name: "Indexed session".into(),
+        visibility: Default::default(),
         bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
         bot_name: "Agent".into(),
         owner_id: user_id(),

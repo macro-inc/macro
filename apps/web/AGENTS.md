@@ -703,6 +703,11 @@ The backend-free desktop/phone/tablet regression is
 
 ## Development Patterns
 
+Derive thread privacy only from the agent's **Ephemeral agent** setting and
+inherit the saved audience on replies; keep visibility controls, audience labels,
+and manual privacy state out of the composer. See
+`docs/architecture/private-message-threads.md` at the repo root.
+
 CRM pipeline schema adapters supply `currencyColumnId`, `fixedOptions` and
 `defaultValue` to the shared database editor. Pass the complete row to cell
 formatting and group monetary calculations by currency; CSV keeps amounts and

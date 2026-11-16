@@ -36,6 +36,7 @@ fn channel_message() -> ChannelMessagePostedMetadata {
 
 fn posted(parent: MessageParent, thread_id: Option<Uuid>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id: Uuid::from_u128(2),
         thread_id,

@@ -75,7 +75,7 @@ pub async fn get_channel_message_by_id(
             comms_messages m
         JOIN
             comms_channels c on m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
-        WHERE
+        WHERE m.visibility->>'type' = 'public' AND
             m.id = $1
             AND c.id = $2
         "#,

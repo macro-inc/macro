@@ -29,6 +29,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
     let root = repo
         .create(CreateMessage {
             kind: messages::domain::models::MessageKind::Message,
+            visibility: Default::default(),
             guest_name: None,
             canonical_root_id: None,
             parent: MessageParent::parse("document", "document-with-comments").unwrap(),

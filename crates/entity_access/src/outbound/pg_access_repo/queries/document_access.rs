@@ -147,7 +147,7 @@ pub async fn get_document_access(
             -- Source 4: a file attached to a document discussion is visible to
             -- current viewers of that document. Removing the attachment, the
             -- discussion, or the parent grant removes this path; it never
-            -- shares the parent itself.
+            -- shares the parent itself. A private discussion shares nothing.
             SELECT 'view' AS access_level
             FROM comms_attachments a
             JOIN comms_messages m ON m.id = a.message_id
@@ -158,6 +158,7 @@ pub async fn get_document_access(
             LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
             WHERE a.entity_type = 'document'
               AND a.entity_id = $3
+              AND m.visibility->>'type' = 'public'
               AND m.deleted_at IS NULL
               AND mt.deleted_at IS NULL
               AND parent_doc."deletedAt" IS NULL

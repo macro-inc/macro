@@ -84,6 +84,7 @@ grant users another agent invocation's edit, deletion, or reaction authority.
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
+- Only mentioned-agent settings select new private thread audiences; clients cannot choose per-message privacy. Private thread audiences are immutable and enforced independently of parent access; keep individual operations, SQL pagination/previews, agent context, and realtime delivery aligned with `docs/architecture/private-message-threads.md`.
 
 ## Related
 

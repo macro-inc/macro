@@ -25,6 +25,21 @@ pub fn session_identity(
     participants: Vec<MacroUserIdStr<'static>>,
 ) -> Result<SessionIdentity> {
     let owner = session.owner_user()?;
+    let visibility = match &session.thread_visibility {
+        Some(visibility) => visibility.clone(),
+        None => {
+            return Err(super::error::AgentSessionError::Unknown(anyhow::anyhow!(
+                "session root audience is unavailable"
+            )));
+        }
+    };
+    if let messages::domain::models::MessageVisibility::Private { user_id, .. } = &visibility
+        && owner.as_ref() != user_id
+    {
+        return Err(super::error::AgentSessionError::Unknown(anyhow::anyhow!(
+            "session owner does not match its private audience"
+        )));
+    }
     let mut audience = participants;
     if !audience.contains(owner) {
         audience.push(owner.clone());
@@ -57,7 +72,41 @@ pub fn session_identity(
         bot_name: bot.name.clone(),
         owner_id: owner.clone(),
         origin,
+        visibility,
         audience,
         source: session.source,
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::domain::model::AgentSessionId;
+    use messages::domain::models::MessageVisibility;
+
+    #[test]
+    fn lifecycle_identity_retains_private_audience_without_an_origin() {
+        let mut session = crate::testing::test_agent_session(AgentSessionId::TEST_A);
+        session.thread_id = Some(macro_uuid::Uuid::now_v7());
+        session.thread_visibility = Some(MessageVisibility::Private {
+            user_id: session.owner_user().unwrap().to_string(),
+            bot_ids: vec![],
+        });
+        let bot = SessionBot {
+            id: session.bot_id,
+            name: "Agent".into(),
+            handle: "agent".into(),
+            avatar_url: None,
+        };
+        let identity = session_identity(&session, &bot, vec![]).unwrap();
+        assert!(identity.origin.is_none());
+        assert_eq!(Some(identity.visibility), session.thread_visibility);
+        session.thread_visibility = None;
+        assert!(session_identity(&session, &bot, vec![]).is_err());
+        session.thread_visibility = Some(MessageVisibility::Private {
+            user_id: "macro|other@example.com".into(),
+            bot_ids: vec![],
+        });
+        assert!(session_identity(&session, &bot, vec![]).is_err());
+    }
 }

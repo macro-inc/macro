@@ -60,6 +60,7 @@ fn bot_sender() -> ChannelSender<'static> {
 fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) -> Message {
     Message {
         kind: crate::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         id,
         parent: initiative(),
         thread_id,
@@ -83,6 +84,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
 fn thread(root: Uuid, replies: Vec<Message>, anchor: Option<ThreadAnchor>) -> MessageThread {
     MessageThread {
         state: ThreadState {
+            visibility: Default::default(),
             root_id: root,
             user_id: USER.to_owned(),
             resolved: false,
@@ -313,6 +315,7 @@ impl MessageCommands for FakeMessages {
             return Err(MessageError::NotFound);
         }
         let state = ThreadState {
+            visibility: Default::default(),
             root_id,
             user_id: USER.to_owned(),
             resolved: patch.resolved.unwrap_or_default(),

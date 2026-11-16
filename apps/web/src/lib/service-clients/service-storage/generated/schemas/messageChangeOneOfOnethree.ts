@@ -7,6 +7,7 @@
 import type { MessageChangeOneOfOnethreeAgent } from './messageChangeOneOfOnethreeAgent';
 import type { MessageChangeOneOfOnethreeThreadId } from './messageChangeOneOfOnethreeThreadId';
 import type { MessageChangeOneOfOnethreeType } from './messageChangeOneOfOnethreeType';
+import type { MessageVisibility } from './messageVisibility';
 
 /**
  * Transient typing indication.
@@ -18,4 +19,6 @@ export type MessageChangeOneOfOnethree = {
   /** Root being replied to, or no root for the parent composer. */
   thread_id?: MessageChangeOneOfOnethreeThreadId;
   type: MessageChangeOneOfOnethreeType;
+  /** Audience inherited from the target thread. */
+  visibility?: MessageVisibility;
 };

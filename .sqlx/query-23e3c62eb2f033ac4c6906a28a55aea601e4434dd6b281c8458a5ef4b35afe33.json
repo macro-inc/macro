@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM agent_conversation_sessions session JOIN comms_channel_agents agent ON agent.channel_id = session.channel_id AND agent.bot_id = session.bot_id WHERE session.session_id = $1 AND agent.kind = 'direct') OR EXISTS(SELECT 1 FROM agent_session s WHERE s.id = $1 AND s.message_visibility->>'type' = 'private') AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "23e3c62eb2f033ac4c6906a28a55aea601e4434dd6b281c8458a5ef4b35afe33"
+}

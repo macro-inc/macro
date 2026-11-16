@@ -146,6 +146,16 @@ impl<Broker: macro_event_broker::MacroEventBroker> crate::domain::ports::Message
 #[cfg(feature = "ports")]
 pub fn topic_events(event: &crate::domain::ports::MessageEvent) -> Vec<MessageMacroEvent> {
     use crate::domain::{events::MessageEventAttachment, ports::MessageChange};
+    if !event.visibility().is_public() {
+        return match &event.change {
+            MessageChange::Posted {
+                message, mentions, ..
+            } => vec![MessageMacroEvent::posted(
+                MessagePostedMetadata::from_message(message, mentions.clone()),
+            )],
+            _ => Vec::new(),
+        };
+    }
     let Ok(actor) = channel_sender::ChannelSender::try_from(event.actor.clone()) else {
         return Vec::new();
     };

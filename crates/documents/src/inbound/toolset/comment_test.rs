@@ -111,6 +111,7 @@ impl MessageCommands for FakeMessages {
         let at = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
         let message = Message {
             kind: messages::domain::models::MessageKind::Message,
+            visibility: Default::default(),
             id: Uuid::from_u128(99),
             parent: MessageParent::parse("document", &access.entity().entity_id).unwrap(),
             thread_id: input.thread_id,
