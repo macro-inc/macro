@@ -17,6 +17,7 @@ function codeMessage(code: SequenceErrorCode) {
       .with('invalid_request', () => t('sequences.errorInvalidRequest'))
       .with('action_unavailable', () => t('sequences.errorActionUnavailable'))
       .with('crm_unavailable', () => t('sequences.errorCrmUnavailable'))
+      .with('person_required', () => t('sequences.errorPersonRequired'))
       .with('internal', () => t('sequences.errorInternal'))
       // A code newer than this build still reads as a failure.
       .exhaustive(() => t('sequences.errorInternal'))
@@ -69,6 +70,7 @@ export function skipMessage(skip: EnrollSkip) {
     .with('no_email', () => t('sequences.skipNoEmail'))
     .with('unsubscribed', () => t('sequences.skipUnsubscribed'))
     .with('already_enrolled', () => t('sequences.skipAlreadyEnrolled'))
+    .with('sequence_full', () => t('sequences.skipSequenceFull'))
     .exhaustive(() => t('sequences.skipUnknown'));
 }
 
