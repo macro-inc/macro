@@ -97,7 +97,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name("Typecheck")
-        .timeout_minutes(30u32)
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
@@ -116,9 +116,7 @@ fn typescript() -> Job {
                 .run("bun run build")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
-        // Native editor modules import the generated document-session package.
-        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
-        .add_step(build_document_session_for_tests())
+        .add_step(document_session_types())
         .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
 }
@@ -679,6 +677,16 @@ fn build_natural_time_for_tests() -> Step<Run> {
             .working_directory(xtask_paths::repo_dir!("apps/web"))
             .timeout_minutes(15u32),
     )
+}
+
+/// Native editor modules import the generated document-session package, which
+/// tsc resolves to its `.d.ts`. Types only: the committed copy is checked
+/// against the build in the decorator-browser and session test steps, so
+/// Typecheck compiles no Rust.
+fn document_session_types() -> Step<Run> {
+    Step::new("Install document-session types")
+        .run("mkdir -p src/lib/core/document-session/wasm && cp ../../packages/collaboration/src/session/wasm.generated.d.ts src/lib/core/document-session/wasm/document_session_wasm.d.ts")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn build_document_session_for_tests() -> Step<Run> {
