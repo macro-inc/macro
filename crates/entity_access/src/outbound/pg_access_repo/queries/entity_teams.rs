@@ -119,7 +119,7 @@ pub async fn crm_team(
 /// access (`crm_access`, or a role above member), and for a hidden company or
 /// contact (or a contact of a hidden company) admins and owners only. A
 /// pipeline has no hidden flag: CRM access is enough. One read bounded by
-/// `users` (`team_user` by its key), plus the record by primary key.
+/// the team's members (`team_user` by team), plus the record by primary key.
 #[tracing::instrument(err, skip(pool, users), fields(user_count = users.len()))]
 pub async fn crm_team_viewers(
     pool: &PgPool,
