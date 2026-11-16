@@ -6,3 +6,6 @@ pub mod activity_topic_consumer;
 pub mod kafka_activity_realtime;
 #[cfg(feature = "outbound")]
 pub mod pg_activity_repo;
+
+#[cfg(feature = "outbound")]
+pub mod entity_access_audience;
