@@ -1,0 +1,19 @@
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_teams.rs
+  s_c40fd2f0323f22::t_374ff3dfb7ea5b 122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2871046e0aa6002721dff64fdde61fc53066d319",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
