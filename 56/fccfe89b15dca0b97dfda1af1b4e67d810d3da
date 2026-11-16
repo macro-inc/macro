@@ -1,0 +1,19 @@
+crates/event_stream/src/inbound/stream_router/test.rs
+  s_695cafe799631b::t_64c57c27a5990f 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "56fccfe89b15dca0b97dfda1af1b4e67d810d3da",
+  "prompts": {},
+  "sessions": {
+    "s_695cafe799631b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bc62c68-1b4e-4243-bba7-d22f0052d31c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
