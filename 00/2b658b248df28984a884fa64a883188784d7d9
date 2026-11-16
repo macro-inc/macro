@@ -1,0 +1,27 @@
+nix/cloud-storage.nix
+  s_8b139b3d2541ba::t_654fd7b155ec01 342-343,722-725
+crates/agent_code_mode/src/domain/models.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 61
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 25-29,39-43
+services/agent_harness_service/src/main.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 927-941,947-950
+services/agent_harness_service/src/internal_mcp.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 159-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "002b658b248df28984a884fa64a883188784d7d9",
+  "prompts": {},
+  "sessions": {
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
