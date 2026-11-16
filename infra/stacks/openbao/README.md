@@ -78,9 +78,10 @@ no NAT or internet gateway removes that rule.
 | Logs | Log group `openbao-dev`, subscribed to a CloudWatch Logs destination in the main account that writes into the same Datadog Firehose. Datadog names it `service:openbao-dev` |
 | Alarms | ECS deployment failure and no healthy target, to the SNS topic `openbao-alarms-dev` in this account. CloudWatch can't notify a topic in another account, and nothing subscribes to this one yet |
 
-Operators reach it the same way as the legacy vault ("Operator tunnel"), under
-the `openbao-deploy-dev` role. The `OpenBaoOperator` permission set is
-view-only and can't start ECS Exec. Take the values from
+Operators reach it the same way as the legacy vault ("Operator tunnel"),
+signed in to `macro-openbao` with the `OpenBaoOperator` permission set. It
+may start ECS Exec and SSM sessions only on the `openbao-dev` cluster and its
+tasks, so keep that cluster name. Take the values from
 `pulumi stack output account --json`:
 `clusterName`, and `loadBalancerDnsName` as the tunnel's remote host. Use local
 port 28443 for this vault, so both tunnels can be open at once.
