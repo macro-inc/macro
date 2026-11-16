@@ -1,0 +1,34 @@
+crates/event_access/ACCESS_MODEL.md
+  s_c40fd2f0323f22::t_02ae27bef9c9e5 1-152,156-248
+  s_aaed6cfde7d1ce::t_ddbe712aab66ee 153-155
+crates/webhook/README.md
+  s_c40fd2f0323f22::t_3e5f839e4f2b58 89-90
+crates/event_access/AGENTS.md
+  s_aaed6cfde7d1ce::t_31cd00b2d0b0b9 6-12,16-21,25,27-29,35-36,40-44,49-50,55-56,60-66
+docs/guides/add-kafka-event.md
+  s_c40fd2f0323f22::t_4cca17de35cc00 22,53-54,114,189-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "261c973d9d7c196f2bb933f3386a07dfce447f6c",
+  "prompts": {},
+  "sessions": {
+    "s_aaed6cfde7d1ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5da40fe9-cd8c-4a2f-bb4a-b7b0090e93e4",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
