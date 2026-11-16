@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createHandler } from './app';
 import { parseConfig } from './config';
@@ -93,7 +94,7 @@ describe('createHandler', () => {
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     });
     expect(documentsDelete.inputSchema.required).toEqual(['op']);
   });
@@ -180,5 +181,76 @@ describe('createHandler', () => {
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error.code).toBe('invalid');
+  });
+
+  test('TOOLS limits tools/list and tools/call to the tools it names', async () => {
+    vi.stubGlobal('fetch', async () => Response.json([]));
+    const handle = createHandler(
+      parseConfig({ ...BINDINGS, TOOLS: 'search_read, documents_read' })
+    );
+
+    const listed = await (
+      await handle(rpc('tools/list', {}, 'user-token'))
+    ).json();
+    const called = await (
+      await handle(
+        rpc(
+          'tools/call',
+          { name: 'pins_read', arguments: { op: 'pins.list' } },
+          'user-token'
+        )
+      )
+    ).json();
+
+    expect(
+      listed.result.tools.map((tool: { name: string }) => tool.name)
+    ).toEqual(['documents_read', 'search_read']);
+    expect(called.error.message).toContain('Unknown tool pins_read');
+  });
+
+  test('TOOLS naming a tool that does not exist fails loudly', () => {
+    expect(() =>
+      createHandler(parseConfig({ ...BINDINGS, TOOLS: 'documents_reed' }))
+    ).toThrow('TOOLS names no such tool: documents_reed');
+  });
+
+  test("every deployed env's TOOLS names real tools", () => {
+    const wrangler = JSON.parse(
+      readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+    );
+    for (const env of ['dev', 'prod']) {
+      const vars = wrangler.env[env].vars;
+      expect(vars.TOOLS, env).toBeTruthy();
+      expect(() =>
+        createHandler(parseConfig({ ...BINDINGS, TOOLS: vars.TOOLS }))
+      ).not.toThrow();
+    }
+  });
+
+  test('tools/call drops user ids and email addresses from results', async () => {
+    vi.stubGlobal('fetch', async () =>
+      Response.json({
+        permission: 'view',
+        owner_id: 'macro|someone@example.com',
+        shared_with: ['macro|other@example.com'],
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'tools/call',
+        {
+          name: 'documents_read',
+          arguments: { op: 'Document.permission', document: 'doc-1' },
+        },
+        'user-token'
+      )
+    );
+    const body = await response.json();
+
+    expect(JSON.stringify(body)).not.toContain('example.com');
   });
 });

@@ -38,6 +38,12 @@ own permission checks and agent attribution apply.
 
 - `TOOL_GROUPING` switches between entity tools and one tool per operation;
   both lists are snapshotted in `packages/sdk-mcp`.
+- `TOOLS` (comma-separated tool names) is what each deployed env offers:
+  the ChatGPT listing's promises, since OpenAI's review reads every tool
+  offered. Unset offers everything (local). A name no tool has fails at boot.
+- Results drop personal identifiers (`dropPersonalIdentifiers`): OpenAI
+  rejected a submission for returning user ids and emails the request
+  didn't need.
 - `RESOURCE_URL` and `AUTHORIZATION_SERVER_URL` mirror
   `McpChatgptServiceUrl` and `McpPublicUrl` in `crates/macro_service_urls`;
   change all of them together. Service hosts come from the SDK for

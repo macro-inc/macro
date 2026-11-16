@@ -46,6 +46,13 @@ method signature or hint tag changes the snapshots: review the diff, then
 
 ## Gotchas
 
+- Hints follow OpenAI's review: a non-read tool is open-world, and
+  destructive unless every operation only creates (`create*`).
+- `runOperation`'s `dropPersonalIdentifiers` removes Macro user ids and
+  email addresses from results and turns user mentions into `@name`; it's
+  off by default because a read-then-replace edit (a booking link's hosts)
+  needs them back.
+
 - Keep URL enrichment optional: a failed `webUrl()` lookup must not replace
   a completed operation's result with an error; direct `webUrl` operations
   still report their own failures.
