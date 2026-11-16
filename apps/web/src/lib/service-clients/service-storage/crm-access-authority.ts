@@ -76,6 +76,7 @@ export function createCrmAccessAuthority(options: {
   const [allowed, setAllowed] = createSignal(false);
   let account: string | undefined;
   let loginEpoch = 0;
+  let loginGeneration = 0;
   let session = 0;
   let shared: CacheAuthorityHost | undefined;
   let owner = memoryAuthority();
@@ -256,6 +257,25 @@ export function createCrmAccessAuthority(options: {
   }
   return {
     allowed,
+    retireUnverified(captured: CrmRequestAuthority) {
+      // An unavailable owner read must close visible/cache admission before a
+      // completed write is returned. Old requests cannot retire a newer scope.
+      if (
+        captured.session !== session ||
+        captured.owner !== owner ||
+        observedGeneration !== captured.generation
+      )
+        return;
+      session += 1;
+      retire(`unknown:${session}`);
+    },
+    captureSession() {
+      const captured = loginGeneration;
+      return () => {
+        if (!account || captured !== loginGeneration)
+          throw new StaleCacheAuthorityError();
+      };
+    },
     prepare,
     accept,
     refresh,
@@ -290,6 +310,7 @@ export function createCrmAccessAuthority(options: {
       if (next === account && epoch === loginEpoch) return;
       account = next;
       loginEpoch = epoch;
+      loginGeneration += 1;
       session += 1;
       setAllowed(false);
       observedGeneration = undefined;

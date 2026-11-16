@@ -99,10 +99,11 @@ function itemPreviewQueryOptions(
   };
 }
 
-function crmPreviewDenied(item: ItemEntity): boolean {
+function previewDenied(item: ItemEntity): boolean {
   return (
-    !crmAccessAllowed() &&
-    (item.type === 'crm_company' || item.type === 'crm_contact')
+    queryAuthorization().paused ||
+    (!crmAccessAllowed() &&
+      (item.type === 'crm_company' || item.type === 'crm_contact'))
   );
 }
 
@@ -119,10 +120,10 @@ export async function getItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
-  if (crmPreviewDenied(item)) return noAccessPreview(item);
+  if (previewDenied(item)) return noAccessPreview(item);
   const epoch = queryAuthorization().epoch;
   const stale = () =>
-    epoch !== queryAuthorization().epoch || crmPreviewDenied(item);
+    epoch !== queryAuthorization().epoch || previewDenied(item);
   if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);
@@ -175,7 +176,7 @@ function useItemPreviewQuery(
 
   return {
     data: () => {
-      if (crmPreviewDenied(item())) return noAccessPreview(item());
+      if (previewDenied(item())) return noAccessPreview(item());
       if (usesGraphql()) return graphqlQuery.data();
       const rest = restQuery();
       return rest && queryReadyGate(rest) ? rest.data : undefined;
@@ -259,7 +260,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       } as PreviewItem;
     }
     const dataWithName = defaultNameTransform(data);
-    if (channelMessageData) {
+    if (channelMessageData && isAccessiblePreviewItem(dataWithName)) {
       return {
         ...dataWithName,
         messageContext: channelMessageData,

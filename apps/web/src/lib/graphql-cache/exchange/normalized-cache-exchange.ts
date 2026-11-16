@@ -8,6 +8,7 @@ import {
   assertResponseAuthority,
   captureOperationResponse,
   operationResponse,
+  preserveMutationOutcome,
   responseAuthorityGeneration,
 } from '../response-authority';
 import {
@@ -1602,6 +1603,8 @@ export function normalizedCacheExchange(
           } catch (error) {
             // A rejected payload still completes its network request. Keep
             // the normal query accounting and persistence acknowledgement.
+            const outcome = preserveMutationOutcome(result);
+            if (outcome) return outcome;
             result = {
               ...result,
               data: undefined,
@@ -1874,6 +1877,8 @@ export function normalizedCacheExchange(
           }
           return result;
         } catch (error) {
+          const outcome = preserveMutationOutcome(result);
+          if (outcome) return outcome;
           return {
             ...result,
             data: undefined,

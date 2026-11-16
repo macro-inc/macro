@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
@@ -61,9 +62,11 @@ export function createPipelinesSource(
     error: () => query.isError,
     refresh,
     create: async (input) => {
+      const canCache = captureQueryAuthorization();
       const pipeline = await throwOnErr(() =>
         deps.storage.createCrmPipeline(input)
       );
+      if (!canCache()) return pipeline;
       deps.client.setQueryData(
         crmKeys.pipelines(pipeline.teamId).queryKey,
         (old: (typeof pipeline)[] | undefined) => [...(old ?? []), pipeline]
@@ -72,12 +75,14 @@ export function createPipelinesSource(
       return pipeline;
     },
     rename: async (id, name) => {
+      const canCache = captureQueryAuthorization();
       await throwOnErr(() => deps.storage.renameCrmPipeline(id, name));
-      update(id, { name });
+      if (canCache()) update(id, { name });
     },
     trash: async (id) => {
+      const canCache = captureQueryAuthorization();
       await throwOnErr(() => deps.storage.trashCrmPipeline(id));
-      update(id);
+      if (canCache()) update(id);
     },
   };
 }

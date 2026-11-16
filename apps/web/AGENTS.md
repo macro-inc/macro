@@ -36,10 +36,16 @@ cache writes, queued settlement and subscription reconnects; a current generatio
 must never be assigned to already-fetched content. Keep authored drafts and queue
 variables independent of optional copied optimism. Coordinator protocol 18 and
 the native permission commands must precede enabling member-access changes.
-Authenticated storage requests opt into `x-macro-crm-access-signal: 1`, except
-`/crm/member-access`. Treat the memoized response header only as a retirement
+Only CRM-bearing storage responses opt into `x-macro-crm-access-signal: 1`;
+independent resources such as document creates and `/crm/member-access` skip it.
+Treat the memoized response header only as a retirement
 hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
+Keep an ordinary write's real status and payload when later CRM proof fails;
+guard the outcome by its login and admit cache effects only under the captured
+permission generation. Parse the selected GraphQL operation and classify REST
+POST contracts explicitly because POST also serves reads. Preserve queued
+identity settlement separately; never offer a duplicate retry for a committed write.
 Capture the generation before predicting optimistic results from authored
 arguments; caller-supplied copied updates must retain their original generation.
 Publish the shared client and host before installing authority callbacks, which
@@ -47,6 +53,10 @@ can synchronously reset mounted observers and reenter client lookup.
 On native, await bounded authority listener setup before exposing cached reads;
 reset and observe the event's scoped owner generation synchronously before refresh.
 `bun run gen-cache-authority-schema --check --rust` checks the shared contract.
+Conceal all preview snapshots while query authorization is paused, including REST email previews;
+an independently shared item may stay mounted but must drop its CRM breadcrumbs and task preset.
+Bound both `init` and `current-authority` cache startup requests with the initialization deadline,
+including the existing owner-handoff pause and resume behavior.
 
 Shared display names and `useUserNames` participant labels use the same account/session-
 scoped QueryClient cache (`queries/auth/user-name-cache.ts`), never a second name map.

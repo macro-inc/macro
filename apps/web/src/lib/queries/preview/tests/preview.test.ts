@@ -1,7 +1,7 @@
 import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PreviewItem } from '../types';
+import type { ItemEntity, PreviewItem } from '../types';
 
 const policy = vi.hoisted(() => ({ allowed: true, graphql: true }));
 const getGraphqlPreviewMock = vi.hoisted(() => vi.fn());
@@ -420,3 +420,55 @@ for (const transport of ['graphql', 'fallback', 'rest'] as const) {
     policy.graphql = true;
   });
 }
+
+it.each(['graphql', 'rest'] as const)(
+  'conceals cached email previews during retirement on %s and resumes after verification',
+  async (transport) => {
+    policy.allowed = true;
+    policy.graphql = transport === 'graphql';
+    const item: ItemEntity = { id: 'thread-1', type: 'email' };
+    const email = {
+      ...preview,
+      ...item,
+      name: 'Shared email',
+      rawName: 'Shared email',
+    };
+    getGraphqlPreviewMock.mockResolvedValue(email);
+    fetchQueryMock.mockResolvedValue(email);
+    createGraphqlItemPreviewQueryMock.mockReturnValue({
+      data: () => email,
+      shouldFallback: () => transport === 'rest',
+      isLoading: () => false,
+    });
+    useQueryMock.mockReturnValue({
+      data: email,
+      isPending: false,
+      isSuccess: true,
+    });
+    let dispose!: () => void;
+    const current = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useItemPreview(() => item)[0];
+    });
+    const resume = beginQueryAuthorizationReset();
+    try {
+      expect(current()).toEqual({
+        ...item,
+        loading: false,
+        access: 'no_access',
+      });
+      await expect(getItemPreview(item)).resolves.toEqual({
+        ...item,
+        loading: false,
+        access: 'no_access',
+      });
+      resume();
+      expect(current()).toEqual(email);
+      await expect(getItemPreview(item)).resolves.toEqual(email);
+    } finally {
+      resume();
+      dispose();
+      policy.graphql = true;
+    }
+  }
+);

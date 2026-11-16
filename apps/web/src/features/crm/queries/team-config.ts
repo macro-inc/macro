@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import type { TeamCrmConfig, TeamCrmConfigPatch } from '../core/team-config';
 import type { CrmQueryDependencies } from './dependencies';
 import { parseTeamViews } from './team-view-codec';
@@ -65,6 +66,7 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
 
   const updateMutation = useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       // Serialize updates: with whole-list team_views writes, concurrent
       // PUTs would clobber each other. Scoped mutations run one at a time,
       // and updater-style teamViews patches read the cache only once the
@@ -93,7 +95,8 @@ export function useTeamCrmConfig(deps: CrmQueryDependencies) {
         };
         return await throwOnErr(() => deps.storage.updateCrmTeamSettings(body));
       },
-      onSuccess: (settings) => {
+      onSuccess: (settings, _variables, canCache) => {
+        if (!canCache?.()) return;
         // The PUT returns the resulting row — seed the cache with it.
         queryClient.setQueryData(CRM_TEAM_SETTINGS_QUERY_KEY, settings);
       },

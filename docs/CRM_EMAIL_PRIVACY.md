@@ -61,8 +61,9 @@ time, network delivery, and client retirement work. An idle or offline client
 has no finite retirement deadline. Fresh authority reads and protected requests
 still enforce revocation immediately.
 
-The client opts into the hint on authenticated storage requests, except the fresh
-authority endpoint itself. A changed, missing, or invalid hint triggers a fresh
+The client opts into the hint for storage responses that can carry CRM content;
+independent resources such as document creation and the fresh authority endpoint
+skip it. A changed, missing, or invalid hint triggers a fresh
 authority read; it never changes the policy directly. The response keeps its
 pre-request generation even when that fresh read changes authority, so a late
 response cannot be relabeled and admitted after retirement. Protected local reads
@@ -77,6 +78,14 @@ authorized read restores them. Independently accessible mail and pipelines reloa
 through current server grants. Unrelated document/calendar data, authored draft
 content, queued command variables, UUIDs, leases, and identity bindings survive.
 
+A completed ordinary write returns its actual status and payload to the same
+login even when later permission proof or cache admission fails. Only its cache
+effects are discarded; a failed proof closes protected views through the normal
+retirement path. Company/contact creation therefore closes the form after a
+successful write instead of offering a retry that could create a duplicate.
+POST reads and GraphQL queries still require content admission, and a replaced
+login cannot receive an earlier login's write outcome.
+
 Coordinator protocol 18 and the native permission commands must ship with this
 web bundle. Older native binaries require an app update; there is no unguarded
 cache fallback. Keep preference changes disabled until the client rollout is
@@ -85,7 +94,7 @@ content already downloaded by an older client.
 
 Deploy the server's authority endpoint and CORS allowance for
 `x-macro-crm-access-signal` before publishing this client. The client sends that
-header on authenticated storage requests even while preference changes are
+header on CRM-bearing storage requests even while preference changes are
 disabled. A server rollback must retain the header allowance and endpoint while
 opted-in clients remain active; otherwise browser preflights or fresh authority
 reads fail.

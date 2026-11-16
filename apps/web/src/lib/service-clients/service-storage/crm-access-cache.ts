@@ -11,6 +11,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import {
   isQueuedSettlementRequest,
   rememberResponseAuthority,
+  rememberWriteResponse,
 } from '@graphql-cache/response-authority';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient, queryPersistence } from '@queries/client';
@@ -21,6 +22,7 @@ import {
   crmAccessAuthority,
   isCrmPolicy,
 } from './crm-access-authority';
+import { crmResponseScope } from './crm-response-scope';
 
 let host: CacheHost | undefined;
 let installed = false;
@@ -140,6 +142,29 @@ function install() {
     if (!storage && !matches(SERVER_HOSTS['email-service']) && !agentActivity)
       return;
     if (storage && url.pathname.endsWith('/crm/member-access')) return;
+    const base = storage
+      ? SERVER_HOSTS['document-storage-service']
+      : agentActivity
+        ? SERVER_HOSTS['agent-harness']
+        : SERVER_HOSTS['email-service'];
+    const path = url.pathname.slice(
+      new URL(base, document.baseURI).pathname.replace(/\/$/, '').length
+    );
+    const assertSession = crmAccessAuthority.captureSession();
+    const scope = await crmResponseScope(
+      storage ? 'storage' : agentActivity ? 'agent' : 'email',
+      path,
+      input,
+      init
+    );
+    assertSession();
+    const queuedMutation = isQueuedSettlementRequest(init);
+    if (!scope.protected && !queuedMutation) {
+      return (response) => {
+        assertSession();
+        return guardResponseBody(response, async () => assertSession());
+      };
+    }
     if (storage) {
       const headers = new Headers(
         init.headers ?? (input instanceof Request ? input.headers : undefined)
@@ -147,7 +172,6 @@ function install() {
       headers.set('x-macro-crm-access-signal', '1');
       init.headers = headers;
     }
-    const queuedMutation = isQueuedSettlementRequest(init);
     const captured = await crmAccessAuthority.prepare();
     return async (response) => {
       let admitted: typeof captured | undefined = captured;
@@ -169,17 +193,33 @@ function install() {
         // changes authority; the response always retains its original generation.
         await crmAccessAuthority.assertCurrent(captured);
       } catch (error) {
-        // Successful queued mutations still need their canonical identity to
-        // settle. Their old token cannot publish response content or optimism.
-        if (!queuedMutation || !response.ok) throw error;
+        crmAccessAuthority.retireUnverified(captured);
+        // An ordinary write keeps its real outcome, while a successful queued
+        // write still needs its identity to settle. Neither can publish rejected
+        // content to a cache; only reads fail when content admission fails.
+        if (
+          !(scope.write && !queuedMutation) &&
+          (!queuedMutation || !response.ok)
+        )
+          throw error;
         admitted = undefined;
         rejected = error;
       }
       const check = async () => {
-        if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
-        await crmAccessAuthority.assertCurrent(admitted);
+        try {
+          if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
+          await crmAccessAuthority.assertCurrent(admitted);
+        } catch (error) {
+          crmAccessAuthority.retireUnverified(captured);
+          throw error;
+        }
       };
       rememberResponseAuthority(response, admitted?.generation, check);
+      if (scope.write && !queuedMutation) {
+        assertSession();
+        rememberWriteResponse(response, assertSession);
+        return guardResponseBody(response, async () => assertSession());
+      }
       return guardResponseBody(response, async () => {
         try {
           await check();

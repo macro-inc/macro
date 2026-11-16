@@ -57,7 +57,12 @@ import {
   type ReadResult,
   type WriteResult,
 } from '../protocol';
-import { rememberResponseAuthority } from '../response-authority';
+import {
+  rememberResponseAuthority,
+  rememberWriteResponse,
+} from '../response-authority';
+import { sourceAuthorityGeneration } from '../source-authority';
+import { cacheAuthorityExchange } from './authority-exchange';
 import { entityFromArgument } from './entity-resolvers';
 import { recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
@@ -730,6 +735,83 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it.each([false, true])(
+    'preserves an ordinary mutation outcome without cache effects when admission fails (partial error=%s)',
+    async (partialError) => {
+      const data = { setEntityProperty: { id: 'created-once' } };
+      const response = Response.json({
+        data,
+        ...(partialError
+          ? {
+              errors: [
+                {
+                  message: 'One field rejected',
+                  extensions: { code: 'INVALID' },
+                },
+              ],
+            }
+          : {}),
+      });
+      rememberResponseAuthority(response, undefined, async () => {
+        throw new StaleCacheAuthorityError();
+      });
+      rememberWriteResponse(response, () => {});
+      const fetch = vi.fn(async () => response);
+      const remove = vi.spyOn(host, 'deleteRecords');
+      const client = createClient({
+        url: 'http://test/graphql',
+        fetch,
+        exchanges: [
+          cacheAuthorityExchange,
+          normalizedCacheExchange(host),
+          fetchExchange,
+        ],
+      });
+      const result = await client
+        .mutation(MUTATION, { input: { entityType: 'CRM_COMPANY' } })
+        .toPromise();
+      expect(result.data).toEqual(data);
+      expect(result.error?.networkError).toBeUndefined();
+      if (partialError)
+        expect(result.error?.graphQLErrors[0]?.extensions.code).toBe('INVALID');
+      else expect(result.error).toBeUndefined();
+      expect(sourceAuthorityGeneration(result.data)).toBe(
+        '00000000-0000-0000-0000-000000000000'
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(host.writes).toHaveLength(0);
+      expect(host.cacheActions).toHaveLength(0);
+      expect(remove).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rejects an ordinary mutation outcome belonging to a replaced login', async () => {
+    const response = Response.json({
+      data: { setEntityProperty: { id: 'old-login' } },
+    });
+    rememberResponseAuthority(response, undefined, async () => {
+      throw new StaleCacheAuthorityError();
+    });
+    rememberWriteResponse(response, () => {
+      throw new StaleCacheAuthorityError();
+    });
+    const client = createClient({
+      url: 'http://test/graphql',
+      fetch: async () => response,
+      exchanges: [
+        cacheAuthorityExchange,
+        normalizedCacheExchange(host),
+        fetchExchange,
+      ],
+    });
+    const result = await client
+      .mutation(MUTATION, { input: { entityType: 'CRM_COMPANY' } })
+      .toPromise();
+    expect(result.data).toBeUndefined();
+    expect(result.error?.networkError).toBeInstanceOf(StaleCacheAuthorityError);
+    expect(host.writes).toHaveLength(0);
   });
 
   it('finishes a rejected authority response before rereading an affected query', async () => {

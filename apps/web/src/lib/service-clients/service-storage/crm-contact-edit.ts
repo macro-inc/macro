@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
 import { recordSessionCacheWrite } from '@graphql-cache/lifecycle';
 import { captureCacheWriteSession } from '@graphql-cache/session-writes';
@@ -12,11 +13,13 @@ import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 
 /** Capture session identity before dispatching a contact edit over REST. */
 export function prepareCrmContactEdit() {
+  const canCache = captureQueryAuthorization();
   const session = captureCacheWriteSession();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
   const authorityGeneration = host?.authority?.snapshot()?.generation;
   const isCurrent = () =>
+    canCache() &&
     session.isCurrent() &&
     client === getGraphqlSoupClient() &&
     host === getGraphqlSoupCacheHost();

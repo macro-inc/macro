@@ -66,6 +66,26 @@ function client(
 }
 
 describe('CRM authority across cache clients', () => {
+  it.each(['generation', 'session', 'host'] as const)(
+    'does not retire a newer %s when an old response loses admission',
+    async (replacement) => {
+      const { authority, retire } = client(sharedOwner().port());
+      await authority.refresh();
+      const old = await authority.prepare();
+      if (replacement === 'generation') {
+        await authority.accept(await authority.prepare(), `${team}:denied`);
+        await authority.accept(await authority.prepare(), `${team}:allowed`);
+      } else {
+        if (replacement === 'session') authority.setSession('viewer', 1);
+        else authority.setHost(sharedOwner().port());
+        await authority.refresh();
+      }
+      retire.mockClear();
+      authority.retireUnverified(old);
+      expect(authority.allowed()).toBe(true);
+      expect(retire).not.toHaveBeenCalled();
+    }
+  );
   it('orders denial and regrant and rejects an older allowed proof from another window', async () => {
     const storage = sharedOwner();
     const a = client(storage.port()).authority;

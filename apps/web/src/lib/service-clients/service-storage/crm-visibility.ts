@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
 import { Telemetry } from '@macro-inc/observability';
 import { stringifyDocument } from '@urql/core';
@@ -9,11 +10,14 @@ import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 
 /** Capture the session before REST dispatch; a late response cannot enter a new session. */
 export function prepareCrmVisibilityWrite() {
+  const canCache = captureQueryAuthorization();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
   const authorityGeneration = host?.authority?.snapshot()?.generation;
   const isCurrent = () =>
-    client === getGraphqlSoupClient() && host === getGraphqlSoupCacheHost();
+    canCache() &&
+    client === getGraphqlSoupClient() &&
+    host === getGraphqlSoupCacheHost();
   return {
     isCurrent,
     async commit(change: {

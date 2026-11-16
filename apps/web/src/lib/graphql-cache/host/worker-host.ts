@@ -126,6 +126,10 @@ type Pending = {
   timer?: ReturnType<typeof setTimeout>;
 };
 
+function isInitializationRequest(kind: CacheRequest['kind']): boolean {
+  return kind === 'init' || kind === 'current-authority';
+}
+
 type HostState =
   | 'idle'
   | 'initializing'
@@ -486,7 +490,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     readAvailability.resume();
     for (const [id, entry] of pending) {
-      if (entry.kind === 'init')
+      if (isInitializationRequest(entry.kind))
         armRequestTimeout(id, entry, initializationTimeoutMs);
       else if (isReadOnlyCacheRequest(entry.kind))
         armRequestTimeout(id, entry, requestTimeoutMs);
@@ -501,7 +505,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // their deadlines must not create a separate page-side read queue.
     for (const entry of pending.values()) {
       if (
-        (entry.kind === 'init' || isReadOnlyCacheRequest(entry.kind)) &&
+        (isInitializationRequest(entry.kind) ||
+          isReadOnlyCacheRequest(entry.kind)) &&
         entry.timer !== undefined
       ) {
         clearTimeout(entry.timer);
@@ -524,7 +529,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // Cancel only the callers, not initialization or admitted worker fibers.
     // Writes remain queued until the engine has safely drained and reopened.
     for (const [id, entry] of pending) {
-      if (entry.kind === 'init' && entry.timer !== undefined) {
+      if (isInitializationRequest(entry.kind) && entry.timer !== undefined) {
         clearTimeout(entry.timer);
         entry.timer = undefined;
       }
@@ -611,7 +616,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           options.initializationTimeoutMs ??
           progress.timeoutMs + STARTUP_RESPONSE_GRACE_MS;
         for (const [id, entry] of pending) {
-          if (entry.kind === 'init' && !readAvailability.timeoutsPaused)
+          if (
+            isInitializationRequest(entry.kind) &&
+            !readAvailability.timeoutsPaused
+          )
             armRequestTimeout(id, entry, initializationTimeoutMs);
         }
       },
@@ -1231,7 +1239,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       };
       const timeoutMs = readAvailability.timeoutsPaused
         ? undefined
-        : msg.kind === 'init'
+        : isInitializationRequest(msg.kind)
           ? initializationTimeoutMs
           : isReadOnlyCacheRequest(msg.kind)
             ? requestTimeoutMs

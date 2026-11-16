@@ -722,17 +722,25 @@ Owners and admins show the reason they always retain access instead of a disable
 Member rows place the CRM label and switch on opposite sides below the identity and role controls;
 the current-user marker stays separate from wrapping names or email addresses. A failed save keeps
 the previous state and can be retried; members do not see these controls.
+An independently shared item can remain open after revocation, but its CRM record
+breadcrumbs and task-creation preset disappear. Previews, including email mentions,
+show no access while cache retirement awaits successful permission verification.
 `GET /crm/member-access` reports current access even
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
 server memoization never applies to record checks or this fresh endpoint. The
 next opted-in request after expiry observes the change (or a missing hint that
 requires a fresh proof); idle/offline clients have no fixed retirement deadline.
-The client sends that opt-in on authenticated storage requests, except the fresh
-authority endpoint. Changed or unavailable hints trigger a fresh proof before
-response admission. Protected local reads also require fresh proof; unavailable
-proof keeps those results closed. An already-started response retains its original
-generation and is discarded if authority changed while it was in flight.
+The client sends that opt-in for storage responses that can carry CRM content;
+independent requests such as document creation and the fresh authority endpoint
+skip it. Changed or unavailable hints trigger a fresh proof before cache admission.
+Protected local reads also require fresh proof; unavailable proof keeps those
+results closed. An already-started read retains its original generation and is
+discarded if authority changed while it was in flight. A completed write keeps
+its actual status and payload for the same login, but its cache effects are
+discarded after retirement. Company/contact create forms close after a successful
+write even if the later proof fails; revocation closes the record view without
+reporting the completed creation as failed or offering a duplicate retry.
 
 After denial, company/contact routes and contact pages, CRM lists, search, CRM
 activity, references, and CRM-derived email thread grants require current access

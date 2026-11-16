@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { useQuery } from '@tanstack/solid-query';
@@ -41,6 +42,7 @@ export function useStageRequirements(
     query,
     save: (rule: StageRequirement) =>
       Telemetry.span('crm.stage-requirements.save', async (span) => {
+        const canCache = captureQueryAuthorization();
         span.setAttr('pipeline.id', pipelineId);
         await deps.client.cancelQueries({ queryKey });
         await throwOnErr(() =>
@@ -50,6 +52,7 @@ export function useStageRequirements(
             requiredColumnIds: rule.fields,
           })
         );
+        if (!canCache()) return;
         // Update the committed rule immediately, even if the subsequent refresh fails.
         deps.client.setQueryData<StageRequirement[]>(queryKey, (current) => [
           ...(current ?? []).filter(

@@ -1004,44 +1004,47 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
-  it('bounds hung registration/init before admitting reads or mutations', async () => {
-    vi.useFakeTimers();
-    configureAdapter = (fake) => fake.ignoredKinds.add('init');
-    const onInitializationError = vi.fn();
-    const host = createWorkerCacheHost({
-      scope: 'scope-1',
-      requestTimeoutMs: 100,
-      initializationTimeoutMs: 10,
-      onInitializationError,
-    });
+  it.each(['init', 'current-authority'] as const)(
+    'bounds hung %s before admitting reads or mutations',
+    async (kind) => {
+      vi.useFakeTimers();
+      configureAdapter = (fake) => fake.ignoredKinds.add(kind);
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 100,
+        initializationTimeoutMs: 10,
+        onInitializationError,
+      });
 
-    const read = host.readQuery({ opKey: 4, query: 'query Read { user }' });
-    const mutation = host.enqueueOptimisticMutation(
-      {
-        uuid: '00000000-0000-4000-8000-000000000100',
-        query: 'mutation Update { update }',
-        data: { update: true },
-      },
-      { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
-    );
-    const readRejected = expect(read).rejects.toThrow(
-      'cache worker timeout: init'
-    );
-    const mutationRejected = expect(mutation).rejects.toThrow(
-      'cache worker timeout: init'
-    );
+      const read = host.readQuery({ opKey: 4, query: 'query Read { user }' });
+      const mutation = host.enqueueOptimisticMutation(
+        {
+          uuid: '00000000-0000-4000-8000-000000000100',
+          query: 'mutation Update { update }',
+          data: { update: true },
+        },
+        { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
+      );
+      const readRejected = expect(read).rejects.toThrow(
+        `cache worker timeout: ${kind}`
+      );
+      const mutationRejected = expect(mutation).rejects.toThrow(
+        `cache worker timeout: ${kind}`
+      );
 
-    await vi.advanceTimersByTimeAsync(11);
-    await Promise.all([readRejected, mutationRejected]);
+      await vi.advanceTimersByTimeAsync(11);
+      await Promise.all([readRejected, mutationRejected]);
 
-    const adapter = requireAdapter();
-    expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
-      [1, 'init'],
-    ]);
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-    expect(onInitializationError).toHaveBeenCalledOnce();
-    expect(vi.getTimerCount()).toBe(0);
-  });
+      const adapter = requireAdapter();
+      expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
+        [1, 'init'],
+      ]);
+      expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+      expect(onInitializationError).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
 
   it.each(['current-revision', 'inspect-mutations'] as const)(
     'times out a hung %s request',

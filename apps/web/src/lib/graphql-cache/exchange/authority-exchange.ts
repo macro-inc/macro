@@ -12,6 +12,7 @@ import {
   assertResponseAuthority,
   captureOperationResponse,
   operationResponse,
+  preserveMutationOutcome,
   responseAuthorityGeneration,
 } from '../response-authority';
 import {
@@ -69,6 +70,8 @@ export const cacheAuthorityExchange: Exchange =
               );
               return result;
             } catch (error) {
+              const outcome = preserveMutationOutcome(result);
+              if (outcome) return outcome;
               return {
                 ...result,
                 data: undefined,

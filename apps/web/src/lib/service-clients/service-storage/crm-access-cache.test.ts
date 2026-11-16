@@ -116,6 +116,123 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it('closes cache admission when a later normalization authority lookup fails, while keeping the write payload', async () => {
+    const current = await verifiedViewer();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/crm/companies',
+      { method: 'POST' }
+    );
+    const response = await observe(responseWithHint(true));
+    vi.spyOn(current.authority, 'current').mockRejectedValueOnce(
+      new Error('Owner unavailable')
+    );
+    await expect(assertResponseAuthority(response)).rejects.toThrow(
+      'Owner unavailable'
+    );
+    expect(crmAccessAuthority.allowed()).toBe(false);
+    expect(await response.json()).toHaveProperty('data.id', 'canonical');
+  });
+  it('does not opt an unrelated document create into CRM proof or cache admission', async () => {
+    const current = await verifiedViewer();
+    const lookup = vi.spyOn(current.authority, 'current');
+    const request: RequestInit = { method: 'POST' };
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/documents',
+      request
+    );
+    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    const response = await observe(
+      Response.json(
+        { id: 'document-1', uploadUrl: 'http://localhost/upload' },
+        { status: 201 }
+      )
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ id: 'document-1' });
+    expect(new Headers(request.headers).has('x-macro-crm-access-signal')).toBe(
+      false
+    );
+    expect(hasResponseAuthority(response)).toBe(false);
+    expect(mocks.proof).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it.each(['unavailable', 'revoked'] as const)(
+    'returns the committed create after proof is %s without admitting its content',
+    async (state) => {
+      await verifiedViewer();
+      const observe = await prepareResponseObservers(
+        'http://localhost/dss/crm/companies',
+        { method: 'POST' }
+      );
+      mocks.proof.mockResolvedValue(
+        state === 'revoked' ? proof(false) : err(new Error('offline'))
+      );
+      const response = await observe(
+        Response.json(
+          { id: 'company-1', name: 'Created once' },
+          { status: 201 }
+        )
+      );
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({
+        id: 'company-1',
+        name: 'Created once',
+      });
+      expect(crmAccessAuthority.allowed()).toBe(false);
+      expect(hasResponseAuthority(response)).toBe(true);
+      expect(responseAuthorityGeneration(response)).toBeUndefined();
+      await expect(assertResponseAuthority(response)).rejects.toBeDefined();
+    }
+  );
+
+  it('preserves the actual rejected write status and payload when proof is unavailable', async () => {
+    await verifiedViewer();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/crm/contacts',
+      { method: 'POST' }
+    );
+    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    const response = await observe(
+      Response.json({ message: 'Already exists' }, { status: 409 })
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ message: 'Already exists' });
+  });
+
+  it.each(['/crm/companies', '/documents'])(
+    'does not return an old login outcome from %s after same-account re-login',
+    async (path) => {
+      await verifiedViewer();
+      const observe = await prepareResponseObservers(
+        `http://localhost/dss${path}`,
+        { method: 'POST' }
+      );
+      crmAccessAuthority.setSession(undefined);
+      crmAccessAuthority.setSession('viewer');
+      mocks.proof.mockResolvedValue(proof(true));
+      await expect(
+        observe(Response.json({ id: 'created-before-login' }))
+      ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+    }
+  );
+
+  it('fences a write body that finishes decoding after login replacement', async () => {
+    await verifiedViewer();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/crm/companies',
+      { method: 'POST' }
+    );
+    const decoding = Promise.withResolvers<unknown>();
+    const response = responseWithHint(true);
+    response.json = () => decoding.promise;
+    const admitted = await observe(response);
+    const body = admitted.json();
+    crmAccessAuthority.setSession('another-viewer');
+    decoding.resolve({ id: 'old-login-result' });
+    await expect(body).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+  });
+
   it('opts in only for authenticated storage requests outside the proof endpoint', async () => {
     owner('viewer');
     crmAccessAuthority.setSession('viewer');

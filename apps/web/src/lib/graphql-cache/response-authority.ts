@@ -1,8 +1,42 @@
-import { makeOperation, type Operation } from '@urql/core';
+import {
+  makeOperation,
+  type Operation,
+  type OperationResult,
+} from '@urql/core';
+import { markSourceAuthority } from './source-authority';
 
 /** Source tokens survive body decoding without depending on the current realm state. */
 const generations = new WeakMap<object, string>();
 const checks = new WeakMap<object, () => Promise<void>>();
+const writeSessions = new WeakMap<Response, () => void>();
+export function rememberWriteResponse(
+  response: Response,
+  assertSession: () => void
+) {
+  writeSessions.set(response, assertSession);
+}
+
+/** The write outcome belongs to its caller; rejected content cannot seed any cache. */
+export function preserveMutationOutcome(
+  result: OperationResult
+): OperationResult | undefined {
+  if (result.operation.kind !== 'mutation') return;
+  const response = operationResponse(result.operation);
+  const assertSession = response && writeSessions.get(response);
+  if (!assertSession) return;
+  try {
+    assertSession();
+  } catch {
+    return;
+  }
+  // An explicit rejected token cannot fall back to the operation's usable token.
+  markSourceAuthority(
+    result.data,
+    '00000000-0000-0000-0000-000000000000',
+    result.operation.context.cacheAuthorizationEpoch as number | undefined
+  );
+  return result;
+}
 export function rememberResponseAuthority(
   response: Response,
   generation: string | undefined,
