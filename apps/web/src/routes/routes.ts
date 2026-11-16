@@ -51,6 +51,7 @@ import {
   ROUTINES_ROUTE_ID,
 } from '@app/features/routines/routine-navigation';
 import { bookingLinksSearch } from '@app/features/scheduling/booking-links-search';
+import { forYouSearch } from '@app/features/suggestions/for-you-search';
 import {
   defineRoute,
   type Entry,
@@ -581,6 +582,13 @@ export const recentRoute = defineRoute({
   path: 'recent',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'recent' }),
+});
+
+export const forYouRoute = defineRoute({
+  id: 'view-for-you',
+  path: 'for-you',
+  search: [forYouSearch.namespace],
+  claim: () => ({ namespace: 'component', id: 'for-you' }),
 });
 
 export const passwordsRoute = defineRoute({

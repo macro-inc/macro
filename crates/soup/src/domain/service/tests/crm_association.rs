@@ -13,8 +13,8 @@ use crm::domain::{
         EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
     },
     model::{
-        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
+        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use entity_access::domain::models::{
@@ -344,10 +344,18 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.list_contacts_for_company")
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crm::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crm::domain::model::CrmCompanyContactsPage, CrmError> {
+        unimplemented!("FakeCrm.list_company_contacts_page")
+    }
+
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         unimplemented!("FakeCrm.get_contact_for_team")
     }
 
@@ -371,8 +379,18 @@ impl CrmService for FakeCrm {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!("FakeCrm.get_company_for_team")
+    }
+
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<crm::domain::previews::CrmPreviews, CrmError> {
+        unimplemented!("FakeCrm.preview_records")
     }
 
     async fn get_team_settings(
@@ -895,6 +913,46 @@ async fn sales_tasks_grouped_reads_only_document_and_task_edges() {
         ])]
     );
     assert_eq!(*crm.edge_access.lock().unwrap(), [None]);
+}
+
+/// Grouped pages without properties resolve the activity scope the same way.
+#[tokio::test]
+async fn sales_tasks_grouped_without_properties_resolve_the_activity_scope() {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.crm_association, None);
+            let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+            documents.sort();
+            assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    repo.expect_populate_properties().times(0);
+    let items: Vec<_> = service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup_grouped_without_properties(GroupedSortRequest {
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), sales_view("tasks")),
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: Some(100),
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
 }
 
 /// A bot's team receipt reaches the edges read, so the CRM service scopes

@@ -27,7 +27,7 @@ both membership rows and rejects denying an admin/owner or self-restoration by
 a denied member. Changing this flag never changes mailbox consent or exclusions.
 A denied member can still manage their contribution consent.
 
-Fresh primary-backed checks protect records, lists, CRM email/activity scope,
+Fresh primary-backed checks protect records, lists, batched record previews, CRM email/activity scope,
 search, references, discussion access, and the CRM-derived grant to other
 mailboxes' threads. Normal mailbox ownership and independent sharing grants
 remain valid. A team-shared pipeline no longer grants access; an individual or

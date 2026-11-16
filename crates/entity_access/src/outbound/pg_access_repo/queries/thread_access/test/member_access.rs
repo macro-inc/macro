@@ -18,6 +18,17 @@ async fn member_crm_revocation_removes_only_the_requesters_crm_grant(pool: PgPoo
             access_as_requester(&pool, &thread).await,
             enabled.then_some(AccessLevel::Comment)
         );
+        #[cfg(feature = "explain_binary")]
+        {
+            let requester = user(REQUESTER);
+            assert_eq!(
+                explain_thread_crm(&pool, &thread, &requester)
+                    .await
+                    .unwrap()
+                    .len(),
+                usize::from(enabled),
+            );
+        }
         assert!(
             sqlx::query_scalar!(
                 "SELECT enabled FROM crm_email_consent WHERE team_id = $1 AND user_id = $2",

@@ -79,9 +79,18 @@ tools/HTTP/GraphQL surfaces over them.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
-  column. Don't pass one to `referencing_rows`: its SQL reads primary cells as
-  reference arrays. Don't add `ON DELETE` actions touching the pipeline row: they
-  wait on the row lock the write guard holds, and the request hangs.
+  column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
+  actions touching the pipeline row: they wait on the row lock the write guard
+  holds, and the request hangs.
+- The Pipelines card (`entries`) starts from the records: `referencing_rows`
+  reaches primary cells through `idx_ep_database_row_references_gin` (keep its
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
+  covers every pipeline while `storage_tables_rows` reads their columns and
+  cells. Never start it from the viewer's pipelines or lock them one at a time:
+  that cost grew with every pipeline the viewer can see.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
@@ -174,6 +183,16 @@ tools/HTTP/GraphQL surfaces over them.
   visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
+
+- `POST /crm/previews` titles up to 100 companies and 100 contacts in one
+  read for web chips (`src/outbound/companies_repo/previews.rs`). It must
+  answer each record as `GET /crm/companies/{id}` and `GET /crm/contacts/{id}`
+  do (current membership and effective CRM access; members see no hidden company, hidden contact, or
+  contact under a hidden company; the name and first domain the read returns,
+  domains ordered by `created_at`, then id), and leave out any record the
+  reads refuse (401, for a missing record too). Change both together;
+  `companies_repo/test/previews.rs` compares them for every role and caller,
+  including revocation and regrant on the same session and contact-page route.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
