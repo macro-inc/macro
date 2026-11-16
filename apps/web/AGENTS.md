@@ -1431,8 +1431,9 @@ which the web deploy publishes and every native bundle deletes: `build-tauri`,
 `build-tauri-dev`, the OTA archive (`infra/stacks/web-app`) and the desktop
 derivation (`nix/tauri-desktop.nix`). Pass a video import's URL through
 `webHostedUrl` (`@core/util/webHostedUrl`) so the apps load the web deploy's
-copy; a bare import 404s in a native build. `scripts/web-hosted.test.ts` checks
-the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
+copy; a bare import 404s in a native build. Retained-build pruning keeps
+`web-hosted/` for apps stuck on old bundles. `scripts/web-hosted.test.ts`
+checks the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
 to each app binary and OTA download.
 
 ## macOS desktop runtime: Chromium (CEF)

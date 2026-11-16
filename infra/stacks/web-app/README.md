@@ -39,8 +39,8 @@ The archive also leaves out `web-hosted/`. Vite writes imported videos there
 (`assetFileNames` in `apps/web/vite.base.ts`); they publish with the other
 immutable assets, and the native apps load them from this deploy
 (`webHostedUrl`) instead of carrying them in every binary and update. Their
-names carry a content hash, so an app on an older bundle finds its videos as
-long as retained-build pruning keeps them.
+names carry a content hash, and retained-build pruning never deletes them, so
+an app stuck on an older bundle still finds its videos.
 
 The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
