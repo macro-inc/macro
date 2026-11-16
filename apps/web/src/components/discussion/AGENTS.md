@@ -16,7 +16,7 @@ The owning surface supplies `EntityConversation` presentation and permissions.
 - Keep fetching, paging, permission checks, and thread rendering in the existing conversation owner.
 - Use loaded commenters for the avatar group beside View discussion; never show an overall comment count in the entry or sheet.
 - Keep surviving replies reachable even when every root message is deleted; use Start a discussion without avatars only when no messages remain.
-- Call unanchored conversation content messages and replies; reserve comment wording for anchored annotations and use Add to the discussion… for the composer.
+- Call entity conversation content messages and replies, with Add to the discussion… for the composer; preserve comment wording in anchored annotations and the legacy PR review renderer.
 - Keep the composer draft when closing the sheet, and focus only after a user opens an empty discussion.
 - Use `MobileDrawer.FixedContent` with `KeyboardFooter`; preserve the default keyboard behavior of other drawers.
 - Never force the thread to the bottom on resize or paging; reserve that for opening, sending, and keyboard changes without a linked target.
