@@ -3,8 +3,9 @@
 //! Visibility is the single reads' (`get_crm_company_access` and
 //! `get_crm_contact_access` in `entity_access`, then `get_company_for_team`
 //! and `get_contact_for_team`): the viewer must belong to the record's team,
-//! and a plain member sees no hidden company, hidden contact, or contact
-//! under a hidden company. Admins and owners see hidden records.
+//! have effective CRM access, and a plain member sees no hidden company,
+//! hidden contact, or contact under a hidden company. Admins and owners see
+//! hidden records.
 //!
 //! Each statement reads its records by primary key behind an `OFFSET 0`
 //! fence, then checks the team. Unfenced, a custom plan can AND the ids with
@@ -47,6 +48,7 @@ impl CompaniesRepositoryImpl {
             JOIN team_user tu
                 ON tu.team_id = c.team_id
                AND tu.user_id = $1
+               AND (tu.crm_access OR tu.team_role <> 'member')
             LEFT JOIN LATERAL (
                 SELECT d.domain
                 FROM crm_domains d
@@ -89,6 +91,7 @@ impl CompaniesRepositoryImpl {
             JOIN team_user tu
                 ON tu.team_id = ct.team_id
                AND tu.user_id = $1
+               AND (tu.crm_access OR tu.team_role <> 'member')
             LEFT JOIN crm_companies co
                 ON co.id = ct.company_id
             WHERE NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member'

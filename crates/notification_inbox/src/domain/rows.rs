@@ -59,6 +59,8 @@ enum Slot {
     PullRequest,
     CalendarEvent,
     CalendarJoinRequest(Uuid),
+    /// One agent request for a vault item, by its request.
+    PasswordAccessRequested(Uuid),
     AccessRequested(Uuid),
     AccessGranted(Uuid),
     /// One removal of runtime access, by its notification.
@@ -77,6 +79,7 @@ impl Slot {
             Self::PullRequest => "pull_request".to_string(),
             Self::CalendarEvent => "calendar_event".to_string(),
             Self::CalendarJoinRequest(id) => format!("calendar_join_request:{id}"),
+            Self::PasswordAccessRequested(id) => format!("password_access_requested:{id}"),
             Self::AccessRequested(id) => format!("access_requested:{id}"),
             Self::AccessGranted(id) => format!("access_granted:{id}"),
             Self::AccessRemoved(id) => format!("access_removed:{id}"),
@@ -458,6 +461,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::CalendarEventJoinRequest(request) => {
             (Slot::CalendarJoinRequest(request.request_id), true)
         }
+        NotifEvent::PasswordAccessRequested(request) => {
+            (Slot::PasswordAccessRequested(request.request_id), true)
+        }
         NotifEvent::AiResponse(_)
         | NotifEvent::AgentSessionSettled(_)
         | NotifEvent::AgentSessionWaitingForInput(_)
@@ -510,6 +516,7 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
         (Slot::PullRequest, ..) => InboxRowType::PullRequest,
         (Slot::CalendarEvent, ..) => InboxRowType::CalendarEvent,
         (Slot::CalendarJoinRequest(_), ..) => InboxRowType::CalendarJoinRequest,
+        (Slot::PasswordAccessRequested(_), ..) => InboxRowType::PasswordAccessRequested,
         (Slot::AccessRequested(_), ..) => InboxRowType::AccessRequested,
         (Slot::AccessGranted(_), ..) => InboxRowType::AccessGranted,
         (Slot::AccessRemoved(_), ..) => InboxRowType::AccessRemoved,
@@ -557,7 +564,7 @@ fn actions(slot: &Slot, shown: &[FeedNotification]) -> Vec<InboxRowAction> {
             action(InboxRowActionKind::Accept, Some(request), None),
             action(InboxRowActionKind::Decline, Some(request), None),
         ],
-        Slot::AccessGranted(_) | Slot::AccessRemoved(_) => {
+        Slot::AccessGranted(_) | Slot::AccessRemoved(_) | Slot::PasswordAccessRequested(_) => {
             vec![action(InboxRowActionKind::Open, None, None)]
         }
         Slot::Agent

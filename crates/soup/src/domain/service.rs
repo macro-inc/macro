@@ -912,13 +912,28 @@ where
         let foreign_entity_source_ids =
             legs_request.build_foreign_entity_source_ids(team_receipt.as_ref());
         let metadata_source_ids = foreign_entity_source_ids.clone();
-        let crm = team_receipt.clone().filter(|receipt| {
+        let mut crm = team_receipt.clone().filter(|receipt| {
             CrmTeamReceipt::from_team_receipt(receipt.clone())
                 .inspect_err(|error| {
                     tracing::warn!(error = ?error, "team receipt is not a CRM receipt; skipping CRM attention feed candidates");
                 })
                 .is_ok()
         });
+        if crm.is_some()
+            && req
+                .types
+                .iter()
+                .any(|kind| matches!(kind, EntityType::CrmCompany | EntityType::CrmContact))
+        {
+            let allowed = self
+                .crm_service
+                .current_member_access(req.user.as_ref())
+                .await
+                .map_err(|_| SoupErr::CrmErr)?;
+            if !allowed.is_some_and(|(_, allowed)| allowed) {
+                crm = None;
+            }
+        }
         let legs = NotifiedHydrationLegs {
             link_ids: legs_request.link_ids.clone(),
             comms: legs_request.build_comms_request(),
@@ -1061,13 +1076,14 @@ where
         let mut crm_contact_ids = Vec::new();
         for entity in entities {
             match entity.entity_type {
-                // Calendar events, agent sessions and runtimes ride the main
-                // by-ids query in both soup types.
+                // Calendar events, agent sessions, runtimes and teams ride the
+                // main by-ids query in both soup types.
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
                 | EntityType::AgentSession
                 | EntityType::Harness
+                | EntityType::Team
                 | EntityType::Initiative => main_entities.push(entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
