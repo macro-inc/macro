@@ -627,11 +627,14 @@ impl EditorSurface {
         Ok(changed)
     }
     fn refresh_cursor(&mut self, doc: &LoroDoc) {
+        let selection = self.core.state().selection();
+        // Source's localCursorUpdate converts no table selection
+        // (cursor.ts:84), so its awareness and presence keep the previous value.
+        if selection.is_some_and(Selection::is_table) {
+            return;
+        }
         self.cursor = self.projection.as_ref().and_then(|p| {
-            self.core
-                .state()
-                .selection()
-                .and_then(|selection| p.cursor(doc, self.core.state(), selection))
+            selection.and_then(|selection| p.cursor(doc, self.core.state(), selection))
         });
     }
     fn output(

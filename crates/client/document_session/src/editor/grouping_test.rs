@@ -1181,3 +1181,122 @@ fn undo_after_resync_restores_the_selection_before_the_edit() {
     assert_eq!(surface.state().root_text_content().as_ref(), "abc");
     assert_eq!(view_selection(surface.state().selection()), at(1));
 }
+
+/// Source's localCursorUpdate (CollabProvider.tsx:296) converts only range and
+/// node selections (cursor.ts:84); a table selection leaves the local awareness,
+/// and with it presence, at its previous value. Browser history then restores
+/// that earlier awareness after undo, not the table's cells.
+#[test]
+fn a_table_selection_keeps_the_previous_awareness_through_undo()
+-> Result<(), Box<dyn std::error::Error>> {
+    let config = crate::application::application_editor_config(
+        EditorConfig {
+            view_host: ViewHost {
+                engine: ViewEngine::Chromium,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config, 7, now(0))?;
+    let doc = lexical_loro::new_doc(7)?;
+    let mut view = Vec::new();
+    surface.init(&doc, now(0), Access::Edit, &mut view)?;
+    surface.apply(
+        &doc,
+        Input::SetState {
+            state: serde_json::from_str(include_str!(
+                "../../../lexical/macro_document_model/src/plugins_group_b/table/actions/fixtures/before.json"
+            ))?,
+            tags: TagSet::default(),
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    surface.apply(
+        &doc,
+        Input::Command {
+            command: Command::ClearHistory,
+            selection: ViewSelection::KeepModel,
+        },
+        now(0),
+        Access::Edit,
+        &mut view,
+    )?;
+    let state = surface.state().view();
+    let table = state.first_child(NodeKey::ROOT).expect("loaded table");
+    let rows = state.children_keys(table)?;
+    let first_row = state.children_keys(rows[0])?;
+    let second_row = state.children_keys(rows[1])?;
+    let text = state
+        .all_text_nodes(first_row[0])
+        .next()
+        .expect("first cell text");
+    let caret = Point::text(text, Utf16Offset(2));
+    let caret_selection = ViewSelection::Range {
+        anchor: caret,
+        focus: caret,
+        resolution_dirty: false,
+    };
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: caret_selection.clone(),
+            change: None,
+        },
+        now(10),
+        Access::Edit,
+        &mut view,
+    )?;
+    let caret_awareness = surface.selection_cursors();
+    assert!(caret_awareness.is_some());
+
+    surface.apply(
+        &doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::Table {
+                table,
+                anchor_cell: second_row[0],
+                focus_cell: second_row[1],
+            },
+            change: None,
+        },
+        now(20),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert!(surface.state().selection().is_some_and(Selection::is_table));
+    // Presence publishes these cursors: peers keep seeing the earlier caret.
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+
+    // A resize leaves the table selection in place, so the awareness the undo
+    // restores is still the caret from before the table selection.
+    let command = macro_document_model::surface::decode_command(
+        "group-b.table",
+        &json!({"action":"resize-column","table":table.index(),"column":0,"baseWidths":[160,160,160],"delta":40.0,"merge":false}).to_string(),
+        table.generation(),
+        None,
+    )?
+    .expect("registered resize action");
+    surface.apply(
+        &doc,
+        Input::Command {
+            command,
+            selection: ViewSelection::KeepModel,
+        },
+        now(1_000),
+        Access::Edit,
+        &mut view,
+    )?;
+    assert!(surface.state().selection().is_some_and(Selection::is_table));
+    assert_eq!(surface.selection_cursors(), caret_awareness);
+
+    let resized = surface.state().to_json()?;
+    surface.apply(&doc, Input::Undo, now(2_000), Access::Edit, &mut view)?;
+    assert_ne!(surface.state().to_json()?, resized);
+    assert_eq!(view_selection(surface.state().selection()), caret_selection);
+    Ok(())
+}
