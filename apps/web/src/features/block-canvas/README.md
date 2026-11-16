@@ -97,6 +97,27 @@ that forwards these keys unless the artifact handled them or the user is typing.
 The host treats those messages only as navigation. Touch devices use the on-screen
 buttons.
 
+## Desktop and touch views
+
+`canvas-next.tsx` is the entry: it owns the editor, state, clipboard and hotkeys,
+and holds the one device switch. `views/canvas-view.tsx` and
+`views/canvas-read-only-view.tsx` are the desktop compositions,
+`views/mobile/` the phone and tablet ones, and `views/shared/` the parts both
+render: `CanvasViewParts` (the root that wires the viewport, the scene, the
+insert menu, the presentation and the empty state), `CanvasInspectorSections`,
+`CanvasReadOnlyParts`, and `CANVAS_TOOLS`, which names and draws each tool
+while every view lists the tools it offers. A canvas embedded in a document
+keeps the desktop read-only view on every device, so its controls stay inside
+the embed.
+
+On touch the drawing tools are an island in the app's bottom chrome, in the
+`accessory` float region above the dock, so the dock, the home indicator and
+the keyboard never cover them, and the page's New button gives way while a
+canvas is open. A phone folds Rectangle and Ellipse into one button and Arrow,
+Line and Connector into another: a tap picks the group's last tool, and a tap
+while it is picked opens the others. A tablet lists every tool. A read-only
+canvas offers Select and Hand. The chrome steps aside while the keyboard is up.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
@@ -282,8 +303,10 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 - `core/`: seed/defaults only. Editing algorithms and typed commands live in graphics.
 - `primitives/`: Solid state, mixed values, creation defaults and UI actions.
 - `components/`: inspector and layer list with explicit props.
-- `views/`: editor surface and controls composed around a supplied editor/state.
-- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys and clipboard.
+- `views/`: editor surface and controls composed around a supplied editor/state,
+  split into desktop, `mobile/` and `shared/` (see Desktop and touch views).
+- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys,
+  clipboard, and the device switch between the desktop and touch views.
 - `queries/canvas-session.ts`: shared runtime, initialization, recovery, permissions and teardown.
 - `primitives/create-canvas-presence.ts`: ephemeral cursor/selection/gesture publication.
 - `clipboard.ts` / `hotkeys.ts`: host adapters. No browser/app dependency in the core.
