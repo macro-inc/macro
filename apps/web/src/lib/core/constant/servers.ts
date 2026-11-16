@@ -114,9 +114,12 @@ export const SERVER_HOSTS: Servers =
  * The app talks to a self-contained local stack (`run_local`, `just stack`)
  * through its single-origin proxy, which keeps each instance's cookies apart.
  * `run_dev` uses the same proxy origin but not those cookie rules.
+ * Static production bundles can route transport locally without enabling
+ * this development-only authentication handoff.
  */
 export function usesLocalStackProxy(): boolean {
   return (
+    import.meta.env.MODE === 'development' &&
     import.meta.env.VITE_LOCAL_STACK === 'true' &&
     SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service']
   );
