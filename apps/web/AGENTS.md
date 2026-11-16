@@ -1424,6 +1424,17 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+## Videos stay out of native bundles
+
+Vite writes imported videos (`.mp4`, `.webm`, `.mov`) to `dist/web-hosted/`,
+which the web deploy publishes and every native bundle deletes: `build-tauri`,
+`build-tauri-dev`, the OTA archive (`infra/stacks/web-app`) and the desktop
+derivation (`nix/tauri-desktop.nix`). Pass a video import's URL through
+`webHostedUrl` (`@core/util/webHostedUrl`) so the apps load the web deploy's
+copy; a bare import 404s in a native build. `scripts/web-hosted.test.ts` checks
+the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
+to each app binary and OTA download.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,
