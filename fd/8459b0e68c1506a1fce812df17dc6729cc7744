@@ -1,0 +1,23 @@
+services/mcp-chatgpt-worker/src/person-tokens.ts
+  s_4e1561ae826eb8::t_6d435dafd74696 18-20,45-47,49-50,54-55
+services/mcp-chatgpt-worker/src/replace-all.test.ts
+  s_4e1561ae826eb8::t_8841c917fd0b79 1-38
+services/mcp-chatgpt-worker/src/replace-all.ts
+  s_4e1561ae826eb8::t_5e01d42b03216f 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fd8459b0e68c1506a1fce812df17dc6729cc7744",
+  "prompts": {},
+  "sessions": {
+    "s_4e1561ae826eb8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36cf77f6-824b-4f1c-9196-fcda157e5653",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
