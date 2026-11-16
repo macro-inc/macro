@@ -86,6 +86,10 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+`password_import_activity` stores only per-batch source format and counts; its
+team foreign key cascades, and the passwords repository includes it in retained
+data checks and explicit vault purge. It does not depend on a successful item.
+
 ## Gotchas
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
@@ -96,6 +100,13 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   their queries between concurrent identical callers through `single_flight`.
   The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
   covers the cached path and needs its own user ids per test.
+- `get_user_accessible_items` counts the caller's document grants first, up to
+  `DOCUMENT_GRANTS_LOOKED_UP_BY_ID`. At or under it, `documents_by_grant.sql`
+  looks each granted document up by id behind `OFFSET 0` fences; above it the
+  planner chooses. Left alone, the planner scans every live document for a
+  caller with many small sources, because it estimates each at the table's
+  average grant count. Keep the fences, and re-measure both paths on a
+  production-size seed before changing the limit.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;

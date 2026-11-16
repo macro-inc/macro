@@ -6,7 +6,11 @@ import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import { resetChannelSync, storeUnstoredPushes } from './catch-up';
+import {
+  rereadChannelsAfterStorageReset,
+  resetChannelSync,
+  storeUnstoredPushes,
+} from './catch-up';
 import { channelCacheHost } from './flag';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
@@ -73,9 +77,11 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * leader keeps up to forty unread and the twenty most recently used channels
  * ready, one request at a time and only while the person leaves the app alone,
  * again after a reconnect or a replaced cache, and drops channels not opened
- * for thirty days. Each tab also sends the messages a page that is gone was
- * still handing to the device queue, and stores the pushed changes such a
- * page had shown but the device had not taken.
+ * for thirty days. When the cache storage is reset under the page, the open
+ * channels' pages and threads are read again so the device holds them again.
+ * Each tab also sends the messages a page that is gone was still handing to
+ * the device queue, and stores the pushed changes such a page had shown but
+ * the device had not taken.
  */
 export function useChannelCache(userId: Accessor<string | undefined>): void {
   const active = () => userId() !== undefined;
@@ -89,7 +95,12 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     if (!cacheHost || !active()) return;
     const again = () => setPass((value) => value + 1);
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(again);
-    const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(again);
+    const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(
+      (change) => {
+        if (change.storage === 'reset') rereadChannelsAfterStorageReset();
+        again();
+      }
+    );
     for (const event of INPUT_EVENTS) {
       window.addEventListener(event, noteInput, {
         capture: true,

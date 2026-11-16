@@ -154,10 +154,10 @@ impl<
 /// Root subscription object combining realtime Soup, notification,
 /// activity, work feed and notification inbox adapters.
 #[derive(MergedSubscription)]
-pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
+pub struct CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>(
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
-    ActivitySubscriptionRoot<AS>,
+    ActivitySubscriptionRoot<AS, EAS, St>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
@@ -166,6 +166,8 @@ where
     R: SoupRealtimeSubscriptionService,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
     AS: ActivitySubscriptionService,
+    EAS: EntityAccessService,
+    Arc<EAS>: FromRef<St>,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
@@ -191,7 +193,7 @@ pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, 
     Schema<
         SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
         CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
-        CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+        CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     >;
 
 /// GraphQL Soup schema type backed by shared query and realtime services.
@@ -302,16 +304,16 @@ impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 }
 
 /// Root GraphQL subscription object for realtime Soup updates.
-pub struct SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR> {
+pub struct SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR> {
     /// Realtime Soup service used by user-scoped subscriptions.
     service: R,
     /// Associates the root with authorization, state, and edge reader types.
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn() -> (Auth, St, NR, PR, ER, FR, AR, AcR)>,
+    _marker: PhantomData<fn() -> (EAS, Auth, St, NR, PR, ER, FR, AR, AcR)>,
 }
 
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+impl<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 {
     /// Creates a root GraphQL subscription object.
     pub fn new(service: R) -> Self {
@@ -628,10 +630,12 @@ where
 
 /// Root entry point for realtime Soup subscriptions.
 #[Subscription]
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+impl<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 where
     R: SoupRealtimeSubscriptionService,
+    EAS: EntityAccessService,
+    Arc<EAS>: FromRef<St>,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
@@ -716,7 +720,9 @@ where
         let user_id = require_authorized_user::<Auth, St>(ctx).await?;
         let session_id = parse_id(session_id, "sessionId")?;
         let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
-            ctx, user_id, session_id,
+            ctx,
+            user_id.clone(),
+            session_id,
         )
         .await?
         .is_some();
@@ -724,6 +730,8 @@ where
             return Err(async_graphql::Error::new("agent session not found"));
         }
         let subscriptions = ctx.data::<AgentSessionActivitySubscriptions>()?.clone();
+        let record_access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
+        let activity_viewer = user_id.clone();
         let mut receiver = subscriptions.subscribe();
         Ok(async_stream::stream! {
             let mut ownership = HashMap::new();
@@ -753,6 +761,11 @@ where
                             }
                         };
                         if belongs {
+                            match graphql_activity::record_visible(record_access.as_ref(), &activity_viewer, &record).await {
+                                Ok(true) => {},
+                                Ok(false) => continue,
+                                Err(error) => { yield Err(error); break; }
+                            }
                             yield Ok(vec![GraphqlActivityEvent::from(record.as_ref().clone())]);
                         }
                     }

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const VIEWPORTS = [
@@ -135,6 +136,69 @@ for (const viewport of VIEWPORTS) {
       await page.screenshot({
         path: `/home/wolf/tmp/passwords-shots/drafts-${viewport.name}.png`,
       });
+      expect(errors).toEqual([]);
+    });
+
+    test(`${viewport.name}: imports a Bitwarden export parsed in the browser`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/src/features/passwords/browser-test/vault.html', {
+        timeout: 240_000,
+      });
+
+      if (viewport.name === 'desktop') {
+        await page
+          .getByRole('button', { name: /^New item in/ })
+          .last()
+          .click();
+        await page.getByRole('menuitem', { name: 'Import…' }).click();
+      } else {
+        await page
+          .getByRole('button', { name: 'New', exact: true })
+          .last()
+          .tap();
+        await page.getByRole('button', { name: 'Import…' }).last().tap();
+      }
+      const dialog = page.locator('[data-passwords-import]');
+      await expect(dialog).toBeVisible();
+      // The synthetic fixture the parser's golden tests use.
+      await dialog
+        .locator('input[type=file]')
+        .setInputFiles(
+          fileURLToPath(
+            new URL(
+              '../../../../../../crates/password_import/tests/fixtures/bitwarden.json',
+              import.meta.url
+            )
+          )
+        );
+
+      const preview = page.locator('[data-passwords-import-preview]');
+      await expect(preview.getByText('Bitwarden JSON')).toBeVisible({
+        timeout: 60_000,
+      });
+      await expect(preview.getByText('Ünïcødé')).toBeVisible();
+      await expect(
+        preview.getByText('Shared organization item').first()
+      ).toBeVisible();
+      await expect(
+        dialog.getByRole('button', { name: /^Import \d+ items$/ })
+      ).toBeEnabled();
+      await press(page, viewport, /^Import \d+ items$/);
+
+      await expect(page.locator('[data-passwords-import-result]')).toBeVisible({
+        timeout: 60_000,
+      });
+      await expect(dialog.getByText(/^\d+ imported$/)).toBeVisible();
+      await expect(dialog.getByText(/failed$/)).toHaveCount(0);
+      await press(page, viewport, 'Open folder');
+      await expect(dialog).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: /Synthetic Visa/ }).first()
+      ).toBeVisible();
       expect(errors).toEqual([]);
     });
 

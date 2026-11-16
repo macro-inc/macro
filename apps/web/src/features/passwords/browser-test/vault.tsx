@@ -3,12 +3,16 @@ import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { parseExportFile } from '@core/password-import/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import { createFakePasswordSource } from '../tests/fake-source';
-import { FIXTURE_SCOPE } from '../tests/fixture-scope';
+import {
+  createMemoryImportResume,
+  FIXTURE_SCOPE,
+} from '../tests/fixture-scope';
 import { VaultView } from '../views/vault-view';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
@@ -91,6 +95,9 @@ const View = () => (
         writeClipboard: async (value) => {
           document.body.dataset.copied = value;
         },
+        // The real wasm parser in its worker (`just ensure-password-import-wasm`).
+        parseExport: parseExportFile,
+        importResume: createMemoryImportResume(),
       }}
     >
       <ItemDndProvider>
