@@ -191,7 +191,12 @@ impl SyncCore {
                     self.wal.entries.retain(|e| {
                         e.seq > through || e.park.is_some() || !self.delivered.contains(&e.seq)
                     });
-                    self.delivered.retain(|seq| *seq > through);
+                    // A retained (parked) row keeps its delivered flag, or the
+                    // delivered prefix would stop at it forever.
+                    let retained: BTreeSet<WalSeq> =
+                        self.wal.entries.iter().map(|e| e.seq).collect();
+                    self.delivered
+                        .retain(|seq| *seq > through || retained.contains(seq));
                     self.foreign_versions.retain(|seq, _| *seq > through);
                 }
                 StorageCompletion::Mark { through } => {

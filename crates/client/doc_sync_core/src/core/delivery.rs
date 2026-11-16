@@ -321,7 +321,7 @@ impl SyncCore {
         }
     }
 
-    fn mark_delivered_prefix(&mut self, now: Now, out: &mut SyncOutput) {
+    pub(super) fn mark_delivered_prefix(&mut self, now: Now, out: &mut SyncOutput) {
         // Persist only a contiguous prefix; never claim an omitted foreign row was delivered.
         let mut through = self.wal.delivered_through;
         for entry in &self.wal.entries {

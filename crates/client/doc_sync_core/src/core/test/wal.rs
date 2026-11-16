@@ -835,3 +835,39 @@ fn own_ack_evidence_excludes_unpushed_rows_and_invalid_checksums() {
 mod gaps;
 
 mod adoption;
+#[test]
+fn pruning_past_a_delivered_parked_row_keeps_later_deliveries_marked() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Durable);
+    let entry = |seq: u64, park: Option<ParkReason>| WalEntry {
+        seq: WalSeq(seq),
+        created_at: UnixMillis(0),
+        foreign: false,
+        bytes: Doc::new(7).snapshot().into(),
+        state: EntryState::Logged,
+        not_acked: 0,
+        vv_before: loro::VersionVector::default(),
+        park,
+        superseded: false,
+    };
+    h.core
+        .wal
+        .entries
+        .push_back(entry(1, Some(ParkReason::Gap)));
+    h.core.wal.entries.push_back(entry(2, None));
+    h.core.delivered.insert(WalSeq(1));
+    h.core.wal.delivered_through = Some(WalSeq(1));
+    let id = h.core.issue(
+        StorageOp::WalPrune {
+            doc: h.core.config.doc.clone(),
+            owner: h.core.config.session,
+            through: WalSeq(1),
+        },
+        StorageCompletion::Prune { through: WalSeq(1) },
+        now(0),
+        &mut h.out,
+    );
+    h.done(id);
+    h.core.delivered.insert(WalSeq(2));
+    h.core.mark_delivered_prefix(now(0), &mut h.out);
+    assert_eq!(h.core.wal.delivered_through, Some(WalSeq(2)));
+}
