@@ -58,6 +58,11 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- Document filters that OpenSearch can't evaluate narrow an id list instead
+  (`simple/simple_document.rs`): owners, folders, file types and
+  `is_email_attachment` each include the caller's own documents and search
+  `ids_only`, since a non-ids-only search also matches everything the caller
+  owns. The OpenSearch index has no attachment field; `document_email` decides.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call

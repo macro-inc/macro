@@ -9,7 +9,7 @@ mod channel;
 mod document;
 
 pub use channel::filter_channels_by_org_id;
-pub use document::filter_documents_by_file_types;
+pub use document::{filter_documents_by_email_attachment, filter_documents_by_file_types};
 /// Given a list of item ids, the item type and a list of project_ids, this will
 /// return a subset list of items that are within the provided project ids and their sub-projects.
 #[tracing::instrument(skip(db), err)]

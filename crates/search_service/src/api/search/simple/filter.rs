@@ -45,7 +45,7 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
         if !should_include {
             Ok(UnifiedDocumentSearchArgs::default())
         } else {
-            let filter_document_response = filter_documents(ctx, user_id, self).await?;
+            let filter_document_response = filter_documents(&ctx.db, user_id, self).await?;
 
             Ok(UnifiedDocumentSearchArgs {
                 document_ids: filter_document_response.document_ids,

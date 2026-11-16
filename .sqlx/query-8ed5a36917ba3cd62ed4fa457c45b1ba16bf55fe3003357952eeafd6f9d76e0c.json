@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id AS \"id!\"\n            FROM unnest($1::text[]) AS d(id)\n            WHERE EXISTS (\n                SELECT 1 FROM document_email de WHERE de.document_id = d.id OFFSET 0\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8ed5a36917ba3cd62ed4fa457c45b1ba16bf55fe3003357952eeafd6f9d76e0c"
+}
