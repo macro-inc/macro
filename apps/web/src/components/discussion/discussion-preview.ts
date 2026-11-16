@@ -8,7 +8,10 @@ export function discussionPreview(messages: readonly MessageListItem[]) {
   );
   const newest = roots
     .filter((message) => !message.deleted_at)
-    .toSorted((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    .toSorted(
+      (a, b) =>
+        b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
+    )[0];
   const commenters = new Map<string, MessageData>();
   let count = 0;
   for (const root of roots.toReversed()) {

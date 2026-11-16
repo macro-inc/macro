@@ -242,8 +242,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                                   id: project().id,
                                 }}
                                 canWrite={canDiscussProject(project())}
-                                targetId={props.route.discussionId}
-                                targetRequestKey={props.navigationRequest}
                               />
                             )
                           : undefined

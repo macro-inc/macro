@@ -41,10 +41,10 @@ export function EntityConversationComposer(props: {
   onSent?: () => void;
   onChange?: (snapshot: InputSnapshot) => void;
 }) {
+  const parentKey = () => `${props.parent.type}:${props.parent.id}`;
   const send = useSendMessageMutation();
   const userId = useUserId();
   const bots = useMessageBotMentionUsers(() => props.parent);
-  let input: InputHandle | undefined;
   return (
     <ChannelInput
       parent={props.parent}
@@ -53,20 +53,20 @@ export function EntityConversationComposer(props: {
       autofocus={false}
       collapsible={props.collapsible}
       onChange={props.onChange}
-      onReady={(handle) => {
-        input = handle;
-        props.onReady?.(handle);
-      }}
+      onReady={props.onReady}
       onSend={async (snapshot) => {
         const senderId = userId();
         if (!senderId) return;
+        const sendingParent = parentKey();
         await send.mutateAsync({
           parent: props.parent,
           senderId,
           optimisticId: newMessageId(),
           ...buildPostMessageSendPayload({ snapshot }),
         });
-        input?.clear();
+        if (parentKey() !== sendingParent) return;
+        // ChannelInput clears optimistically and restores failures itself.
+        // Clearing again here would discard text typed during delivery.
         props.onSent?.();
         if (props.blurOnSend && document.activeElement instanceof HTMLElement)
           document.activeElement.blur();
@@ -97,6 +97,8 @@ export type EntityConversationProps = {
 
 export type ConversationPresentation = {
   messages: Accessor<MessageListItem[]>;
+  targetId: Accessor<string | null | undefined>;
+  targetRequestKey: Accessor<string | number | undefined>;
   pending: Accessor<boolean>;
   unavailable: Accessor<boolean>;
   hasEarlier: Accessor<boolean>;
@@ -207,6 +209,8 @@ export function EntityConversation(props: EntityConversationProps) {
   );
   const presentation: ConversationPresentation = {
     messages,
+    targetId: () => props.targetId,
+    targetRequestKey: () => props.targetRequestKey,
     pending: () => !target.resolved() || query.isPending,
     unavailable,
     failed: () => query.isError,

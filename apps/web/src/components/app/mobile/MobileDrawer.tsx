@@ -148,7 +148,15 @@ function MobileDrawerFixedContent(
   return (
     <Layer depth={0}>
       <Drawer.Content
-        onFocusIn={(e: FocusEvent) => scrollToFocusedInput(e)}
+        onFocusIn={(e: FocusEvent) => {
+          // A pinned footer is already above the keyboard. Scrolling Content
+          // for its input would move the header inside this fixed-height sheet.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-drawer-scroll-body]')
+          )
+            scrollToFocusedInput(e);
+        }}
         style={{
           '--drawer-h': `${targetHeight()}dvh`,
           '--drawer-max-h': `${maxHeight()}dvh`,
@@ -179,7 +187,13 @@ function MobileDrawerFixedContent(
 /** Place after a min-h-0 flexing thread inside FixedContent. */
 function MobileDrawerKeyboardFooter(props: ComponentProps<'div'>) {
   const [local, rest] = splitProps(props, ['class']);
-  return <div class={cn('shrink-0', local.class)} {...rest} />;
+  return (
+    <div
+      data-drawer-keyboard-footer
+      class={cn('shrink-0', local.class)}
+      {...rest}
+    />
+  );
 }
 
 function MobileDrawerOverlay(props: ComponentProps<typeof Drawer.Overlay>) {

@@ -198,6 +198,39 @@ describe('EntityDiscussion target ownership', () => {
       );
     }
   );
+
+  it('lets a composed sheet own target scrolling while sharing the conversation source', () => {
+    mocks.urlTarget = 'reply';
+    mocks.timeline.mockReturnValue({
+      isSuccess: true,
+      data: {
+        pages: [
+          {
+            entries: [
+              { type: 'message', message: thread('root-of-reply', null) },
+            ],
+          },
+        ],
+      },
+    });
+    const view = render(() => (
+      <EntityDiscussion
+        parent={{ type: 'document', id: 'document' }}
+        canWrite={false}
+        link={{ type: 'task', id: 'document' }}
+      >
+        {(conversation) => (
+          <section aria-label="Phone discussion">
+            <span>{conversation.targetId()}</span>
+            {conversation.content()}
+          </section>
+        )}
+      </EntityDiscussion>
+    ));
+    expect(view.getByRole('region', { name: 'Phone discussion' })).toBeTruthy();
+    expect(view.getByRole('article').dataset.target).toBe('reply');
+    expect(mocks.scroll).not.toHaveBeenCalled();
+  });
 });
 
 function discussion(

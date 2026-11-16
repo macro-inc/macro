@@ -8,11 +8,19 @@ import {
   type ConversationPresentation,
   EntityConversationComposer,
 } from '@core/messages/EntityConversation';
+import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
 import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import type { MessageParent } from '@service-storage/messages';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { DiscussionEntry } from './discussion-entry';
 import { discussionPreview } from './discussion-preview';
@@ -22,8 +30,6 @@ export function MobileDiscussion(props: {
   conversation: ConversationPresentation;
   parent: MessageParent;
   canWrite: boolean;
-  targetId?: string | null;
-  targetRequestKey?: string | number;
 }) {
   const [state, setState] = createStore({ open: false, focusComposer: false });
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
@@ -36,9 +42,22 @@ export function MobileDiscussion(props: {
   );
   const scrollToEnd = () => {
     const element = thread();
-    if (element && !props.targetId) element.scrollTop = element.scrollHeight;
+    if (element && !props.conversation.targetId())
+      element.scrollTop = element.scrollHeight;
   };
   createResizeObserver(thread, scrollToEnd);
+  createEffect(
+    on(
+      [
+        thread,
+        () => props.conversation.targetId(),
+        () => props.conversation.targetRequestKey(),
+      ],
+      ([element, id]) => {
+        if (element && id) onCleanup(scrollToRenderedTarget(element, id));
+      }
+    )
+  );
   const open = () => {
     const interaction = beginInteraction('discussion.open');
     try {
@@ -54,7 +73,11 @@ export function MobileDiscussion(props: {
   };
   createEffect(
     on(
-      () => [props.targetId, props.targetRequestKey] as const,
+      () =>
+        [
+          props.conversation.targetId(),
+          props.conversation.targetRequestKey(),
+        ] as const,
       ([id]) => {
         if (id) setState({ open: true, focusComposer: false });
       }
@@ -62,13 +85,7 @@ export function MobileDiscussion(props: {
   );
   // The keyboard consumes only the sheet's bottom content. Keep the newest
   // comment visible after that external viewport change, unless following a link.
-  createEffect(
-    on(
-      [virtualKeyboardHeight, () => props.conversation.messages().length],
-      scrollToEnd,
-      { defer: true }
-    )
-  );
+  createEffect(on(virtualKeyboardHeight, scrollToEnd, { defer: true }));
   return (
     <>
       <div>
@@ -86,9 +103,11 @@ export function MobileDiscussion(props: {
               (!props.conversation.failed() || preview().count > 0)
             }
             fallback={
-              <Button variant="ghost" onClick={props.conversation.retry}>
-                {t('common.retry')}
-              </Button>
+              <Show when={!props.conversation.unavailable()}>
+                <Button variant="ghost" onClick={props.conversation.retry}>
+                  {t('common.retry')}
+                </Button>
+              </Show>
             }
           >
             <StaticMarkdownContext>
@@ -150,7 +169,7 @@ export function MobileDiscussion(props: {
                       draft = snapshot;
                     }}
                     onSent={() => {
-                      draft = undefined;
+                      draft = input?.snapshot();
                       scrollToEnd();
                     }}
                   />

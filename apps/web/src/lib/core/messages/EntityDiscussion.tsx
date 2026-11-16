@@ -74,7 +74,9 @@ export function EntityDiscussion(props: {
   const commentId = () =>
     props.targetId === undefined ? params.commentId() : props.targetId;
   const floating = () =>
-    props.floatingComposerOnTouch === true && isTouchDevice();
+    props.floatingComposerOnTouch === true &&
+    isTouchDevice() &&
+    !props.children;
   let container: HTMLDivElement | undefined;
   // Scroll to the linked message once per navigation of `comment_id`, as the
   // margin does for anchored comments. A repeat navigation to the same message
@@ -106,6 +108,8 @@ export function EntityDiscussion(props: {
     on(
       [scrollRequest, () => props.scrollReady !== false],
       ([request, ready]) => {
+        // A composed sheet owns its own scroll root outside this inline container.
+        if (props.children) return;
         if (!request || !container || request.key === scrolledKey) return;
         const onSettled = () => {
           scrolledKey = request.key;
@@ -144,6 +148,7 @@ export function EntityDiscussion(props: {
           canWrite={props.canWrite}
           canModerate={props.canModerate}
           targetId={commentId()}
+          targetRequestKey={scrollRequest()?.key}
           targetCleared={targetCleared()}
           onClearTarget={() => setClearedKey(scrollRequest()?.key)}
           label={props.label}
