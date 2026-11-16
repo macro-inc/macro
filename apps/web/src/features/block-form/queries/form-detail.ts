@@ -109,7 +109,7 @@ function toBookingTarget(target: FormBookingTarget): FormBookingTarget {
   return { profileId: target.profileId, eventTypeId: target.eventTypeId };
 }
 
-/** Percentage is Number storage; forms send and display the stored fraction. */
+/** Percentage is Number storage; forms send the stored fraction. */
 function toFormColumnKind(kind: ColumnKind): FormColumnKind {
   return kind.type === 'percentage' ? { type: 'number' } : kind;
 }
@@ -122,6 +122,7 @@ function questionColumns(detail: WireFormDetail): FormColumn[] {
           id: question.column,
           name: question.title,
           kind: toFormColumnKind(question.kind),
+          percentage: question.kind.type === 'percentage',
           options: question.options.map((option) => ({
             id: option.id,
             label: option.label,
