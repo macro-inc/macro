@@ -2154,3 +2154,5 @@ async fn channel_picture_removal_does_not_require_static_file_availability() {
     svc.set_channel_picture(access, None).await.unwrap();
     assert_eq!(*repo.picture_updates.lock().unwrap(), [(channel_id, None)]);
 }
+
+mod crm_references;

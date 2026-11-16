@@ -74,10 +74,11 @@ pub(in crate::api::search) async fn resolve_crm_team_receipt(
         .map_err(|e| SearchError::InternalError(e.into()))
 }
 
-/// Builds the CRM search service over the read-only pool. Search and
-/// enrich are both read-only, so the read replica is fine.
+/// Recheck access on primary; existing search and enrichment reads stay on the replica.
 fn search_service(ctx: &SearchHandlerState) -> CrmSearchServiceImpl<CrmSearchRepositoryImpl> {
-    CrmSearchServiceImpl::new(CrmSearchRepositoryImpl::new(ctx.db.0.clone()))
+    CrmSearchServiceImpl::new(
+        CrmSearchRepositoryImpl::new(ctx.db.0.clone()).with_access_pool(ctx.crm_db.clone()),
+    )
 }
 
 /// Name/domain search over the caller's team CRM companies, returning
