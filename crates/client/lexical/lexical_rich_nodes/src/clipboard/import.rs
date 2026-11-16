@@ -141,8 +141,9 @@ pub fn insert_data_transfer_for_rich_text(
                 match imported {
                     Ok(true) => return Ok(true),
                     Ok(false) => {}
-                    Err(_) => tracing::warn!(
+                    Err(error) => tracing::warn!(
                         bytes = entry.data.len(),
+                        error = %error,
                         "invalid lexical clipboard content"
                     ),
                 }
@@ -155,9 +156,11 @@ pub fn insert_data_transfer_for_rich_text(
                     })();
                     match imported {
                         Ok(()) => return Ok(true),
-                        Err(_) => {
-                            tracing::warn!(bytes = entry.data.len(), "invalid HTML clipboard nodes")
-                        }
+                        Err(error) => tracing::warn!(
+                            bytes = entry.data.len(),
+                            error = %error,
+                            "invalid HTML clipboard nodes"
+                        ),
                     }
                 }
             }
