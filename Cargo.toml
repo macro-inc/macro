@@ -766,3 +766,15 @@ opt-level = 3
 
 [profile.document-session-wasm.package.document_session_wasm]
 opt-level = 3
+
+# regex_icase_v8 compiles and scans 3 x 65,536 regexes over the whole BMP; unoptimized it
+# takes about 13 minutes. Keep debug assertions and overflow checks enabled.
+[profile.test.package.regress]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+[profile.test.package.lexical_workspace_tests]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
