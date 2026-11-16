@@ -38,7 +38,7 @@ saves `.fig` files, built both as native Rust and as wasm for the web viewer.
 - After a decode/edit/save change: `cargo run -p fig_engine --features cli
   --release --bin fig_render -- roundtrip FILE.fig…` against local `.fig`
   files (not committed — third-party).
-- Wasm build: `just build-fig-engine-wasm` from `apps/web`.
+- Wasm build: `just build-wasm fig-engine` from `apps/web`.
 
 ## Gotchas
 

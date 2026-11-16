@@ -34,8 +34,8 @@ the corpus CLI) and as WebAssembly in the web app's DOCX editor worker.
 
 - Add an edit operation: `src/edit.rs` (`EditOp` variant) → the matching
   `src/edit/<area>.rs` → `src/edit/test.rs`.
-- Rebuild the wasm bundle after a native change: `just build-docx-engine-wasm`
-  from `apps/web` (or `just ensure-docx-engine-wasm` to rebuild only if stale).
+- Rebuild the wasm bundle after a native change: `just build-wasm docx-engine`
+  from `apps/web` (or `just ensure-wasm docx-engine` to rebuild only if stale).
 
 ## Checks
 

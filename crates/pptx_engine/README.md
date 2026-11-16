@@ -197,8 +197,8 @@ deck.apply(
 std::fs::write("edited.pptx", deck.save()?)?;
 ```
 
-The browser build: `just build-pptx-engine-wasm` from `apps/web` (wasm-pack,
-`--target web`, SIMD enabled; `ensure-pptx-engine-wasm` rebuilds only when
+The browser build: `just build-wasm pptx-engine` from `apps/web` (wasm-pack,
+`--target web`, SIMD enabled; `ensure-wasm pptx-engine` rebuilds only when
 sources changed).
 
 ## Testing
