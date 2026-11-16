@@ -1,0 +1,44 @@
+packages/sdk-ocaml/fetch/test/run.mjs
+  s_db3df2a0acfcb5::t_a5a2fff3803507 1-94
+  s_e015be4a6833c1::t_fcf126e8b765bd 95-101
+packages/sdk-ocaml/fetch/macro_sdk_fetch.ml
+  s_db3df2a0acfcb5::t_c0f8590a8a1b89 1-99
+packages/sdk-ocaml/fetch/macro_sdk_fetch.mli
+  s_db3df2a0acfcb5::t_38cd881b29b3cb 1-54
+packages/sdk-ocaml/fetch/test/test_fetch.ml
+  s_db3df2a0acfcb5::t_5c37938337d049 1-205
+packages/sdk-ocaml/fetch/await.js
+  s_e015be4a6833c1::t_cb6b5cac3936ca 1-14
+packages/sdk-ocaml/fetch/await.wat
+  s_e015be4a6833c1::t_e0b944c93cd281 1-14
+packages/sdk-ocaml/fetch/bigstringaf.wat
+  s_e015be4a6833c1::t_a7bb6393867ae3 1-40
+packages/sdk-ocaml/fetch/dune
+  s_e015be4a6833c1::t_086a5986c80bce 1-21
+packages/sdk-ocaml/fetch/test/dune
+  s_e015be4a6833c1::t_df99475909f50f 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "21bcd729d97bb59c603e3dd4d925df5a65ddd957",
+  "prompts": {},
+  "sessions": {
+    "s_db3df2a0acfcb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a3ce940-fc42-4b87-807f-86ade69c60ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e015be4a6833c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "497631fe-089f-4a0c-bf2f-36800aaf41e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
