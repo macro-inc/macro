@@ -527,9 +527,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  // A new search moves the highlight to the top; a further page listed below
-  // keeps it where the user put it.
-  createEffect(on(search, () => setSelectedIndex(0)));
+  // A new search moves the highlight and the list to the top; a further page
+  // listed below keeps both where the user put them.
+  createEffect(
+    on(
+      search,
+      () => {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
   let previousWindow: string | undefined;
   createEffect(
     on(quickAccess.windowKey, (key) => {
@@ -544,7 +553,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
   // Further pages load as the end of the list scrolls into view. With no rows
   // listed, the sentinel sits below the empty list and keeps reading pages
-  // until one matches or the sources end. A failed page waits for Retry.
+  // until one matches or the sources end. A failed page waits for Retry. The
+  // sentinel opts out of scroll anchoring: as the anchor, it would be held in
+  // view while each page lands above it, and every page would load the next.
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   useInfiniteScrollSentinel({
     sentinel,
@@ -766,7 +777,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 }}
               </For>
               <Show when={hasMore()}>
-                <div ref={setSentinel} class="h-px" />
+                <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
               </Show>
             </div>
           </Show>
@@ -833,7 +844,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         )}
       </Show>
       <Show when={sortedEntities().length === 0 && hasMore()}>
-        <div ref={setSentinel} class="h-px" />
+        <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+      </Show>
+      <Show when={isLoadingMore()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.loadingOptions')}
+        </div>
       </Show>
       <Show when={paginationError() && hasMore()}>
         <Button

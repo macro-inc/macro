@@ -55,7 +55,8 @@ export function CalendarPeopleFilterSubmenu(props: {
   const hasNext = () => !!source.suggestions.data()?.nextCursor;
   // Further contacts load as the end of the list scrolls into view. With no
   // rows listed, the sentinel sits below the empty list and keeps reading
-  // pages until one matches or the directory ends.
+  // pages until one matches or the directory ends. The sentinel opts out of
+  // scroll anchoring, which would otherwise hold it in view as pages land.
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   useInfiniteScrollSentinel({
     sentinel,
@@ -253,13 +254,13 @@ export function CalendarPeopleFilterSubmenu(props: {
                   )}
                 </Virtualizer>
                 <Show when={hasNext()}>
-                  <div ref={setSentinel} class="h-px" />
+                  <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
                 </Show>
               </div>
             </Show>
           </Show>
           <Show when={matches().length === 0 && hasNext()}>
-            <div ref={setSentinel} class="h-px" />
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
           </Show>
           <Show
             when={

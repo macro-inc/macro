@@ -302,7 +302,9 @@ function SourceOptions<TId extends string>(props: {
     const ids = new Set(source.visibleIds());
     return source.options().filter((option) => ids.has(option.id));
   });
-  // Further pages load as the end of the options scrolls into view.
+  // Further pages load as the end of the options scrolls into view. The
+  // sentinel opts out of scroll anchoring, which would otherwise hold it in
+  // view as pages land above it.
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   useInfiniteScrollSentinel({
     sentinel,
@@ -339,7 +341,7 @@ function SourceOptions<TId extends string>(props: {
         when={source.error()}
         fallback={
           <Show when={source.hasNext()}>
-            <div ref={setSentinel} class="h-px" />
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
           </Show>
         }
       >
