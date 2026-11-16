@@ -59,7 +59,10 @@ it when it expires; a failed load offers Retry.
 The detail header shows the logo tile, name, folder path and kind, then
 Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
 Copy action and never reveal the password. An empty account identifier or API Key
-shows a dash; lookup failures stay visible. Missing provider username slots read as
+shows a dash; lookup failures stay visible. When Macro does not answer (offline,
+or a gateway returning 502-504) the banner, the username row and a notice above
+the list read "Can't reach Macro. Check your connection.", and the notice's Retry
+reloads the list and the selected username. Missing provider username slots read as
 empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
