@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { brotliCompressSync } from 'node:zlib';
 import { desktopIncludesSession } from './desktop-contract';
 import { root } from './evidence';
 
@@ -47,20 +46,23 @@ if (!sessions.length) {
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, message + '\n');
 } else {
-  run('just', ['build-document-session-wasm']);
+  run('just', [
+    '--justfile',
+    path.join(root, 'apps/web/justfile'),
+    'build-document-session-wasm',
+  ]);
   const artifact = path.join(
     root,
-    'packages/collaboration/pkg/document_session_wasm_bg.wasm'
+    'apps/web/src/lib/core/document-session/wasm/document_session_wasm_bg.wasm'
   );
   if (!existsSync(artifact))
     throw new Error(
-      'Session build must emit packages/collaboration/pkg/document_session_wasm_bg.wasm'
+      'Session build must emit the native document-session WASM artifact'
     );
-  const bytes = brotliCompressSync(readFileSync(artifact)).byteLength;
-  if (bytes > 1107 * 1024)
-    throw new Error(
-      `Session wasm exceeds the provisional 1,107 KiB budget: ${bytes}`
-    );
+  const size = run('bun', [
+    path.join(root, 'apps/web/scripts/document-session-size.ts'),
+    artifact,
+  ]).trim();
   const desktop = readFileSync(
     path.join(root, 'nix/tauri-desktop.nix'),
     'utf8'
@@ -68,6 +70,6 @@ if (!sessions.length) {
   if (!desktopIncludesSession(desktop))
     throw new Error('Desktop coreWasmPackages omits document_session_wasm');
   console.log(
-    `Session wasm size/desktop contract passed: ${bytes} brotli bytes`
+    `Session wasm size/desktop contract passed: ${size}`
   );
 }
