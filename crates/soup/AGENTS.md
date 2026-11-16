@@ -89,8 +89,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
-  the caller's mailbox. Keep browser requests bounded; never expand every CRM
-  record into client-side filters or raise ingress limits to fit them.
+  the caller's mailbox. It reads only what the request's sources can return
+  (`ActivityReads`): a source pinned to the nil id (`exclusions`) reads
+  nothing, so each Sales view reads one source, and the edges come from one
+  statement that probes the Companies and Contacts property indexes with the
+  scope's record ids (`CrmService::activity_property_edges`), without its
+  domains, addresses or database rows. A request that reads database rows
+  still takes the record path. Keep browser requests bounded; never expand
+  every CRM record into client-side filters or raise ingress limits to fit
+  them.
+- Property edges reach database-row cells from the requested records through
+  `idx_ep_database_row_references_gin`: keep that arm's literal
+  `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
+  partial index applies, and join the row by the guarded uuid cast, never
+  `r.id::text = ep.entity_id`, which reads every row cell of every database.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the
@@ -106,6 +118,19 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`agent_session_follower`, people who prompted the session from the session
   itself), who may also read them through the thread's parent. The notified
   and work feeds share that rule through `notified::agent_session_gate`.
+- A source pinned to the nil id (how CRM tabs, Home, Tasks, and GraphQL
+  hydration leave a source out) runs no statement: `exclusions.rs` drops the
+  email, channel, channel-thread (by thread or channel id), call, and
+  foreign-entity requests, the calendar and agent-session legs return early,
+  and a dynamic query that can return no row (`DynamicArms::can_match`) skips
+  its transaction and source-id read. A project parent pinned to nil counts
+  only there: a union with another live arm keeps that project arm, because
+  dropping it leaves one read of `TopItems`, Postgres inlines the CTE, and
+  CRM record Files then scanned `document_sub_type` once per page row.
+  The CRM company request is dropped when the ids its extractor collects are
+  all nil, read from the extract because it unions `And`ed ids; a
+  hidden-company request keeps the leg so the admin check still answers it.
+  Prove a new pin impossible the same way; `nil OR real id` must keep its leg.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
@@ -119,6 +144,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
 - Keep flat timestamp top clauses lightweight; bind the caller's source ids, then document-ID arrays, after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
 - The dynamic query's document, chat, and project arms match `entity_access.source_id = ANY(<bound source ids>)`, not a join to the `user_source_ids` CTE: Postgres costs a CTE join at the average source's grant count and probed the item table once per grant for callers holding hundreds of thousands. The query runs in a transaction that raises `parallel_setup_cost`, because parallel plans made callers with a few thousand grants twice as slow.
+- A document arm whose filter admits only ids it names, at most `MAX_NAMED_CANDIDATES` of them (`named_document_bound`: CRM Tasks, Notes, References) checks access after its own filters (`DocumentArmAccess::AfterFilters`): the candidates and their sub-type, file-type and property filters sit behind an `OFFSET 0` fence, the `properties_filter` `EXISTS` run once per candidate (`PropertyProbe::PerCandidate`) instead of as a bitmap over every row the property holds (a `DocumentLiteral::Property` inside the document filter keeps `PropertyProbe::Planned`), and each survivor probes `entity_access` by uuid over its two partial unique indexes, in page order and past the cursor so a flat timestamp page stops at its `LIMIT`. Broad arms and longer lists keep the semi-join. An id OR'ed with any other literal does not bound the arm.
 - Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
 - Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.

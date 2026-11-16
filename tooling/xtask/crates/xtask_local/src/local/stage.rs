@@ -20,7 +20,7 @@ use console::Style;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
 
 use super::supervisor::Job;
-use super::telemetry::RunTelemetry;
+use super::telemetry::{MAIN_LANE, RunTelemetry};
 use super::{BringUp, Mode};
 
 #[cfg(test)]
@@ -117,6 +117,9 @@ pub struct Stage {
     /// Where steps are recorded for local telemetry when there is no job (a
     /// job records its own): `stack up`, `stack update`, `build-services`.
     telemetry: Option<RunTelemetry>,
+    /// The lane this stage's steps run in, for telemetry: [`MAIN_LANE`] for
+    /// the bring-up's own thread, or the name a background lane was given.
+    lane: &'static str,
 }
 
 impl Stage {
@@ -134,6 +137,7 @@ impl Stage {
             timings: Arc::new(Mutex::new(Vec::new())),
             job: None,
             telemetry: None,
+            lane: MAIN_LANE,
         }
     }
 
@@ -190,14 +194,19 @@ impl Stage {
             timings: Arc::clone(&self.timings),
             job: self.job.clone(),
             telemetry: self.telemetry.clone(),
+            lane: self.lane,
         }
     }
 
     /// A handle that records into the same timing table from another thread
     /// (the background teardown / frontend-build lanes). Output stays quiet:
-    /// a lane that races the foreground stages cannot share the spinner.
-    pub fn background(&self) -> Stage {
-        self.quiet()
+    /// a lane that races the foreground stages cannot share the spinner. Its
+    /// steps are recorded in `lane`.
+    pub fn background(&self, lane: &'static str) -> Stage {
+        Stage {
+            lane,
+            ..self.quiet()
+        }
     }
 
     fn record(&self, label: &str, elapsed: Duration) {
@@ -360,7 +369,7 @@ impl Stage {
     /// failed.
     fn recording_job(&self, label: &str, step: impl FnOnce() -> Result<()>) -> Result<()> {
         if let Some(job) = &self.job {
-            job.step_started(label);
+            job.step_started(label, self.lane);
             let start = Instant::now();
             let result = step();
             if result.is_err() {
@@ -372,7 +381,7 @@ impl Stage {
         let Some(telemetry) = &self.telemetry else {
             return step();
         };
-        telemetry.step_started(label);
+        telemetry.step_started(label, self.lane);
         let start = Instant::now();
         let result = step();
         telemetry.step_finished(label, start.elapsed(), result.is_ok());
