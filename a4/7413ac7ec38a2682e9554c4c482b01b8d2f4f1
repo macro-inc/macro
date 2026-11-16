@@ -1,0 +1,36 @@
+tooling/xtask/crates/xtask_nextest_filter/determinator.toml
+  s_e7fba64acbc356::t_473acd14993a4d 27-32
+tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
+  s_e7fba64acbc356::t_473acd14993a4d 340
+  s_e7fba64acbc356::t_47132789921fb7 197,252-260,270,280
+.github/workflows/code_check_cloud_storage.yml
+  s_e7fba64acbc356::t_374f023c6a7ad4 62,899-907
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/code_mode_ocaml.sh
+  s_4e1561ae826eb8::t_3f077e0d170827 1-6
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_e7fba64acbc356::t_3dc73b22f72ca4 441-447
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a47413ac7ec38a2682e9554c4c482b01b8d2f4f1",
+  "prompts": {},
+  "sessions": {
+    "s_4e1561ae826eb8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36cf77f6-824b-4f1c-9196-fcda157e5653",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e7fba64acbc356": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc72e5c9-e8a1-4e3f-8b52-3eec63bb16f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
