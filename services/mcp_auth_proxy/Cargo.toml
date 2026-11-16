@@ -13,6 +13,7 @@ inbound = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_auth",
+  "dep:macro_authorization",
   "dep:macro_user_id",
   "dep:tower",
   "dep:tower-http",
@@ -40,6 +41,7 @@ bot_id = { path = "../../crates/bot_id" }
 chrono = { workspace = true, optional = true }
 cursor_api_key = { path = "../../crates/cursor_api_key", optional = true }
 fusionauth = { path = "../../crates/fusionauth", optional = true }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, optional = true }
 macro_auth = { path = "../../crates/macro_auth", optional = true }
 macro_tower_layers = { path = "../../crates/macro_tower_layers", optional = true }
 macro_user_id = { path = "../../crates/macro_user_id", optional = true }
@@ -65,6 +67,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
+jsonwebtoken = { workspace = true }
 async-trait = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

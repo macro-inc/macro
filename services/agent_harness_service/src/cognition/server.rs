@@ -530,7 +530,6 @@ pub async fn build(
     let user_permissions_service = Arc::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
             roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
         ),
     );
 

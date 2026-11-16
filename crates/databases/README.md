@@ -203,3 +203,9 @@ and fold over the complete table, then returns pages with table versions. This
 preserves filtering, option ordering, row positions and sorting across pages.
 The current implementation scans the table for each page; indexed query pushdown
 is a future optimization, not a different query language for each host.
+
+A host that already knows which rows it wants reads them by id instead:
+`storage_row_cells` for one table, `storage_tables_rows` for several. Both read
+the tables' columns and only the named rows, by primary key, with the same few
+statements however many tables are read, and no views. Each read gets only the
+rows it names, even when another read names the same table.

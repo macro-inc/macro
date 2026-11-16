@@ -126,6 +126,10 @@ read their code, and follow that pattern rather than inventing a new one.
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
   `data-keep-keyboard`. Dismiss with `useTouchOutsideToDismissKeyboard`.
+- In the iOS app a swipe down into the keyboard dismisses it
+  (`SwipeDownDismissKeyboard`). Mark a composer's own text scroll box
+  `data-composer-scroll` (a `textarea` counts already): a drag that starts in
+  it scrolls the draft, and dismisses only after the text reaches its top.
 - Size against the keyboard with `var(--dvh,1dvh)` and
   `var(--virtual-keyboard-height,0px)`, fallback included (Android leaves it
   unset); in JS read `virtualKeyboardVisible()`. Sheets with inputs call
@@ -166,9 +170,11 @@ read their code, and follow that pattern rather than inventing a new one.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`
   as the fallback; otherwise phones go blank.
 - Keep mobile views minimal: a control appears on mobile only when the
-  mobile view adds it. A detail header is Back, the title with its menu, and
-  Info; put other actions in the title menu or a sheet so they stay
-  reachable. Drop a feature on phones only when it is desk work (API keys).
+  mobile view adds it. A new detail header is Back, the title with its menu,
+  and Info; put other actions in the title menu or a sheet so they stay
+  reachable. A header split from a shared one keeps the islands it had,
+  listed in its mobile view, until someone decides to remove them. Drop a
+  feature on phones only when it is desk work (API keys).
 
 ## Platform pitfalls
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_feed_view (user_id, viewed_at) VALUES ($1, $2)\n               ON CONFLICT (user_id) DO UPDATE\n               SET viewed_at = GREATEST(suggestion_feed_view.viewed_at, EXCLUDED.viewed_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "842c19e2b022e5adbf8cbf280473ce7d26edf9773be9757c22f2bcdcae4a07a0"
+}

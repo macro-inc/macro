@@ -284,13 +284,16 @@ export function runCreateAction(
             blockName: 'md',
             loading: true,
             span,
-            createFn: () =>
-              createMarkdownFile({
+            createFn: async () => {
+              const id = await createMarkdownFile({
                 title: '',
                 content: '',
                 projectId: options.projectId,
                 source,
-              }),
+              });
+              if (!id) toast.failure(t('create.couldNotCreateDocument'));
+              return id;
+            },
             shouldInsert,
             openCreated,
           })
@@ -362,7 +365,10 @@ export function runCreateAction(
             projectId: options.projectId,
             source,
           });
-          if ('error' in result) return;
+          if ('error' in result) {
+            toast.failure(t('create.couldNotCreateCanvas'));
+            return;
+          }
           return result.documentId ?? undefined;
         },
         shouldInsert,
@@ -389,13 +395,16 @@ export function runCreateAction(
       createBlock({
         blockName: 'snippet',
         loading: true,
-        createFn: () =>
-          createSnippet({
+        createFn: async () => {
+          const id = await createSnippet({
             projectId: options.projectId,
             title: '',
             content: '',
             source,
-          }),
+          });
+          if (!id) toast.failure(t('create.couldNotCreateSnippet'));
+          return id;
+        },
         shouldInsert,
         openCreated,
       }).catch(reportCreateBlockError);
@@ -480,7 +489,10 @@ export function runCreateAction(
             projectId: options.projectId,
             source,
           });
-          if (result.isErr()) return;
+          if (result.isErr()) {
+            toast.failure(t('create.couldNotCreateCodeFile'));
+            return;
+          }
           return result.value.documentId ?? undefined;
         },
         shouldInsert,
