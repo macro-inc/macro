@@ -424,7 +424,16 @@ between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
 another. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data.
+persisted data. A page whose build was superseded (`cache-superseded`) never
+retries: that coordinator never hands the database back, so the page waits for
+the reload prompt. A page also stops after ten restarts in a row
+(`MAX_RECOVERY_ATTEMPTS`); the count and backoff reset only after a restarted
+cache has stayed up for a minute, because a restart can succeed and the new
+host fail again moments later. `graphql.cache_recovery` records each attempt and
+its failure, `graphql.cache_recovery_relapse` a restarted host that failed
+before staying up, and `graphql.cache_recovery_stopped` why the page stopped.
+Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
+from a fixed list (`describeCacheError`), so the message itself never leaves.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -441,7 +450,8 @@ and only the coordinator whose engine holds the database, or is opening or
 draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
-  `cache-superseded`. Each page retires its host to the network. The owner's
+  `cache-superseded`, and later requests are refused with the
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
   page leaves the way a navigating page does: it terminates its engine, which
   releases the owner lock without counting as a lost owner. An enqueue that was
   already sent is reported as uncertain rather than sent again, because it may
@@ -462,7 +472,8 @@ while hidden, online, not holding work (a call or an upload, via
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
 rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again.
+the same build again. Its `cache-unavailable` notice carries `superseded: true`,
+so its host retires with `cache-superseded` and recovery does not retry it.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
