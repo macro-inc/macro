@@ -640,8 +640,14 @@ fn native_editor_view_browser_tests_run_for_every_web_artifact_input() {
         "bun.lock",
     ] {
         let line = format!("- '{path}'\n");
-        assert!(artifact.contains(&line), "{path} runs the suite: {artifact}");
-        assert!(should_run.contains(&line), "{path} starts the job: {should_run}");
+        assert!(
+            artifact.contains(&line),
+            "{path} runs the suite: {artifact}"
+        );
+        assert!(
+            should_run.contains(&line),
+            "{path} starts the job: {should_run}"
+        );
     }
     let job = browser_job(&yaml);
     let step = job
