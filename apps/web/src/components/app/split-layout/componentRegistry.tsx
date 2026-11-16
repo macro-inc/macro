@@ -646,13 +646,6 @@ if (DEV_MODE_ENV) {
   );
 
   registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
-    )
-  );
-
-  registerComponent(
     'md-parse',
     lazy(
       () =>

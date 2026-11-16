@@ -45,6 +45,7 @@ location_check = []
 
 [dependencies]
 passwords = { path = "../../crates/passwords" }
+password_events = { path = "../../crates/password_events" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
