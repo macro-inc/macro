@@ -701,6 +701,13 @@ jobs:
         WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
+    - name: Build document-session WASM for tests
+      run: just build-document-session-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
+      timeout-minutes: 15
+      working-directory: apps/web
     - name: Test
       run: bun run test --shard=${{ matrix.shard }}/6
       env:
@@ -870,6 +877,13 @@ jobs:
         fi
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Build document-session WASM for tests
+      run: just build-document-session-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
         WASM_PKG_HTTP_CACHE: '1'

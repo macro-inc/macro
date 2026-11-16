@@ -24,6 +24,7 @@ TypeScript job logic in the owning package.
 - Run the resolved native editor feature-graph guard before lexical/session compilation; production closures exclude compatibility/foreign-node features while explicit compatibility web remains a positive control.
 
 - Keep unfinished standalone facade tooling out of the production web Typecheck job.
+- Build agent-fold and the production document-session WASM before web unit-test shards; package tests must not depend on external artifact manifests.
 
 ## Checks
 

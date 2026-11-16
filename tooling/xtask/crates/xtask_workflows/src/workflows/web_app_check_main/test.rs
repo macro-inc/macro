@@ -497,7 +497,11 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let vitest = test_job
         .find("bun run test --shard=${{ matrix.shard }}/6")
         .expect("vitest step runs one shard");
-    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+    for build in [
+        "just build-agent-fold-wasm",
+        "just build-natural-time-wasm",
+        "just build-document-session-wasm",
+    ] {
         let wasm = test_job
             .find(build)
             .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
