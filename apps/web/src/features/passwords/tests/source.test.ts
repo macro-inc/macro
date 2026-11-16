@@ -627,3 +627,29 @@ it('tells a list behind an unreachable gateway from other list failures', async 
     .catch((error: unknown) => error);
   expect(isUnreachable(broken)).toBe(false);
 });
+
+it('sets and removes a private favorite with no credential payload and accepts 204', async () => {
+  mocks.fetch.mockImplementation(() =>
+    Promise.resolve(new Response(null, { status: 204 }))
+  );
+  const source = createPasswordSource('team', CURRENT);
+  expect((await source.setFavorite('item', true)).isOk()).toBe(true);
+  expect((await source.setFavorite('item', false)).isOk()).toBe(true);
+  const requests = mocks.fetch.mock.calls.map(([url, options]) => ({
+    url: String(url),
+    method: options.method,
+    body: options.body,
+  }));
+  expect(requests).toEqual([
+    {
+      url: 'https://storage.example.test/passwords/teams/team/items/item/favorite',
+      method: 'PUT',
+      body: undefined,
+    },
+    {
+      url: 'https://storage.example.test/passwords/teams/team/items/item/favorite',
+      method: 'DELETE',
+      body: undefined,
+    },
+  ]);
+});

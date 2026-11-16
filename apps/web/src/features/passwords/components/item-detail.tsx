@@ -525,6 +525,7 @@ export function ItemDetailBody(props: {
 export function FavoriteToggle(props: {
   favorite: boolean;
   onToggle: () => void;
+  pending?: boolean;
 }) {
   return (
     <Button
@@ -537,6 +538,7 @@ export function FavoriteToggle(props: {
       tooltip={
         props.favorite ? t('passwords.unfavorite') : t('passwords.addFavorite')
       }
+      disabled={props.pending}
       onClick={props.onToggle}
     >
       <Show when={props.favorite} fallback={<StarIcon class="size-4" />}>

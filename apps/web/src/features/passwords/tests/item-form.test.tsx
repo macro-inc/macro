@@ -7,7 +7,7 @@ import type { PasswordDraft } from '../core/types';
 
 afterEach(cleanup);
 
-function mountForm(initial: PasswordDraft) {
+function mountForm(initial: PasswordDraft, isNew = true) {
   const [draft, setDraft] = createSignal(initial);
   render(() => (
     <ItemForm
@@ -16,7 +16,7 @@ function mountForm(initial: PasswordDraft) {
       totpKey=""
       hasTotp={false}
       folders={[]}
-      isNew
+      isNew={isNew}
       onChange={setDraft}
       onTotpKey={() => {}}
     />
@@ -228,4 +228,17 @@ it('adds, renames and removes custom fields by position without losing focus', (
   expect(
     screen.queryByLabelText('Valid thru', { selector: 'input' })
   ).toBeNull();
+});
+
+it('offers an initial favorite on create while existing items use the detail star', () => {
+  mountForm(card(), false);
+  expect(
+    screen.queryByRole('checkbox', { name: t('passwords.favorite') })
+  ).toBeNull();
+  cleanup();
+  const draft = mountForm(card());
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: t('passwords.favorite') })
+  );
+  expect(draft().favorite).toBe(true);
 });
