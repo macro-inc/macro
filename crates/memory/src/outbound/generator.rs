@@ -8,6 +8,9 @@ use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// A model adapter whose tool context is supplied at the composition root.
 pub struct AgentMemoryGenerator<C> {
     pub context: C,
@@ -95,17 +98,32 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
         )
         .await
         .map_err(|e| MemoryError::Other(anyhow::anyhow!(e)))?;
-        #[derive(serde::Deserialize)]
-        struct Judgement {
-            accepted: bool,
-        }
-        let judgement: Judgement = serde_json::from_str(response.trim())
-            .map_err(|_| MemoryError::Rejected("judge did not return a valid decision".into()))?;
-        if !judgement.accepted {
+        let accepted = judge_decision(&response)
+            .ok_or_else(|| MemoryError::Rejected("judge did not return a valid decision".into()))?;
+        if !accepted {
             return Err(MemoryError::Rejected(
                 "content did not pass privacy and quality review".into(),
             ));
         }
         Ok(())
     }
+}
+
+/// The judge's `{"accepted": bool}` decision, wherever it sits in the reply: a
+/// code fence or surrounding prose must not turn an answer into a failure.
+/// Conflicting decisions are no decision, so the caller still fails closed.
+fn judge_decision(response: &str) -> Option<bool> {
+    #[derive(serde::Deserialize)]
+    struct Judgement {
+        accepted: bool,
+    }
+    let mut decisions = response.match_indices('{').filter_map(|(start, _)| {
+        serde_json::Deserializer::from_str(response.get(start..)?)
+            .into_iter::<Judgement>()
+            .next()?
+            .ok()
+            .map(|judgement| judgement.accepted)
+    });
+    let first = decisions.next()?;
+    decisions.all(|accepted| accepted == first).then_some(first)
 }
