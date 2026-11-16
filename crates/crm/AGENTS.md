@@ -77,6 +77,11 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Selected-email policy types live in `domain/email_rules.rs`; their validation
+  checks format/resource bounds only. Target authorization and activation are
+  separate operations. Dormant selected storage keeps legacy `enabled` false;
+  never treat that bit as the effective selected consent or bypass its guards.
+
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
   column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`

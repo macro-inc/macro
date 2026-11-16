@@ -31,6 +31,7 @@ mod population_locks;
 mod previews;
 mod resolve_association;
 mod search_contacts_for_team;
+mod selected_email_policy;
 mod set_company_hidden;
 mod set_company_name;
 mod set_contact_hidden;

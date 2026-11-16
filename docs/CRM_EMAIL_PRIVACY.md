@@ -28,6 +28,16 @@ hides or deletes a company or contact.
 
 ## Enforcement and boundaries
 
+Selected contribution has dormant storage for versioned member/mailbox rules
+and actor history; see the [phased design](design/crm-selective-email-contribution.md).
+No public operation activates it yet. Existing consents keep `mode = all` and
+their original `enabled` value. A future selected grant uses `enabled = false`
+and a separate `selected_enabled` bit, so old readers fail closed. Database
+guards reject legacy opt-ins on selected rows, make legacy withdrawals clear
+both bits, and increment the policy version when effective consent changes.
+Mailbox lifecycle revocation clears both bits without reviving them on reconnect.
+All three eligibility implementations below must be upgraded before activation.
+
 `EmailPrivacyService` in the CRM domain validates domains and authorizes typed team
 receipts. The Axum GET/PUT `/crm/email-privacy` adapters only extract identity,
 forward a command, and map the response. The SQL repository persists consent and
