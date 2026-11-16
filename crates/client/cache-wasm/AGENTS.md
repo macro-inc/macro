@@ -47,12 +47,11 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
-- Bump this crate's `version` whenever a change here or in `cache-core` /
-  `cache-turso` changes what the web host reads or sends. `just ensure-cache-wasm`
-  rebuilds a checkout's engine only when the version differs, and `bun run build`
-  never rebuilds it, so without a bump an existing checkout bundles new host code
-  with its old engine. A mutation inspection without lease fields, for one, makes
-  the queue wait out a dead page's five-minute lease.
+- Bump this crate's `version` when a change here, in `cache-core` or in
+  `cache-turso` changes what the web host reads or sends: a checkout rebuilds
+  its engine only on a version change (`just ensure-cache-wasm`; `bun run build`
+  never does), and the bump is what the native release gate reads
+  (`apps/web/docs/ios-releases.md`).
 - Preserve successful hydration replies when optional window-proof computation
   fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
