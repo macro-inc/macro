@@ -123,7 +123,7 @@ async fn stage_requirements_reject_atomically_and_allow_combined_edits(pool: PgP
         .unwrap();
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
-    let amount = detail.columns[3].column.id;
+    let amount = detail.columns[4].column.id;
     s.set_stage_requirement(
         access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
         StageRequirement {
@@ -257,7 +257,7 @@ async fn rejected_required_input_edits_preserve_materialized_formulas(pool: PgPo
         .unwrap();
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
-    let amount = detail.columns[3].column.id;
+    let amount = detail.columns[4].column.id;
     let doubled = ColumnId::new();
     write(
         &s,
@@ -377,7 +377,7 @@ async fn board_moves_share_stage_validation_and_keep_failed_moves_unchanged(pool
         .unwrap();
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
-    let amount = detail.columns[3].column.id;
+    let amount = detail.columns[4].column.id;
     s.set_stage_requirement(
         access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
         StageRequirement {
@@ -488,6 +488,7 @@ async fn rule_ids_survive_renames_and_cascade_on_explicit_deletion(pool: PgPool)
         .unwrap();
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
+    // Owner: Revenue is a monetary field, which a pipeline never lets go of.
     let amount = detail.columns[3].column.id;
     let rule = StageRequirement {
         stage_column_id: stage,
@@ -583,7 +584,7 @@ async fn rule_ids_survive_renames_and_cascade_on_explicit_deletion(pool: PgPool)
         StageRequirement {
             stage_column_id: stage,
             stage_id: won,
-            required_column_ids: vec![detail.columns[2].column.id],
+            required_column_ids: vec![detail.columns[4].column.id],
         },
     )
     .await
@@ -626,14 +627,14 @@ async fn requirements_refuse_foreign_columns_and_non_stage_fields(pool: PgPool) 
             required_column_ids: vec![other.primary_column_id],
         },
         StageRequirement {
-            stage_column_id: detail.columns[3].column.id,
+            stage_column_id: detail.columns[4].column.id,
             stage_id: won,
             required_column_ids: vec![stage],
         },
         StageRequirement {
             stage_column_id: stage,
             stage_id: OptionId::new(),
-            required_column_ids: vec![detail.columns[3].column.id],
+            required_column_ids: vec![detail.columns[4].column.id],
         },
     ] {
         assert!(
@@ -681,7 +682,7 @@ async fn stage_label_case_and_duplicate_option_requests_cannot_bypass_rules(pool
         StageRequirement {
             stage_column_id: stage,
             stage_id: option,
-            required_column_ids: vec![detail.columns[3].column.id],
+            required_column_ids: vec![detail.columns[4].column.id],
         },
     )
     .await
@@ -731,7 +732,7 @@ async fn concurrent_stage_entry_and_required_field_clear_cannot_both_commit(pool
         .unwrap();
     let stage = detail.columns[1].column.id;
     let option = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
-    let amount = detail.columns[3].column.id;
+    let amount = detail.columns[4].column.id;
     s.set_stage_requirement(
         access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
         StageRequirement {

@@ -1902,32 +1902,38 @@ impl<
 
         // Update project modified timestamps. args.project_id of None means "no change",
         // so only move the document out of its old project when a different project (or
-        // "" for no project) was explicitly requested.
+        // "" for no project) was explicitly requested. A document whose id isn't a UUID
+        // holds no grant rows: it reads its folders' grants, so it has none to move.
+        let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).ok();
         if let Some(new_project_id) = &args.project_id
             && let Some(old_project_id) = &document_context.project_id
             && new_project_id != old_project_id
             && !old_project_id.is_empty()
         {
-            let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(old_project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(old_project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
         }
         if let Some(project_id) = &args.project_id
             && !project_id.is_empty()
         {
-            let project_id = uuid::Uuid::parse_str(project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }

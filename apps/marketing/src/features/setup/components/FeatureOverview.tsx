@@ -181,7 +181,7 @@ const expandedFeatures = [
   },
 ];
 
-/** The workspace constellation shared by onboarding and the public homepage. */
+/** The workspace constellation used by onboarding. */
 export function FeatureConstellation(
   props: {
     expanded?: boolean;

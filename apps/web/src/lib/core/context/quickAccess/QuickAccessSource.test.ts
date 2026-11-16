@@ -1580,6 +1580,22 @@ describe('Quick Access source integration', () => {
     expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the listed rows when a cache change replays the same search result', async () => {
+    mocks.search.mockResolvedValue(page(0, 1));
+    const list = setup((source) => source.useList({ buckets: ['note'] }));
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    const listed = list.items();
+    const searches = mocks.search.mock.calls.length;
+
+    mocks.changed?.();
+    await vi.waitFor(() =>
+      expect(mocks.search.mock.calls.length).toBeGreaterThan(searches)
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+
+    expect(list.items()).toBe(listed);
+  });
+
   it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {
     vi.useFakeTimers();
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
