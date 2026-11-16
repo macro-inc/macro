@@ -768,38 +768,59 @@ pub fn fork_order<'a>(lanes: &[&'a Lane]) -> Vec<&'a Lane> {
     ordered
 }
 
-/// Row filtering: filter words (each must match the kind, the status,
-/// or part of the name, task or program) and a find query (part of the
-/// name, task, doing or tape text).
+/// Filters owned by one list page.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     /// List ended agents too, not only current ones.
     pub all: bool,
-    /// Lowercase filter words.
-    pub words: Vec<String>,
-    /// Lowercase find query.
+    /// Restrict agent rows to one kind.
+    pub kind: Option<AgentKind>,
+    /// Restrict agent rows to one status.
+    pub status: Option<Status>,
+    /// Lowercase text query.
     pub find: String,
 }
 
 impl Filter {
     /// Whether nothing filters.
     pub fn is_empty(&self) -> bool {
-        self.words.is_empty() && self.find.is_empty()
+        self.kind.is_none() && self.status.is_none() && self.find.is_empty()
     }
 
-    fn word_matches(word: &str, agent: &Agent) -> bool {
-        let status = format!("{:?}", agent.status).to_lowercase();
-        agent.kind.label() == word
-            || status == word
-            || agent.name.to_lowercase().contains(word)
-            || agent
-                .task
-                .as_deref()
-                .is_some_and(|task| task.to_lowercase().contains(word))
-            || agent
-                .program
-                .as_deref()
-                .is_some_and(|program| program.to_lowercase().contains(word))
+    /// Cycle through agent roles and back to all roles.
+    pub fn next_kind(&mut self) {
+        self.kind = match self.kind {
+            None => Some(AgentKind::Manager),
+            Some(AgentKind::Manager) => Some(AgentKind::Builder),
+            Some(AgentKind::Builder) => Some(AgentKind::Explorer),
+            Some(AgentKind::Explorer) => Some(AgentKind::Planner),
+            Some(AgentKind::Planner) => Some(AgentKind::Chatter),
+            Some(AgentKind::Chatter) => Some(AgentKind::Reviewer),
+            Some(AgentKind::Reviewer) => Some(AgentKind::Subagent),
+            Some(AgentKind::Subagent) => Some(AgentKind::MacrodSession),
+            Some(AgentKind::MacrodSession) => Some(AgentKind::WorkRun),
+            Some(AgentKind::WorkRun) => Some(AgentKind::Factory),
+            Some(AgentKind::Factory) => Some(AgentKind::Shell),
+            Some(AgentKind::Shell) => Some(AgentKind::Other),
+            Some(AgentKind::Other) => None,
+        };
+    }
+
+    /// Cycle statuses; final statuses also include ended agents.
+    pub fn next_status(&mut self) {
+        self.status = match self.status {
+            None => Some(Status::Working),
+            Some(Status::Working) => Some(Status::Waiting),
+            Some(Status::Waiting) => Some(Status::Blocked),
+            Some(Status::Blocked) => Some(Status::Idle),
+            Some(Status::Idle) => Some(Status::Done),
+            Some(Status::Done) => Some(Status::Failed),
+            Some(Status::Failed) => Some(Status::Stopped),
+            Some(Status::Stopped) => None,
+        };
+        if self.status.is_some_and(Status::is_final) {
+            self.all = true;
+        }
     }
 
     fn find_matches(&self, agent: &Agent) -> bool {
@@ -810,6 +831,10 @@ impl Filter {
                 .as_deref()
                 .is_some_and(|task| task.to_lowercase().contains(find))
             || agent
+                .program
+                .as_deref()
+                .is_some_and(|program| program.to_lowercase().contains(find))
+            || agent
                 .doing
                 .as_deref()
                 .is_some_and(|doing| doing.to_lowercase().contains(find))
@@ -817,11 +842,9 @@ impl Filter {
 
     /// Whether an agent row shows.
     pub fn matches_agent(&self, agent: &Agent) -> bool {
-        let words = self
-            .words
-            .iter()
-            .all(|word| Self::word_matches(word, agent));
-        words && (self.find.is_empty() || self.find_matches(agent))
+        self.kind.is_none_or(|kind| agent.kind == kind)
+            && self.status.is_none_or(|status| agent.status == status)
+            && (self.find.is_empty() || self.find_matches(agent))
     }
 
     /// Whether a pull request row shows; `name_of` names its agents.
@@ -842,10 +865,10 @@ impl Filter {
         .map(|text| text.to_lowercase())
         .collect::<Vec<_>>();
         let has = |needle: &str| haystack.iter().any(|text| text.contains(needle));
-        self.words.iter().all(|word| has(word)) && (self.find.is_empty() || has(&self.find))
+        self.find.is_empty() || has(&self.find)
     }
 
-    /// Whether a lane shows: every word and the find query must match its
+    /// Whether a lane shows: the text query must match its
     /// branch, an alias, an agent's name, or its pull request's number,
     /// title or state.
     pub fn matches_lane(
@@ -867,7 +890,7 @@ impl Filter {
         }
         let haystack: Vec<String> = haystack.iter().map(|text| text.to_lowercase()).collect();
         let has = |needle: &str| haystack.iter().any(|text| text.contains(needle));
-        self.words.iter().all(|word| has(word)) && (self.find.is_empty() || has(&self.find))
+        self.find.is_empty() || has(&self.find)
     }
 
     /// Whether a tape line shows; `agent` is its agent's row, if known.
@@ -876,17 +899,9 @@ impl Filter {
             return true;
         }
 
-        let words = match agent {
-            Some(agent) => self
-                .words
-                .iter()
-                .all(|word| Self::word_matches(word, agent)),
-            None => self.words.is_empty(),
-        };
-        let find = self.find.is_empty()
+        self.find.is_empty()
             || event.text.to_lowercase().contains(&self.find)
-            || agent.is_some_and(|agent| self.find_matches(agent));
-        words && find
+            || agent.is_some_and(|agent| self.find_matches(agent))
     }
 }
 

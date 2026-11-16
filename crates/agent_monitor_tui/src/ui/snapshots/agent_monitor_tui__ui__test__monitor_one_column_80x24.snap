@@ -2,8 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app(), 80, 24)"
 ---
- FILTER [f] any   ENDED: HIDE [a]  CLEAR [x]
- SEARCH [/] any
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]
+ SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
 ┌ AGENTS  34 SHOWN / 34 TOTAL ───────────────────────────────────────────  [1] ┐
 │STATUS  WORKING 25  WAITING 0  BLOCKED 1  IDLE 4                              │
 │24H     TURNS 234  TOOLS 644  │ TOK/MIN 5.0M                                  │
@@ -25,4 +25,4 @@ expression: "render(&mut app(), 80, 24)"
 ┌ SPEND TODAY  ~$25.28 ──────────────────────────────────────────────────  [3] ┐
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]

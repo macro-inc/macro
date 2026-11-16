@@ -81,7 +81,7 @@ impl Key {
 }
 
 /// A page of the viewer.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Page {
     /// The monitor grid of every pane (`0`).
     Monitor,
@@ -125,12 +125,11 @@ impl Page {
         }
     }
 
-    /// Whether this page contains rows affected by the shared filters.
+    /// Whether this page has its own row filters.
     pub fn has_filters(&self) -> bool {
         matches!(
             self,
-            Page::Monitor
-                | Page::Tree
+            Page::Tree
                 | Page::Wall
                 | Page::Zoom(Pane::Agents | Pane::Tape | Pane::Failures | Pane::Changes)
         )
@@ -138,7 +137,12 @@ impl Page {
 
     /// Whether the ended-agent toggle applies on this page.
     pub fn filters_agents(&self) -> bool {
-        matches!(self, Page::Monitor | Page::Wall | Page::Zoom(Pane::Agents))
+        matches!(self, Page::Wall | Page::Zoom(Pane::Agents))
+    }
+
+    /// Whether kind and status filters apply to this page's agent rows.
+    pub fn filters_agent_rows(&self) -> bool {
+        self.filters_agents() || *self == Page::Tree
     }
 
     /// The page a number key opens.
@@ -205,15 +209,6 @@ pub enum Motion {
     Right,
 }
 
-/// An on-page filter field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FilterField {
-    /// Every word must match the row's metadata.
-    Words,
-    /// Text contained in the row or event.
-    Search,
-}
-
 /// The mode the base state returns to after filtering or help.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Base {
@@ -230,8 +225,6 @@ pub enum Mode {
     Base(Base),
     /// Editing an on-page filter.
     Filter {
-        /// The field being edited.
-        field: FilterField,
         /// What is typed so far.
         input: Input,
         /// Value restored by Escape.
@@ -255,18 +248,16 @@ impl PartialEq for Mode {
             (Mode::Help { base: a }, Mode::Help { base: b }) => a == b,
             (
                 Mode::Filter {
-                    field: a,
                     input: x,
                     original: old_x,
                     base: bx,
                 },
                 Mode::Filter {
-                    field: b,
                     input: y,
                     original: old_y,
                     base: by,
                 },
-            ) => a == b && bx == by && old_x == old_y && same_line(x, y),
+            ) => bx == by && old_x == old_y && same_line(x, y),
             _ => false,
         }
     }
@@ -311,10 +302,14 @@ pub enum Action {
     /// Open the row under the cursor of a pane, or of the page when `None`.
     Activate(Option<Pane>),
     /// Start editing the current value of a filter field.
-    EditFilter(FilterField),
+    EditFilter,
     /// Update a filter field live.
-    SetFilter(FilterField, String),
-    /// Clear the row filters and hide ended agents again.
+    SetFilter(String),
+    /// Cycle the agent kind filter.
+    NextKind,
+    /// Cycle the agent status filter.
+    NextStatus,
+    /// Clear this page's row filters and hide ended agents again.
     ClearFilters,
     /// Show ended agents too, or only current ones again.
     ToggleAll,
@@ -388,11 +383,10 @@ pub fn step(mode: Mode, key: Key, page: &Page) -> (Mode, Action) {
     match mode {
         Mode::Base(base) => step_base(base, key, page),
         Mode::Filter {
-            field,
             input,
             original,
             base,
-        } => step_filter(field, input, original, base, key),
+        } => step_filter(input, original, base, key),
         Mode::Help { base } => match key {
             Key::Esc | Key::Char('?') => (Mode::Base(base), Action::None),
             Key::Char('q') => (Mode::Help { base }, Action::Quit),
@@ -443,8 +437,9 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('B') if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) => {
             (stay, Action::CycleFigure(false))
         }
-        Key::Char('/') if page.has_filters() => (stay, Action::EditFilter(FilterField::Search)),
-        Key::Char('f') if page.has_filters() => (stay, Action::EditFilter(FilterField::Words)),
+        Key::Char('/') if page.has_filters() => (stay, Action::EditFilter),
+        Key::Char('t') if page.filters_agent_rows() => (stay, Action::NextKind),
+        Key::Char('s') if page.filters_agent_rows() => (stay, Action::NextStatus),
         Key::Char('?') => (Mode::Help { base }, Action::None),
         Key::Char(digit) if digit.is_ascii_digit() => match Page::numbered(digit) {
             Some(target) => (Mode::Base(Base::Idle), Action::Open(target)),
@@ -492,25 +487,18 @@ fn edit(input: &mut Input, key: Key) -> bool {
     true
 }
 
-fn step_filter(
-    field: FilterField,
-    mut input: Input,
-    original: String,
-    base: Base,
-    key: Key,
-) -> (Mode, Action) {
+fn step_filter(mut input: Input, original: String, base: Base, key: Key) -> (Mode, Action) {
     match key {
-        Key::Esc => (Mode::Base(base), Action::SetFilter(field, original)),
+        Key::Esc => (Mode::Base(base), Action::SetFilter(original)),
         Key::Enter => (Mode::Base(base), Action::None),
         _ => {
             let action = if edit(&mut input, key) {
-                Action::SetFilter(field, input.value().to_owned())
+                Action::SetFilter(input.value().to_owned())
             } else {
                 Action::None
             };
             (
                 Mode::Filter {
-                    field,
                     input,
                     original,
                     base,

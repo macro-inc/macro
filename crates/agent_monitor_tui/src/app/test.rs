@@ -17,56 +17,58 @@ fn type_line(app: &mut App, line: &str) {
 }
 
 #[test]
-fn page_filters_reopen_cancel_and_clear_without_navigating() {
+fn filters_belong_to_their_page_and_leave_monitor_unfiltered() {
+    use agent_monitor::domain::model::{AgentKind, Status};
     let mut app = changes_app();
     app.key(Key::Char('1'));
-    type_line(&mut app, "fBUILDER working");
+    app.key(Key::Char('t'));
+    app.key(Key::Char('t'));
+    app.key(Key::Char('s'));
+    assert_eq!(app.filter.kind, Some(AgentKind::Builder));
+    assert_eq!(app.filter.status, Some(Status::Working));
     let rows = app.view.sorted_agents(&app.filter);
     assert!(!rows.is_empty());
-    assert!(rows.iter().all(|agent| agent.kind.label() == "builder"
-        && agent.status == agent_monitor::domain::model::Status::Working));
-    app.key(Key::Char('a'));
-    type_line(&mut app, "/task");
-    assert!(app.filter.all);
-    assert_eq!(
-        app.filter.words,
-        vec![String::from("builder"), String::from("working")]
+    assert!(
+        rows.iter()
+            .all(|agent| agent.kind == AgentKind::Builder && agent.status == Status::Working)
     );
-    assert_eq!(app.filter.find, "task");
-    assert_eq!(*app.page(), Page::Zoom(Pane::Agents));
-
-    app.key(Key::Char('f'));
-    assert!(matches!(&app.mode, Mode::Filter { input, .. } if input.value() == "builder working"));
+    type_line(&mut app, "/task");
+    let agents_filter = app.filter.clone();
+    app.key(Key::Char('/'));
     app.key(Key::Backspace);
     app.key(Key::Esc);
-    assert_eq!(
-        app.filter.words,
-        vec![String::from("builder"), String::from("working")]
-    );
-    app.key(Key::Char('/'));
-    app.key(Key::Char('s'));
-    app.key(Key::Esc);
-    assert_eq!(app.filter.find, "task");
+    assert_eq!(app.filter, agents_filter);
 
     app.key(Key::Char('2'));
-    assert_eq!(
-        app.filter.find, "task",
-        "filters stay shared across list pages"
-    );
+    assert_eq!(app.filter, Filter::default());
+    type_line(&mut app, "/error");
+    app.key(Key::Esc);
+    assert_eq!(*app.page(), Page::Zoom(Pane::Agents));
+    assert_eq!(app.filter, agents_filter);
+    app.key(Key::Char('0'));
+    for key in ['/', 't', 's', 'a', 'x'] {
+        app.key(Key::Char(key));
+    }
+    assert_eq!(app.mode, Mode::default());
+    assert_eq!(app.filter, Filter::default());
+    app.key(Key::Char('1'));
+    assert_eq!(app.filter, agents_filter);
     app.key(Key::Char('x'));
     assert_eq!(app.filter, Filter::default());
-    assert_eq!(*app.page(), Page::Zoom(Pane::Tape));
-    assert!(!app.view.sorted_agents(&app.filter).is_empty());
+    app.key(Key::Char('2'));
+    assert_eq!(app.filter.find, "error");
 }
 
 #[test]
 fn a_toggles_and_esc_walks_back_one_page() {
     let mut app = app();
+    app.key(Key::Char('1'));
     app.key(Key::Char('a'));
     assert!(app.filter.all);
     app.key(Key::Char('a'));
     assert!(!app.filter.all);
 
+    app.key(Key::Char('0'));
     app.key(Key::Char('w'));
     app.key(Key::Char('5'));
     assert_eq!(*app.page(), Page::Tree);

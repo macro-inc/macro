@@ -8,6 +8,7 @@ mod changes;
 mod drill;
 mod filters;
 mod panes;
+mod tabs;
 mod tree;
 mod wall;
 
@@ -63,6 +64,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
 
     let [body, footer] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
 
+    let body = tabs::draw(frame, body, app.page());
     let body = filters::draw(frame, body, app);
 
     match app.page().clone() {
@@ -181,8 +183,6 @@ fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
         keys = vec![("Enter", "APPLY"), ("Esc", "CANCEL")];
     } else {
         for hint in [
-            ("0-8", "PAGE"),
-            ("w", "WALL"),
             ("Esc", "BACK"),
             ("Enter", "OPEN"),
             ("Tab", "PANE"),
@@ -200,7 +200,7 @@ fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-const HELP: [(&str, &str); 18] = [
+const HELP: [(&str, &str); 19] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = changes)",
@@ -215,15 +215,10 @@ const HELP: [(&str, &str); 18] = [
         "open the agent under the cursor (a PR's author); expand a tool call",
     ),
     ("ESC", "back one step"),
-    (
-        "f",
-        "filter words: kind, status, name, task or program; every word must match",
-    ),
+    ("t", "agent pages: cycle kind filter"),
+    ("s", "agent pages: cycle status filter"),
     ("/", "search text in names, tasks, activity and events"),
-    (
-        "x",
-        "clear shared filters (fields at the top of each list page)",
-    ),
+    ("x", "clear only this page's filters"),
     ("a", "list ended agents too, or only current ones"),
     ("b  B", "next / previous BODY figure (monitor and BODY)"),
     ("CTRL-T  `", "cycle themes: classic, ember, phosphor, dusk"),
@@ -274,7 +269,7 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         );
         frame.render_widget(
             Paragraph::new(
-                Line::from(Span::styled(key_text, theme::bold(Token::Highlight))).right_aligned(),
+                Line::from(Span::styled(key_text, theme::ink(Token::Frame))).right_aligned(),
             ),
             key_area,
         );

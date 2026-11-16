@@ -2,13 +2,14 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
 ┌ release-train  manager ◆ WORK building hc:t1 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │PROGRAM claude   MODEL claude-opus-5-5   CWD /srv/work/release-train   BRANCH feat/release-train   SPACE demo                                                                                         │
 │TERMINAL t1   SESSION demo-session-001   PID 40002   STARTED 09:39:00   PARENT —   TASK Ship the release branch                                                                                       │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ DURATION ─────────────────┐┌ TURNS ───────────────────┐┌ TOOLS ────────────────────┐┌ TOKENS ──────────────────┐┌ TOK IN ───────────────────┐┌ TOK OUT ─────────────────┐┌ CACHE RD/WR ──────────────┐
 │22m40s                     ││14                        ││38                         ││1.5M                      ││146.9k                     ││17.4k                     ││1.3M/47.3k                 │
-│   ·   ·   ·   ·   ·   ·   ││▁▁▁▁▂▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃││▁▁▁▁▁▁▁▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅││▁▁▁▁▂▁▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂││     ·   ·   ·   ·   ·   · ││    ·   ·   ·   ·   ·   · ││    ·   ·   ·   ·   ·   ·  │
+│                           ││▁▁▁▁▂▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃││▁▁▁▁▁▁▁▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅││▁▁▁▁▂▁▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂││                           ││                          ││                           │
 └───────────────────────────┘└──────────────────────────┘└───────────────────────────┘└──────────────────────────┘└───────────────────────────┘└──────────────────────────┘└───────────────────────────┘
 ┌ TIMELINE  7 EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │▲·····▪·▮············································································✖···▮·│·········································································································▮│
@@ -19,42 +20,41 @@ expression: "render(&mut app, 200, 56)"
 │10:00:05 TURN Running the tests first.                                                                                        ││· explorer find-15          DONE                                      │
 │10:00:06 TOOL Bash        cargo test -p store                                                                    34.0s ✕ ERR  ││◆ builder  fix-18           WORK                                      │
 │         ┌ ARGUMENTS                                                                                                          ││◆ builder  fix-19           WORK                                      │
-│         │ cargo test -p store                                                                                                ││◆ builder  rpc-server       WORK Task explore the reducer             │
+│   ·   · │ cargo test -p store                                                                                                ││◆ builder  rpc-server       WORK Task explore the reducer             │
 │         ├ RESULT                                                                                                             ││◆ builder  fix-20           WORK                                      │
-│         │ 1 failed: replay_orders                                                                                            ││◇ explorer find-21          IDLE                                      │
+│   ·   · │ 1 failed: replay_orders                                                                                            ││◇ explorer find-21          IDLE                                      │
 │         └                                                                                                                    ││· builder  store-reducer    DONE                                      │
 │10:00:40 ERR  1 failed: replay_orders                                                                                         ││◇ reviewer review-rpc       IDLE                                      │
-│10:00:42 TOOL Read        src/store.rs                                                                            0.3s ◆ OK   ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                         ◇ …      ││                                                                      │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│10:00:42 TOOL Read        src/store.rs                                                                            0.3s ◆ OK   ││                                                                      │
+│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                         ◇ …      ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              ││                                                                      │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              ││                                                                      │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │└─────────────────────────────────────────── FOCUS [Tab]  OPEN [Enter] ┘
-│                                                                                                                              │┌ PRS  2 ──────────────────────────────────────────────────────────────┐
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││◆ #4211  app        feat(monitor): serve the store… REQ     13m open  │
-│                                                                                                                              ││◆ #4207  app        feat(monitor): single-writer s… APPR    19m open  │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │└────────────────────────────────────────────────── OPEN AGENT [Enter] ┘
-│                                                                                                                              │┌ TAPE ────────────────────────────────────────────────────────────────┐
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:37 release-t… TOOL Grep Snapshot                                │
-│                                                                                                                              ││10:01:36 release-t… STAT working (building)                           │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:31 release-t… STAT blocked (permission)                         │
-│                                                                                                                              ││10:01:27 release-t… TOOL Bash just check                              │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TURN turn start                                   │
-│                                                                                                                              ││10:01:26 release-t… STAT working (building)                           │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TEND turn end                                     │
-│                                                                                                                              ││10:01:26 release-t… STAT idle (building)                              │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:23 release-t… TOOL Task explore the reducer                     │
-│                                                                                                                              ││10:01:19 release-t… TOOL Task explore the reducer                     │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:18 release-t… TOOL Edit store.rs                                │
-│                                                                                                                              ││10:01:12 release-t… TOOL Edit pages.rs                                │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:09 release-t… TOOL Edit client.rs                               │
-│                                                                                                                              ││10:01:07 release-t… TURN turn start                                   │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:07 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:04 release-t… TEND turn end                                     │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:04 release-t… STAT idle (building)                              │
-│                                                                                                                              ││10:01:01 release-t… TOOL Bash git status                              │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:00:59 release-t… TOOL Edit store.rs                                │
-│                                                                                                                              ││                                                                      │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                              │└─────────────────────────────────────────── FOCUS [Tab]  OPEN [Enter] ┘
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┌ PRS  2 ──────────────────────────────────────────────────────────────┐
+│                                                                                                                              ││◆ #4211  app        feat(monitor): serve the store… REQ     13m open  │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││◆ #4207  app        feat(monitor): single-writer s… APPR    19m open  │
+│                                                                                                                              │└────────────────────────────────────────────────── OPEN AGENT [Enter] ┘
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┌ TAPE ────────────────────────────────────────────────────────────────┐
+│                                                                                                                              ││10:01:37 release-t… TOOL Grep Snapshot                                │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:36 release-t… STAT working (building)                           │
+│                                                                                                                              ││10:01:31 release-t… STAT blocked (permission)                         │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:27 release-t… TOOL Bash just check                              │
+│                                                                                                                              ││10:01:26 release-t… TURN turn start                                   │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… STAT working (building)                           │
+│                                                                                                                              ││10:01:26 release-t… TEND turn end                                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… STAT idle (building)                              │
+│                                                                                                                              ││10:01:23 release-t… TOOL Task explore the reducer                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:19 release-t… TOOL Task explore the reducer                     │
+│                                                                                                                              ││10:01:18 release-t… TOOL Edit store.rs                                │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:12 release-t… TOOL Edit pages.rs                                │
+│                                                                                                                              ││10:01:09 release-t… TOOL Edit client.rs                               │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:07 release-t… TURN turn start                                   │
+│                                                                                                                              ││10:01:07 release-t… STAT working (building)                           │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:04 release-t… TEND turn end                                     │
+│                                                                                                                              ││10:01:04 release-t… STAT idle (building)                              │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:01 release-t… TOOL Bash git status                              │
+│                                                                                                                              ││10:00:59 release-t… TOOL Edit store.rs                                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────── EXPAND TOOL CALL [Enter] ┘└──────────────────────────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

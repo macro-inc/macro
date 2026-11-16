@@ -23,7 +23,8 @@ times a second, and ticks at `fps` only while something animates.
   spend, PRs: failing CI first). Spend by kind is the collector's split of
   today (`Totals::spend_by_kind`), never a sum of rows' lifetime costs, so it adds up to the day total.
 - `src/ui.rs`: bottom key hints and width breakpoints; panes and
-  pages live in `src/ui/`. The global header, navigation strip, and quote board are removed.
+  pages live in `src/ui/`. `ui/tabs.rs` draws left-aligned page tabs on every
+  view, wrapping on narrow terminals. The global header and quote board are removed.
   `ui/agent_summary.rs` draws separate status and activity rows inside AGENTS,
   both in the monitor and on its full page. Spend lives in SPEND (the full
   page also lists lifetime cost by agent), and error counts live in FAILURES.
@@ -96,12 +97,15 @@ times a second, and ticks at `fps` only while something animates.
   `Palette`, and each figure's `Look` maps its parts onto those roles.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
-- Use page controls, not typed commands: `0`–`8` and `w` navigate; `ui/filters.rs`
-  shows shared word filters (`f`), text search (`/`), ended agents (`a`, where
-  applicable), and reset (`x`). Every word must match row metadata; search
-  matches text. Enter keeps edits; Escape restores the field's previous value.
-  The tree always includes ended agents. Spend totals, sources, BODY and
-  detail pages are unfiltered and do not show filter controls.
+- Keep the monitor unfiltered; show left-aligned page tabs on every view and
+  only relevant, independently remembered filters on other pages.
+  `0`–`8` and `w` navigate. Agents, Tree and Wall have kind (`t`), status (`s`)
+  and text (`/`) filters; Agents and Wall also toggle ended agents (`a`).
+  Tape, Failures and Changes have text search scoped to their content;
+  Changes keeps its repository and landed controls. Reset (`x`) affects only
+  the current page. Enter keeps search edits; Escape restores the prior query.
+  Final status selection includes ended agents; Tree always includes them.
+  Spend, Sources, BODY and detail pages have no filter row.
 - Give every Ctrl shortcut a plain-key twin: browsers hosting ttyd keep
   Ctrl-T, Ctrl-W and Ctrl-N for themselves.
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never
@@ -110,8 +114,9 @@ times a second, and ticks at `fps` only while something animates.
   each frame, so render through `ui::draw` (or call `theme::set_active`). Pick the token
   by role, not by the hue you want: see the doc on each `Token` variant.
 - Put only the title in a pane's chip; render hotkeys in square brackets,
-  right-aligned outside the chip with `theme::hotkeys`; keep the top filter rows
-  and bottom key row left-aligned, and omit the healthy LIVE indicator.
+  right-aligned outside the chip with `theme::hotkeys`, in `Token::Frame` at
+  regular weight. Keep page tabs, page filters and the bottom key row
+  left-aligned, and omit the healthy LIVE indicator.
   Connection problems still appear in the bottom row alongside help.
 - Use thin outlines for every pane through `theme::pane` or `theme::frame`;
   `ui::draw` finishes each frame with `theme::grid` (dots on blank pane rows).

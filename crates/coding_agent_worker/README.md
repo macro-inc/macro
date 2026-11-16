@@ -239,13 +239,16 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   no theme draws in `classic` with a warning in the bottom status bar; the
   collector ignores the key. In the viewer, Ctrl-T (or a backtick, for a
   terminal in a browser, which keeps Ctrl-T) cycles the themes. Navigate
-  with `0`–`8` or `w`; list pages have shared word filters (`f`), text search
-  (`/`), reset (`x`), and an ended-agent toggle (`a`) where applicable.
+  with the left-aligned page tabs (`0`–`8` or `w`) on every view. The monitor
+  has no filters. Agents, Tree and Wall have their own kind (`t`), status (`s`)
+  and text (`/`) filters; Agents and Wall can also include ended agents (`a`).
+  Tape, Failures and Changes have their own text search. Reset (`x`) clears
+  only the current page. Spend, Sources, BODY and detail pages have no filters.
   Enter keeps a filter edit; Escape cancels it. The AGENTS pane and page separate
   current status from 24-hour activity. SPEND owns cost figures (including
   lifetime cost by agent on its full page); FAILURES owns error totals.
-  Pane titles contain only names, with bracketed hotkeys on the right;
-  the top filter rows and bottom key row are left-aligned. The bottom row
+  Pane titles contain only names, with regular-weight bracketed hotkeys in the border color on the right;
+  the page tabs, page filters and bottom key row are left-aligned. The bottom row
   includes `HELP [?]` and connection problems, without a healthy LIVE indicator.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`

@@ -2,8 +2,9 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
- FILTER [f] any   CLEAR [x]
- SEARCH [/] any  · filters shared across list pages
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
+ KIND: all [t]  STATUS: all [s]
+ CLEAR [x]  NAME / TASK [/] any
 ┌ TREE  34 AGENTS · 8 ROOTS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [5] ┐
 │▾ ◆ manager  release-train    WORK 09:39:00  22m   9▸  Ship the release branch                                                                            │
 │  ▾ ◆ builder  fix-19         WORK 10:01:11  28s   1▸  Follow-up from review                                                                              │
@@ -39,7 +40,6 @@ expression: "render(&mut app, 200, 56)"
 │    · ◆ subagent explore the… WORK 10:01:06  34s   0▸  explore the reducer                                                                                │
 │· ◇ shell    logs             IDLE 09:37:00  24m   0▸  tail service logs                                                                                  │
 │· ✕ builder  flaky-tests      FAIL 09:26:00  35m   0▸  Fix the flaky suite                                                                                │
-│                                                                                                                                                          │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                          │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
@@ -57,4 +57,4 @@ expression: "render(&mut app, 200, 56)"
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                          │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── FOLD [←→]  OPEN [Enter] ┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

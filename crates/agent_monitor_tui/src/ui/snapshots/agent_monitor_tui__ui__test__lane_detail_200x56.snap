@@ -2,6 +2,7 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
 ┌ CHANGES  ▸ feat/ui-pages  demo-org/app ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [8] ┐
 │  GRAPH  COMMIT   AGE   SUBJECT                                                                                                               PULL REQUEST                                            │
 │  ○      aca7c9f  20s   test(email): snapshot the digest renderer  ↑ not pushed                                                               #4215 draft                                             │
@@ -9,18 +10,17 @@ expression: "render(&mut app, 200, 56)"
 │  ○      b934cb6  50s   feat(channels): pin a message to the header  ↑ not pushed                                                             https://github.com/demo-org/app/pull/4215               │
 │  │                                                                                                                                           CI ✕   REVIEW draft                                     │
 │  ●      c5c1ccd  1m    perf(feed): batch avatar lookups                                                                                      opened 7m ago · updated 50s ago                         │
-│  │                                                                                                                                                                                                   │
+│  │    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │  ●      b9635c1  7m    fix(viewer): keep the cursor on resize                                                                                AGENTS                                                  │
 │  │                                                                                                                                                                                      OPEN [Enter] │
 │  ●      c5f05d7  17m   feat(viewer): command line mnemonics                                                                                  ◇ ui-pages              builder   IDLE                  │
-│  │                                                                                                                                                                                                   │
+│  │    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │  ●      d27d5ee  26m   feat(viewer): drill-in transcript                                                                                                                                             │
-│  │                                                                                                                                                                                                   │
+│  │    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │  ●      df0a605  36m   feat(viewer): page stack and zoom                                                                                                                                             │
-│  │                                                                                                                                                                                                   │
+│  │    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │  ╰─ stacked on feat/store-reducer at b3a3e4b · +12 −4                                                                                                                                                │
 │     checked out in /srv/work/ui-pages                                                                                                                                                                │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                                                                      │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                                                                      │
@@ -57,4 +57,4 @@ expression: "render(&mut app, 200, 56)"
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                                                                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

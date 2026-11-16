@@ -140,17 +140,13 @@ fn esc_returns_exactly_one_state() {
     );
 
     let filter = Mode::Filter {
-        field: FilterField::Words,
         input: typed("builder working"),
         original: String::from("builder"),
         base: Base::Pane(Pane::Spend),
     };
     assert_eq!(
         step(filter, Key::Esc, &Page::Monitor),
-        (
-            focused.clone(),
-            Action::SetFilter(FilterField::Words, String::from("builder"))
-        )
+        (focused.clone(), Action::SetFilter(String::from("builder")))
     );
 
     let help = Mode::Help {
@@ -170,7 +166,6 @@ fn quit_keys() {
     );
 
     let filter = Mode::Filter {
-        field: FilterField::Search,
         original: String::new(),
         input: typed("AG"),
         base: Base::Idle,
@@ -234,7 +229,6 @@ fn ctrl_t_cycles_the_theme_in_any_mode() {
     assert_eq!(action, Action::NextTheme);
 
     let typing = Mode::Filter {
-        field: FilterField::Search,
         input: typed("T"),
         original: String::new(),
         base: Base::Idle,
@@ -256,16 +250,12 @@ fn a_backtick_cycles_the_theme_where_a_browser_keeps_ctrl_t() {
     );
     // In a filter it is just a character.
     let typing = Mode::Filter {
-        field: FilterField::Search,
         input: typed("T"),
         original: String::new(),
         base: Base::Idle,
     };
     let (mode, action) = step(typing, Key::Char('`'), &Page::Monitor);
-    assert_eq!(
-        action,
-        Action::SetFilter(FilterField::Search, String::from("T`"))
-    );
+    assert_eq!(action, Action::SetFilter(String::from("T`")));
     assert!(matches!(mode, Mode::Filter { input, .. } if input.value() == "T`"));
 }
 
@@ -301,7 +291,7 @@ fn key_events_decode() {
 fn a_toggles_ended_agents() {
     let focused = Mode::Base(Base::Pane(Pane::Agents));
     assert_eq!(
-        step(focused.clone(), Key::Char('a'), &Page::Monitor),
+        step(focused.clone(), Key::Char('a'), &Page::Zoom(Pane::Agents)),
         (focused, Action::ToggleAll)
     );
 }
@@ -353,7 +343,6 @@ fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
 #[test]
 fn filters_edit_live_without_triggering_shortcuts() {
     let mode = Mode::Filter {
-        field: FilterField::Words,
         input: typed("builder"),
         original: String::from("builder"),
         base: Base::Pane(Pane::Agents),
@@ -365,12 +354,6 @@ fn filters_edit_live_without_triggering_shortcuts() {
     );
     assert_eq!(mode, Mode::Base(Base::Pane(Pane::Agents)));
     assert_eq!(actions.last(), Some(&Action::None));
-    assert_eq!(
-        actions[0],
-        Action::SetFilter(FilterField::Words, String::from("builderq"))
-    );
-    assert_eq!(
-        actions[2],
-        Action::SetFilter(FilterField::Words, String::from("buildeq"))
-    );
+    assert_eq!(actions[0], Action::SetFilter(String::from("builderq")));
+    assert_eq!(actions[2], Action::SetFilter(String::from("buildeq")));
 }

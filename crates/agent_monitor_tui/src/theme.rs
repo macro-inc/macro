@@ -211,7 +211,7 @@ pub fn hotkeys(keys: &[(&str, &str)]) -> Line<'static> {
     let mut spans = Vec::new();
     for (key, action) in keys {
         spans.push(Span::styled(format!(" {action} "), ink(Token::TextDim)));
-        spans.push(Span::styled(format!("[{key}] "), bold(Token::Highlight)));
+        spans.push(Span::styled(format!("[{key}] "), ink(Token::Frame)));
     }
     Line::from(spans).right_aligned()
 }

@@ -315,6 +315,6 @@ fn help_overlay() {
     let mut app = app();
     app.key(Key::Char('?'));
     let screen = render(&mut app, 200, 56);
-    assert!(screen.contains("filter words: kind, status, name, task or program"));
-    assert!(screen.contains("clear shared filters"));
+    assert!(screen.contains("agent pages: cycle kind filter"));
+    assert!(screen.contains("clear only this page's filters"));
 }

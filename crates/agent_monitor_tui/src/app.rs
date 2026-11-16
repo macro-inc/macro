@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use tui_tree_widget::TreeState;
 
@@ -112,8 +112,10 @@ pub struct App {
     pub mode: Mode,
     /// Pages opened, the current one last; never empty.
     pub pages: Vec<Page>,
-    /// Row filtering.
+    /// Filters for the current page.
     pub filter: Filter,
+    /// Each list page remembers its own filters.
+    saved_filters: HashMap<Page, Filter>,
     /// Cursors.
     pub cursors: Cursors,
     /// A one-line note in the bottom status bar.
@@ -138,6 +140,7 @@ impl App {
             mode: Mode::default(),
             pages: vec![Page::Monitor],
             filter: Filter::default(),
+            saved_filters: HashMap::new(),
             cursors: Cursors::default(),
             message: None,
             label,
@@ -194,29 +197,24 @@ impl App {
             Action::Open(page) => self.open(page),
             Action::Back => {
                 if self.pages.len() > 1 {
+                    let previous = self.pages[self.pages.len() - 2].clone();
+                    self.switch_filters(&previous);
                     self.pages.pop();
                 }
             }
             Action::Move(pane, motion) => self.move_cursor(pane, motion),
             Action::Activate(pane) => self.activate(pane),
-            Action::EditFilter(field) => {
-                let original = match field {
-                    keys::FilterField::Words => self.filter.words.join(" "),
-                    keys::FilterField::Search => self.filter.find.clone(),
-                };
+            Action::EditFilter => {
+                let original = self.filter.find.clone();
                 self.mode = Mode::Filter {
-                    field,
                     input: tui_input::Input::new(original.clone()),
                     original,
                     base: self.mode.base(),
                 };
             }
-            Action::SetFilter(field, value) => match field {
-                keys::FilterField::Words => {
-                    self.filter.words = value.split_whitespace().map(str::to_lowercase).collect();
-                }
-                keys::FilterField::Search => self.filter.find = value.to_lowercase(),
-            },
+            Action::SetFilter(value) => self.filter.find = value.to_lowercase(),
+            Action::NextKind => self.filter.next_kind(),
+            Action::NextStatus => self.filter.next_status(),
             Action::ClearFilters => self.filter = Filter::default(),
             Action::ToggleAll => self.filter.all = !self.filter.all,
             Action::CycleFigure(forward) => self.view.body.cycle(forward),
@@ -495,7 +493,16 @@ impl App {
         }
     }
 
+    fn switch_filters(&mut self, next: &Page) {
+        if self.page().has_filters() {
+            self.saved_filters
+                .insert(self.page().clone(), self.filter.clone());
+        }
+        self.filter = self.saved_filters.get(next).cloned().unwrap_or_default();
+    }
+
     fn open(&mut self, page: Page) {
+        self.switch_filters(&page);
         if page == Page::Monitor {
             self.pages = vec![Page::Monitor];
             return;

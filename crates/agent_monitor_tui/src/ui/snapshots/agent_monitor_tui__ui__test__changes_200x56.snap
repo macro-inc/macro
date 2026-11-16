@@ -2,8 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
- FILTER [f] any   CLEAR [x]
- SEARCH [/] any  · filters shared across list pages
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
+ CLEAR [x]  BRANCH / PR [/] any
 ┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  [8] ┐
 │REPO  app 13 ✕    origin/main 4be30b8 · fetched 5m ago · local main −37                                                                                  1 col = 5m  ◂ 11h ▸  SORT fork  LANDED shown │
 │┄┄┄┄┄┄┼-11h┄┄┄┄┄┄┄┼-10h┄┄┄┄┄┄┄┼-9h┄┄┄┄┄┄┄┄┼-8h┄┄┄┄┄┄┄┄┼-7h┄┄┄┄┄┄┄┄┼-6h┄┄┄┄┄┄┄┄┼-5h┄┄┄┄┄┄┄┄┼-4h┄┄┄┄┄┄┄┄┼-3h┄┄┄┄┄┄┄┄┼-2h┄┄┄┄┄┄┄┄┼-1h┄┄┄┄┄┄┄NOW LANE              PR      CI REV    ±MAIN      ↑    AGE  │
@@ -57,4 +57,4 @@ expression: "render(&mut app, 200, 56)"
 │  … ○ bde62ff 1m docs(api): document pagination cursors ↑   ○ b1592e9 40s perf(feed): batch avatar lookups ↑   ⟦○ a4cc2d2 10s feat(channels): pin a message to the header ↑⟧                          │
 │                                                              LANE [↑↓]  COMMIT [←→]  AGENT [Enter]  LANE PAGE [p]  NEXT ✕ [n N]  ZOOM [+ −]  PAN [< >]  NOW [Home]  REPO [[ ]]  LANDED [m]  SORT [s] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

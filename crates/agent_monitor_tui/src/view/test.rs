@@ -142,7 +142,7 @@ fn agents_sort_by_status_then_latest_activity() {
 }
 
 #[test]
-fn filter_words_match_kind_status_and_name() {
+fn agent_filters_combine_kind_status_and_text() {
     let mut view = view();
     let mut manager = agent("demo:lead", Status::Working, 1);
     manager.kind = AgentKind::Manager;
@@ -161,13 +161,21 @@ fn filter_words_match_kind_status_and_name() {
             .map(|agent| agent.id.to_string())
             .collect()
     };
-    let words = |words: &[&str]| Filter {
-        words: words.iter().map(|word| (*word).to_owned()).collect(),
-        ..Filter::default()
-    };
-
-    assert_eq!(ids(words(&["builder", "working"])), vec!["demo:rpc"]);
-    assert_eq!(ids(words(&["manager"])), vec!["demo:lead"]);
+    assert_eq!(
+        ids(Filter {
+            kind: Some(AgentKind::Builder),
+            status: Some(Status::Working),
+            ..Filter::default()
+        }),
+        vec!["demo:rpc"]
+    );
+    assert_eq!(
+        ids(Filter {
+            kind: Some(AgentKind::Manager),
+            ..Filter::default()
+        }),
+        vec!["demo:lead"]
+    );
     assert_eq!(
         ids(Filter {
             find: String::from("u"),
@@ -412,7 +420,7 @@ fn failing_prs_sort_first_then_open_ones_newest_first_then_finished() {
     assert_eq!(order, vec![3, 2, 4, 1]);
 
     let filter = Filter {
-        words: vec![String::from("draft")],
+        find: String::from("draft"),
         ..Filter::default()
     };
     let drafts: Vec<u32> = view

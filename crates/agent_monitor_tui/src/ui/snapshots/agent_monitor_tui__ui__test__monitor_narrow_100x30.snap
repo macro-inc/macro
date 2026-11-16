@@ -2,8 +2,8 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app(), 100, 30)"
 ---
- FILTER [f] any   ENDED: HIDE [a]  CLEAR [x]
- SEARCH [/] any  · filters shared across list pages
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]
+ CHANGES [8]  WALL [w]
 ┌ AGENTS  34 SHOWN / 34 TOTAL ─────────────────────────────  [1] ┐┌ SPEND TODAY  ~$25.28 ────  [3] ┐
 │STATUS  WORKING 25  WAITING 0  BLOCKED 1  IDLE 4                ││          █                     │
 │24H     TURNS 234  TOOLS 644  │ TOK/MIN 5.0M                    ││         ██                     │
@@ -31,4 +31,4 @@ expression: "render(&mut app(), 100, 30)"
 │10:01:40 fix-19         STAT working            ││  6s ✕ tool  builder  fix-16         Edit failed│
 │10:01:40 explore the r… SPWN subagent explore th││  6s ✕ tool  other    lint-sweep se… Read failed│
 └────────────────────────────────────────────────┘└────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]

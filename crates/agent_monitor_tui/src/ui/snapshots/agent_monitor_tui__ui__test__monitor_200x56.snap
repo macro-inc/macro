@@ -2,8 +2,7 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app(), 200, 56)"
 ---
- FILTER [f] any   ENDED: HIDE [a]  CLEAR [x]
- SEARCH [/] any  · filters shared across list pages
+ MONITOR [0]  AGENTS [1]  TAPE [2]  SPEND [3]  FAILURES [4]  TREE [5]  SOURCES [6]  BODY [7]  CHANGES [8]  WALL [w]
 ┌ AGENTS  34 SHOWN / 34 TOTAL ─────────────────────────────────────────────────────────────────────────────────────  [1] ┐┌ BODY  BIOSCAN  VITALS ─────────  [7] ┐┌ SPEND TODAY  ~$25.28 ────────  [3] ┐
 │STATUS  WORKING 25  WAITING 0  BLOCKED 1  IDLE 4                                                                        ││┌╴SCAN 0x001                        ╶┐││          █                         │
 │24H     TURNS 234  TOOLS 644  │ TOK/MIN 5.0M                                                                            ││♥ 168 BPM  5.0M TOK/M  25 WORKING     ││         ▇█                         │
@@ -25,16 +24,16 @@ expression: "render(&mut app(), 200, 56)"
 │◆ subagent q4-roadmap/explore t WORK explore the reducer            4s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││TOOL       /MIN                      ╴│┌ SOURCES  1/1 OK ─────────────  [6] ┐
 │◆ subagent scratch-notes/explor WORK explore the reducer            6s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Read    ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮   55││  SOURCE            AGT  ITEMS LAST │
 │◆ subagent mesh-plan/explore th WORK explore the reducer            8s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││◆ demo                34      —    —│
-│◆ subagent fix-19/explore the r WORK explore the reducer            9s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││                                    │
-│◆ subagent billing-revamp/explo WORK explore the reducer           13s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮▮               27││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│◆ subagent ui-pages/explore the WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                25││                                    │
-│◆ subagent fix-18/explore the r WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│◆ subagent release-train/explor WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶─                                  ─╴││                                    │
-│◆ subagent find-17/explore the  WORK explore the reducer           34s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶                                    ╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│◆ subagent review-rpc/explore t WORK explore the reducer           46s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶                                    ╴││                                    │
-│◆ subagent store-reducer/explor WORK explore the reducer            1m    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶                                    ╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│▲ manager  billing-revamp   ⎇3  BLCK permission                    59m   22    65    2.1M ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▂││                                      ││                                    │
-│◇ builder  ui-pages      #4215  IDLE Pages and drill-in            28m   18    44    1.9M ▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││└╴SUBJ 25 LIVE            TOK/M 5.0M╶┘││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent fix-19/explore the r WORK explore the reducer            9s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent billing-revamp/explo WORK explore the reducer           13s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮▮               27││                                    │
+│◆ subagent ui-pages/explore the WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                25││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent fix-18/explore the r WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││                                    │
+│◆ subagent release-train/explor WORK explore the reducer           16s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶─                                  ─╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent find-17/explore the  WORK explore the reducer           34s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶                                    ╴││                                    │
+│◆ subagent review-rpc/explore t WORK explore the reducer           46s    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶                                    ╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent store-reducer/explor WORK explore the reducer            1m    1     1       0 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶                                    ╴││                                    │
+│▲ manager  billing-revamp   ⎇3  BLCK permission                    59m   22    65    2.1M ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▂││     ·   ·   ·   ·   ·   ·   ·   ·    ││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◇ builder  ui-pages      #4215  IDLE Pages and drill-in            28m   18    44    1.9M ▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││└╴SUBJ 25 LIVE            TOK/M 5.0M╶┘││                                    │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────────────────┘└────────────────────────────────────┘
 ┌ TAPE  500 LINES  ▼ FOLLOWING ──────────────────────────────────────────────────────────────  [2] ┐┌ CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────────────────────────  [8] ┐
 │10:01:40 fix-19         TURN turn start                                                           ││  LANE            PR      CI REV    12h ········ NOW  ±MAIN      AGE                              │
@@ -56,5 +55,6 @@ expression: "render(&mut app(), 200, 56)"
 │10:01:38 fix-18         TOOL Write README.md                                                      ││ 15s ✕ tool  other    lint-sweep se… Write failed                                                 │
 │10:01:38 scratch-notes  TEND turn end                                                             ││ 18s ✕ tool  other    lint-sweep se… Grep failed                                                  │
 │10:01:38 q4-roadmap     TURN turn start                                                           ││ 18s ✕ tool  builder  fix-18         Task failed                                                  │
+│10:01:38 fix-18         TURN turn start                                                           ││ 26s ✕ tool  builder  rpc-server     Task failed                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-DEMO   HELP [?]  PAGE [0-8]  WALL [w]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
+DEMO   HELP [?]  BACK [Esc]  OPEN [Enter]  PANE [Tab]  MOVE [↑↓]  THEME [`]  QUIT [q]
