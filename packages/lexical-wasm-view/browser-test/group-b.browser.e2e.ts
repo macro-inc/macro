@@ -549,6 +549,52 @@ test('a mouse drag across cells keeps a native TableSelection over both cells', 
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+test('mid-drag, a caret on a sibling block outside the table still replaces the table selection', async ({
+  page,
+}) => {
+  const withParagraph = {
+    root: {
+      ...tableDocument.root,
+      children: [
+        ...tableDocument.root.children,
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text: 'after' }],
+        },
+      ],
+    },
+  };
+  await page.evaluate(
+    (state) => window.groupB.first.set(state),
+    JSON.stringify(withParagraph)
+  );
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(1).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  // Only a caret on the root or on an element holding the table is the
+  // cleared native drag; a caret on another block is a real selection.
+  await page.evaluate(() => {
+    const paragraph = [...document.querySelectorAll('#first p')].find(
+      (element) => element.textContent === 'after'
+    );
+    if (!paragraph) throw new Error('Missing sibling paragraph');
+    document.getSelection()?.setBaseAndExtent(paragraph, 0, paragraph, 0);
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.groupB.first.selection().kind))
+    .toBe('range');
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
 test('cancelled, foreign-pointer and readonly cell drags submit no table selection', async ({
   page,
 }) => {
