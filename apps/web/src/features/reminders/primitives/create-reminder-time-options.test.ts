@@ -1,5 +1,6 @@
+import naturalTimeWasm from 'wasm:natural-time';
 import type { NaturalTimeState } from '@core/natural-time/create-natural-time';
-import { loadNaturalTimeForTest } from '@core/natural-time/tests/load-wasm';
+import { loadWasmForTest } from '@core/wasm/tests/load-for-test';
 import { createRoot, createSignal } from 'solid-js';
 import {
   afterEach,
@@ -15,7 +16,10 @@ import { createReminderTimeOptions } from './create-reminder-time-options';
 let ready: NaturalTimeState;
 
 beforeAll(async () => {
-  ready = { status: 'ready', reader: await loadNaturalTimeForTest() };
+  ready = {
+    status: 'ready',
+    reader: await loadWasmForTest(naturalTimeWasm),
+  };
 });
 
 function choicesFor(text: string, state: NaturalTimeState = ready) {

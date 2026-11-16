@@ -1,9 +1,9 @@
 /**
- * Typed surface of the `natural_time` wasm package, loaded on first use.
- * `just build-wasm natural-time` builds it into the gitignored `./wasm/`.
- * The shapes mirror `natural_time::wasm`; the reading rules are the crate
- * docs in `crates/natural_time/src/lib.rs`.
+ * The `natural_time` wasm module with its results typed: the generated
+ * declarations type them `any`. The shapes mirror `natural_time::wasm`; the
+ * reading rules are the crate docs in `crates/natural_time/src/lib.rs`.
  */
+import naturalTimeWasm from 'wasm:natural-time';
 
 /** Which part of a longer phrase to read, as `natural_time::Pick`. */
 type NaturalTimePick = 'start' | 'end' | 'span';
@@ -52,33 +52,14 @@ type Read = (
 ) => NaturalTimeOutcome;
 
 export interface NaturalTimeWasmModule {
-  default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
   read: Read;
   /** Reads like `read`, with a guessed am or pm the other way round. */
   readOtherMeridiem: Read;
 }
 
-let modulePromise: Promise<NaturalTimeWasmModule> | undefined;
-
-/** Loads and initializes the wasm module once per context; a failed load is tried again. */
-export function loadNaturalTimeWasm(): Promise<NaturalTimeWasmModule> {
-  if (!modulePromise) {
-    modulePromise = (async () => {
-      try {
-        const url = new URL('./wasm/natural_time.js', import.meta.url).href;
-        const wasm = (await import(
-          /* @vite-ignore */ url
-        )) as NaturalTimeWasmModule;
-        // The generated JS's own relative wasm URL 404s in production; a static
-        // `new URL` makes vite emit and rewrite the binary.
-        const wasmUrl = new URL('./wasm/natural_time_bg.wasm', import.meta.url);
-        await wasm.default({ module_or_path: wasmUrl });
-        return wasm;
-      } catch (error) {
-        modulePromise = undefined;
-        throw error;
-      }
-    })();
-  }
-  return modulePromise;
+/** Loads the module once per context; a failed load is tried again. */
+export async function loadNaturalTimeWasm(): Promise<NaturalTimeWasmModule> {
+  // Checked against the generated declarations.
+  const reader: NaturalTimeWasmModule = await naturalTimeWasm.load();
+  return reader;
 }

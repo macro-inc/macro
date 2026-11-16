@@ -1,7 +1,8 @@
 /**
- * Typed surface of the `database_sql` wasm package, loaded on first use.
- * `just build-wasm database-sql` builds it into the gitignored `./wasm/`.
+ * The `database_sql` wasm module with its values typed by the specta types:
+ * the generated declarations type them `any`.
  */
+import databaseSqlWasm from 'wasm:database-sql';
 
 import type {
   Bin,
@@ -31,7 +32,6 @@ export interface DatabaseSqlQuery {
 }
 
 interface DatabaseSqlWasmModule {
-  default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
   /** Compiles a statement. Throws an `EngineError` when it does not compile. */
   Query: new (
     catalog: Catalog,
@@ -67,29 +67,11 @@ interface DatabaseSqlWasmModule {
   renderFormula: (catalog: Catalog, table: string, formula: Formula) => string;
 }
 
-let modulePromise: Promise<DatabaseSqlWasmModule> | undefined;
-
-/** Loads and initializes the wasm module once per context; a failed load is tried again. */
-export function loadDatabaseSqlWasm(): Promise<DatabaseSqlWasmModule> {
-  if (!modulePromise) {
-    modulePromise = (async () => {
-      try {
-        const url = new URL('./wasm/database_sql.js', import.meta.url).href;
-        const wasm = (await import(
-          /* @vite-ignore */ url
-        )) as DatabaseSqlWasmModule;
-        // The generated JS's own relative wasm URL 404s in production; a static
-        // `new URL` makes vite emit and rewrite the binary.
-        const wasmUrl = new URL('./wasm/database_sql_bg.wasm', import.meta.url);
-        await wasm.default({ module_or_path: wasmUrl });
-        return wasm;
-      } catch (error) {
-        modulePromise = undefined;
-        throw error;
-      }
-    })();
-  }
-  return modulePromise;
+/** Loads the module once per context; a failed load is tried again. */
+export async function loadDatabaseSqlWasm(): Promise<DatabaseSqlWasmModule> {
+  // Checked against the generated declarations.
+  const engine: DatabaseSqlWasmModule = await databaseSqlWasm.load();
+  return engine;
 }
 
 /** Compile `sql` against `catalog` in the wasm engine, loading it on first use. */

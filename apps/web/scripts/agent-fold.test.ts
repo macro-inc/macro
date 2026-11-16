@@ -2,7 +2,11 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { beforeAll, expect, it } from 'vitest';
-import type { FoldStream } from '../src/lib/core/agent-fold/wasm-module';
+import type {
+  AgentFoldWasmModule,
+  FoldStream,
+} from '../src/lib/core/agent-fold/wasm-module';
+import { loadWasmForTest } from '../src/lib/core/wasm/tests/load-for-test';
 
 let Stream: new (session: string) => FoldStream;
 
@@ -12,11 +16,9 @@ beforeAll(async () => {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 10 * 1024 * 1024,
   });
-  const path = new URL('../src/lib/core/agent-fold/wasm/', import.meta.url);
-  const wasm = await import(/* @vite-ignore */ new URL('agent_fold.js', path).href);
-  await wasm.default({
-    module_or_path: readFileSync(new URL('agent_fold_bg.wasm', path)),
-  });
+  // Imported after the build, so the plugin finds the package.
+  const { default: agentFoldWasm } = await import('wasm:agent-fold');
+  const wasm: AgentFoldWasmModule = await loadWasmForTest(agentFoldWasm);
   Stream = wasm.FoldStream;
   // CI compiles the release WASM from scratch on every run, which takes 3–6
   // minutes depending on the runner.

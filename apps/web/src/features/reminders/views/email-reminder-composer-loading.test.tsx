@@ -1,3 +1,5 @@
+import naturalTimeWasm from 'wasm:natural-time';
+import { loadWasmForTest } from '@core/wasm/tests/load-for-test';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 import {
   cleanup,
@@ -7,7 +9,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { EmailReminderComposer } from './email-reminder-composer';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
@@ -20,12 +22,9 @@ vi.mock('@queries/undo', () => ({
 }));
 // The browser loader can't run under the test runner; hand over the real
 // reader it would load.
-vi.mock('@core/natural-time/wasm-module', async () => {
-  const { loadNaturalTimeForTest } = await import(
-    '@core/natural-time/tests/load-wasm'
-  );
-  const reader = await loadNaturalTimeForTest();
-  return { loadNaturalTimeWasm: async () => reader };
+// Loads the real reader, which the app's own loader then shares.
+beforeAll(async () => {
+  await loadWasmForTest(naturalTimeWasm);
 });
 
 const reminder: EmailFollowup = {
