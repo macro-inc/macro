@@ -112,7 +112,7 @@ Read Database results from the actual owned InputCommitReceipt getters before fr
 
 - Set `NATIVE_SESSION_GUARD_PROFILE=preview` only for matched dev-probes test artifacts; leave it unset or use `production` for no-dev artifacts so the production export guard runs.
 
-- Build the production document-session artifact before package tests, or copy a matching source-built artifact into this worktree. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to that output for guard fixtures. The standalone compatibility shim and its metadata-only compatibility test were removed; this package does not require a compatibility runtime artifact. Keep tracked compatibility declarations unchanged.
+- Build the production document-session artifact before package tests, or copy a matching source-built artifact into this worktree. The guard fixtures read that artifact from `apps/web/src/lib/core/document-session/wasm/`; set both `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` only to test another build. The standalone compatibility shim and its metadata-only compatibility test were removed; this package does not require a compatibility runtime artifact. Keep tracked compatibility declarations unchanged.
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
 - Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.

@@ -1,6 +1,6 @@
 /** Node/Bun fixture over a real generated ordinary module, not browser acceptance. */
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   ABI_MAJOR,
   Access,
@@ -32,11 +32,28 @@ function invoke(
   return Reflect.apply(method, target, args);
 }
 let moduleId = 0;
-async function fixture() {
+// The production document-session artifact the package's other native tests
+// import; NATIVE_SESSION_GUARD_JS/WASM select another build (a preview profile).
+const ARTIFACT = new URL(
+  '../../../../apps/web/src/lib/core/document-session/wasm/',
+  import.meta.url
+);
+function fixturePaths() {
   const js = process.env.NATIVE_SESSION_GUARD_JS;
   const wasm = process.env.NATIVE_SESSION_GUARD_WASM;
+  if (!js && !wasm)
+    return {
+      js: fileURLToPath(new URL('document_session_wasm.js', ARTIFACT)),
+      wasm: fileURLToPath(new URL('document_session_wasm_bg.wasm', ARTIFACT)),
+    };
   if (!js || !wasm)
-    throw new Error('Real ordinary guard JS/WASM fixture paths are required');
+    throw new Error(
+      'Set both NATIVE_SESSION_GUARD_JS and NATIVE_SESSION_GUARD_WASM, or neither'
+    );
+  return { js, wasm };
+}
+async function fixture() {
+  const { js, wasm } = fixturePaths();
   const url = pathToFileURL(js);
   url.searchParams.set('guard-fixture', String(++moduleId));
   const module: unknown = await import(/* @vite-ignore */ url.href);
