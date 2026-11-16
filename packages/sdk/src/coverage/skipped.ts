@@ -114,7 +114,6 @@ export const authExcluded = [
   'passwordLogin',
   'passwordlessCallback',
   'passwordlessLogin',
-  'patchTeam',
   'patchTeamCrmSettings',
   'patchTeamMemberPlan',
   'patchUserGroup',

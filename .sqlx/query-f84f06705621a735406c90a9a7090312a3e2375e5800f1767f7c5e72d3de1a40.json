@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Items whose Companies or Contacts property names a record of the activity\n-- scope. $1 is the permitted team ids checked on the primary (or a verified\n-- bot's team); $2 is the item kinds to return. The replica cannot grant access.\n--\n-- Reads only the scope's visible company and contact ids, from their team\n-- indexes (companies index-only), without domains or addresses. Each id then\n-- probes its property's partial GIN index (`idx_ep_companies_value_gin`,\n-- `idx_ep_contacts_value_gin`) with the containment test of `property_edges`,\n-- so the cost follows the scope's records, not every team's property rows. The\n-- property ids are literals so the planner can use those partial indexes;\n-- `test` pins them to `SystemPropertyKey`.\n--\n-- Bound: one probe per visible company and contact, about 2.6 us and 2.4\n-- buffers each warm: 38 ms for 4k companies and 10k contacts, 1 ms for 30\n-- companies. Revisit if a team's records near 40k (100 ms).\nWITH scope AS MATERIALIZED (\n    SELECT $1::uuid[] AS teams\n), companies AS MATERIALIZED (\n    -- Fence companies too so stale statistics cannot scan other teams.\n    SELECT co.id, co.team_id\n    FROM scope\n    CROSS JOIN LATERAL (\n        SELECT co.id, co.team_id\n        FROM crm_companies co\n        WHERE co.team_id = ANY(scope.teams) AND NOT co.hidden\n        OFFSET 0\n    ) co\n), contacts AS MATERIALIZED (\n    -- Fence the contact lookup inside the scope join so stale statistics cannot\n    -- start it from every team's contacts. Apply visibility after the team lookup\n    -- to avoid bitmap-reading all of `crm_contacts_visible_company_id_idx`.\n    SELECT ct.id\n    FROM scope\n    CROSS JOIN LATERAL (\n        SELECT ct.id, ct.team_id, ct.company_id, ct.hidden\n        FROM crm_contacts ct\n        WHERE ct.team_id = ANY(scope.teams)\n        OFFSET 0\n    ) ct\n    WHERE NOT ct.hidden\n      AND (\n          ct.company_id IS NULL\n          OR EXISTS (\n              SELECT 1 FROM companies co\n              WHERE co.id = ct.company_id AND co.team_id = ct.team_id\n          )\n      )\n)\n-- Each probe is a fenced lateral, so the records always drive: when the kind\n-- filter makes the property rows look few, a plain join reads them first and\n-- tests every record against every row (1.8 s for Calls on the largest team).\nSELECT ep.entity_type AS \"entity_type!: EntityType\", ep.entity_id AS \"entity_id!\"\nFROM companies co\nCROSS JOIN LATERAL (\n    SELECT ep.entity_type, ep.entity_id\n    FROM entity_properties ep\n    WHERE ep.property_definition_id = '00000001-0000-0000-0000-00000000000c'\n      AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', co.id::text))\n      AND ep.entity_type = ANY($2::property_entity_type[])\n    OFFSET 0\n) ep\nUNION\nSELECT ep.entity_type, ep.entity_id\nFROM contacts ct\nCROSS JOIN LATERAL (\n    SELECT ep.entity_type, ep.entity_id\n    FROM entity_properties ep\n    WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000013'\n      AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', ct.id::text))\n      AND ep.entity_type = ANY($2::property_entity_type[])\n    OFFSET 0\n) ep\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        {
+          "Custom": {
+            "name": "property_entity_type[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "property_entity_type",
+                  "kind": {
+                    "Enum": [
+                      "CHANNEL",
+                      "CHAT",
+                      "DOCUMENT",
+                      "PROJECT",
+                      "THREAD",
+                      "USER",
+                      "COMPANY",
+                      "TASK",
+                      "CALL_RECORD",
+                      "CALENDAR_EVENT",
+                      "INITIATIVE",
+                      "CONTACT",
+                      "DATABASE_ROW"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f84f06705621a735406c90a9a7090312a3e2375e5800f1767f7c5e72d3de1a40"
+}
