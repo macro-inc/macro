@@ -46,6 +46,7 @@ export * from './apiDraftInputBodyMacro';
 export * from './apiDraftInputBodyText';
 export * from './apiDraftInputCc';
 export * from './apiDraftInputDbId';
+export * from './apiDraftInputFrom';
 export * from './apiDraftInputHeadersJson';
 export * from './apiDraftInputIncludeSignature';
 export * from './apiDraftInputProviderId';

@@ -12,6 +12,7 @@ export const MOBILE_NAV_VIEW_IDS = [
   'channels',
   'agents',
   'documents',
+  'passwords',
   'tasks',
   'reviews',
   'booking-links',

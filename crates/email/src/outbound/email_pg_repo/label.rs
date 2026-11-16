@@ -1,3 +1,4 @@
+use crate::domain::message_labels::state as label_state;
 use crate::domain::models::{
     LabelListVisibility, LabelType, LinkLabel, MessageListVisibility, SimpleMessage,
     StagedLabelChange, label::system_labels,
@@ -5,6 +6,7 @@ use crate::domain::models::{
 use crate::outbound::email_pg_repo::db_types::{
     LabelListVisibilityDbRow, LabelTypeDbRow, MessageListVisibilityDbRow,
 };
+use crate::outbound::label_state_pg::PgLabelState;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -264,8 +266,8 @@ pub(super) async fn stage_thread_label_change(
         })
         .map(|message| message.db_id)
         .collect();
-    email_db_client::labels::pending_writes::mark_pending_label_writes(
-        &mut *tx,
+    label_state::mark_pending_label_writes(
+        &mut PgLabelState(&mut tx),
         link_id,
         &pending_ids,
         provider_label_id,
@@ -310,8 +312,8 @@ pub(super) async fn revert_staged_label_change(
     let mut tx = pool.begin().await?;
     email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, &[thread_id])
         .await?;
-    email_db_client::labels::pending_writes::abandon_pending_label_writes(
-        &mut tx,
+    label_state::abandon_pending_label_writes(
+        &mut PgLabelState(&mut tx),
         link_id,
         provider_message_ids,
         write_id,

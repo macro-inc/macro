@@ -1582,6 +1582,13 @@ export type UpdateCalendarEventRequest = {
      * Replacement location; an empty string clears it.
      */
     location?: string | null;
+    /**
+     * Switch the event to a Macro call in this write: mint one, write its
+     * join link into the description and location, and detach any provider
+     * conference. An event already holding a Macro call keeps it. Cannot be
+     * combined with `conference`.
+     */
+    macroCall?: boolean;
     outOfOffice?: null | OutOfOfficeProperties;
     /**
      * Original-start key of the occurrence the update targets.
@@ -1647,7 +1654,7 @@ export type VisibleCalendar = {
     color?: string | null;
     /**
      * Whether this calendar counts toward the requester's busy time: their
-     * setting, by default only the primary calendars of inboxes they own.
+     * setting in Settings → Calendar, on by default for every calendar.
      * The nearest thing to "this is the requester's own": a provider's
      * access role only says what they may do, on a colleague's calendar too.
      */
@@ -1896,7 +1903,7 @@ export type UpdateCalendarEventErrors = {
      */
     409: CalendarMutationApiError;
     /**
-     * Transient provider failure
+     * Transient provider failure, or the Macro call could not be created
      */
     503: CalendarMutationApiError;
 };

@@ -178,9 +178,9 @@ fn write_executable(path: &Path, binary: &[u8]) -> std::io::Result<()> {
     file.sync_all()
 }
 
-/// Replace this process with `executable`, with the same arguments and
-/// environment, handing it `agent` when there is one. Returns only on
-/// failure, and then the agent is stopped.
+/// Replace this process with `executable`, running `arguments` (`argv`,
+/// starting with `argv[0]`) in the same environment, handing it `agent` when
+/// there is one. Returns only on failure, and then the agent is stopped.
 ///
 /// Takes the path recorded before the swap: once the running file is
 /// replaced, Linux reports this process's executable as deleted.
@@ -188,13 +188,14 @@ fn write_executable(path: &Path, binary: &[u8]) -> std::io::Result<()> {
 pub fn relaunch(
     executable: &Path,
     tag: &str,
+    arguments: &[std::ffi::OsString],
     agent: Option<crate::handoff::HandedOffAgent>,
 ) -> std::io::Error {
     use std::os::unix::process::CommandExt as _;
 
     use super::log::{self, ApplyMethod, UpdateEvent};
 
-    let mut args = std::env::args_os();
+    let mut args = arguments.iter();
     let mut command = std::process::Command::new(executable);
     if let Some(arg0) = args.next() {
         command.arg0(arg0);

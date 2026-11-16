@@ -67,6 +67,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
         created,
         FormDetail {
             form: Form {
+                appearance: None,
                 id: form_id,
                 name: "Q4 offsite RSVP".into(),
                 description: "".into(),
@@ -504,6 +505,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                             }]),
                         },
                     ]],
+                    ids: None,
                 },
             }],
         }

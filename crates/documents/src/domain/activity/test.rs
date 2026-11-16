@@ -111,6 +111,7 @@ fn created_on_behalf_of_the_owner_stays_on_their_feed() {
 #[test]
 fn attributed_update_and_delete_map_to_activities() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: Some(user("macro|editor@example.com")),
@@ -139,8 +140,33 @@ fn attributed_update_and_delete_map_to_activities() {
 }
 
 #[test]
+fn appearance_events_do_not_ingest_history() {
+    let event = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: Some([
+            model_entity::EntityAppearance::default(),
+            model_entity::EntityAppearance {
+                icon: None,
+                color: Some(model_entity::AppearanceColor::Blue),
+            },
+        ]),
+        document_id: DOCUMENT_ID.to_string(),
+        owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
+        actor_user_id: Some(user("macro|editor@example.com")),
+        actor: None,
+        on_behalf_of: None,
+        document_name: None,
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    }));
+    assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
 fn delegated_update_stays_on_the_user_feed() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: None,
@@ -164,6 +190,7 @@ fn delegated_update_stays_on_the_user_feed() {
 #[test]
 fn unattributable_mutations_are_dropped() {
     let updated = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::from_principal_str("macro|owner@example.com").unwrap(),
         actor_user_id: None,

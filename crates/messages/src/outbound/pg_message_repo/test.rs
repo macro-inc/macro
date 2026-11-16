@@ -1,5 +1,10 @@
 use super::*;
+use crate::domain::service::MessageService;
+use crate::domain::service::guest_chat::{
+    GuestCallAccess, GuestCallAuthorizer, GuestChatApi, GuestChatPost, GuestChatService,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use std::sync::Arc;
 
 const USER: &str = "macro|message-test@example.com";
 
@@ -695,7 +700,7 @@ async fn discussion_delivery_context_reads_document_assignees_and_thread_authors
     .unwrap();
     sqlx::query!(
         r#"INSERT INTO entity_properties(id, entity_id, entity_type, property_definition_id, values)
-        VALUES ($1, 'message-doc-a', 'DOCUMENT', $2, $3)"#,
+        VALUES ($1, 'message-doc-a', 'TASK', $2, $3)"#,
         macro_uuid::generate_uuid_v7(),
         system_properties::SystemPropertyKey::Assignees.uuid(),
         serde_json::json!({
@@ -831,6 +836,37 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
         .await
         .unwrap();
     assert!(removed.attachments.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn attachments_read_back_in_the_order_they_were_sent(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let sent = [
+        "doc-7", "doc-2", "doc-9", "doc-0", "doc-5", "doc-3", "doc-8", "doc-1", "doc-6", "doc-4",
+    ];
+    let mut create = command("message-doc-a", None, "ten attachments");
+    create.input.attachments = sent
+        .iter()
+        .map(|entity_id| NewAttachment {
+            entity_type: "document".into(),
+            entity_id: (*entity_id).into(),
+            width: None,
+            height: None,
+        })
+        .collect();
+    let message = repo.create(create).await.unwrap();
+    let read = repo
+        .get(&message.parent, message.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let order: Vec<_> = read
+        .attachments
+        .iter()
+        .map(|attachment| attachment.entity_id.as_str())
+        .collect();
+    assert_eq!(order, sent);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1573,6 +1609,88 @@ async fn guests_and_members_share_the_persisted_call_discussion(pool: PgPool) {
             .len(),
         1
     );
+}
+
+struct CallGuestAccess {
+    call_id: Uuid,
+    guest_id: Uuid,
+}
+
+#[async_trait::async_trait]
+impl GuestCallAuthorizer for CallGuestAccess {
+    async fn authorize(&self, call_id: Uuid, token: &str) -> Result<GuestCallAccess, MessageError> {
+        if call_id != self.call_id || token != "guest-session" {
+            return Err(MessageError::Forbidden);
+        }
+        Ok(GuestCallAccess {
+            guest_id: self.guest_id,
+            name: "Visitor".into(),
+        })
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn guest_service_reads_before_and_after_first_post_and_then_replies(pool: PgPool) {
+    let call_id = setup_call_chat(&pool).await;
+    let guest_id = Uuid::now_v7();
+    let service = GuestChatService::new(
+        Arc::new(MessageService::new(
+            PgMessageRepository::new(pool),
+            NoMessageEventPublisher,
+        )),
+        Arc::new(CallGuestAccess { call_id, guest_id }),
+    );
+    assert!(
+        service
+            .read_thread(call_id, "guest-session")
+            .await
+            .unwrap()
+            .thread
+            .is_none()
+    );
+
+    let root = service
+        .post_message(
+            call_id,
+            "guest-session",
+            GuestChatPost {
+                id: Uuid::now_v7(),
+                content: "First".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(root.id, call_id);
+    assert_eq!(root.thread_id, None);
+    let thread = service
+        .read_thread(call_id, "guest-session")
+        .await
+        .unwrap()
+        .thread
+        .unwrap();
+    assert_eq!(thread.root.id, call_id);
+    assert!(thread.replies.is_empty());
+
+    let reply = service
+        .post_message(
+            call_id,
+            "guest-session",
+            GuestChatPost {
+                id: Uuid::now_v7(),
+                content: "Second".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(reply.thread_id, Some(call_id));
+    let thread = service
+        .read_thread(call_id, "guest-session")
+        .await
+        .unwrap()
+        .thread
+        .unwrap();
+    assert_eq!(thread.replies.len(), 1);
+    assert_eq!(thread.replies[0].id, reply.id);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

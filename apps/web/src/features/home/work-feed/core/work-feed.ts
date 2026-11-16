@@ -17,7 +17,8 @@ export type WorkFeedItemType =
   | 'channel_thread'
   | 'calendar_event'
   | 'pull_request'
-  | 'agent_session';
+  | 'agent_session'
+  | 'runtime';
 
 /** Which items one feed shows. Pages, live updates and undo share it. */
 export type WorkFeedScope = {

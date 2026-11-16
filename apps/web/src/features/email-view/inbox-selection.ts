@@ -1,6 +1,6 @@
-/** Restore legacy multi-selections as one inbox; an empty selection means all. */
+/** Restore a selection of inboxes without repeats; an empty one means all. */
 export function normalizeInboxSelection(
   ids: readonly string[] | undefined
 ): string[] | undefined {
-  return ids?.length ? ids.slice(0, 1) : undefined;
+  return ids?.length ? [...new Set(ids)] : undefined;
 }

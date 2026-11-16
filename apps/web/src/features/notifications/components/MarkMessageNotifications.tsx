@@ -1,4 +1,4 @@
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useOptionalGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -33,11 +33,13 @@ export function MarkMessageNotifications(props: {
   // global NotificationSource. Use an exact-message GraphQL edge or scope that
   // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
   // is thread-aware, so targeting a root also includes reply notifications.
-  const notificationSource = useGlobalNotificationSource();
+  const notificationSource = useOptionalGlobalNotificationSource();
   const scopedIndex = useContext(MessageNotificationIndexContext);
-  const notifications = scopedIndex
-    ? () => scopedIndex().get(props.messageId) ?? []
-    : useNotificationsForEntity(notificationSource, props.parent);
+  const notifications = notificationSource
+    ? scopedIndex
+      ? () => scopedIndex().get(props.messageId) ?? []
+      : useNotificationsForEntity(notificationSource, props.parent)
+    : () => [];
   const isMessageNotification = (n: UnifiedNotification) => {
     const content = n.notification_metadata.content;
     return (
@@ -82,7 +84,7 @@ export function MarkMessageNotifications(props: {
         span.setAttr('message.id', props.messageId);
         span.setAttr('notification.count', unread.length);
         span.setAttr('notification.read_trigger', 'visible');
-        await notificationSource.bulkMarkAsRead(unread);
+        await notificationSource?.bulkMarkAsRead(unread);
       })
     );
     if (result.isErr())

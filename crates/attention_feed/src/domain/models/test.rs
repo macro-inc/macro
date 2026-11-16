@@ -33,6 +33,7 @@ fn tokens_round_trip() {
         keys: vec![format!("document:{}", uuid(1))],
         notification_ids: vec![uuid(2)],
         archived_threads: vec![uuid(3)],
+        unseen_ids: vec![uuid(2)],
     };
     assert_eq!(DoneReceipt::decode(&receipt.encode()).unwrap(), receipt);
     assert_eq!(
@@ -58,6 +59,7 @@ fn tokens_keep_the_work_feed_wire_format() {
             keys: vec!["document:d".to_string()],
             notification_ids: Vec::new(),
             archived_threads: Vec::new(),
+            unseen_ids: Vec::new(),
         })
         .unwrap(),
         serde_json::json!({ "k": ["document:d"], "n": [], "e": [] })

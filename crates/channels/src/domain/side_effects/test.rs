@@ -783,16 +783,17 @@ async fn bot_thread_reply_sends_reply_notification() {
 }
 
 #[tokio::test]
-async fn people_connected_to_the_threads_call_get_no_reply_notification() {
+async fn channel_members_connected_to_the_threads_call_get_a_reply_notification() {
     let channel_id = Uuid::new_v4();
     let connected = user("connected@example.com");
+    let outsider = user("outsider@example.com");
     let away = user("away@example.com");
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext {
             thread_context: ThreadNotificationContext {
-                connected_call_participants: vec![connected.clone()],
-                participants: vec![connected.clone(), away.clone()],
+                connected_call_participants: vec![connected.clone(), outsider.clone()],
+                participants: vec![away.clone()],
                 parent_sender_id: None,
             },
             ..FakeContext::default()
@@ -815,11 +816,11 @@ async fn people_connected_to_the_threads_call_get_no_reply_notification() {
     let ChannelNotificationEffect::Reply { recipient_ids, .. } = &notification_effects[0] else {
         panic!("expected a reply notification");
     };
-    assert_eq!(recipient_ids, &HashSet::from([away]));
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
 }
 
 #[tokio::test]
-async fn a_mention_of_someone_connected_to_the_threads_call_is_dropped() {
+async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
     let channel_id = Uuid::new_v4();
     let now = Utc::now();
     let sender = user("sender@example.com");
@@ -872,7 +873,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_dropped() {
     else {
         panic!("expected a mention notification");
     };
-    assert_eq!(recipient_ids, &HashSet::from([away]));
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
 }
 
 #[tokio::test]
@@ -1378,6 +1379,38 @@ fn broker_events_map_participant_joined_to_participant_added() {
         envelope["metadata"]["added_user_ids"][0],
         "macro|alice@example.com"
     );
+}
+
+#[test]
+fn broker_events_carry_the_requesters_name_on_a_request_to_join() {
+    use macro_event_broker::MacroEvent as _;
+    let channel_id = Uuid::new_v4();
+    let events = broker_events_for_event(&ChannelEvent::AccessRequested {
+        request: ChannelAccessRequest {
+            id: Uuid::from_u128(3),
+            channel_id,
+            requester_id: user("sarah@example.com"),
+            status: crate::domain::access_requests::ChannelAccessRequestStatus::Pending,
+            created_at: Utc::now(),
+            resolved_at: None,
+            resolved_by: None,
+        },
+        requester_name: Some("Sarah Lee".to_string()),
+        participant_user_ids: users(&["alice@example.com"]),
+        metadata: ChannelMetadata {
+            channel_type: ChannelType::Private,
+            channel_name: "design".to_string(),
+        },
+    });
+
+    assert_eq!(events.len(), 1);
+    let envelope = serde_json::to_value(events[0].event()).unwrap();
+    assert_eq!(envelope["event_type"], "channel.access_requested");
+    assert_eq!(
+        envelope["metadata"]["requester_id"],
+        "macro|sarah@example.com"
+    );
+    assert_eq!(envelope["metadata"]["requester_name"], "Sarah Lee");
 }
 
 #[test]

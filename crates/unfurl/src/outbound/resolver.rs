@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
-use super::http_safety::is_private_ip;
+use super::http_safety::is_non_public_ip;
 
 /// reqwest DNS resolver that drops private / internal IPs from the answer
 /// set and errors out if nothing public remains.
@@ -37,7 +37,7 @@ impl Resolve for PrivateIpFilteringResolver {
 
             let filtered: Vec<SocketAddr> = lookup
                 .filter(|sa| {
-                    let allowed = !is_private_ip(&sa.ip());
+                    let allowed = !is_non_public_ip(&sa.ip());
                     if !allowed {
                         tracing::warn!(
                             host = %hostname,

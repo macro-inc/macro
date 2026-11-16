@@ -251,6 +251,11 @@ fn ops() -> Vec<DatabaseOp> {
         column(ColumnChange::DeleteOption { option: DONE }),
         rows(RowsChange::Insert {
             rows: vec![every_cell_value()],
+            ids: None,
+        }),
+        rows(RowsChange::Insert {
+            rows: vec![every_cell_value()],
+            ids: Some(vec![ROW]),
         }),
         rows(RowsChange::Update {
             changes: RowChanges::Uniform {

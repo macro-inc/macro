@@ -7,7 +7,7 @@ Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
 `redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
-`routine-suggestions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync and routine suggestions metrics, the Outlook retention filter, one other log-based metric, and one downtime.
+`routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -43,14 +43,15 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
-GraphQL soup DSS 5xx and DB connections monitors, and macrodb blocked
-connections. `error-logs-overall` notifies without paging because it crosses
+GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
+connections, the AI provider account monitor, and the Stripe inbox's
+dead-lettered and late-apply monitors. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts` and `routine-suggestions.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -59,7 +60,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts, Outlook sync and Routine suggestions) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync, Routine suggestions, Computer capacity, and Search and database saturation) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -116,12 +117,13 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **105 resources to create**: 76 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+- **122 resources to create**: 83 monitors (39 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
   presence, 3 OAuth), 2 webhooks,
-  15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
-  suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
+  suggestions, 1 log-based and 6 span-based metrics for agent runtimes), the
+  GoAlert synthetic test, the nine prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -290,6 +292,24 @@ These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSocket
 See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
 limitations and the post-deploy verification gates.
 
+## AI provider coverage
+
+`monitors/ai-providers.ts` adds **four monitors, one dashboard, two log-based
+metrics and one span-based metric** for Macro's AI provider accounts. Its
+header lists every log and span field it reads; [the
+runbook](../../../docs/runbooks/ai-providers.md) covers each alert.
+
+- A provider refusing Macro's key as suspended or out of credit pages from the
+  Rust services' `ai provider account unavailable` log, and notifies from the
+  AI editing worker's `ai.provider_account_unavailable` span.
+- Month-to-date priced spend, from the `ai usage priced` log, warns at 50% and
+  80% of a provider's monthly cap and alerts at 100%. `MONTHLY_CAPS` lists only
+  documented caps: Fireworks ($30). The spend monitors use a calendar-month
+  cumulative window (`current_1mo`).
+
+Deploy the services that emit those logs and the span before these; until then
+the metrics are empty and the monitors do not alert.
+
 ## Outlook sync coverage
 
 `monitors/outlook-sync.ts` adds **six monitors, one dashboard, six log-based
@@ -329,3 +349,44 @@ plus two, fail; it does not page while suggestions are behind
 Deploy the agent-harness-service release that emits the
 `routine_suggestions.*` logs before these. Log-based metrics count from deploy
 onward. There is no baseline yet; the 10% threshold is a starting point.
+
+## Database saturation coverage
+
+`monitors/macrodb.ts` adds a monitor on instance I/O credits
+(`EBSIOBalance%`) for the prod instances that report a balance (the read
+replica today; the primary has reported none since its resize on 2026-10-28), with graphs of read plus write IOPS
+against the provisioned storage IOPS, disk queue depth and throughput credits beside
+it, and a Grafana copy. `monitors/storage-pool.ts` adds **one monitor and one
+dashboard** for cloud-storage-service pool waits, per pool. Neither pages.
+[The runbook](../../../docs/runbooks/macrodb.md#io-credits) covers both.
+
+The pool monitor and the pool graphs read `db.client.connection.*` metrics and
+have no prod data until the cloud-storage-service release that records them.
+A minute without a wait exports no points, so the monitor counts it as 0 and
+does not alert on missing data. Tasks carry no per-task tag, so every pool
+query takes `max` and the graphs split by availability zone. The thresholds
+are provisional until prod has a week of data. The dashboard's `env` and `db` variables switch it to
+dev; the monitors are prod only.
+
+## Agent runtime coverage
+
+`monitors/harness-runtimes.ts` adds **four monitors, one dashboard, six
+span-based metrics and one log-based metric** for agent-harness-service
+runtimes. Its header lists every field it reads;
+[the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
+alert. None of them page.
+
+Per runtime, the monitors notify when one dials more than 15 times in
+15 minutes or lists more than 500 sessions to reattach; across the service,
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes;
+and per task, when its resident memory passes 75% of its limit over 15
+minutes.
+Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
+dials, 263 sessions and 451 warnings. Every reattach storm crossed the
+sessions or dials threshold and the starvation one; the storm at 17:15Z on
+2026-11-10 was one runtime listing about 1,450 sessions in three dials.
+
+The eager, lazy and skipped metrics stay empty until the agent-harness-service
+release that records those span fields; the dials, sessions and starvation
+metrics read fields prod emits today. Span-based metrics count from deploy
+onward.

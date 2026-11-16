@@ -144,7 +144,10 @@ describe('SoupViewContextProvider setup', () => {
     ));
 
     expect(screen.getByTestId('child').textContent).toBe('ready');
-    expect(mocks.itemsOptionsEvaluated).toHaveBeenCalledTimes(1);
+    expect(mocks.itemsOptionsEvaluated).toHaveBeenCalledTimes(2);
+    expect(mocks.itemsOptionsEvaluated).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false, graphqlCacheFirstEntities: [] })
+    );
     expect(mocks.groupedOptionsEvaluated).toHaveBeenCalledTimes(1);
     expect(mocks.searchOptionsEvaluated).toHaveBeenCalledTimes(1);
     expect(mocks.searchOptionsEvaluated).toHaveBeenCalledWith({

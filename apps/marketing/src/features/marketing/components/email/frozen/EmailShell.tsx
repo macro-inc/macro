@@ -1,22 +1,22 @@
-import Calendar from '@phosphor/calendar-blank.svg';
-import Chats from '@phosphor/chats.svg';
-import Check from '@phosphor/check.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import Clock from '@phosphor/clock.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
-import Folder from '@phosphor/folder.svg';
-import House from '@phosphor/house.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import PaperPlane from '@phosphor/paper-plane-tilt.svg';
-import Plus from '@phosphor/plus.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import Star from '@phosphor/star.svg';
-import Tray from '@phosphor/tray.svg';
-import Users from '@phosphor/users-three.svg';
-import Signal from '@phosphor/wave-sine.svg';
-import Noise from '@phosphor/waveform.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Chats from '@icon/system/regular/chats.svg';
+import Check from '@icon/system/regular/check.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import File from '@icon/system/regular/file.svg';
+import Folder from '@icon/system/regular/folder.svg';
+import House from '@icon/system/regular/house.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import PaperPlane from '@icon/system/regular/paper-plane-tilt.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import Star from '@icon/system/regular/star.svg';
+import Tray from '@icon/system/regular/tray.svg';
+import Users from '@icon/system/regular/users-three.svg';
+import Signal from '@icon/system/regular/wave-sine.svg';
+import Noise from '@icon/system/regular/waveform.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   demoMailAccounts,
@@ -91,9 +91,7 @@ export function EmailSidebar(props: {
     <ViewSidebar.Root aria-label="Email navigation" class="mail-sidebar">
       <header class="flex shrink-0 flex-col">
         <ViewSidebar.Header>
-          <h3 class="text-sm font-semibold tracking-[-0.03em] text-ink">
-            Email
-          </h3>
+          <h3 class="text-sm font-medium tracking-[-0.03em] text-ink">Email</h3>
           <Show when={props.onToggleNavigation}>
             <ViewSidebar.Control
               label="Collapse email navigation"

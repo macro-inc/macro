@@ -1,0 +1,3196 @@
+{
+  "components": {
+    "schemas": {
+      "AsyncResponse": {
+        "description": "Async response",
+        "properties": {
+          "metadata": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_code": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "ConfigMap": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "ConfigMap type is used to hold incus config. In contrast to plain\nmap[string]string it provides unmarshal methods for JSON and YAML, which\ngracefully handle numbers and bools.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "DevicesMap": {
+        "additionalProperties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "description": "DevicesMap type is used to hold incus devices configurations. In contrast to\nplain map[string]map[string]string it provides unmarshal methods for JSON and\nYAML, which gracefully handle numbers and bools.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "EmptySyncResponse": {
+        "description": "Empty sync response",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "status_code": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Error response",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "error_code": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Image": {
+        "description": "Image represents an image",
+        "properties": {
+          "aliases": {
+            "description": "List of aliases",
+            "items": {
+              "$ref": "#/components/schemas/ImageAlias"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Aliases"
+          },
+          "architecture": {
+            "description": "Architecture",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "Architecture"
+          },
+          "auto_update": {
+            "description": "Whether the image should auto-update when a new build is available",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "AutoUpdate"
+          },
+          "cached": {
+            "description": "Whether the image is an automatically cached remote image",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "Cached"
+          },
+          "created_at": {
+            "description": "When the image was originally created",
+            "example": "2021-03-23T20:00:00-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "CreatedAt"
+          },
+          "expires_at": {
+            "description": "When the image becomes obsolete\n\nAPI extension: images_expiry",
+            "example": "2025-03-23T20:00:00-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "ExpiresAt"
+          },
+          "filename": {
+            "description": "Original filename",
+            "example": "06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb.rootfs",
+            "type": "string",
+            "x-go-name": "Filename"
+          },
+          "fingerprint": {
+            "description": "Full SHA-256 fingerprint",
+            "example": "06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb",
+            "type": "string",
+            "x-go-name": "Fingerprint"
+          },
+          "last_used_at": {
+            "description": "Last time the image was used",
+            "example": "2021-03-22T20:39:00.575185384-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "LastUsedAt"
+          },
+          "profiles": {
+            "description": "List of profiles to use when creating from this image (if none provided by user)\n\nAPI extension: image_profiles",
+            "example": [
+              "default"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Profiles"
+          },
+          "project": {
+            "description": "Project name\n\nAPI extension: images_all_projects",
+            "example": "project1",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Descriptive properties",
+            "example": {
+              "os": "Ubuntu",
+              "release": "jammy",
+              "variant": "cloud"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Properties"
+          },
+          "public": {
+            "description": "Whether the image is available to unauthenticated users",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Public"
+          },
+          "size": {
+            "description": "Size of the image in bytes",
+            "example": 272237676,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Size"
+          },
+          "type": {
+            "description": "Type of image (container or virtual-machine)\n\nAPI extension: image_types",
+            "example": "container",
+            "type": "string",
+            "x-go-name": "Type"
+          },
+          "update_source": {
+            "$ref": "#/components/schemas/ImageSource"
+          },
+          "uploaded_at": {
+            "description": "When the image was added to this server",
+            "example": "2021-03-24T14:18:15.115036787-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "UploadedAt"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ImageAlias": {
+        "description": "ImageAlias represents an alias from the alias list of an image",
+        "properties": {
+          "description": {
+            "description": "Description of the alias",
+            "example": "Our preferred Ubuntu image",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "name": {
+            "description": "Name of the alias",
+            "example": "ubuntu-22.04",
+            "type": "string",
+            "x-go-name": "Name"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ImageAliasesEntry": {
+        "description": "ImageAliasesEntry represents an image alias",
+        "properties": {
+          "description": {
+            "description": "Alias description",
+            "example": "Our preferred Ubuntu image",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "name": {
+            "description": "Alias name",
+            "example": "ubuntu-22.04",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "target": {
+            "description": "Target fingerprint for the alias",
+            "example": "06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb",
+            "type": "string",
+            "x-go-name": "Target"
+          },
+          "type": {
+            "description": "Alias type (container or virtual-machine)\n\nAPI extension: image_types",
+            "example": "container",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ImageSource": {
+        "description": "ImageSource represents the source of an image",
+        "properties": {
+          "alias": {
+            "description": "Source alias to download from",
+            "example": "jammy",
+            "type": "string",
+            "x-go-name": "Alias"
+          },
+          "certificate": {
+            "description": "Source server certificate (if not trusted by system CA)",
+            "example": "X509 PEM certificate",
+            "type": "string",
+            "x-go-name": "Certificate"
+          },
+          "image_type": {
+            "description": "Type of image (container or virtual-machine)\n\nAPI extension: image_types",
+            "example": "container",
+            "type": "string",
+            "x-go-name": "ImageType"
+          },
+          "protocol": {
+            "description": "Source server protocol",
+            "example": "simplestreams",
+            "type": "string",
+            "x-go-name": "Protocol"
+          },
+          "server": {
+            "description": "URL of the source server",
+            "example": "https://images.linuxcontainers.org",
+            "type": "string",
+            "x-go-name": "Server"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "Instance": {
+        "properties": {
+          "architecture": {
+            "description": "Architecture name",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "Architecture"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "created_at": {
+            "description": "Instance creation timestamp",
+            "example": "2021-03-23T20:00:00-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "CreatedAt"
+          },
+          "description": {
+            "description": "Instance description",
+            "example": "My test instance",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "devices": {
+            "$ref": "#/components/schemas/DevicesMap"
+          },
+          "disk_only": {
+            "description": "Whether only the instances disk should be restored",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "DiskOnly"
+          },
+          "ephemeral": {
+            "description": "Whether the instance is ephemeral (deleted on shutdown)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Ephemeral"
+          },
+          "expanded_config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "expanded_devices": {
+            "$ref": "#/components/schemas/DevicesMap"
+          },
+          "last_used_at": {
+            "description": "Last start timestamp",
+            "example": "2021-03-23T20:00:00-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "LastUsedAt"
+          },
+          "location": {
+            "description": "What cluster member this instance is located on",
+            "example": "server01",
+            "type": "string",
+            "x-go-name": "Location"
+          },
+          "name": {
+            "description": "Instance name",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "profiles": {
+            "description": "List of profiles applied to the instance",
+            "example": [
+              "default"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Profiles"
+          },
+          "project": {
+            "description": "Instance project name\n\nAPI extension: instance_all_projects",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "restore": {
+            "description": "If set, instance will be restored to the provided snapshot name",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "stateful": {
+            "description": "Whether the instance currently has saved state on disk",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Stateful"
+          },
+          "status": {
+            "description": "Instance status (see instance_state)",
+            "example": "Running",
+            "type": "string",
+            "x-go-name": "Status"
+          },
+          "status_code": {
+            "$ref": "#/components/schemas/StatusCode"
+          },
+          "type": {
+            "description": "The type of instance (container or virtual-machine)",
+            "example": "container",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "title": "Instance represents an instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceExecPost": {
+        "properties": {
+          "command": {
+            "description": "Command and its arguments",
+            "example": [
+              "bash"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Command"
+          },
+          "cwd": {
+            "description": "Current working directory for the command",
+            "example": "/home/foo/",
+            "type": "string",
+            "x-go-name": "Cwd"
+          },
+          "environment": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Additional environment to pass to the command",
+            "example": {
+              "FOO": "BAR"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Environment"
+          },
+          "group": {
+            "description": "GID of the user to spawn the command as",
+            "example": 1000,
+            "format": "uint32",
+            "type": "integer",
+            "x-go-name": "Group"
+          },
+          "height": {
+            "description": "Terminal height in rows (for interactive)",
+            "example": 24,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Height"
+          },
+          "interactive": {
+            "description": "Whether the command is to be spawned in interactive mode (singled PTY instead of 3 PIPEs)",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "Interactive"
+          },
+          "record-output": {
+            "description": "Whether to capture the output for later download (requires non-interactive)",
+            "type": "boolean",
+            "x-go-name": "RecordOutput"
+          },
+          "user": {
+            "description": "UID of the user to spawn the command as",
+            "example": 1000,
+            "format": "uint32",
+            "type": "integer",
+            "x-go-name": "User"
+          },
+          "wait-for-websocket": {
+            "description": "Whether to wait for all websockets to be connected before spawning the command",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "WaitForWS"
+          },
+          "width": {
+            "description": "Terminal width in characters (for interactive)",
+            "example": 80,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Width"
+          }
+        },
+        "title": "InstanceExecPost represents an instance exec request.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstancePut": {
+        "properties": {
+          "architecture": {
+            "description": "Architecture name",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "Architecture"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "description": {
+            "description": "Instance description",
+            "example": "My test instance",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "devices": {
+            "$ref": "#/components/schemas/DevicesMap"
+          },
+          "disk_only": {
+            "description": "Whether only the instances disk should be restored",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "DiskOnly"
+          },
+          "ephemeral": {
+            "description": "Whether the instance is ephemeral (deleted on shutdown)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Ephemeral"
+          },
+          "profiles": {
+            "description": "List of profiles applied to the instance",
+            "example": [
+              "default"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Profiles"
+          },
+          "restore": {
+            "description": "If set, instance will be restored to the provided snapshot name",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "stateful": {
+            "description": "Whether the instance currently has saved state on disk",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Stateful"
+          }
+        },
+        "title": "InstancePut represents the modifiable fields of an instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceRebuildPost": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/InstanceSource"
+          }
+        },
+        "title": "InstanceRebuildPost indicates how to rebuild an instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceSource": {
+        "properties": {
+          "alias": {
+            "description": "Image alias name (for image source)",
+            "example": "ubuntu/22.04",
+            "type": "string",
+            "x-go-name": "Alias"
+          },
+          "allow_inconsistent": {
+            "description": "Whether to ignore errors when copying (e.g. for volatile files)\n\nAPI extension: instance_allow_inconsistent_copy",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "AllowInconsistent"
+          },
+          "base-image": {
+            "description": "Base image fingerprint (for faster migration)",
+            "example": "ed56997f7c5b48e8d78986d2467a26109be6fb9f2d92e8c7b08eb8b6cec7629a",
+            "type": "string",
+            "x-go-name": "BaseImage"
+          },
+          "certificate": {
+            "description": "Certificate (for remote images or migration)",
+            "example": "X509 PEM certificate",
+            "type": "string",
+            "x-go-name": "Certificate"
+          },
+          "fingerprint": {
+            "description": "Image fingerprint (for image source)",
+            "example": "ed56997f7c5b48e8d78986d2467a26109be6fb9f2d92e8c7b08eb8b6cec7629a",
+            "type": "string",
+            "x-go-name": "Fingerprint"
+          },
+          "instance_only": {
+            "description": "Whether the copy should skip the snapshots (for copy)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "InstanceOnly"
+          },
+          "live": {
+            "description": "Whether this is a live migration (for migration)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Live"
+          },
+          "mode": {
+            "description": "Whether to use pull or push mode (for migration)",
+            "example": "pull",
+            "type": "string",
+            "x-go-name": "Mode"
+          },
+          "operation": {
+            "description": "Remote operation URL (for migration)",
+            "example": "https://1.2.3.4:8443/1.0/operations/1721ae08-b6a8-416a-9614-3f89302466e1",
+            "type": "string",
+            "x-go-name": "Operation"
+          },
+          "project": {
+            "description": "Source project name (for copy and local image)",
+            "example": "blah",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Image filters (for image source)",
+            "example": {
+              "os": "Ubuntu",
+              "release": "jammy",
+              "variant": "cloud"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Properties"
+          },
+          "protocol": {
+            "description": "Protocol name (for remote image)",
+            "example": "simplestreams",
+            "type": "string",
+            "x-go-name": "Protocol"
+          },
+          "refresh": {
+            "description": "Whether this is refreshing an existing instance (for migration and copy)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Refresh"
+          },
+          "refresh_exclude_older": {
+            "description": "Whether to exclude source snapshots earlier than latest target snapshot\n\nAPI extension: custom_volume_refresh_exclude_older_snapshots",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "RefreshExcludeOlder"
+          },
+          "secret": {
+            "description": "Remote server secret (for remote private images)",
+            "example": "RANDOM-STRING",
+            "type": "string",
+            "x-go-name": "Secret"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Map of migration websockets (for migration)",
+            "example": {
+              "criu": "RANDOM-STRING",
+              "rsync": "RANDOM-STRING"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Websockets"
+          },
+          "server": {
+            "description": "Remote server URL (for remote images)",
+            "example": "https://images.linuxcontainers.org",
+            "type": "string",
+            "x-go-name": "Server"
+          },
+          "source": {
+            "description": "Existing instance name or snapshot (for copy)",
+            "example": "foo/snap0",
+            "type": "string",
+            "x-go-name": "Source"
+          },
+          "type": {
+            "description": "Source type",
+            "example": "image",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "title": "InstanceSource represents the creation source for a new instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceState": {
+        "properties": {
+          "cpu": {
+            "$ref": "#/components/schemas/InstanceStateCPU"
+          },
+          "disk": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InstanceStateDisk"
+            },
+            "description": "Disk usage key/value pairs",
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Disk"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/InstanceStateMemory"
+          },
+          "network": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InstanceStateNetwork"
+            },
+            "description": "Network usage key/value pairs",
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Network"
+          },
+          "os_info": {
+            "$ref": "#/components/schemas/InstanceStateOSInfo"
+          },
+          "pid": {
+            "description": "PID of the runtime",
+            "example": 7281,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Pid"
+          },
+          "processes": {
+            "description": "Number of processes in the instance",
+            "example": 50,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Processes"
+          },
+          "started_at": {
+            "description": "The time that the instance started at\n\nAPI extension: instance_state_started_at.",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "StartedAt"
+          },
+          "status": {
+            "description": "Current status (Running, Stopped, Frozen or Error)",
+            "example": "Running",
+            "type": "string",
+            "x-go-name": "Status"
+          },
+          "status_code": {
+            "$ref": "#/components/schemas/StatusCode"
+          }
+        },
+        "title": "InstanceState represents an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateCPU": {
+        "properties": {
+          "allocated_time": {
+            "description": "CPU time available per second, in nanoseconds\n\nAPI extension: instance_state_cpu_time",
+            "example": 4000000000,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "AllocatedTime"
+          },
+          "usage": {
+            "description": "CPU usage in nanoseconds",
+            "example": 3637691016,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Usage"
+          }
+        },
+        "title": "InstanceStateCPU represents the cpu information section of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateDisk": {
+        "properties": {
+          "total": {
+            "description": "Total size in bytes\n\nAPI extension: instances_state_total",
+            "example": 502239232,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Total"
+          },
+          "usage": {
+            "description": "Disk usage in bytes",
+            "example": 502239232,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Usage"
+          }
+        },
+        "title": "InstanceStateDisk represents the disk information section of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateMemory": {
+        "properties": {
+          "swap_usage": {
+            "description": "SWAP usage in bytes",
+            "example": 12297557,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "SwapUsage"
+          },
+          "swap_usage_peak": {
+            "description": "Peak SWAP usage in bytes",
+            "example": 12297557,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "SwapUsagePeak"
+          },
+          "total": {
+            "description": "Total memory size in bytes\n\nAPI extension: instances_state_total",
+            "example": 12297557,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Total"
+          },
+          "usage": {
+            "description": "Memory usage in bytes",
+            "example": 73248768,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Usage"
+          },
+          "usage_peak": {
+            "description": "Peak memory usage in bytes",
+            "example": 73785344,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "UsagePeak"
+          }
+        },
+        "title": "InstanceStateMemory represents the memory information section of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateNetwork": {
+        "properties": {
+          "addresses": {
+            "description": "List of IP addresses",
+            "items": {
+              "$ref": "#/components/schemas/InstanceStateNetworkAddress"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Addresses"
+          },
+          "counters": {
+            "$ref": "#/components/schemas/InstanceStateNetworkCounters"
+          },
+          "host_name": {
+            "description": "Name of the interface on the host",
+            "example": "vethbbcd39c7",
+            "type": "string",
+            "x-go-name": "HostName"
+          },
+          "hwaddr": {
+            "description": "MAC address",
+            "example": "10:66:6a:0c:ee:dd",
+            "type": "string",
+            "x-go-name": "Hwaddr"
+          },
+          "mtu": {
+            "description": "MTU (maximum transmit unit) for the interface",
+            "example": 1500,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Mtu"
+          },
+          "state": {
+            "description": "Administrative state of the interface (up/down)",
+            "example": "up",
+            "type": "string",
+            "x-go-name": "State"
+          },
+          "type": {
+            "description": "Type of interface (broadcast, loopback, point-to-point, ...)",
+            "example": "broadcast",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "title": "InstanceStateNetwork represents the network information section of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateNetworkAddress": {
+        "description": "InstanceStateNetworkAddress represents a network address as part of the network section of an\ninstance's state.",
+        "properties": {
+          "address": {
+            "description": "IP address",
+            "example": "fd42:4c81:5770:1eaf:1266:6aff:fe0c:eedd",
+            "type": "string",
+            "x-go-name": "Address"
+          },
+          "family": {
+            "description": "Network family (inet or inet6)",
+            "example": "inet6",
+            "type": "string",
+            "x-go-name": "Family"
+          },
+          "netmask": {
+            "description": "Network mask",
+            "example": "64",
+            "type": "string",
+            "x-go-name": "Netmask"
+          },
+          "scope": {
+            "description": "Address scope (local, link or global)",
+            "example": "global",
+            "type": "string",
+            "x-go-name": "Scope"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateNetworkCounters": {
+        "description": "InstanceStateNetworkCounters represents packet counters as part of the network section of an\ninstance's state.",
+        "properties": {
+          "bytes_received": {
+            "description": "Number of bytes received",
+            "example": 192021,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "BytesReceived"
+          },
+          "bytes_sent": {
+            "description": "Number of bytes sent",
+            "example": 10888579,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "BytesSent"
+          },
+          "errors_received": {
+            "description": "Number of errors received",
+            "example": 14,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "ErrorsReceived"
+          },
+          "errors_sent": {
+            "description": "Number of errors sent",
+            "example": 41,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "ErrorsSent"
+          },
+          "packets_dropped_inbound": {
+            "description": "Number of inbound packets dropped",
+            "example": 179,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "PacketsDroppedInbound"
+          },
+          "packets_dropped_outbound": {
+            "description": "Number of outbound packets dropped",
+            "example": 541,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "PacketsDroppedOutbound"
+          },
+          "packets_received": {
+            "description": "Number of packets received",
+            "example": 1748,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "PacketsReceived"
+          },
+          "packets_sent": {
+            "description": "Number of packets sent",
+            "example": 964,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "PacketsSent"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStateOSInfo": {
+        "properties": {
+          "fqdn": {
+            "description": "FQDN of the instance.",
+            "example": "myhost.mydomain.local",
+            "type": "string",
+            "x-go-name": "FQDN"
+          },
+          "hostname": {
+            "description": "Hostname of the instance.",
+            "example": "myhost",
+            "type": "string",
+            "x-go-name": "Hostname"
+          },
+          "kernel_version": {
+            "description": "Version of the kernel running in the instance.",
+            "example": "6.1.0-25-amd64",
+            "type": "string",
+            "x-go-name": "KernelVersion"
+          },
+          "os": {
+            "description": "Operating system running in the instance.",
+            "example": "Debian GNU/Linux",
+            "type": "string",
+            "x-go-name": "OS"
+          },
+          "os_version": {
+            "description": "Version of the operating system.",
+            "example": "12 (bookworm)",
+            "type": "string",
+            "x-go-name": "OSVersion"
+          }
+        },
+        "title": "InstanceStateOSInfo represents the operating system information section of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceStatePut": {
+        "properties": {
+          "action": {
+            "description": "State change action (start, stop, restart, freeze, unfreeze)",
+            "example": "start",
+            "type": "string",
+            "x-go-name": "Action"
+          },
+          "force": {
+            "description": "Whether to force the action (for stop and restart)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Force"
+          },
+          "stateful": {
+            "description": "Whether to store the runtime state (for stop)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Stateful"
+          },
+          "timeout": {
+            "description": "How long to wait (in s) before giving up (when force isn't set)",
+            "example": 30,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Timeout"
+          }
+        },
+        "title": "InstanceStatePut represents the modifiable fields of an instance's state.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstanceType": {
+        "title": "InstanceType represents the type if instance being returned or requested via the API.",
+        "type": "string",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "InstancesPost": {
+        "properties": {
+          "architecture": {
+            "description": "Architecture name",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "Architecture"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "description": {
+            "description": "Instance description",
+            "example": "My test instance",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "devices": {
+            "$ref": "#/components/schemas/DevicesMap"
+          },
+          "disk_only": {
+            "description": "Whether only the instances disk should be restored",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "DiskOnly"
+          },
+          "ephemeral": {
+            "description": "Whether the instance is ephemeral (deleted on shutdown)",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Ephemeral"
+          },
+          "instance_type": {
+            "description": "Cloud instance type (AWS, GCP, Azure, ...) to emulate with limits",
+            "example": "t1.micro",
+            "type": "string",
+            "x-go-name": "InstanceType"
+          },
+          "name": {
+            "description": "Instance name",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "profiles": {
+            "description": "List of profiles applied to the instance",
+            "example": [
+              "default"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Profiles"
+          },
+          "restore": {
+            "description": "If set, instance will be restored to the provided snapshot name",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "source": {
+            "$ref": "#/components/schemas/InstanceSource"
+          },
+          "start": {
+            "description": "Whether to start the instance after creation\n\nAPI extension: instance_create_start",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "Start"
+          },
+          "stateful": {
+            "description": "Whether the instance currently has saved state on disk",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Stateful"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InstanceType"
+          }
+        },
+        "title": "InstancesPost represents the fields available for a new instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "Operation": {
+        "description": "Operation represents a background operation",
+        "properties": {
+          "class": {
+            "description": "Type of operation (task, token or websocket)",
+            "example": "websocket",
+            "type": "string",
+            "x-go-name": "Class"
+          },
+          "created_at": {
+            "description": "Operation creation time",
+            "example": "2021-03-23T17:38:37.753398689-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "CreatedAt"
+          },
+          "description": {
+            "description": "Description of the operation",
+            "example": "Executing command",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "err": {
+            "description": "Operation error message",
+            "example": "Some error message",
+            "type": "string",
+            "x-go-name": "Err"
+          },
+          "id": {
+            "description": "UUID of the operation",
+            "example": "6916c8a6-9b7d-4abd-90b3-aedfec7ec7da",
+            "type": "string",
+            "x-go-name": "ID"
+          },
+          "location": {
+            "description": "What cluster member this record was found on\n\nAPI extension: operation_location",
+            "example": "server01",
+            "type": "string",
+            "x-go-name": "Location"
+          },
+          "may_cancel": {
+            "description": "Whether the operation can be canceled",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "MayCancel"
+          },
+          "metadata": {
+            "additionalProperties": {},
+            "description": "Operation specific metadata",
+            "example": {
+              "command": [
+                "bash"
+              ],
+              "environment": {
+                "HOME": "/root",
+                "LANG": "C.UTF-8",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM": "xterm",
+                "USER": "root"
+              },
+              "fds": {
+                "0": "da3046cf02c0116febf4ef3fe4eaecdf308e720c05e5a9c730ce1a6f15417f66",
+                "1": "05896879d8692607bd6e4a09475667da3b5f6714418ab0ee0e5720b4c57f754b"
+              },
+              "interactive": true
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Metadata"
+          },
+          "resources": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "Affected resources",
+            "example": {
+              "instances": [
+                "/1.0/instances/foo"
+              ]
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Resources"
+          },
+          "status": {
+            "description": "Status name",
+            "example": "Running",
+            "type": "string",
+            "x-go-name": "Status"
+          },
+          "status_code": {
+            "$ref": "#/components/schemas/StatusCode"
+          },
+          "updated_at": {
+            "description": "Operation last change",
+            "example": "2021-03-23T17:38:37.753398689-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "UpdatedAt"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "Resources": {
+        "description": "Resources represents the system hardware resources",
+        "properties": {
+          "cpu": {
+            "$ref": "#/components/schemas/ResourcesCPU"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ResourcesMemory"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ResourcesCPU": {
+        "description": "ResourcesCPU represents the cpu resources available on the system",
+        "properties": {
+          "architecture": {
+            "description": "Architecture name\n\nAPI extension: resources_v2",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "Architecture"
+          },
+          "total": {
+            "description": "Total number of CPU threads (from all sockets and cores)",
+            "example": 1,
+            "format": "uint64",
+            "type": "integer",
+            "x-go-name": "Total"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ResourcesMemory": {
+        "description": "ResourcesMemory represents the memory resources available on the system",
+        "properties": {
+          "total": {
+            "description": "Total system memory (bytes)",
+            "example": 687194767360,
+            "format": "uint64",
+            "type": "integer",
+            "x-go-name": "Total"
+          },
+          "used": {
+            "description": "Used system memory (bytes)",
+            "example": 557450502144,
+            "format": "uint64",
+            "type": "integer",
+            "x-go-name": "Used"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "Server": {
+        "description": "Server represents a server configuration",
+        "properties": {
+          "api_extensions": {
+            "description": "List of supported API extensions",
+            "example": [
+              "etag",
+              "patch",
+              "network",
+              "storage"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "readOnly": true,
+            "type": "array",
+            "x-go-name": "APIExtensions"
+          },
+          "api_status": {
+            "description": "Support status of the current API (one of \"devel\", \"stable\" or \"deprecated\")",
+            "example": "stable",
+            "readOnly": true,
+            "type": "string",
+            "x-go-name": "APIStatus"
+          },
+          "api_version": {
+            "description": "API version number",
+            "example": "1.0",
+            "readOnly": true,
+            "type": "string",
+            "x-go-name": "APIVersion"
+          },
+          "auth": {
+            "description": "Whether the client is trusted (one of \"trusted\" or \"untrusted\")",
+            "example": "untrusted",
+            "readOnly": true,
+            "type": "string",
+            "x-go-name": "Auth"
+          },
+          "auth_methods": {
+            "description": "List of supported authentication methods\n\nAPI extension: macaroon_authentication",
+            "example": [
+              "tls"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "readOnly": true,
+            "type": "array",
+            "x-go-name": "AuthMethods"
+          },
+          "auth_user_method": {
+            "description": "The current API user login method\n\nAPI extension: auth_user",
+            "example": "unix",
+            "readOnly": true,
+            "type": "string",
+            "x-go-name": "AuthUserMethod"
+          },
+          "auth_user_name": {
+            "description": "The current API user identifier\n\nAPI extension: auth_user",
+            "example": "uid=201105",
+            "readOnly": true,
+            "type": "string",
+            "x-go-name": "AuthUserName"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/ServerEnvironment"
+          },
+          "public": {
+            "description": "Whether the server is public-only (only public endpoints are implemented)",
+            "example": false,
+            "readOnly": true,
+            "type": "boolean",
+            "x-go-name": "Public"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ServerEnvironment": {
+        "properties": {
+          "addresses": {
+            "description": "List of addresses the server is listening on",
+            "example": [
+              ":8443"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Addresses"
+          },
+          "architectures": {
+            "description": "List of architectures supported by the server",
+            "example": [
+              "x86_64",
+              "i686"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Architectures"
+          },
+          "certificate": {
+            "description": "Server certificate as PEM encoded X509",
+            "example": "X509 PEM certificate",
+            "type": "string",
+            "x-go-name": "Certificate"
+          },
+          "certificate_fingerprint": {
+            "description": "Server certificate fingerprint as SHA256",
+            "example": "fd200419b271f1dc2a5591b693cc5774b7f234e1ff8c6b78ad703b6888fe2b69",
+            "type": "string",
+            "x-go-name": "CertificateFingerprint"
+          },
+          "driver": {
+            "description": "List of supported instance drivers (separate by \" | \")",
+            "example": "lxc | qemu",
+            "type": "string",
+            "x-go-name": "Driver"
+          },
+          "driver_version": {
+            "description": "List of supported instance driver versions (separate by \" | \")",
+            "example": "4.0.7 | 5.2.0",
+            "type": "string",
+            "x-go-name": "DriverVersion"
+          },
+          "firewall": {
+            "description": "Current firewall driver\n\nAPI extension: firewall_driver",
+            "example": "nftables",
+            "type": "string",
+            "x-go-name": "Firewall"
+          },
+          "kernel": {
+            "description": "OS kernel name",
+            "example": "Linux",
+            "type": "string",
+            "x-go-name": "Kernel"
+          },
+          "kernel_architecture": {
+            "description": "OS kernel architecture",
+            "example": "x86_64",
+            "type": "string",
+            "x-go-name": "KernelArchitecture"
+          },
+          "kernel_features": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Map of kernel features that were tested on startup\n\nAPI extension: kernel_features",
+            "example": {
+              "netnsid_getifaddrs": "true",
+              "seccomp_listener": "true"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "KernelFeatures"
+          },
+          "kernel_version": {
+            "description": "Kernel version",
+            "example": "5.4.0-36-generic",
+            "type": "string",
+            "x-go-name": "KernelVersion"
+          },
+          "lxc_features": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Map of LXC features that were tested on startup\n\nAPI extension: lxc_features",
+            "example": {
+              "cgroup2": "true",
+              "devpts_fd": "true",
+              "pidfd": "true"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "LXCFeatures"
+          },
+          "os_name": {
+            "description": "Name of the operating system (Linux distribution)\n\nAPI extension: api_os",
+            "example": "Ubuntu",
+            "type": "string",
+            "x-go-name": "OSName"
+          },
+          "os_version": {
+            "description": "Version of the operating system (Linux distribution)\n\nAPI extension: api_os",
+            "example": "22.04",
+            "type": "string",
+            "x-go-name": "OSVersion"
+          },
+          "project": {
+            "description": "Current project name\n\nAPI extension: projects",
+            "example": "default",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "server": {
+            "description": "Server implementation name",
+            "example": "incus",
+            "type": "string",
+            "x-go-name": "Server"
+          },
+          "server_clustered": {
+            "description": "Whether the server is part of a cluster\n\nAPI extension: clustering",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "ServerClustered"
+          },
+          "server_event_mode": {
+            "description": "Mode that the event distribution subsystem is operating in on this server.\nEither \"full-mesh\", \"hub-server\" or \"hub-client\".\n\nAPI extension: event_hub",
+            "example": "full-mesh",
+            "type": "string",
+            "x-go-name": "ServerEventMode"
+          },
+          "server_name": {
+            "description": "Server hostname\n\nAPI extension: clustering",
+            "example": "castiana",
+            "type": "string",
+            "x-go-name": "ServerName"
+          },
+          "server_pid": {
+            "description": "PID of the daemon",
+            "example": 1453969,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "ServerPid"
+          },
+          "server_version": {
+            "description": "Server version",
+            "example": "4.11",
+            "type": "string",
+            "x-go-name": "ServerVersion"
+          },
+          "storage": {
+            "description": "List of active storage drivers (separate by \" | \")",
+            "example": "dir | zfs",
+            "type": "string",
+            "x-go-name": "Storage"
+          },
+          "storage_supported_drivers": {
+            "description": "List of supported storage drivers",
+            "items": {
+              "$ref": "#/components/schemas/ServerStorageDriverInfo"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "StorageSupportedDrivers"
+          },
+          "storage_version": {
+            "description": "List of active storage driver versions (separate by \" | \")",
+            "example": "1 | 0.8.4-1ubuntu11",
+            "type": "string",
+            "x-go-name": "StorageVersion"
+          }
+        },
+        "title": "ServerEnvironment represents the read-only environment fields of a server configuration.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "ServerStorageDriverInfo": {
+        "description": "ServerStorageDriverInfo represents the read-only info about a storage driver",
+        "properties": {
+          "Name": {
+            "description": "Name of the driver\n\nAPI extension: server_supported_storage_drivers",
+            "example": "zfs",
+            "type": "string"
+          },
+          "Remote": {
+            "description": "Whether the driver has remote volumes\n\nAPI extension: server_supported_storage_drivers",
+            "example": false,
+            "type": "boolean"
+          },
+          "Version": {
+            "description": "Version of the driver\n\nAPI extension: server_supported_storage_drivers",
+            "example": "0.8.4-1ubuntu11",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "StatusCode": {
+        "format": "int64",
+        "title": "StatusCode represents a valid operation and container status.",
+        "type": "integer",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "StorageVolumeSource": {
+        "description": "StorageVolumeSource represents the creation source for a new storage volume",
+        "properties": {
+          "certificate": {
+            "description": "Certificate (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "X509 PEM certificate",
+            "type": "string",
+            "x-go-name": "Certificate"
+          },
+          "location": {
+            "description": "What cluster member this record was found on\n\nAPI extension: cluster_internal_custom_volume_copy",
+            "example": "server01",
+            "type": "string",
+            "x-go-name": "Location"
+          },
+          "mode": {
+            "description": "Whether to use pull or push mode (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "pull",
+            "type": "string",
+            "x-go-name": "Mode"
+          },
+          "name": {
+            "description": "Source volume name (for copy)",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "operation": {
+            "description": "Remote operation URL (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "https://1.2.3.4:8443/1.0/operations/1721ae08-b6a8-416a-9614-3f89302466e1",
+            "type": "string",
+            "x-go-name": "Operation"
+          },
+          "pool": {
+            "description": "Source storage pool (for copy)",
+            "example": "local",
+            "type": "string",
+            "x-go-name": "Pool"
+          },
+          "project": {
+            "description": "Source project name\n\nAPI extension: storage_api_project",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "refresh": {
+            "description": "Whether existing destination volume should be refreshed\n\nAPI extension: custom_volume_refresh",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Refresh"
+          },
+          "refresh_exclude_older": {
+            "description": "Whether to exclude source snapshots earlier than latest target snapshot\n\nAPI extension: custom_volume_refresh_exclude_older_snapshots",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "RefreshExcludeOlder"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Map of migration websockets (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": {
+              "rsync": "RANDOM-STRING"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Websockets"
+          },
+          "type": {
+            "description": "Source type (copy or migration)",
+            "example": "copy",
+            "type": "string",
+            "x-go-name": "Type"
+          },
+          "volume_only": {
+            "description": "Whether snapshots should be discarded (for migration)\n\nAPI extension: storage_api_volume_snapshots",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "VolumeOnly"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "StorageVolumesPost": {
+        "description": "StorageVolumesPost represents the fields of a new storage pool volume",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "content_type": {
+            "description": "Volume content type (filesystem or block)\n\nAPI extension: custom_block_volumes",
+            "example": "filesystem",
+            "type": "string",
+            "x-go-name": "ContentType"
+          },
+          "description": {
+            "description": "Description of the storage volume\n\nAPI extension: entity_description",
+            "example": "My custom volume",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "name": {
+            "description": "Volume name",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "restore": {
+            "description": "Name of a snapshot to restore\n\nAPI extension: storage_api_volume_snapshots",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "source": {
+            "$ref": "#/components/schemas/StorageVolumeSource"
+          },
+          "type": {
+            "description": "Volume type (container, custom, image or virtual-machine)",
+            "example": "custom",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      }
+    }
+  },
+  "info": {
+    "description": "This is the REST API used by all Incus clients.\nInternal endpoints aren't included in this documentation.\n\nThe Incus API is available over both a local unix+http and remote https API.\nAuthentication for local users relies on group membership and access to the unix socket.\nFor remote users, the default authentication method is TLS client\ncertificates.",
+    "license": {
+      "name": "Apache-2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    "title": "Incus external REST API",
+    "version": "1.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/1.0": {
+      "get": {
+        "description": "Shows the full server environment and configuration.",
+        "operationId": "server_get",
+        "parameters": [
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/Server"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Server environment and configuration"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the server environment and configuration",
+        "tags": [
+          "server"
+        ]
+      }
+    },
+    "/1.0/images": {
+      "get": {
+        "description": "Returns a list of images (structs).",
+        "operationId": "images_get_recursion1",
+        "parameters": [
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Collection filter",
+            "example": "default",
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Retrieve images from all projects",
+            "example": "default",
+            "in": "query",
+            "name": "all-projects",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Recursion level; this client always sends 1",
+            "in": "query",
+            "name": "recursion",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "description": "List of images",
+                      "items": {
+                        "$ref": "#/components/schemas/Image"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "API endpoints"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/1.0/images/aliases/{name}": {
+      "get": {
+        "description": "Gets a specific image alias.",
+        "operationId": "image_alias_get",
+        "parameters": [
+          {
+            "description": "Alias name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/ImageAliasesEntry"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Image alias"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the image alias",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/1.0/instances": {
+      "get": {
+        "description": "Returns a list of instances (basic structs).",
+        "operationId": "instances_get_recursion1",
+        "parameters": [
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Collection filter",
+            "example": "default",
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Retrieve instances from all projects",
+            "in": "query",
+            "name": "all-projects",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Recursion level; this client always sends 1",
+            "in": "query",
+            "name": "recursion",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "description": "List of instances",
+                      "items": {
+                        "$ref": "#/components/schemas/Instance"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "API endpoints"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the instances",
+        "tags": [
+          "instances"
+        ]
+      },
+      "post": {
+        "description": "Creates a new instance.\nDepending on the source, this can create an instance from an existing\nlocal image, remote image, existing local instance or snapshot, remote\nmigration stream or backup file.",
+        "operationId": "instances_post",
+        "parameters": [
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member",
+            "example": "default",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstancesPost"
+              }
+            }
+          },
+          "description": "Instance request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a new instance",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/instances/{name}": {
+      "delete": {
+        "description": "Deletes a specific instance.\n\nThis also deletes anything owned by the instance such as snapshots and backups.",
+        "operationId": "instance_delete",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete an instance",
+        "tags": [
+          "instances"
+        ]
+      },
+      "get": {
+        "description": "Gets a specific instance (basic struct).",
+        "operationId": "instance_get",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/Instance"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Instance"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the instance",
+        "tags": [
+          "instances"
+        ]
+      },
+      "patch": {
+        "description": "Updates a subset of the instance configuration",
+        "operationId": "instance_patch",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstancePut"
+              }
+            }
+          },
+          "description": "Update request",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptySyncResponse"
+                }
+              }
+            },
+            "description": "Empty sync response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Partially update the instance",
+        "tags": [
+          "instances"
+        ]
+      },
+      "put": {
+        "description": "Updates the instance configuration or trigger a snapshot restore.",
+        "operationId": "instance_put",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag of the instance read before this update",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstancePut"
+              }
+            }
+          },
+          "description": "Update request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update the instance",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/instances/{name}/exec": {
+      "post": {
+        "description": "Executes a command inside an instance.\n\nThe returned operation metadata will contain either 2 or 4 websockets.\nIn non-interactive mode, you'll get one websocket for each of stdin, stdout and stderr.\nIn interactive mode, a single bi-directional websocket is used for stdin and stdout/stderr.\n\nAn additional \"control\" socket is always added on top which can be used for out of band communications.\nThis allows sending signals and window sizing information through.",
+        "operationId": "instance_exec_post",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceExecPost"
+              }
+            }
+          },
+          "description": "Exec request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Run a command",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/instances/{name}/rebuild": {
+      "post": {
+        "description": "Rebuild an instance using an alternate image or as empty.",
+        "operationId": "instance_rebuild_post",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceRebuildPost"
+              }
+            }
+          },
+          "description": "InstanceRebuild request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Rebuild an instance",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/instances/{name}/state": {
+      "get": {
+        "description": "Gets the runtime state of the instance.\n\nThis is a reasonably expensive call as it causes code to be run\ninside of the instance to retrieve the resource usage and network\ninformation.",
+        "operationId": "instance_state_get",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/InstanceState"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "State"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the runtime state",
+        "tags": [
+          "instances"
+        ]
+      },
+      "put": {
+        "description": "Changes the running state of the instance.",
+        "operationId": "instance_state_put",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceStatePut"
+              }
+            }
+          },
+          "description": "State",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change the state",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/operations/{id}": {
+      "get": {
+        "description": "Gets the operation state.",
+        "operationId": "operation_get",
+        "parameters": [
+          {
+            "description": "Operation ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/Operation"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the operation state",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/1.0/operations/{id}/wait": {
+      "get": {
+        "description": "Waits for the operation to reach a final state (or timeout) and retrieve its final state.",
+        "operationId": "operation_wait_get",
+        "parameters": [
+          {
+            "description": "Operation ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Timeout in seconds (-1 means never)",
+            "example": -1,
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/Operation"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Wait for the operation",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/1.0/resources": {
+      "get": {
+        "description": "Gets the hardware information profile of the server.",
+        "operationId": "resources_get",
+        "parameters": [
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/Resources"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Hardware resources"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get system resources information",
+        "tags": [
+          "server"
+        ]
+      }
+    },
+    "/1.0/storage-pools/{poolName}/volumes/{type}": {
+      "post": {
+        "description": "Creates a new storage volume (type specific endpoint).\nWill return an empty sync response on simple volume creation but an operation on copy or migration.",
+        "operationId": "storage_pool_volumes_type_post",
+        "parameters": [
+          {
+            "description": "Storage pool name",
+            "in": "path",
+            "name": "poolName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume type",
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageVolumesPost"
+              }
+            }
+          },
+          "description": "Storage volume",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptySyncResponse"
+                }
+              }
+            },
+            "description": "Empty sync response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a storage volume",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}": {
+      "delete": {
+        "description": "Removes the storage volume.",
+        "operationId": "storage_pool_volume_type_delete",
+        "parameters": [
+          {
+            "description": "Storage pool name",
+            "in": "path",
+            "name": "poolName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume type",
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume name",
+            "in": "path",
+            "name": "volumeName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptySyncResponse"
+                }
+              }
+            },
+            "description": "Empty sync response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete the storage volume",
+        "tags": [
+          "storage"
+        ]
+      }
+    }
+  }
+}

@@ -68,6 +68,8 @@ export default {
   livesOn: 'Lives on {{name}}',
   requestAccess: 'Request access',
   requestedToUse: 'Requested to use {{name}}',
+  requestedToUseInline: 'requested to use {{name}}',
+  pendingRequestsTitle: 'Pending requests',
   requestSent: 'Access requested. The owner will be notified.',
   alreadyRequested:
     'You already asked for access. The owner has been notified.',

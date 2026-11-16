@@ -22,8 +22,9 @@ people. The server owns all state; the browser only calls the API.
 - An email that didn't go out (refused, stuck, cancelled or trashed in Mail,
   or gone) puts the enrollment in `needs_attention`. An inbox that can't send,
   or an owner without access, only holds steps back.
-- Inbox sync calls `message_synced` after each upsert; a reply or bounce stops
-  the enrollment (`domain/replies.rs` classifies, pure).
+- Inbox sync calls `message_synced` for each received message after its insert
+  commits, through the email domain's `InboxSyncSequences` port. A reply or
+  bounce stops the enrollment (`domain/replies.rs` classifies, pure).
 
 ## Start here
 

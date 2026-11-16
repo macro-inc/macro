@@ -21,7 +21,7 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchProfile, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -55,7 +55,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 11;
+pub const STORAGE_SCHEMA_VERSION: u32 = 12;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -73,11 +73,11 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 28] = [
+const CREATE_SCHEMA: [&str; 29] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
-    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
+    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
     "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, superseded INTEGER NOT NULL DEFAULT 0, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
@@ -102,6 +102,7 @@ const CREATE_SCHEMA: [&str; 28] = [
     "CREATE INDEX optimistic_exact_facts_lookup_idx ON optimistic_exact_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_integer_facts_lookup_idx ON optimistic_integer_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_sort_facts_lookup_idx ON optimistic_sort_facts(attribute, value, document_id)",
+    contact_search::CREATE_INDEX,
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
@@ -919,6 +920,64 @@ impl TursoStorage {
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
 
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.require_healthy()?;
+        if limit == 0 || limit > cache_core::people::MAX_PEOPLE_BATCH {
+            return Err(TursoStorageError::InvalidInput);
+        }
+        let mut last = None;
+        let mut count = 0;
+        let mut more = false;
+        let mut key_buffer = String::new();
+        let sql = if after.is_some() {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id > ? ORDER BY id LIMIT ?"
+        } else {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id >= ? ORDER BY id LIMIT ?"
+        };
+        let result = driver::query_each(
+            &self.connection(),
+            sql,
+            vec![
+                text(after.unwrap_or("")),
+                Value::from_i64(i64::try_from(limit + 1).map_err(|_| invariant())?),
+            ],
+            |row| {
+                if count == limit {
+                    more = true;
+                    return Ok(());
+                }
+                let mut values = row.get_values();
+                let (Some(Value::Text(id)), Some(Value::Blob(value)), None) =
+                    (values.next(), values.next(), values.next())
+                else {
+                    return Err(invariant());
+                };
+                let key = RecordKey::borrow_entity("GraphqlContact", id.as_str(), &mut key_buffer)?;
+                let record = decode_record(value).map_err(|_| invariant())?;
+                visit(&key, &record);
+                last = Some(id.as_str().to_owned());
+                count += 1;
+                Ok(())
+            },
+        );
+        self.latch_result(result)?;
+        Ok(if more { last } else { None })
+    }
+
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(people_sql::read(&self.connection(), viewer, plan))
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1029,31 +1088,63 @@ impl Storage for TursoStorage {
                     )?;
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
-                calendar::delete_ranges(&connection, &keys)
+                calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)
             })
         })();
         self.latch_result(result)
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let result = {
-            let connection = self.connection();
-            driver::query(
-                &connection,
-                SEARCH_LOAD,
-                vec![text(profile.as_str()), text(bucket)],
-            )
-            .and_then(|rows| {
-                rows.into_iter()
-                    .map(|row| parse_search_document(&row, profile))
-                    .collect()
-            })
-        };
+        let (sql, values) = search::statement(profile, bucket, query);
+        let mut key = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            search::visit_row(row, profile, &mut key, &mut visit)
+        });
+        self.latch_result(result)
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(name_search::read(&self.connection(), read))
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let (sql, values) = search::statement_with_base(
+            contact_search::LOAD,
+            SearchProfile::QuickAccessV1,
+            "person",
+            query,
+        );
+        let mut key_buffer = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            let mut values = row.get_values();
+            let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(blob)), None) =
+                (values.next(), values.next(), values.next(), values.next())
+            else {
+                return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+            };
+            let key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
+            let record = decode_record(blob)
+                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+            visit(&key, &record);
+            Ok(())
+        });
         self.latch_result(result)
     }
 
@@ -1718,6 +1809,7 @@ impl PredicateIndexStorage for TursoStorage {
                     )?;
                 }
                 calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)?;
                 write_projection_mutations(&connection, projections)
             })
         })();
@@ -1997,6 +2089,18 @@ fn write_projection_mutations(
     connection: &Arc<Connection>,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<(), TursoStorageError> {
+    // Contact facts are cache-owned derivatives of normalized authority. A
+    // caller's generic projection cannot add membership, replace private names,
+    // or erase facts without removing the underlying contact record.
+    let mutations = mutations
+        .into_iter()
+        .filter(|mutation| {
+            !mutation
+                .record_key()
+                .as_str()
+                .starts_with("GraphqlContact:")
+        })
+        .collect::<Vec<_>>();
     let keys = mutations
         .iter()
         .map(ProjectionMutation::record_key)
@@ -3190,6 +3294,7 @@ fn initialize(
     page_retention::compact_legacy_pages(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
+    people_sql::open(connection)?;
     Ok(migrated)
 }
 
@@ -3711,7 +3816,7 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
         OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS,
     )?;
     validate_table_indexes(connection, "meta", &[(0, "key")])?;
-    validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
+    contact_search::validate_indexes(connection)?;
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
@@ -3810,6 +3915,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "optimistic_integer_facts_lookup_idx",
         "optimistic_sort_facts_lookup_idx",
         "search_documents_browse_idx",
+        contact_search::INDEX,
         "sort_facts_lookup_idx",
     ];
     let expected = expected
@@ -4030,6 +4136,8 @@ fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStor
         (5, "timestamp_ms", 1, 1),
         (1, "__typename", 0, 1),
         (2, "id", 0, 1),
+        (4, "search_text", 0, 1),
+        (6, "source_hash", 0, 1),
     ];
     if index_rows.len() != expected.len() + 1 {
         return Err(compatibility());
@@ -4176,8 +4284,18 @@ fn validate_table_indexes(
     let Some(row) = rows.first() else {
         return Ok(());
     };
+    if required_i64(row, 0).ok() != Some(0) {
+        return Err(compatibility());
+    }
+    validate_primary_index(connection, row, expected_key_columns)
+}
+
+fn validate_primary_index(
+    connection: &Arc<Connection>,
+    row: &[Value],
+    expected_key_columns: &[(i64, &str)],
+) -> Result<(), TursoStorageError> {
     if row.len() != 5
-        || required_i64(row, 0).ok() != Some(0)
         || required_i64(row, 2).ok() != Some(1)
         || required_text(row, 3).ok().as_deref() != Some("pk")
         || required_i64(row, 4).ok() != Some(0)
@@ -4706,6 +4824,7 @@ struct EncodedRecord {
     value: Vec<u8>,
     search_documents: Vec<SearchDocument>,
     calendar_range: Option<cache_core::calendar::CalendarRangeRow>,
+    contact: Option<Record>,
 }
 
 fn prepare_records(
@@ -4719,6 +4838,17 @@ fn prepare_records(
                 value: encode_record(&record),
                 search_documents: project_search_documents(&key, &record),
                 calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
+                    fields: record
+                        .fields
+                        .iter()
+                        .filter(|(field, _)| {
+                            cache_core::people::sql::projection::INPUT_FIELDS
+                                .contains(&field.as_str())
+                        })
+                        .map(|(field, value)| (field.clone(), value.clone()))
+                        .collect(),
+                }),
             })
         })
         .collect()
@@ -4821,7 +4951,8 @@ fn write_derived_rows(
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     write_search_documents(connection, entries)?;
-    calendar::write_ranges(connection, entries)
+    calendar::write_ranges(connection, entries)?;
+    people_sql::write(connection, entries)
 }
 
 fn write_search_documents(
@@ -5197,10 +5328,14 @@ mod alternatives;
 mod bounded_selection;
 mod calendar;
 mod conjunction;
+mod contact_search;
 mod integrity;
 mod mutation_retry;
+mod name_search;
 mod page_retention;
+mod people_sql;
 mod record_batch;
+mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

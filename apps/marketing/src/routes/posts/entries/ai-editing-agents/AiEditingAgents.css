@@ -1,3 +1,5 @@
+/* Article typography must not leak into the shared product UI. */
+@scope (:root) to (.post-product-ui) {
 .aie-post {
   color: var(--c4);
   font-family: 'Inter', system-ui, sans-serif;
@@ -62,4 +64,6 @@
   color: var(--c1);
   font-family: 'Inter', body, system-ui, sans-serif;
   font-size: 0.95em;
+}
+
 }

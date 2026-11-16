@@ -45,6 +45,8 @@ export class StaticImage {
   /**
    * The `<m-image>` tag that shows this image in an agent reply, a channel
    * message or a Markdown document. Put it on a line of its own.
+   *
+   * @readonly
    */
   toMarkdown(alt = ''): string {
     return wrapXml('m-image', {

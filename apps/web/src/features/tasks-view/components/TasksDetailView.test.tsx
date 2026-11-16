@@ -94,6 +94,7 @@ it('steps within the provider task source without switching to tasks outside the
     loadMore: async () => {},
     loadMoreGroup: async () => {},
     refresh: async () => {},
+    sortsSearchResults: false,
   };
   const openTask = vi.fn((task: { id: string }) => {
     setSelected(task);

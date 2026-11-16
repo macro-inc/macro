@@ -18,6 +18,8 @@ mod ingest;
 mod lifecycle;
 mod progress;
 mod projection;
+mod purge;
+mod reimport;
 mod settings;
 #[cfg(test)]
 mod test;
@@ -26,11 +28,22 @@ mod watches;
 #[derive(Clone)]
 pub struct PgMailboxSync {
     pub(super) db: PgPool,
+    imports_paused: bool,
 }
 
 impl PgMailboxSync {
     pub fn new(db: PgPool) -> Self {
-        Self { db }
+        Self {
+            db,
+            imports_paused: false,
+        }
+    }
+
+    /// While paused, message claims take only live work: import rows wait,
+    /// and every live change keeps importing.
+    pub fn with_imports_paused(mut self, paused: bool) -> Self {
+        self.imports_paused = paused;
+        self
     }
 
     // Serialize only the brief lease-acquisition transactions. Draft and
@@ -176,6 +189,8 @@ impl MailboxSyncRepository for PgMailboxSync {
             r#"
             UPDATE email_sync_streams s SET position = $4,
                 initial_complete = s.initial_complete OR $5,
+                -- A round's first page records the reader revision it started at.
+                reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
                     THEN now() + interval '2 minutes' ELSE now() END,
@@ -192,7 +207,8 @@ impl MailboxSyncRepository for PgMailboxSync {
             lease.fence,
             position.expose(),
             complete,
-            lease.mailbox.grant_generation
+            lease.mailbox.grant_generation,
+            page.reader_revision
         )
         .execute(&mut *tx)
         .await
@@ -269,12 +285,13 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
         // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
         // Without it, Postgres before 18 reads every backed-off row on each poll.
+        // Paused imports name `false` twice, so only live rows are claimed.
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT q.link_id,q.generation,q.provider_id,q.notified_traceparent FROM email_message_reconciliation q
                 JOIN email_links l ON l.id = q.link_id
                 WHERE q.generation = l.sync_generation AND l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK'
-                    AND q.is_import IN (false,true)
+                    AND q.is_import IN (false,$2)
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
             )
@@ -284,7 +301,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
             RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at,c.notified_traceparent
-        "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#,lease_id,!self.imports_paused).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
                 mailbox: MailboxKey {
@@ -305,7 +322,7 @@ impl MailboxSyncRepository for PgMailboxSync {
 
     async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, MailboxError> {
         let rows = sqlx::query!(r#"
-            SELECT f.provider_id,f.parent_id,f.display_name,f.role FROM email_mailbox_folders f
+            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count FROM email_mailbox_folders f
             JOIN email_links l ON l.id = f.link_id
             WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL
         "#,mailbox.link_id,mailbox.sync_generation).fetch_all(&self.db).await.map_err(db_error)?;
@@ -318,6 +335,11 @@ impl MailboxSyncRepository for PgMailboxSync {
                     role: serde_json::from_value(serde_json::Value::String(row.role))
                         .map_err(|_| MailboxError::Persistence)?,
                     has_children: false,
+                    total_items: row
+                        .total_item_count
+                        .map(u32::try_from)
+                        .transpose()
+                        .map_err(|_| MailboxError::Persistence)?,
                 })
             })
             .collect()

@@ -24,4 +24,6 @@ Use the SQLx CLI to create migration files instead of manually creating timestam
    Replace `name_of_migration` with the actual snake_case migration name.
 5. Do not manually add timestamps or hand-create migration filenames; `sqlx migrate add` generates the correct timestamped file.
 6. After the command succeeds, read the generated migration file and add the requested SQL changes there.
-7. If `sqlx` is not installed or not on `PATH`, stop and tell the user to install `sqlx-cli` rather than manually creating the migration file.
+7. Before pushing, run the [`migration-review`](../migration-review/SKILL.md) skill on the
+   finished file: it checks locks, rewrites, and compatibility with deployed code.
+8. If `sqlx` is not installed or not on `PATH`, stop and tell the user to install `sqlx-cli` rather than manually creating the migration file.

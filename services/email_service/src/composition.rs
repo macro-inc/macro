@@ -1,5 +1,8 @@
 //! Shared composition for the HTTP API and background workers.
 
+pub(crate) mod api;
+pub mod workers;
+
 use crate::outbound::{
     email_api::{GmailApi, MicrosoftCredentialsClient},
     inbox_health::{PgInboxHealth, ProviderInboxHealth},
@@ -86,5 +89,40 @@ pub fn read_receipts(
     Ok(email::domain::read_receipts::ReadReceiptService::new(
         email::outbound::read_receipts_pg::ReadReceiptPgRepository(db),
         email::domain::read_receipts::PixelUrlPrefix::new(base.as_str()),
+    ))
+}
+
+/// Email sequences over PostgreSQL, the email crate's step store, and team and
+/// CRM access. `C` is the host's CRM service: the API and the workers resolve
+/// company metadata differently.
+pub type Sequences<C> = email_sequences::domain::service::Sequences<
+    email_sequences::outbound::PgSequenceRepo,
+    email::outbound::PgSequenceSteps,
+    email_sequences::outbound::CrmOwnerAccess<
+        entity_access::domain::service::EntityAccessServiceImpl<
+            entity_access::outbound::PgAccessRepository,
+        >,
+        C,
+    >,
+>;
+
+/// Unsubscribe links point at this service's public URL, which serves
+/// `/public/sequences/unsubscribe/{token}`.
+pub fn sequences<C: crm::domain::service::CrmService>(
+    db: sqlx::PgPool,
+    crm: C,
+    environment: macro_env::Environment,
+) -> anyhow::Result<Sequences<C>> {
+    let base = macro_service_urls::EmailServiceUrl::new_for_environment(environment)?;
+    Ok(email_sequences::domain::service::Sequences::new(
+        email_sequences::outbound::PgSequenceRepo::new(db.clone()),
+        email::outbound::PgSequenceSteps,
+        email_sequences::outbound::CrmOwnerAccess::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db),
+            ),
+            crm,
+        ),
+        base.as_str(),
     ))
 }

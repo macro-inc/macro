@@ -1,0 +1,158 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime\n             WHERE id IN (SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "host_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "size: ComputerSize",
+        "type_info": {
+          "Custom": {
+            "name": "computer_size",
+            "kind": {
+              "Enum": [
+                "standard",
+                "large",
+                "xl"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "memory_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "disk_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "catalog_entry",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "comp_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "enrolled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "enrollment_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 17,
+        "name": "setup_completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "default_agent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "image",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing"
+              ]
+            }
+          }
+        },
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "ffec1b1f46e72af4447816cd91a969cc83d9380623ca1f521f404046fdc86e56"
+}

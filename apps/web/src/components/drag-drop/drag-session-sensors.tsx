@@ -14,11 +14,15 @@ export function DragSessionSensors(props: {
   nestedScroll?: { viewportSelector: string; horizontalOutside: boolean };
   /** Use a distance-only mouse sensor instead of the default 250ms-or-10px sensor. */
   activationDistance?: number;
+  /** Reuse the enclosing provider's sensors; getViewport must be absent for foreign drags. */
+  reuseProviderSensors?: boolean;
   onCancel: () => void;
 }) {
   const context = useDragDropContext();
   if (!context) throw new Error('DragSessionSensors requires DragDropProvider');
   const [state, actions] = context;
+  if (props.reuseProviderSensors && props.activationDistance !== undefined)
+    throw new Error('Existing-provider mode cannot install a distance sensor');
   const distanceSensor =
     props.activationDistance === undefined
       ? undefined
@@ -29,6 +33,7 @@ export function DragSessionSensors(props: {
     nestedScroll: props.nestedScroll,
   });
   const cancelDrag = () => {
+    if (props.reuseProviderSensors && !props.getViewport()) return;
     if (distanceSensor?.cancel(true)) return;
     if (!state.active.draggable) return;
     props.onCancel();
@@ -37,6 +42,7 @@ export function DragSessionSensors(props: {
   };
   const cancelOnEscape = (event: KeyboardEvent) => {
     if (event.key !== 'Escape') return;
+    if (props.reuseProviderSensors && !props.getViewport()) return;
     if (distanceSensor) {
       if (!distanceSensor.cancel()) return;
     } else if (state.active.draggable) {
@@ -68,5 +74,7 @@ export function DragSessionSensors(props: {
     document.removeEventListener('scroll', updateDrop, true);
     window.removeEventListener('blur', cancelDrag);
   });
-  return distanceSensor ? null : <DragDropSensors />;
+  return props.reuseProviderSensors || distanceSensor ? null : (
+    <DragDropSensors />
+  );
 }

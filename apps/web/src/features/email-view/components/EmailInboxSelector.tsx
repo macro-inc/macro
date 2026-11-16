@@ -37,10 +37,10 @@ type InboxOption = {
 };
 
 /**
- * Single-select over the user's linked inboxes: one inbox, or all of them.
- * `undefined` in view state means all; a chosen inbox is stored as `[id]`.
- * Legacy multi-id selections are normalized to their first inbox on restore.
- * Send-as aliases (which Gmail can add on its own, e.g. for a Gmailify
+ * The user's linked inboxes: all of them, or any chosen set. `undefined` in
+ * view state means all. The account pickers choose one inbox at a time; the
+ * Filters menu and the mobile drawer can choose several, which the pickers
+ * then name by count. Send-as aliases (which Gmail can add on its own, e.g. for a Gmailify
  * account) filter their inbox by address; they are never counted as inboxes.
  */
 function useInboxSelection() {
@@ -69,7 +69,9 @@ function useInboxSelection() {
   // A persisted alias still needs a clear/switch control if it disappears.
   const hasMultipleInboxes = () => inboxes().length > 1 || !!state.aliasFilter;
   const isSelected = (id: string) =>
-    (!state.aliasFilter && soleInbox()?.id === id) || selectedId() === id;
+    state.aliasFilter
+      ? selectedId() === id
+      : soleInbox()?.id === id || !!state.inboxIds?.includes(id);
   const selectedId = () => {
     if (state.aliasFilter)
       return `${state.aliasFilter.inboxId}:${state.aliasFilter.emailAddress.toLowerCase()}`;
@@ -102,6 +104,24 @@ function useInboxSelection() {
     isSelected,
     selectedOption,
     selectAll: () => setInboxIds(undefined),
+    /** Adds or removes one inbox; an alias still replaces the selection. */
+    toggle: (id: string) => {
+      const option = options().find((option) => option.id === id);
+      if (!option) return;
+      if (option.aliasAddress && option.inboxId) {
+        setAliasFilter({
+          inboxId: option.inboxId,
+          emailAddress: option.aliasAddress,
+        });
+        return;
+      }
+      const current = state.aliasFilter ? [] : (state.inboxIds ?? []);
+      setInboxIds(
+        current.includes(id)
+          ? current.filter((inbox) => inbox !== id)
+          : [...current, id]
+      );
+    },
     select: (id: string) => {
       const option = options().find((option) => option.id === id);
       if (!option) return;
@@ -529,7 +549,8 @@ function InboxRadioItem(props: {
 
 /**
  * Inbox section of the mobile filter drawer; must render inside the drawer's
- * `Accordion`. Radio semantics match the sidebar list: one inbox or all.
+ * `Accordion`. Inboxes are checkboxes, as in the Filters menu; an alias
+ * replaces the selection, and All inboxes clears it.
  */
 export function EmailInboxDrawerSection(props: { value: string }) {
   const selection = useInboxSelection();
@@ -541,9 +562,9 @@ export function EmailInboxDrawerSection(props: { value: string }) {
         label="Inbox"
         activeCount={selection.isAll() ? 0 : 1}
       >
-        <div role="radiogroup" aria-label="Inbox">
+        <div role="group" aria-label="Inbox">
           <MobileFilterDrawer.Option
-            selectionMode="single"
+            selectionMode="multiple"
             checked={selection.isAll()}
             onChange={selection.selectAll}
             icon={<TrayIcon class="size-4" />}
@@ -553,9 +574,9 @@ export function EmailInboxDrawerSection(props: { value: string }) {
           <For each={selection.options()}>
             {(option) => (
               <MobileFilterDrawer.Option
-                selectionMode="single"
+                selectionMode="multiple"
                 checked={selection.isSelected(option.id)}
-                onChange={() => selection.select(option.id)}
+                onChange={() => selection.toggle(option.id)}
                 icon={<InboxAvatar option={option} size="sm" />}
               >
                 <InboxOptionLabel option={option} />

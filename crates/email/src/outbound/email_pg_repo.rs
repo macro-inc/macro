@@ -22,6 +22,8 @@ pub use sequence_steps::PgSequenceSteps;
 mod attachment_access;
 mod attachment_cleanup;
 mod client_id_mapping;
+#[cfg(feature = "mailbox")]
+mod connection;
 mod contact;
 mod db_types;
 mod draft;

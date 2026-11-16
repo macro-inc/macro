@@ -1,3 +1,5 @@
+/* Article typography must not leak into the shared product UI. */
+@scope (:root) to (.post-product-ui) {
 .posts-shell {
   --post-ink: #fff;
   --post-muted: #a8a8a8;
@@ -26,17 +28,13 @@
 
 .posts-article {
   margin: 0 auto;
-  max-width: 792px;
-  padding: 116px 24px 120px;
+  width: min(800px, calc(100% - 64px));
+  container-type: inline-size;
+  padding: 132px 0 120px;
 }
 
 .posts-article--with-footer {
   padding-bottom: 0;
-}
-
-.posts-page-footer {
-  padding-bottom: 48px;
-  padding-inline: 24px;
 }
 
 .posts-home-cta-wrap {
@@ -50,42 +48,18 @@
   padding-bottom: 0;
 }
 
-/* ---- Linear-style article header (centered) ---- */
+/* Centered article header follows the feature-page typography. */
 .posts-article-header {
+  max-width: 640px;
   margin: 0 auto;
   text-align: center;
-}
-
-.posts-eyebrow {
-  align-items: center;
-  color: var(--c4);
-  display: flex;
-  flex-wrap: wrap;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  gap: 8px;
-  justify-content: center;
-}
-
-.posts-shell .posts-eyebrow a {
-  color: var(--c4);
-}
-
-.posts-shell .posts-eyebrow a:hover {
-  color: var(--c1);
-}
-
-.posts-eyebrow-sep {
-  color: var(--c4);
-  opacity: 0.5;
 }
 
 .posts-title {
   color: var(--c0);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: clamp(32px, 5vw, 48px);
-  font-weight: 400;
+  font-weight: 370;
   letter-spacing: -0.022em;
   line-height: 1.05;
   margin: 18px auto 0;
@@ -107,6 +81,53 @@
   margin: 56px auto 28px;
   padding: 48px 0;
   position: relative;
+}
+
+.posts-article.posts-article--video {
+  width: min(1000px, calc(100% - 48px));
+}
+
+.posts-article--video .posts-article-header {
+  max-width: none;
+  width: 100%;
+}
+
+.posts-hero-video {
+  margin: 64px auto 28px;
+  width: 100%;
+}
+
+.posts-hero-video iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 44px;
+  corner-shape: squircle;
+  background: #111;
+}
+
+.posts-hero-video figcaption {
+  margin: 12px auto 0;
+  max-width: 640px;
+  color: var(--post-faint);
+  font-size: 12px;
+  line-height: 24px;
+  text-wrap: balance;
+}
+
+@media (max-width: 699px) {
+  .posts-article.posts-article--video {
+    width: calc(100% - 32px);
+  }
+
+  .posts-hero-video {
+    margin-top: 44px;
+  }
+
+  .posts-hero-video iframe {
+    border-radius: 28px;
+  }
 }
 
 /* Dividers stay within the centered reading column. */
@@ -230,7 +251,7 @@
 .posts-shell .posts-index-title {
   color: var(--c0);
   font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 400;
+  font-weight: 370;
 }
 
 .posts-header-text h1 {
@@ -272,7 +293,7 @@
 .post-body h3 {
   color: var(--c0);
   font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 400;
+  font-weight: 370;
   letter-spacing: -0.018em;
 }
 
@@ -627,16 +648,12 @@
 
 @media (max-width: 720px) {
   .posts-article {
-    padding: 72px 20px 80px;
+    width: min(540px, calc(100% - 32px));
+    padding: 114px 0 80px;
   }
 
   .posts-article--with-footer {
     padding-bottom: 0;
-  }
-
-  .posts-page-footer {
-    padding-bottom: 40px;
-    padding-inline: 18px;
   }
 
   .posts-home-cta-wrap {
@@ -681,4 +698,6 @@
   .post-body h2 {
     margin-top: 56px;
   }
+}
+
 }

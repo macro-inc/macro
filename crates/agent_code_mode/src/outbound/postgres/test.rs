@@ -60,3 +60,32 @@ async fn records_survive_reconnection_and_remain_scoped_to_their_session(pool: P
         Err(CodeModeError::NotFound)
     ));
 }
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn records_with_nul_characters_are_saved_without_them(pool: PgPool) {
+    sqlx::raw_sql(include_str!("test/sessions.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
+    let mut record = ExecutionRecord {
+        acting_as: None,
+        turn_id: None,
+        execution_id: ExecutionId::mint(),
+        source: "return 'a\0b';".into(),
+        status: ExecutionStatus::Running,
+        result: None,
+        error: None,
+        calls: Vec::new(),
+        activity: Vec::new(),
+        activity_truncated: false,
+    };
+    let store = PgExecutionStore::new(pool);
+    store.create(session, &record).await.unwrap();
+    record.status = ExecutionStatus::Succeeded;
+    record.result = Some(json!({"data": ["x\0y"], "k\0ey": 1}));
+    store.save(session, &record).await.unwrap();
+    let saved = store.get(session, record.execution_id).await.unwrap();
+    assert_eq!(saved.source, "return 'ab';");
+    assert_eq!(saved.result, Some(json!({"data": ["xy"], "key": 1})));
+}

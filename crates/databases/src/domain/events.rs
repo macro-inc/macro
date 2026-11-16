@@ -154,6 +154,16 @@ pub enum DatabaseTopicEvent {
     /// Who the database is shared with changed.
     #[serde(rename = "database.sharing_changed")]
     SharingChanged(DatabaseSharingChangedMetadata),
+    /// Icon or color metadata changed without touching content recency.
+    #[serde(rename = "database.appearance_changed")]
+    AppearanceChanged {
+        /// The database entity.
+        database_id: DatabaseId,
+        /// The editor, when authenticated.
+        attribution: Option<Attribution>,
+        /// Previous and saved appearance.
+        change: activity::AppearanceChange,
+    },
 }
 
 impl TopicEvent for DatabaseTopicEvent {
