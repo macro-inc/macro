@@ -23,7 +23,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
     CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOnly, is_agent_run,
+    MacroAuthorizationState, UserOnly, is_program_run,
 };
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -204,7 +204,7 @@ impl IntoResponse for ToolApprovalApiError {
 }
 
 /// Only a person lets a held call run: an agent's program (see
-/// [`is_agent_run`]) may deny or cancel one, but approving would let it
+/// [`is_program_run`]) may deny or cancel one, but approving would let it
 /// approve its own call.
 fn refuse_program_approval(
     answer: ToolApprovalAnswerDto,
@@ -215,7 +215,7 @@ fn refuse_program_approval(
         answer,
         ToolApprovalAnswerDto::Approve | ToolApprovalAnswerDto::ApproveAndRemember
     );
-    if approves && is_agent_run(attribution, headers) {
+    if approves && is_program_run(attribution, headers) {
         return Err((
             StatusCode::FORBIDDEN,
             "An agent can't approve this for you.",

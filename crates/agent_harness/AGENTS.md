@@ -179,7 +179,8 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
 cancel held tool calls, but cannot approve or approve and remember them; the
-HTTP boundary checks agent and routine attribution and the execution header.
+HTTP boundary refuses any program (`macro_authorization::is_program_run`:
+agent or routine attribution, or the execution header).
 
 ## Checks
 

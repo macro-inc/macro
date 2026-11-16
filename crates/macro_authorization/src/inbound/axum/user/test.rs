@@ -1,9 +1,11 @@
 use super::*;
 use crate::{
-    BotOnly, CredentialAttribution, CredentialOrigin, InternalAuthConfig, JwtValidator,
-    MacroAuthorizationExtractor, MacroAuthorizationServiceImpl, NoBotAuthorizer,
+    AccountHolderOrInternal, BotOnly, CredentialAttribution, CredentialOrigin, InternalAuthConfig,
+    JwtValidator, MacroAuthorizationExtractor, MacroAuthorizationServiceImpl, NoBotAuthorizer,
     NoUserApiKeyAuthorizer, UserOnly, ValidatedCredential, ValidatedIdentity,
 };
+use crate::{is_agent_run, is_program_run};
+use ::axum::http::HeaderMap;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -55,10 +57,10 @@ fn state() -> MacroAuthorizationState<AuthorizationService> {
     )))
 }
 
-/// Whether a request carrying `token` as `?macro-api-token=` or as the
+/// How a request carrying `token` as `?macro-api-token=` or as the
 /// access-token cookie, with no `Authorization` header and no code-execution
-/// marker, is an agent's program by the check person-only routes use.
-async fn is_program(token: &str) -> [bool; 2] {
+/// marker, reads by `check`.
+async fn reads_as(token: &str, check: fn(CredentialAttribution, &HeaderMap) -> bool) -> [bool; 2] {
     let state = state();
     let mut verdicts = [false; 2];
     let requests = [
@@ -75,7 +77,7 @@ async fn is_program(token: &str) -> [bool; 2] {
             )
             .await
             .unwrap();
-        *verdict = crate::is_agent_run(caller.authorization.attribution(), &parts.headers);
+        *verdict = check(caller.authorization.attribution(), &parts.headers);
     }
     verdicts
 }
@@ -84,14 +86,39 @@ async fn is_program(token: &str) -> [bool; 2] {
 /// `routine_id` and no `agent_id`; the token alone must read as a program.
 #[tokio::test]
 async fn a_routine_owner_token_is_a_program_without_the_marker() {
-    assert_eq!(is_program("routine").await, [true, true]);
+    assert_eq!(reads_as("routine", is_program_run).await, [true, true]);
 }
 
 #[tokio::test]
 async fn agent_tokens_stay_programs_and_plain_user_tokens_stay_people() {
-    assert_eq!(is_program("execution").await, [true, true]);
-    assert_eq!(is_program("api").await, [false, false]);
-    assert_eq!(is_program("user").await, [false, false]);
+    assert_eq!(reads_as("execution", is_program_run).await, [true, true]);
+    assert_eq!(reads_as("api", is_program_run).await, [false, false]);
+    assert_eq!(reads_as("user", is_program_run).await, [false, false]);
+}
+
+/// Owner routines send email and create events on a schedule, so the routes
+/// that only ask an agent's program to confirm (`is_agent_run`) and the
+/// account-holder policy still admit a routine owner token.
+#[tokio::test]
+async fn a_routine_owner_token_keeps_its_confirm_and_account_holder_routes() {
+    assert_eq!(reads_as("routine", is_agent_run).await, [false, false]);
+    assert_eq!(reads_as("execution", is_agent_run).await, [true, true]);
+
+    let (mut parts, _) = axum::http::Request::builder()
+        .uri("/account?macro-api-token=routine")
+        .body(())
+        .unwrap()
+        .into_parts();
+    let caller = MacroAuthorizationExtractor::<AuthorizationService, AccountHolderOrInternal>::from_request_parts(
+        &mut parts,
+        &state(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        caller.authorization.user.attribution(),
+        CredentialAttribution::Routine
+    );
 }
 
 #[tokio::test]

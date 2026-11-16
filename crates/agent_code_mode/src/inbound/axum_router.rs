@@ -22,7 +22,7 @@ use entity_access::{
 };
 use macro_authorization::{
     ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOnly, is_agent_run,
+    MacroAuthorizationState, UserOnly, is_program_run,
 };
 use macro_uuid::Uuid;
 use std::sync::Arc;
@@ -276,14 +276,14 @@ pub async fn list_reviews<Access: EntityAccessService, Auth: MacroAuthorizationS
         .map_err(CodeExecutionApiError)
 }
 
-/// Only a person decides a review: an agent's program (see [`is_agent_run`])
+/// Only a person decides a review: any program (see [`is_program_run`])
 /// is refused, or it could approve the draft it presented itself.
 fn decode_user_decision(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
     body: &[u8],
 ) -> Result<ReviewDecision, CodeExecutionApiError> {
-    if is_agent_run(attribution, headers) {
+    if is_program_run(attribution, headers) {
         return Err(CodeExecutionApiError(CodeModeError::Forbidden));
     }
     decode(body).map_err(CodeExecutionApiError)

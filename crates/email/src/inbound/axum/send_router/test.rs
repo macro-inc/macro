@@ -28,3 +28,10 @@ fn a_program_cannot_send_without_the_users_quoted_approval() {
     );
     assert!(refuse_program_send(CredentialAttribution::Person, &browser, None).is_ok());
 }
+
+/// Owner routines send email on a schedule: a routine owner token alone is
+/// not refused here; only an agent's token or a code-mode request is.
+#[test]
+fn a_routine_owner_token_may_send() {
+    assert!(refuse_program_send(CredentialAttribution::Routine, &HeaderMap::new(), None).is_ok());
+}

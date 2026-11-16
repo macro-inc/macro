@@ -33,8 +33,7 @@ impl MacroUserAuthentication {
     /// token or an agent acting for them.
     #[must_use]
     pub fn is_human_session(&self) -> bool {
-        self.origin == CredentialOrigin::Session
-            && self.attribution() == CredentialAttribution::Person
+        self.origin == CredentialOrigin::Session && self.agent_id.is_none()
     }
 
     /// Who the signed claims say this credential acts for: the person, or a
@@ -49,8 +48,9 @@ impl MacroUserAuthentication {
     }
 }
 
-/// Whose program, if any, a user credential was signed for. Routes only a
-/// person may drive refuse every variant but `Person` (see `is_agent_run`).
+/// Whose program, if any, a user credential was signed for. Routes where only
+/// a person may decide refuse every variant but `Person` (`is_program_run`);
+/// routes that ask a program to confirm refuse only `Agent` (`is_agent_run`).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CredentialAttribution {
     /// No signed program attribution.
