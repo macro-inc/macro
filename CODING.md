@@ -27,6 +27,7 @@ files; the [style guide](docs/development/style-guide.md) indexes them.
 - Name things for what they are or do; avoid jargon, slang, and vague labels such as `candidates`.
 - Use ternaries sparingly for short, simple expressions; use explicit branches for complex or nested decisions.
 - Break up long statements and compound conditions instead of compressing them onto one line.
+- Comment logic a reader cannot follow at a glance: before the block, say why it works this way and what its steps do.
 - Separate functions, variable groups, conditionals, and distinct logic blocks with blank lines.
 - Keep compatibility only at deployed boundaries; reject obsolete unreleased formats instead of adding upgrade paths.
 

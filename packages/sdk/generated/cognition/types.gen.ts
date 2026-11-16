@@ -54,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'agent_activity_summary' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -176,6 +176,34 @@ export type AttachmentMetadata = {
 export type AttachmentType = 'document' | 'image' | 'channel' | 'email' | 'project' | 'skill';
 
 /**
+ * Request body for executing a pending tool call.
+ */
+export type CallToolRequest = {
+    /**
+     * Optional updated arguments. Uses original args if omitted.
+     */
+    args?: unknown;
+    /**
+     * The message ID containing the tool call.
+     */
+    messageId: string;
+    /**
+     * The tool call ID to execute.
+     */
+    toolCallId: string;
+};
+
+/**
+ * Response body for a successful tool call.
+ */
+export type CallToolResponse = {
+    /**
+     * The tool execution result.
+     */
+    result: unknown;
+};
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -289,23 +317,16 @@ export type ChatMessage = {
 export type ChatMessageContent = string | Array<AssistantMessagePart>;
 
 /**
- * Error response for the chat message endpoint.
+ * Error response for chat message endpoints
  */
 export type ChatMessageError = {
     /**
-     * Stable machine-readable code.
+     * Stable machine-readable code for admission errors (402 or 503).
      */
-    code: ChatMessageErrorCode;
-    /**
-     * Human-readable message.
-     */
+    code?: string | null;
     error: string;
+    stream_id?: string | null;
 };
-
-/**
- * Why a chat message was refused.
- */
-export type ChatMessageErrorCode = 'chat_read_only';
 
 export type ChatMessageWithAttachments = {
     /**
@@ -458,6 +479,20 @@ export type ConversationRecord = {
     chat_id: string;
     messages: Array<MessageWithAttachments>;
     title: string;
+};
+
+/**
+ * Request body for creating a chat.
+ */
+export type CreateChatRequest = {
+    /**
+     * Optional name for the chat.
+     */
+    name?: string | null;
+    /**
+     * Optional project to associate the chat with.
+     */
+    projectId?: string | null;
 };
 
 /**
@@ -832,6 +867,51 @@ export type GetChatsForAttachmentResponse = {
 export type Granularity = 'day' | 'week' | 'month' | 'summary';
 
 /**
+ * HTTP request payload for sending a chat message.
+ * Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
+ */
+export type HttpSendChatMessageRequest = {
+    /**
+     * Additional system instructions appended to the base system prompt
+     */
+    additional_instructions?: string | null;
+    /**
+     * Attachments for the message
+     */
+    attachments?: Array<Entity> | null;
+    /**
+     * Id of the chat the message belongs to (optional - if not provided, a new chat is created)
+     */
+    chat_id?: string | null;
+    /**
+     * The content of the message
+     */
+    content: string;
+    /**
+     * The model to respond with (`provider/model` id)
+     */
+    model: string;
+    /**
+     * Inference speed, validated against the selected model. Defaults to standard.
+     */
+    speed?: ModelSpeed;
+    /**
+     * Which toolset to use. Defaults to `all`
+     */
+    toolset?: ToolSet;
+};
+
+/**
+ * The caller's ledger rows.
+ */
+export type ImportEntitiesResponse = {
+    /**
+     * The caller's own rows and their team's imported rows, newest first.
+     */
+    entities: Array<ImportEntity>;
+};
+
+/**
  * One row of the import ledger.
  */
 export type ImportEntity = {
@@ -921,6 +1001,35 @@ export type ImportEntity = {
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    page: string;
+};
+
+/**
+ * The outcome of importing a Notion page, with its ledger row.
+ */
+export type ImportNotionPageResponse = {
+    /**
+     * The row behind the outcome; `entity_id` is the document once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportNotionPageResult;
+};
+
+/**
+ * What importing one Notion page did.
+ */
+export type ImportNotionPageResult = 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
  * Discovery-run state for one user × source.
  */
 export type ImportRun = {
@@ -978,6 +1087,10 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * visibility filter.
  */
 export type Initiator = 'onboarding' | 'chat' | 'archive' | 'manual';
+
+export type JwtPayload = {
+    token: string;
+};
 
 /**
  * Metadata for one staged Linear issue.
@@ -1067,6 +1180,11 @@ export type MessageWithAttachments = {
     content: string;
     date: string;
 };
+
+/**
+ * The requested inference speed. Standard is backward compatible with old clients.
+ */
+export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1705,6 +1823,20 @@ export type ReadActivityResponse = {
 export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
+ * Request body for rejecting a pending tool call.
+ */
+export type RejectToolCallRequest = {
+    /**
+     * The message ID containing the tool call.
+     */
+    messageId: string;
+    /**
+     * The tool call ID to reject.
+     */
+    toolCallId: string;
+};
+
+/**
  * The role of a message participant.
  */
 export type Role = 'user' | 'assistant' | 'system';
@@ -1754,6 +1886,55 @@ export type ScanCounts = {
      * Pages found.
      */
     pages: number;
+};
+
+export type SendChatMessagePayload = JwtPayload & {
+    /**
+     * Additional system instructions appended to the base system prompt
+     */
+    additional_instructions?: string | null;
+    /**
+     * Use citation prompt
+     */
+    attachments?: Array<Entity> | null;
+    /**
+     * Id of the chat the message belongs to
+     */
+    chat_id: string;
+    /**
+     * The content of the message
+     */
+    content: string;
+    /**
+     * the chat model to respond with (`provider/model` id)
+     */
+    model: string;
+    /**
+     * Stream ID for tracking the response
+     */
+    stream_id: string;
+    /**
+     * Which toolset to use. Defaults to `all`
+     */
+    toolset?: ToolSet;
+};
+
+/**
+ * Response for initiating a chat message stream
+ */
+export type SendChatMessageResponse = {
+    /**
+     * The chat ID (may differ from request if a new chat was created)
+     */
+    chat_id: string;
+    /**
+     * The message ID for the AI response
+     */
+    message_id: string;
+    /**
+     * The stream ID that will receive the response chunks (same as message_id)
+     */
+    stream_id: string;
 };
 
 /**
@@ -2030,6 +2211,10 @@ export type StreamError = {
     stream_id: string;
 };
 
+export type StringIdResponse = {
+    id: string;
+};
+
 export type StructuredCompletionError = {
     /**
      * Stable machine-readable code for admission errors (402 or 503).
@@ -2205,6 +2390,62 @@ export type ToolSet = {
     type: 'databases_read_only';
 };
 
+/**
+ * Body for tracking one external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity created from the item; required when `status` is
+     * `imported`.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+     * `{title, url?, summary?}`; Slack: `{name, …}`.
+     */
+    metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * `staged` to propose the item, `imported` to record an entity already
+     * created from it.
+     */
+    status: TrackImportStatus;
+};
+
+/**
+ * The outcome of tracking an item, with its ledger row.
+ */
+export type TrackImportEntityResponse = {
+    /**
+     * The row behind the outcome.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: TrackImportOutcome;
+};
+
+/**
+ * What tracking an item did.
+ */
+export type TrackImportOutcome = 'staged' | 'recorded_imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
+ * Whether a tracked item is a candidate or an import already made.
+ */
+export type TrackImportStatus = 'staged' | 'imported';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2260,6 +2501,42 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Request body for updating a tool call's arguments.
+ */
+export type UpdateToolCallRequest = {
+    /**
+     * The new arguments for the tool call.
+     */
+    args: unknown;
+    /**
+     * The message ID containing the tool call.
+     */
+    messageId: string;
+    /**
+     * The tool call ID to update.
+     */
+    toolCallId: string;
+};
+
+/**
+ * Request body for updating a tool response.
+ */
+export type UpdateToolResponseRequest = {
+    /**
+     * The message ID containing the tool response.
+     */
+    messageId: string;
+    /**
+     * The new user tool response.
+     */
+    response: UserToolResponseValue;
+    /**
+     * The tool call ID whose response should be updated.
+     */
+    toolCallId: string;
 };
 
 /**
@@ -2400,6 +2677,13 @@ export type UserPdfRect = {
     page_index: number;
     top: number;
     width: number;
+};
+
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseValue = 'PendingUserExecution' | 'Rejected' | {
+    UserAction: unknown;
 };
 
 /**
@@ -2812,6 +3096,27 @@ export type PermanentlyDeleteChatResponses = {
     200: unknown;
 };
 
+export type CreateChatData = {
+    body: CreateChatRequest;
+    path?: never;
+    query?: never;
+    url: '/chats';
+};
+
+export type CreateChatErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type CreateChatError = CreateChatErrors[keyof CreateChatErrors];
+
+export type CreateChatResponses = {
+    200: StringIdResponse;
+};
+
+export type CreateChatResponse = CreateChatResponses[keyof CreateChatResponses];
+
 export type GetChatHistoryHandlerData = {
     body?: never;
     path: {
@@ -2899,6 +3204,32 @@ export type GetChatResponses = {
 
 export type GetChatResponse2 = GetChatResponses[keyof GetChatResponses];
 
+export type CopyChatData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the chat to copy
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/copy';
+};
+
+export type CopyChatErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type CopyChatError = CopyChatErrors[keyof CopyChatErrors];
+
+export type CopyChatResponses = {
+    200: StringIdResponse;
+};
+
+export type CopyChatResponse = CopyChatResponses[keyof CopyChatResponses];
+
 export type GetChatPermissionsData = {
     body?: never;
     path: {
@@ -2944,6 +3275,132 @@ export type RevertDeleteChatErrors = {
 export type RevertDeleteChatError = RevertDeleteChatErrors[keyof RevertDeleteChatErrors];
 
 export type RevertDeleteChatResponses = {
+    200: unknown;
+};
+
+export type CallToolData = {
+    body: CallToolRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/call';
+};
+
+export type CallToolErrors = {
+    /**
+     * Validation or execution failed
+     */
+    400: string;
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type CallToolError = CallToolErrors[keyof CallToolErrors];
+
+export type CallToolResponses = {
+    /**
+     * Tool executed successfully
+     */
+    200: CallToolResponse;
+};
+
+export type CallToolResponse2 = CallToolResponses[keyof CallToolResponses];
+
+export type RejectToolCallData = {
+    body: RejectToolCallRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/reject';
+};
+
+export type RejectToolCallErrors = {
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type RejectToolCallError = RejectToolCallErrors[keyof RejectToolCallErrors];
+
+export type RejectToolCallResponses = {
+    /**
+     * Tool call rejected
+     */
+    200: unknown;
+};
+
+export type UpdateToolResponseData = {
+    body: UpdateToolResponseRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/response/update';
+};
+
+export type UpdateToolResponseErrors = {
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type UpdateToolResponseError = UpdateToolResponseErrors[keyof UpdateToolResponseErrors];
+
+export type UpdateToolResponseResponses = {
+    /**
+     * Tool response updated
+     */
+    200: unknown;
+};
+
+export type UpdateToolCallData = {
+    body: UpdateToolCallRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/update';
+};
+
+export type UpdateToolCallErrors = {
+    /**
+     * Validation failed
+     */
+    400: string;
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type UpdateToolCallError = UpdateToolCallErrors[keyof UpdateToolCallErrors];
+
+export type UpdateToolCallResponses = {
+    /**
+     * Tool call args updated
+     */
     200: unknown;
 };
 
@@ -3161,6 +3618,99 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListImportEntitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListImportEntitiesErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListImportEntitiesResponses = {
+    200: ImportEntitiesResponse;
+};
+
+export type ListImportEntitiesResponse = ListImportEntitiesResponses[keyof ListImportEntitiesResponses];
+
+export type TrackImportEntityData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackImportEntityErrors = {
+    /**
+     * Invalid item or metadata
+     */
+    400: unknown;
+    /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackImportEntityResponses = {
+    200: TrackImportEntityResponse;
+};
+
+export type TrackImportEntityResponse2 = TrackImportEntityResponses[keyof TrackImportEntityResponses];
+
+export type DeclineImportEntityData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DeclineImportEntityErrors = {
+    /**
+     * No such row belongs to the caller
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeclineImportEntityResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DeclineImportEntityResponse = DeclineImportEntityResponses[keyof DeclineImportEntityResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3203,6 +3753,34 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageErrors = {
+    /**
+     * No page given
+     */
+    400: unknown;
+    /**
+     * Not a page that can be imported, or Notion is not connected
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageResponses = {
+    200: ImportNotionPageResponse;
+};
+
+export type ImportNotionPageResponse2 = ImportNotionPageResponses[keyof ImportNotionPageResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -4031,7 +4609,7 @@ export type ReadSkillResponses = {
 export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
 
 export type SendChatMessageData = {
-    body?: never;
+    body: HttpSendChatMessageRequest;
     path?: never;
     query?: never;
     url: '/stream/chat/message';
@@ -4039,12 +4617,37 @@ export type SendChatMessageData = {
 
 export type SendChatMessageErrors = {
     /**
-     * Legacy AI chats are read-only; continue the chat in Agents instead
+     * Bad request
      */
-    410: ChatMessageError;
+    400: ChatMessageError;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Payment required — the user's AI allowance is used up
+     */
+    402: ChatMessageError;
+    /**
+     * Forbidden — user lacks access to the requested model
+     */
+    403: ChatMessageError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
+
+export type SendChatMessageResponses = {
+    /**
+     * Stream initiated successfully
+     */
+    200: SendChatMessageResponse;
+};
+
+export type SendChatMessageResponse2 = SendChatMessageResponses[keyof SendChatMessageResponses];
 
 export type StopChatStreamData = {
     body: StopChatStreamRequest;

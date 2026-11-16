@@ -15,7 +15,7 @@ async fn dispatch(
 #[tokio::test]
 async fn shutdown_before_claim_leaves_work_pending() {
     let (repo, access, executor, pending) = setup();
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
     assert_eq!(
         service
             .dispatch(pending, std::future::ready(()))
@@ -32,7 +32,7 @@ async fn shutdown_before_claim_leaves_work_pending() {
 async fn access_revoked_after_admission_cancels_without_execution() {
     let (repo, access, executor, pending) = setup();
     *access.denied.lock().unwrap() = true;
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
     assert_eq!(
         dispatch(&service, pending).await.unwrap(),
         DispatchResult::Cancelled(CancellationReason::AccessDenied)
@@ -42,10 +42,39 @@ async fn access_revoked_after_admission_cancels_without_execution() {
 }
 
 #[tokio::test]
+async fn owners_outside_the_rollout_are_cancelled_before_authorization() {
+    let (repo, access, executor, pending) = setup();
+    let service =
+        EventDispatchService::new(repo, access.clone(), executor.clone(), Rollout(Some(false)));
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+    assert!(access.calls.lock().unwrap().is_empty());
+    assert!(executor.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_unreadable_rollout_retries_then_cancels() {
+    let (repo, access, executor, mut pending) = setup();
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), Rollout(None));
+    assert!(dispatch(&service, pending.clone()).await.is_err());
+    assert_eq!(repo.0.lock().unwrap().pending.len(), 1);
+
+    pending.admitted_at = Utc::now() - CONDITION_RETRY_WINDOW - chrono::Duration::seconds(1);
+    repo.0.lock().unwrap().pending[0].admitted_at = pending.admitted_at;
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+    assert!(executor.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn non_user_owner_never_reaches_authorization_or_execution() {
     let (repo, access, executor, pending) = setup();
     repo.0.lock().unwrap().configurations[0].owner = Owner::Team(generate_uuid_v7());
-    let service = EventDispatchService::new(repo, access.clone(), executor.clone());
+    let service = EventDispatchService::new(repo, access.clone(), executor.clone(), ROLLED_OUT);
     assert_eq!(
         dispatch(&service, pending).await.unwrap(),
         DispatchResult::Cancelled(CancellationReason::NotUserOwned)
@@ -82,7 +111,7 @@ async fn deletion_trigger_change_disable_and_reenable_cancel_obsolete_work() {
                 }
             }
         };
-        let service = EventDispatchService::new(repo, access, executor.clone());
+        let service = EventDispatchService::new(repo, access, executor.clone(), ROLLED_OUT);
         assert_eq!(
             dispatch(&service, pending).await.unwrap(),
             DispatchResult::Cancelled(reason)
@@ -94,7 +123,8 @@ async fn deletion_trigger_change_disable_and_reenable_cancel_obsolete_work() {
 #[tokio::test]
 async fn transient_prestart_errors_leave_pending_but_failed_execution_is_terminal() {
     let (repo, access, executor, pending) = setup();
-    let service = EventDispatchService::new(repo.clone(), access.clone(), executor.clone());
+    let service =
+        EventDispatchService::new(repo.clone(), access.clone(), executor.clone(), ROLLED_OUT);
     *access.unavailable.lock().unwrap() = true;
     assert!(dispatch(&service, pending.clone()).await.is_err());
     *access.unavailable.lock().unwrap() = false;
@@ -127,7 +157,7 @@ async fn transient_prestart_errors_leave_pending_but_failed_execution_is_termina
 async fn poststart_bookkeeping_failure_is_reconciled_without_reexecution() {
     let (repo, access, executor, pending) = setup();
     repo.0.lock().unwrap().fail_finalize = true;
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
     assert!(dispatch(&service, pending.clone()).await.is_err());
     assert!(
         service
@@ -157,7 +187,7 @@ async fn poststart_bookkeeping_failure_is_reconciled_without_reexecution() {
 #[tokio::test]
 async fn claim_race_never_executes_but_disable_after_start_does_not_undo_run() {
     let (repo, access, executor, pending) = setup();
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
     repo.0.lock().unwrap().lose_claim = true;
     assert_eq!(
         dispatch(&service, pending.clone()).await.unwrap(),
@@ -203,7 +233,7 @@ async fn two_events_queue_during_execution_then_failure_does_not_block_next() {
     repo.admit(third.action_id, third.revision, &third.event)
         .await
         .unwrap();
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
     assert!(
         service
             .pending(10.try_into().unwrap())
@@ -362,7 +392,7 @@ async fn unmet_condition_skips_with_history_and_never_executes() {
         .lock()
         .unwrap()
         .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT)
         .with_conditions(conditions.clone());
 
     assert_eq!(
@@ -396,7 +426,7 @@ async fn met_condition_runs_normally() {
         json!([{"events":["document.updated"], "condition":"Is this urgent?"}]),
     );
     let conditions = Arc::new(Conditions::default());
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT)
         .with_conditions(conditions.clone());
 
     assert_eq!(
@@ -426,7 +456,7 @@ async fn a_matching_filter_without_a_condition_skips_the_check() {
         let (repo, access, executor, pending) = setup();
         conditional(&repo, filters.clone());
         let conditions = Arc::new(Conditions::default());
-        let service = EventDispatchService::new(repo, access, executor.clone())
+        let service = EventDispatchService::new(repo, access, executor.clone(), ROLLED_OUT)
             .with_conditions(conditions.clone());
 
         assert_eq!(
@@ -451,8 +481,8 @@ async fn every_matching_condition_is_asked_once() {
         ]),
     );
     let conditions = Arc::new(Conditions::default());
-    let service =
-        EventDispatchService::new(repo, access, executor).with_conditions(conditions.clone());
+    let service = EventDispatchService::new(repo, access, executor, ROLLED_OUT)
+        .with_conditions(conditions.clone());
 
     dispatch(&service, pending).await.unwrap();
 
@@ -478,7 +508,7 @@ async fn unavailable_condition_retries_within_the_window_then_skips() {
         Err(ConditionError::Transient(rootcause::report!("jev down"))),
         Err(ConditionError::Transient(rootcause::report!("jev down"))),
     ]);
-    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT)
         .with_conditions(conditions);
 
     assert!(dispatch(&service, pending.clone()).await.is_err());
@@ -513,11 +543,13 @@ async fn rejected_or_unconfigured_conditions_skip_immediately() {
                 .push_back(Err(ConditionError::Permanent(rootcause::report!(
                     "rejected"
                 ))));
-            let service = EventDispatchService::new(repo.clone(), access, executor.clone())
-                .with_conditions(conditions);
+            let service =
+                EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT)
+                    .with_conditions(conditions);
             dispatch(&service, pending).await
         } else {
-            let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+            let service =
+                EventDispatchService::new(repo.clone(), access, executor.clone(), ROLLED_OUT);
             dispatch(&service, pending).await
         };
 

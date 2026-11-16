@@ -68,6 +68,33 @@ test('saveQuery saves the SQL with its chart columns and returns the live block'
   );
 });
 
+test('the namespace saves a question that spans databases, with no database in the request or the block', async () => {
+  const requests = serve(() =>
+    Response.json({ ...saved, databaseId: null }, { status: 201 }),
+  );
+
+  const question = await macro().databases.saveQuery({
+    sql: 'SELECT COUNT(*) AS rows FROM "Guests" JOIN "Tables" ON true',
+    title: 'Seats',
+    display: { mode: 'scalar' },
+  });
+
+  expect(requests).toHaveLength(1);
+  expect(requests[0].method).toBe('POST');
+  expect(new URL(requests[0].url).pathname).toBe('/databases/queries');
+  expect(await requests[0].json()).toEqual({
+    definition: {
+      version: 1,
+      query: 'SELECT COUNT(*) AS rows FROM "Guests" JOIN "Tables" ON true',
+    },
+  });
+  expect(question.database).toBeUndefined();
+  expect(question.table).toBeUndefined();
+  expect(question.toBlock()).toBe(
+    '<m-db-query>{"queryId":"query-1","title":"Seats","prompt":"Seats","displayMode":"scalar"}</m-db-query>',
+  );
+});
+
 test('a table saves a question about itself, and the block names the table', async () => {
   serve(() => Response.json(saved, { status: 201 }));
   const guests = DatabaseTable.byId(macro().databases.byId('db-1'), 'table-1');

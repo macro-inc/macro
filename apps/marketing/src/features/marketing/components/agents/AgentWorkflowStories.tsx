@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { Button } from '@ui';
 import {
   createSignal,
@@ -149,7 +149,7 @@ function WorkflowSources(props: {
       text={
         'Sources: @[customer-support](agent:support), @[File upload testing notes](agent:notes), and @[Upload size guidance task](agent:task).' +
         (props.meeting
-          ? '\n\n@[Valentina’s latest email](agent:email) · @[Beacon discovery call](agent:call)'
+          ? '\n\n@[Austin Barron’s latest email](agent:email) · @[Beacon discovery call](agent:call)'
           : '')
       }
       mentions={{
@@ -201,7 +201,7 @@ export function AgentFeedbackWorkflow(props: { workspace: DummyWorkspace }) {
       },
       {
         id: 'feedback-before-3',
-        person: 'valentina',
+        person: 'austin',
         time: '9:38 AM',
         body: 'Westlake also asked who’s reviewing their files. same thing as last week',
       },
@@ -819,23 +819,16 @@ export function AgentTeamworkStory() {
     w.setData('channels', (c) => c.id === 'client-files', 'messages', [
       ...teamHistory,
       ...sceneMessages.slice(0, step + 2),
-      ...(step === 5
-        ? [
-            {
-              id: 'design-followup',
-              person: 'julia' as const,
-              time: '10:18 AM',
-              body: 'Tested the preview with their sample project. All three subfolders stayed intact. I’ll review the PR after lunch.',
-              replyTo: 'design-request',
-            },
-          ]
-        : []),
     ]);
+    // Run after the channel's initial thread positioning and mockup layout.
+    requestAnimationFrame(() => {
+      const log = root.querySelector<HTMLElement>('.sample-chat-log');
+      if (log) log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+    });
   };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 5,
-    loop: { hold: 10000 },
+    steps: 4,
     reset: () => {
       advance(0);
       setDetail(undefined);
@@ -844,14 +837,8 @@ export function AgentTeamworkStory() {
       if (log) log.scrollTop = 0;
     },
     delay: (step) => (step >= 4 ? 3500 : 2600),
-    reduced: () => advance(5),
-    advance: (step) => {
-      advance(step);
-      queueMicrotask(() => {
-        const log = root.querySelector<HTMLElement>('.sample-chat-log');
-        if (log) log.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
-      });
-    },
+    reduced: () => advance(4),
+    advance,
   });
   let trigger: HTMLElement | undefined;
   const show = (next: 'design' | 'session' | 'pr') => {
@@ -870,8 +857,8 @@ export function AgentTeamworkStory() {
     <ProductDemo
       ref={(el) => (root = el)}
       label="People, Macro, and Cursor working together"
-      height={820}
-      mobileHeight={780}
+      height={600}
+      mobileHeight={600}
       onInteract={playback.pause}
     >
       <div

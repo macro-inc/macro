@@ -47,6 +47,30 @@ interface ReplayEnvelope {
   message: unknown;
 }
 
+/**
+ * How long the live channel may trail messages recover() already delivered
+ * before it is treated as stalled. A message that was only delayed arrives
+ * well within this; a lost one never does.
+ */
+export const CHANNEL_STALL_GRACE_MS = 5_000;
+
+type CallbackRegistry = { unregisterCallback?: (id: number) => void };
+
+/**
+ * Tauri's Channel delivers in index order and holds every later message until
+ * a missing index arrives, so a lost message makes it retain all traffic that
+ * follows. Its own cleanup only runs when its end index is reached, which a
+ * stalled channel never does; unregister it so it can be collected.
+ */
+function releaseChannel(channel: Channel<unknown>) {
+  channel.onmessage = () => {};
+  const internals: CallbackRegistry | undefined = Reflect.get(
+    window,
+    '__TAURI_INTERNALS__'
+  );
+  internals?.unregisterCallback?.(channel.id);
+}
+
 /** Native builds that predate the replay fork send bare messages. */
 const toEnvelope = (payload: unknown): ReplayEnvelope =>
   match(payload)
@@ -100,6 +124,10 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
   private queued: ReplayEnvelope[] = [];
   private deliver?: (envelope: ReplayEnvelope) => void;
   private visibilityHandler?: () => void;
+  private channel?: Channel<unknown>;
+  // Highest sequence number the live channel has handed us.
+  private liveSeq = 0;
+  private stallCheck?: ReturnType<typeof setTimeout>;
 
   // WebSocket state constants
   readonly CONNECTING: 0 = 0;
@@ -206,8 +234,10 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       this.deliver = deliver;
 
       const onMessage = new Channel<unknown>();
+      this.channel = onMessage;
       onMessage.onmessage = (payload: unknown) => {
         const envelope = toEnvelope(payload);
+        this.liveSeq = Math.max(this.liveSeq, envelope.seq);
         if (this.recovering) {
           this.queued.push(envelope);
         } else {
@@ -292,6 +322,9 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
     this._readyState = this.CLOSED;
     this.removeListener?.();
     this.teardownVisibilityListener();
+    clearTimeout(this.stallCheck);
+    if (this.channel) releaseChannel(this.channel);
+    this.channel = undefined;
     if (this.onclose) {
       this.onclose.call(this as any, event);
     }
@@ -354,7 +387,21 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
         `Tauri WebSocket ${this._url}: unrecoverable missed messages, forcing reconnect`
       );
       this.failConnection('Replay gap detected');
+      return;
     }
+    if (this.liveSeq < this.lastSeq) this.watchForStall(this.lastSeq);
+  }
+
+  /**
+   * recover() delivered messages the live channel has not. If the channel lost
+   * one of them it has stalled: it will never deliver again and retains every
+   * later message, so reconnect rather than let it grow for the session.
+   */
+  private watchForStall(recoveredSeq: number) {
+    clearTimeout(this.stallCheck);
+    this.stallCheck = setTimeout(() => {
+      if (this.liveSeq < recoveredSeq) this.handleFailure('channel_stall');
+    }, CHANNEL_STALL_GRACE_MS);
   }
 
   private handleError(event: Event) {
@@ -476,10 +523,14 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       });
   }
 
-  private handleFailure(operation: 'receive' | 'send') {
+  private handleFailure(operation: 'receive' | 'send' | 'channel_stall') {
     if (this._readyState === this.CLOSING || this._readyState === this.CLOSED)
       return;
-    const reason = operation === 'send' ? 'Send failed' : 'Receive failed';
+    const reason = match(operation)
+      .with('receive', () => 'Receive failed')
+      .with('send', () => 'Send failed')
+      .with('channel_stall', () => 'Live channel stalled')
+      .exhaustive();
     const span = Telemetry.span('websocket.transport.failure');
     span.setAttr('websocket.transport', 'tauri');
     if (this.socketId !== null)

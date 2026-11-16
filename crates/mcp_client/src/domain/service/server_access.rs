@@ -12,10 +12,10 @@
 use std::sync::Arc;
 
 use oauth2::TokenResponse as _;
-use rmcp::transport::auth::{AuthError, AuthorizationManager};
+use rmcp::transport::auth::AuthError;
 
 use crate::domain::models::{McpServerRecord, StoredCredentials};
-use crate::domain::ports::McpServerStore;
+use crate::domain::ports::{McpServerHttp, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
 
 #[cfg(test)]
@@ -85,6 +85,7 @@ pub fn unexpired_access_token(
 #[tracing::instrument(skip_all, err, fields(server = %record.server_name))]
 pub async fn server_access<S: McpServerStore>(
     record: &McpServerRecord,
+    http: &impl McpServerHttp,
     store: Arc<S>,
 ) -> Result<ServerAccess, AuthError> {
     let Some(credentials) = &record.credentials else {
@@ -100,7 +101,7 @@ pub async fn server_access<S: McpServerStore>(
     }
 
     tracing::info!("stored access token has expired or is about to; refreshing");
-    let mut manager = AuthorizationManager::new(&*record.url).await?;
+    let mut manager = http.authorization_manager(&record.url).await?;
     let credential_store = PersistingCredentialStore::new(record.clone(), store);
     credential_store.seed(credentials.clone()).await?;
     manager.set_credential_store(credential_store);

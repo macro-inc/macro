@@ -94,7 +94,7 @@ and session hosts supply titles and GitHub totals from existing queries; no extr
 Missing titles stay hidden, and unavailable GitHub totals never fall back to
 captured estimates.
 Legacy embedded agent hosts still render their frame-owned chrome above both
-panes. Moving `AgentSplitHeader` does not change that portal placement; full-height
+panes. Moving the agent session header does not change that portal placement; full-height
 embedded changes require a separate host-layout migration.
 
 The source owns fetching, cache identity, and conversion into the feature's core

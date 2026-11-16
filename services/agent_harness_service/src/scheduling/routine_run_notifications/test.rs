@@ -36,6 +36,11 @@ impl NotificationIngress for CapturingIngress {
 /// Report a run that ended with `end`, and return what was sent once the
 /// send settles.
 async fn sent(end: RunEnd) -> Vec<serde_json::Value> {
+    sent_for(end, None).await
+}
+
+/// The same, for a run of a routine `parent` created.
+async fn sent_for(end: RunEnd, parent: Option<&str>) -> Vec<serde_json::Value> {
     let ingress = Arc::new(CapturingIngress::default());
     let tracker = TaskTracker::new();
     let notifications = RoutineRunNotifications::new(Arc::clone(&ingress), tracker.clone());
@@ -44,6 +49,7 @@ async fn sent(end: RunEnd) -> Vec<serde_json::Value> {
         owner: MacroUserIdStr::parse_from_str(OWNER).unwrap(),
         routine_id: uuid::Uuid::nil(),
         routine_name: "Morning brief".to_string(),
+        parent_name: parent.map(str::to_owned),
         trigger: RunTrigger::Scheduled,
         target: RunTarget::Agent,
         end,
@@ -88,4 +94,14 @@ async fn every_run_that_did_not_succeed_notifies_as_failed() {
             "{end:?}"
         );
     }
+}
+
+#[tokio::test]
+async fn a_sub_routines_run_names_the_routine_that_created_it() {
+    let sent = sent_for(RunEnd::Succeeded, Some("Weekly planning")).await;
+
+    assert_eq!(
+        sent[0]["req"]["notification"]["content"]["routineName"],
+        "Morning brief · from Weekly planning"
+    );
 }

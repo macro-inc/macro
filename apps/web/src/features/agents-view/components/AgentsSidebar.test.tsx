@@ -365,7 +365,10 @@ describe('mixed Agents sidebar', () => {
     const filterMenu = screen.getByRole('button', {
       name: 'Filter conversations',
     });
-    const badge = () => filterMenu.parentElement?.querySelector('span');
+    // Tooltip portals also leave an empty hidden span beside the trigger.
+    const badge = () =>
+      filterMenu.parentElement &&
+      within(filterMenu.parentElement).queryByText(/^\d+$/);
     const openOption = async (name: string, role = 'menuitem') => {
       fireEvent.keyDown(filterMenu, { key: 'ArrowDown' });
       return screen.findByRole(role, { name });

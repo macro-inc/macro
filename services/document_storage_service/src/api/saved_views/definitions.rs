@@ -171,23 +171,29 @@ pub struct SavedViewDefinitionPath {
 
 /// Domain failures as stable statuses; another owner's view reads as missing.
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct SavedViewDefinitionErr(#[from] Error);
+pub enum SavedViewDefinitionErr {
+    /// The saved view domain refused or failed.
+    #[error(transparent)]
+    Domain(#[from] Error),
+    /// A share from a session whose scope shares nothing.
+    #[error(transparent)]
+    SharingRefused(#[from] agent_correlation::context::SharingRefused),
+}
 
 impl IntoResponse for SavedViewDefinitionErr {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
-            Error::NotFound | Error::NotOwner => StatusCode::NOT_FOUND,
-            Error::Conflict => StatusCode::CONFLICT,
-            Error::Invalid => StatusCode::BAD_REQUEST,
-            Error::NotMember => StatusCode::FORBIDDEN,
-            Error::Internal(error) => {
+        let status = match &self {
+            Self::Domain(Error::NotFound | Error::NotOwner) => StatusCode::NOT_FOUND,
+            Self::Domain(Error::Conflict) => StatusCode::CONFLICT,
+            Self::Domain(Error::Invalid) => StatusCode::BAD_REQUEST,
+            Self::Domain(Error::NotMember) | Self::SharingRefused(_) => StatusCode::FORBIDDEN,
+            Self::Domain(Error::Internal(error)) => {
                 tracing::error!(error = ?error, "saved view failure");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
-        let message = match self.0 {
-            Error::NotOwner => Error::NotFound.to_string(),
+        let message = match self {
+            Self::Domain(Error::NotOwner) => Error::NotFound.to_string(),
             other => other.to_string(),
         };
         (
@@ -304,6 +310,9 @@ pub async fn create_handler(
     user: Viewer,
     Json(request): Json<CreateSavedViewDefinitionRequest>,
 ) -> Result<(StatusCode, Json<SavedViewDefinition>), SavedViewDefinitionErr> {
+    // A saved view's team share is its own column, which the grant
+    // writers never see.
+    agent_correlation::context::refuse_sharing(request.shared_team_id.is_some())?;
     let view = service
         .create(
             user.authorization.user.macro_user_id.as_ref(),
@@ -340,6 +349,9 @@ pub async fn update_handler(
     Path(path): Path<SavedViewDefinitionPath>,
     Json(request): Json<UpdateSavedViewDefinitionRequest>,
 ) -> Result<Json<SavedViewDefinition>, SavedViewDefinitionErr> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(request.sharing.is_some())?;
     let share = match request.sharing {
         None => ShareChange::Unchanged,
         Some(SavedViewSharingRequest { team_id: None }) => ShareChange::Private,

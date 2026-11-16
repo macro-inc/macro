@@ -23,7 +23,7 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         .snapshot
         .harness
         .as_ref()
-        .map_or_else(|| app.machine_name.clone(), |harness| harness.name.clone());
+        .map_or_else(|| app.pairing_name.clone(), |harness| harness.name.clone());
 
     let serving: Vec<Span> = if app.serving() {
         vec![Span::styled("  ⏵ serving SSE", Style::new().fg(OK))]

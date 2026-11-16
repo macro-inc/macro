@@ -1,3 +1,4 @@
+import { channelListName } from '@channel/group-chat-name';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   singleLineMarkdownTheme,
@@ -100,7 +101,10 @@ export function ChannelMessageSingleLine(props: {
   return (
     <span class="flex items-center gap-1 min-w-0 truncate">
       <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
-        {props.entity.channelName}
+        {channelListName({
+          name: props.entity.channelName,
+          channelType: props.entity.channelType,
+        })}
       </span>
       <Show when={props.entity.senderId}>
         {(id) => <UserIcon id={id()} size="sm" />}
@@ -180,7 +184,10 @@ export function ChannelMessageWideContent(props: {
     <>
       <span class="shrink-0 flex gap-1.5 items-center">
         <span class="text-ink-muted whitespace-nowrap">
-          {props.entity.channelName}
+          {channelListName({
+            name: props.entity.channelName,
+            channelType: props.entity.channelType,
+          })}
         </span>
         <Show when={props.entity.senderId}>
           {(id) => <UserIcon id={id()} size="sm" />}

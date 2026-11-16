@@ -1,508 +1,304 @@
+import { t } from '@app/lib/i18n';
 import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
+import { CallWaveform } from '@channel/Call/components/CallWaveform';
 import { Message } from '@channel/Message';
-import { Thread } from '@channel/Thread/Thread';
+import { SenderName } from '@channel/Message/SenderName';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { UserIcon } from '@core/component/UserIcon';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { MessageData } from '@core/messages/types';
-import { idToEmail } from '@core/user';
 import { formatVideoTimestamp } from '@core/util/duration';
-import Subtitles from '@icon/system/regular/subtitles.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CrosshairIcon from '@icon/system/regular/crosshair.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
+import { Avatar, Button, Tooltip } from '@ui';
+import { createContext, For, type JSX, Show, useContext } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
-import { getSegmentVideoSeconds } from './transcript-playback';
+  createTranscriptScroll,
+  type TranscriptFollow,
+} from '../primitives/transcript-scroll';
+import { createTranscriptTimeline } from '../primitives/transcript-timeline';
 
-// Match the channel message grouping window (5 minutes).
-const GROUPING_WINDOW_MS = 5 * 60 * 1000;
-
-type SegmentItem = {
-  segment: CallRecordTranscriptSegment;
-  groupedWithPrevious: boolean;
-};
-
-function getDiarizedSpeakerId(
-  segment: CallRecordTranscriptSegment | undefined
-): string | undefined {
-  return segment?.diarizedSpeakerId ?? undefined;
-}
-
-function shouldGroupWithPrevious(
-  current: CallRecordTranscriptSegment,
-  previous: CallRecordTranscriptSegment | undefined
-): boolean {
-  if (!previous) return false;
-  if (current.speakerId !== previous.speakerId) return false;
-  if (getDiarizedSpeakerId(current) !== getDiarizedSpeakerId(previous)) {
-    return false;
-  }
-  const gap =
-    new Date(current.startedAt).getTime() -
-    new Date(previous.startedAt).getTime();
-  return gap >= 0 && gap <= GROUPING_WINDOW_MS;
-}
-
-function segmentToApiChannelMessage(
-  s: CallRecordTranscriptSegment,
-  _channelId: string
-): MessageData & {
-  thread: {
-    reply_count: number;
-    latest_reply_at?: string | null;
-    preview: MessageData[];
-  };
-} {
-  return {
-    id: s.segmentId ?? `transcript-${s.sequenceNum}`,
-    content: s.content,
-    sender: senderFromStorageId(s.speakerId),
-    sender_id: s.speakerId,
-    created_at: s.startedAt,
-    updated_at: s.startedAt,
-    attachments: [],
-    reactions: [],
-    thread: { preview: [], reply_count: 0 },
-  };
-}
-
-function TranscriptSegmentRow(props: {
-  segment: CallRecordTranscriptSegment;
-  channelId: string;
-  isActive: boolean;
-  timelineStartMs: number | null;
-  onSeekToSeconds?: (seconds: number) => void;
-}) {
-  const message = segmentToApiChannelMessage(props.segment, props.channelId);
-  const videoTimestamp = getSegmentVideoSeconds(
-    props.segment,
-    props.timelineStartMs
-  );
-  return (
-    <Thread.Row message={message}>
-      <Message.Root
-        message={message}
-        selected={props.isActive}
-        onClick={() => {
-          if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
-        }}
-      >
-        <Message.Layout class="pt-(--regular-message-padding-t)">
-          <Message.Slot placement="icon">
-            <Message.SenderIcon />
-          </Message.Slot>
-          <Message.Slot
-            placement="header"
-            class="flex items-center gap-1 min-w-0"
-          >
-            <Message.SenderName />
-            <span class="ml-auto flex shrink-0 items-center gap-2 text-xs text-ink-muted">
-              <span class="tabular-nums">
-                <Show
-                  when={videoTimestamp !== null}
-                  fallback={<Message.Timestamp />}
-                >
-                  {formatVideoTimestamp(videoTimestamp ?? 0)}
-                </Show>
-              </span>
-            </span>
-          </Message.Slot>
-          <Message.Slot placement="content">
-            <div class="whitespace-pre-wrap wrap-break-word text-sm">
-              {props.segment.content}
-            </div>
-          </Message.Slot>
-        </Message.Layout>
-      </Message.Root>
-    </Thread.Row>
-  );
-}
-
-function GroupedTranscriptSegmentRow(props: {
-  segment: CallRecordTranscriptSegment;
-  channelId: string;
-  isActive: boolean;
-  timelineStartMs: number | null;
-  onSeekToSeconds?: (seconds: number) => void;
-}) {
-  const message = segmentToApiChannelMessage(props.segment, props.channelId);
-  const videoTimestamp = getSegmentVideoSeconds(
-    props.segment,
-    props.timelineStartMs
-  );
-  return (
-    <Thread.Row message={message}>
-      <Message.Root
-        message={message}
-        selected={props.isActive}
-        onClick={() => {
-          if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
-        }}
-      >
-        <Message.Layout>
-          <Message.Slot placement="icon">
-            <Message.SenderIcon hidden />
-          </Message.Slot>
-          <Message.Slot placement="content">
-            <div class="whitespace-pre-wrap wrap-break-word text-sm">
-              {props.segment.content}
-            </div>
-          </Message.Slot>
-        </Message.Layout>
-      </Message.Root>
-    </Thread.Row>
-  );
-}
-
-/** Standalone calls and external speakers have no channel sender entity. */
-function MeetingTranscriptSegmentRow(props: {
-  segment: CallRecordTranscriptSegment;
-  guest: boolean;
-  speakerName?: string;
-  grouped: boolean;
-  isActive: boolean;
-  timelineStartMs: number | null;
-  onSeekToSeconds?: (seconds: number) => void;
-}) {
-  const guest = () => props.guest;
-  const name = () =>
-    props.speakerName?.trim() ||
-    (guest() ? 'Guest' : idToEmail(props.segment.speakerId));
-  const videoTimestamp = () =>
-    getSegmentVideoSeconds(props.segment, props.timelineStartMs);
-  return (
-    <button
-      type="button"
-      class="grid w-full grid-cols-[2rem_minmax(0,1fr)] gap-x-2 rounded-lg px-2 py-1 text-left hover:bg-hover"
-      classList={{ 'bg-hover': props.isActive, 'pt-4': !props.grouped }}
-      onClick={() => {
-        const seconds = videoTimestamp();
-        if (seconds !== null) props.onSeekToSeconds?.(seconds);
-      }}
-    >
-      <Show when={!props.grouped}>
-        <span class="row-span-2">
-          <Show
-            when={!guest()}
-            fallback={
-              <span class="flex size-7 items-center justify-center rounded-full bg-hover text-xs text-ink-muted">
-                {name().charAt(0).toUpperCase()}
-              </span>
-            }
-          >
-            <UserIcon
-              id={props.segment.speakerId}
-              size="sm"
-              isDeleted={false}
-            />
-          </Show>
-        </span>
-        <span class="flex min-w-0 items-center gap-2 text-xs">
-          <span class="truncate font-medium text-ink">{name()}</span>
-          <Show when={guest()}>
-            <span class="text-ink-extra-muted">Guest</span>
-          </Show>
-          <Show when={videoTimestamp() !== null}>
-            <span class="ml-auto text-ink-muted tabular-nums">
-              {formatVideoTimestamp(videoTimestamp() ?? 0)}
-            </span>
-          </Show>
-        </span>
-      </Show>
-      <span class="col-start-2 whitespace-pre-wrap wrap-break-word text-sm text-ink">
-        {props.segment.content}
-      </span>
-    </button>
-  );
-}
-
-export function CallTranscript(props: {
+type TranscriptRootProps = {
   transcript: CallRecordTranscriptSegment[];
-  channelId?: string | null;
-  /** Call record carrying the session's guests; guest speakers resolve names from it. */
   record?: { guests: Array<{ id: string; displayName: string }> };
   timelineStartMs: number | null;
+  durationSeconds?: number;
   activeSequenceNum?: number | null;
-  /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
+  playing?: boolean;
   videoSeekGeneration?: number;
   onSeekToSeconds?: (seconds: number) => void;
-  hideHeader?: boolean;
-}) {
-  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
-  const [syncToVideoTime, setSyncToVideoTime] = createSignal(true);
-  const [isActiveRowInView, setIsActiveRowInView] = createSignal(true);
-  const rowRefs = new Map<number, HTMLDivElement>();
-  let ignoreScrollUntil = 0;
+  active?: boolean;
+  messages?: MessageData[];
+  /** Inline transcripts share the page scroller; cards own one. */
+  scrollElement?: HTMLElement;
+  /** Share follow actions with the enclosing page's custom scrollbar. */
+  follow?: TranscriptFollow;
+  children: JSX.Element;
+};
+type TranscriptContextValue = {
+  props: TranscriptRootProps;
+  scroll: ReturnType<typeof createTranscriptScroll>;
+  timeline: ReturnType<typeof createTranscriptTimeline>;
+};
+const TranscriptContext = createContext<TranscriptContextValue>();
 
-  const transcriptMeta = createMemo(() => {
-    const sorted = [...props.transcript].sort(
-      (a, b) => a.sequenceNum - b.sequenceNum
-    );
-    const items: SegmentItem[] = sorted.map((segment, index) => {
-      const previous = sorted[index - 1];
-      return {
-        segment,
-        groupedWithPrevious: shouldGroupWithPrevious(segment, previous),
-      };
-    });
-    return { items };
-  });
+function useTranscript() {
+  const context = useContext(TranscriptContext);
+  if (!context)
+    throw new Error('CallTranscript parts require CallTranscript.Root');
+  return context;
+}
 
-  const scrollActiveIntoView = (
-    behavior: ScrollBehavior = 'smooth',
-    opts?: { mode?: 'auto' | 'force' }
-  ) => {
-    const activeSequenceNum = props.activeSequenceNum;
-    if (activeSequenceNum === null || activeSequenceNum === undefined) return;
-
-    const container = scrollRef();
-    const row = rowRefs.get(activeSequenceNum);
-    if (!container || !row) return;
-
-    const containerRect = container.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const mode = opts?.mode ?? 'auto';
-
-    if (mode === 'auto') {
-      const isAbove = rowRect.top < containerRect.top;
-      const isBelow = rowRect.bottom > containerRect.bottom;
-      if (!isAbove && !isBelow) return;
-    }
-
-    const targetScrollTop =
-      container.scrollTop +
-      (rowRect.top - containerRect.top) -
-      container.clientHeight / 2 +
-      row.clientHeight / 2;
-
-    ignoreScrollUntil = performance.now() + 350;
-    container.scrollTo({
-      top: Math.max(0, targetScrollTop),
-      behavior,
-    });
-  };
-
-  const updateActiveRowVisibility = () => {
-    const activeSequenceNum = props.activeSequenceNum;
-    if (activeSequenceNum === null || activeSequenceNum === undefined) {
-      setIsActiveRowInView(true);
-      return;
-    }
-
-    const container = scrollRef();
-    const row = rowRefs.get(activeSequenceNum);
-    if (!container || !row) {
-      setIsActiveRowInView(false);
-      return;
-    }
-
-    const containerRect = container.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const intersects =
-      rowRect.bottom > containerRect.top && rowRect.top < containerRect.bottom;
-    setIsActiveRowInView(intersects);
-  };
-
-  const onTranscriptViewportResize = () => {
-    updateActiveRowVisibility();
-
-    // If we're following video time, keep the active row placed sensibly after layout changes.
-    if (syncToVideoTime()) {
-      scrollActiveIntoView('auto');
-      updateActiveRowVisibility();
-      return;
-    }
-
-    // If the user has disabled follow-scroll, don't fight them — unless the active row is now
-    // fully scrolled out of view due to a viewport resize, in which case recover visibility.
-    if (!isActiveRowInView()) {
-      scrollActiveIntoView('auto');
-      updateActiveRowVisibility();
-    }
-  };
-
-  /** Avoid double `scrollActiveIntoView` when seek bumps `videoSeekGeneration` and active line updates in the same flush. */
-  let suppressFollowScrollAfterSeek = false;
-
-  createEffect(
-    on(
-      () => props.videoSeekGeneration ?? 0,
-      (gen, prev) => {
-        if (prev === undefined) {
-          updateActiveRowVisibility();
-          return;
-        }
-        if (gen !== prev) {
-          suppressFollowScrollAfterSeek = true;
-          queueMicrotask(() => {
-            suppressFollowScrollAfterSeek = false;
-          });
-          setSyncToVideoTime(true);
-          scrollActiveIntoView('smooth', { mode: 'force' });
-          updateActiveRowVisibility();
-        }
-      }
-    )
-  );
-
-  createEffect(() => {
-    void props.activeSequenceNum;
-    void syncToVideoTime();
-    void scrollRef();
-
-    if (suppressFollowScrollAfterSeek) {
-      updateActiveRowVisibility();
-      return;
-    }
-
-    if (syncToVideoTime()) {
-      scrollActiveIntoView();
-    }
-    updateActiveRowVisibility();
-  });
-
-  createEffect(() => {
-    const el = scrollRef();
-    if (!el) return;
-
-    let rafId = 0;
-    const schedule = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        onTranscriptViewportResize();
-      });
-    };
-
-    schedule();
-    const observer = new ResizeObserver(schedule);
-    observer.observe(el);
-    onCleanup(() => {
-      observer.disconnect();
-      if (rafId) cancelAnimationFrame(rafId);
-    });
-  });
-
+function TranscriptRoot(props: TranscriptRootProps) {
+  const scroll = createTranscriptScroll(props);
+  const timeline = createTranscriptTimeline(props);
   return (
-    <div class="relative flex h-full min-h-0 flex-col overflow-hidden">
-      <div class="relative flex flex-1 min-h-0 flex-col overflow-hidden">
-        <div
-          ref={setScrollRef}
-          class="h-full min-h-0 flex-1 overflow-y-auto scrollbar-hidden"
-          onWheel={() => setSyncToVideoTime(false)}
-          onTouchMove={() => setSyncToVideoTime(false)}
-          onScroll={() => {
-            if (performance.now() < ignoreScrollUntil) return;
-            updateActiveRowVisibility();
-          }}
-        >
-          <Show when={!props.hideHeader}>
-            <div class="isolate flex items-center gap-2 sticky top-0 bg-surface z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
-              <Subtitles class="size-4 text-ink shrink-0" />
-              <p class="font-semibold text-ink select-none text-sm shrink-0">
-                Transcript
-              </p>
-            </div>
-          </Show>
-
-          <div class="flex flex-col p-4 pt-0">
-            <For each={transcriptMeta().items}>
-              {(item) => (
-                <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
-                  <Show
-                    when={
-                      !isCallGuestId(props.record, item.segment.speakerId) &&
-                      props.channelId
-                    }
-                    fallback={
-                      <MeetingTranscriptSegmentRow
-                        segment={item.segment}
-                        guest={isCallGuestId(
-                          props.record,
-                          item.segment.speakerId
-                        )}
-                        speakerName={guestDisplayName(
-                          props.record,
-                          item.segment.speakerId
-                        )}
-                        grouped={item.groupedWithPrevious}
-                        isActive={
-                          item.segment.sequenceNum === props.activeSequenceNum
-                        }
-                        timelineStartMs={props.timelineStartMs}
-                        onSeekToSeconds={props.onSeekToSeconds}
-                      />
-                    }
-                  >
-                    {(channelId) => (
-                      <Show
-                        when={item.groupedWithPrevious}
-                        fallback={
-                          <TranscriptSegmentRow
-                            segment={item.segment}
-                            channelId={channelId()}
-                            isActive={
-                              item.segment.sequenceNum ===
-                              props.activeSequenceNum
-                            }
-                            timelineStartMs={props.timelineStartMs}
-                            onSeekToSeconds={props.onSeekToSeconds}
-                          />
-                        }
-                      >
-                        <GroupedTranscriptSegmentRow
-                          segment={item.segment}
-                          channelId={channelId()}
-                          isActive={
-                            item.segment.sequenceNum === props.activeSequenceNum
-                          }
-                          timelineStartMs={props.timelineStartMs}
-                          onSeekToSeconds={props.onSeekToSeconds}
-                        />
-                      </Show>
-                    )}
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </div>
-        <CustomScrollbar scrollContainer={scrollRef} />
-      </div>
-      <Show
-        when={
-          !syncToVideoTime() &&
-          !isActiveRowInView() &&
-          props.activeSequenceNum !== null &&
-          props.activeSequenceNum !== undefined
-        }
+    <TranscriptContext.Provider value={{ props, scroll, timeline }}>
+      <div
+        class="relative flex min-h-0 flex-col"
+        classList={{ 'h-full overflow-hidden': !props.scrollElement }}
       >
-        <div
-          class="absolute bottom-0 inset-x-px px-2 pb-2 flex justify-center pointer-events-none z-20"
-          style={{
-            'background-image':
-              'linear-gradient(transparent, var(--color-surface) 85%)',
-          }}
-        >
-          <button
-            type="button"
-            class="pointer-events-auto isolate overflow-hidden relative bg-surface border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
-            onClick={() => {
-              setSyncToVideoTime(true);
-              scrollActiveIntoView('smooth');
-              setIsActiveRowInView(true);
-            }}
-          >
-            <span class="relative z-user-highlight">Sync to video time</span>
-          </button>
-        </div>
-      </Show>
+        {props.children}
+      </div>
+    </TranscriptContext.Provider>
+  );
+}
+
+function TranscriptScrollArea(props: { children: JSX.Element }) {
+  const context = useTranscript();
+  return (
+    <div
+      ref={context.scroll.setScrollRef}
+      classList={{
+        'h-full min-h-0 flex-1 overflow-y-auto scrollbar-hidden':
+          !context.props.scrollElement,
+      }}
+    >
+      {props.children}
     </div>
   );
 }
+
+function TranscriptHeader() {
+  return (
+    <h3 class="px-3 py-3 text-sm font-semibold">
+      {t('calls.detailTranscript')}
+    </h3>
+  );
+}
+
+function TranscriptContent() {
+  const { props, scroll, timeline } = useTranscript();
+  return (
+    <StaticMarkdownContext>
+      <div
+        class="flex flex-col gap-1 pb-6"
+        classList={{ 'px-3': !props.scrollElement }}
+      >
+        <For each={timeline()}>
+          {(item) => {
+            if (item.kind === 'chat') {
+              return (
+                <Message.Root
+                  message={item.message}
+                  class="rounded-xl px-3 py-3"
+                >
+                  <div class="grid grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-0.5">
+                    <div class="row-span-3">
+                      <Message.SenderIcon />
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                      <Message.SenderName />
+                      <span class="flex items-center gap-1 rounded bg-hover px-1.5 py-0.5 text-ink-muted">
+                        <ChatIcon class="size-3" />
+                        {t('calls.detailChat')}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => props.onSeekToSeconds?.(item.seconds)}
+                      >
+                        {formatVideoTimestamp(item.seconds)}
+                      </Button>
+                    </div>
+                    <Message.Content />
+                    <Message.Attachments />
+                  </div>
+                </Message.Root>
+              );
+            }
+            const segment = () => item.segment;
+            const active = () =>
+              segment().sequenceNum === props.activeSequenceNum;
+            const guest = () =>
+              isCallGuestId(props.record, segment().speakerId);
+            const name = () =>
+              guestDisplayName(props.record, segment().speakerId) ||
+              t('calls.detailGuest');
+            const message = (): MessageData => ({
+              id: item.key,
+              content: segment().content,
+              sender: senderFromStorageId(segment().speakerId),
+              sender_id: segment().speakerId,
+              created_at: segment().startedAt,
+              updated_at: segment().startedAt,
+              attachments: [],
+              reactions: [],
+            });
+            return (
+              <div
+                data-call-transcript-row
+                ref={(element) =>
+                  scroll.registerRow(segment().sequenceNum, element)
+                }
+              >
+                <Message.Root
+                  message={message()}
+                  class="rounded-xl"
+                  classList={{ 'bg-hover': active() }}
+                >
+                  <Tooltip.Root>
+                    <Tooltip.Trigger
+                      as="button"
+                      type="button"
+                      class="grid w-full grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-0.5 rounded-xl px-3 py-3 text-left"
+                      onClick={() => {
+                        if (item.seconds !== null)
+                          props.onSeekToSeconds?.(item.seconds);
+                      }}
+                    >
+                      <span class="row-span-2">
+                        <Show
+                          when={!guest()}
+                          fallback={
+                            <Avatar size="sm">
+                              <Avatar.Fallback>
+                                {name().charAt(0)}
+                              </Avatar.Fallback>
+                            </Avatar>
+                          }
+                        >
+                          <Message.SenderIcon interactive={false} />
+                        </Show>
+                      </span>
+                      <span class="flex min-w-0 items-center justify-between gap-2 text-xs">
+                        <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                          <Show
+                            when={guest()}
+                            fallback={<SenderName message={message()} />}
+                          >
+                            {name()}
+                          </Show>
+                        </span>
+                        <span class="flex shrink-0 items-center justify-end gap-2">
+                          <Show when={active()}>
+                            <CallWaveform
+                              class="size-3 shrink-0"
+                              live
+                              speaking={props.playing ?? false}
+                            />
+                          </Show>
+                          <Show when={item.seconds !== null}>
+                            <span class="tabular-nums text-ink-muted">
+                              {formatVideoTimestamp(item.seconds ?? 0)}
+                            </span>
+                          </Show>
+                        </span>
+                      </span>
+                      <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">
+                        {segment().content}
+                      </span>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content>
+                        <Show
+                          when={guest()}
+                          fallback={<SenderName message={message()} />}
+                        >
+                          {name()}
+                        </Show>
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Message.Root>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    </StaticMarkdownContext>
+  );
+}
+
+function TranscriptScrollbar() {
+  const { props, scroll } = useTranscript();
+  return (
+    <Show when={!props.scrollElement}>
+      <CustomScrollbar
+        scrollContainer={scroll.scrollRef}
+        onScrollIntent={scroll.stopFollowing}
+      />
+    </Show>
+  );
+}
+
+function TranscriptSync(props: {
+  mount?: HTMLElement;
+  surface?: 'surface' | 'inset';
+}) {
+  const { props: transcript, scroll } = useTranscript();
+  const showSync = () => {
+    if (transcript.active === false) return false;
+    if (scroll.following() || scroll.activeVisible()) return false;
+    return transcript.activeSequenceNum != null;
+  };
+  const button = () => (
+    <div
+      class="pointer-events-auto rounded-full border border-edge-muted shadow-menu"
+      classList={{
+        'bg-inset': props.surface === 'inset',
+        'bg-surface': props.surface !== 'inset',
+      }}
+    >
+      <Button variant="secondary" size="sm" onClick={scroll.sync}>
+        <CrosshairIcon class="size-4" />
+        {t('calls.detailSyncToVideo')}
+      </Button>
+    </div>
+  );
+  return (
+    <Show when={showSync()}>
+      <Show
+        when={props.mount}
+        fallback={
+          <div
+            class="pointer-events-none inset-x-0 bottom-4 z-20 flex justify-center py-2"
+            classList={{
+              absolute: !transcript.scrollElement,
+              sticky: !!transcript.scrollElement,
+            }}
+          >
+            {button()}
+          </div>
+        }
+      >
+        {(target) => (
+          <Portal mount={target()}>
+            <div class="flex justify-center">{button()}</div>
+          </Portal>
+        )}
+      </Show>
+    </Show>
+  );
+}
+
+export const CallTranscript = {
+  Root: TranscriptRoot,
+  ScrollArea: TranscriptScrollArea,
+  Header: TranscriptHeader,
+  Content: TranscriptContent,
+  Scrollbar: TranscriptScrollbar,
+  Sync: TranscriptSync,
+};

@@ -1,0 +1,30 @@
+export default {
+  count: {
+    one: '{{count}} sub-routine',
+    other: '{{count}} sub-routines',
+  },
+  toggle: {
+    one: 'Show or hide {{count}} sub-routine',
+    other: 'Show or hide {{count}} sub-routines',
+  },
+  finished: { other: 'Finished: {{count}}' },
+  pausedWithParent: 'Paused with the routine that created it',
+  sectionTitle: 'Created by this routine',
+  sectionAside: 'Paused and deleted with this routine',
+  none: 'Nothing this routine created is still active.',
+  showFinished: 'Show finished',
+  hideFinished: 'Hide finished',
+  finishedRow: 'Finished',
+  pausedRow: 'Paused',
+  activeRow: 'Active',
+  runningRow: 'Running',
+  createdBy: 'Created by {{name}}',
+  createdByGone: 'Created by another routine',
+  keep: 'Keep as my routine',
+  kept: 'Kept as your routine',
+  deleteNote: {
+    one: 'The {{count}} routine it created will be deleted too.',
+    other: 'The {{count}} routines it created will be deleted too.',
+  },
+  runCreated: 'Created',
+};

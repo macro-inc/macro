@@ -72,6 +72,7 @@ import {
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
 } from './queries/companies';
+import { useCompanyContactsQuery } from './queries/company-contacts';
 import { useCompanyEmailsQuery } from './queries/company-emails';
 import {
   useSetContactCompanyMutation,
@@ -375,6 +376,8 @@ export function createAppCrmContext(): CrmContext {
     userId,
     isTeamAdmin: useIsTeamAdmin,
     createCompanySource: (...args) => useCompanyQuery(deps, ...args),
+    createCompanyContactsSource: (...args) =>
+      useCompanyContactsQuery(deps, ...args),
     createContactSource: (...args) =>
       withReadyGate(useContactQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,

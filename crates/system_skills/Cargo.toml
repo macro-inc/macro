@@ -6,5 +6,6 @@ version = "0.1.0"
 
 [dependencies]
 prompt = { path = "../prompt" }
+routine_program = { path = "../routine_program" }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

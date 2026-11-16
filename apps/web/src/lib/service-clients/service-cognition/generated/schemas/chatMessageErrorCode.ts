@@ -6,12 +6,6 @@
  */
 
 /**
- * Why a chat message was refused.
+ * Stable machine-readable code for admission errors (402 or 503).
  */
-export type ChatMessageErrorCode =
-  (typeof ChatMessageErrorCode)[keyof typeof ChatMessageErrorCode];
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ChatMessageErrorCode = {
-  chat_read_only: 'chat_read_only',
-} as const;
+export type ChatMessageErrorCode = string | null;

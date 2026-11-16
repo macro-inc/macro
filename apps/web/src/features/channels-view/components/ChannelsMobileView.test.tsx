@@ -1,14 +1,18 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import {
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
-import { For, type JSX } from 'solid-js';
+import { createMemo, createRoot, createSignal, For, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveChannelLabelMemberships } from '../core/smart-tags';
 import type { ChannelsDataSource } from '../queries';
 
 const mocks = vi.hoisted(() => ({
@@ -28,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   handle: {},
   failure: vi.fn(),
   incomingCallIds: new Map<string, string>(),
+  mentionCounts: new Map<string, number>(),
+  unreadChannelIds: new Set(['one']),
 }));
 vi.mock('@app/components/list', () => ({ createListController: () => ({}) }));
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -76,7 +82,15 @@ vi.mock(
     ChannelCardLayout: (props: {
       item: { entity: ChannelEntity };
       onClick: (event: MouseEvent) => void;
-    }) => <button onClick={props.onClick}>{props.item.entity.name}</button>,
+      trailing?: JSX.Element;
+      badge?: JSX.Element;
+    }) => (
+      <div data-testid={`row-${props.item.entity.id}`}>
+        <button onClick={props.onClick}>{props.item.entity.name}</button>
+        {props.trailing}
+        {props.badge}
+      </div>
+    ),
   })
 );
 vi.mock('@queries/channel/notification-selection', () => ({
@@ -109,13 +123,16 @@ vi.mock('./rail/hooks/useChannelCalls', () => ({
 }));
 vi.mock('./rail/hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({
-    unreadChannelIds: () => new Set(['one']),
+    unreadChannelIds: () => mocks.unreadChannelIds,
     callStatuses: () => new Map(),
     incomingCallIds: () => mocks.incomingCallIds,
+    mentionCount: (channelId: string) =>
+      mocks.mentionCounts.get(channelId) ?? 0,
   }),
 }));
 
 import { ChannelsMobileView } from './ChannelsMobileView';
+import { channelsForMobileSection } from './rail/next/mobile/mobile-section-tabs';
 
 const channel: ChannelEntity = {
   id: 'one',
@@ -142,6 +159,8 @@ const source: ChannelsDataSource = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.incomingCallIds = new Map();
+  mocks.mentionCounts = new Map();
+  mocks.unreadChannelIds = new Set(['one']);
   HTMLElement.prototype.scrollTo = vi.fn();
 });
 afterEach(() => {
@@ -210,6 +229,32 @@ describe('mobile channel activation', () => {
   });
 });
 
+describe('mobile section hydration', () => {
+  it('keeps resolved conversations usable while remaining members load', async () => {
+    const [loading, setLoading] = createSignal(true);
+    const sectionSource: ChannelsDataSource = {
+      ...source,
+      isLoading: loading,
+      isFetching: loading,
+    };
+    render(() => (
+      <ChannelsMobileView
+        source={sectionSource}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+      />
+    ));
+
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.click(row);
+    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledOnce());
+    setLoading(false);
+    setLoading(true);
+    expect(screen.getByRole('button', { name: 'One' })).toBe(row);
+  });
+});
+
 describe('mobile channel press feedback', () => {
   it('highlights a held row and cancels when the finger scrolls or the touch is cancelled', () => {
     vi.useFakeTimers();
@@ -263,6 +308,76 @@ describe('mobile channel press feedback', () => {
   });
 });
 
+describe('mobile section membership', () => {
+  it('indexes 10,000 name matches among 20,000 channels once per membership change', () => {
+    const channels = Array.from({ length: 20_000 }, (_, index) => ({
+      ...channel,
+      id: `channel-${index}`,
+      name: `${index < 10_000 ? 'Matching' : 'Different'} ${index}`,
+    }));
+    const [matchedSection] = resolveChannelLabelMemberships(
+      [
+        {
+          id: 'large-rule',
+          name: 'Large rule',
+          rule: { attribute: 'name', contains: 'matching' },
+          channelIds: [],
+          explicitChannelIds: [],
+          channelCount: 0,
+          sortOrder: 0,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+      channels
+    );
+    expect(matchedSection.channelIds).toHaveLength(10_000);
+    const [memberIds, setMemberIds] = createStore(matchedSection.channelIds);
+    let memberReads = 0;
+    const trackedIds = new Proxy(memberIds, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          memberReads += 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const label: ChannelLabel = {
+      ...matchedSection,
+      channelIds: trackedIds,
+    };
+    createRoot((dispose) => {
+      try {
+        const matches = createMemo(() =>
+          channelsForMobileSection({
+            tab: 'label:large-rule',
+            channels,
+            labels: [label],
+          })
+        );
+        expect(matches()).toEqual(channels.slice(0, 10_000));
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+
+        channels[19_999].name = 'Matching renamed';
+        const [renamedSection] = resolveChannelLabelMemberships(
+          [matchedSection],
+          channels
+        );
+        expect(renamedSection.channelIds).toHaveLength(10_001);
+        memberReads = 0;
+        setMemberIds(renamedSection.channelIds);
+        expect(matches()).toEqual([
+          ...channels.slice(0, 10_000),
+          channels[19_999],
+        ]);
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+      } finally {
+        dispose();
+      }
+    });
+  });
+});
+
 describe('mobile channel pins', () => {
   const pinnedChannel: ChannelEntity = {
     ...channel,
@@ -298,8 +413,12 @@ describe('mobile channel pins', () => {
     );
   });
 
-  it('keeps a pinned conversation in the list while its call rings so it can be joined', () => {
-    mocks.incomingCallIds = new Map([['two', 'call-1']]);
+  it('counts unread mentions on list rows and pins, capped at the edge limit', () => {
+    mocks.mentionCounts = new Map([
+      ['one', 3],
+      ['two', 10],
+    ]);
+    mocks.unreadChannelIds = new Set(['one', 'two']);
     render(() => (
       <ChannelsMobileView
         source={both}
@@ -309,12 +428,51 @@ describe('mobile channel pins', () => {
       />
     ));
 
-    expect(
-      screen.getByRole('group', { name: 'Pinned conversations' })
-    ).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Two' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Join call-1' })).toBeTruthy();
+    const row = screen.getByTestId('row-one');
+    const rowCount = within(row).getByRole('img', {
+      name: '3 unread mentions',
+    });
+    expect(rowCount.textContent).toBe('3');
+    const pins = screen.getByRole('group', { name: 'Pinned conversations' });
+    const pinCount = within(pins).getByRole('img', {
+      name: 'More than 9 unread mentions',
+    });
+    expect(pinCount.textContent).toBe('9+');
+    // A pin with mentions shows the count in place of its unread dot.
+    expect(within(pins).queryByLabelText('Unread')).toBeNull();
   });
+
+  it.each([false, true])(
+    'keeps a ringing pinned conversation joinable with section tabs enabled: %s',
+    (sectionsEnabled) => {
+      mocks.incomingCallIds = new Map([['two', 'call-1']]);
+      const allSource = {
+        ...both,
+        items: () =>
+          sectionsEnabled
+            ? channelsForMobileSection({
+                tab: 'all',
+                channels: both.items(),
+                labels: [],
+              })
+            : both.items(),
+      };
+      render(() => (
+        <ChannelsMobileView
+          source={allSource}
+          pinned={[pinnedChannel]}
+          searchQuery=""
+          onClearSearch={() => {}}
+        />
+      ));
+
+      expect(
+        screen.getByRole('group', { name: 'Pinned conversations' })
+      ).toBeTruthy();
+      expect(screen.getAllByRole('button', { name: 'Two' })).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Join call-1' })).toBeTruthy();
+    }
+  );
 
   it('lists pinned conversations normally while searching', () => {
     render(() => (

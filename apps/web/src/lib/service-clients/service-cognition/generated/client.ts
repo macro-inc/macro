@@ -9,10 +9,13 @@ import type {
   ActivityReports,
   AddServerRequest,
   BrowsePipedreamMcpCatalogParams,
+  CallToolRequest,
+  CallToolResponse,
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
   CompleteOnboardingRequest,
+  CreateChatRequest,
   CreateConfirmedCalendarEvent200,
   CreateConfirmedCalendarEventBody,
   CreatePipedreamMcpTokenBody,
@@ -38,7 +41,12 @@ import type {
   GetChatResponse,
   GetChatsForAttachmentResponse,
   GetUserActivityParams,
+  HttpSendChatMessageRequest,
+  ImportEntitiesResponse,
+  ImportNotionPageRequest,
+  ImportNotionPageResponse,
   ImportSource,
+  ListImportEntitiesParams,
   ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -58,8 +66,10 @@ import type {
   ProjectionStateResponse,
   ReadActivityResponse,
   ReadMyActivityParams,
+  RejectToolCallRequest,
   RunImportOutcome,
   RunImportRequest,
+  SendChatMessageResponse,
   SendConfirmedEmail200,
   SendConfirmedEmailBody,
   ServerResponse,
@@ -72,11 +82,16 @@ import type {
   StopChatStreamError,
   StopChatStreamRequest,
   StopChatStreamResponse,
+  StringIDResponse,
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  TrackImportEntityRequest,
+  TrackImportEntityResponse,
   UpdateExplicitMemoryRequest,
   UpdateServerRequest,
+  UpdateToolCallRequest,
+  UpdateToolResponseRequest,
   UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
@@ -646,6 +661,69 @@ export const permanentlyDeleteChat = async (
 };
 
 /**
+ * @summary Create a new chat.
+ */
+export type createChatResponse200 = {
+  data: StringIDResponse;
+  status: 200;
+};
+
+export type createChatResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createChatResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type createChatResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createChatResponseSuccess = createChatResponse200 & {
+  headers: Headers;
+};
+export type createChatResponseError = (
+  | createChatResponse401
+  | createChatResponse403
+  | createChatResponse500
+) & {
+  headers: Headers;
+};
+
+export type createChatResponse =
+  | createChatResponseSuccess
+  | createChatResponseError;
+
+export const getCreateChatUrl = () => {
+  return `/chats`;
+};
+
+export const createChat = async (
+  createChatRequest: CreateChatRequest,
+  options?: RequestInit
+): Promise<createChatResponse> => {
+  const res = await fetch(getCreateChatUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createChatRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createChatResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createChatResponse;
+};
+
+/**
  * @summary Retrieves chat history for a specific chat ID
  */
 export type getChatHistoryHandlerResponse200 = {
@@ -825,6 +903,61 @@ export const getChat = async (
 };
 
 /**
+ * @summary Copy a chat and its messages into a new chat.
+ */
+export type copyChatResponse200 = {
+  data: StringIDResponse;
+  status: 200;
+};
+
+export type copyChatResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type copyChatResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type copyChatResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type copyChatResponseSuccess = copyChatResponse200 & {
+  headers: Headers;
+};
+export type copyChatResponseError = (
+  | copyChatResponse401
+  | copyChatResponse404
+  | copyChatResponse500
+) & {
+  headers: Headers;
+};
+
+export type copyChatResponse = copyChatResponseSuccess | copyChatResponseError;
+
+export const getCopyChatUrl = (chatId: string) => {
+  return `/chats/${chatId}/copy`;
+};
+
+export const copyChat = async (
+  chatId: string,
+  options?: RequestInit
+): Promise<copyChatResponse> => {
+  const res = await fetch(getCopyChatUrl(chatId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyChatResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as copyChatResponse;
+};
+
+/**
  * @summary Get the share permissions for a chat.
  */
 export type getChatPermissionsResponse200 = {
@@ -933,6 +1066,245 @@ export const revertDeleteChat = async (
     status: res.status,
     headers: res.headers,
   } as revertDeleteChatResponse;
+};
+
+/**
+ * @summary Execute a pending tool call, optionally with updated arguments.
+ */
+export type callToolResponse200 = {
+  data: CallToolResponse;
+  status: 200;
+};
+
+export type callToolResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type callToolResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type callToolResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type callToolResponseSuccess = callToolResponse200 & {
+  headers: Headers;
+};
+export type callToolResponseError = (
+  | callToolResponse400
+  | callToolResponse404
+  | callToolResponse500
+) & {
+  headers: Headers;
+};
+
+export type callToolResponse = callToolResponseSuccess | callToolResponseError;
+
+export const getCallToolUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/call`;
+};
+
+export const callTool = async (
+  chatId: string,
+  callToolRequest: CallToolRequest,
+  options?: RequestInit
+): Promise<callToolResponse> => {
+  const res = await fetch(getCallToolUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callToolRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: callToolResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as callToolResponse;
+};
+
+/**
+ * @summary Reject a pending tool call.
+ */
+export type rejectToolCallResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type rejectToolCallResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type rejectToolCallResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type rejectToolCallResponseSuccess = rejectToolCallResponse200 & {
+  headers: Headers;
+};
+export type rejectToolCallResponseError = (
+  | rejectToolCallResponse404
+  | rejectToolCallResponse500
+) & {
+  headers: Headers;
+};
+
+export type rejectToolCallResponse =
+  | rejectToolCallResponseSuccess
+  | rejectToolCallResponseError;
+
+export const getRejectToolCallUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/reject`;
+};
+
+export const rejectToolCall = async (
+  chatId: string,
+  rejectToolCallRequest: RejectToolCallRequest,
+  options?: RequestInit
+): Promise<rejectToolCallResponse> => {
+  const res = await fetch(getRejectToolCallUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rejectToolCallRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rejectToolCallResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rejectToolCallResponse;
+};
+
+/**
+ * @summary Update a tool response.
+ */
+export type updateToolResponseResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type updateToolResponseResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type updateToolResponseResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type updateToolResponseResponseSuccess =
+  updateToolResponseResponse200 & {
+    headers: Headers;
+  };
+export type updateToolResponseResponseError = (
+  | updateToolResponseResponse404
+  | updateToolResponseResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateToolResponseResponse =
+  | updateToolResponseResponseSuccess
+  | updateToolResponseResponseError;
+
+export const getUpdateToolResponseUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/response/update`;
+};
+
+export const updateToolResponse = async (
+  chatId: string,
+  updateToolResponseRequest: UpdateToolResponseRequest,
+  options?: RequestInit
+): Promise<updateToolResponseResponse> => {
+  const res = await fetch(getUpdateToolResponseUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateToolResponseRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateToolResponseResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateToolResponseResponse;
+};
+
+/**
+ * @summary Update a tool call's arguments after validation.
+ */
+export type updateToolCallResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type updateToolCallResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type updateToolCallResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type updateToolCallResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type updateToolCallResponseSuccess = updateToolCallResponse200 & {
+  headers: Headers;
+};
+export type updateToolCallResponseError = (
+  | updateToolCallResponse400
+  | updateToolCallResponse404
+  | updateToolCallResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateToolCallResponse =
+  | updateToolCallResponseSuccess
+  | updateToolCallResponseError;
+
+export const getUpdateToolCallUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/update`;
+};
+
+export const updateToolCall = async (
+  chatId: string,
+  updateToolCallRequest: UpdateToolCallRequest,
+  options?: RequestInit
+): Promise<updateToolCallResponse> => {
+  const res = await fetch(getUpdateToolCallUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateToolCallRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateToolCallResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateToolCallResponse;
 };
 
 export type getCitationHandlerResponse200 = {
@@ -1354,6 +1726,197 @@ export const generateImage = async (
 };
 
 /**
+ * @summary List the caller's import ledger: staged candidates, running and finished
+imports (with the team's imports), and declined items.
+ */
+export type listImportEntitiesResponse200 = {
+  data: ImportEntitiesResponse;
+  status: 200;
+};
+
+export type listImportEntitiesResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listImportEntitiesResponseSuccess =
+  listImportEntitiesResponse200 & {
+    headers: Headers;
+  };
+export type listImportEntitiesResponseError = listImportEntitiesResponse500 & {
+  headers: Headers;
+};
+
+export type listImportEntitiesResponse =
+  | listImportEntitiesResponseSuccess
+  | listImportEntitiesResponseError;
+
+export const getListImportEntitiesUrl = (params?: ListImportEntitiesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/import/entities?${stringifiedParams}`
+    : `/import/entities`;
+};
+
+export const listImportEntities = async (
+  params?: ListImportEntitiesParams,
+  options?: RequestInit
+): Promise<listImportEntitiesResponse> => {
+  const res = await fetch(getListImportEntitiesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listImportEntitiesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listImportEntitiesResponse;
+};
+
+/**
+ * @summary Track an external item in the ledger: stage it as a candidate, or record a
+Macro entity already created from it. Says when the item was already
+imported, so callers do not create a duplicate.
+ */
+export type trackImportEntityResponse200 = {
+  data: TrackImportEntityResponse;
+  status: 200;
+};
+
+export type trackImportEntityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type trackImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
+  headers: Headers;
+};
+export type trackImportEntityResponseError = (
+  | trackImportEntityResponse400
+  | trackImportEntityResponse422
+  | trackImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type trackImportEntityResponse =
+  | trackImportEntityResponseSuccess
+  | trackImportEntityResponseError;
+
+export const getTrackImportEntityUrl = () => {
+  return `/import/entities`;
+};
+
+export const trackImportEntity = async (
+  trackImportEntityRequest: TrackImportEntityRequest,
+  options?: RequestInit
+): Promise<trackImportEntityResponse> => {
+  const res = await fetch(getTrackImportEntityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(trackImportEntityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: trackImportEntityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as trackImportEntityResponse;
+};
+
+/**
+ * @summary Decline one of the caller's staged candidates; it is remembered as declined
+and not proposed again.
+ */
+export type declineImportEntityResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type declineImportEntityResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type declineImportEntityResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type declineImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type declineImportEntityResponseSuccess =
+  declineImportEntityResponse204 & {
+    headers: Headers;
+  };
+export type declineImportEntityResponseError = (
+  | declineImportEntityResponse404
+  | declineImportEntityResponse409
+  | declineImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type declineImportEntityResponse =
+  | declineImportEntityResponseSuccess
+  | declineImportEntityResponseError;
+
+export const getDeclineImportEntityUrl = (id: string) => {
+  return `/import/entities/${id}`;
+};
+
+export const declineImportEntity = async (
+  id: string,
+  options?: RequestInit
+): Promise<declineImportEntityResponse> => {
+  const res = await fetch(getDeclineImportEntityUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: declineImportEntityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as declineImportEntityResponse;
+};
+
+/**
  * @summary Where the user's Notion workspace import stands.
  */
 export type notionReportHandlerResponse200 = {
@@ -1452,6 +2015,71 @@ export const cancelNotionHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelNotionHandlerResponse;
+};
+
+/**
+ * @summary Import one Notion page as a Macro document through the caller's Notion
+connection, deduplicated against the ledger. Notion databases are not
+imported; a whole workspace goes through a reviewed import instead.
+ */
+export type importNotionPageResponse200 = {
+  data: ImportNotionPageResponse;
+  status: 200;
+};
+
+export type importNotionPageResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type importNotionPageResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type importNotionPageResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
+  headers: Headers;
+};
+export type importNotionPageResponseError = (
+  | importNotionPageResponse400
+  | importNotionPageResponse422
+  | importNotionPageResponse500
+) & {
+  headers: Headers;
+};
+
+export type importNotionPageResponse =
+  | importNotionPageResponseSuccess
+  | importNotionPageResponseError;
+
+export const getImportNotionPageUrl = () => {
+  return `/import/notion/pages`;
+};
+
+export const importNotionPage = async (
+  importNotionPageRequest: ImportNotionPageRequest,
+  options?: RequestInit
+): Promise<importNotionPageResponse> => {
+  const res = await fetch(getImportNotionPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importNotionPageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: importNotionPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as importNotionPageResponse;
 };
 
 /**
@@ -3353,30 +3981,70 @@ export const readSkill = async (
 };
 
 /**
- * Every request is refused, whether or not the chat exists, before any
-admission, storage, or model work. Continue the chat in Agents instead.
- * @summary Refuse a chat message: legacy AI chats are read-only.
+ * This endpoint initiates a chat message and streams the response via the stream service.
+The client should subscribe to the returned stream_id via connection_gateway to receive chunks.
+ * @summary Send a new chat message and stream the AI response.
  */
-export type sendChatMessageResponse410 = {
-  data: ChatMessageError;
-  status: 410;
+export type sendChatMessageResponse200 = {
+  data: SendChatMessageResponse;
+  status: 200;
 };
-export type sendChatMessageResponseError = sendChatMessageResponse410 & {
+
+export type sendChatMessageResponse400 = {
+  data: ChatMessageError;
+  status: 400;
+};
+
+export type sendChatMessageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type sendChatMessageResponse402 = {
+  data: ChatMessageError;
+  status: 402;
+};
+
+export type sendChatMessageResponse403 = {
+  data: ChatMessageError;
+  status: 403;
+};
+
+export type sendChatMessageResponse503 = {
+  data: ChatMessageError;
+  status: 503;
+};
+
+export type sendChatMessageResponseSuccess = sendChatMessageResponse200 & {
+  headers: Headers;
+};
+export type sendChatMessageResponseError = (
+  | sendChatMessageResponse400
+  | sendChatMessageResponse401
+  | sendChatMessageResponse402
+  | sendChatMessageResponse403
+  | sendChatMessageResponse503
+) & {
   headers: Headers;
 };
 
-export type sendChatMessageResponse = sendChatMessageResponseError;
+export type sendChatMessageResponse =
+  | sendChatMessageResponseSuccess
+  | sendChatMessageResponseError;
 
 export const getSendChatMessageUrl = () => {
   return `/stream/chat/message`;
 };
 
 export const sendChatMessage = async (
+  httpSendChatMessageRequest: HttpSendChatMessageRequest,
   options?: RequestInit
 ): Promise<sendChatMessageResponse> => {
   const res = await fetch(getSendChatMessageUrl(), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(httpSendChatMessageRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

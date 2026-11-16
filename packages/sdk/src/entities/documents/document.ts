@@ -1,6 +1,7 @@
 import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
 import type {
   DocumentTeamShareResponse,
+  EntityAppearance,
   GetDocumentResponses,
   GetUserDocumentsHandlerData,
   GithubPullRequest,
@@ -26,7 +27,10 @@ import {
   unwrap,
 } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Canvas } from '../canvases/canvas';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -270,6 +274,12 @@ export class Document
     client: MacroClient,
     opts: { name: string; markdown?: string; project?: Project },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createMarkdownHandler({
         body: {
@@ -290,6 +300,12 @@ export class Document
     client: MacroClient,
     opts: { name: string; markdown?: string; project?: Project },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.createSnippet', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createSnippetHandler({
         body: {
@@ -316,6 +332,13 @@ export class Document
       project?: Project;
     },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.createSkill', opts, {
+      name: true,
+      description: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createSkillHandler({
         body: {
@@ -371,11 +394,41 @@ export class Document
   /** Favorites identify documents as `document`. */
   readonly entityType = 'document';
 
+  /**
+   * Share this document with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * document; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'document', this.id);
+  }
+
   /** The properties service identifies documents as `DOCUMENT`. */
   protected readonly propertyEntityType: PropertyEntityType = 'DOCUMENT';
 
   /** The document's display name. */
   readonly name = this.field('documentName');
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace Markdown or snippet appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setDocumentAppearance({
+        path: { document_id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** The document's file type (e.g. `md`, `pdf`, `docx`). */
   readonly fileType = this.field('fileType');

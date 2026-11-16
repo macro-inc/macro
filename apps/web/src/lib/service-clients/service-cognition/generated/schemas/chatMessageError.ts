@@ -5,13 +5,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ChatMessageErrorCode } from './chatMessageErrorCode';
+import type { ChatMessageErrorStreamId } from './chatMessageErrorStreamId';
 
 /**
- * Error response for the chat message endpoint.
+ * Error response for chat message endpoints
  */
 export interface ChatMessageError {
-  /** Stable machine-readable code. */
-  code: ChatMessageErrorCode;
-  /** Human-readable message. */
+  /** Stable machine-readable code for admission errors (402 or 503). */
+  code?: ChatMessageErrorCode;
   error: string;
+  stream_id?: ChatMessageErrorStreamId;
 }

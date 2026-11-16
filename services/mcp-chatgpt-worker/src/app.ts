@@ -29,6 +29,9 @@ import type { Config } from './config';
 /** Where MCP clients discover this resource server's authorization server. */
 export const PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 
+/** Where OpenAI checks that the app's MCP server is on a domain it owns. */
+export const OPENAI_APPS_CHALLENGE_PATH = '/.well-known/openai-apps-challenge';
+
 const SERVER_INFO = { name: 'macro', title: 'Macro', version: '1.0.0' };
 
 function isServiceName(name: string): name is ServiceName {
@@ -173,6 +176,12 @@ export function createHandler(config: Config) {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith(PROTECTED_RESOURCE_PATH))
       return Response.json(protectedResourceMetadata(config));
+    if (pathname === OPENAI_APPS_CHALLENGE_PATH)
+      return config.OPENAI_APPS_CHALLENGE
+        ? new Response(config.OPENAI_APPS_CHALLENGE, {
+            headers: { 'content-type': 'text/plain; charset=utf-8' },
+          })
+        : new Response('Not found', { status: 404 });
     if (pathname !== mcpPath) return new Response('Not found', { status: 404 });
 
     const token = bearerToken(request);

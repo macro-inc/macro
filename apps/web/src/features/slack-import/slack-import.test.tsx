@@ -6,7 +6,8 @@ import { importReceipt } from './tests/fake-sources';
 
 const host = vi.hoisted(() => ({
   enabled: true,
-  channels: vi.fn(() => ({ isSuccess: false, data: [] as { id: string }[] })),
+  channels: vi.fn(() => ({ channelsById: () => host.channelsById })),
+  channelsById: {} as Record<string, { id: string }>,
   invalidateChannels: vi.fn(async () => {}),
   invalidateSoup: vi.fn(),
   revalidate: vi.fn(async () => {}),
@@ -45,8 +46,10 @@ vi.mock('@core/pipedream/pendingConnect', () => ({
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   holdAutomaticReload: vi.fn(),
 }));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: host.channels,
+}));
 vi.mock('@queries/channel/channels', () => ({
-  useListChannelsQuery: host.channels,
   invalidateListChannels: host.invalidateChannels,
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
@@ -97,6 +100,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   host.enabled = true;
+  host.channelsById = {};
 });
 
 describe('Slack import production boundary', () => {
@@ -133,6 +137,8 @@ describe('Slack import production boundary', () => {
     expect(host.invalidateSoup).toHaveBeenCalledOnce();
     expect(host.revalidate).toHaveBeenCalledOnce();
     expect(host.props!.channelHref(importReceipt().jobId)).toBeUndefined();
+    host.channelsById = { imported: { id: 'imported' } };
+    expect(host.props!.channelHref('imported')).toBe('/app/channel/imported');
     setTeamId('two');
     await waitFor(() => expect(host.view).toHaveBeenLastCalledWith('two'));
     setAdmin(false);

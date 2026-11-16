@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectData, CompletePipedreamMcpConnectErrors, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectResponses, CreateConfirmedCalendarEventData, CreateConfirmedCalendarEventErrors, CreateConfirmedCalendarEventResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, EditExplicitMemoryData, EditExplicitMemoryErrors, EditExplicitMemoryResponses, FetchWebPageData, FetchWebPageErrors, FetchWebPageResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, GetUserActivityData, GetUserActivityErrors, GetUserActivityResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, ListSkillsData, ListSkillsErrors, ListSkillsResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, ReadExplicitMemoryData, ReadExplicitMemoryErrors, ReadExplicitMemoryResponses, ReadMyActivityData, ReadMyActivityErrors, ReadMyActivityResponses, ReadSkillData, ReadSkillErrors, ReadSkillResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SearchWebData, SearchWebErrors, SearchWebResponses, SendChatMessageData, SendChatMessageErrors, SendConfirmedEmailData, SendConfirmedEmailErrors, SendConfirmedEmailResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
+import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectData, CompletePipedreamMcpConnectErrors, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreateConfirmedCalendarEventData, CreateConfirmedCalendarEventErrors, CreateConfirmedCalendarEventResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeclineImportEntityData, DeclineImportEntityErrors, DeclineImportEntityResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, EditExplicitMemoryData, EditExplicitMemoryErrors, EditExplicitMemoryResponses, FetchWebPageData, FetchWebPageErrors, FetchWebPageResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, GetUserActivityData, GetUserActivityErrors, GetUserActivityResponses, HealthHandlerData, HealthHandlerResponses, ImportNotionPageData, ImportNotionPageErrors, ImportNotionPageResponses, ListImportEntitiesData, ListImportEntitiesErrors, ListImportEntitiesResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, ListSkillsData, ListSkillsErrors, ListSkillsResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, ReadExplicitMemoryData, ReadExplicitMemoryErrors, ReadExplicitMemoryResponses, ReadMyActivityData, ReadMyActivityErrors, ReadMyActivityResponses, ReadSkillData, ReadSkillErrors, ReadSkillResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SearchWebData, SearchWebErrors, SearchWebResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SendConfirmedEmailData, SendConfirmedEmailErrors, SendConfirmedEmailResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, TrackImportEntityData, TrackImportEntityErrors, TrackImportEntityResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -157,6 +157,20 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Create a new chat.
+     */
+    public createChat<ThrowOnError extends boolean = false>(options: Options<CreateChatData, ThrowOnError>): RequestResult<CreateChatResponses, CreateChatErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateChatResponses, CreateChatErrors, ThrowOnError>({
+            url: '/chats',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Retrieves chat history for a specific chat ID
      */
     public getChatHistoryHandler<ThrowOnError extends boolean = false>(options: Options<GetChatHistoryHandlerData, ThrowOnError>): RequestResult<GetChatHistoryHandlerResponses, GetChatHistoryHandlerErrors, ThrowOnError> {
@@ -185,6 +199,13 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Copy a chat and its messages into a new chat.
+     */
+    public copyChat<ThrowOnError extends boolean = false>(options: Options<CopyChatData, ThrowOnError>): RequestResult<CopyChatResponses, CopyChatErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CopyChatResponses, CopyChatErrors, ThrowOnError>({ url: '/chats/{chat_id}/copy', ...options });
+    }
+
+    /**
      * Get the share permissions for a chat.
      */
     public getChatPermissions<ThrowOnError extends boolean = false>(options: Options<GetChatPermissionsData, ThrowOnError>): RequestResult<GetChatPermissionsResponses, GetChatPermissionsErrors, ThrowOnError> {
@@ -196,6 +217,62 @@ export class Sdk extends HeyApiClient {
      */
     public revertDeleteChat<ThrowOnError extends boolean = false>(options: Options<RevertDeleteChatData, ThrowOnError>): RequestResult<RevertDeleteChatResponses, RevertDeleteChatErrors, ThrowOnError> {
         return (options.client ?? this.client).put<RevertDeleteChatResponses, RevertDeleteChatErrors, ThrowOnError>({ url: '/chats/{chat_id}/revert_delete', ...options });
+    }
+
+    /**
+     * Execute a pending tool call, optionally with updated arguments.
+     */
+    public callTool<ThrowOnError extends boolean = false>(options: Options<CallToolData, ThrowOnError>): RequestResult<CallToolResponses, CallToolErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CallToolResponses, CallToolErrors, ThrowOnError>({
+            url: '/chats/{chat_id}/tool/call',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Reject a pending tool call.
+     */
+    public rejectToolCall<ThrowOnError extends boolean = false>(options: Options<RejectToolCallData, ThrowOnError>): RequestResult<RejectToolCallResponses, RejectToolCallErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RejectToolCallResponses, RejectToolCallErrors, ThrowOnError>({
+            url: '/chats/{chat_id}/tool/reject',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Update a tool response.
+     */
+    public updateToolResponse<ThrowOnError extends boolean = false>(options: Options<UpdateToolResponseData, ThrowOnError>): RequestResult<UpdateToolResponseResponses, UpdateToolResponseErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<UpdateToolResponseResponses, UpdateToolResponseErrors, ThrowOnError>({
+            url: '/chats/{chat_id}/tool/response/update',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Update a tool call's arguments after validation.
+     */
+    public updateToolCall<ThrowOnError extends boolean = false>(options: Options<UpdateToolCallData, ThrowOnError>): RequestResult<UpdateToolCallResponses, UpdateToolCallErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<UpdateToolCallResponses, UpdateToolCallErrors, ThrowOnError>({
+            url: '/chats/{chat_id}/tool/update',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     public getCitationHandler<ThrowOnError extends boolean = false>(options: Options<GetCitationHandlerData, ThrowOnError>): RequestResult<GetCitationHandlerResponses, GetCitationHandlerErrors, ThrowOnError> {
@@ -261,6 +338,38 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * List the caller's import ledger: staged candidates, running and finished
+     * imports (with the team's imports), and declined items.
+     */
+    public listImportEntities<ThrowOnError extends boolean = false>(options?: Options<ListImportEntitiesData, ThrowOnError>): RequestResult<ListImportEntitiesResponses, ListImportEntitiesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListImportEntitiesResponses, ListImportEntitiesErrors, ThrowOnError>({ url: '/import/entities', ...options });
+    }
+
+    /**
+     * Track an external item in the ledger: stage it as a candidate, or record a
+     * Macro entity already created from it. Says when the item was already
+     * imported, so callers do not create a duplicate.
+     */
+    public trackImportEntity<ThrowOnError extends boolean = false>(options: Options<TrackImportEntityData, ThrowOnError>): RequestResult<TrackImportEntityResponses, TrackImportEntityErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<TrackImportEntityResponses, TrackImportEntityErrors, ThrowOnError>({
+            url: '/import/entities',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Decline one of the caller's staged candidates; it is remembered as declined
+     * and not proposed again.
+     */
+    public declineImportEntity<ThrowOnError extends boolean = false>(options: Options<DeclineImportEntityData, ThrowOnError>): RequestResult<DeclineImportEntityResponses, DeclineImportEntityErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeclineImportEntityResponses, DeclineImportEntityErrors, ThrowOnError>({ url: '/import/entities/{id}', ...options });
+    }
+
+    /**
      * Where the user's Notion workspace import stands.
      */
     public notionReportHandler<ThrowOnError extends boolean = false>(options?: Options<NotionReportHandlerData, ThrowOnError>): RequestResult<NotionReportHandlerResponses, NotionReportHandlerErrors, ThrowOnError> {
@@ -273,6 +382,22 @@ export class Sdk extends HeyApiClient {
      */
     public cancelNotionHandler<ThrowOnError extends boolean = false>(options?: Options<CancelNotionHandlerData, ThrowOnError>): RequestResult<CancelNotionHandlerResponses, CancelNotionHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CancelNotionHandlerResponses, CancelNotionHandlerErrors, ThrowOnError>({ url: '/import/notion/cancel', ...options });
+    }
+
+    /**
+     * Import one Notion page as a Macro document through the caller's Notion
+     * connection, deduplicated against the ledger. Notion databases are not
+     * imported; a whole workspace goes through a reviewed import instead.
+     */
+    public importNotionPage<ThrowOnError extends boolean = false>(options: Options<ImportNotionPageData, ThrowOnError>): RequestResult<ImportNotionPageResponses, ImportNotionPageErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportNotionPageResponses, ImportNotionPageErrors, ThrowOnError>({
+            url: '/import/notion/pages',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -622,13 +747,20 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Refuse a chat message: legacy AI chats are read-only.
+     * Send a new chat message and stream the AI response.
      *
-     * Every request is refused, whether or not the chat exists, before any
-     * admission, storage, or model work. Continue the chat in Agents instead.
+     * This endpoint initiates a chat message and streams the response via the stream service.
+     * The client should subscribe to the returned stream_id via connection_gateway to receive chunks.
      */
-    public sendChatMessage<ThrowOnError extends boolean = false>(options?: Options<SendChatMessageData, ThrowOnError>): RequestResult<unknown, SendChatMessageErrors, ThrowOnError> {
-        return (options?.client ?? this.client).post<unknown, SendChatMessageErrors, ThrowOnError>({ url: '/stream/chat/message', ...options });
+    public sendChatMessage<ThrowOnError extends boolean = false>(options: Options<SendChatMessageData, ThrowOnError>): RequestResult<SendChatMessageResponses, SendChatMessageErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SendChatMessageResponses, SendChatMessageErrors, ThrowOnError>({
+            url: '/stream/chat/message',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**

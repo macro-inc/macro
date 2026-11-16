@@ -1,8 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type EntityData, InlineEntity } from '@entity';
+import {
+  type NotificationMuteMenuProps,
+  NotificationMutePage,
+} from '@notifications/components/NotificationMuteMenu';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 
 export type SoupEntityDrawerAction = {
   id: string;
@@ -10,6 +14,7 @@ export type SoupEntityDrawerAction = {
   destructive?: boolean;
   disabled?: boolean;
   onClick: () => void | Promise<void>;
+  muteMenu?: NotificationMuteMenuProps;
 };
 
 export type SoupEntityDrawerActionGroup = {
@@ -29,12 +34,24 @@ type SoupEntityActionDrawerProps = {
 
 /** Mobile drawer presentation shared by Soup-backed entity lists. */
 export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
+  const [muteActionId, setMuteActionId] = createSignal<string>();
+  const muteMenu = () =>
+    props.groups
+      .flatMap((group) => group.items)
+      .find((action) => action.id === muteActionId())?.muteMenu;
+  const close = () => {
+    setMuteActionId(undefined);
+    props.onOpenChange(false);
+  };
   return (
     <MobileDrawer
       side="bottom"
       open={props.open}
       closeOnOutsidePointerStrategy="pointerdown"
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        if (!open) setMuteActionId(undefined);
+        props.onOpenChange(open);
+      }}
       preventScroll={false}
       preventScrollbarShift={false}
       restoreFocus={false}
@@ -54,38 +71,63 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
           </Show>
 
           <MobileDrawer.ScrollBody>
-            <For each={props.groups}>
-              {(group, groupIndex) => (
-                <>
-                  <Show when={groupIndex() > 0}>
-                    <div class="mt-3" />
-                  </Show>
-                  <MobileDrawer.Section class="flex flex-col shrink-0">
-                    <For each={group.items}>
-                      {(action) => (
-                        <MobileDrawer.Item
-                          type="button"
-                          disabled={action.disabled}
-                          class={cn(
-                            action.destructive
-                              ? 'text-failure-ink'
-                              : 'text-ink',
-                            action.disabled && 'opacity-50'
+            <Show
+              when={muteMenu()}
+              fallback={
+                <For each={props.groups}>
+                  {(group, groupIndex) => (
+                    <>
+                      <Show when={groupIndex() > 0}>
+                        <div class="mt-3" />
+                      </Show>
+                      <MobileDrawer.Section class="flex flex-col shrink-0">
+                        <For each={group.items}>
+                          {(action) => (
+                            <MobileDrawer.Item
+                              type="button"
+                              disabled={
+                                action.disabled || action.muteMenu?.disabled
+                              }
+                              class={cn(
+                                action.destructive
+                                  ? 'text-failure-ink'
+                                  : 'text-ink',
+                                action.disabled && 'opacity-50'
+                              )}
+                              onClick={async (event) => {
+                                if (action.muteMenu) {
+                                  if (action.muteMenu.muted) {
+                                    action.muteMenu.onMute(false);
+                                    close();
+                                  } else setMuteActionId(action.id);
+                                  return;
+                                }
+                                props.beforeAction?.(
+                                  action,
+                                  event.currentTarget
+                                );
+                                await action.onClick();
+                                close();
+                              }}
+                            >
+                              {action.label}
+                            </MobileDrawer.Item>
                           )}
-                          onClick={async (event) => {
-                            props.beforeAction?.(action, event.currentTarget);
-                            await action.onClick();
-                            props.onOpenChange(false);
-                          }}
-                        >
-                          {action.label}
-                        </MobileDrawer.Item>
-                      )}
-                    </For>
-                  </MobileDrawer.Section>
-                </>
+                        </For>
+                      </MobileDrawer.Section>
+                    </>
+                  )}
+                </For>
+              }
+            >
+              {(menu) => (
+                <NotificationMutePage
+                  {...menu()}
+                  onBack={() => setMuteActionId(undefined)}
+                  onActionComplete={close}
+                />
               )}
-            </For>
+            </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

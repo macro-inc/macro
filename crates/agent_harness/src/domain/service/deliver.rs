@@ -150,20 +150,23 @@ where
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = false))]
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
+        let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
         if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
         {
+            span.record("agent.session.reattached", false);
             return Ok(false);
         }
         if self.sessions.attached_mcp_servers(session_id).is_some() {
+            span.record("agent.session.reattached", false);
             self.ensure_hydrated(session_id).await?;
             return Ok(true);
         }
         self.reconnect(session_id).await?;
-        tracing::Span::current().record("agent.session.reattached", true);
+        span.record("agent.session.reattached", true);
         Ok(true)
     }
 
@@ -333,6 +336,7 @@ where
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
+                client: None,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -403,6 +407,7 @@ where
             actor,
             announce: _,
             context: _,
+            client: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)

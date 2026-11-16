@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod test;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
-use crate::realtime::AgentSessionLogSubscriptions;
+use crate::realtime::{AgentSessionActivitySubscriptions, AgentSessionLogSubscriptions};
 use crate::saved_view::{GraphqlSavedView, GraphqlSavedViewPage, SavedViewMutationRoot};
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
@@ -48,8 +48,9 @@ use graphql_notification::{
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
 use graphql_notification_inbox::{
-    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
-    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    GraphqlNotificationInboxClear, GraphqlNotificationInboxPage, NotificationInboxInput,
+    NotificationInboxMutationRoot, NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    resolve_notification_inbox_clears,
 };
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
@@ -698,6 +699,71 @@ where
             ));
         })
     }
+
+    /// Recorded activity from any invocation associated with this accessible session.
+    /// The stream errors when rows were missed; clients must refetch its REST page.
+    async fn agent_session_activity_appended(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<GraphqlActivityEvent>>,
+        > + 'static,
+    > {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+        let session_id = parse_id(session_id, "sessionId")?;
+        let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx, user_id, session_id,
+        )
+        .await?
+        .is_some();
+        if !accessible {
+            return Err(async_graphql::Error::new("agent session not found"));
+        }
+        let subscriptions = ctx.data::<AgentSessionActivitySubscriptions>()?.clone();
+        let mut receiver = subscriptions.subscribe();
+        Ok(async_stream::stream! {
+            let mut ownership = HashMap::new();
+            // The empty first frame acknowledges that delivery is listening.
+            // The client rereads after this point to close the REST-to-stream gap.
+            yield Ok(Vec::new());
+            loop {
+                match receiver.recv().await {
+                    Ok(record) => {
+                        let Some(correlation_id) = record.agent_correlation_id else { continue };
+                        let belongs = if let Some(belongs) = ownership.get(&correlation_id) {
+                            *belongs
+                        } else {
+                            match subscriptions.session_for_correlation(correlation_id).await {
+                                Ok(owner) => {
+                                    let belongs = owner == Some(session_id);
+                                    if ownership.len() >= 4096 {
+                                        ownership.clear();
+                                    }
+                                    ownership.insert(correlation_id, belongs);
+                                    belongs
+                                }
+                                Err(error) => {
+                                    yield Err(async_graphql::Error::new(error.to_string()));
+                                    break;
+                                }
+                            }
+                        };
+                        if belongs {
+                            yield Ok(vec![GraphqlActivityEvent::from(record.as_ref().clone())]);
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(agent.session.id = %session_id, skipped, "closing an agent session activity subscription that fell behind");
+                        yield Err(async_graphql::Error::new("agent session activity subscription closed after falling behind"));
+                        break;
+                    }
+                }
+            }
+        })
+    }
 }
 
 /// The authenticated user and their user-scoped data.
@@ -941,6 +1007,19 @@ where
         .await
     }
 
+    /// The authenticated user's clears of their notifications inbox: the
+    /// one named by `clearId` when given (none once it is forgotten, a day
+    /// after it finished), otherwise every clear and undo still running.
+    /// While a clear is applying, hide the rows it covers; read this again
+    /// after reconnecting, since updates about clears are not replayed.
+    async fn notification_inbox_clears(
+        &self,
+        ctx: &Context<'_>,
+        clear_id: Option<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlNotificationInboxClear>> {
+        resolve_notification_inbox_clears(ctx, self.user_id.clone(), clear_id).await
+    }
+
     /// Authenticated user email catalog fields supplied by `graphql_email`.
     #[graphql(flatten)]
     async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlEmailQuery<E>> {
@@ -1043,7 +1122,7 @@ where
         let entity_id = parse_id(input.entity_id, "entityId")?;
         let entity = input
             .entity_type
-            .into_model()
+            .into_model()?
             .with_entity_string(entity_id.to_string());
         resolve_soup_entity::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(ctx, self.user_id.clone(), entity)
             .await

@@ -13,7 +13,14 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{FolderChangeReader, MailboxWatchClient};
 
+#[cfg(test)]
+mod test;
+
 impl FolderChangeReader for OutlookApiClientRepository {
+    // 1: a round is not capped at 100 items by `$top`. Rounds started before
+    // it hold at most the folder's newest 100 messages.
+    const READER_REVISION: i16 = 1;
+
     async fn folder_changes(
         &self,
         token: &AccessToken,
@@ -25,13 +32,11 @@ impl FolderChangeReader for OutlookApiClientRepository {
             None => {
                 let mut url =
                     self.endpoint(&["me", "mailFolders", folder.as_str(), "messages", "delta"])?;
-                url.query_pairs_mut()
-                    .append_pair("$select", "id")
-                    .append_pair("$top", "100");
+                url.query_pairs_mut().append_pair("$select", "id");
                 url
             }
         };
-        let page: wire::Page<wire::Change> = self.get(token, url).await?;
+        let page: wire::Page<wire::Change> = self.get_delta_page(token, url).await?;
         let mut changed = Vec::new();
         let mut removed = Vec::new();
         for message in page.value {
@@ -60,6 +65,7 @@ impl FolderChangeReader for OutlookApiClientRepository {
             changed,
             removed,
             position,
+            reader_revision: Self::READER_REVISION,
         })
     }
 }

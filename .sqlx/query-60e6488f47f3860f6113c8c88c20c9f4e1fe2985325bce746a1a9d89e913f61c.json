@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\",\n                          COALESCE(BOOL_OR(ct.hidden OR COALESCE(co.hidden, FALSE)), FALSE) AS \"hidden!\"\n                   FROM crm_contact_emails ce\n                   JOIN crm_contacts ct ON ct.id = ce.contact_id\n                   LEFT JOIN crm_companies co ON co.id = ct.company_id\n                   WHERE ce.email = ANY($2) AND ct.team_id = $1 AND ct.id <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "hidden!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "60e6488f47f3860f6113c8c88c20c9f4e1fe2985325bce746a1a9d89e913f61c"
+}

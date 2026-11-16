@@ -154,7 +154,7 @@ impl CodeUpgrades for PgCodeUpgrades {
     ) -> Result<()> {
         let (id, revision) = identity(action)?;
         let mut transaction = self.pool.begin().await?;
-        sqlx::query!(
+        let paused = sqlx::query!(
             r#"
             UPDATE scheduled_action SET enabled = false, updated_at = now()
             WHERE id = $1 AND configuration_revision = $2
@@ -164,6 +164,21 @@ impl CodeUpgrades for PgCodeUpgrades {
         )
         .execute(&mut *transaction)
         .await?;
+        // Its sub-routines pause with it, and resume when the owner switches
+        // it back on.
+        if paused.rows_affected() != 0 {
+            sqlx::query!(
+                r#"
+                UPDATE scheduled_action
+                SET enabled = false, paused_by_parent = true, updated_at = now()
+                WHERE parent_id = $1 AND parent_id IS NOT NULL AND enabled
+                  AND NOT (trigger_type = 'once' AND next_run_at IS NULL)
+                "#,
+                id,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
         sqlx::query!(
             r#"
             UPDATE scheduled_action_code_upgrade

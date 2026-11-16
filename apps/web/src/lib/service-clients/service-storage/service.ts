@@ -150,6 +150,14 @@ const ProjectsSvc = new Svc('Projects Service')
     result: schemas.uploadExtractFolderHandlerResponse.shape.data.shape,
     throws: withFetchErrors(),
   })
+  .fn('getUploadExtractStatus', {
+    description: 'Get where a folder upload stands',
+    args: {
+      requestId: schemas.getUploadExtractStatusHandlerParams.shape.request_id,
+    },
+    result: schemas.getUploadExtractStatusHandlerResponse.shape.data.shape,
+    throws: withFetchErrors(),
+  })
   .fn('permanentlyDelete', {
     description: 'Permanently delete a project',
     args: {

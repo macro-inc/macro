@@ -94,6 +94,7 @@ export function existingDirectMessage(
 }
 
 type GetOrCreatePrivateChannelParams = {
+  parentSpan?: TraceContext;
   recipients: string[];
 };
 
@@ -112,9 +113,11 @@ export function useGetOrCreatePrivateChannelMutation(
     gcTime: 0,
     mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
       return await throwOnErr(async () =>
-        storageServiceClient.getOrCreatePrivateChannel({
-          recipients: vars.recipients,
-        })
+        (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
+          storageServiceClient.getOrCreatePrivateChannel({
+            recipients: vars.recipients,
+          })
+        )
       );
     },
     ...withCallbacks<
@@ -130,7 +133,8 @@ export function useGetOrCreatePrivateChannelMutation(
         onSettled: () =>
           fireAndForget(invalidateListChannels(), 'channel-list'),
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

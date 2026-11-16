@@ -8,7 +8,9 @@ use axum::{
     http::StatusCode,
     routing::{delete, get, put},
 };
-use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    AccessError, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use entity_registry::NonUserOwners;
@@ -18,7 +20,7 @@ use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::domain::models::{GetChatResponse, PatchChatArgs, Result};
+use crate::domain::models::{ChatErr, GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
 use crate::inbound::http::extractors::UserPermissionsState;
 
@@ -282,6 +284,13 @@ pub async fn patch_chat_handler<
     Path(chat_id): Path<String>,
     Json(req): Json<PatchChatRequest>,
 ) -> Result<StatusCode> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(req.share_permission.is_some()).map_err(|_| {
+        ChatErr::Access(AccessError::UnauthorizedWithMessage(
+            agent_correlation::context::SharingRefused::MESSAGE,
+        ))
+    })?;
     state
         .inner
         .patch(

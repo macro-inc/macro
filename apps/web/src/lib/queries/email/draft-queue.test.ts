@@ -2,6 +2,7 @@ import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { toast } from '@core/component/Toast/Toast';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
   SaveEmailDraftMutation,
@@ -19,6 +20,7 @@ import { refetchSoupEntity } from '../soup/cache';
 import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
+  beginDraftAttempt,
   emailSendOwnsDraft,
   localDraftMessage,
   readLocalDraft,
@@ -43,7 +45,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   isFeatureEnabled: () => true,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
+  Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: mocks.assertQueueAvailable,
@@ -96,6 +98,15 @@ beforeEach(() => {
   mocks.cacheEnabled = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
+  vi.mocked(beginDraftAttempt).mockResolvedValue({
+    kind: 'email-draft',
+    id: 'attempt',
+    draftKey: 'draft',
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    operation: 'save',
+  });
 });
 
 async function setup(committed = false) {
@@ -590,4 +601,18 @@ it('does not report a save that lost to its own send', async () => {
     code: 'INVALID',
   });
   expect(toast.failure).toHaveBeenCalledOnce();
+});
+
+it('queues nothing for a draft that is being discarded', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('deleting'));
+  // A closed composer's last flush arrives after the discard.
+  vi.mocked(beginDraftAttempt).mockResolvedValue(undefined);
+
+  expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
+  expect(operations).toEqual([]);
+  expect(Telemetry.info).toHaveBeenCalledExactlyOnceWith(
+    'email_draft.save_yielded_to_discard',
+    { 'email_draft.draft_id': handle }
+  );
 });

@@ -116,7 +116,7 @@ it('keeps a draft sync failure visible without a connected inbox', () => {
   const context = createComposeContext();
   context.accounts.inboxes = () => [];
   context.drafts.saveLocalDraft = vi.fn();
-  context.drafts.syncAvailability = () => 'unavailable';
+  context.drafts.syncAvailability = () => 'recovery-required';
   render(() => <EmailComposeView context={context} draftId="draft" />);
   expect(screen.getByText('No email account connected.')).toBeDefined();
   expect(screen.getByText('Draft synchronization unavailable')).toBeDefined();
