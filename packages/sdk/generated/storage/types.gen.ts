@@ -3762,6 +3762,11 @@ export type ChannelAccessRequestedMetadata = {
      * Person asking to join.
      */
     requester_id: MacroUserIdStr;
+    /**
+     * The requester's profile name when they asked, if they had one. Absent
+     * on events from before it was added.
+     */
+    requester_name?: string | null;
 };
 
 /**
@@ -4935,6 +4940,20 @@ export type CommentOnTextResponse = {
 };
 
 /**
+ * CRM-owned roles for columns in the reusable table.
+ */
+export type CommercialFields = {
+    /**
+     * Monetary fields, each with an independent per-row currency.
+     */
+    money?: Array<MoneyColumn>;
+    /**
+     * Outcome column, absent only for a pipeline from a pre-migration writer.
+     */
+    outcome?: string | null;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -4951,6 +4970,21 @@ export type CommittedChange = {
      * The version the batch produced.
      */
     version: TableVersion;
+};
+
+/**
+ * One page of a company's contacts.
+ */
+export type CompanyContactsPageResponse = {
+    /**
+     * The page's contacts, alphabetically by name (the email when
+     * unnamed), in the same order as `GET /crm/companies/{company_id}/contacts`.
+     */
+    contacts: Array<CrmContactResponse>;
+    /**
+     * Cursor for the next page; absent on the last page.
+     */
+    nextCursor?: string | null;
 };
 
 /**
@@ -5535,6 +5569,12 @@ export type CreateCrmTeamContactRequest = {
  * Request body for creating a database.
  */
 export type CreateDatabaseRequest = {
+    /**
+     * The first table's display name; "Table 1" when omitted. Name it when
+     * you are about to fill a table, and build into it rather than adding a
+     * second table beside an empty "Table 1".
+     */
+    firstTable?: string | null;
     /**
      * Display name.
      */
@@ -6325,16 +6365,40 @@ export type CrmCompanyFilters = {
 };
 
 /**
+ * What a company chip shows: the fields the company read returns for its
+ * title, without its contacts.
+ */
+export type CrmCompanyPreview = {
+    /**
+     * The company.
+     */
+    id: string;
+    /**
+     * The team's name override, else the primary domain's directory name.
+     */
+    name?: string | null;
+    /**
+     * The company's first domain, which titles a company with no name.
+     */
+    primaryDomain?: string | null;
+    /**
+     * The company's last interaction, as the company read's `updatedAt`.
+     */
+    updatedAt: string;
+};
+
+/**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.
  * Mirrors the soup-listed `crmCompany` shape (`name` / `description`
- * resolved from the primary domain's `crm_domain_directory` entry) and
- * embeds the company's contacts so the panel can render in a single
- * request.
+ * resolved from the primary domain's `crm_domain_directory` entry). It
+ * embeds the company's contacts unless the caller asks it not to
+ * (`includeContacts=false`).
  */
 export type CrmCompanyResponse = {
     /**
      * Contacts attached to this company. Hidden contacts are filtered
-     * out for non-admin viewers.
+     * out for non-admin viewers. Empty when the request set
+     * `includeContacts=false`.
      */
     contacts: Array<CrmContactResponse>;
     /**
@@ -6376,6 +6440,60 @@ export type CrmCompanyResponse = {
     teamId: string;
     /**
      * Most recent known interaction with this company.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The name and visibility of a contact's company.
+ */
+export type CrmContactCompanyResponse = {
+    /**
+     * The company's oldest domain, which clients show when it has no
+     * name.
+     */
+    domain?: string | null;
+    /**
+     * Whether the company is hidden. Only admin/owner callers can see a
+     * hidden company.
+     */
+    hidden: boolean;
+    /**
+     * The id of the company; equal to the contact's `companyId`.
+     */
+    id: string;
+    /**
+     * The company's display name, if it has one.
+     */
+    name?: string | null;
+};
+
+/**
+ * A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the
+ * contact, with what its page shows of its company.
+ */
+export type CrmContactDetailResponse = CrmContactResponse & {
+    company?: null | CrmContactCompanyResponse;
+};
+
+/**
+ * What a contact chip shows.
+ */
+export type CrmContactPreview = {
+    /**
+     * The contact's primary email, which titles a contact with no name.
+     */
+    email?: string | null;
+    /**
+     * The contact.
+     */
+    id: string;
+    /**
+     * The contact's display name.
+     */
+    name?: string | null;
+    /**
+     * When the contact record last changed.
      */
     updatedAt: string;
 };
@@ -6479,6 +6597,35 @@ export type CrmDomainResponse = {
  * `member` is deliberately not representable.
  */
 export type CrmPermissionRole = 'admin' | 'owner';
+
+/**
+ * The previews of the requested records the viewer may open; a record the
+ * viewer may not open, or that does not exist, is left out.
+ */
+export type CrmPreviews = {
+    /**
+     * Company previews, in no particular order.
+     */
+    companies: Array<CrmCompanyPreview>;
+    /**
+     * Contact previews, in no particular order.
+     */
+    contacts: Array<CrmContactPreview>;
+};
+
+/**
+ * The CRM records whose chips to title.
+ */
+export type CrmPreviewsRequest = {
+    /**
+     * Companies to preview, at most 100.
+     */
+    companyIds?: Array<string>;
+    /**
+     * Contacts to preview, at most 100.
+     */
+    contactIds?: Array<string>;
+};
 
 /**
  * One stage in a `PUT /crm/stages` body.
@@ -10349,7 +10496,15 @@ export type EntryChanges = {
  */
 export type EntryFieldChange = {
     after?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount now.
+     */
+    afterCurrency?: string | null;
     before?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount before.
+     */
+    beforeCurrency?: string | null;
     /**
      * The field.
      */
@@ -11030,6 +11185,11 @@ export type ExternalChatParticipant = {
      * else a generic name.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
 };
 
 /**
@@ -11041,6 +11201,11 @@ export type ExternalChatPersonRef = {
      * Display name, never authentication evidence.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * Verified Macro user, if any.
      */
@@ -11258,6 +11423,11 @@ export type ExternalChatSender = {
      */
     personId: string;
     /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
+    /**
      * Verified Macro user association, if present.
      */
     userId?: string | null;
@@ -11289,6 +11459,12 @@ export type ExternalChatSummary = {
      * Display name: the group's, or a direct chat's other person.
      */
     name: string;
+    /**
+     * The group's picture, or a direct chat's person's, as the owner's
+     * account sees it: a static file id; `null` when hidden, unset or not
+     * fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * The service the chat lives in.
      */
@@ -11477,6 +11653,11 @@ export type FieldRename = {
  * The sum of a number field over the matched entries.
  */
 export type FieldTotal = {
+    /**
+     * The currency code of a monetary field's amounts; such a field has one
+     * total per currency, never converted or combined. Absent for other numbers.
+     */
+    currency?: string | null;
     /**
      * The field.
      */
@@ -13299,7 +13480,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property' | 'name';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -13505,6 +13686,7 @@ export type Harness = {
      * Teams it is a team machine for: their every member is a user of it.
      */
     shared_team_ids?: Array<string>;
+    team_agent_user_id?: null | MacroUserIdStr;
     /**
      * Update timestamp.
      */
@@ -15526,6 +15708,20 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Stable association between a numeric amount and its per-row denomination.
+ */
+export type MoneyColumn = {
+    /**
+     * The numeric column; renaming it preserves this association.
+     */
+    amount: string;
+    /**
+     * The select column containing the currency code.
+     */
+    currency: string;
+};
+
+/**
  * A signed-in respondent's own response.
  */
 export type MyResponse = {
@@ -17074,6 +17270,10 @@ export type PinnedItem = {
  */
 export type Pipeline = {
     /**
+     * Stable identities for Outcome and amount/currency fields.
+     */
+    commercialFields: CommercialFields;
+    /**
      * Creation time.
      */
     createdAt: string;
@@ -17197,6 +17397,10 @@ export type PipelineExportResponse = {
  * One field of a pipeline, named as people see it.
  */
 export type PipelineFieldSummary = {
+    /**
+     * For a monetary amount, the field holding each entry's currency code.
+     */
+    currencyField?: string | null;
     /**
      * Whether it holds several values.
      */
@@ -20319,7 +20523,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property' | 'name';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -29081,7 +29285,14 @@ export type GetCompanyData = {
          */
         company_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Whether to embed every contact of the company (default `true`).
+         * A caller that pages contacts through
+         * `GET /crm/companies/{company_id}/contacts/page` sets it to `false`.
+         */
+        includeContacts?: boolean;
+    };
     url: '/crm/companies/{company_id}';
 };
 
@@ -29153,6 +29364,54 @@ export type CreateCrmContactResponses = {
 };
 
 export type CreateCrmContactResponse = CreateCrmContactResponses[keyof CreateCrmContactResponses];
+
+export type ListCompanyContactsPageData = {
+    body?: never;
+    path: {
+        /**
+         * The CRM company whose contacts to list
+         */
+        company_id: string;
+    };
+    query?: {
+        /**
+         * `true` for the archived contacts (admins only: plain members get an
+         * empty list), `false` (default) for the active ones. Every contact of
+         * an archived company counts as archived.
+         */
+        archived?: boolean;
+        /**
+         * Keep contacts whose name or primary email contains this text,
+         * ignoring case. Blank matches every contact.
+         */
+        query?: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`.
+         */
+        cursor?: string;
+        /**
+         * Contacts per page, from 1 through 200 (default 50). Values outside
+         * the range are clamped.
+         */
+        limit?: number;
+    };
+    url: '/crm/companies/{company_id}/contacts/page';
+};
+
+export type ListCompanyContactsPageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCompanyContactsPageError = ListCompanyContactsPageErrors[keyof ListCompanyContactsPageErrors];
+
+export type ListCompanyContactsPageResponses = {
+    200: CompanyContactsPageResponse;
+};
+
+export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;
@@ -29343,7 +29602,7 @@ export type GetContactErrors = {
 export type GetContactError = GetContactErrors[keyof GetContactErrors];
 
 export type GetContactResponses = {
-    200: CrmContactResponse;
+    200: CrmContactDetailResponse;
 };
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
@@ -30052,6 +30311,38 @@ export type GetCrmPipelineViewPositionsResponses = {
 };
 
 export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
+
+export type PreviewCrmRecordsData = {
+    body: CrmPreviewsRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/previews';
+};
+
+export type PreviewCrmRecordsErrors = {
+    /**
+     * More than 100 ids of a kind
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * A bot or harness credential
+     */
+    403: unknown;
+    /**
+     * An id that is not a UUID
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type PreviewCrmRecordsError = PreviewCrmRecordsErrors[keyof PreviewCrmRecordsErrors];
+
+export type PreviewCrmRecordsResponses = {
+    200: CrmPreviews;
+};
+
+export type PreviewCrmRecordsResponse = PreviewCrmRecordsResponses[keyof PreviewCrmRecordsResponses];
 
 export type GetCrmTeamSettingsData = {
     body?: never;
@@ -35252,7 +35543,8 @@ export type GetItemsSoupData = {
         /**
          * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
          * Missing definitions, unsupported types, and mismatched values sort as missing.
-         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+         * Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
          * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;

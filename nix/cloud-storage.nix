@@ -168,6 +168,8 @@
           || (rel == "vendor")
           || (rel == "vendor/utoipa-swagger-ui")
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
+          || (rel == "vendor/chrono-tz")
+          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -1058,9 +1060,19 @@
         '';
       };
 
+      # Local dev shells build Rust through kache (see the shellHook); CI keeps
+      # sccache.
+      kache = pkgs.callPackage ./_kache.nix { };
+      kacheRustcWrapper = pkgs.writeShellScript "kache-rustc-wrapper" (
+        builtins.replaceStrings [ "@kache@" ] [ (pkgs.lib.getExe kache) ] (
+          builtins.readFile ./kache-rustc-wrapper.sh
+        )
+      );
+
       shellTools =
         with pkgs;
         [
+          kache
           daytona
           goalert-mcp
           goalert-mcp-macro
@@ -1157,6 +1169,8 @@
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
           grep -q "fn write_embed_code" \
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+          grep -q "IANA_TZDB_VERSION" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
           touch $out
         '';
         pruned-deploy-src-starter-agent =
@@ -1294,13 +1308,21 @@
                 # dedicated cache disk (SCCACHE_DIR) sets its own size. CI gets
                 # the default too, since print-dev-env output evaluates this hook.
                 export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
-                # Local rebuilds after an edit are mostly workspace crates, which
-                # incremental compilation reuses and sccache misses across
-                # worktrees anyway. Third-party crates still go through sccache.
+                # Local builds keep incremental compilation on and go through
+                # kache instead of sccache: kache reuses compiled crates across
+                # worktrees (a new worktree's build takes about a third of the
+                # time), and the wrapper keeps incremental state for crates
+                # rebuilt in place, so the edit loop stays fast. kache's
+                # scheduler is off: it slowed parallel builds by pacing their
+                # compilers. To use another cache, set RUSTC_WRAPPER after
+                # entering the shell.
                 # Line tables keep backtrace locations while shrinking test
                 # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
                 if [ -z "''${CI:-}" ]; then
                   unset CARGO_INCREMENTAL
+                  export RUSTC_WRAPPER=${kacheRustcWrapper}
+                  export KACHE_SCHEDULER="''${KACHE_SCHEDULER:-false}"
+                  export KACHE_LOCAL_ONLY="''${KACHE_LOCAL_ONLY:-true}"
                   export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
                   ${pkgs.lib.optionalString isLinux ''
                     # Link host binaries with mold. Scoped to the host target, so

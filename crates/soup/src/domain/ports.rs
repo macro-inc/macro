@@ -343,6 +343,24 @@ pub trait SoupService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// Run a grouped soup query without entity properties, for callers that
+    /// resolve properties themselves.
+    ///
+    /// The default loads them through [`Self::get_user_soup_grouped`] and
+    /// drops them; the production service overrides it to skip the read.
+    fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> impl Future<Output = Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr>> + Send
+    {
+        async move {
+            Ok(self
+                .get_user_soup_grouped(req)
+                .await?
+                .map(|item| item.map_extra(|_| ())))
+        }
+    }
+
     /// Display text for group keys that `group_by` leaves unlabeled, such as
     /// the names behind entity-id keys, limited to what the user can read.
     /// Keys the grouping labels on its own, or the user cannot read, are left
@@ -473,6 +491,13 @@ where
         req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         (**self).get_user_soup_grouped(req).await
+    }
+
+    async fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        (**self).get_user_soup_grouped_without_properties(req).await
     }
 
     async fn group_labels<'a>(

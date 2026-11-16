@@ -12,6 +12,7 @@ async fn create_database_grants_owner_and_starter_table() {
             name: "  Offsite ".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -49,6 +50,40 @@ async fn create_database_grants_owner_and_starter_table() {
             name: "   ".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::InvalidSchemaOperation(_)));
+}
+
+#[tokio::test]
+async fn create_database_names_its_only_table_when_asked() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let db = svc
+        .create_database(CreateDatabase {
+            name: "Cow-ender".into(),
+            owner_id: user(OWNER),
+            acting_bot: None,
+            first_table: Some("  Cow activities ".into()),
+        })
+        .await
+        .unwrap();
+    let detail = svc
+        .get_database(receipt::<ViewAccessLevel>(db.id, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert_eq!(detail.tables.len(), 1, "no empty Table 1 beside it");
+    assert_eq!(detail.tables[0].table.name, "Cow activities");
+    assert_eq!(detail.tables[0].columns[0].name(), "Name");
+
+    let err = svc
+        .create_database(CreateDatabase {
+            name: "Cow-ender".into(),
+            owner_id: user(OWNER),
+            acting_bot: None,
+            first_table: Some("  ".into()),
         })
         .await
         .unwrap_err();
@@ -82,6 +117,7 @@ async fn database_details_answer_every_live_database_the_viewer_holds_a_grant_on
             name: "Venue".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -90,6 +126,7 @@ async fn database_details_answer_every_live_database_the_viewer_holds_a_grant_on
             name: "Archive".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -308,6 +345,7 @@ async fn table_rename_rejects_invalid_names_foreign_tables_and_trashed_databases
             name: "Elsewhere".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

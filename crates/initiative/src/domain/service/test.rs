@@ -4,6 +4,7 @@ mod access;
 mod events;
 mod initial_properties;
 mod reads;
+mod telemetry;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,

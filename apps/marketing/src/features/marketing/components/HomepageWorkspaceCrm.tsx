@@ -29,7 +29,7 @@ export default function HomepageWorkspaceCrm() {
               {(company) => (
                 <CompanyKanbanCardSurface
                   icon={
-                    <span class="text-xs font-semibold text-accent">
+                    <span class="text-xs font-medium text-accent">
                       {company.initials}
                     </span>
                   }

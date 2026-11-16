@@ -50,11 +50,11 @@ use crate::domain::ports::{
     TableEventPublisher,
 };
 
-/// The table every new database starts with.
-const FIRST_TABLE: FirstTable = FirstTable {
-    name: "Table 1",
-    title_column: "Name",
-};
+/// The name of the table every new database starts with, unless its creator
+/// names it.
+const FIRST_TABLE_NAME: &str = "Table 1";
+/// The title column every new database's first table starts with.
+const FIRST_TABLE_TITLE_COLUMN: &str = "Name";
 /// Longest accepted database/table/column name.
 const MAX_NAME_LEN: usize = 200;
 /// Longest accepted select-option label.
@@ -536,13 +536,17 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
+        let first_table = FirstTable {
+            name: validate_name(command.first_table.as_deref().unwrap_or(FIRST_TABLE_NAME))?,
+            title_column: FIRST_TABLE_TITLE_COLUMN,
+        };
         let command = CreateDatabase {
             name: validate_name(&command.name)?,
             ..command
         };
         let database = self
             .repository
-            .create_database(&command, FIRST_TABLE)
+            .create_database(&command, first_table)
             .await
             .map_err(repository_error)?;
         self.emit(DatabaseMacroEvent::created(DatabaseCreatedMetadata {

@@ -18,8 +18,7 @@
 SET LOCAL lock_timeout = '5s';
 
 -- What a code-mode invocation's session may do when narrower than its
--- person's access (`generation`: a suggestion generation session;
--- `no_send`: a background run that sends nothing), set
+-- person's access (`generation`: a suggestion generation session), set
 -- where its credential is minted and enforced wherever it is accepted.
 ALTER TABLE agent_correlations ADD COLUMN scope text;
 

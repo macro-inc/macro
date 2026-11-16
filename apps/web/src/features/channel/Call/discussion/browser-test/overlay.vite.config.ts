@@ -54,6 +54,9 @@ export default defineConfig(async (env) => {
                 `origin/main:apps/web/src/features/channel/Call/${path}`,
               ],
               { encoding: 'utf8' }
+            ).replace(
+              '} = createCallStage({',
+              '} = createCallStage({ pin: callCtx.pin,'
             );
         },
       },

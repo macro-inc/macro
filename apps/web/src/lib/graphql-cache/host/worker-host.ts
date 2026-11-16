@@ -74,6 +74,7 @@ import {
   COORDINATOR_CONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
+import { unsupportedBrowserReason } from './browser-support';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
@@ -158,35 +159,6 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_STORAGE_HEALTH_INTERVAL_MS = 5 * 60_000;
 const MIN_STORAGE_HEALTH_INTERVAL_MS = 1_000;
 const MAX_STORAGE_HEALTH_INTERVAL_MS = 15 * 60_000;
-
-function unsupportedBrowserReason(): string | undefined {
-  if (typeof SharedWorker !== 'function') {
-    return 'SharedWorker is not supported by this browser';
-  }
-  if (typeof Worker !== 'function') {
-    return 'DedicatedWorker is not supported by this browser';
-  }
-  if (typeof MessageChannel !== 'function') {
-    return 'MessageChannel is not supported by this browser';
-  }
-  if (
-    typeof navigator === 'undefined' ||
-    !navigator.locks ||
-    typeof navigator.locks.request !== 'function'
-  ) {
-    return 'Web Locks are not supported by this browser';
-  }
-  if (
-    !navigator.storage ||
-    typeof navigator.storage.getDirectory !== 'function'
-  ) {
-    return 'OPFS is not supported by this browser';
-  }
-  // Do not probe createSyncAccessHandle here: Chromium and Firefox expose it
-  // only inside DedicatedWorker. Engine initialization reports that async
-  // capability failure through the normal terminal-init path.
-  return undefined;
-}
 
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
@@ -1486,6 +1458,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         document: args.document,
         fragmentName: args.fragmentName,
         keys,
+        ...(args.priority ? { priority: args.priority } : {}),
       })) as ReadRecordsByKeysResult;
     },
 

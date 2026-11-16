@@ -72,7 +72,9 @@ code mode can mint a fresh invocation correlation. Cache credentials by owner,
 agent, and session. The bot
 never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
 (code mode) choose the claim themselves, plus an optional signed `agent_via`
-client label (public MCP code mode signs the MCP client's name); `mint_for`
+client label (public MCP code mode signs the MCP client's name) and a
+`SignedCorrelation`: the code-mode correlation and its session's scope, signed
+as `agent_scope` so services with no database enforce it too; `mint_for`
 signs none of these claims. `mint_for_routine` signs the routine whose run the
 token acts for (and optionally an agent; `None` writes as the owner).
 
