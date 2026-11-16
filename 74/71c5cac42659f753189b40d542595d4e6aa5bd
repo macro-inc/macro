@@ -1,0 +1,23 @@
+crates/agent_session/Cargo.toml
+  s_55d96f0c2de296::t_fb3b9ada1061df 14
+crates/agent_session/AGENTS.md
+  s_55d96f0c2de296::t_15a24437a7c0ed 170
+crates/agent_session/src/outbound/postgres.rs
+  s_55d96f0c2de296::t_ecb6c08e65900b 238-239,244-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7471c5cac42659f753189b40d542595d4e6aa5bd",
+  "prompts": {},
+  "sessions": {
+    "s_55d96f0c2de296": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28a7957c-6e94-4604-966b-d1c21dfa3b6b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
