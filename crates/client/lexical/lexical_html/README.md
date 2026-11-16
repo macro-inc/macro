@@ -19,3 +19,6 @@ Regenerate serializer goldens with
 `bun crates/client/lexical/lexical_html/tools/serializer-oracle.mts`. The serializer
 also preserves linkedom’s unusual nonempty void elements: an explicitly inserted
 child causes a closing tag, while empty void elements render `<br>`.
+
+The export algorithms port `@lexical/html` (MIT; see LICENSE-LEXICAL) and the
+serializer ports linkedom 0.18.13 (ISC; see LICENSE-LINKEDOM).
