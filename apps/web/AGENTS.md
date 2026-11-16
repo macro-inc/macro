@@ -43,7 +43,7 @@ hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
 Keep personal Soup mail, Work Feed, bookmark metadata and independently scoped database-view reads available offline without CRM proof; inspect resolver contracts and arguments rather than broad fragment type names.
 Admit opaque Soup continuations only from an independently scoped cached parent with the same query, operation, group and current account/owner generation; bound witnesses and invalidate them on cache replacement.
-Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes and retain each active Mail chunk's witnesses through fallback reads, while CRM-only shared threads remain gated.
+Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes, and retain witnesses through active Mail chunks, complete thread reads and mounted thread routes, including canonical IDs and fallback reads, while CRM-only shared threads remain gated.
 Memoize GraphQL classification by document and selected operation with bounded retention, recheck arguments and witnesses on each call, and never evaluate disabled infinite-query variables.
 Keep unrelated response observers synchronous and stable native reads to one IPC; use the installed authority event/version fence to reject changed generations instead of polling after every command.
 Keep an ordinary write's real status and payload when later CRM proof fails;

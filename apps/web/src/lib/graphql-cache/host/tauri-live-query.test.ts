@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCrmAccessAuthority } from '../../service-clients/service-storage/crm-access-authority';
 import { StaleCacheAuthorityError } from '../authority';
 import { testAuthority } from '../authority-fixture';
 
@@ -137,6 +138,43 @@ describe('native retained view transport', () => {
         )
       ).toBe(false);
     } finally {
+      host.dispose();
+    }
+  });
+
+  it('retains a CRM registration through successful unchanged permission proofs', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const fetchProof = vi.fn(async () => 'none');
+    const controller = createCrmAccessAuthority({
+      fetchProof,
+      retire: async () => {},
+    });
+    controller.setSession('viewer');
+    controller.setHost(host.authority);
+    const crm = { ...args, filters: {} };
+    try {
+      await expect(host.entityFilter(crm)).resolves.toEqual(update);
+      const next = {
+        ...crm,
+        liveQuery: { ...crm.liveQuery!, since: update.revision },
+      };
+      await expect(host.entityFilter(next)).resolves.toEqual(update);
+      await expect(host.entityFilter(next)).resolves.toEqual(update);
+      expect(fetchProof).toHaveBeenCalledTimes(3);
+      expect(
+        invoke.mock.calls
+          .map(([command]) => command)
+          .filter((command) =>
+            command.startsWith('graphql_cache_entity_filter')
+          )
+      ).toEqual([
+        'graphql_cache_entity_filter',
+        'graphql_cache_entity_filter_resume',
+        'graphql_cache_entity_filter_resume',
+      ]);
+    } finally {
+      controller.setHost(undefined);
+      controller.setSession(undefined);
       host.dispose();
     }
   });

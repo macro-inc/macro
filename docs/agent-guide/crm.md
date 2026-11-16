@@ -647,8 +647,11 @@ list, pipeline, or record, and highlights its sidebar item. The back arrow
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
+Members without CRM access keep their email contribution controls. Revoke access
+while this page is open: **Stages** and **Email sync** disappear while contribution
+settings remain usable. Restoring access returns those sections.
 
-CRM is available without contributing email. The banner **Your emails aren’t
+CRM access does not require contributing email. The banner **Your emails aren’t
 contributing to CRM** opens **Review and opt in**. The dialog shows the exact
 connected primary mailbox, **Team blacklist**, and **My blacklist** before
 **Share my emails with CRM**. Opt-in shares full content from all available

@@ -499,6 +499,7 @@ function NoTeamState() {
 }
 
 function CrmContent() {
+  const { canAccess } = useCrmContext();
   const teamQuery = useCurrentTeamQuery();
 
   return (
@@ -508,8 +509,10 @@ function CrmContent() {
         description="Manage email sharing and shape your team’s deal pipeline."
       >
         <CrmEmailPrivacySettings />
-        <StagesSection />
-        <EmailSyncSection />
+        <Show when={canAccess()}>
+          <StagesSection />
+          <EmailSyncSection />
+        </Show>
       </SettingsPage>
     </Show>
   );

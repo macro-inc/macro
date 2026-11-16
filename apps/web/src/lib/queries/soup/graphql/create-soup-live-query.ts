@@ -127,9 +127,10 @@ export function createSoupLiveQuery(
   const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
   const crmBlocked = () =>
-    queryAuthorization().paused && !excludesCrmContent(request()?.filters);
+    !excludesCrmContent(request()?.filters) && queryAuthorization().paused;
   const firstPageInput = createMemo(() => {
-    queryAuthorization().epoch;
+    // Independent inputs must not track CRM proof epochs: replacing their
+    // identity discards the loaded Mail cursor and any page still in flight.
     if (crmBlocked()) return;
     const input = request();
     return input ? { initial: { ...input, expand: true } } : undefined;

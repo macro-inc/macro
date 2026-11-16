@@ -149,7 +149,7 @@ export default {
   privacyRetry: 'Retry',
   privacyContributionTitle: 'Your email contribution',
   privacyAvailability:
-    'Everyone on your team can use CRM and manage companies without sharing their email.',
+    'Email contribution is optional and separate from CRM access.',
   privacyConnect: 'Connect your email first',
   privacyShared: 'Your eligible emails are shared with your team.',
   privacyNotShared: 'Your emails are not contributing to CRM.',

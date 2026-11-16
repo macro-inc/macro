@@ -612,9 +612,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             policy,
           })
         );
+        const previousGeneration = authorityObserver.snapshot()?.generation;
         context.run(() => authorityObserver.observe(result.authority, version));
-        pendingReads.clear();
-        liveQueries.clear();
+        if (previousGeneration !== result.authority.generation) {
+          pendingReads.clear();
+          liveQueries.clear();
+        }
         authorityObserver.verify();
         return result;
       },
