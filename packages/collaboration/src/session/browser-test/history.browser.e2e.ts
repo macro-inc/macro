@@ -1,6 +1,39 @@
 import { expect, test } from '@playwright/test';
 import type {} from './fixture';
 
+type Snapshot = Awaited<ReturnType<Window['historyRun']['snapshot']>>;
+
+/**
+ * Keys a Loro-driven import (undo or redo) reads back as null when the node
+ * holds them absent, touched or not; text mode stays absent (Source undo/redo
+ * probe log 8803f2b1). Present keys keep their values.
+ */
+const STORAGE_NULL_KEYS: Record<string, readonly string[]> = {
+  text: ['detail', 'format', 'style'],
+  paragraph: ['direction', 'indent', 'textFormat', 'textStyle'],
+};
+function withStoredNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withStoredNulls);
+  if (!value || typeof value !== 'object') return value;
+  const node: Record<string, unknown> = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, withStoredNulls(item)])
+  );
+  const type = typeof node.type === 'string' ? node.type : '';
+  for (const key of STORAGE_NULL_KEYS[type] ?? [])
+    if (!(key in node)) node[key] = null;
+  return node;
+}
+/** The snapshot with its content parsed, so key order does not matter. */
+const parsed = (snapshot: Snapshot) => ({
+  ...snapshot,
+  content: JSON.parse(snapshot.content),
+});
+/** What a history step restores: `snapshot` after the stored-null read. */
+const afterHistory = (snapshot: Snapshot) => ({
+  ...snapshot,
+  content: withStoredNulls(JSON.parse(snapshot.content)),
+});
+
 test('keyboard redo restores the committed caret after recreating a paragraph', async ({
   page,
 }) => {
@@ -20,7 +53,7 @@ test('keyboard redo restores the committed caret after recreating a paragraph', 
   expect(undone.anchor.id).not.toBe(committed.anchor.id);
   await page.keyboard.press('Control+y');
   const redone = await page.evaluate(() => window.historyRun.snapshot());
-  expect(redone).toEqual(committed);
+  expect(parsed(redone)).toEqual(afterHistory(committed));
   await page.evaluate(() => window.historyRun.close());
   expect(errors).toEqual([]);
 });
@@ -50,13 +83,13 @@ test('routed keyboard typing undo and both redo shortcuts restore content and ca
   expect(committed.anchor.offset).toBe(4);
   for (const shortcut of ['Control+Shift+z', 'Control+y']) {
     await page.keyboard.press('Control+z');
-    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
-      before
-    );
+    expect(
+      parsed(await page.evaluate(() => window.historyRun.snapshot()))
+    ).toEqual(afterHistory(before));
     await page.keyboard.press(shortcut);
-    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
-      committed
-    );
+    expect(
+      parsed(await page.evaluate(() => window.historyRun.snapshot()))
+    ).toEqual(afterHistory(committed));
   }
   await page.evaluate(() => window.historyRun.close());
   expect(errors).toEqual([]);
@@ -84,9 +117,9 @@ test('code subtree redo retains exact raw model identities and caret', async ({
       'paragraph',
     ]);
     await page.keyboard.press(redo);
-    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
-      typed
-    );
+    expect(
+      parsed(await page.evaluate(() => window.historyRun.snapshot()))
+    ).toEqual(afterHistory(typed));
   }
   await page.evaluate(() => window.historyRun.close());
   expect(errors).toEqual([]);
