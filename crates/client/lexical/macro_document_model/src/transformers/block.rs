@@ -198,6 +198,9 @@ impl MultilineElementTransformer for Callback {
         &self.entry.dependencies
     }
     fn export(&self, cx: &mut ExportCx<'_>, node: NodeKey) -> Result<Option<String>> {
+        if let Some(set) = super::details::DetailsSet::of(self.entry.name) {
+            return super::details::export(cx, node, set, &self.options);
+        }
         Ok(cx
             .state()
             .get::<CursorSystemNotificationNode>(node)
@@ -217,16 +220,19 @@ impl MultilineElementTransformer for Callback {
             "HTML_BLOCKQUOTE" => {
                 super::quote::after_start(tx, opts, lines, root, index, start, &self.options)
             }
-            // Source imports `<details>` only where DetailsNode is registered, which is
-            // read-only rendering; no native registry has it, so the lines stay text.
-            "DETAILS_INTERNAL" | "DETAILS_EXTERNAL" | "DETAILS_ALL" => {
-                if tx.view().has_node_type("details") {
-                    Err(Error::InvalidArgument("DetailsNode import is not ported"))
-                } else {
-                    Ok(AfterStartMatch::Skip)
-                }
-            }
-            _ => Ok(AfterStartMatch::Default),
+            name => match super::details::DetailsSet::of(name) {
+                Some(set) => super::details::after_start(
+                    tx,
+                    opts,
+                    lines,
+                    root,
+                    index,
+                    start,
+                    set,
+                    &self.options,
+                ),
+                None => Ok(AfterStartMatch::Default),
+            },
         }
     }
     fn reg_exp_start(&self) -> &dyn Matcher {

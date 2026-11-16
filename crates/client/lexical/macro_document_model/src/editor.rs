@@ -124,6 +124,29 @@ const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
         register::<CursorSystemNotificationNode>,
     ),
 ];
+/// Source `StaticRenderNodeTypes` beyond the supported registry: read-only renderers
+/// only, never an editor preset.
+const STATIC_RENDER_REGISTRATIONS: &[NodeRegistration] = &[
+    (DetailsNode::TYPE, register::<DetailsNode>),
+    (DetailsSummaryNode::TYPE, register::<DetailsSummaryNode>),
+];
+/// Whether a serialized type is one only Source's read-only renderers register.
+pub fn is_static_render_node_type(name: &str) -> bool {
+    STATIC_RENDER_REGISTRATIONS
+        .iter()
+        .any(|(ty, _)| *ty == name)
+}
+/// Register one read-only renderer class by name, for a caller that names its classes.
+pub fn register_static_render_node(
+    builder: EditorBuilder,
+    name: &str,
+) -> crate::ModelResult<EditorBuilder> {
+    let (_, register) = STATIC_RENDER_REGISTRATIONS
+        .iter()
+        .find(|(ty, _)| *ty == name)
+        .ok_or_else(|| Error::UnknownSerializedType(name.into()))?;
+    Ok(register(builder))
+}
 /// Whether a serialized type belongs to the source supported registry.
 pub fn is_supported_node_type(name: &str) -> bool {
     matches!(name, "root" | "paragraph" | "text" | "tab" | "linebreak")

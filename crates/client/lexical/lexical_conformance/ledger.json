@@ -377,53 +377,13 @@
     },
     {
       "file": "packages/lexical-core/tests/github-markdown.test.ts",
-      "test": "GitHub details sections > stay text when an unfiltered set runs in an editor without them",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "op 5 read: call 1: unmapped Macro API: @macro-inc/lexical-core/nodes/DetailsNode.$isDetailsNode"
-    },
-    {
-      "file": "packages/lexical-core/tests/github-markdown.test.ts",
-      "test": "GitHub details sections > honors `open` and labels a section without a summary",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "unimplemented configured class \"details\""
-    },
-    {
-      "file": "packages/lexical-core/tests/github-markdown.test.ts",
       "test": "GitHub details sections > keep a quote whole when it holds blocks and a section",
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "unimplemented configured class \"details\""
-    },
-    {
-      "file": "packages/lexical-core/tests/github-markdown.test.ts",
-      "test": "GitHub details sections > round-trips through Markdown export",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "unimplemented configured class \"details\""
-    },
-    {
-      "file": "packages/lexical-core/tests/github-markdown.test.ts",
-      "test": "GitHub details sections > stay text in editors that do not register the details nodes",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "op 3 call: unmapped API: LexicalEditor.hasNode"
+      "decision": "wasm-rust PM ruling 2026-11-16: normalizeGithubMarkdown is out of native scope; packages/lexical-core/utils/github-markdown.ts",
+      "note": "Only the Source static renderer uses normalizeGithubMarkdown, and StaticMarkdown stays on upstream Lexical in this PR. This case imports normalizeGithubMarkdown output.",
+      "failure": "op 0 call: unmapped Macro API: @macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown"
     },
     {
       "file": "packages/lexical-core/tests/github-markdown.test.ts",
@@ -431,9 +391,9 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/github-markdown.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "unimplemented configured class \"details\""
+      "decision": "wasm-rust PM ruling 2026-11-16: normalizeGithubMarkdown is out of native scope; packages/lexical-core/utils/github-markdown.ts",
+      "note": "Only the Source static renderer uses normalizeGithubMarkdown, and StaticMarkdown stays on upstream Lexical in this PR. This case imports normalizeGithubMarkdown output.",
+      "failure": "op 0 call: unmapped Macro API: @macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown"
     },
     {
       "file": "packages/lexical-core/tests/github-markdown.test.ts",

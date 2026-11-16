@@ -82,6 +82,7 @@ pub(crate) fn validate_config(config: &Value) -> Result<()> {
         ]
         .contains(&string(node)?)
             && !macro_document_model::is_supported_node_type(string(node)?)
+            && !macro_document_model::is_static_render_node_type(string(node)?)
         {
             return Err(fail(format!("unimplemented configured class {node}")));
         }

@@ -196,6 +196,9 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> Result<Edi
             "mark" => builder.node::<lexical_rich_nodes::mark::MarkNode>(),
             "hashtag" => builder.node::<lexical_rich_nodes::hashtag::HashtagNode>(),
             "root" | "paragraph" | "text" | "tab" | "linebreak" | "artificial" => builder,
+            node if macro_document_model::is_static_render_node_type(node) => {
+                macro_document_model::register_static_render_node(builder, node)?
+            }
             _ => macro_document_model::register_supported_node(builder, node)?,
         };
     }

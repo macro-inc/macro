@@ -18,8 +18,12 @@ mock.module(
   ),
   () => ({ nanoid: (size = 21) => 'u'.repeat(size) })
 );
-const { SupportedNodeTypes, NodeReplacements, RegisteredNodesByType } =
-  await import(root + '/packages/lexical-core/node-list.ts');
+const {
+  SupportedNodeTypes,
+  StaticRenderNodeTypes,
+  NodeReplacements,
+  RegisteredNodesByType,
+} = await import(root + '/packages/lexical-core/node-list.ts');
 const { createHeadlessEditor } = await import(
   root + '/node_modules/@lexical/headless/dist/LexicalHeadless.node.mjs'
 );
@@ -290,8 +294,9 @@ const nodeState = {
 };
 const output: Case[] = [];
 const ownUndefined: Record<string, string[]> = {};
+// Read-only renderers also register the details nodes.
 const classTypes = Object.fromEntries(
-  SupportedNodeTypes.map((klass) => [klass.name, klass.getType()])
+  StaticRenderNodeTypes.map((klass) => [klass.name, klass.getType()])
 );
 const classReferences: Record<string, string> = {};
 for (const [preset, classes] of Object.entries(RegisteredNodesByType)) {

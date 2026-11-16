@@ -122,6 +122,13 @@ pub(crate) fn call(
                 .map(|key| r.node(view, key))
                 .unwrap_or(Ok(Value::Null));
         }
+        "isOpen" => {
+            return Ok(json!(
+                view.get::<macro_document_model::nodes::DetailsNode>(key)
+                    .ok_or_else(|| fail("details"))?
+                    .open
+            ));
+        }
         "getTag" => {
             return Ok(serde_json::to_value(
                 view.get::<lexical_rich_nodes::heading::HeadingNode>(key)

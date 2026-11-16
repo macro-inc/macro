@@ -7,6 +7,7 @@ use std::{
 };
 mod auto_link;
 mod block;
+mod details;
 mod envelope;
 mod inline;
 mod media;

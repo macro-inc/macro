@@ -5,9 +5,19 @@ use lexical_markdown::{Error, Result};
 use lexical_model::*;
 use lexical_rich_nodes::quote::QuoteNode;
 use serde_json::json;
+/// Source `htmlBlockquoteTransformers`, which starts with `QUOTED_DETAILS`.
+pub(super) fn html_transformers(options: &MacroMarkdownOptions) -> Result<Vec<Transformer>> {
+    transformer_list(true, options)
+}
 fn registry(html: bool, options: &MacroMarkdownOptions) -> Result<Transformers> {
+    Ok(Transformers::new(transformer_list(html, options)?))
+}
+fn transformer_list(html: bool, options: &MacroMarkdownOptions) -> Result<Vec<Transformer>> {
     let mut out = Vec::new();
     if html {
+        out.push(Transformer::MultilineElement(Arc::new(
+            super::details::QuotedDetails::new(options)?,
+        )));
         out.push(transformer("HTML_BLOCKQUOTE", options)?);
     }
     out.push(transformer("I_HTML_RENDER", options)?);
@@ -23,7 +33,7 @@ fn registry(html: bool, options: &MacroMarkdownOptions) -> Result<Transformers> 
         out.push(transformer(name, options)?);
     }
     out.extend(lexical_markdown::builtin::transformers());
-    Ok(Transformers::new(out))
+    Ok(out)
 }
 fn normalized(content: &str) -> Result<String> {
     let regex = RegexMatcher::new("<br\\s*/?>", "i")?;

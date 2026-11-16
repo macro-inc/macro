@@ -4,6 +4,8 @@ The portable node layer registers all 57 supported classes (41 Macro nodes and
 16 upstream nodes). Payloads preserve JavaScript field order and distinguish
 missing properties from explicit null with `Maybe<T>`. Framework fields remain
 in `lexical_model`; real subtype projections retain code, list and mark behavior.
+DetailsNode and DetailsSummaryNode register only through `register_static_render_node`,
+as Source registers them only in read-only renderers.
 `ImportPolicy` is the single mechanism for reproducing each node's NodeState and
 base-field import rules.
 

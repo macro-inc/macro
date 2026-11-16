@@ -1,4 +1,4 @@
-//! The 41 concrete Macro node payloads and their inherited model behavior.
+//! The 41 supported and 2 static-render Macro node payloads and their inherited model behavior.
 use crate::policy::{ImportPolicy, ImportedState, SearchText};
 use indexmap::IndexMap;
 use lexical_model::*;
@@ -30,6 +30,9 @@ pub use booking_link_mention::*;
 /// ClassedBlockNode model and editing helpers.
 pub mod classed_block;
 pub use classed_block::*;
+/// DetailsNode and DetailsSummaryNode, registered only for read-only rendering.
+pub mod details;
+pub use details::*;
 /// CommentNode model and editing helpers.
 pub mod comment;
 pub use comment::*;

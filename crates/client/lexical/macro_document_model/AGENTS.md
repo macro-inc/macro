@@ -61,7 +61,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Match list DOM exports and source attribute order byte-for-byte; never emit stored HTML directly.
 - Restore source own-undefined properties as null at snapshot boundaries and on container creation using the generated catalog; keep ordinary editor JSON unchanged. Apply Source's import normalization to stored values through SyncPolicy::normalize_stored over exactly stored_normalized_fields (inventory class column: computed at export, `|| undefined` on import, never imported): falsy table frozen counts/rowStriping, cell width, code language/theme and highlightType, a falsy pr-mention url (a GitHub PR URL id moves into it, as the constructor does), every classed-block attributes, and listitem checked by parent listType (cleared outside check lists, Boolean inside). The next local sync writes the normalized value, as Source's Mirror does; pass-through fields such as colWidths keep an imported null. The Source control is `apps/web/.../collaboration/storedFieldSync.test.ts`; its fixture lives in document_session/tests/testdata/source-stored-field-sync.
 - Keep wire-properties.json generated from actual source node exports and shared with conformance.
-- Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
+- Keep all 41 supported and 2 static-render concrete nodes typed, with own fields in upstream exportJSON order.
 - Preserve raw code language/theme when the parent afterCloneFrom hook restores them.
 - Normalize dirty code content through the registered code-node transform, preserving Source text separators and caret restoration while leaving token painting in the view; clear format only on exact native ordinary Text payloads, retaining keys, selection format and stored highlight fields, and retain a valid native caret when Source computes an invalid negative offset.
 - Keep named and full registration on the one source-ordered catalog in editor.rs.
@@ -101,7 +101,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep source object order and regex metadata in transformers/catalog.json generated from TS.
-- Keep the DETAILS_* transformers a Source no-op: skip import and never replace, because only Source's read-only renderer registers DetailsNode and no native registry does (tests/details.rs).
+- Register DetailsNode and DetailsSummaryNode only through register_static_render_node (Source StaticRenderNodeTypes), never in a preset; the DETAILS_* and quoted details transformers skip import where the editor lacks them and never replace (tests/details.rs).
 - Match transformer constructor arguments independently of static JSON import policy.
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.

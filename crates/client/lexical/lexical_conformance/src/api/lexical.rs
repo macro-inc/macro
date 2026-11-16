@@ -692,6 +692,10 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 .published_editor_state(r.editor_id, r.committed_version, state)?;
             Ok(json!({"$snapshot":id}))
         }
+        "LexicalEditor.hasNode" => Ok(json!(
+            tx.view()
+                .has_node_type(string(&a.first().ok_or_else(|| fail("class"))?["$klass"])?)
+        )),
         "LexicalEditor.toJSON" => Ok(json!({"editorState":tx.committed_state().to_json()?})),
         "lexical/LexicalUtils.getEditorStateTextContent" => {
             let id =

@@ -56,7 +56,9 @@
     "MagicChipNode": "magic-chip",
     "AgentActivityNode": "agent-activity",
     "AgentContextNode": "agent-context",
-    "CursorSystemNotificationNode": "system-notification"
+    "CursorSystemNotificationNode": "system-notification",
+    "DetailsNode": "details",
+    "DetailsSummaryNode": "details-summary"
   },
   "ownUndefined": {
     "root": [],
