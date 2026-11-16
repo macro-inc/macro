@@ -12,3 +12,6 @@ pub use menu::decode_command;
 
 #[cfg(test)]
 mod menu_test;
+
+#[cfg(test)]
+mod snippet_insert_test;

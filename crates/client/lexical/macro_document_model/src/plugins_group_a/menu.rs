@@ -103,8 +103,26 @@ struct SourceResolution {
     key: NodeKey,
     await_id: String,
     source: Option<SerializedEditorState>,
-    preset: crate::EditorType,
+    /// None: the web host's surface preset, captured at registration.
+    preset: Option<crate::EditorType>,
 }
+/// The surface preset snippet Markdown is parsed into.
+#[derive(Clone, Copy)]
+struct SnippetPreset(crate::EditorType);
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SourceResolutionInput {
+    key: u32,
+    await_id: String,
+    source: Option<SerializedEditorState>,
+}
+#[derive(Clone, Debug)]
+struct SnippetInsert {
+    start: SnippetStart,
+    generation: u32,
+}
+/// Web snippet start at the active `;` search (Source INSERT_SNIPPET_COMMAND).
+static SNIPPET_INSERT: CommandKey<SnippetInsert> = CommandKey::new("group-a.snippet-insert");
 static RESOLVE_SOURCE: CommandKey<SourceResolution> =
     CommandKey::new("group-a.snippet-resolve-source");
 
@@ -124,7 +142,7 @@ pub fn resolve_snippet_source(
             key,
             await_id,
             source,
-            preset,
+            preset: Some(preset),
         },
     ))
 }
@@ -158,6 +176,30 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
             },
         ))));
     }
+    if name == SNIPPET_INSERT.name() {
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &SNIPPET_INSERT,
+            SnippetInsert {
+                start: serde_json::from_str(json)?,
+                generation,
+            },
+        ))));
+    }
+    if name == RESOLVE_SOURCE.name() {
+        let input: SourceResolutionInput = serde_json::from_str(json)?;
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &RESOLVE_SOURCE,
+            SourceResolution {
+                key: NodeKey::from_parts(KeyParts {
+                    index: input.key,
+                    generation,
+                }),
+                await_id: input.await_id,
+                source: input.source,
+                preset: None,
+            },
+        ))));
+    }
     if let Some(command) = tag_mention::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -175,9 +217,10 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
         },
     ))))
 }
-pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
+pub(super) fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder {
     let builder = search::register(builder)
         .extension_state(source::ExtractionState::default())
+        .extension_state(SnippetPreset(ty))
         .plugin(Menu);
     let builder = tag_mention::register(mention_user::register(builder));
     mention_date::register(builder)
@@ -188,7 +231,12 @@ impl Plugin for Menu {
         "group-a.menu"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        static COMMANDS: [CommandRegistration; 3] = [
+        static COMMANDS: [CommandRegistration; 4] = [
+            CommandRegistration {
+                command: CommandKind::Extension(&SNIPPET_INSERT),
+                priority: CommandPriority::High,
+                placement: Placement::After,
+            },
             CommandRegistration {
                 command: CommandKind::Extension(&SELECT),
                 priority: CommandPriority::Normal,
@@ -211,6 +259,9 @@ impl Plugin for Menu {
         let Command::Extension(extension) = command else {
             return Ok(Handled::No);
         };
+        if let Some(command) = extension.payload(&SNIPPET_INSERT) {
+            return insert_web_snippet(tx, command);
+        }
         if let Some(command) = extension.payload(&RESOLVE_SOURCE) {
             if !source::has_request(tx, command.key, &command.await_id)? {
                 return Ok(Handled::No);
@@ -240,7 +291,14 @@ impl Plugin for Menu {
                 return Ok(Handled::No);
             }
             let nodes = match extracted {
-                Some(prepared) => match source::parse(tx, command.preset, &prepared.markdown) {
+                Some(prepared) => match source::parse(
+                    tx,
+                    match command.preset {
+                        Some(preset) => preset,
+                        None => tx.extension::<SnippetPreset>()?.0,
+                    },
+                    &prepared.markdown,
+                ) {
                     Ok(nodes) => nodes,
                     Err(error) => {
                         emit_source_error(tx, command, SnippetErrorPhase::Parse, error.to_string());
@@ -382,6 +440,50 @@ impl Plugin for Menu {
         tx.select_end(node)?;
         Ok(Handled::Yes)
     }
+}
+
+// Source snippetsPlugin insertSnippet: select the end of the first `;` search,
+// remove it, then $insertNodes an inline await placeholder for the host fetch.
+fn insert_web_snippet(tx: &mut Transaction<'_>, command: &SnippetInsert) -> Result<Handled, Error> {
+    let start = &command.start;
+    if command.generation != tx.committed_state().max_key().generation()
+        || start.source_document_id.as_ref() == Some(&start.document_id)
+    {
+        return Ok(Handled::No);
+    }
+    let Some(search) = lexical_rich_nodes::utils::dfs(tx.view(), None, None)
+        .into_iter()
+        .map(|record| record.node)
+        .find(|key| {
+            tx.view().get::<InlineSearchNode>(*key).is_some()
+                && tx
+                    .text_content(*key)
+                    .trim_matches(is_js_whitespace)
+                    .starts_with(';')
+        })
+    else {
+        return Ok(Handled::No);
+    };
+    tx.select_end(search)?;
+    tx.remove(search, false)?;
+    let placeholder = create_await_node(tx, None, Some("Inserting snippet...".into()), true)?.key();
+    let await_id = tx
+        .get::<AwaitNode>(placeholder)
+        .and_then(|node| node.await_id.as_deref())
+        .ok_or(Error::Invariant("snippet await id"))?
+        .to_owned();
+    tx.insert_nodes_at_selection(&[placeholder])?;
+    source::track_request(tx, placeholder, await_id.clone())?;
+    tx.emit(
+        &SNIPPET_REQUEST,
+        SnippetRequest {
+            key: placeholder.index(),
+            generation: placeholder.generation(),
+            await_id,
+            document_id: start.document_id.clone(),
+        },
+    );
+    Ok(Handled::Yes)
 }
 
 fn emit_source_error(
