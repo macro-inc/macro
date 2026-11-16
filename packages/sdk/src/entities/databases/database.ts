@@ -9,6 +9,7 @@ import type {
   DatabaseDetail,
   DatabaseOp,
   DatabaseWebhookResponse,
+  EntityAppearance,
   EntityKind,
   ImportTable,
   InferColumnTypeOutcome,
@@ -25,6 +26,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { MacroApiError, MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import type { PropertyDefinition } from '../properties/property-definition';
 import { EntityAccess } from '../sharing/access';
@@ -244,6 +247,17 @@ function soleResult<
   return result;
 }
 
+/** What a new database is called, and its first table. */
+export type CreateDatabaseOptions = {
+  /** The database's name. */
+  name: string;
+  /**
+   * The name of the table the database starts with; "Table 1" when omitted.
+   * Name it when you are about to fill a table, and build into it.
+   */
+  firstTable?: string;
+};
+
 /**
  * A Macro database: a named collection of tables, owned and shared as one
  * entity.
@@ -257,6 +271,18 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
+
+  /**
+   * Share this database with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * database; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'database', this.id);
+  }
 
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(
@@ -288,13 +314,15 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return new Database(client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /** Create a database owned by the caller; see {@link CreateDatabaseOptions}. */
   static async create(
     client: MacroClient,
-    options: { name: string },
+    options: CreateDatabaseOptions,
   ): Promise<Database> {
     const record = unwrap(
-      await client.storage.createDatabase({ body: { name: options.name } }),
+      await client.storage.createDatabase({
+        body: { name: options.name, firstTable: options.firstTable },
+      }),
     );
     return new Database(client, record.id);
   }
@@ -384,6 +412,27 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** The database's display name. */
   readonly name = this.mappedField('database', (record) => record.name);
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.mappedField(
+    'database',
+    (record) => record.appearance,
+  );
+
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setDatabaseAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** The user who owns the database. */
   readonly owner = this.mappedField('database', (record) =>

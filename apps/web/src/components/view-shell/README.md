@@ -99,15 +99,18 @@ inset; check with `useTouchTopBarsFloat`.
 
 A detail whose standalone view has a split header shows that same header in a
 touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
-`SplitHeaderScope.TopBar`; the detail contributes through `SplitHeaderLeft`,
-`SplitHeaderRight`, and the title file menu as it does in its own split
-(`MarkdownSplitHeader` for documents and tasks, `FileSplitHeader` for Drive
-files, `AgentSessionHeader` for agent sessions, `PrSplitHeader` for pull
-requests). `entityDetailHostsSplitHeader`
+`SplitHeaderScope.TopBar`; the detail fills that bar as it fills its own
+split's header. A detail with a mobile view renders it, and its `MobileHeader`
+lands in the bar: `HostedMarkdownHeader` (`MobileMarkdownHeader`) for documents
+and tasks, `MobileEmailThread` for Mail threads, `MobileAgentSessionHeader` for
+agent sessions. Those views read the item from its feature context, not from a
+legacy Block. Details not yet split contribute through `SplitHeaderLeft`,
+`SplitHeaderRight`, and the title file menu (`FileSplitHeader` for Drive files,
+`PrSplitHeader` for pull requests). `entityDetailHostsSplitHeader`
 lists the detail types that do; add a type there once its detail renders its
-standalone header from block-free parts (`EntitySplitLabel`,
-`ResponsiveDocumentToolbar`, `ResponsiveAccessBadge`). Inline block previews
-(`PreviewFrame`) use the same scope.
+standalone header without a Block. A `SplitHeaderScope.Root` that is off hides
+any enclosing scope from its content, so `useSplitHeaderScope` answers for the
+nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow

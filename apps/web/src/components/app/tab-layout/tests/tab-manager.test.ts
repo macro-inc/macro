@@ -12,7 +12,8 @@ import {
   createTestPolicy,
 } from '@app/lib/split-router/tests/fixtures';
 import { createRoot } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { closeTabOrWindow } from '../close-tab-shortcut';
 import { NO_SPLITS_TAB_HOST } from '../DesktopTabsController';
 import {
   createTabManager,
@@ -167,6 +168,35 @@ describe('desktop tab manager', () => {
     const { tabManager } = track(setup('/home'));
     tabManager.closeTab(tabManager.activeTabId());
     expect(tabManager.tabs()).toHaveLength(1);
+  });
+
+  it('Cmd+W closes the active tab and keeps the window while another tab is open', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    tabManager.newTab();
+    await flush(router);
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(tabManager, closeWindow);
+    await flush(router);
+    expect(tabManager.tabs().map((tab) => tab.id)).toEqual([first!.id]);
+    expect(closeWindow).not.toHaveBeenCalled();
+  });
+
+  it('Cmd+W on the last tab closes the window and keeps the tab', () => {
+    const { tabManager } = track(setup('/home'));
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(tabManager, closeWindow);
+    expect(tabManager.tabs()).toHaveLength(1);
+    expect(closeWindow).toHaveBeenCalledOnce();
+  });
+
+  it('Cmd+W without desktop tabs closes the window', () => {
+    const closeWindow = vi.fn(async () => {});
+
+    closeTabOrWindow(undefined, closeWindow);
+    expect(closeWindow).toHaveBeenCalledOnce();
   });
 
   it('openEntryInNewTab without activation leaves the layout alone', async () => {

@@ -67,7 +67,11 @@ export function MobileSectionsView(props: {
     sectionsEnabled
   );
   usePending('channels.section.members', members.isLoading);
-  const sectionChannels = () =>
+  const base = () =>
+    selected() === 'direct_messages'
+      ? props.sources.direct_messages
+      : props.sources.recents;
+  const sectionChannels = createMemo(() =>
     channelsForMobileSection({
       tab: selected(),
       channels: selectedLabel()
@@ -78,11 +82,8 @@ export function MobileSectionsView(props: {
           ])
         : base().items(),
       labels: labels(),
-    });
-  const base = () =>
-    selected() === 'direct_messages'
-      ? props.sources.direct_messages
-      : props.sources.recents;
+    })
+  );
   const source: ChannelsDataSource = {
     items: sectionChannels,
     isLoading: () =>

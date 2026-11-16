@@ -11,7 +11,7 @@
 }
 .forms-story .feature-demo-backdrop { --workspace-dots-opacity: .06; --workspace-grain-opacity: .11; inset: -40px; }
 .forms-story .feature-demo-backdrop::before { opacity: .5; }
-.forms-card { min-width: 0; padding: 30px; border-radius: 26px; background: linear-gradient(140deg, #ffffff0d, #ffffff04); box-shadow: inset 0 1px 0 #ffffff20, inset 0 0 0 1px #ffffff0d; backdrop-filter: blur(12px); }
+.forms-card { --illustration-radius: 26px; min-width: 0; padding: 30px; border-radius: var(--illustration-radius); background: linear-gradient(140deg, #ffffff0d, #ffffff04); box-shadow: inset 0 1px 0 #ffffff20, inset 0 0 0 1px #ffffff0d; backdrop-filter: blur(12px); }
 .forms-card-label { display: flex; align-items: center; gap: 10px; color: var(--color-ink-muted); font-size: 13px; margin-bottom: 24px; }
 .forms-card-label > span { margin-left: auto; }
 .forms-story svg { width: 18px; height: 18px; flex: none; }
@@ -52,7 +52,7 @@
 @media (max-width: 699px) {
   .forms-story { padding-top: 24px; font-size: 14px; }
   .forms-story .feature-demo-backdrop { inset: -12px; }
-  .forms-card { padding: 22px 18px; border-radius: 22px; }
+  .forms-card { --illustration-radius: 22px; padding: 22px 18px; }
   .forms-question-card, .forms-response-card, .forms-gate-card, .forms-booking-card, .forms-conversation, .forms-agent-card, .forms-settings-card { width: 100%; }
   .forms-response-card { margin-top: 0; }
   .forms-card-label { font-size: 12px; gap: 6px; }

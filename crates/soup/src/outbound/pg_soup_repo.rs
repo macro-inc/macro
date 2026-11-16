@@ -34,6 +34,9 @@ mod notified;
 mod touched;
 mod unexpanded;
 
+#[cfg(test)]
+mod test;
+
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,
@@ -508,6 +511,7 @@ macro_rules! map_soup_type {
         match r.item_type.as_ref() {
             "document" => Ok(::models_soup::item::SoupItem::Document(
                 ::models_soup::document::SoupDocument {
+                    appearance: r.appearance.map(serde_json::from_value).transpose().map_err(type_err)?,
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     document_version_id: r
                         .document_version_id

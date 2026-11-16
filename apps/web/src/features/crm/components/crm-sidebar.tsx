@@ -47,8 +47,6 @@ export function CrmSidebar(props: {
   onImport: () => void;
   onExport: () => void;
   onSettings: () => void;
-  search?: () => JSX.Element;
-  searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
@@ -56,10 +54,7 @@ export function CrmSidebar(props: {
   return (
     <ViewSidebar.Root aria-label={t('crm.navigation')}>
       <header class="flex shrink-0 flex-col">
-        <ViewSidebar.Header
-          search={props.search}
-          searchLabel={props.searchLabel}
-        >
+        <ViewSidebar.Header>
           <div class="flex min-w-0 items-center gap-1">
             <ViewSidebar.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>

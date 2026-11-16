@@ -107,7 +107,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
         />
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex">
+            <ViewShell.TopBar class="touch:flex touch:flex-wrap touch:gap-y-2">
               <HeaderIsland class="px-1">
                 <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
               </HeaderIsland>

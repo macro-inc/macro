@@ -1,12 +1,11 @@
 //! Team namespace deletion and explicit item/TOTP erasure; membership never erases values.
 use super::*;
 impl PasswordService {
-    /// Internal requests require rollout even for empty vaults; callers prove emptiness before RPC.
+    /// Trusted internal erasure requires provider readiness, independent of human rollout.
     #[tracing::instrument(skip_all,err,name="passwords.team.purge",fields(team_id=%team.0,outcome=tracing::field::Empty))]
     pub async fn purge_team(&self, team: TeamId) -> Result<(), Error> {
-        self.availability.require_service_enabled().await?;
         let _lease = self.repository.lock(team, ItemId(Uuid::nil())).await?;
-        self.availability.require_service_enabled().await?;
+        self.availability.require_provider()?;
         self.repository.close_team(team).await?;
         self.provider.purge_namespace(team).await?;
         self.repository.purge_team_metadata(team).await?;
@@ -17,7 +16,6 @@ impl PasswordService {
     /// Retry explicit item deletions whose provider erasure has not completed.
     #[tracing::instrument(skip_all,err,name="passwords.items.cleanup",fields(completed=tracing::field::Empty,failed=tracing::field::Empty))]
     pub async fn cleanup_retired_items(&self) -> Result<usize, Error> {
-        self.availability.require_service_enabled().await?;
         let mut completed = 0;
         let mut failed = 0;
         for (team, item) in self.repository.item_cleanup_due().await? {
@@ -63,7 +61,6 @@ impl PasswordService {
         team: TeamId,
         item: ItemId,
     ) -> Result<bool, Error> {
-        self.availability.require_service_enabled().await?;
         let record = match self.repository.get(team, item).await {
             Ok(record) => record,
             Err(Error::NotFound) => return Ok(false),
@@ -72,6 +69,7 @@ impl PasswordService {
         if !record.deleting {
             return Ok(false);
         }
+        self.availability.require_provider()?;
         self.repository.retire_totp(team, item, None).await?;
         for key in self.repository.totp_keys(team, item).await? {
             self.provider.delete_totp(team, key).await?;
@@ -91,7 +89,7 @@ impl PasswordService {
             }
             Err(error) => return Err(error),
         };
-        self.availability.require_service_enabled().await?;
+        self.availability.require_provider()?;
         if !self.repository.totp_cleanup_ready(cleanup).await? {
             tracing::Span::current().record("outcome", "quarantined");
             return Ok(false);

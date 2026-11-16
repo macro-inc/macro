@@ -626,9 +626,9 @@ pub struct FakeAvailability;
 #[async_trait]
 impl Availability for FakeAvailability {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
-        self.require_service_enabled().await
+        self.require_provider()
     }
-    async fn require_service_enabled(&self) -> Result<(), Error> {
+    fn require_provider(&self) -> Result<(), Error> {
         Ok(())
     }
 }

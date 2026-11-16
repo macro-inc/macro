@@ -18,6 +18,7 @@ const SUBSCRIPTION: &str = "sub_team";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Step {
     Purge(Uuid),
+    ReleaseComputers(Uuid),
     CancelSubscription(String),
     DeleteTeam { team_id: Uuid, bot_ids: Vec<BotId> },
     Published(String),
@@ -196,6 +197,11 @@ impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
         }
         Ok(())
     }
+
+    async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.journal.record(Step::ReleaseComputers(team_id));
+        Ok(())
+    }
 }
 
 fn scheduled_action(id: u128) -> (RegisteredEntityType, Uuid) {
@@ -224,6 +230,10 @@ fn bot(id: u128) -> BotId {
 
 fn purge(id: u128) -> Step {
     Step::Purge(Uuid::from_u128(id))
+}
+
+fn release_computers() -> Step {
+    Step::ReleaseComputers(TEAM_ID)
 }
 
 fn cancel_subscription() -> Step {
@@ -320,6 +330,7 @@ async fn delete_team_purges_what_the_team_owns_directly() {
             purge(1),
             purge(2),
             purge(3),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -345,6 +356,7 @@ async fn delete_team_purges_what_the_teams_bots_own() {
         vec![
             purge(1),
             purge(2),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -371,6 +383,7 @@ async fn delete_team_purges_what_soft_deleted_team_bots_own() {
         vec![
             purge(1),
             purge(2),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01), bot(0xb02)]),
             published_team_deleted(),
@@ -401,6 +414,7 @@ async fn delete_team_purges_in_rank_order_before_billing_the_row_and_the_event()
             purge(3),
             purge(6),
             purge(1),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -423,6 +437,7 @@ async fn delete_team_purges_content_created_while_it_purges() {
         vec![
             purge(1),
             purge(0x1000),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -478,6 +493,7 @@ async fn delete_team_keeps_the_team_when_a_purge_fails_and_a_retry_resumes() {
             purge(3),
             purge(4),
             purge(5),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),

@@ -1,3 +1,4 @@
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
@@ -7,19 +8,23 @@ import { useBlockAliasedName, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockDataSignal as blockLoaderDataSignal } from '@core/internal/BlockLoader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   blockErrorSignal,
   blockHandleSignal,
+  blockMetadataSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import {
   useCanComment,
   useCanEdit,
+  useGetPermissions,
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { DocumentEntity } from '@entity';
 import { DocumentNotificationReadMarker } from '@notifications';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
@@ -27,11 +32,12 @@ import type { MarkdownData } from '../definition';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import { MarkdownHeader } from '../views/markdown-header';
+import { MobileMarkdownHeader } from '../views/mobile/markdown-header';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
-import { TopBar } from './TopBar';
 import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
@@ -103,12 +109,27 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const canComment = useCanComment();
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
+  const permissions = useGetPermissions();
 
+  const documentEntity = (): DocumentEntity | undefined => {
+    const metadata = blockMetadataSignal();
+    if (
+      (kind !== 'document' && kind !== 'snippet') ||
+      !metadata ||
+      metadata.documentId !== documentId
+    )
+      return;
+    return markdownEntityFromMetadata(
+      metadata,
+      persistedName() ?? metadata.documentName ?? ''
+    );
+  };
   return (
     <DocumentBlockContainer>
       <MarkdownDocument
         documentId={documentId}
         kind={kind}
+        entity={documentEntity()}
         state={markdownState}
         documentSource={documentSource()}
         permissions={{
@@ -127,7 +148,19 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
             <div class="flex flex-col size-full">
               <div class="relative shrink-0">
                 <Suspense>
-                  <TopBar collaborationStatus={collaborationStatus()} />
+                  <Show
+                    when={isTouchDevice()}
+                    fallback={
+                      <MarkdownHeader
+                        collaborationStatus={collaborationStatus}
+                      />
+                    }
+                  >
+                    <MobileMarkdownHeader
+                      collaborationStatus={collaborationStatus}
+                      permissions={permissions()}
+                    />
+                  </Show>
                 </Suspense>
                 <Suspense>
                   <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">

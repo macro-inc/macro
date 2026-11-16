@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/entity-appearance/queries/**
+  - apps/web/src/features/entity-appearance/primitives/**
   - apps/web/src/features/passwords/queries/**
   - apps/web/src/features/passwords/primitives/**
   - apps/web/src/features/notifications-inbox/queries/**

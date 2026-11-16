@@ -50,6 +50,14 @@ pub enum InitiativeTopicEvent {
     /// A project name, sharing policy, or collaborators changed.
     #[serde(rename = "initiative.updated")]
     Updated(InitiativeChange),
+    /// Icon or color metadata changed without affecting content recency.
+    #[serde(rename = "initiative.appearance_changed")]
+    AppearanceChanged {
+        /// Attribution and occurrence of the edit.
+        change: InitiativeChange,
+        /// Previous and saved appearance.
+        appearance: activity::AppearanceChange,
+    },
     /// An initiative was permanently deleted and its history must be removed.
     #[serde(rename = "initiative.purged")]
     Purged {

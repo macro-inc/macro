@@ -594,7 +594,9 @@ pub trait EmailThreadMailProjectionService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr>> + Send;
 }
 
-/// Read-only domain service used to hydrate Soup previews of authorized threads.
+/// Read-only domain service used to hydrate Soup previews of threads looked
+/// up by id. A thread renders as All Mail shows it, or, when every message is
+/// in spam or trash, as its Spam or Trash row does.
 pub trait EmailThreadPreviewService: Send + Sync + 'static {
     /// Fetch the Soup preview of each authorized thread in one batch, as the
     /// thread's own inbox renders it. A thread without a row is absent.
@@ -603,6 +605,14 @@ pub trait EmailThreadPreviewService: Send + Sync + 'static {
         viewer: MacroUserIdStr<'static>,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<Vec<EnrichedEmailThreadPreview>, EmailErr>> + Send;
+
+    /// Fetch the preview of a thread in the caller's own or delegated inboxes.
+    /// A thread outside them, or without a row, is `None`.
+    fn get_owned_email_thread_preview(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EnrichedEmailThreadPreview>, EmailErr>> + Send;
 }
 
 /// Read-only domain service used to hydrate lightweight email content edges.
@@ -665,6 +675,14 @@ impl<T: EmailThreadPreviewService> EmailThreadPreviewService for ReadonlyEmailPr
     ) -> impl Future<Output = Result<Vec<EnrichedEmailThreadPreview>, EmailErr>> + Send {
         self.0
             .get_email_thread_previews_by_receipts(viewer, receipts)
+    }
+
+    fn get_owned_email_thread_preview(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EnrichedEmailThreadPreview>, EmailErr>> + Send {
+        self.0.get_owned_email_thread_preview(macro_id, thread_id)
     }
 }
 
@@ -1501,6 +1519,14 @@ impl EmailThreadPreviewService for NoOpEmailService {
         _viewer: MacroUserIdStr<'static>,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<Vec<EnrichedEmailThreadPreview>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
         Err(no_op_email_err())
     }
 }

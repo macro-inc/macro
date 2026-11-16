@@ -9,10 +9,11 @@ import {
 } from '@thisbeyond/solid-dnd';
 import { cn, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { CHANNELS_TOUR } from '../../tour';
 import { formatDetailedTimestamp } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
 import { ChannelLiveCallBadge } from './ChannelLiveCallBadge';
 import {
   ChannelAvatar,
@@ -256,11 +257,18 @@ export function ChannelOption(props: {
             >
               <ChannelLiveCallBadge channelId={props.channel.id} />
             </Show>
-            <Show when={!unjoined() && item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
+            <Show when={!unjoined()}>
+              <Switch>
+                <Match when={item().mentions > 0}>
+                  <ChannelMentionCount count={item().mentions} />
+                </Match>
+                <Match when={item().unread}>
+                  <span
+                    aria-label="Unread"
+                    class="size-2 shrink-0 rounded-full bg-accent"
+                  />
+                </Match>
+              </Switch>
             </Show>
           </span>
           <IncomingCallActions

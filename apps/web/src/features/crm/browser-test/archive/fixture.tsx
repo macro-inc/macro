@@ -99,10 +99,7 @@ function Fixture() {
                   </RecordOverview>
                 }
               >
-                <CompanyContactsSection
-                  company={source.company()}
-                  contacts={source.contacts()}
-                />
+                <CompanyContactsSection company={source.company()} />
               </Show>
               <RecordDetailsSection
                 company={kind === 'company' ? source.company() : undefined}

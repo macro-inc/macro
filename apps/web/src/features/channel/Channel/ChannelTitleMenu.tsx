@@ -1,7 +1,12 @@
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
+import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { MenuItem } from '@core/component/ContextMenu';
+import { useChannelName, useChannelType } from '@core/context/channels';
+import { fireAndForget } from '@core/util/fireAndForget';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { type ComponentProps, type JSX, Show } from 'solid-js';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './channel-actions';
@@ -11,7 +16,8 @@ import { useChannelEntity } from './channel-entity';
  * The conversation's entity actions behind the same ellipsis a document's
  * title menu uses. The actions match the channel's row in the rail, so
  * favoriting, muting or renaming a conversation does not depend on finding
- * that row.
+ * that row. It also offers Ask Macro, which would otherwise take a top bar
+ * button.
  *
  * Owned by the channel top bar rather than by each of its hosts: the menu
  * resolves the conversation from its id, so a surface that opens a channel
@@ -32,6 +38,20 @@ export function ChannelTitleMenu(props: {
     return resolved && withEntityNotifications(resolved, notificationSource);
   };
   const list = toSingleEntityActionListState(entity);
+  const channelName = useChannelName(props.channelId);
+  const channelType = useChannelType(props.channelId);
+
+  // Seed for "Ask Macro": a new chat with this channel @mentioned.
+  const askMacroEntity = () => {
+    const type = channelType();
+    if (!type) return undefined;
+    return {
+      type: 'channel' as const,
+      id: props.channelId,
+      name: channelName() ?? channel()?.name ?? 'New Channel',
+      channelType: type,
+    };
+  };
 
   return (
     <Show when={entity()} fallback={props.children}>
@@ -46,7 +66,24 @@ export function ChannelTitleMenu(props: {
               'aria-label': 'Channel actions',
             }
           }
-          extraItems={props.extraItems}
+          extraItems={
+            <>
+              <Show when={askMacroEntity()}>
+                {(seed) => (
+                  <MenuItem
+                    text={t('entityActions.askMacro')}
+                    onClick={() =>
+                      fireAndForget(
+                        openChatWithAgent(seed()),
+                        'channel-title-menu'
+                      )
+                    }
+                  />
+                )}
+              </Show>
+              {props.extraItems}
+            </>
+          }
         >
           {props.children ?? <DotsThreeIcon class="size-4 shrink-0" />}
         </SoupEntityActionsDropdown>

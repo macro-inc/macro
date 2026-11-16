@@ -235,7 +235,7 @@ export function Header(props: {
           hotkey: TOKENS.calendar.period.previous,
         }}
         variant="ghost"
-        size={compact ? 'icon-sm' : 'icon-lg'}
+        size={compact ? 'icon-md' : 'icon-lg'}
         class="border-transparent bg-transparent"
         onClick={calendarPager.previousPeriod}
       >
@@ -253,7 +253,7 @@ export function Header(props: {
           hotkey: TOKENS.calendar.period.next,
         }}
         variant="ghost"
-        size={compact ? 'icon-sm' : 'icon-lg'}
+        size={compact ? 'icon-md' : 'icon-lg'}
         class="border-transparent bg-transparent"
         onClick={calendarPager.nextPeriod}
       >
@@ -264,7 +264,7 @@ export function Header(props: {
   const todayButton = (mobile: boolean, compact = false) => {
     const Control = compact ? ButtonGroup.Button : Button;
     const size = () => {
-      if (compact) return mobile ? 'icon-sm' : 'sm';
+      if (compact) return mobile ? 'icon-md' : 'md';
       return mobile ? 'icon-md' : 'lg';
     };
     return (
@@ -384,12 +384,12 @@ export function Header(props: {
               <Show when={showBookingLinks()}>
                 <CalendarSchedulingActions compact />
               </Show>
-              <HeaderActionGroup label="Calendar navigation">
+              <HeaderActionGroup label="Calendar navigation" size="md">
                 {todayButton(!breakpoints.labeledToday(), true)}
                 {previous(true)}
                 {next(true)}
               </HeaderActionGroup>
-              <HeaderActionGroup label="Calendar view">
+              <HeaderActionGroup label="Calendar view" size="md">
                 <PeriodSelector isNarrow={isNarrow()} compact grouped />
               </HeaderActionGroup>
               {headerCreateMenu()}

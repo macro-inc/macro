@@ -162,6 +162,7 @@ function StackEntityDetail(props: {
                   fallbackName={target().fallbackName}
                   ownerId={context.data.metadata.owner}
                   projectId={context.data.metadata.projectId ?? undefined}
+                  appearance={context.data.metadata.appearance}
                   onClose={navigationStack.pop}
                   onDuplicate={(id, name) => duplicate(target(), id, name)}
                 />

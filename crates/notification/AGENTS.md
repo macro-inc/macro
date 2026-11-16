@@ -31,6 +31,13 @@ through the same service.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
+- `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one
+  user's notifications done as a stored action with a per-notification
+  ledger: chunked, leased, resumable and undoable. The inbox's clear runs on
+  it (`crates/notification_inbox`). Every state-changing step is one
+  transaction over the action row, the ledger and `user_notification`; keep
+  it that way. `user_notification.done_by` is cleared by a trigger on any
+  other state change, so new state writers need no change.
 
 ## Scope
 
@@ -72,7 +79,8 @@ through the same service.
 
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's
-  rows through `idx_user_notification_viewer_entity` on those copies, so a row
+  rows through `idx_user_notification_viewer_entity` on those copies, and an
+  entity read's event-type filter reads the copied type from that index, so a row
   inserted without them never matches an entity read or mark-seen, and a
   migration that rewrites those `notification` columns must update
   `user_notification` too.

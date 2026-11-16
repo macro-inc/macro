@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
+use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::local_env::Tunnels;
 use super::stage::Stage;
@@ -121,6 +122,10 @@ struct StackState {
     /// `--traces off` must survive a rebuild regenerating the env.
     #[serde(default = "traces_on")]
     traces_enabled: bool,
+    /// The computers fleet the stack ran; absent in stacks recorded before
+    /// computers existed, which ran none.
+    #[serde(default)]
+    computers: Option<Fleet>,
 }
 
 fn traces_on() -> bool {
@@ -128,6 +133,10 @@ fn traces_on() -> bool {
 }
 
 impl StackState {
+    fn computers(&self, mode: Mode, instance: &Instance) -> Computers {
+        Computers::new(mode, self.computers.unwrap_or(Fleet::Off), instance)
+    }
+
     /// Whether the proxy serves a built bundle, which also moves Mailpit under it.
     fn serves_bundle(&self) -> bool {
         self.frontend == "static" || self.shares_bundle
@@ -182,6 +191,7 @@ pub(super) fn record(
             egress_url,
             preview_ssh_host,
             traces_enabled: args.traces.enabled(),
+            computers: Some(plan.computers),
         },
     )
 }
@@ -247,7 +257,6 @@ fn up_allocated(
         // the phase.
         supervisor::clear_job(&instance);
     }
-
     let static_bundle = !args.run.no_frontend && !args.infra_only;
     let plan = BringUp {
         vite: false,
@@ -258,11 +267,14 @@ fn up_allocated(
         share_app: false,
         infra_only: args.infra_only,
         start: Start::Fresh,
+        // Off unless asked: headless stacks serve agents and CI, which should
+        // not pay for building the computer image.
+        computers: args.run.computers.fleet(Fleet::Off),
     };
     let stack_up = super::bring_up(stage, mode, &mut instance, &args.run, &plan)?;
     if !args.infra_only {
         stage.print_timings("bring-up");
-        super::print_stack_summary(mode, &instance, &stack_up, &plan)?;
+        super::print_stack_summary(stage, mode, &instance, &stack_up, &plan)?;
         stage.note(&format!(
             "  headless: `just stack status`, `just stack update`, `just stack down`{}",
             instance_suffix(&instance)
@@ -324,6 +336,8 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
                 build_aux_services: args.build_aux_services,
                 binaries_dir: args.binaries_dir.clone(),
             },
+            // `up`'s default: no computers.
+            computers: Default::default(),
             no_frontend: false,
             verbose: args.verbose,
             no_snapshot: false,
@@ -350,14 +364,17 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
     let env = env_layer::resolve(
         mode,
         &instance,
-        args.env.no_doppler || state.no_doppler,
-        args.env.env_file.as_deref().or(state.env_file.as_deref()),
-        state.serves_bundle(),
-        Tunnels {
-            egress: state.egress_url.as_deref(),
-            preview_ssh: state.preview_ssh_host.as_deref(),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler || state.no_doppler,
+            env_file: args.env.env_file.as_deref().or(state.env_file.as_deref()),
+            static_frontend: state.serves_bundle(),
+            tunnels: Tunnels {
+                egress: state.egress_url.as_deref(),
+                preview_ssh: state.preview_ssh_host.as_deref(),
+            },
+            wire_otel: state.traces_enabled,
+            computers: &state.computers(mode, &instance),
         },
-        state.traces_enabled,
     )?;
     let only = if args.services.is_empty() {
         None
@@ -490,11 +507,15 @@ fn remount(
     new: &super::build::BinariesDir,
     state: &StackState,
 ) -> Result<()> {
-    let gmail_forwarder = env
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
-    super::gen_compose::generate(mode, instance, new, state.serves_bundle(), gmail_forwarder)?;
+    let sidecars = super::gen_compose::Sidecars::from_env(mode, &env.merged);
+    super::gen_compose::generate(
+        mode,
+        instance,
+        new,
+        state.serves_bundle(),
+        sidecars,
+        &state.computers(mode, instance),
+    )?;
     let mut up = super::compose_cmd(instance, env);
     up.args([
         "up",
@@ -506,8 +527,14 @@ fn remount(
     for svc in super::inventory::services_for_mode(mode) {
         up.arg(svc.compose_name);
     }
-    if gmail_forwarder {
+    if sidecars.gmail_forwarder {
         up.arg("gmail_forwarder");
+    }
+    if sidecars.gmail_emulator {
+        up.arg(super::google_emulator::SERVICE);
+    }
+    if sidecars.outlook_emulator {
+        up.arg(super::microsoft_emulator::SERVICE);
     }
     stage.run("Remounting Rust services", &mut up)?;
     write_state(
@@ -522,6 +549,7 @@ fn remount(
             egress_url: state.egress_url.clone(),
             preview_ssh_host: state.preview_ssh_host.clone(),
             traces_enabled: state.traces_enabled,
+            computers: state.computers,
         },
     )?;
     super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());

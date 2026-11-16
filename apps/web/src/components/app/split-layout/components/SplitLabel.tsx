@@ -1,4 +1,5 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
@@ -30,6 +31,7 @@ import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   createSignal,
   For,
@@ -257,6 +259,8 @@ export type SplitLabelDocument = {
  */
 export function EntitySplitLabel(props: {
   targetType: EntityIconSelector;
+  /** The entity's own icon and color, when it has chosen one. */
+  appearance?: EntityAppearance | null;
   name: string;
   document?: SplitLabelDocument;
   icon?: JSX.Element;
@@ -268,6 +272,7 @@ export function EntitySplitLabel(props: {
   title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  const suppliedIcon = children(() => props.icon);
   useSplitDisplayName(() => props.name);
 
   const openTitleFileMenu = (e: MouseEvent) => {
@@ -284,16 +289,17 @@ export function EntitySplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
                 targetType={props.targetType}
+                appearance={props.appearance}
                 size="xs"
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show
@@ -364,6 +370,12 @@ export function BlockItemSplitLabel(props: {
     }
     return blockName;
   };
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
   const document = (): SplitLabelDocument | undefined => {
     const metadata = blockMetadataSignal();
     if (!metadata) return;
@@ -378,6 +390,7 @@ export function BlockItemSplitLabel(props: {
   return (
     <EntitySplitLabel
       targetType={targetType()}
+      appearance={appearance()}
       name={displayName() ?? ''}
       document={document()}
       icon={props.icon}

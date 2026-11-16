@@ -139,6 +139,30 @@ impl<T> SoupItem<T> {
         }
     }
 
+    /// Returns the item's own name, as a name-sorted Soup page orders on it.
+    ///
+    /// `None` for the kinds that have no name of their own; those sort after
+    /// every named item.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            SoupItem::Document(document) => Some(document.name.as_str()),
+            SoupItem::Chat(chat) => Some(chat.name.as_str()),
+            SoupItem::Project(project) => Some(project.name.as_str()),
+            SoupItem::Initiative(initiative) => Some(initiative.name.as_str()),
+            SoupItem::CalendarEvent(event) => Some(event.title.as_str()),
+            SoupItem::Channel(channel) => channel.channel.channel.name.as_deref(),
+            SoupItem::AgentSession(session) => Some(session.name.as_str()),
+            SoupItem::CrmCompany(company) => company.name.as_deref(),
+            SoupItem::CrmContact(contact) => contact.name.as_deref(),
+            SoupItem::Harness(harness) => Some(harness.name.as_str()),
+            SoupItem::EmailThread(_)
+            | SoupItem::ChannelThread(_)
+            | SoupItem::Call(_)
+            | SoupItem::ForeignEntity(_)
+            | SoupItem::DatabaseRow(_) => None,
+        }
+    }
+
     fn cursor_timestamp(&self, sort: SimpleSortMethod) -> DateTime<Utc> {
         match (self, sort) {
             (SoupItem::Document(soup_document), SimpleSortMethod::ViewedAt) => {
@@ -319,6 +343,7 @@ impl<T> SoupItem<T> {
     {
         match self {
             SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -336,6 +361,7 @@ impl<T> SoupItem<T> {
                 deleted_at,
                 extra,
             }) => SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -379,6 +405,7 @@ impl<T> SoupItem<T> {
                 extra: f(extra),
             }),
             SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,
@@ -387,6 +414,7 @@ impl<T> SoupItem<T> {
                 viewed_at,
                 extra,
             }) => SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,

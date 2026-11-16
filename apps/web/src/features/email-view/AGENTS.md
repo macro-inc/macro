@@ -27,6 +27,8 @@ the Soup-backed thread list, and saved email views (flag
 
 ## Gotchas
 
+- Keep tags in the desktop Filters menu and mobile filter drawer, not in the
+  sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
@@ -48,6 +50,13 @@ the Soup-backed thread list, and saved email views (flag
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - Unread dots are presence in a small first unread page per view, never a count.
+- `/` and Cmd+F are registered for the whole desktop view in
+  `use-email-search-hotkeys.ts`, not in the list header: a thread or a new
+  email unmounts that header, and a `/` with no Email command falls through
+  to the app sidebar's Search view. With the header unmounted, `/` returns to
+  the list (`closeThread`, as Back does) and focuses the header's field once
+  it mounts; Cmd+F stays unhandled so the browser can find text in the thread
+  or draft.
 - `ViewShell.Main` holds the list at the width `use-reading-pane-list-width.ts`
   reads beside the reading pane, so every drag must be saved through
   `onWidthChangeEnd`; an unsaved one snaps back on the next resize.

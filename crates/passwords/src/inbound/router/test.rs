@@ -63,14 +63,13 @@ struct Disabled;
 #[async_trait::async_trait]
 impl Availability for Disabled {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
-        self.require_service_enabled().await
+        self.require_provider()
     }
-    async fn require_service_enabled(&self) -> Result<(), Error> {
+    fn require_provider(&self) -> Result<(), Error> {
         Err(Error::Unavailable)
     }
 }
-fn flagged_app_with_actor(
-    result: Result<feature_flags::FlagSnapshot, String>,
+fn flagged_app(
     actor_result: Result<feature_flags::FlagSnapshot, String>,
     configured: bool,
 ) -> (
@@ -89,7 +88,6 @@ fn flagged_app_with_actor(
             actor_result.clone(),
         );
     }
-    flags.set_service(PASSWORDS_CONTEXT, result);
     let app = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
@@ -102,23 +100,6 @@ fn flagged_app_with_actor(
         }),
     });
     (app, repository, provider)
-}
-fn flagged_app(
-    result: Result<feature_flags::FlagSnapshot, String>,
-    configured: bool,
-) -> (
-    Router,
-    Arc<crate::domain::service::test::fakes::FakeRepository>,
-    Arc<crate::domain::service::test::fakes::FakeProvider>,
-) {
-    flagged_app_with_actor(
-        result,
-        Ok(feature_flags::FlagSnapshot::new([(
-            crate::outbound::availability::PASSWORDS_FLAG.into(),
-            feature_flags::FlagValue::Boolean(true),
-        )])),
-        configured,
-    )
 }
 fn app() -> Router {
     flagged_app(Err("flag transport failed".into()), true).0
@@ -303,9 +284,9 @@ struct Enabled;
 #[async_trait::async_trait]
 impl Availability for Enabled {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
-        self.require_service_enabled().await
+        self.require_provider()
     }
-    async fn require_service_enabled(&self) -> Result<(), Error> {
+    fn require_provider(&self) -> Result<(), Error> {
         Ok(())
     }
 }

@@ -1,7 +1,10 @@
+import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
 import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import { createFakePasswordSource } from '../tests/fake-source';
@@ -41,6 +44,36 @@ const source = createFakePasswordSource([
     },
   },
 ]);
+// The first create of this folder name fails, as an unreachable vault would;
+// the retry then succeeds.
+const UNREACHABLE_FOLDER = 'Unreachable folder';
+let folderCreateFailed = false;
+let folderCreateAttempts = 0;
+const createFolder = source.createFolder;
+source.createFolder = async (name, parentId) => {
+  if (name === UNREACHABLE_FOLDER) {
+    folderCreateAttempts += 1;
+    document.body.dataset.folderCreateAttempts = String(folderCreateAttempts);
+  }
+  if (name === UNREACHABLE_FOLDER && !folderCreateFailed) {
+    folderCreateFailed = true;
+    return err('failed');
+  }
+  return createFolder(name, parentId);
+};
+// Count metadata mutations so pointer tests can distinguish cancellation from a no-op tree.
+let folderMoves = 0;
+const moveFolder = source.moveFolder;
+source.moveFolder = async (id, parentId) => {
+  document.body.dataset.folderMoves = String(++folderMoves);
+  return moveFolder(id, parentId);
+};
+let itemMoves = 0;
+const moveItem = source.move;
+source.move = async (item, folderId) => {
+  document.body.dataset.itemMoves = String(++itemMoves);
+  return moveItem(item, folderId);
+};
 const View = () => (
   <QueryClientProvider
     client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -60,10 +93,13 @@ const View = () => (
         },
       }}
     >
-      <div class="relative h-dvh bg-panel text-ink">
-        <VaultView />
-        <FloatRegionHost />
-      </div>
+      <ItemDndProvider>
+        <div class="relative h-dvh bg-panel text-ink">
+          <VaultView />
+          <FloatRegionHost />
+          <ToastRegion />
+        </div>
+      </ItemDndProvider>
     </PasswordsProvider>
   </QueryClientProvider>
 );

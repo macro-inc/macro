@@ -6,7 +6,7 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSettingsPage } from '../primitives/settings-page';
 import { CrmWorkspaceView } from './crm-workspace';
 
@@ -15,11 +15,10 @@ const fixture = vi.hoisted(() => ({
   pipelinesEnabled: true,
   listsEnabled: true,
   touch: true,
-  narrow: false,
   width: 600,
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
-  setCollapsed: vi.fn(),
+  root: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -38,8 +37,16 @@ vi.mock('@app/components/view-shell', () => ({
       <Show when={props.hasDetail}>{props.children}</Show>
     </>
   ),
+  asideCollapsedPreferenceKey: (app: string) =>
+    `macro:pref:view-sidebar:collapsed:${app}`,
   ViewShell: {
-    Root: (props: ParentProps) => props.children,
+    Root: (props: ParentProps<{ asidePreferenceKey?: string }>) => {
+      fixture.root(
+        props.asidePreferenceKey,
+        localStorage.getItem('macro:pref:view-sidebar:collapsed:crm')
+      );
+      return props.children;
+    },
     Aside: (props: ParentProps) => props.children,
     Main: (props: ParentProps) => props.children,
     Header: (props: ParentProps) => <header>{props.children}</header>,
@@ -48,24 +55,11 @@ vi.mock('@app/components/view-shell', () => ({
     Title: (props: ParentProps) => <h1>{props.children}</h1>,
     Toggle: () => <button type="button" aria-label="Show navigation" />,
   },
-  useViewShell: () => ({
-    aside: { isCollapsed: () => true },
-    breakpoints: { narrow: () => fixture.narrow },
-  }),
+  ViewNavigationControls: () => (
+    <div role="group" aria-label="Navigation controls" />
+  ),
   useViewControlHotkeys: () => {},
   SearchBar: () => null,
-}));
-vi.mock('@app/preferences/use-preference', () => ({
-  usePreference: () => {
-    const [collapsed, setCollapsed] = createSignal(false);
-    return [
-      collapsed,
-      (value: boolean) => {
-        fixture.setCollapsed(value);
-        setCollapsed(value);
-      },
-    ];
-  },
 }));
 vi.mock('@components/app/split-layout/context', async () => {
   const { createContext } = await import('solid-js');
@@ -101,32 +95,7 @@ vi.mock('@ui', async () => ({
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => <button aria-label={props.label} {...props} />,
-  Dropdown: Object.assign(
-    (
-      props: ParentProps<{
-        open: boolean;
-        onOpenChange: (open: boolean) => void;
-      }>
-    ) => (
-      <div>
-        <button type="button" onClick={() => props.onOpenChange(true)}>
-          Show CRM navigation
-        </button>
-        <Show when={props.open}>{props.children}</Show>
-      </div>
-    ),
-    { Trigger: () => null, Content: (props: ParentProps) => props.children }
-  ),
-}));
-vi.mock('@components/app/split-panel', () => ({
-  SplitPanel: {
-    ControlGroup: (props: ParentProps) => <div>{props.children}</div>,
-    CloseButton: () => <button type="button" aria-label="Close split" />,
-  },
-}));
-vi.mock('@ui/components/Tour', () => ({ tourTarget: () => () => {} }));
-vi.mock('@app/components/view-shell/tour', () => ({
-  VIEW_SHELL_TOUR: { sidebarToggle: 'sidebar-toggle' },
+  Dropdown: () => null,
 }));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({
   getViewPreset: () => ({ filters: {}, clientFilters: {} }),
@@ -181,14 +150,8 @@ vi.mock('../components/crm-sidebar', () => ({
     pipelines?: JSX.Element;
     onNavigate: (id: string) => void;
     onSettings: () => void;
-    onCollapse?: () => void;
   }) => (
     <nav aria-label="CRM sidebar">
-      <Show when={props.onCollapse}>
-        <button type="button" onClick={props.onCollapse}>
-          Collapse CRM sidebar
-        </button>
-      </Show>
       <button type="button" onClick={() => props.onNavigate('active')}>
         Companies
       </button>
@@ -305,10 +268,19 @@ afterEach(() => {
   fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
   fixture.touch = true;
-  fixture.narrow = false;
   fixture.width = 600;
   fixture.openWithSplit.mockReset();
-  fixture.setCollapsed.mockReset();
+  fixture.root.mockReset();
+  vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+  });
 });
 
 /** A workspace whose route shows another tab's list when the tab changes. */
@@ -368,7 +340,7 @@ it('keeps sidebar destinations in the mobile header when switching records, pipe
   const tabs = () =>
     within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
-    screen.queryByRole('button', { name: 'Expand CRM sidebar' })
+    screen.queryByRole('group', { name: 'Navigation controls' })
   ).toBeNull();
   expect(
     tabs().getByRole('button', { name: 'Companies', pressed: true })
@@ -505,6 +477,49 @@ it('returns to the pipeline when its record is open and the pipeline is picked a
   expect(record.close).toHaveBeenCalledOnce();
   expect(activeTab()).toBe('pipeline:sales');
   expect(screen.getByText('Sales table')).toBeTruthy();
+});
+
+it('puts the shell navigation controls in pipeline and settings headers on desktop', () => {
+  fixture.touch = false;
+  setup('pipeline:sales');
+  expect(fixture.root).toHaveBeenCalledWith('crm', null);
+  expect(
+    screen.getByRole('group', { name: 'Navigation controls' }).parentElement
+      ?.tagName
+  ).toBe('HEADER');
+  fireEvent.click(screen.getByRole('button', { name: 'CRM settings' }));
+  expect(
+    screen.getByRole('group', { name: 'Navigation controls' })
+  ).toBeTruthy();
+});
+
+it('moves a collapsed sidebar saved under the old CRM key to the shell preference', () => {
+  localStorage.setItem('macro:pref:crm:sidebar-collapsed', 'true');
+  setup();
+  expect(fixture.root).toHaveBeenCalledWith('crm', 'true');
+  expect(localStorage.getItem('macro:pref:crm:sidebar-collapsed')).toBeNull();
+});
+
+it('keeps the shell preference over a choice saved under the old CRM key', () => {
+  localStorage.setItem('macro:pref:crm:sidebar-collapsed', 'true');
+  localStorage.setItem('macro:pref:view-sidebar:collapsed:crm', 'false');
+  setup();
+  expect(fixture.root).toHaveBeenCalledWith('crm', 'false');
+  expect(localStorage.getItem('macro:pref:crm:sidebar-collapsed')).toBeNull();
+});
+
+it('keeps the old CRM choice and renders when saving the shell preference fails', () => {
+  const values = new Map([['macro:pref:crm:sidebar-collapsed', 'true']]);
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: () => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    },
+    removeItem: (key: string) => values.delete(key),
+  });
+  setup();
+  expect(fixture.root).toHaveBeenCalledWith('crm', null);
+  expect(values.get('macro:pref:crm:sidebar-collapsed')).toBe('true');
 });
 
 it('opens the company of a pipeline row in its own split on touch', () => {

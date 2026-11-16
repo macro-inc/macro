@@ -1,7 +1,9 @@
 import {
+  asideCollapsedPreferenceKey,
   CollectionPanes,
   SearchBar,
   useViewControlHotkeys,
+  ViewNavigationControls,
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -36,6 +38,7 @@ import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import FileCsvIcon from '@icon/system/regular/file-csv.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, ButtonGroup, Tooltip } from '@ui';
+import { Result } from 'neverthrow';
 import {
   createEffect,
   createSignal,
@@ -81,41 +84,35 @@ import {
   useQuickAccessCrmCompaniesQuery,
 } from './use-crm';
 
-function NavigationToggle() {
-  return (
-    <ViewSidebar.Toggle
-      action="expand"
-      presentation={isTouchDevice() ? 'pill' : undefined}
-    />
-  );
-}
+const CRM_ASIDE_PREFERENCE = 'crm';
+/** Where CRM saved a collapsed sidebar before it used the shell's preference. */
+const LEGACY_COLLAPSED_PREFERENCE = 'macro:pref:crm:sidebar-collapsed';
 
-function CrmSearchBar() {
-  const view = useCrmWorkspace();
-  let input: HTMLInputElement | undefined;
-  useViewControlHotkeys({
-    scopeId: view.host.scopeId,
-    enabled: view.host.isActive,
-    search: {
-      description: 'Search companies',
-      run: () => {
-        input?.focus();
-        input?.select();
-        return true;
-      },
-    },
-  });
+/**
+ * Moves a choice saved under CRM's old key to the shell's, which wins if set.
+ * The old key stays until the copy succeeds; storage that throws leaves the
+ * shell's default in place.
+ */
+const adoptLegacyCollapsedPreference = Result.fromThrowable(() => {
+  const legacy = localStorage.getItem(LEGACY_COLLAPSED_PREFERENCE);
+  if (legacy === null) return;
+  const key = asideCollapsedPreferenceKey(CRM_ASIDE_PREFERENCE);
+  if (localStorage.getItem(key) === null) localStorage.setItem(key, legacy);
+  localStorage.removeItem(LEGACY_COLLAPSED_PREFERENCE);
+});
+
+/**
+ * Split close and Show navigation for CRM headers outside a top bar. Touch
+ * opens navigation as a sheet from the same pill the list's filter row has.
+ */
+function CrmNavigationControls() {
   return (
-    <SearchBar
-      ref={(element) => (input = element)}
-      label="Search companies"
-      placeholder="Search companies"
-      value={view.searchText()}
-      onValueChange={view.setSearchText}
-      onEscape={view.host.focus}
-      hotkey="cmd+f"
-      class="max-w-md flex-1"
-    />
+    <Show
+      when={!isTouchDevice()}
+      fallback={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+    >
+      <ViewNavigationControls />
+    </Show>
   );
 }
 
@@ -198,6 +195,8 @@ export function CrmWorkspaceView(props: {
     editList?: () => void;
   }) => JSX.Element;
 }) {
+  // Before the shell below reads the preference.
+  adoptLegacyCollapsedPreference();
   const activityFlag = useFeatureFlag(enableCrmActivity);
   const {
     openCreateCompany: openCreateCompanyModal,
@@ -417,73 +416,6 @@ export function CrmWorkspaceView(props: {
       }
     )
   );
-  const sidebar = () => (
-    <CrmSidebar
-      searchLabel={peopleActive() ? 'Search people' : 'Search companies'}
-      search={() => (
-        <Show when={peopleActive()} fallback={<CrmSearchBar />}>
-          <PeopleSearchBar
-            value={peopleSearch()}
-            onValueChange={searchPeople}
-          />
-        </Show>
-      )}
-      promotion={
-        <ConnectorImportSidebar
-          category="crm"
-          class="mt-auto"
-          applies={teamQuery.isSuccess ? !!teamId() : undefined}
-          alternatives={[
-            {
-              icon: FileCsvIcon,
-              label: 'Upload a CSV',
-              description: 'Import companies from a spreadsheet export.',
-              onSelect: () => setImporting(true),
-            },
-          ]}
-        />
-      }
-      pipelines={
-        <Show when={pipelinesEnabled()}>
-          <PipelineSidebar
-            pipelines={pipelines.pipelines()}
-            activeId={settings.isOpen() ? undefined : pipelineId()}
-            loading={pipelines.loading()}
-            error={pipelines.error()}
-            canCreate={canCreatePipeline()}
-            onCreate={() => setCreatingPipeline(true)}
-            onSelect={selectPipeline}
-            onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
-          />
-        </Show>
-      }
-      active={settings.isOpen() ? 'settings' : activeRecord()}
-      lists={lists.lists().map((list) => ({
-        id: list.id,
-        name: list.name,
-        count: list.config.companyIds.length,
-      }))}
-      listsEnabled={listsEnabled()}
-      listsLoading={lists.query.isLoading}
-      listsError={lists.query.isError}
-      canCreateList={!!teamId()}
-      onNavigate={navigate}
-      onCreateCompany={openCreateCompanyModal}
-      onCreateContact={() => openCreateContactModal()}
-      pipeline={
-        pipelinesEnabled()
-          ? {
-              disabled: !canCreatePipeline(),
-              onCreate: () => setCreatingPipeline(true),
-            }
-          : undefined
-      }
-      onNewList={() => setEditing({ name: '', companyIds: [] })}
-      onImport={() => setImporting(true)}
-      onExport={() => setExporting(true)}
-      onSettings={settings.open}
-    />
-  );
   const mobileHeader = () => (
     <div class="flex min-w-0 flex-col gap-2">
       <CrmMobileTabs
@@ -538,14 +470,69 @@ export function CrmWorkspaceView(props: {
   return (
     <ViewShell.Root
       contentLayout="collection"
-      asidePreferenceKey="crm"
+      asidePreferenceKey={CRM_ASIDE_PREFERENCE}
       aside={{ preserveDuringResize: false }}
       main={{ min: 320 }}
       resizable
     >
       <ViewShell.Aside>
         <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
-          {sidebar()}
+          <CrmSidebar
+            promotion={
+              <ConnectorImportSidebar
+                category="crm"
+                class="mt-auto"
+                applies={teamQuery.isSuccess ? !!teamId() : undefined}
+                alternatives={[
+                  {
+                    icon: FileCsvIcon,
+                    label: 'Upload a CSV',
+                    description: 'Import companies from a spreadsheet export.',
+                    onSelect: () => setImporting(true),
+                  },
+                ]}
+              />
+            }
+            pipelines={
+              <Show when={pipelinesEnabled()}>
+                <PipelineSidebar
+                  pipelines={pipelines.pipelines()}
+                  activeId={settings.isOpen() ? undefined : pipelineId()}
+                  loading={pipelines.loading()}
+                  error={pipelines.error()}
+                  canCreate={canCreatePipeline()}
+                  onCreate={() => setCreatingPipeline(true)}
+                  onSelect={selectPipeline}
+                  onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
+                />
+              </Show>
+            }
+            active={settings.isOpen() ? 'settings' : activeRecord()}
+            lists={lists.lists().map((list) => ({
+              id: list.id,
+              name: list.name,
+              count: list.config.companyIds.length,
+            }))}
+            listsEnabled={listsEnabled()}
+            listsLoading={lists.query.isLoading}
+            listsError={lists.query.isError}
+            canCreateList={!!teamId()}
+            onNavigate={navigate}
+            onCreateCompany={openCreateCompanyModal}
+            onCreateContact={() => openCreateContactModal()}
+            pipeline={
+              pipelinesEnabled()
+                ? {
+                    disabled: !canCreatePipeline(),
+                    onCreate: () => setCreatingPipeline(true),
+                  }
+                : undefined
+            }
+            onNewList={() => setEditing({ name: '', companyIds: [] })}
+            onImport={() => setImporting(true)}
+            onExport={() => setExporting(true)}
+            onSettings={settings.open}
+          />
         </Suspense>
       </ViewShell.Aside>
       <CollectionPanes
@@ -574,11 +561,7 @@ export function CrmWorkspaceView(props: {
                         onCopyLink={() => copyPipelineLink(id)}
                         onTrashed={() => navigate('active')}
                         onOpenRecord={openPipelineRecord}
-                        navigation={
-                          <Show when={!isTouchDevice()}>
-                            <NavigationToggle />
-                          </Show>
-                        }
+                        navigation={<CrmNavigationControls />}
                       />
                     )}
                   </Show>
@@ -613,12 +596,9 @@ export function CrmWorkspaceView(props: {
                     <CrmActivityView
                       tab={tab}
                       title={
-                        <div class="flex min-w-0 items-center gap-3">
-                          <NavigationToggle />
-                          <ViewSidebar.Title caret={false} title={title()}>
-                            {title()}
-                          </ViewSidebar.Title>
-                        </div>
+                        <ViewSidebar.Title caret={false} title={title()}>
+                          {title()}
+                        </ViewSidebar.Title>
                       }
                     />
                   </Suspense>
@@ -630,23 +610,20 @@ export function CrmWorkspaceView(props: {
                 <Show when={!isTouchDevice()}>
                   <ListHeader
                     title={
-                      <div class="flex min-w-0 items-center gap-3">
-                        <NavigationToggle />
-                        <ViewSidebar.Title caret={false} title={title()}>
-                          {title()}
-                        </ViewSidebar.Title>
-                      </div>
+                      <ViewSidebar.Title caret={false} title={title()}>
+                        {title()}
+                      </ViewSidebar.Title>
                     }
                   >
                     <Show when={!peopleActive()}>
-                      <HeaderActionGroup label="Company filters">
+                      <HeaderActionGroup label="Company filters" size="md">
                         <UnifiedFilterDropdown
                           grouped
                           hideLabel
                           variant="ghost"
                         />
                       </HeaderActionGroup>
-                      <HeaderActionGroup label="Company view options">
+                      <HeaderActionGroup label="Company view options" size="md">
                         <SoupViewContextSort grouped />
                         <SoupViewContextGroup
                           grouped
@@ -713,7 +690,7 @@ export function CrmWorkspaceView(props: {
           fallback={
             <>
               <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2">
-                <NavigationToggle />
+                <CrmNavigationControls />
                 <Tooltip label="Back">
                   <Button
                     aria-label="Close CRM settings"
@@ -737,10 +714,7 @@ export function CrmWorkspaceView(props: {
           }
         >
           <Show when={itemKey()} keyed>
-            <CrmItemDetail
-              sourceName={activePipeline()?.name ?? title()}
-              navigation={<NavigationToggle />}
-            />
+            <CrmItemDetail sourceName={activePipeline()?.name ?? title()} />
           </Show>
           <Show when={recordOpen()}>
             <CrmRecordDetail
@@ -752,7 +726,7 @@ export function CrmWorkspaceView(props: {
               onSectionChange={view.host.record.setSection}
               onClose={view.host.record.close}
               onOpenPipeline={selectPipeline}
-              navigation={<NavigationToggle />}
+              navigation={<CrmNavigationControls />}
             />
           </Show>
         </Show>

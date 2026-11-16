@@ -6,7 +6,6 @@ import {
   CodeDetail,
   type CodeDetailContext,
 } from '@app/features/drive-view/views/CodeDetail';
-import { FileSplitHeader } from '@app/features/drive-view/views/FileSplitHeader';
 import {
   ImageDetail,
   type ImageDetailContext,
@@ -52,6 +51,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { EntityDetailTarget } from './entity-detail-target';
+import { FileSplitHeader } from './FileSplitHeader';
 
 // PDF.js and its viewer are only needed once a PDF is opened.
 const PdfDetail = lazyNamed(

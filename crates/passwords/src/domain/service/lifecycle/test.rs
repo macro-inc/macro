@@ -83,43 +83,120 @@ async fn failed_explicit_delete_retains_retry_and_enabled_cleanup_finishes_it() 
     assert!(f.repository.records.lock().unwrap()[&f.item.0].deleting);
 }
 
-#[tokio::test]
-async fn disabled_jobs_and_internal_purge_do_no_work_and_reenable_resumes() {
-    use crate::outbound::availability::*;
-    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
-    for result in [Ok(FlagSnapshot::default()), Err("remote failed".to_owned())] {
-        let mut f = Fixture::new().await;
-        f.provider.fail_delete.store(true, Ordering::SeqCst);
-        assert!(f.service.delete(&f.actor, f.team, f.item).await.is_err());
-        let mut flags = FakeFeatureFlags::default();
-        flags.set_service(PASSWORDS_CONTEXT, result);
-        f.service.availability = Arc::new(PasswordAvailability {
-            flags,
-            provider_configured: true,
-        });
-        let repo_calls = f.repository.calls.load(Ordering::SeqCst);
-        let provider_calls = f.provider.calls.load(Ordering::SeqCst);
-        assert!(f.service.cleanup_retired_items().await.is_err());
-        assert!(f.service.cleanup_expired_totp_enrollments().await.is_err());
-        assert!(f.service.purge_team(f.team).await.is_err());
-        assert_eq!(f.repository.calls.load(Ordering::SeqCst), repo_calls);
-        assert_eq!(f.provider.calls.load(Ordering::SeqCst), provider_calls);
-        assert!(f.repository.closed_teams.lock().unwrap().is_empty());
-        let mut flags = FakeFeatureFlags::default();
-        flags.set_service(
-            PASSWORDS_CONTEXT,
-            Ok(FlagSnapshot::new([(
-                PASSWORDS_FLAG.into(),
-                FlagValue::Boolean(true),
-            )])),
-        );
-        f.service.availability = Arc::new(PasswordAvailability {
-            flags,
-            provider_configured: true,
-        });
-        f.provider.fail_delete.store(false, Ordering::SeqCst);
-        assert_eq!(f.service.cleanup_retired_items().await.unwrap(), 1);
+// A maintenance call must never need either an actor or a service flag identity.
+struct NoFlagEvaluation;
+impl feature_flags::FeatureFlags for NoFlagEvaluation {
+    async fn load(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<feature_flags::FlagSnapshot, rootcause::Report> {
+        panic!("maintenance must not evaluate rollout flags")
     }
+}
+
+#[tokio::test]
+async fn maintenance_recovers_retained_work_without_flag_evaluation() {
+    use crate::outbound::availability::PasswordAvailability;
+    let mut f = Fixture::new().await;
+    f.provider.fail_delete.store(true, Ordering::SeqCst);
+    assert!(f.service.delete(&f.actor, f.team, f.item).await.is_err());
+    f.service.availability = Arc::new(PasswordAvailability {
+        flags: NoFlagEvaluation,
+        provider_configured: true,
+    });
+    f.provider.fail_delete.store(false, Ordering::SeqCst);
+    assert_eq!(f.service.cleanup_retired_items().await.unwrap(), 1);
+    assert_eq!(
+        f.service.cleanup_expired_totp_enrollments().await.unwrap(),
+        0
+    );
+    f.service.purge_team(f.team).await.unwrap();
+    assert_eq!(*f.provider.purged.lock().unwrap(), vec![f.team]);
+}
+
+#[tokio::test]
+async fn maintenance_reconciles_accepted_values_without_flag_evaluation() {
+    use crate::outbound::availability::PasswordAvailability;
+    let mut f = Fixture::new().await;
+    f.repository.fail_save.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        f.service
+            .update(
+                &f.actor,
+                f.team,
+                f.item,
+                WriteItem {
+                    operation_id: Uuid::now_v7(),
+                    name: "Recoverable".into(),
+                    kind: ItemKind::Login,
+                    url: None,
+                    folder_id: None,
+                    favorite: false,
+                    private: true,
+                    expected_version: Some(1),
+                    values: SecretValues {
+                        username: SecretString("account".into()),
+                        password: SecretString("synthetic".into()),
+                        notes: SecretString(String::new()),
+                        fields: vec![],
+                    },
+                },
+            )
+            .await,
+        Err(Error::Unavailable)
+    ));
+    f.repository.fail_save.store(false, Ordering::SeqCst);
+    f.service.availability = Arc::new(PasswordAvailability {
+        flags: NoFlagEvaluation,
+        provider_configured: true,
+    });
+    f.service.reconcile(f.team, f.item).await.unwrap();
+    assert_eq!(
+        f.repository.records.lock().unwrap()[&f.item.0]
+            .metadata
+            .version,
+        2
+    );
+    assert_eq!(f.provider.stored.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn empty_maintenance_needs_neither_flags_nor_provider_configuration() {
+    use crate::outbound::availability::PasswordAvailability;
+    let provider = Arc::new(FakeProvider::new());
+    let service = PasswordService {
+        repository: Arc::new(FakeRepository::new()),
+        provider: provider.clone(),
+        availability: Arc::new(PasswordAvailability {
+            flags: NoFlagEvaluation,
+            provider_configured: false,
+        }),
+    };
+    assert_eq!(service.cleanup_retired_items().await.unwrap(), 0);
+    assert_eq!(service.cleanup_expired_totp_enrollments().await.unwrap(), 0);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn retained_work_without_provider_configuration_remains_retryable() {
+    use crate::outbound::availability::PasswordAvailability;
+    let mut f = Fixture::new().await;
+    f.provider.fail_delete.store(true, Ordering::SeqCst);
+    assert!(f.service.delete(&f.actor, f.team, f.item).await.is_err());
+    f.service.availability = Arc::new(PasswordAvailability {
+        flags: NoFlagEvaluation,
+        provider_configured: false,
+    });
+    let provider_calls = f.provider.calls.load(Ordering::SeqCst);
+    assert_eq!(f.service.cleanup_retired_items().await.unwrap(), 0);
+    assert!(matches!(
+        f.service.purge_team(f.team).await,
+        Err(Error::Unavailable)
+    ));
+    assert_eq!(f.provider.calls.load(Ordering::SeqCst), provider_calls);
+    assert!(f.repository.records.lock().unwrap()[&f.item.0].deleting);
+    assert!(f.provider.stored.lock().unwrap().contains_key(&f.item.0));
+    assert!(f.repository.closed_teams.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

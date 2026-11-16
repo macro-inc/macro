@@ -22,10 +22,10 @@ import {
 /**
  * A split header for content hosted inside another view's pane, such as an
  * inline preview. Hosted content contributes through `SplitHeaderLeft`,
- * `SplitHeaderRight`, and the title file menu exactly as it does to its own
- * split's header, so a document shows the same title island and actions
- * whether it fills a split or sits beside a list. `SplitHeaderScope.TopBar`
- * places those contributions in the pane's top bar.
+ * `SplitHeaderRight`, the title file menu, or a mobile view's `MobileHeader`
+ * exactly as it does to its own split's header, so a document shows the same
+ * title island and actions whether it fills a split or sits beside a list.
+ * `SplitHeaderScope.TopBar` places those contributions in the pane's top bar.
  */
 type SplitHeaderScopeValue = {
   setLayoutRef: (
@@ -55,7 +55,16 @@ type RootProps = ParentProps<{
 
 function Root(props: RootProps) {
   return (
-    <Show when={props.when ?? true} fallback={props.children}>
+    <Show
+      when={props.when ?? true}
+      fallback={
+        // A host that keeps its own bar hides any enclosing scope, so its
+        // content doesn't draw a hosted header meant for an outer host.
+        <SplitHeaderScopeContext.Provider value={undefined}>
+          {props.children}
+        </SplitHeaderScopeContext.Provider>
+      }
+    >
       <ActiveRoot {...props} />
     </Show>
   );
@@ -74,6 +83,7 @@ function ActiveRoot(props: RootProps) {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<ReturnType<SplitPanelContextType['titleFileMenuActions']>>();
+  const mobileHeaderOwner = createSignal<symbol>();
   const headerCollapse = createPriorityCollapseController();
   const toolbarCollapse = createPriorityCollapseController();
 
@@ -91,6 +101,10 @@ function ActiveRoot(props: RootProps) {
           splitHotkeyScope: props.splitHotkeyScope ?? panel.splitHotkeyScope,
           isInlinePreview: props.isInlinePreview ?? panel.isInlinePreview,
           layoutRefs,
+          // The scope shows its own header: a hosted mobile view owns that one,
+          // and hosted content must not resize the enclosing split's controls.
+          mobileHeaderOwner,
+          headerMdControls: undefined,
           titleFileMenuRef,
           setTitleFileMenuRef,
           titleFileMenuTrigger,

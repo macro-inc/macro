@@ -7,10 +7,6 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { emailThreadRoute } from '@app/routes/routes';
-import {
-  EmailThreadControlGroups,
-  EmailThreadHeaderActions,
-} from '@block-email/component/EmailThreadHeaderActions';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {
   type EmailThreadToolsOptions,
@@ -18,9 +14,16 @@ import {
 } from '@block-email/component/useEmailThreadTools';
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
 import { registerEmailHotkeys } from '@block-email/util/emailHotkeys';
+import {
+  EmailThreadActions,
+  EmailThreadControlGroups,
+  EmailThreadHeaderActions,
+  emailThreadMenu,
+} from '@block-email/views/email-thread-parts';
+import { MobileEmailThread } from '@block-email/views/mobile/email-thread';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   useCanAutofocusSplitContent,
@@ -46,6 +49,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -76,7 +80,7 @@ function EmailDetailHeader(
     onEmailReminderSaved: () => void | Promise<void>;
   }
 ) {
-  const { emailEntity, permissions, menuTools, controls } =
+  const { emailEntity, permissions, actions, controls } =
     useEmailThreadTools(props);
   return (
     <>
@@ -91,7 +95,7 @@ function EmailDetailHeader(
               entity={emailEntity()}
               permissions={permissions()}
               ops={[]}
-              tools={menuTools}
+              tools={emailThreadMenu(actions)}
               onEmailReminderSaved={props.onEmailReminderSaved}
             />
           </Portal>
@@ -208,7 +212,7 @@ export function EmailDetailView(props: {
       registerEmailHotkeys(hotkeyScope(), handlers);
       registerScopeSignalHotkey(hotkeyScope, {
         hotkey: 'enter',
-        description: 'Reply to message',
+        description: 'Reply all to message',
         keyDownHandler: handlers.activate,
         hotkeyToken: TOKENS.block.focus,
         hide: true,
@@ -243,86 +247,119 @@ export function EmailDetailView(props: {
     isPending: () => threadQuery.isLoading,
   };
 
+  const afterReminderSaved = async () => {
+    await listNavigation.afterReminderSaved?.();
+  };
+  const threadFrame = (thread: () => JSX.Element) => (
+    <div ref={container} class="relative min-h-0 min-w-0 flex-1" tabIndex={-1}>
+      <EmailThreadLoadGate
+        isLocalDraft={source.isLocalDraft()}
+        result={loadResult}
+        notificationSource={notificationSource}
+        threadId={props.thread.id}
+        linkId={threadData()?.link_id}
+        onRetry={() => fireAndForget(threadQuery.refetch(), 'email-view')}
+      >
+        {thread()}
+      </EmailThreadLoadGate>
+    </div>
+  );
+
   return (
     <SidePanel.Root floating defaultOpen={false}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <ViewShell.TopBar class="touch:flex">
-          {/* The subject sits atop the thread, so the header only goes
-              back; the reading pane already shows the list beside it. */}
-          <Show when={!pane}>
-            <HeaderIsland class="px-1">
-              <Button
-                variant="ghost"
-                size="icon-md"
-                tooltip="Back"
-                aria-label="Back"
-                onClick={closeThread}
-              >
-                <ArrowLeftIcon class="size-4 touch:size-6" />
-              </Button>
-            </HeaderIsland>
-          </Show>
-          {/* Empty while the subject in the thread holds the menu. */}
-          <ViewShell.TopBarTitle>
-            <div ref={setHeaderMenuMount} class="flex items-center" />
-          </ViewShell.TopBarTitle>
-          <EmailThreadHeaderActions
-            controls={<div ref={setControlsMount} class="flex items-center" />}
-            share={
-              <Show when={ENABLE_EMAIL_SHARING}>
-                <ShareTrigger
-                  size="md"
-                  onClick={openShare}
-                  id={props.thread.id}
-                  blockType="email"
-                  hotkeyScope={keyScope}
-                />
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <ViewShell.TopBar>
+              {/* The subject sits atop the thread, so the header only goes
+                  back; the reading pane already shows the list beside it. */}
+              <Show when={!pane}>
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  tooltip="Back"
+                  aria-label="Back"
+                  onClick={closeThread}
+                >
+                  <ArrowLeftIcon class="size-4" />
+                </Button>
               </Show>
-            }
-          />
-        </ViewShell.TopBar>
-        <div
-          ref={container}
-          class="relative min-h-0 min-w-0 flex-1"
-          tabIndex={-1}
-        >
-          <EmailThreadLoadGate
-            isLocalDraft={source.isLocalDraft()}
-            result={loadResult}
-            notificationSource={notificationSource}
-            threadId={props.thread.id}
-            linkId={threadData()?.link_id}
-            onRetry={() => fireAndForget(threadQuery.refetch(), 'email-view')}
-          >
-            <EmailThreadHostView
-              title={title()}
-              titleTrailing={<TitleMenuMount ref={setSubjectMenuMount} />}
-              threadId={threadId}
-              source={source}
-              threadTransport={() => threadQuery.transport}
-              host={host}
-              chrome={({ createTask, createEvent, canCreateEvent }) => (
-                <EmailDetailHeader
-                  onEmailReminderSaved={async () => {
-                    await listNavigation.afterReminderSaved?.();
-                  }}
-                  id={props.thread.id}
-                  title={title()}
-                  onCreateTask={createTask}
-                  onCreateEvent={createEvent}
-                  canCreateEvent={canCreateEvent}
-                  onMarkedUnread={closeThread}
-                  onDeleted={closeThread}
-                  listNavigation={listNavigation}
-                  titleMenuMount={subjectMenuMount() ?? headerMenuMount()}
-                  controlsMount={controlsMount()}
-                />
-              )}
-              sidePanelHeaderToggle={false}
-            />
-          </EmailThreadLoadGate>
-        </div>
-      </div>
+              <div ref={setHeaderMenuMount} class="flex items-center" />
+              <EmailThreadHeaderActions
+                controls={
+                  <div ref={setControlsMount} class="flex items-center" />
+                }
+                share={
+                  <Show when={ENABLE_EMAIL_SHARING}>
+                    <ShareTrigger
+                      size="md"
+                      onClick={openShare}
+                      id={props.thread.id}
+                      blockType="email"
+                      hotkeyScope={keyScope}
+                    />
+                  </Show>
+                }
+              />
+            </ViewShell.TopBar>
+            {threadFrame(() => (
+              <EmailThreadHostView
+                title={title()}
+                titleTrailing={<TitleMenuMount ref={setSubjectMenuMount} />}
+                threadId={threadId}
+                source={source}
+                threadTransport={() => threadQuery.transport}
+                host={host}
+                chrome={({ createTask, createEvent, canCreateEvent }) => (
+                  <EmailDetailHeader
+                    onEmailReminderSaved={afterReminderSaved}
+                    id={props.thread.id}
+                    title={title()}
+                    onCreateTask={createTask}
+                    onCreateEvent={createEvent}
+                    canCreateEvent={canCreateEvent}
+                    onMarkedUnread={closeThread}
+                    onDeleted={closeThread}
+                    listNavigation={listNavigation}
+                    titleMenuMount={subjectMenuMount() ?? headerMenuMount()}
+                    controlsMount={controlsMount()}
+                  />
+                )}
+                actions={({ createTask }) => (
+                  <EmailThreadActions
+                    title={title()}
+                    onCreateTask={createTask}
+                  />
+                )}
+              />
+            ))}
+          </div>
+        }
+      >
+        {/* Touch shows the thread's own header, as a standalone thread does;
+            the workspace adds Back while the thread covers the list. */}
+        <SplitHeaderScope.Root>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <SplitHeaderScope.TopBar />
+            {threadFrame(() => (
+              <MobileEmailThread
+                title={title()}
+                threadId={threadId}
+                source={source}
+                threadTransport={() => threadQuery.transport}
+                host={host}
+                list={{
+                  onMarkedUnread: closeThread,
+                  onDeleted: closeThread,
+                  listNavigation,
+                  onEmailReminderSaved: afterReminderSaved,
+                }}
+              />
+            ))}
+          </div>
+        </SplitHeaderScope.Root>
+      </Show>
     </SidePanel.Root>
   );
 }

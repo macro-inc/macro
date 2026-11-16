@@ -4,18 +4,19 @@ import { AgentConnections } from '@app/features/block-agent/component/AgentConne
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
-import {
-  AgentSessionHeader,
-  agentSessionFileOperations,
-  agentSessionTitle,
-} from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
 import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
+import {
+  agentSessionFileOperations,
+  agentSessionTitle,
+  useAgentSessionHeader,
+} from '@app/features/block-agent/component/agent-session-header';
 import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
+import { MobileAgentSessionHeader } from '@app/features/block-agent/views/mobile/agent-session-header';
 import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
   ChangesHandoff,
@@ -93,6 +94,23 @@ function SessionCommands(props: {
     onDeleted: props.onDeleted,
   });
   return null;
+}
+
+/** The session's own header on touch, the one its block shows. */
+function SessionMobileHeader(props: { onDeleted: () => void }) {
+  const { metadata, session } = useAgentSession();
+  const header = useAgentSessionHeader({
+    session,
+    title: () => metadata()?.title ?? undefined,
+  });
+
+  return (
+    <MobileAgentSessionHeader
+      session={session()}
+      header={header}
+      onDelete={props.onDeleted}
+    />
+  );
 }
 
 function SessionContent(props: {
@@ -179,8 +197,8 @@ function SessionContent(props: {
         defaultOpen={false}
         persistKey="agent"
       >
-        {/* Touch shows the session's own split header, as a standalone
-            session does at phone width. */}
+        {/* Touch shows the session's own header, as a standalone session
+            does at phone width. */}
         <SplitHeaderScope.Root when={isTouchDevice()}>
           <Show
             when={isTouchDevice()}
@@ -286,11 +304,7 @@ function SessionContent(props: {
             }
           >
             <SplitHeaderScope.TopBar />
-            <AgentSessionHeader
-              session={session()}
-              title={metadata()?.title ?? undefined}
-              onDelete={props.onDeleted}
-            />
+            <SessionMobileHeader onDeleted={props.onDeleted} />
             <Show when={entity()}>
               {(current) => (
                 <SessionCommands
@@ -302,7 +316,7 @@ function SessionContent(props: {
           </Show>
           <div class="relative min-h-0 min-w-0 flex-1">
             <SidePanel.Layout
-              headerToggle={isTouchDevice()}
+              headerToggle={false}
               floating
               persistentFloating={persistentFloating()}
             >

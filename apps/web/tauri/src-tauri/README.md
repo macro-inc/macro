@@ -43,6 +43,40 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## Native HTTP connections
+
+Service requests from the native apps go through the HTTP plugin
+(`src/lib/core/util/platformFetch.ts`), not the WebView. The plugin fork keeps
+one client for them, so requests to a host share its connections. A client per
+request gives every request its own TCP and TLS handshake, which on a slow
+mobile network is most of the time the request takes.
+
+Keep the plugin's `gzip` feature on: the services compress a response only for
+a client that asks. The feature belongs to `reqwest`, so it also applies to the
+app's other native clients (the bundle updater, the desktop updater, uploads).
+A decoded response has no `Content-Length`, which is the one thing a web bundle
+can see of this.
+
+A connection kept from before a mobile app was suspended can be dead without
+either end knowing, and a request sent on it hangs. The mobile resume handler in
+`src/lib.rs` therefore calls `Http::reset_connections`; call it from any new
+path that learns the network changed. The plugin drops them itself when the
+machine slept ten seconds or more since the last request, which covers a
+desktop machine waking. Nothing does it for a network change with the machine
+awake (the network status plugin reports only online and offline). A
+connection that dies silently is then noticed by the plugin's HTTP/2 probe: a
+request that hears nothing for five seconds probes, and the connection is
+dropped after twenty more without an answer. The wait is that long because the
+answer queues behind data in flight, and a shorter one drops connections that
+are slow, not dead. An HTTP/1.1 connection, such as one to file storage, has no
+probe and waits for TCP to give up. All of this needs a native app release.
+
+Requests on a shared connection share its flow control, so a response body the
+page neither reads nor cancels holds data against the others until it is read
+or released. The plugin gives a connection a window far larger than a few
+abandoned bodies can fill, but not an unlimited one; read or cancel every body
+you fetch.
+
 ## OTA bundle storage
 
 On iOS, the bundle updater stores downloads and their persistence markers in
@@ -73,6 +107,22 @@ iOS pasteboard plugin stages images. The web client tags the pasted `File`s
 with the staged token, keeps them for local previews, and uploads through
 `upload_staged_file_to_presigned_url`. Other desktop platforms stage nothing
 and keep the browser upload. This needs a desktop native release.
+
+## macOS app menu and Cmd+W
+
+`src/desktop/app_menu.rs` replaces Tauri's default macOS menu with a copy whose
+File menu has **Close Tab** (Cmd+W) instead of Close Window. The menu claims
+Cmd+W before the page sees the key, so the item emits `desktop-close-tab` to the
+focused window, and `useCloseTabShortcut` (`components/app/tab-layout`) closes
+the active desktop tab, or the window when no other tab is open or tabs are off.
+Window > Close Window has no shortcut; the title bar's close button is unchanged.
+When the key window isn't a Tauri window (a popup wry opened, Web Inspector),
+both items close it natively. Until the frontend mounts its listener (a blank
+or crashed webview), Cmd+W does nothing; the close button still works.
+The frontend's window close needs `core:window:allow-close` in
+`capabilities/desktop.json`. Both the WKWebView and Chromium builds use this
+menu; Linux and Windows have no app menu and no desktop tabs. The menu is a
+native change: it ships with the next desktop release.
 
 ## Desktop app icons
 
@@ -447,6 +497,13 @@ Old schema 2 updaters reject schema 3 and continue using their existing bundle.
 Android cannot receive legacy schema 2 updates because their shared minimum
 cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
 for iOS/desktop-only schema 2 releases.
+
+Desktop reads `minNativeBuild` (`MIN_NATIVE_BUILD`) from schema 3 manifests too.
+Its release numbers come from hand-typed tags, so they never gate updater
+capabilities: each check sends `manifest_schema`, the newest manifest schema the
+updater reads, and the endpoint offers desktop no bundle with a newer schema.
+Desktop updaters that predate the parameter reject schema 3 after downloading
+it, so they keep their bundle until a native update.
 
 Every new native command used by shared JS must raise the corresponding
 platform minimum to a binary that implements it. Optional reachability falls

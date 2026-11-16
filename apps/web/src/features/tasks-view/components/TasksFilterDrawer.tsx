@@ -106,14 +106,7 @@ export function TasksFilterDrawer() {
           )
         }
       >
-        <Show
-          when={!state.search.trim()}
-          fallback={
-            <MobileDrawer.Label class="pt-4">
-              Search ordering
-            </MobileDrawer.Label>
-          }
-        >
+        <Show when={!state.search.trim()}>
           <MobileDrawer.Label id="task-sort-label" class="pt-4">
             Sort
           </MobileDrawer.Label>

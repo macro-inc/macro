@@ -1,6 +1,7 @@
 import { useTouchTopBarsFloat, ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -22,6 +23,7 @@ import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import IconShared from '@icon/share.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import IconLink from '@icon/system/regular/link.svg';
+import { normalizeGithubMarkdown } from '@macro-inc/lexical-core';
 import { NotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
@@ -67,11 +69,7 @@ import {
   type PrActions,
 } from '../primitives/create-pr-actions';
 import { usePrFileOperations } from '../primitives/pr-file-operations';
-import {
-  cleanGithubMarkdown,
-  githubAvatarUrl,
-  githubDisplayLogin,
-} from '../util/githubMarkdown';
+import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
 import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
@@ -227,31 +225,45 @@ export function PrDetailActions(props: {
   );
 
   return (
-    <ViewShell.TopBarActions class="not-touch:gap-2">
+    <ViewShell.TopBarActions class="not-touch:gap-2 touch:max-w-full">
       <Show when={props.detail}>
-        <HeaderActionGroup label="Sharing">
-          <Tooltip label="Share pull request">
-            <HeaderActionButton
-              grouped
-              label="Share"
-              icon={
-                <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              }
-              onClick={openShare}
-            />
-          </Tooltip>
-          <CopyButton
-            as={ButtonGroup.Button}
-            variant="ghost"
-            aria-label="Copy Share Link"
-            tooltip="Copy Share Link"
-            size="icon-sm"
-            onClick={copyLink}
-          >
-            <IconLink class="size-3.5" />
-          </CopyButton>
-        </HeaderActionGroup>
-        <PullRequestActionsButton actions={props.actions} />
+        {(detail) => (
+          <>
+            <HeaderActionGroup label="Actions">
+              <AskMacroButton
+                grouped
+                entity={{
+                  type: 'pr',
+                  id: detail().id,
+                  url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
+                }}
+              />
+            </HeaderActionGroup>
+            <HeaderActionGroup label="Sharing">
+              <Tooltip label="Share pull request">
+                <HeaderActionButton
+                  grouped
+                  label="Share"
+                  icon={
+                    <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                  }
+                  onClick={openShare}
+                />
+              </Tooltip>
+              <CopyButton
+                as={ButtonGroup.Button}
+                variant="ghost"
+                aria-label="Copy Share Link"
+                tooltip="Copy Share Link"
+                size="icon-sm"
+                onClick={copyLink}
+              >
+                <IconLink class="size-3.5" />
+              </CopyButton>
+            </HeaderActionGroup>
+            <PullRequestActionsButton actions={props.actions} />
+          </>
+        )}
       </Show>
       <ChangesToggle />
       <SidePanel.Toggle />
@@ -453,7 +465,7 @@ function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
   const description = createMemo(() => {
     const raw = props.pullRequest?.description;
     if (!raw) return null;
-    const cleaned = cleanGithubMarkdown(raw);
+    const cleaned = normalizeGithubMarkdown(raw);
     return cleaned || null;
   });
 
