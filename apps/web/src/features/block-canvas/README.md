@@ -159,7 +159,9 @@ middle of that frame. The view follows the frame: until the person has moved the
 canvas, the last fit is redone when the frame changes (the chrome is measured
 after the first paint, and a rotation changes everything); once they have, a
 rotation keeps what was in the middle in the middle, and chrome that grows or
-shrinks moves nothing.
+shrinks, or a keyboard that makes the view shorter, moves nothing. A fit of an
+empty canvas is not kept up, and neither is any fit once a press lands on the
+canvas or text is being typed.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.01 exponential rate
 per normalized wheel pixel and an exponent cap of 0.6 per event (about 82% zoom-in).
@@ -409,7 +411,10 @@ visual viewport growing back. While text is typed the touch views keep it inside
 the frame and the visual viewport (`keepInFrame` in `views/shared/canvas-framing.ts`):
 the canvas pans as the keyboard comes up and as the text grows, and the page
 itself is put back if the browser scrolled it to reveal the caret, so the
-header stays on screen. On every device a scroll the browser gives the canvas
+header stays on screen. Text that fits is kept whole; text larger than the
+frame follows its caret and is otherwise left where the person put it. The
+keyboard closing because the focus moved to one of the editor's own menus, or
+the window losing focus, does not commit. On every device a scroll the browser gives the canvas
 surface (a caret typed past its edge) is turned into the same pan and undone, so
 presses keep landing where they are aimed.
 

@@ -4,6 +4,18 @@ import { onCleanup } from 'solid-js';
 /** Screen pixels kept between what is being typed and the frame's edges. */
 const KEEP_SHOWN_MARGIN = 16;
 
+/** Where the caret is on screen, when it is inside `element`. */
+function caretIn(element: HTMLElement) {
+  const selection = document.getSelection();
+  if (!selection?.rangeCount) return undefined;
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.endContainer)) return undefined;
+  const rects = range.getClientRects();
+  const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
+  // An empty line reports no box at all.
+  return rect.width || rect.height ? rect : undefined;
+}
+
 type Measured = {
   hostWidth: number;
   hostHeight: number;
@@ -69,8 +81,10 @@ export function createCanvasFraming(
     );
   };
   /**
-   * Pan so that `element` lies inside the frame, clear of its edges. An
-   * element larger than the frame shows its end, where the typing is.
+   * Pan so that the text being typed in `element` can be seen. Text that fits
+   * in the frame is kept whole, clear of its edges. Text larger than the
+   * frame follows its caret, and is left alone while it has none: bringing its
+   * end in would take the place the person tapped out of view.
    */
   const show = (element: HTMLElement) => {
     if (!frame) return;
@@ -80,36 +94,57 @@ export function createCanvasFraming(
     // says what can be seen.
     const visual = window.visualViewport;
     const room = {
-      left: laidOut.left,
-      top: laidOut.top,
-      right: Math.min(
-        laidOut.right,
-        visual ? visual.offsetLeft + visual.width : Infinity
-      ),
-      bottom: Math.min(
-        laidOut.bottom,
-        visual ? visual.offsetTop + visual.height : Infinity
-      ),
+      left: laidOut.left + KEEP_SHOWN_MARGIN,
+      top: laidOut.top + KEEP_SHOWN_MARGIN,
+      right:
+        Math.min(
+          laidOut.right,
+          visual ? visual.offsetLeft + visual.width : Infinity
+        ) - KEEP_SHOWN_MARGIN,
+      bottom:
+        Math.min(
+          laidOut.bottom,
+          visual ? visual.offsetTop + visual.height : Infinity
+        ) - KEEP_SHOWN_MARGIN,
     };
     const box = element.getBoundingClientRect();
-    const along = (start: number, end: number, from: number, to: number) => {
-      const past = end - (to - KEEP_SHOWN_MARGIN);
-      if (past > 0) return -past;
-      const before = from + KEEP_SHOWN_MARGIN - start;
-      // Never push the end out to bring the start in.
-      return before > 0 ? Math.min(before, -past) : 0;
+    const caret = caretIn(element);
+    /** How far to move a span so that it lies between `from` and `to`. */
+    const into = (start: number, end: number, from: number, to: number) => {
+      if (end > to) return to - end;
+      return start < from ? from - start : 0;
     };
-    const x = along(box.left, box.right, room.left, room.right);
-    const y = along(box.top, box.bottom, room.top, room.bottom);
+    const along = (
+      [start, end]: [number, number],
+      [from, to]: [number, number],
+      caretSpan: [number, number] | undefined
+    ) => {
+      if (end - start <= to - from) return into(start, end, from, to);
+      return caretSpan ? into(caretSpan[0], caretSpan[1], from, to) : 0;
+    };
+    const x = along(
+      [box.left, box.right],
+      [room.left, room.right],
+      caret && [caret.left, caret.right]
+    );
+    const y = along(
+      [box.top, box.bottom],
+      [room.top, room.bottom],
+      caret && [caret.top, caret.bottom]
+    );
     if (Math.abs(x) >= 1 || Math.abs(y) >= 1) editor.panBy({ x, y });
   };
+  // Only a fit that had something to fit is one to keep up: an empty canvas
+  // must not zoom onto the first thing put on it when the chrome next moves.
   const fit = () => {
-    editor.fitScene(viewport());
-    fitted = { camera: editor.getCamera(), again: fit };
+    fitted = editor.fitScene(viewport())
+      ? { camera: editor.getCamera(), again: fit }
+      : undefined;
   };
   const fitSelection = () => {
-    editor.fitSelection(viewport());
-    fitted = { camera: editor.getCamera(), again: fitSelection };
+    fitted = editor.fitSelection(viewport())
+      ? { camera: editor.getCamera(), again: fitSelection }
+      : undefined;
   };
 
   return {
@@ -117,9 +152,18 @@ export function createCanvasFraming(
     centre,
     fit,
     fitSelection,
-    /** A press on the canvas: the person has taken over from the last fit. */
-    release() {
-      fitted = undefined;
+    /**
+     * A press anywhere on `element`, the view's host, means the person has
+     * taken over from the last fit. Heard at the window: a tool may stop the
+     * press before it reaches the host.
+     */
+    watchPresses(element: HTMLElement) {
+      const pressed = (event: PointerEvent) => {
+        if (event.target instanceof Node && element.contains(event.target))
+          fitted = undefined;
+      };
+      window.addEventListener('pointerdown', pressed, true);
+      onCleanup(() => window.removeEventListener('pointerdown', pressed, true));
     },
     /**
      * Fit into `element`, which the view lays over the part of the canvas no
@@ -128,8 +172,9 @@ export function createCanvasFraming(
      * The view then follows the frame. Until the person moves the canvas, the
      * last fit is redone whenever the frame changes: the chrome is measured
      * after the first paint, and a rotation changes everything. Once they
-     * have, a rotation keeps what was in the middle in the middle, and chrome
-     * that merely grows or shrinks moves nothing.
+     * have, a rotation (the host changing width) keeps what was in the middle
+     * in the middle. Chrome that merely grows or shrinks moves nothing, and
+     * neither does a keyboard, which only makes the host shorter.
      */
     frameWithin(element: HTMLElement, padding: number) {
       frame = { element, padding };
@@ -138,20 +183,15 @@ export function createCanvasFraming(
         const last = previous;
         const next = measure();
         previous = next;
-        if (untouched()) {
-          fitted?.again();
-          return;
+        if (untouched()) fitted?.again();
+        else {
+          fitted = undefined;
+          if (last && next.hostWidth !== last.hostWidth)
+            editor.panBy({
+              x: next.centre.x - last.centre.x,
+              y: next.centre.y - last.centre.y,
+            });
         }
-        fitted = undefined;
-        if (
-          last &&
-          (next.hostWidth !== last.hostWidth ||
-            next.hostHeight !== last.hostHeight)
-        )
-          editor.panBy({
-            x: next.centre.x - last.centre.x,
-            y: next.centre.y - last.centre.y,
-          });
         // The keyboard takes the lower part of the view: what is being typed
         // must not end up behind it.
         keepShown?.();
@@ -169,6 +209,8 @@ export function createCanvasFraming(
      */
     keepInFrame(element: HTMLElement) {
       if (!frame) return;
+      // Typing has begun: the last fit is no longer what the person wants kept.
+      fitted = undefined;
       const check = () => show(element);
       keepShown = check;
       // Reports once when it starts observing, which is the first check.
@@ -185,8 +227,11 @@ export function createCanvasFraming(
       window.addEventListener('scroll', stayPut);
       window.visualViewport?.addEventListener('scroll', stayPut);
       window.visualViewport?.addEventListener('resize', check);
+      // The caret also moves without the text changing size.
+      document.addEventListener('selectionchange', check);
       onCleanup(() => {
         observer.disconnect();
+        document.removeEventListener('selectionchange', check);
         window.removeEventListener('scroll', stayPut);
         window.visualViewport?.removeEventListener('scroll', stayPut);
         window.visualViewport?.removeEventListener('resize', check);

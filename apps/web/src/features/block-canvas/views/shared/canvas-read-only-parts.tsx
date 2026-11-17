@@ -69,10 +69,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
-      element.addEventListener('pointerdown', framing.release, true);
-      onCleanup(() =>
-        element.removeEventListener('pointerdown', framing.release, true)
-      );
+      framing.watchPresses(element);
     },
     host: () => host,
     tool,

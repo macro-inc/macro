@@ -35,6 +35,8 @@ function setup() {
     },
   ]);
   const host = box({ x: 0, y: 0, width: 400, height: 800 });
+  document.body.append(host.element);
+  cleanups.push(() => host.element.remove());
   const frame = box({ x: 0, y: 100, width: 400, height: 500 });
   // Observers in the order they were made: the frame's, then any text's.
   const observers: (() => void)[] = [];
@@ -53,6 +55,7 @@ function setup() {
   const framing = createRoot((dispose) => {
     cleanups.push(dispose, () => editor.dispose(), vi.unstubAllGlobals);
     const framing = createCanvasFraming(editor, () => host.element);
+    framing.watchPresses(host.element);
     framing.frameWithin(frame.element, 24);
     typing = (text) => framing.keepInFrame(text.element);
     return framing;
@@ -69,6 +72,9 @@ function setup() {
     frame,
     square,
     resized,
+    /** A finger lands on the canvas. */
+    press: () =>
+      host.element.dispatchEvent(new Event('pointerdown', { bubbles: true })),
     /** Start keeping `text` in view; returns its own "it changed size". */
     typing(text: ReturnType<typeof box>) {
       typing(text);
@@ -104,10 +110,10 @@ it('redoes the fit when the chrome settles, while nobody has moved the canvas', 
 });
 
 it('keeps the middle in the middle through a rotation once the canvas was moved', () => {
-  const { editor, framing, host, frame, resized } = setup();
+  const { editor, framing, host, frame, resized, press } = setup();
   framing.fit();
   resized();
-  framing.release();
+  press();
   editor.panBy({ x: 30, y: -40 });
   const middle = screenToWorld(editor.getCamera(), framing.centre());
 
@@ -122,10 +128,10 @@ it('keeps the middle in the middle through a rotation once the canvas was moved'
 });
 
 it('moves nothing when only the chrome changes under a canvas that was moved', () => {
-  const { editor, framing, frame, resized } = setup();
+  const { editor, framing, frame, resized, press } = setup();
   framing.fit();
   resized();
-  framing.release();
+  press();
   const camera = editor.getCamera();
 
   // A second row of buttons appears in the bottom chrome.
@@ -150,7 +156,24 @@ it('pans the text being typed up from behind the keyboard', () => {
   expect(editor.getCamera()).toEqual({ ...before, y: before.y - 186 });
 });
 
-it('follows a line that grows past the right edge, showing its end', () => {
+/** Put the caret at this box on screen, inside `text`. */
+function caretAt(
+  text: ReturnType<typeof box>,
+  rect: { x: number; y: number; width: number; height: number }
+) {
+  const caret = new DOMRect(rect.x, rect.y, rect.width, rect.height);
+  vi.spyOn(document, 'getSelection').mockReturnValue({
+    rangeCount: 1,
+    getRangeAt: () => ({
+      endContainer: text.element,
+      getClientRects: () => [caret],
+      getBoundingClientRect: () => caret,
+    }),
+  } as unknown as Selection);
+  cleanups.push(() => vi.restoreAllMocks());
+}
+
+it('follows the caret of a line that grows past the right edge', () => {
   const { editor, typing } = setup();
   const before = editor.getCamera();
   const text = box({ x: 300, y: 200, width: 60, height: 30 });
@@ -158,11 +181,70 @@ it('follows a line that grows past the right edge, showing its end', () => {
   grew();
   expect(editor.getCamera()).toEqual(before);
 
-  // Wider than the frame now: the end, where the caret is, stays in.
+  // Wider than the frame now, the caret at its end.
   text.set({ x: 300, y: 200, width: 500, height: 30 });
+  caretAt(text, { x: 799, y: 200, width: 1, height: 30 });
   grew();
 
   expect(editor.getCamera()).toEqual({ ...before, x: before.x - 416 });
+});
+
+it('leaves a long text where it is when the caret is already in view', () => {
+  const { editor, typing } = setup();
+  const before = editor.getCamera();
+  // A line far wider than the frame, tapped near its start to fix a typo.
+  const text = box({ x: 20, y: 200, width: 900, height: 30 });
+  const grew = typing(text);
+  grew();
+  expect(editor.getCamera()).toEqual(before);
+
+  caretAt(text, { x: 60, y: 200, width: 1, height: 30 });
+  document.dispatchEvent(new Event('selectionchange'));
+
+  expect(editor.getCamera()).toEqual(before);
+});
+
+it('moves nothing for a keyboard that only makes the view shorter', () => {
+  const { editor, framing, host, frame, resized, press } = setup();
+  framing.fit();
+  resized();
+  press();
+  const camera = editor.getCamera();
+
+  // Typing in a field elsewhere on the page: the canvas has no text of its own.
+  host.set({ x: 0, y: 0, width: 400, height: 460 });
+  frame.set({ x: 0, y: 100, width: 400, height: 360 });
+  resized();
+
+  expect(editor.getCamera()).toEqual(camera);
+});
+
+it('does not take a fit of an empty canvas as one to keep up', () => {
+  const { editor, framing, frame, resized } = setup();
+  editor.select('square');
+  editor.deleteSelection();
+  framing.fit();
+  const empty = editor.getCamera();
+
+  // Something is put on the canvas and the chrome changes for it.
+  editor.undo();
+  frame.set({ x: 0, y: 100, width: 300, height: 500 });
+  resized();
+
+  expect(editor.getCamera()).toEqual(empty);
+});
+
+it('stops redoing the fit once text is being typed', () => {
+  const { editor, framing, frame, typing, resized } = setup();
+  framing.fit();
+  const fitted = editor.getCamera();
+  // Started from the keyboard, with no press on the canvas.
+  typing(box({ x: 100, y: 200, width: 120, height: 30 }));
+
+  frame.set({ x: 0, y: 100, width: 400, height: 280 });
+  resized();
+
+  expect(editor.getCamera().scale).toBe(fitted.scale);
 });
 
 it('keeps to what the visual viewport shows where the page ignores the keyboard', () => {

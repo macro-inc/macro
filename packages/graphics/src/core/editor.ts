@@ -239,9 +239,11 @@ function createEditor(
     for (const listener of listeners) listener(camera);
   }
 
+  /** False when there was nothing to fit, or no room to fit it into. */
   function fitBounds(bounds: Bounds, viewport: FitViewport) {
     const fitted = fitBoundsCamera(bounds, viewport);
     if (fitted) publish(fitted);
+    return !!fitted;
   }
 
   function beginShape(kind: DrawingKind, point: DrawingSample) {
@@ -428,13 +430,13 @@ function createEditor(
     },
     fitScene(viewport: FitViewport) {
       const bounds = worldBounds(document, document.rootId);
-      fitBounds(bounds, viewport);
+      return fitBounds(bounds, viewport);
     },
     fitSelection(viewport: FitViewport) {
       const points = selection
         .getState()
         .selectedIds.flatMap((id) => nodeBoundsPoints(document, id));
-      if (points.length) fitBounds(enclosing(points), viewport);
+      return points.length > 0 && fitBounds(enclosing(points), viewport);
     },
     fitImage(viewport: { width: number; height: number }) {
       if (document.surface) publish(fitImageCamera(document.surface, viewport));

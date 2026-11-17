@@ -229,7 +229,9 @@ function MobileCanvasLayout() {
   // that moves to the canvas or to a control is that press's business, and it
   // commits the text itself.
   const commitTextLeftByKeyboard = (event: FocusEvent) => {
-    if (event.relatedTarget) return;
+    // A window that lost the focus (another app in front) takes it from the
+    // text too, and that is not the keyboard being closed.
+    if (event.relatedTarget || !document.hasFocus()) return;
     if (
       event.target instanceof Element &&
       event.target.closest('[data-canvas-text-editor]')
@@ -237,8 +239,17 @@ function MobileCanvasLayout() {
       commitText();
   };
   // A tablet's hide key leaves the focus where it was, so there the keyboard
-  // going away is the only sign.
-  onKeyboardClosed(commitText);
+  // going away is the only sign. It also goes away when the focus moves to one
+  // of the editor's own menus, which must stay open over the text.
+  onKeyboardClosed(() => {
+    const focused = document.activeElement;
+    if (
+      !focused ||
+      focused === document.body ||
+      focused.closest('[data-canvas-text-editor]')
+    )
+      commitText();
+  });
 
   // A sheet takes the keyboard's focus with it, so each way out of the Attach
   // sheets hands it back to the canvas.
