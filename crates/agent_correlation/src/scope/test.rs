@@ -156,7 +156,11 @@ fn a_run_that_sends_nothing_reaches_nobody() {
 #[test]
 fn a_signed_scope_is_read_from_its_claim() {
     assert_eq!(SignedScope::from_claim(None), SignedScope::Unscoped);
-    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
         assert_eq!(
             SignedScope::from_claim(Some(scope.as_str())),
             SignedScope::Known(scope)
@@ -187,6 +191,7 @@ fn no_scope_reaches_graphql() {
     for scope in [
         SignedScope::Known(SessionScope::Generation),
         SignedScope::Known(SessionScope::NoSend),
+        SignedScope::Known(SessionScope::DryRun),
         SignedScope::Unknown,
     ] {
         for (method, path) in [
@@ -200,4 +205,35 @@ fn no_scope_reaches_graphql() {
         assert!(scope.allows("GET", "/dss/documents/01a1"), "{scope:?}");
     }
     assert!(SignedScope::Unscoped.allows("POST", "/dss/soup/graphql"));
+}
+
+/// A dry run reads, including the reads the SDK sends as POST, and writes
+/// nothing, under any service prefix.
+#[test]
+fn a_dry_run_reads_and_writes_nothing() {
+    let scope = SessionScope::DryRun;
+    for (method, path) in [
+        ("GET", "/email/threads/abc"),
+        ("HEAD", "/documents/abc"),
+        ("POST", "/dss/search"),
+        ("POST", "/search"),
+        ("POST", "/cognition/decisions"),
+    ] {
+        assert!(scope.allows(method, path), "{method} {path}");
+    }
+    for (method, path) in [
+        ("POST", "/email/messages"),
+        ("POST", "/email/drafts"),
+        ("DELETE", "/email/drafts/01a1"),
+        ("PUT", "/email/drafts/scheduled/01a1"),
+        ("PATCH", "/documents/01a1"),
+        ("POST", "/scheduled-action/suggestions"),
+        ("POST", "/scheduled-actions"),
+        ("POST", "/channels/01a1/messages"),
+        ("POST", "/web/search"),
+        ("POST", "/cognition/structured-completion"),
+    ] {
+        assert!(!scope.allows(method, path), "{method} {path}");
+    }
+    assert!(!scope.allows_sharing());
 }
