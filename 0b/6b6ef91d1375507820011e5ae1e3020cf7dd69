@@ -1,0 +1,45 @@
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_358a0656ff17a9::t_b08188ae0c3a54 20888-21066
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_358a0656ff17a9::t_12a5d35fa5a74b 4920-4956,16741-16858
+crates/ai_tools/Cargo.toml
+  s_1bdeec8ad1cef4::t_6fc2b8c8e1fa92 32
+crates/ai_tools/src/lib.rs
+  s_1bdeec8ad1cef4::t_ae65f6b1562702 63,428-429
+crates/ai_tools/src/schemas/anthropic_tools.rs
+  s_1bdeec8ad1cef4::t_77bd8827f8347a 1-3,6,8-9,11-26,30-31
+crates/ai_tools/src/schemas/mod.rs
+  s_1bdeec8ad1cef4::t_b1999a39f99ba7 6
+crates/ai_tools/src/test.rs
+  s_358a0656ff17a9::t_445eb6ae109dd1 878,881-885
+docs/agent-guide/ai-chat.md
+  s_1bdeec8ad1cef4::t_b7b0a56a85a16c 1357
+docs/runbooks/ai-quota-enforcement.md
+  s_1bdeec8ad1cef4::t_cfc981bdd47bec 281
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_1bdeec8ad1cef4::t_138d63322268d7 175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0b6b6ef91d1375507820011e5ae1e3020cf7dd69",
+  "prompts": {},
+  "sessions": {
+    "s_1bdeec8ad1cef4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3958bab-cd72-473c-9a8e-8d126becb13e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
