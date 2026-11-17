@@ -14,6 +14,7 @@ export default {
   openItem: 'Open',
   openDraft: 'Open draft',
   turnOn: 'Turn on',
+  review: 'Review',
   markDone: 'Mark done',
   markDoneSuggestion: 'Mark “{{title}}” done',
   dismiss: 'Dismiss',

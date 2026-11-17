@@ -169,6 +169,28 @@ test('pressing a run’s text puts its prompt in the composer without starting i
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'open');
 });
 
+test('pointing at a run offers Open chat beside Run, and a routine Review', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const run = row(page, 'suggestion-background');
+  const openChat = run.getByRole('button', { name: 'Open chat', exact: true });
+  await expect(openChat.locator('..')).toHaveCSS('opacity', '0');
+  await run.hover();
+  await expect(openChat.locator('..')).toHaveCSS('opacity', '1');
+  await openChat.click();
+  // Its prompt is in the composer and nothing was started.
+  await expect(requests(page).getByRole('listitem')).toHaveText([
+    'composer Summarize this week and post it.',
+  ]);
+  await expect(run).toHaveAttribute('data-suggestion-status', 'open');
+
+  const routine = row(page, 'suggestion-routine');
+  await routine.hover();
+  await routine.getByRole('button', { name: 'Review', exact: true }).click();
+  await expect(requests(page)).toContainText('review routine-draft-1');
+});
+
 test('a failed run says so and Retry runs it again', async ({ page }) => {
   await page.goto('/');
   const suggestion = row(page, 'suggestion-failed');

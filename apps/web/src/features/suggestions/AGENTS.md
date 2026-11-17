@@ -109,9 +109,11 @@ only, behind `enable-suggestions`.
   sparkle, an orange repeat for a routine, a spinner while running, a red
   mark once failed), says what Macro will do, and has one secondary button:
   Run, Open chat, Turn on, Retry, or View while it runs. Running and failed
-  runs are the same row in the Running card. Pressing the row's text looks without taking it up
-  (`feed.look`): a routine opens for review, a run under way opens its
-  session, and a prompt opens in the composer.
+  runs are the same row in the Running card. Pointing at the row or
+  focusing in it adds a ghost Open chat (a run) or Review (a routine)
+  beside the button, and pressing the row's text does the same. Both look
+  without taking it up (`feed.look`): a routine opens for review, a run
+  under way opens its session, and a prompt opens in the composer.
 - A To do row (`ToDoRow`) leads with a circle that marks it done without
   opening anything (`feed.markDone`; the server counts that as taken up,
   like Open). Its line names the item it is about (`SuggestionItemParts`'

@@ -311,8 +311,10 @@ so at the start of its line); the row moves to **Running**, where it reads
 "Running." with **View**, which opens its session, and a failed run turns
 red with **Retry**. **Open chat**
 opens the composer with a prompt typed, unsent, and **Turn on** saves a
-routine. Pressing a Suggestions row's text looks without taking it up: a
-routine opens for review and a run's prompt opens in the composer. **To do**
+routine. Pointing at a row shows **Open chat** beside **Run**, or **Review**
+beside **Turn on**, which look without taking it up: a run's prompt opens in
+the composer, unsent, and a routine opens for review. Pressing the row's
+text does the same. **To do**
 is the person's own mail and documents: each row names the item it is about,
 who wrote, whether a reply is drafted, and how long it has waited. Its circle
 marks it done without opening anything; pressing its text, or **Open** /

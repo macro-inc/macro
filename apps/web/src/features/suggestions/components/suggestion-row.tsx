@@ -197,6 +197,22 @@ function acceptLabel(props: MacroRowProps): string {
     : t('suggestions.run');
 }
 
+/**
+ * What looking without taking it up is called, where the row's button does
+ * something else: a run's prompt opens in chat, a routine for review.
+ */
+function lookLabel(props: MacroRowProps): string | undefined {
+  if (props.status === 'running') return undefined;
+
+  const suggestion = props.suggestion;
+  if (suggestion.kind === 'routine') return t('suggestions.review');
+  if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
+    return t('suggestions.openInChat');
+  }
+
+  return undefined;
+}
+
 /** The mark before the title: its kind, or how its run is going. */
 function MacroLead(props: MacroRowProps) {
   return (
@@ -280,8 +296,20 @@ export function MacroRow(props: MacroRowProps) {
         <RowNotes failed={props.failed} changed={props.changed} />
       </Item.Content>
       <Item.Actions>
-        <span class="opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
+        <span class="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
           <DismissButton {...props} />
+          <Show when={lookLabel(props)}>
+            {(label) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={props.onLook}
+                data-suggestion-look
+              >
+                {label()}
+              </Button>
+            )}
+          </Show>
         </span>
         <Show
           when={props.status !== 'running'}
