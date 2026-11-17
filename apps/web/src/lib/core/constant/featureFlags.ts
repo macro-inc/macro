@@ -536,16 +536,6 @@ export const enableEmailReadReceipts = defineFlag({
   default: onInDev,
 });
 
-// CRM companies & contacts frontend: the Companies view + sidebar entry, the
-// company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
-// global search. PostHog-gated (currently targeted at the Macro team in prod)
-// with a dev-mode default; override with VITE_ENABLE_CRM.
-export const enableCrm = defineFlag({
-  key: 'enable-crm',
-  env: 'ENABLE_CRM',
-  default: onInDev,
-});
-
 // Emergency stop for CRM contact results in @ mentions and Command K/mobile
 // name searches. Companies and Macro users remain searchable. Off until
 // PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.

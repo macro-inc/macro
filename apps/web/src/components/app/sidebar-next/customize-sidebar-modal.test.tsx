@@ -46,7 +46,6 @@ function Modal() {
         showNotifications: false,
         showForYou: false,
         showScheduling: true,
-        showCustomers: true,
         showCalls: true,
         showReviews: true,
         showActivity: true,

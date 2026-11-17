@@ -1,5 +1,4 @@
 import {
-  enableCrm,
   enableCrmActivity,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -15,7 +14,7 @@ export const CUSTOMER_CONTACT_PROPERTY_IDS: readonly string[] = [
 
 /** Whether task creation shows the pill. Read once per opening of a form. */
 export function customerContactEnabled(): boolean {
-  return isFeatureEnabled(enableCrm) && isFeatureEnabled(enableCrmActivity);
+  return isFeatureEnabled(enableCrmActivity);
 }
 
 function entityReferences(value: PropertyApiValues | undefined) {

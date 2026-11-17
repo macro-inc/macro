@@ -12,7 +12,6 @@ import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
-  enableCrm,
   enableDatabases,
   enableForms,
   enableProjects,
@@ -392,7 +391,6 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
-  const crmFlag = useFeatureFlag(enableCrm);
   const projectsFlag = useFeatureFlag(enableProjects);
   // queries
   const historyQuery = useHistoryQuery();
@@ -1080,10 +1078,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
     const projectedBuckets = createMemo(() =>
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
-        (bucket) =>
-          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-            crmFlag().enabled) &&
-          (bucket !== 'initiative' || projectsFlag().enabled)
+        (bucket) => bucket !== 'initiative' || projectsFlag().enabled
       )
     );
     const personExclusions = createContactExclusions(

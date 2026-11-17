@@ -34,7 +34,6 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_CALLS,
-  enableCrm,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -244,15 +243,13 @@ export const GoToHotkeys = () => {
   const reviews = useFeatureFlag(enableTasksReviews);
   const notificationsEnabled = useUnifiedNotificationsFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
-  const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       activityFeedEnabled(),
       recentViewEnabled(),
       reviews().enabled,
       notificationsEnabled(),
-      external().enabled,
-      crm().enabled
+      external().enabled
     )
   );
 
@@ -410,7 +407,7 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Notifications, Recent, Activity, Calls, Reviews, CRM,
+ * flag-gated Notifications, Recent, Activity, Calls, Reviews,
  * and External entries in their correct positions. Callers subscribe to the
  * flags and pass them in, so a flag that resolves after mount still rebuilds
  * the list.
@@ -420,8 +417,7 @@ export const buildSidebarLinks = (
   showRecent: boolean,
   showReviews: boolean,
   showNotifications: boolean,
-  showExternal: boolean,
-  showCustomers: boolean
+  showExternal: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS;
 
@@ -448,16 +444,14 @@ export const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  if (showCustomers) {
-    // Customers sits just after Channels (and Calls when present).
-    const anchorId = ENABLE_CALLS ? 'calls' : 'channels';
-    const idx = links.findIndex((l) => l.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      COMPANIES_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
+  // Customers sits just after Channels (and Calls when present).
+  const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
+  const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
+  links = [
+    ...links.slice(0, customersIdx + 1),
+    COMPANIES_LINK,
+    ...links.slice(customersIdx + 1),
+  ];
 
   if (showReviews) {
     // Reviews sits at the end (accessed via More menu but has a hotkey).

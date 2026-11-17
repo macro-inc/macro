@@ -43,7 +43,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 vi.mock('./use-nav-item-gates', () => ({
   useNavItemGates: () => () => ({
     showScheduling: false,
-    showCustomers: false,
     showCalls: true,
     showReviews: false,
     showActivity: false,
@@ -125,6 +124,7 @@ describe('ViewSwitcher', () => {
       'Tasks',
       'Calendar',
       'Agents',
+      'Customers',
       'Calls',
     ]);
     expect(screen.getByRole('menuitem', { current: 'page' }).textContent).toBe(

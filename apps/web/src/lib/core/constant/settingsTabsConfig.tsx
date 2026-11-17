@@ -38,7 +38,6 @@ import {
   ENABLE_EMAIL,
   enableCalendarScheduling,
   enableChatV3Agents,
-  enableCrm,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -361,7 +360,6 @@ export const useSettingsTabAvailable = () => {
   const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
   const botManagementFlag = useFeatureFlag(botManagement);
   const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
-  const crmFlag = useFeatureFlag(enableCrm);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -387,12 +385,8 @@ export const useSettingsTabAvailable = () => {
       case 'Team':
       case 'Team Members':
       case 'Tags':
-        return true;
-      // CRM is still rolling out (Macro-internal only); keep the settings tab
-      // behind the same enable-crm gate as every other CRM surface so it never
-      // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return crmFlag().enabled;
+        return true;
       case 'Connected':
         return true;
       case 'Shortcuts':

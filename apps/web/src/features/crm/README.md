@@ -169,9 +169,8 @@ fetching details or capturing navigation history. Record contexts isolate drafts
 
 `enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
 Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and, with `enable-crm`, the Customer / Contact pill in the task
-composer and Universal Input's task mode. Those two read both flags through
-`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
+composer context, and the Customer / Contact pill in the task composer and
+Universal Input's task mode, which read it through `customerContactEnabled`. It defaults off everywhere and can be overridden locally with
 `VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
 queries; saved activity links wait for flag loading, then fall back to Companies.
 The standard record task action still associates the task with its record.

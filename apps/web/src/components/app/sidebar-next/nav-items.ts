@@ -242,7 +242,6 @@ export type NavItemGates = {
   showNotifications: boolean;
   showForYou: boolean;
   showScheduling: boolean;
-  showCustomers: boolean;
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
@@ -260,7 +259,6 @@ export const isNavItemAvailable = (
   if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'booking-links') return gates.showScheduling;
-  if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;

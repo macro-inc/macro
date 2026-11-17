@@ -19,7 +19,6 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showNotifications: true,
   showForYou: false,
   showScheduling: true,
-  showCustomers: true,
   showCalls: true,
   showReviews: true,
   showActivity: true,

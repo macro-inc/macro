@@ -5,7 +5,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
   enableCalendarScheduling,
-  enableCrm,
   enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
@@ -24,7 +23,6 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const notifications = useUnifiedNotificationsFlag();
   const suggestions = useSuggestionsFlag();
   const scheduling = useFeatureFlag(enableCalendarScheduling);
-  const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
   const passwords = useFeatureFlag(enablePasswords);
@@ -36,7 +34,6 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showNotifications: notifications(),
     showForYou: suggestions(),
     showScheduling: scheduling().enabled,
-    showCustomers: crm().enabled,
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),

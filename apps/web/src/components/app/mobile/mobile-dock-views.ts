@@ -3,7 +3,6 @@ import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   enableCalendarScheduling,
-  enableCrm,
   enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
@@ -153,7 +152,6 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
 ];
 
 export function useMobileDockViews() {
-  const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const passwords = useFeatureFlag(enablePasswords);
@@ -162,8 +160,9 @@ export function useMobileDockViews() {
     passwords().enabled && team.isSuccess && Boolean(team.data?.team);
   const external = useFeatureFlag(enableWhatsappLinked);
   return createMemo(() =>
-    MOBILE_DOCK_VIEWS.filter((view) => view.id !== 'companies' || crm().enabled)
-      .filter((view) => view.id !== 'reviews' || reviews().enabled)
+    MOBILE_DOCK_VIEWS.filter(
+      (view) => view.id !== 'reviews' || reviews().enabled
+    )
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
