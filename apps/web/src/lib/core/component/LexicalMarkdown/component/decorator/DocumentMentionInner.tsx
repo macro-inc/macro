@@ -94,7 +94,7 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
     return baseEntity;
   };
 
-  const previewData = useItemPreviewData(itemEntity);
+  const previewData = useItemPreviewData(itemEntity, props.inlinePreview);
   const { item } = previewData;
 
   const isSelectedAsNode = createMemo(() => host.isSelected(props.key));
@@ -110,6 +110,7 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
   });
 
   const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+  const [previewTrigger, setPreviewTrigger] = createSignal<HTMLElement>();
   const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
 
   const calendarOpen = createMemo(() =>
@@ -150,20 +151,24 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
     const target = calendarOpen();
     if (target?.kind === 'calendar') {
       fireAndForget(
-        openCalendarEventSplit({
-          ...target.target,
-          openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
-        }),
+        (async () => {
+          const opened = await openCalendarEventSplit({
+            ...target.target,
+            openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+          });
+          if (opened) props.onOpened?.();
+        })(),
         'document-mention'
       );
       return;
     }
-    openDocument(
+    const result = openDocument(
       resolvedBlockName(),
       props.documentId,
       props.blockParams,
       openInNewSplitForMention(e?.shiftKey, e != null)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   });
 
   const releaseEnter = host.registerNormalEnter((event) => {
@@ -211,7 +216,8 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
   // Native listeners: inside an editable editor (the agent and chat
   // composers) the shell stops click propagation before Solid's delegated
   // handlers run, which left the chip inert there.
-  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
+  const openIfReady = (e: MouseEvent | KeyboardEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     const i = item();
     if (
@@ -222,10 +228,16 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
     ) {
       open(e);
     }
-  });
+  };
+  const navHandlers =
+    useNativeSplitNavigationHandler<HTMLSpanElement>(openIfReady);
+  // Outside an editor (a list row or a dialog) the hover card trigger opens
+  // the reference itself.
+  const inEditor = props.host !== undefined || lexicalWrapper?.editor != null;
 
   // One set of preview props for the hover card and the touch sheet.
   const previewContentProps: DocumentPreviewContentProps = {
+    onOpened: () => props.onOpened?.(),
     get delete() {
       return host.isEditable() ? deleteMention : undefined;
     },
@@ -283,6 +295,22 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
         open={previewCardOpen()}
         onOpenChange={setPreviewCardOpen}
         keepOpenOnTriggerPress={showsPreviewOnOpen()}
+        triggerRef={setPreviewTrigger}
+        triggerOnClick={inEditor ? undefined : openIfReady}
+        // A modal makes previews outside its content inert.
+        portalMount={
+          previewTrigger()?.closest<HTMLElement>('[role="dialog"]') ?? undefined
+        }
+        triggerOnKeyDown={
+          inEditor
+            ? undefined
+            : (event) => {
+                if (event.key === 'Enter') openIfReady(event);
+              }
+        }
+        triggerClass={
+          inEditor ? undefined : 'rounded-xs focus-visible:bg-active'
+        }
         trigger={
           <span class="relative">
             <span
@@ -307,6 +335,7 @@ export function DocumentMentionInner(props: DocumentMentionProps) {
                     documentName={props.documentName}
                     createdAt={props.createdAt}
                     isRecentMention={isRecentMention}
+                    onOpened={props.onOpened}
                   />
                 </Match>
               </Switch>

@@ -30,6 +30,7 @@ import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import type { DocumentMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { useExternalChatDetailQuery } from '@queries/external-chats';
 import {
+  type AccessiblePreviewItem,
   failedReadAccess,
   type ItemEntity,
   isAccessiblePreviewItem,
@@ -43,7 +44,7 @@ import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Tooltip } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
-import type { JSX } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import {
   createEffect,
   createMemo,
@@ -64,6 +65,14 @@ import { DocumentMentionInner } from './DocumentMentionInner';
 
 // Time threshold for showing fallback state for recently created mentions (1 minute)
 const RECENT_MENTION_THRESHOLD_MS = 1 * 60 * 1000;
+
+export type DocumentMentionProps = DocumentMentionDecoratorProps & {
+  readonly host?: DocumentMentionHost;
+  /** Dismiss a hosting dialog or sheet after the reference opens a split. */
+  onOpened?: () => void;
+  /** Host-authorized display data; hover previews still load through the shared query. */
+  inlinePreview?: Accessor<AccessiblePreviewItem>;
+};
 
 /**
  * Determine if we should use fallback data for a mention due to stale preview cache.
@@ -114,6 +123,7 @@ function SkillSlashText(props: {
   name: string;
   collapsed?: boolean;
   dimmed?: boolean;
+  onOpened?: () => void;
 }) {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
@@ -121,12 +131,13 @@ function SkillSlashText(props: {
     // Also keeps the outer mention click handler from opening the skill a
     // second time.
     e.stopPropagation();
-    openDocument(
+    const result = openDocument(
       'skill',
       props.documentId,
       undefined,
       openInNewSplitForMention(e.shiftKey, true)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   });
   return (
     <span
@@ -191,6 +202,7 @@ export function InlinePreview(props: {
   documentName?: string;
   createdAt?: number;
   isRecentMention: () => boolean;
+  onOpened?: () => void;
 }) {
   const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
@@ -249,6 +261,7 @@ export function InlinePreview(props: {
             name={props.documentName ?? ''}
             collapsed={props.collapsed}
             dimmed
+            onOpened={props.onOpened}
           />
         </Show>
       </Match>
@@ -294,6 +307,7 @@ export function InlinePreview(props: {
             documentId={props.entity.id}
             name={props.documentName ?? ''}
             collapsed={props.collapsed}
+            onOpened={props.onOpened}
           />
         </Show>
       </Match>
@@ -371,6 +385,7 @@ export function InlinePreview(props: {
               documentId={accessibleItem().id}
               name={accessibleItem().name}
               collapsed={props.collapsed}
+              onOpened={props.onOpened}
             />
           </Show>
         )}
@@ -384,10 +399,6 @@ export function InlinePreview(props: {
     </Switch>
   );
 }
-
-export type DocumentMentionProps = DocumentMentionDecoratorProps & {
-  readonly host?: DocumentMentionHost;
-};
 
 export function DocumentMention(props: DocumentMentionProps) {
   if (props.blockName === 'routine' || props.blockName === 'automation') {
@@ -594,7 +605,7 @@ function RoutineMention(props: DocumentMentionProps) {
   return <PreviewedRoutineMention {...props} />;
 }
 
-function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
+function PreviewedRoutineMention(props: DocumentMentionProps) {
   const { item } = useItemPreviewData(() => ({
     id: props.documentId,
     type: 'routine',
@@ -652,9 +663,7 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
  * Routine references use their saved label, else the routine's own name;
  * routines have no hover preview.
  */
-function RoutineLink(
-  props: DocumentMentionDecoratorProps & { resolvedName?: string }
-) {
+function RoutineLink(props: DocumentMentionProps & { resolvedName?: string }) {
   const name = () =>
     props.documentName?.replaceAll('\n', ' ').trim() ||
     props.resolvedName?.replaceAll('\n', ' ').trim() ||
@@ -662,12 +671,13 @@ function RoutineLink(
   const open = (event: MouseEvent | KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    openDocument(
+    const result = openDocument(
       'routine',
       props.documentId,
       undefined,
       openInNewSplitForMention(event.shiftKey, true)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   };
   return (
     <Tooltip label={name()} as="span" disabled={!props.collapsed}>
@@ -728,14 +738,15 @@ function DatabaseMention(props: DocumentMentionProps) {
               />
             }
             collapsed={props.collapsed}
-            onOpen={(event) =>
-              openDocument(
+            onOpen={(event) => {
+              const result = openDocument(
                 'database',
                 props.documentId,
                 props.blockParams,
                 openInNewSplitForMention(event.shiftKey, true)
-              )
-            }
+              );
+              if (result && result.status !== 'unavailable') props.onOpened?.();
+            }}
           />
           <Show when={enabled().enabled && editable() && host.isInteractable()}>
             <Button
@@ -772,7 +783,7 @@ function DatabaseMention(props: DocumentMentionProps) {
  * A form: its icon and name, from its own detail, which respondents can read.
  * Opens for every recipient; the forms flag gates authoring only.
  */
-function FormMention(props: DocumentMentionDecoratorProps) {
+function FormMention(props: DocumentMentionProps) {
   const detail = useFormDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.form.name : props.documentName;
@@ -794,14 +805,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
             />
           }
           collapsed={props.collapsed}
-          onOpen={(event) =>
-            openDocument(
+          onOpen={(event) => {
+            const result = openDocument(
               'form',
               props.documentId,
               props.blockParams,
               openInNewSplitForMention(event.shiftKey, true)
-            )
-          }
+            );
+            if (result && result.status !== 'unavailable') props.onOpened?.();
+          }}
         />
       }
     >
@@ -826,7 +838,7 @@ function FormMention(props: DocumentMentionDecoratorProps) {
  * inside External; a viewer the chat isn't shared with sees it as
  * unavailable.
  */
-function ExternalChatMention(props: DocumentMentionDecoratorProps) {
+function ExternalChatMention(props: DocumentMentionProps) {
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
   const detail = useExternalChatDetailQuery(
@@ -851,11 +863,15 @@ function ExternalChatMention(props: DocumentMentionDecoratorProps) {
             />
           }
           collapsed={props.collapsed}
-          onOpen={(event) =>
-            openWithSplit(externalChatContent(props.documentId), {
-              preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
-            })
-          }
+          onOpen={(event) => {
+            const result = openWithSplit(
+              externalChatContent(props.documentId),
+              {
+                preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
+              }
+            );
+            if (result && result.status !== 'unavailable') props.onOpened?.();
+          }}
         />
       }
     >
@@ -866,7 +882,7 @@ function ExternalChatMention(props: DocumentMentionDecoratorProps) {
   );
 }
 
-function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
+function SkillDocumentMention(props: DocumentMentionProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
@@ -893,26 +909,26 @@ function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
  * in code, not documents, so there is nothing to preview-fetch and nothing to
  * open — the pill never navigates.
  */
-function SystemSkillMention(
-  props: DocumentMentionDecoratorProps & { name: string }
-) {
+function SystemSkillMention(props: DocumentMentionProps & { name: string }) {
   return (
     <SkillSlashText
       documentId={props.documentId}
       name={props.name}
       collapsed={props.collapsed}
+      onOpened={props.onOpened}
     />
   );
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
-export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+export function DocumentMentionStatic(props: DocumentMentionProps) {
   if (props.blockName === 'skill') {
     return (
       <SkillSlashText
         documentId={props.documentId}
         name={props.documentName ?? ''}
         collapsed={props.collapsed}
+        onOpened={props.onOpened}
       />
     );
   }

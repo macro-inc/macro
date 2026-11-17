@@ -85,11 +85,18 @@ the account, or changes its managers.
 
 ## Gotchas
 
-- Both extractors reject (400) a request that combines explicit credential
-  types (internal key, bot token, user API key, bearer/query user) rather
-  than picking one — don't "fix" this by adding precedence logic.
-- Cookies are ambient and only considered when no explicit credential is
-  present; an explicit credential always wins over a cookie.
+- Both extractors read the request's credential only through
+  `macro_auth::credential::request_credential`, the same reading the agent
+  scope check (`agent_correlation`) uses, so the two can't disagree. A user
+  token authenticates by fixed precedence: `macro-api-token` query parameter
+  (keys percent-decoded), then bearer, then the access-token cookie.
+  Explicit credentials of different kinds (internal key, bot token, harness
+  token, user API key, explicit user token), or one credential header with
+  different values, are refused 400 `conflicting_credentials`; an ambient
+  cookie beside another credential is not a conflict (browsers and native
+  apps send it everywhere), and the scope check still reads its token.
+- Locally (`local_auth`), a configured user stands in for an ambient cookie
+  or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
 - A route whose response carries a new credential's secret refuses
   `is_program_run`, because a program's results reach the model: the

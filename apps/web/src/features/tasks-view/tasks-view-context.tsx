@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import type {
   SavedViewSource,
   SavedViewsSource,
@@ -179,6 +180,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useParams<{
     taskId?: string;
@@ -527,7 +529,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };

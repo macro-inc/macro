@@ -1,6 +1,7 @@
 import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import type { NativeBodyPopupComposition } from '@block-md/component/format-host/native-body-popup';
+import { HostedMarkdownHeader } from '@block-md/component/HostedMarkdownHeader';
 import {
   MarkdownDocument,
   MarkdownDocumentContent,
@@ -22,6 +23,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
@@ -43,6 +45,9 @@ export type MarkdownDetailProps = {
   documentId: string;
   kind?: MarkdownDocumentKind;
   fallbackName?: string;
+  /** The title menu's Duplicate and Delete in a hosted header. */
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 };
 
@@ -87,9 +92,13 @@ function MarkdownDetailContent(props: {
   fallbackName: string;
   data: MarkdownDocumentData;
   bodyFormatPopup: NativeBodyPopupComposition;
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  // A host that shows hosted headers gets the document's own, with its Info.
+  const hostedHeader = useSplitHeaderScope();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   const state = createMarkdownDocumentState();
@@ -139,10 +148,23 @@ function MarkdownDetailContent(props: {
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
+        <HostedMarkdownHeader
+          collaborationStatus={() => {
+            const connection = props.data.connection;
+            return connection.type === 'session'
+              ? state.session.status()
+              : connection.source.status();
+          }}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
+        />
         <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
-            <MarkdownHeaderActions />
+            {/* A hosted header lists its own actions. */}
+            <Show when={!hostedHeader}>
+              <MarkdownHeaderActions />
+            </Show>
           </Show>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
             <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
@@ -200,6 +222,8 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
           bodyFormatPopup={
             isTouchDevice() ? mobileBodyFormatPopup : desktopBodyFormatPopup
           }
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
           children={props.children}
         />
       )}

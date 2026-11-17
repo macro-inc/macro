@@ -1,5 +1,9 @@
 # iOS releases and breaking Tauri changes
 
+The optional `layout_plugin` enables iPhone Duo navigation using UIKit 27.1
+traits. It requires a rebuilt native app; older binaries retain the bottom dock
+without invoking a missing command. The native/web contract remains compatible.
+
 Native reload history and UIKit memory-warning diagnostics require an App Store
 binary update. Their IPC is optional: OTA-only clients retain frontend reload
 markers and instance IDs, with missing native coverage explicitly reported.

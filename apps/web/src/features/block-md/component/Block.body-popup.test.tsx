@@ -69,6 +69,7 @@ vi.mock('@core/signal/load', () => ({
 vi.mock('@core/signal/permissions', () => ({
   useCanComment: () => () => true,
   useCanEdit: () => () => true,
+  useGetPermissions: () => () => 'owner',
   useIsDocumentOwner: () => () => true,
 }));
 vi.mock('@core/util/currentBlockDocumentName', () => ({
