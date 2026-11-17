@@ -342,6 +342,20 @@ async fn the_policy_check_refuses_escape_hatches() {
             "module N = struct module X = Sys end\nmodule G (A : sig module X : sig val command : string -> int end end) = struct let r = A.X.command \"id\" end\nmodule U = G (N)\nlet () = Code_mode.run (fun _ -> `Int U.r)",
             "Sys as a submodule behind a signature is not allowed",
         ),
+        // A path to a local alias of Sys stays an unexpanded alias in the
+        // typed tree; the check expands it in the program's environment.
+        (
+            "module type Command = sig val command : string -> int end\nmodule Nested = struct module X = Sys end\nmodule M : Command = Nested.X\nlet () = Code_mode.run (fun _ -> `Int (M.command \"id\"))",
+            "Error: Sys as a submodule behind a signature is not allowed in code-mode programs\n    at main.ml:3:22",
+        ),
+        (
+            "module type Command = sig val command : string -> int end\nmodule Nested = struct module X = Sys end\nlet () = Code_mode.run (fun _ -> let module L : Command = Nested.X in `Int (L.command \"id\"))",
+            "Sys as a submodule behind a signature is not allowed",
+        ),
+        (
+            "module type Command = sig val command : string -> int end\nmodule Y = struct module S = Sys end\nmodule M : sig module S : Command end = Y\nlet () = Code_mode.run (fun _ -> `Int (M.S.command \"id\"))",
+            "Sys as a submodule behind a signature is not allowed",
+        ),
         (
             "let () = Code_mode.run (fun _ -> ignore (input_value (open_in_bin \"main.ml\")); `Null)",
             "input_value (unmarshalling) is not allowed",

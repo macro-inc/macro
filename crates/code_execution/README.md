@@ -63,10 +63,11 @@ deadline and cancellation, with fixed command lines (no dune, ocamlfind,
 `-pp` or `-ppx`, nothing from the program). Each step runs in its own
 process group, so stopping it also stops the binaryen tools wasm_of_ocaml
 starts. `Limits::max_cpu` applies to each step, and each step's address
-space is capped at 1 GiB with core dumps off (`RLIMIT_AS`, `RLIMIT_CORE`;
-binaryen runs on one thread so its stacks fit): a program's source drives
+space is capped at 1 GiB with core dumps off (`RLIMIT_AS`, `RLIMIT_CORE`, set
+before the step execs; binaryen runs on one thread so its stacks fit): a program's source drives
 the compiler's memory, so one that builds types of exponential size fails
-saying it needs more memory than code mode allows. Ordinary programs
+saying it needs more memory than code mode allows (only the runtime's
+own fatal lines count, never a diagnostic echoing the source). Ordinary programs
 compile in under 384 MiB.
 
 1. `ocamlc -nostdlib -I <stdlib> -I <cmi> -bin-annot -c main.ml`: only the
@@ -74,17 +75,24 @@ compile in under 384 MiB.
    visible, not the JavaScript interop.
 2. `code_mode_policy main.cmt`: refuses `external` declarations and uses of
    `Obj`, `Marshal`, `Sys.command`, `input_value`/`output_value`,
-   `Camlinternal*`, `Unix` and `Js_of_ocaml`. Values are matched by path
-   and by the unit that declared them, so local aliases and opens still
-   name them. A module that declares a forbidden value (`Sys`, `Stdlib`)
-   may only be used as a path prefix, opened, or renamed (`module S =
-   Sys`); any other use of it as a module (a signature constraint, a
-   functor argument, a first-class module, an `include`) is refused, and so
-   is any coerced module whose type still holds such a value, since a
-   signature the program writes could rename it. Binding `Stdlib` to a
-   module is refused. Defense in depth; Deno's permissions are the
-   boundary: with the policy skipped (a test-only compile), `Sys.command`
-   fails at run time because the loader's `require` has no
+   `Camlinternal*`, `Unix` and `Js_of_ocaml`. What it guarantees: no value
+   the program names is one of those, by path or by the unit that declared
+   it, so aliases and opens still name them. A value's declaring unit
+   changes only when its module is coerced to a signature the program
+   writes (a constraint, a functor argument, a first-class module, an
+   `include`); every coercion whose source module's type holds a forbidden
+   value, or `Sys`/`Stdlib` as a submodule, is refused. That type is
+   expanded in the environment it was typed in (rebuilt from the `.cmt`),
+   through aliases to any local or library module, named module types,
+   submodules and functor results; a type it cannot expand, or one too
+   large to expand, is refused too. `Sys` and `Stdlib` themselves may be
+   used only as a path prefix, opened, or renamed (`module S = Sys`), and
+   `Stdlib` may not be bound to a module. It does not look inside the
+   bundle's libraries (what their own code calls) and refuses some safe
+   programs (coercing a module that holds `Sys` even where the signature
+   hides it, `module type of Sys`). Defense in depth; Deno's permissions
+   are the boundary: with the policy skipped (a test-only compile),
+   `Sys.command` fails at run time because the loader's `require` has no
    `node:child_process`, and Deno denies running processes.
 3. `wasm_of_ocaml compile` and `link` against the bundle's archives, keeping
    only the program's own modules in scratch.

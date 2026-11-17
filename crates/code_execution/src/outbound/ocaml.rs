@@ -333,7 +333,8 @@ impl Step<'_> {
         // No inherited variables, as for Deno. wasm_of_ocaml runs binaryen
         // from PATH through /bin/sh, writes temporary files under TMPDIR and
         // reads findlib's stdlib package from the bundle's configuration.
-        let mut child = Command::new(program)
+        let mut child = Command::new(program);
+        child
             .args(args)
             .env_clear()
             .env("PATH", bundle.join("bin"))
@@ -355,14 +356,19 @@ impl Step<'_> {
             .kill_on_drop(true)
             // Its own process group, so stopping it also stops the binaryen
             // tools wasm_of_ocaml runs through /bin/sh.
-            .process_group(0)
-            .spawn()
-            .map_err(internal)?;
+            .process_group(0);
+        // SAFETY: the hook runs in the forked child before exec and only
+        // makes setrlimit system calls, which are async-signal-safe; it
+        // allocates nothing and touches no lock.
+        unsafe {
+            child.pre_exec(cap_memory);
+        }
+        let mut child = child.spawn().map_err(internal)?;
         let group = child
             .id()
             .and_then(|id| i32::try_from(id).ok())
             .and_then(rustix::process::Pid::from_raw);
-        if super::deno::limit(&child, self.limits).is_err() || cap_memory(group).is_err() {
+        if super::deno::limit(&child, self.limits).is_err() {
             stop(&mut child, group).await;
             tracing::error!("could not limit a compile step");
             return Err(CompileError::Internal);
@@ -417,20 +423,18 @@ impl Step<'_> {
 }
 
 /// Cap a step's address space and turn off core dumps (a compiler that
-/// runs out of memory aborts, and its core would land in scratch). Its
-/// children (binaryen) inherit both.
-fn cap_memory(group: Option<rustix::process::Pid>) -> rustix::io::Result<()> {
-    let pid = group.ok_or(rustix::io::Errno::SRCH)?;
-    rustix::process::prlimit(
-        Some(pid),
+/// runs out of memory aborts, and its core would land in scratch). Set in
+/// the child before exec, so nothing it maps escapes the cap; its children
+/// (binaryen) inherit both.
+fn cap_memory() -> std::io::Result<()> {
+    rustix::process::setrlimit(
         rustix::process::Resource::As,
         rustix::process::Rlimit {
             current: Some(MAX_STEP_ADDRESS_SPACE),
             maximum: Some(MAX_STEP_ADDRESS_SPACE),
         },
     )?;
-    rustix::process::prlimit(
-        Some(pid),
+    rustix::process::setrlimit(
         rustix::process::Resource::Core,
         rustix::process::Rlimit {
             current: Some(0),
@@ -440,18 +444,26 @@ fn cap_memory(group: Option<rustix::process::Pid>) -> rustix::io::Result<()> {
     Ok(())
 }
 
-/// Whether a failed step said it ran out of memory: the OCaml runtime's
-/// fatal errors and binaryen's (C++) allocation failure.
+/// Whether a failed step said it ran out of memory: a line of its own
+/// that is the OCaml runtime's fatal error (`Fatal error: exception
+/// Out_of_memory`, `Fatal error: allocation failure …`) or binaryen's C++
+/// abort (`terminate called after throwing … std::bad_alloc`). Only a
+/// line's start counts: a compiler diagnostic echoes the program's source
+/// (as `<line> | …`), which may hold the same words, and keeps its own
+/// error.
 fn out_of_memory(stderr: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(stderr);
-    [
+    const RUNTIME_MARKERS: [&str; 4] = [
+        "Out_of_memory",
         "Out of memory",
+        "out of memory",
         "allocation failure",
-        "Not enough heap memory",
-        "std::bad_alloc",
-    ]
-    .iter()
-    .any(|marker| text.contains(marker))
+    ];
+    String::from_utf8_lossy(stderr).lines().any(|line| {
+        (line.starts_with("Fatal error:")
+            && (RUNTIME_MARKERS.iter().any(|marker| line.contains(marker))
+                || line.contains("Not enough heap memory")))
+            || (line.starts_with("terminate called") && line.contains("std::bad_alloc"))
+    })
 }
 
 /// Kill a step's whole process group and reap its leader. The group's other

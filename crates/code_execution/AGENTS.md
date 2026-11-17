@@ -75,4 +75,5 @@ flags the boundary for OCaml as for JavaScript.
   The OCaml tests (`src/outbound/deno/test/ocaml.rs`) also need the bundle:
   `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
   set for the build. Every isolation test of the JavaScript path has an OCaml
-  twin there; add one with each new one.
+  twin there or is listed as not applying in that file's header; add one
+  with each new one.

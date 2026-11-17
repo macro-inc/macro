@@ -11,17 +11,27 @@
    A program may not declare an external, use Obj, Marshal, Sys.command,
    input_value or output_value (unmarshalling by another name), the
    compiler's internal Camlinternal modules, the JavaScript interop
-   (Js_of_ocaml, Jsoo_runtime) or Unix. Values are matched by path and by
-   the unit that declared them, so local aliases and opens still name
-   them. A module that declares a forbidden value (Sys, Stdlib) may be
-   used only as a path prefix (Sys.time), opened, or given another name
-   (module S = Sys); any other use of it as a module (a signature
-   constraint, a functor argument, a first-class module, an include)
-   could rename the value behind a signature the program writes, so it is
-   refused, and so is any coerced module whose type still holds such a
-   value. Binding Stdlib itself to a module is refused too. Every check
-   is a rule below, applied to the paths and declarations the iterator
-   visits, so a fuller analyzer can replace this one without changing its
+   (Js_of_ocaml, Jsoo_runtime) or Unix.
+
+   What it guarantees: no value the program names is forbidden, judged by
+   its path and by the unit that declared it (val_uid), so local aliases
+   and opens still name it. The declaring unit changes only when the
+   value's module is coerced to a signature the program writes (a
+   constraint, a functor argument, a first-class module, an include's
+   implicit coercion). Every coercion is refused whose source module's
+   type holds a forbidden value or Sys/Stdlib as a submodule, with that
+   type expanded in the environment it was typed in (rebuilt from the
+   .cmt's summaries) through aliases to any local or library module,
+   named module types, submodules and functor results; a type that cannot
+   be expanded, or is too large to, is refused too. Sys and Stdlib
+   themselves may be used only as a path prefix (Sys.time), opened, or
+   renamed (module S = Sys), and Stdlib may not be bound to a module.
+
+   It does not look inside the bundle's libraries (what their own code
+   calls), and it refuses some safe programs: a coerced module that holds
+   Sys where the signature hides it, module type of Sys. Every check is a
+   rule below, applied to the paths and declarations the iterator visits,
+   so a fuller analyzer can replace this one without changing its
    callers. *)
 
 open Typedtree
@@ -141,40 +151,75 @@ let holder_of_path path =
       | Some (unit, []) -> holds_forbidden_value unit
       | Some _ | None -> None)
 
-(* A forbidden value a module's type still holds, looking through its
-   submodules and aliases: what a signature written over it could
-   rename. *)
-let rec forbidden_in_type depth (mty : Types.module_type) =
-  if depth > 16 then None
-  else
+(* A coerced module's type is checked in the environment it was typed
+   in, rebuilt from the summary the .cmt keeps, so every alias (to Sys,
+   to a local module holding Sys, to a submodule of a library) and every
+   named module type is expanded before it is judged. *)
+exception Undecidable
+
+let environment (env : Env.t) =
+  try Envaux.env_of_only_summary env with _ -> raise Undecidable
+
+(* The most a coerced module's type may expand to (signature items and
+   modules visited) before the check gives up and refuses it. *)
+let expansion_budget = 200_000
+
+(* A forbidden value a module's type holds anywhere a signature written
+   over it could rename it: its values, its submodules, a functor's
+   result, all with aliases and module type names expanded. A functor's
+   parameter is not searched: values flow into it, not out. Raises
+   Undecidable when the type cannot be expanded or is too large. *)
+let forbidden_in_type env (mty : Types.module_type) =
+  let budget = ref expansion_budget in
+  let rec held env (mty : Types.module_type) =
+    decr budget;
+    if !budget < 0 then raise Undecidable;
     match mty with
     | Mty_alias path -> (
         match holder_of_path path with
         | Some holder -> Some (holder ^ " as a submodule")
-        | None -> None)
+        | None -> (
+            match Env.find_module path env with
+            | declaration -> held env declaration.md_type
+            | exception Not_found -> raise Undecidable))
+    | Mty_ident _ -> (
+        match Mtype.scrape env mty with
+        | Mty_ident _ -> None (* abstract: it holds no value *)
+        | expanded -> held env expanded
+        | exception Not_found -> raise Undecidable)
     | Mty_signature items ->
+        let env = Env.add_signature items env in
         List.find_map
           (function
             | Types.Sig_value (id, value, _) ->
+                decr budget;
                 forbidden_declaration (Ident.name id) value
-            | Sig_module (_, _, md, _, _) ->
-                forbidden_in_type (depth + 1) md.md_type
+            | Sig_module (_, _, md, _, _) -> held env md.md_type
             | _ -> None)
           items
-    | Mty_ident _ | Mty_functor _ -> None
+    | Mty_functor (Named (Some id, parameter), result) ->
+        held (Env.add_module id Mp_present parameter env) result
+    | Mty_functor (_, result) -> held env result
+  in
+  held env mty
 
 (* A module expression whose result the compiler coerces to another
    signature (a constraint, a functor argument, a first-class module):
-   refused when its own type holds a forbidden value. *)
+   refused when its own type, fully expanded, holds a forbidden value, or
+   when that cannot be decided. *)
 let check_coerced (m : module_expr) =
   match m.mod_desc with
   | Tmod_ident (path, _) when Option.is_some (holder_of_path path) ->
       () (* refused where the iterator visits it *)
   | _ -> (
-      match forbidden_in_type 0 m.mod_type with
+      match forbidden_in_type (environment m.mod_env) m.mod_type with
       | Some what ->
           report m.mod_loc (not_allowed (what ^ " behind a signature"))
-      | None -> ())
+      | None -> ()
+      | exception Undecidable ->
+          report m.mod_loc
+            "A module behind a signature that the check cannot expand is not \
+             allowed in code-mode programs")
 
 let holder_not_allowed holder =
   not_allowed
@@ -290,8 +335,14 @@ let iterator =
 let () =
   match Sys.argv with
   | [| _; file |] -> (
-      match (Cmt_format.read_cmt file).cmt_annots with
+      let cmt = Cmt_format.read_cmt file in
+      match cmt.cmt_annots with
       | Implementation structure ->
+          (* The load path the program was compiled with, so its
+             environments can be rebuilt. *)
+          Load_path.init ~auto_include:Load_path.no_auto_include
+            ~visible:cmt.cmt_loadpath.visible ~hidden:cmt.cmt_loadpath.hidden;
+          Envaux.reset_cache ();
           iterator.structure iterator structure;
           let sorted =
             List.sort
