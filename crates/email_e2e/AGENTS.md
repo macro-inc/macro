@@ -375,6 +375,10 @@ shared with the web app's suite) and backend entry points second.
   `tests/search.rs` that sets `StackOptions::search` has no cluster in CI:
   keep search scenarios in that file.
   `Email end-to-end (browser)` (`email_e2e_browser.rs`) runs the browser suite.
+  The last job of each, `Tell Macro Alerts` (`email_e2e_alert.rs`), posts
+  to the Macro Alerts channel when the pushes to `main` or the sweep turn
+  red and when they pass again; what to do then is in
+  `docs/development/ci.md` ("When an email end-to-end alert fires").
 - A change to `src/stack_server.rs`: `just email-e2e-browser`.
 
 ## Gotchas
