@@ -229,11 +229,14 @@ field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
 the search in the field and clears it from the list after a selection.
 
-A project's Tasks header keeps search, filters, Add existing tasks and New task on
-screen at 320–430px phone widths, with search closed and open, by collapsing both
-actions to icons and narrowing the open search on phones only; tablet and desktop
-keep the labels. Its backend-free regression renders the real row with a stand-in
-for the task filters (the real phone filter trigger, one button on desktop):
+A project's Tasks header keeps search, filters and Add existing tasks on screen at
+320–430px phone widths, with search closed and open, by collapsing Add existing
+tasks to an icon and narrowing the open search on phones only; tablet and desktop
+keep the labels. On touch, New task is the project's own floating `+ Task`
+pill, which replaces the Tasks view's (that one creates outside any project), and
+read-only viewers get none. Its backend-free regression renders the real row and
+float host with a stand-in for the task filters (the real phone filter trigger,
+one button on desktop) and for the Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
