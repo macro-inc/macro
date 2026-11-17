@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH held AS (\n                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units\n                FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'\n                UNION ALL\n                SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)\n                FROM computer_reservation\n            )\n            SELECT host.id\n            FROM hosted_runtime_host host\n            LEFT JOIN held ON held.host_id = host.id\n            WHERE host.awake_capacity_units >= $1::BIGINT\n              AND host.backend = 'incus' AND host.admitting\n            GROUP BY host.id, host.sold_capacity_units\n            HAVING host.sold_capacity_units - COALESCE(SUM(held.units), 0) >= $1::BIGINT\n            ORDER BY host.sold_capacity_units - COALESCE(SUM(held.units), 0) DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9a6b8cc7c15c603eafb2fb4b1c6a4bcff7500e07ec8eb42a118e3a0127c52628"
+}

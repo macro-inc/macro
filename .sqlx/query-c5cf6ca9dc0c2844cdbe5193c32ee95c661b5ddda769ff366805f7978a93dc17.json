@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime\n             WHERE id IN (SELECT computer_id FROM hosted_runtime_timer WHERE fire_at <= $1)",
+  "query": "SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime\n             WHERE id IN (SELECT computer_id FROM hosted_runtime_timer WHERE fire_at <= $1)\n               AND ($2::UUID[] IS NULL OR host_id = ANY($2))",
   "describe": {
     "columns": [
       {
@@ -117,7 +117,8 @@
     ],
     "parameters": {
       "Left": [
-        "Timestamptz"
+        "Timestamptz",
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -143,5 +144,5 @@
       true
     ]
   },
-  "hash": "e0b979d6599a2b186f65a3974697ef20b6b7c3bc9983d85ff46b6022db043dde"
+  "hash": "c5cf6ca9dc0c2844cdbe5193c32ee95c661b5ddda769ff366805f7978a93dc17"
 }
