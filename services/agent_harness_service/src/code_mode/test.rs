@@ -683,6 +683,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         (None, None),
     ] {
         let run = RunCredentials {
+            egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
             gate: Arc::new(Gate {
@@ -701,6 +702,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             "session run {scope:?}"
         );
         let run = UserRunCredentials {
+            egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
             endpoints: SdkEndpoints::default(),
@@ -715,6 +717,35 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
     }
+}
+
+/// Runs go through the forwarder only where the egress flag is on for the
+/// user they act as; with no flag client, the flag off, or the flags
+/// unreadable, they go directly.
+#[tokio::test]
+async fn the_egress_flag_fails_closed_to_direct() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let flags = |result: Result<FlagSnapshot, String>| {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), result);
+        EgressRollout::new(Some(flags))
+    };
+    let flag =
+        |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
+    assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
+    assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
+    assert_eq!(
+        flags(Err("PostHog is down".into())).egress(&user).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress(&user)
+            .await,
+        Egress::Direct
+    );
 }
 
 /// The scope can't be read.
@@ -766,4 +797,61 @@ async fn a_scoped_session_calls_no_connected_apps_tool_directly() {
             .await
             .is_some()
     );
+}
+
+/// A user's egress is read once and reused: runs inside the cache's life
+/// don't ask PostHog again, and a failed read sends runs direct for a
+/// shorter while before asking again.
+#[tokio::test(start_paused = true)]
+async fn the_egress_flag_is_read_once_per_user_for_a_while() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Counts its loads; fails while `failing`.
+    struct Counted {
+        loads: Arc<AtomicUsize>,
+        failing: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl feature_flags::FeatureFlags for Counted {
+        async fn load(&self, _: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, rootcause::Report> {
+            self.loads.fetch_add(1, Ordering::SeqCst);
+            if self.failing.load(Ordering::SeqCst) {
+                return Err(rootcause::report!("PostHog is down"));
+            }
+            Ok(FlagSnapshot::new([(
+                EGRESS_PROXY_FLAG.to_owned(),
+                FlagValue::Boolean(true),
+            )]))
+        }
+    }
+
+    let loads = Arc::new(AtomicUsize::new(0));
+    let failing = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let rollout = EgressRollout::new(Some(Counted {
+        loads: Arc::clone(&loads),
+        failing: Arc::clone(&failing),
+    }));
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let other = MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap();
+
+    assert_eq!(rollout.egress(&user).await, Egress::Proxied);
+    assert_eq!(rollout.egress(&user).await, Egress::Proxied);
+    assert_eq!(loads.load(Ordering::SeqCst), 1);
+    // Another user is read on their own.
+    assert_eq!(rollout.egress(&other).await, Egress::Proxied);
+    assert_eq!(loads.load(Ordering::SeqCst), 2);
+    // Past the cache's life, the flags are read again.
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    failing.store(true, Ordering::SeqCst);
+    assert_eq!(rollout.egress(&user).await, Egress::Direct);
+    assert_eq!(loads.load(Ordering::SeqCst), 3);
+    // A failed read holds for a shorter while.
+    assert_eq!(rollout.egress(&user).await, Egress::Direct);
+    assert_eq!(loads.load(Ordering::SeqCst), 3);
+    tokio::time::advance(std::time::Duration::from_secs(11)).await;
+    failing.store(false, Ordering::SeqCst);
+    assert_eq!(rollout.egress(&user).await, Egress::Proxied);
+    assert_eq!(loads.load(Ordering::SeqCst), 4);
 }

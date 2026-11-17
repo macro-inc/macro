@@ -11,5 +11,5 @@
     width: calc(100% - 48px);
     margin-block: 32px;
   }
-  .product-page .product-introduction { width: calc(100% - 16px); }
+  .product-page .product-introduction { width: 100%; }
 }

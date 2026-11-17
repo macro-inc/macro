@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/core/index.ts",
     "./browser": "./src/browser/index.ts",
+    "./pan-zoom": "./src/pan-zoom/index.ts",
     "./solid": "./src/solid/index.tsx",
     "./loro": "./src/loro/index.ts",
     "./loro/solid": "./src/loro/solid/index.tsx"

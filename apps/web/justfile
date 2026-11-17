@@ -7,6 +7,11 @@ android-dev *ARGS:
 android-build *ARGS:
     bash scripts/android.sh build "$@"
 
+# Android: performance benchmark of a signed-in benchmark build on one emulator
+# (`--serial` is required). See scripts/android-benchmark/README.md.
+android-benchmark *ARGS:
+    bun scripts/android-benchmark/run.ts "$@"
+
 # Increment the versionCode and commit before preparing the next native APK or
 # Play AAB release. Also raises the Android floor in min-native-build.json to
 # the new versionCode, so the next prod web deploy stops serving shared JS to

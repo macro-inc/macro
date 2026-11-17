@@ -102,8 +102,7 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled, savedViews, selectedTask } =
-    useTasksView();
+  const { state, setState, savedViews, selectedTask } = useTasksView();
   const params = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const layout = useSplitLayout();
@@ -171,11 +170,7 @@ function TasksViewRoot() {
             hasDetail={!!selectedTask() || !!params.projectId}
             list={
               <Show
-                when={
-                  isProjectTab(state.tab) &&
-                  projectsEnabled() &&
-                  !state.savedViewActive
-                }
+                when={isProjectTab(state.tab) && !state.savedViewActive}
                 fallback={taskList()}
               >
                 <ProjectsTab

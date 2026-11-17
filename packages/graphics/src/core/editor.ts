@@ -36,8 +36,9 @@ import {
   drawableIds,
   freezeDocument,
   groupNodes,
-  hitTest,
+  hitTestWithin,
   nodeBoundsPoints,
+  PICK_TOLERANCE,
   reparent,
   ungroupNode,
   worldBounds,
@@ -360,8 +361,20 @@ function createEditor(
       };
     },
     select,
-    hitTest: (point: Point, deep = false) =>
-      hitTest(document, point, deep, 3 / camera.scale),
+    selectMany: selection.selectMany,
+    /**
+     * The topmost item at a point. Its paint is picked as a cursor picks it;
+     * a wider `reach`, in screen pixels, is searched only when nothing is
+     * under the point.
+     */
+    hitTest: (point: Point, deep = false, reach = PICK_TOLERANCE) =>
+      hitTestWithin(
+        document,
+        point,
+        deep,
+        PICK_TOLERANCE / camera.scale,
+        reach / camera.scale
+      ),
     groupSelection(id: string) {
       if (disposed) return;
       commitDocument(
@@ -495,6 +508,11 @@ function createEditor(
     },
     zoomAt(anchor: Point, scale: number) {
       publish(zoomAt(camera, anchor, scale));
+    },
+    /** One camera change for a two-finger step: pan, then zoom around `anchor`. */
+    panZoomBy(pan: Point, anchor: Point, factor: number) {
+      const panned = { ...camera, x: camera.x + pan.x, y: camera.y + pan.y };
+      publish(zoomAt(panned, anchor, camera.scale * factor));
     },
     resetCamera() {
       publish(INITIAL_CAMERA);

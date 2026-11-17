@@ -32,6 +32,7 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -82,6 +83,7 @@ export default {
   routineMenu,
   routineSuggestions,
   settingsBilling,
+  settingsEmail,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,

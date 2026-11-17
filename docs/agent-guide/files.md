@@ -18,7 +18,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' and Databases' (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -41,7 +41,7 @@ well as ID, so an unrelated conversation with the same ID remains visible.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
-With `enable-databases` enabled, **My Files** includes owned databases and
+**My Files** includes owned databases and
 **Shared with me** includes databases shared by other owners. **All files**
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
@@ -193,7 +193,7 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 Created by uses a bounded searchable contact window on desktop and in the mobile
 drawer, with Me and persisted selections resolved independently of that window.
-Next options replaces the page; selected and unavailable IDs remain selected,
+Further pages load as the list scrolls; selected and unavailable IDs remain selected,
 and Only clears off-page selections in this group without changing other facets.
 Partial/offline cache data is labeled rather than treated as an empty directory.
 The source stays idle until the creator submenu/drawer section opens. Regression:
