@@ -10,6 +10,22 @@ const parse = JSON.parse.bind(JSON);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const isArray = Array.isArray;
+// Captured before the program runs, so it can't redefine what the fetch
+// wrapper's checks rely on.
+const uncurry = (method) => Function.prototype.call.bind(method);
+const getter = (prototype, name) => uncurry(Object.getOwnPropertyDescriptor(prototype, name).get);
+const URLConstructor = URL;
+const RequestConstructor = Request;
+const urlHostname = getter(URL.prototype, "hostname");
+const urlPort = getter(URL.prototype, "port");
+const urlProtocol = getter(URL.prototype, "protocol");
+const urlPathname = getter(URL.prototype, "pathname");
+const requestUrl = getter(Request.prototype, "url");
+const lowerCase = uncurry(String.prototype.toLowerCase);
+const endsWith = uncurry(String.prototype.endsWith);
+const slice = uncurry(String.prototype.slice);
+const decodeComponent = decodeURIComponent;
+const rejection = Promise.reject.bind(Promise);
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
@@ -131,8 +147,59 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // A scoped run's credential reaches only services that hold it to its
+  // scope. Unfurl takes no credential and fetches any URL it is given, so a
+  // scoped run never reaches it, however the URL is spelled: any case, a
+  // trailing dot on the host, or percent-encoded, dot or doubled segments.
+  const place = (url) => {
+    const parsed = new URLConstructor(url);
+    let path = urlPathname(parsed);
+    for (let round = 0; round < 4; round++) {
+      let decoded;
+      try {
+        decoded = decodeComponent(path);
+      } catch {
+        break;
+      }
+      if (decoded === path) break;
+      path = decoded;
+    }
+    // No prototype, so the program can't intercept its indexes.
+    const segments = {__proto__: null, length: 0};
+    let start = 0;
+    for (let index = 0; index <= path.length; index++) {
+      if (index < path.length && path[index] !== "/") continue;
+      const segment = lowerCase(slice(path, start, index));
+      start = index + 1;
+      if (segment === "" || segment === ".") continue;
+      if (segment === "..") {
+        if (segments.length > 0) segments.length -= 1;
+        continue;
+      }
+      segments[segments.length] = segment;
+      segments.length += 1;
+    }
+    let host = lowerCase(urlHostname(parsed));
+    while (endsWith(host, ".")) host = slice(host, 0, -1);
+    const protocol = urlProtocol(parsed);
+    const port = urlPort(parsed) || (protocol === "https:" ? "443" : protocol === "http:" ? "80" : "");
+    return {host, port, segments};
+  };
+  const withheld = context.scoped && context.hosts.unfurl ? place(context.hosts.unfurl) : undefined;
+  const reachesWithheld = (url) => {
+    const target = place(url);
+    if (target.host !== withheld.host || target.port !== withheld.port) return false;
+    if (target.segments.length < withheld.segments.length) return false;
+    for (let index = 0; index < withheld.segments.length; index++) {
+      if (target.segments[index] !== withheld.segments[index]) return false;
+    }
+    return true;
+  };
   globalThis.fetch = (input, init) => {
-    const request = new Request(input, init);
+    const request = new RequestConstructor(input, init);
+    if (withheld && reachesWithheld(requestUrl(request))) {
+      return rejection(new Error("A scoped run can't use link previews (macro.unfurls): they fetch any URL they're given."));
+    }
     // Every request to an SDK origin, whatever credential it carries.
     if (origins.has(new URL(request.url).origin)) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
@@ -173,7 +240,7 @@ try {
   // program's and holds back a dry run's writes. Nothing else may reach the
   // network (raw sockets, listeners, websockets), start a realm with its own
   // fetch (workers), or reach Node's or Deno's internals past the import map.
-  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];

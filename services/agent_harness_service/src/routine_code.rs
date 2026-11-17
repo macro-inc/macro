@@ -304,6 +304,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 arguments,
                 dry_run: run.dry_run,
             }),
+            scoped: false,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();
