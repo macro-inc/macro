@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::AgentChannelSelection;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_live_bots_audience_is_its_owner_and_the_people_in_its_current_channels(
@@ -114,5 +115,61 @@ async fn adding_and_removing_a_bot_from_a_channel_publishes_the_change(
             }),
         );
     }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn moving_an_agent_between_channels_publishes_each_channel_it_left_and_joined(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let broker = RecordingEventBroker::default();
+    let service = recording_service(&pool, broker.clone());
+    let first_channel = macro_uuid::generate_uuid_v7();
+    let second_channel = macro_uuid::generate_uuid_v7();
+    insert_channel_member(&pool, first_channel, USER_OWNER).await?;
+    insert_channel_member(&pool, second_channel, USER_OWNER).await?;
+    let mut request = create_agent_req("moving-agent", AgentChannelScope::Selected);
+    request.channel_ids = vec![first_channel];
+    let agent = service.create_agent(user_id(USER_OWNER), request).await?;
+    broker.clear();
+
+    service
+        .patch_agent(
+            user_id(USER_OWNER),
+            agent.bot.id,
+            PatchAgentRequest {
+                channels: Some(AgentChannelSelection {
+                    channel_scope: AgentChannelScope::Selected,
+                    channel_ids: vec![second_channel],
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+
+    let changes = broker
+        .events()
+        .into_iter()
+        .filter(|event| event.payload["event_type"] == "bot.channel_changed")
+        .map(|event| {
+            (
+                event.payload["metadata"]["channel_id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                event.payload["metadata"]["change"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        changes,
+        vec![
+            (first_channel.to_string(), "left".to_string()),
+            (second_channel.to_string(), "joined".to_string()),
+        ]
+    );
     Ok(())
 }

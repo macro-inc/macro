@@ -453,10 +453,13 @@ where
 
     /// Replace a manageable agent's configuration with `req`, `current` being
     /// the bot [`Self::ensure_manageable`] returned for it.
+    /// Replace an agent's configuration. `previous_channels` are the channels
+    /// it was selected for before, so each channel it leaves or joins hears it.
     async fn replace_agent(
         &self,
         caller: MacroUserIdStr<'static>,
         current: &Bot,
+        previous_channels: &[Uuid],
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         validate_update_agent_request(&req)?;
@@ -493,13 +496,33 @@ where
                 .owner
                 .clone()
                 .expect("owned agent bot must have an owner"),
-            actor_user_id: caller,
+            actor_user_id: caller.clone(),
             name: Some(requested_name),
             handle: Some(requested_handle),
             description: requested_description,
             avatar_url: requested_avatar_url,
             updated_at: agent.bot.updated_at,
         }));
+        for &channel_id in previous_channels {
+            if !agent.channel_ids.contains(&channel_id) {
+                self.publish_channel_change(
+                    agent.bot.id,
+                    channel_id,
+                    BotChannelChange::Left,
+                    caller.clone(),
+                );
+            }
+        }
+        for &channel_id in &agent.channel_ids {
+            if !previous_channels.contains(&channel_id) {
+                self.publish_channel_change(
+                    agent.bot.id,
+                    channel_id,
+                    BotChannelChange::Joined,
+                    caller.clone(),
+                );
+            }
+        }
 
         Ok(agent)
     }
@@ -610,7 +633,8 @@ where
         validate_runtime(&req.harness, req.harness_id)?;
         validate_update_agent_request(&req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
-        self.replace_agent(caller, &current, req).await
+        self.replace_agent(caller, &current, &existing.channel_ids, req)
+            .await
     }
 
     async fn manageable_agent(
@@ -645,7 +669,8 @@ where
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
-        self.replace_agent(caller, &current, update).await
+        self.replace_agent(caller, &current, &agent.channel_ids, update)
+            .await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {

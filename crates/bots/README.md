@@ -18,7 +18,7 @@ the JSON envelope.
 | `bot.created` | Regular or channel-scoped bot creation | `bot_id`, `kind`, `owner`, `name`, `handle`, `description`, `avatar_url`, `created_by_user_id`, `channel_id`, `created_at` |
 | `bot.updated` | Bot PATCH | `bot_id`, `owner`, `actor_user_id`, requested `name`, `handle`, `description`, and `avatar_url` fields, plus `updated_at` |
 | `bot.deleted` | Bot soft deletion | `bot_id`, `owner`, `actor_user_id` |
-| `bot.channel_changed` | A bot added to or removed from a channel (`add_bot_to_channel`, `remove_bot_from_channel`) | `bot_id`, `channel_id`, `change` (`joined` or `left`), `actor_user_id` |
+| `bot.channel_changed` | A bot added to or removed from a channel (`add_bot_to_channel`, `remove_bot_from_channel`), or an agent update that changes its selected channels (one event per channel left or joined) | `bot_id`, `channel_id`, `change` (`joined` or `left`), `actor_user_id` |
 
 `owner` is a tagged union. A user owner is encoded as
 `{"type":"user","user_id":"..."}`, while a team owner is encoded as
