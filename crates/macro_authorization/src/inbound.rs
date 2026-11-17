@@ -18,4 +18,5 @@ pub use axum::{
     UserBotOrHarnessEntity, UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity,
     UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity,
     UserOrInternalService, UserOrInternalServiceAuthorization, is_agent_run, is_program_run,
+    request_is_program, rewrite_program_json,
 };
