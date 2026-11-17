@@ -154,6 +154,7 @@
       "crates/macro_env_var",
       "crates/macro_event_broker",
       "crates/macro_event_topics",
+      "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model",
