@@ -72,6 +72,29 @@ pub struct BotDeletedMetadata {
     pub actor_user_id: MacroUserIdStr<'static>,
 }
 
+/// Whether a bot joined or left a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BotChannelChange {
+    /// The bot was added to the channel.
+    Joined,
+    /// The bot was removed from the channel.
+    Left,
+}
+
+/// Metadata for [`BotTopicEvent::ChannelChanged`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BotChannelChangedMetadata {
+    /// Identifier of the bot that joined or left.
+    pub bot_id: BotId,
+    /// The channel it joined or left.
+    pub channel_id: Uuid,
+    /// Whether it joined or left.
+    pub change: BotChannelChange,
+    /// Authenticated user who added or removed the bot.
+    pub actor_user_id: MacroUserIdStr<'static>,
+}
+
 /// Lifecycle events published to [`MacroBotsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
@@ -85,6 +108,22 @@ pub enum BotTopicEvent {
     /// A bot was soft-deleted.
     #[serde(rename = "bot.deleted")]
     Deleted(BotDeletedMetadata),
+    /// A bot joined or left a channel. Consumers deployed before this variant
+    /// fail to decode it and skip it.
+    #[serde(rename = "bot.channel_changed")]
+    ChannelChanged(BotChannelChangedMetadata),
+}
+
+impl BotTopicEvent {
+    /// The bot the event is about.
+    pub fn bot_id(&self) -> BotId {
+        match self {
+            Self::Created(metadata) => metadata.bot_id,
+            Self::Updated(metadata) => metadata.bot_id,
+            Self::Deleted(metadata) => metadata.bot_id,
+            Self::ChannelChanged(metadata) => metadata.bot_id,
+        }
+    }
 }
 
 impl TopicEvent for BotTopicEvent {
@@ -116,6 +155,12 @@ impl BotMacroEvent {
     pub fn deleted(metadata: BotDeletedMetadata) -> Self {
         let key = metadata.bot_id.to_string();
         Self::new(key, BotTopicEvent::Deleted(metadata))
+    }
+
+    /// Build a channel-changed event keyed by the bot id.
+    pub fn channel_changed(metadata: BotChannelChangedMetadata) -> Self {
+        let key = metadata.bot_id.to_string();
+        Self::new(key, BotTopicEvent::ChannelChanged(metadata))
     }
 
     fn new(key: String, event: BotTopicEvent) -> Self {

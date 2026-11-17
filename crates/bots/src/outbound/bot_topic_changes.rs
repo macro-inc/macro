@@ -92,12 +92,18 @@ impl BotChangeSource for BotTopicChanges {
                     continue;
                 }
             };
-            let bot_id = match &event.event().event {
-                BotTopicEvent::Created(metadata) => metadata.bot_id,
-                BotTopicEvent::Updated(metadata) => metadata.bot_id,
-                BotTopicEvent::Deleted(metadata) => metadata.bot_id,
+            let topic_event = &event.event().event;
+            let channel_id = match topic_event {
+                BotTopicEvent::ChannelChanged(metadata) => Some(metadata.channel_id),
+                BotTopicEvent::Created(_)
+                | BotTopicEvent::Updated(_)
+                | BotTopicEvent::Deleted(_) => None,
             };
-            return Ok(BotChange { bot_id, span });
+            return Ok(BotChange {
+                bot_id: topic_event.bot_id(),
+                channel_id,
+                span,
+            });
         }
     }
 }
