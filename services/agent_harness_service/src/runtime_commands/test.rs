@@ -262,14 +262,25 @@ async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
 }
 
 fn no_agent_handoff() -> super::ApplyAgent {
-    Arc::new(|_, _| Box::pin(async { false }))
+    Arc::new(|_| Box::pin(async {}))
+}
+
+fn handoff_request() -> super::ApplyAgentRuntime {
+    super::ApplyAgentRuntime {
+        apply_agent_harness: HarnessId::new_from_uuid(uuid::Uuid::from_u128(
+            0x0000_0000_0000_7000_8000_0000_0000_0a9e,
+        )),
+        computer_id: hosted_runtimes::domain::ids::ComputerId::new_from_uuid(
+            uuid::Uuid::from_u128(7),
+        ),
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration::new(2),
+    }
 }
 
 #[tokio::test]
-async fn an_agent_handoff_reaches_the_replica_holding_the_runtime_and_runs_no_command() {
+async fn an_agent_handoff_reaches_every_replica_with_no_credential_and_runs_no_command() {
     let redis = redis_client();
     let harness = harness(false);
-    let target = harness_id();
     let (handed_tx, mut handed) = tokio::sync::mpsc::unbounded_channel();
     let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
     let consumer = tokio::spawn(consume_runtime_commands(
@@ -277,22 +288,19 @@ async fn an_agent_handoff_reaches_the_replica_holding_the_runtime_and_runs_no_co
         ReplicaId::mint(),
         Arc::new(|_| false),
         Arc::new(|_| false),
-        Arc::new(move |harness, environment| {
+        Arc::new(move |request| {
             let handed_tx = handed_tx.clone();
-            Box::pin(async move { handed_tx.send((harness, environment)).is_ok() })
+            Box::pin(async move {
+                let _ = handed_tx.send(request);
+            })
         }),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
     ));
     ready(&mut readiness).await;
-    let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
-        [("MACRO_API_KEY".to_owned(), "mak_ada".to_owned())]
-            .into_iter()
-            .collect(),
-    );
 
-    super::publish_apply_agent(&redis, target, environment.clone())
+    super::publish_apply_agent(&redis, &handoff_request())
         .await
         .unwrap();
 
@@ -300,9 +308,93 @@ async fn an_agent_handoff_reaches_the_replica_holding_the_runtime_and_runs_no_co
         .await
         .expect("the agent hand-off arrives")
         .expect("the consumer is running");
-    assert_eq!(received, (target, environment));
+    assert_eq!(received, handoff_request());
     assert_eq!(harness.calls.load(Ordering::SeqCst), 0);
     consumer.abort();
+}
+
+/// Issues Ada's environment and counts the issues.
+#[derive(Default)]
+struct AdaAgent {
+    issued: std::sync::Mutex<
+        Vec<(
+            hosted_runtimes::domain::ids::ComputerId,
+            hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+        )>,
+    >,
+}
+
+impl hosted_runtimes::domain::agent::AgentEnrollmentSource for AdaAgent {
+    fn issue(
+        &self,
+        computer: hosted_runtimes::domain::ids::ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+    ) -> hosted_runtimes::domain::agent::AgentEnrollmentFuture<'_> {
+        self.issued.lock().unwrap().push((computer, generation));
+        let env = hosted_runtimes::domain::agent::AgentEnv::new(
+            [(
+                hosted_runtimes::domain::agent::AgentEnvKey::new("MACRO_API_KEY").unwrap(),
+                "mak_ada".to_owned(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+        Box::pin(async move {
+            Ok(Some(hosted_runtimes::domain::agent::AgentEnrollment {
+                agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+                    "macro|ada-1@agents.macro.invalid".to_owned(),
+                )
+                .unwrap(),
+                env,
+            }))
+        })
+    }
+}
+
+#[tokio::test]
+async fn only_the_replica_holding_the_runtime_issues_and_sends_the_agent() {
+    for holds_connection in [false, true] {
+        let agents = Arc::new(AdaAgent::default());
+        let sent = Arc::new(std::sync::Mutex::new(vec![]));
+
+        super::hand_agent_to_runtime(
+            handoff_request(),
+            agents.clone(),
+            Arc::new(move |_| holds_connection),
+            {
+                let sent = Arc::clone(&sent);
+                Arc::new(move |harness, environment| {
+                    sent.lock().unwrap().push((harness, environment));
+                    Box::pin(async { true })
+                })
+            },
+        )
+        .await;
+
+        let request = handoff_request();
+        if holds_connection {
+            assert_eq!(
+                *agents.issued.lock().unwrap(),
+                vec![(request.computer_id, request.generation)]
+            );
+            assert_eq!(
+                *sent.lock().unwrap(),
+                vec![(
+                    request.apply_agent_harness,
+                    agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+                        [("MACRO_API_KEY".to_owned(), "mak_ada".to_owned())]
+                            .into_iter()
+                            .collect()
+                    )
+                )]
+            );
+        } else {
+            // Issuing would retire the holder's credentials.
+            assert!(agents.issued.lock().unwrap().is_empty());
+            assert!(sent.lock().unwrap().is_empty());
+        }
+    }
 }
 
 fn empty_models(redis: redis::Client) -> MacrodModels {

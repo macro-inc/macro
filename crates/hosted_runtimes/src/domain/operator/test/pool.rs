@@ -185,37 +185,6 @@ fn ada() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|ada-1@agents.macro.invalid".to_owned()).unwrap()
 }
 
-fn ada_enrollment() -> crate::domain::agent::AgentEnrollment {
-    let mut values = std::collections::BTreeMap::new();
-    values.insert(
-        crate::domain::agent::AgentEnvKey::new("MACRO_API_KEY").unwrap(),
-        "mak_ada".to_owned(),
-    );
-    crate::domain::agent::AgentEnrollment {
-        agent_user_id: ada(),
-        env: crate::domain::agent::AgentEnv::new(values).unwrap(),
-    }
-}
-
-/// Issues Ada's environment for the computers linked to her.
-#[derive(Default)]
-struct AdaRuns {
-    linked: Mutex<Vec<ComputerId>>,
-    issued: Mutex<Vec<ComputerId>>,
-}
-
-impl crate::domain::agent::AgentEnrollmentSource for AdaRuns {
-    fn issue(
-        &self,
-        computer: ComputerId,
-        _generation: EnrollmentGeneration,
-    ) -> crate::domain::agent::AgentEnrollmentFuture<'_> {
-        self.issued.lock().unwrap().push(computer);
-        let linked = self.linked.lock().unwrap().contains(&computer);
-        Box::pin(async move { Ok(linked.then(ada_enrollment)) })
-    }
-}
-
 fn agent_purchase(
     resources: crate::domain::size::ComputerResources,
     catalog_entry: crate::domain::size::CatalogEntryId,
@@ -294,18 +263,14 @@ async fn an_agent_purchase_takes_only_an_agent_pool_computer() {
     assert_eq!(pool_computers(&operator).len(), 1);
 }
 
-#[tokio::test]
-async fn a_taken_agent_pool_computer_hands_over_once_its_agent_is_online() {
-    let operator = operator(FakeFleet::default())
-        .await
-        .with_agent_pool(ONE_STANDARD);
-    let source = std::sync::Arc::new(AdaRuns::default());
-    let operator = operator.with_agent_enrollment(source.clone());
-    let id = add_pool_computer_of(&operator, PoolKind::Agent).await;
+/// An agent pool computer taken for Ada, after its first handover attempt.
+async fn taken_for_ada(
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+) -> ComputerId {
+    let id = add_pool_computer_of(operator, PoolKind::Agent).await;
     operator.run_fleet_effects().await.unwrap();
     assert!(operator.macrod_connected(HARNESS).await.unwrap());
     // A pool computer enrolls with no agent.
-    assert_eq!(*source.issued.lock().unwrap(), vec![id]);
     assert_eq!(operator.fleet.enrollments.lock().unwrap()[0].0.agent, None);
     let pooled = operator
         .repo
@@ -329,34 +294,59 @@ async fn a_taken_agent_pool_computer_hands_over_once_its_agent_is_online() {
         .unwrap();
     assert!(matches!(claim, Claim::Taken(_)));
     assert_eq!(operator.repo.agents.lock().unwrap().get(&id), Some(&ada()));
-    source.linked.lock().unwrap().push(id);
-
-    // The handover delivers the agent and waits for it to report online.
     operator.run_fleet_effects().await.unwrap();
+    id
+}
+
+fn join_team_pending(
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+    id: ComputerId,
+) -> bool {
+    operator
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|pending| pending.computer_id == id && pending.effect == Effect::JoinTeam)
+}
+
+#[tokio::test]
+async fn a_taken_agent_pool_computer_hands_over_once_its_agent_is_online() {
+    let operator = operator(FakeFleet::default())
+        .await
+        .with_agent_pool(ONE_STANDARD);
+    let id = taken_for_ada(&operator).await;
+
+    // The handover asks for the agent to be delivered, with no credential,
+    // and waits for it to report online.
+    let generation = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap()
+        .enrollment_generation;
     assert_eq!(
-        *operator.harnesses.applied_agents.lock().unwrap(),
-        vec![(HARNESS, ada_enrollment())]
+        *operator.harnesses.delivered_agents.lock().unwrap(),
+        vec![(HARNESS, id, generation)]
     );
     assert_eq!(
         *operator.harnesses.reconnects.lock().unwrap(),
         vec![HARNESS]
     );
     assert!(
-        operator
-            .repo
-            .effects
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|pending| pending.computer_id == id && pending.effect == Effect::JoinTeam),
+        join_team_pending(&operator, id),
         "the handover retries until the agent is online"
     );
     assert_eq!(*operator.harnesses.default_agents.lock().unwrap(), vec![]);
 
-    // Not online yet: the retry delivers it again, without a second reconnect.
+    // Not online yet: the retry asks again, without a second reconnect.
     operator.repo.effect_run_after.lock().unwrap().clear();
     operator.run_fleet_effects().await.unwrap();
-    assert_eq!(operator.harnesses.applied_agents.lock().unwrap().len(), 2);
+    assert_eq!(operator.harnesses.delivered_agents.lock().unwrap().len(), 2);
     assert_eq!(
         *operator.harnesses.reconnects.lock().unwrap(),
         vec![HARNESS]
@@ -366,15 +356,43 @@ async fn a_taken_agent_pool_computer_hands_over_once_its_agent_is_online() {
     operator.repo.effect_run_after.lock().unwrap().clear();
     operator.run_fleet_effects().await.unwrap();
 
-    assert_eq!(operator.harnesses.applied_agents.lock().unwrap().len(), 2);
-    assert!(
-        !operator
-            .repo
-            .effects
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|pending| pending.computer_id == id && pending.effect == Effect::JoinTeam),
-        "the handover is done"
+    assert_eq!(operator.harnesses.delivered_agents.lock().unwrap().len(), 2);
+    assert!(!join_team_pending(&operator, id), "the handover is done");
+    let computer = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(computer.state.failure, None);
+}
+
+#[tokio::test]
+async fn an_agent_that_never_comes_online_fails_its_computer_with_that_reason() {
+    let operator = operator(FakeFleet::default())
+        .await
+        .with_agent_pool(ONE_STANDARD);
+    let id = taken_for_ada(&operator).await;
+
+    for _ in 1..MAX_EFFECT_ATTEMPTS {
+        operator.repo.effect_run_after.lock().unwrap().clear();
+        operator.run_fleet_effects().await.unwrap();
+    }
+
+    assert!(!join_team_pending(&operator, id));
+    let computer = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(computer.state.failure, Some(Failure::AgentNotStarted));
+    assert_eq!(
+        operator.harnesses.delivered_agents.lock().unwrap().len(),
+        MAX_EFFECT_ATTEMPTS as usize
     );
 }

@@ -202,16 +202,18 @@ attempt, so a busy database never fails a computer or abandons a removal.
   (`Harnesses::reconnect`, `RuntimeRegistry::disconnect` on the replica that
   holds it; a failed publish retries the effect) so macrod reloads as the
   team's, then refills. It does nothing for a computer released before it ran.
-  For an agent teammate's computer it then hands macrod the agent's
-  environment (`Harnesses::apply_agent`: fresh credentials from the
-  `AgentEnrollmentSource`, published on the runtime bus, sent by the replica
-  holding the socket as `ToRuntimeMessage::ApplyAgent`); macrod stages it at
+  For an agent teammate's computer it then has the agent's environment
+  handed to macrod (`Harnesses::deliver_agent`: the runtime bus carries only
+  the harness, computer and enrollment generation; the replica holding
+  macrod's socket issues fresh credentials from the `AgentEnrollmentSource`,
+  which retires the previous key, and sends them down that socket as
+  `ToRuntimeMessage::ApplyAgent`; no other replica issues). macrod stages it at
   `/run/macro-agent-inbox/agent.env` and the guest's `macro-agent-apply` unit
   installs it as `/var/lib/macrod/agent.env`, which starts the agent. The
   effect keeps failing, and so retries with new credentials, until the agent
   reports itself online (`team_agents.first_online_at`, read by
   `ComputerAgents::agent_online`); after the effect's last attempt the
-  computer fails. A taken computer
+  computer fails with `Failure::AgentNotStarted`. A taken computer
   never returns to the pool.
 - **Capacity**: free sold units are sold capacity minus the units of live
   bought computers (phase not `destroying`) and every reservation, expired or not

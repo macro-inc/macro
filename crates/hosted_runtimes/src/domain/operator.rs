@@ -344,9 +344,11 @@ where
                 self.repo
                     .finish_effect(
                         pending.id,
-                        effect_failure(&pending.effect).map(|failure| Event::EffectFailed {
-                            failure,
-                            reason: error.to_string(),
+                        effect_failure(&pending.effect, &error).map(|failure| {
+                            Event::EffectFailed {
+                                failure,
+                                reason: error.to_string(),
+                            }
                         }),
                         self.clock.now(),
                     )
@@ -876,11 +878,11 @@ where
         self.hand_over_agent(&computer, harness_id).await
     }
 
-    /// For an agent teammate's computer taken from the pool: hand macrod the
-    /// agent's environment until the agent reports itself online. Each
-    /// attempt issues fresh credentials (retiring the previous ones) and
-    /// delivers them again, so a delivery lost on the runtime bus, or sent
-    /// before macrod redialed, is made up on the effect's next retry.
+    /// For an agent teammate's computer taken from the pool: have the
+    /// agent's environment handed to macrod until the agent reports itself
+    /// online. Each attempt asks again, so a request lost on the runtime bus,
+    /// or sent before macrod redialed, is made up on the effect's next retry;
+    /// each delivery issues fresh credentials and retires the previous ones.
     async fn hand_over_agent(
         &self,
         computer: &Computer,
@@ -892,23 +894,11 @@ where
         if self.repo.agent_online(&agent).await.map_err(internal)? {
             return Ok(());
         }
-        // `None`: the agent teammates rollout is off for its creator, so
-        // the computer runs as a plain one.
-        let Some(enrollment) = self
-            .agents
-            .issue(computer.id, computer.enrollment_generation)
-            .await
-            .map_err(internal)?
-        else {
-            return Ok(());
-        };
         self.harnesses
-            .apply_agent(harness_id, &enrollment)
+            .deliver_agent(harness_id, computer.id, computer.enrollment_generation)
             .await
             .map_err(internal)?;
-        Err(ComputerError::Internal(rootcause::report!(
-            "the agent was handed its environment and has not reported online yet"
-        )))
+        Err(ComputerError::AgentNotStarted)
     }
 
     /// Keep the host's warm pool at its targets, for each kind of guest:
@@ -1025,7 +1015,10 @@ fn fleet_completion(
 
 /// What the team is told when `effect` fails for good. A setup notice that
 /// cannot be sent fails nothing: the computer itself is fine.
-fn effect_failure(effect: &Effect) -> Option<Failure> {
+fn effect_failure(effect: &Effect, error: &ComputerError) -> Option<Failure> {
+    if matches!(error, ComputerError::AgentNotStarted) {
+        return Some(Failure::AgentNotStarted);
+    }
     match effect {
         Effect::Create { .. } => Some(Failure::Create),
         Effect::Start { .. }

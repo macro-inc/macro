@@ -41,36 +41,39 @@ pub(crate) async fn publish_disconnect(
     Ok(())
 }
 
-/// Hand an agent teammate's environment to whichever replica holds the
-/// harness's runtime connection (an agent pool computer a team just took).
-/// Its values are credentials; Debug shows none.
-#[derive(serde::Serialize, serde::Deserialize)]
+/// Ask whichever replica holds the harness's runtime connection to hand it
+/// the agent of `computer_id` (an agent pool computer a team just took). No
+/// credential travels on the bus: that replica issues the agent's environment
+/// itself and sends it down macrod's authenticated socket.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApplyAgentRuntime {
     pub(crate) apply_agent_harness: HarnessId,
-    pub(crate) environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+    pub(crate) computer_id: hosted_runtimes::domain::ids::ComputerId,
+    pub(crate) generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
 }
 
 /// Broadcast an [`ApplyAgentRuntime`] to every replica.
 pub(crate) async fn publish_apply_agent(
     redis: &redis::Client,
-    harness: HarnessId,
-    environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+    request: &ApplyAgentRuntime,
 ) -> anyhow::Result<()> {
-    let payload = zeroize::Zeroizing::new(serde_json::to_string(&ApplyAgentRuntime {
-        apply_agent_harness: harness,
-        environment,
-    })?);
+    let payload = serde_json::to_string(request)?;
     redis
         .get_multiplexed_async_connection()
         .await?
-        .publish::<_, _, ()>(COMMAND_CHANNEL, payload.as_str())
+        .publish::<_, _, ()>(COMMAND_CHANNEL, payload)
         .await?;
     Ok(())
 }
 
-/// Hands a harness's live runtime an agent environment; whether this
-/// replica held the connection.
-pub(crate) type ApplyAgent = Arc<
+/// Hands a harness's live runtime its agent, if this replica holds the
+/// connection.
+pub(crate) type ApplyAgent =
+    Arc<dyn Fn(ApplyAgentRuntime) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+
+/// Sends an agent environment down a harness's runtime connection; whether
+/// this replica held it.
+pub(crate) type SendAgent = Arc<
     dyn Fn(
             HarnessId,
             agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
@@ -78,6 +81,41 @@ pub(crate) type ApplyAgent = Arc<
         + Send
         + Sync,
 >;
+
+/// Carry out an [`ApplyAgentRuntime`] on this replica: only the one holding
+/// the harness's connection issues the agent's credentials (each issue
+/// retires the previous ones, so the others must not), then sends them down
+/// macrod's socket.
+pub(crate) async fn hand_agent_to_runtime(
+    request: ApplyAgentRuntime,
+    agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
+    connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    send: SendAgent,
+) {
+    if !connected(request.apply_agent_harness) {
+        return;
+    }
+    let enrollment = match agents.issue(request.computer_id, request.generation).await {
+        Ok(Some(enrollment)) => enrollment,
+        Ok(None) => {
+            tracing::warn!(computer_id = %request.computer_id, "the computer runs no agent; nothing to hand over");
+            return;
+        }
+        Err(error) => {
+            tracing::warn!(computer_id = %request.computer_id, %error, "could not issue the agent's environment");
+            return;
+        }
+    };
+    let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+        enrollment
+            .env
+            .expose()
+            .iter()
+            .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+            .collect(),
+    );
+    send(request.apply_agent_harness, environment).await;
+}
 
 // Untagged: a disconnect's and an agent hand-off's required fields appear in
 // no other event, so they are tried first.
@@ -143,10 +181,7 @@ where
             RuntimeBusEvent::ApplyAgent(request) => {
                 // Only the replica holding the connection sends it; the rest
                 // find nothing to hand it to.
-                let handed = apply_agent(request.apply_agent_harness, request.environment);
-                probes.spawn(async move {
-                    handed.await;
-                });
+                probes.spawn(apply_agent(request));
                 continue;
             }
             RuntimeBusEvent::Command(request) => *request,

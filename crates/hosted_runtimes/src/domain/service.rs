@@ -75,6 +75,10 @@ pub enum ComputerError {
     /// Subscription billing failed.
     #[error(transparent)]
     Billing(#[from] BillingError),
+    /// An agent teammate's computer was handed its agent, which has not
+    /// reported itself online yet.
+    #[error("the agent teammate has not started on its computer yet")]
+    AgentNotStarted,
     /// An adapter operation failed.
     #[error("internal computer error: {0:?}")]
     Internal(rootcause::Report),

@@ -603,6 +603,8 @@ impl IntoResponse for ComputersHttpError {
                 tracing::error!(error = ?report, "computer request failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            // Only the fleet worker's handover returns it.
+            ComputerError::AgentNotStarted => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match &self.0 {
             ComputerError::Internal(_) => "internal error".to_owned(),

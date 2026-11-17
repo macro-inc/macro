@@ -223,6 +223,9 @@ pub enum Failure {
     /// The charge for a computer taken from the warm pool was refused, so
     /// it was released.
     Payment,
+    /// An agent teammate's computer was taken from the pool and its agent
+    /// never reported itself online.
+    AgentNotStarted,
 }
 
 impl Failure {
@@ -235,6 +238,7 @@ impl Failure {
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
             Self::Payment => "The payment for the computer didn't go through, so it was released.",
+            Self::AgentNotStarted => "The agent teammate didn't start on its computer.",
         }
     }
 }

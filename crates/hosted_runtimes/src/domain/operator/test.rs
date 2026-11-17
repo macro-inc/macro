@@ -289,7 +289,7 @@ struct FakeHarnesses {
     fail_default_agent: std::sync::atomic::AtomicBool,
     default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
     reconnects: Mutex<Vec<HarnessId>>,
-    applied_agents: Mutex<Vec<(HarnessId, crate::domain::agent::AgentEnrollment)>>,
+    delivered_agents: Mutex<Vec<(HarnessId, ComputerId, EnrollmentGeneration)>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -326,15 +326,16 @@ impl Harnesses for FakeHarnesses {
         Ok(())
     }
 
-    async fn apply_agent(
+    async fn deliver_agent(
         &self,
         harness_id: HarnessId,
-        agent: &crate::domain::agent::AgentEnrollment,
+        computer_id: ComputerId,
+        generation: EnrollmentGeneration,
     ) -> Result<(), FakeError> {
-        self.applied_agents
+        self.delivered_agents
             .lock()
             .unwrap()
-            .push((harness_id, agent.clone()));
+            .push((harness_id, computer_id, generation));
         Ok(())
     }
 

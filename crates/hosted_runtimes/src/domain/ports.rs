@@ -742,13 +742,17 @@ pub trait Harnesses: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Hand macrod on `harness_id` the agent's environment, so the guest
-    /// starts the agent (a pool computer a purchase took for one). Delivery
-    /// is not confirmed here: the agent's own online report is.
-    fn apply_agent(
+    /// Ask for the agent of `computer_id` (enrollment `generation`) to be
+    /// handed to macrod on `harness_id`, so the guest starts it (a pool
+    /// computer a purchase took for an agent). Carries no credential: the
+    /// replica holding macrod's socket issues the agent's environment and
+    /// sends it down that socket. Delivery is not confirmed here: the agent's
+    /// own online report is.
+    fn deliver_agent(
         &self,
         harness_id: HarnessId,
-        agent: &crate::domain::agent::AgentEnrollment,
+        computer_id: ComputerId,
+        generation: crate::domain::enrollment::EnrollmentGeneration,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the

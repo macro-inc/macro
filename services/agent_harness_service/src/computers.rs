@@ -553,22 +553,22 @@ impl Harnesses for HostedHarnesses {
             .map_err(HostedHarnessError::Bus)
     }
 
-    async fn apply_agent(
+    async fn deliver_agent(
         &self,
         harness_id: HarnessId,
-        agent: &hosted_runtimes::domain::agent::AgentEnrollment,
+        computer_id: ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
     ) -> Result<(), Self::Err> {
-        let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
-            agent
-                .env
-                .expose()
-                .iter()
-                .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
-                .collect(),
-        );
-        crate::runtime_commands::publish_apply_agent(&self.redis, harness_id, environment)
-            .await
-            .map_err(HostedHarnessError::Bus)
+        crate::runtime_commands::publish_apply_agent(
+            &self.redis,
+            &crate::runtime_commands::ApplyAgentRuntime {
+                apply_agent_harness: harness_id,
+                computer_id,
+                generation,
+            },
+        )
+        .await
+        .map_err(HostedHarnessError::Bus)
     }
 
     async fn create_default_agent(

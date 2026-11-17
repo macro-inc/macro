@@ -81,6 +81,10 @@ impl ComputerAgents for FakeComputers {
         }
         Ok(self.live)
     }
+
+    async fn agent_online(&self, _: &MacroUserIdStr<'_>) -> Result<bool, Down> {
+        unreachable!("admission never asks whether an agent is online")
+    }
 }
 
 fn admission(

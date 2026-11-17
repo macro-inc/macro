@@ -216,7 +216,6 @@ utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 web_search = { path = "../../crates/web_search", features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-zeroize = { workspace = true }
 
 [dev-dependencies]
 agent = { path = "../../crates/agent" }

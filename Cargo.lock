@@ -832,7 +832,6 @@ dependencies = [
  "web_search",
  "wiremock",
  "workspace-hack",
- "zeroize",
 ]
 
 [[package]]

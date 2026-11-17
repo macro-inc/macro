@@ -1752,6 +1752,12 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
+    // The replica holding an agent pool computer's socket issues its agent's
+    // credentials; they never cross the runtime bus.
+    let runtime_command_agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource> =
+        Arc::new(computers::agent_enrollment::AuthAgentEnrollment::new(
+            config.authentication_service_secret_key.as_ref(),
+        )?);
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
@@ -1773,11 +1779,27 @@ pub async fn run() -> anyhow::Result<()> {
                     },
                     {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
-                        Arc::new(move |harness, environment| {
-                            let runtimes = Arc::clone(&runtimes);
-                            Box::pin(
-                                async move { runtimes.apply_agent(harness, environment).await },
-                            )
+                        let agents = Arc::clone(&runtime_command_agents);
+                        Arc::new(move |request| {
+                            let connected = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness| runtimes.is_connected(harness))
+                            };
+                            let send: runtime_commands::SendAgent = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness, environment| {
+                                    let runtimes = Arc::clone(&runtimes);
+                                    Box::pin(async move {
+                                        runtimes.apply_agent(harness, environment).await
+                                    })
+                                })
+                            };
+                            Box::pin(runtime_commands::hand_agent_to_runtime(
+                                request,
+                                Arc::clone(&agents),
+                                connected,
+                                send,
+                            ))
                         })
                     },
                     runtime_command_harness.clone(),
