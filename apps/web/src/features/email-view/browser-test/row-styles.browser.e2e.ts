@@ -160,9 +160,9 @@ for (const size of SIZES) {
           'Casey Moore',
           'Notes from the offsite'
         );
-        expect(unreadWeights.sender).toBe('700');
-        expect(unreadWeights.subject).toBe('700');
-        expect(unreadWeights.date).toBe('700');
+        expect(unreadWeights.sender).toBe('600');
+        expect(unreadWeights.subject).toBe('600');
+        expect(unreadWeights.date).toBe('600');
         expect(readWeights.sender).toBe('400');
         expect(readWeights.subject).toBe('400');
         expect(readWeights.date).toBe('400');
