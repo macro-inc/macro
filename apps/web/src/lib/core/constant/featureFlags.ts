@@ -699,6 +699,18 @@ export const enableTaskDuplicates = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Channel messages read from the device cache and are written through its
+ * queue (`queries/messages/local`); off, channels use REST. Needs the GraphQL
+ * cache. No default, dev included: off until PostHog answers on, because the
+ * rollout moves where messages are stored and sent. A local or CI bundle has
+ * no PostHog and sets `VITE_ENABLE_CHANNEL_LOCAL_SYNC` at build time.
+ */
+export const enableChannelLocalSync = defineFlag({
+  key: 'enable-channel-local-sync',
+  env: 'ENABLE_CHANNEL_LOCAL_SYNC',
+});
+
 // Snippets: reusable markdown documents, the `c` launcher entry, and the `;`
 // insert menu. PostHog-gated (currently targeted at the Macro team) with a
 // dev-mode default; override with VITE_ENABLE_SNIPPETS.

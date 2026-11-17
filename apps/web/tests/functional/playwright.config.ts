@@ -38,6 +38,7 @@ export default defineConfig({
       MACRO_DEV_HTTPS: 'false',
       VITE_LOCAL_SERVERS: 'ALL',
       VITE_LOCAL_BACKEND_ORIGIN: 'same-origin',
+      VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'true',
       VITE_ENABLE_BROWSER_OTEL: 'false',
     },
   },

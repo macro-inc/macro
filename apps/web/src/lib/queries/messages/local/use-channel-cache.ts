@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { enableChannelLocalSync } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
@@ -74,10 +74,10 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * for thirty days.
  */
 export function useChannelCache(active: Accessor<boolean>): void {
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
+  const localSync = useFeatureFlag(enableChannelLocalSync);
   const isLeader = createTabLeaderSignal('graphql-channel-prewarm:v1');
   const [pass, setPass] = createSignal(0);
-  const host = () => (graphqlSoup().enabled ? channelCacheHost() : undefined);
+  const host = () => (localSync().enabled ? channelCacheHost() : undefined);
 
   createEffect(() => {
     const cacheHost = host();
