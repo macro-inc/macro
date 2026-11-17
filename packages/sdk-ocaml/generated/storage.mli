@@ -65,6 +65,42 @@ val make_access_request :
   access_request
 (** Latest request for one person and one entity. *)
 
+(** How an agent's access request was resolved. *)
+type nonrec access_request_resolution =
+  | Approved
+  | Denied
+  | Revoked
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val access_request_resolution_of_yojson :
+  Yojson.Safe.t -> access_request_resolution
+
+val yojson_of_access_request_resolution :
+  access_request_resolution -> Yojson.Safe.t
+
+type nonrec access_request_resolved_metadata = {
+  item_id : string;  (** Requested item. *)
+  request_id : string;  (** Resolved request. *)
+  status : access_request_resolution;  (** Resolution. *)
+  team_id : string;  (** Team owning the item. *)
+}
+(** Metadata for \[[PasswordTopicEvent::AccessRequestResolved]\]. *)
+
+val access_request_resolved_metadata_of_yojson :
+  Yojson.Safe.t -> access_request_resolved_metadata
+
+val yojson_of_access_request_resolved_metadata :
+  access_request_resolved_metadata -> Yojson.Safe.t
+
+val make_access_request_resolved_metadata :
+  item_id:string ->
+  request_id:string ->
+  status:access_request_resolution ->
+  team_id:string ->
+  unit ->
+  access_request_resolved_metadata
+(** Metadata for \[[PasswordTopicEvent::AccessRequestResolved]\]. *)
+
 type nonrec access_request_state = {
   access_level : access_level option;
   can_review : bool;
@@ -3480,6 +3516,7 @@ val make_new_option : id:string -> label:string -> unit -> new_option
 type nonrec column_kind =
   | Text  (** Free text. *)
   | Number  (** A number. *)
+  | Percentage  (** A number shown as a percent: 0.25 displays as 25%. *)
   | Boolean  (** A checkbox. *)
   | Date  (** A date-time. *)
   | Date_range  (** A span from one date-time to another. *)
@@ -7400,9 +7437,14 @@ type nonrec column_config =
       database_id : string;  (** Target database. *)
       table_id : string;  (** Target table. *)
     }  (** A relation column: its cells reference rows of another table. *)
-  | Derived of { formula : formula  (** How its cells are computed. *) }
+  | Derived of {
+      formula : formula;  (** How its cells are computed. *)
+      percentage : bool option;
+          (** Whether a number formula is shown as a percent. *)
+    }
       (** A derived column: its cells are computed from the row's others, and
 its definition, a number or date one, never holds a value. *)
+  | Percentage  (** A number shown as a percent: 0.25 displays as 25%. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -7413,7 +7455,8 @@ val make_column_config_link :
   database_id:string -> table_id:string -> unit -> column_config
 (** A relation column: its cells reference rows of another table. *)
 
-val make_column_config_derived : formula:formula -> unit -> column_config
+val make_column_config_derived :
+  formula:formula -> ?percentage:bool -> unit -> column_config
 (** A derived column: its cells are computed from the row's others, and
 its definition, a number or date one, never holds a value. *)
 
@@ -7512,6 +7555,8 @@ type nonrec column_cast = {
   failures : int;
       (** For a [checked] cast, how many cells would not convert. *)
   is_multi_select : bool;  (** Whether the target holds several values. *)
+  percentage : bool option;
+      (** Whether the target shows a number as a percent. *)
   reason : string option;  (** Why nothing converts, for a [never] cast. *)
   relation : bool;
       (** Whether the target is a relation to another table's rows. *)
@@ -7532,6 +7577,7 @@ val make_column_cast :
   examples:string list ->
   failures:int ->
   is_multi_select:bool ->
+  ?percentage:bool ->
   ?reason:string ->
   relation:bool ->
   ?specific_entity_type:entity_type ->
@@ -7977,6 +8023,86 @@ val yojson_of_comment_on_text_response :
 val make_comment_on_text_response :
   comment:message -> marked_text:string -> unit -> comment_on_text_response
 (** The thread the comment started. *)
+
+type nonrec crm_contact_response = {
+  company_domain : bool option;
+      (** Whether the contact has an address on one of its company's domains.
+Such a contact cannot be unlinked from the company or moved to another.
+Older servers omit this classification; clients must then keep it read-only. *)
+  company_domain_emails : string list option;
+      (** The addresses on one of the company's domains. The last one cannot be
+removed while the contact is linked to the company. *)
+  company_id : string option;
+      (** The id of the company the contact belongs to; absent for a
+contact without a company. *)
+  created_at : string;  (** When the contact record was created. *)
+  email : string option;
+      (** The contact's primary email address; absent for contacts added by
+name alone. *)
+  emails : string list option;
+      (** Every address the contact is known by: the primary first, then the
+rest oldest first. Older servers omit it; clients then show [email]. *)
+  first_interaction : string;
+      (** Earliest known interaction with this contact. *)
+  hidden : bool;
+      (** Whether the contact is hidden from CRM listings for the
+requesting team. Non-admin viewers never see [hidden = true]
+rows (the endpoint filters them out); admin/owner callers see
+hidden contacts so they can render the right toggle state. *)
+  id : string;  (** The id of the contact record. *)
+  last_interaction : string;
+      (** Most recent known interaction with this contact. *)
+  name : string option;  (** Display name observed for the contact, if any. *)
+  personal_email : bool option;
+      (** Whether the primary address uses a known personal provider. Linking
+or switching the company needs this and [companyDomain = false].
+Older servers omit this classification; clients must then keep it read-only. *)
+  updated_at : string;  (** When the contact record was last updated. *)
+}
+(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+
+val crm_contact_response_of_yojson : Yojson.Safe.t -> crm_contact_response
+val yojson_of_crm_contact_response : crm_contact_response -> Yojson.Safe.t
+
+val make_crm_contact_response :
+  ?company_domain:bool ->
+  ?company_domain_emails:string list ->
+  ?company_id:string ->
+  created_at:string ->
+  ?email:string ->
+  ?emails:string list ->
+  first_interaction:string ->
+  hidden:bool ->
+  id:string ->
+  last_interaction:string ->
+  ?name:string ->
+  ?personal_email:bool ->
+  updated_at:string ->
+  unit ->
+  crm_contact_response
+(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+
+type nonrec company_contacts_page_response = {
+  contacts : crm_contact_response list;
+      (** The page's contacts, alphabetically by name (the email when
+unnamed), in the same order as [GET /crm/companies/{company_id}/contacts]. *)
+  next_cursor : string option;
+      (** Cursor for the next page; absent on the last page. *)
+}
+(** One page of a company's contacts. *)
+
+val company_contacts_page_response_of_yojson :
+  Yojson.Safe.t -> company_contacts_page_response
+
+val yojson_of_company_contacts_page_response :
+  company_contacts_page_response -> Yojson.Safe.t
+
+val make_company_contacts_page_response :
+  contacts:crm_contact_response list ->
+  ?next_cursor:string ->
+  unit ->
+  company_contacts_page_response
+(** One page of a company's contacts. *)
 
 type nonrec skipped_import_record = {
   key : string;  (** The company's domain or the contact's email. *)
@@ -10272,7 +10398,132 @@ val make_crm_company_filters :
   ?company_ids:string list -> ?hidden:bool -> unit -> crm_company_filters
 (** The crm company filters used to narrow which CRM companies appear in soup. *)
 
-type nonrec crm_contact_response = {
+type nonrec crm_company_preview = {
+  id : string;  (** The company. *)
+  name : string option;
+      (** The team's name override, else the primary domain's directory name. *)
+  primary_domain : string option;
+      (** The company's first domain, which titles a company with no name. *)
+  updated_at : string;
+      (** The company's last interaction, as the company read's [updatedAt]. *)
+}
+(** What a company chip shows: the fields the company read returns for its
+title, without its contacts. *)
+
+val crm_company_preview_of_yojson : Yojson.Safe.t -> crm_company_preview
+val yojson_of_crm_company_preview : crm_company_preview -> Yojson.Safe.t
+
+val make_crm_company_preview :
+  id:string ->
+  ?name:string ->
+  ?primary_domain:string ->
+  updated_at:string ->
+  unit ->
+  crm_company_preview
+(** What a company chip shows: the fields the company read returns for its
+title, without its contacts. *)
+
+type nonrec crm_domain_response = {
+  company_id : string;  (** The id of the company the domain belongs to. *)
+  created_at : string;  (** When the domain record was created. *)
+  domain : string;  (** The domain (e.g. "acme.com"). *)
+  id : string;  (** The id of the domain record. *)
+}
+(** A CRM domain associated with a company. *)
+
+val crm_domain_response_of_yojson : Yojson.Safe.t -> crm_domain_response
+val yojson_of_crm_domain_response : crm_domain_response -> Yojson.Safe.t
+
+val make_crm_domain_response :
+  company_id:string ->
+  created_at:string ->
+  domain:string ->
+  id:string ->
+  unit ->
+  crm_domain_response
+(** A CRM domain associated with a company. *)
+
+type nonrec crm_company_response = {
+  contacts : crm_contact_response list;
+      (** Contacts attached to this company. Hidden contacts are filtered
+out for non-admin viewers. Empty when the request set
+[includeContacts=false]. *)
+  created_at : string;  (** Earliest known interaction with this company. *)
+  description : string option;
+      (** Display description from the primary domain's directory entry. *)
+  domains : crm_domain_response list;
+      (** All domains associated with this company, ordered by creation
+time ascending (primary first). *)
+  email_sync : bool;  (** Whether email sync is enabled for this company. *)
+  hidden : bool;
+      (** Whether the company is hidden from CRM listings for the
+requesting team. Non-admin viewers never see [hidden = true]
+rows (the endpoint 404s for them); admin/owner callers see
+hidden companies so they can render the right toggle state. *)
+  id : string;  (** The id of the company. *)
+  name : string option;
+      (** Display name from the primary domain's directory entry, or
+[None] when unresolved. *)
+  team_id : string;  (** The id of the team that owns this company record. *)
+  updated_at : string;  (** Most recent known interaction with this company. *)
+}
+(** A CRM company as returned by [GET /crm/companies/{company_id}].
+Mirrors the soup-listed [crmCompany] shape ([name] / [description]
+resolved from the primary domain's [crm_domain_directory] entry). It
+embeds the company's contacts unless the caller asks it not to
+([includeContacts=false]). *)
+
+val crm_company_response_of_yojson : Yojson.Safe.t -> crm_company_response
+val yojson_of_crm_company_response : crm_company_response -> Yojson.Safe.t
+
+val make_crm_company_response :
+  contacts:crm_contact_response list ->
+  created_at:string ->
+  ?description:string ->
+  domains:crm_domain_response list ->
+  email_sync:bool ->
+  hidden:bool ->
+  id:string ->
+  ?name:string ->
+  team_id:string ->
+  updated_at:string ->
+  unit ->
+  crm_company_response
+(** A CRM company as returned by [GET /crm/companies/{company_id}].
+Mirrors the soup-listed [crmCompany] shape ([name] / [description]
+resolved from the primary domain's [crm_domain_directory] entry). It
+embeds the company's contacts unless the caller asks it not to
+([includeContacts=false]). *)
+
+type nonrec crm_contact_company_response = {
+  domain : string option;
+      (** The company's oldest domain, which clients show when it has no
+name. *)
+  hidden : bool;
+      (** Whether the company is hidden. Only admin/owner callers can see a
+hidden company. *)
+  id : string;
+      (** The id of the company; equal to the contact's [companyId]. *)
+  name : string option;  (** The company's display name, if it has one. *)
+}
+(** The name and visibility of a contact's company. *)
+
+val crm_contact_company_response_of_yojson :
+  Yojson.Safe.t -> crm_contact_company_response
+
+val yojson_of_crm_contact_company_response :
+  crm_contact_company_response -> Yojson.Safe.t
+
+val make_crm_contact_company_response :
+  ?domain:string ->
+  hidden:bool ->
+  id:string ->
+  ?name:string ->
+  unit ->
+  crm_contact_company_response
+(** The name and visibility of a contact's company. *)
+
+type nonrec crm_contact_detail_response = {
   company_domain : bool option;
       (** Whether the contact has an address on one of its company's domains.
 Such a contact cannot be unlinked from the company or moved to another.
@@ -10306,13 +10557,18 @@ hidden contacts so they can render the right toggle state. *)
 or switching the company needs this and [companyDomain = false].
 Older servers omit this classification; clients must then keep it read-only. *)
   updated_at : string;  (** When the contact record was last updated. *)
+  company : crm_contact_company_response option;
 }
-(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+(** A CRM contact as returned by [GET /crm/contacts/{contact_id}]: the
+contact, with what its page shows of its company. *)
 
-val crm_contact_response_of_yojson : Yojson.Safe.t -> crm_contact_response
-val yojson_of_crm_contact_response : crm_contact_response -> Yojson.Safe.t
+val crm_contact_detail_response_of_yojson :
+  Yojson.Safe.t -> crm_contact_detail_response
 
-val make_crm_contact_response :
+val yojson_of_crm_contact_detail_response :
+  crm_contact_detail_response -> Yojson.Safe.t
+
+val make_crm_contact_detail_response :
   ?company_domain:bool ->
   ?company_domain_emails:string list ->
   ?company_id:string ->
@@ -10326,80 +10582,48 @@ val make_crm_contact_response :
   ?name:string ->
   ?personal_email:bool ->
   updated_at:string ->
+  ?company:crm_contact_company_response ->
   unit ->
-  crm_contact_response
-(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+  crm_contact_detail_response
+(** A CRM contact as returned by [GET /crm/contacts/{contact_id}]: the
+contact, with what its page shows of its company. *)
 
-type nonrec crm_domain_response = {
-  company_id : string;  (** The id of the company the domain belongs to. *)
-  created_at : string;  (** When the domain record was created. *)
-  domain : string;  (** The domain (e.g. "acme.com"). *)
-  id : string;  (** The id of the domain record. *)
+type nonrec crm_contact_preview = {
+  email : string option;
+      (** The contact's primary email, which titles a contact with no name. *)
+  id : string;  (** The contact. *)
+  name : string option;  (** The contact's display name. *)
+  updated_at : string;  (** When the contact record last changed. *)
 }
-(** A CRM domain associated with a company. *)
+(** What a contact chip shows. *)
 
-val crm_domain_response_of_yojson : Yojson.Safe.t -> crm_domain_response
-val yojson_of_crm_domain_response : crm_domain_response -> Yojson.Safe.t
+val crm_contact_preview_of_yojson : Yojson.Safe.t -> crm_contact_preview
+val yojson_of_crm_contact_preview : crm_contact_preview -> Yojson.Safe.t
 
-val make_crm_domain_response :
-  company_id:string ->
-  created_at:string ->
-  domain:string ->
-  id:string ->
-  unit ->
-  crm_domain_response
-(** A CRM domain associated with a company. *)
-
-type nonrec crm_company_response = {
-  contacts : crm_contact_response list;
-      (** Contacts attached to this company. Hidden contacts are filtered
-out for non-admin viewers. *)
-  created_at : string;  (** Earliest known interaction with this company. *)
-  description : string option;
-      (** Display description from the primary domain's directory entry. *)
-  domains : crm_domain_response list;
-      (** All domains associated with this company, ordered by creation
-time ascending (primary first). *)
-  email_sync : bool;  (** Whether email sync is enabled for this company. *)
-  hidden : bool;
-      (** Whether the company is hidden from CRM listings for the
-requesting team. Non-admin viewers never see [hidden = true]
-rows (the endpoint 404s for them); admin/owner callers see
-hidden companies so they can render the right toggle state. *)
-  id : string;  (** The id of the company. *)
-  name : string option;
-      (** Display name from the primary domain's directory entry, or
-[None] when unresolved. *)
-  team_id : string;  (** The id of the team that owns this company record. *)
-  updated_at : string;  (** Most recent known interaction with this company. *)
-}
-(** A CRM company as returned by [GET /crm/companies/{company_id}].
-Mirrors the soup-listed [crmCompany] shape ([name] / [description]
-resolved from the primary domain's [crm_domain_directory] entry) and
-embeds the company's contacts so the panel can render in a single
-request. *)
-
-val crm_company_response_of_yojson : Yojson.Safe.t -> crm_company_response
-val yojson_of_crm_company_response : crm_company_response -> Yojson.Safe.t
-
-val make_crm_company_response :
-  contacts:crm_contact_response list ->
-  created_at:string ->
-  ?description:string ->
-  domains:crm_domain_response list ->
-  email_sync:bool ->
-  hidden:bool ->
+val make_crm_contact_preview :
+  ?email:string ->
   id:string ->
   ?name:string ->
-  team_id:string ->
   updated_at:string ->
   unit ->
-  crm_company_response
-(** A CRM company as returned by [GET /crm/companies/{company_id}].
-Mirrors the soup-listed [crmCompany] shape ([name] / [description]
-resolved from the primary domain's [crm_domain_directory] entry) and
-embeds the company's contacts so the panel can render in a single
-request. *)
+  crm_contact_preview
+(** What a contact chip shows. *)
+
+type nonrec crm_member_access_response = {
+  allowed : bool;  (** Whether the viewer may access that team's CRM. *)
+  team_id : string option;  (** The viewer's current team, if any. *)
+}
+(** Current authority for the authenticated viewer; contribution consent is separate. *)
+
+val crm_member_access_response_of_yojson :
+  Yojson.Safe.t -> crm_member_access_response
+
+val yojson_of_crm_member_access_response :
+  crm_member_access_response -> Yojson.Safe.t
+
+val make_crm_member_access_response :
+  allowed:bool -> ?team_id:string -> unit -> crm_member_access_response
+(** Current authority for the authenticated viewer; contribution consent is separate. *)
 
 (** Minimum team role required for a CRM governance capability. Members
 can edit visible CRM records (e.g. company properties), but the
@@ -10413,6 +10637,42 @@ type nonrec crm_permission_role =
 
 val crm_permission_role_of_yojson : Yojson.Safe.t -> crm_permission_role
 val yojson_of_crm_permission_role : crm_permission_role -> Yojson.Safe.t
+
+type nonrec crm_previews = {
+  companies : crm_company_preview list;
+      (** Company previews, in no particular order. *)
+  contacts : crm_contact_preview list;
+      (** Contact previews, in no particular order. *)
+}
+(** The previews of the requested records the viewer may open; a record the
+viewer may not open, or that does not exist, is left out. *)
+
+val crm_previews_of_yojson : Yojson.Safe.t -> crm_previews
+val yojson_of_crm_previews : crm_previews -> Yojson.Safe.t
+
+val make_crm_previews :
+  companies:crm_company_preview list ->
+  contacts:crm_contact_preview list ->
+  unit ->
+  crm_previews
+(** The previews of the requested records the viewer may open; a record the
+viewer may not open, or that does not exist, is left out. *)
+
+type nonrec crm_previews_request = {
+  company_ids : string list option;  (** Companies to preview, at most 100. *)
+  contact_ids : string list option;  (** Contacts to preview, at most 100. *)
+}
+(** The CRM records whose chips to title. *)
+
+val crm_previews_request_of_yojson : Yojson.Safe.t -> crm_previews_request
+val yojson_of_crm_previews_request : crm_previews_request -> Yojson.Safe.t
+
+val make_crm_previews_request :
+  ?company_ids:string list ->
+  ?contact_ids:string list ->
+  unit ->
+  crm_previews_request
+(** The CRM records whose chips to title. *)
 
 type nonrec crm_stage_input = {
   id : string option;  (** Existing stage to keep; omit to add one. *)
@@ -12009,6 +12269,30 @@ val make_document_updated_metadata :
   document_updated_metadata
 (** Metadata for \[[DocumentTopicEvent::Updated]\]. *)
 
+type nonrec email_attachments_released_metadata = {
+  kept_document_ids : string list;
+      (** Documents left as they were: kept by their owner, or already in the
+Trash. They are no longer email attachments either. *)
+  trashed_document_ids : string list;
+      (** Documents the batch moved to the Trash. *)
+}
+(** Metadata for \[[DocumentTopicEvent::EmailAttachmentsReleased]\]: the
+documents of one queue batch that lost their last email link. *)
+
+val email_attachments_released_metadata_of_yojson :
+  Yojson.Safe.t -> email_attachments_released_metadata
+
+val yojson_of_email_attachments_released_metadata :
+  email_attachments_released_metadata -> Yojson.Safe.t
+
+val make_email_attachments_released_metadata :
+  kept_document_ids:string list ->
+  trashed_document_ids:string list ->
+  unit ->
+  email_attachments_released_metadata
+(** Metadata for \[[DocumentTopicEvent::EmailAttachmentsReleased]\]: the
+documents of one queue batch that lost their last email link. *)
+
 (** Events that can be published to \[[MacroDocumentsTopic]\]. *)
 type nonrec document_topic_event =
   | Document_created of {
@@ -12041,6 +12325,17 @@ type nonrec document_topic_event =
       metadata : document_interaction_metadata;
           (** A peer joined, left, or a periodic save occurred. *)
     }  (** A peer joined, left, or a periodic save occurred. *)
+  | Document_email_attachments_released of {
+      metadata : email_attachments_released_metadata;
+          (** Documents whose mail is gone stopped being email attachments, in one
+batch: the system moved some to the Trash and left the rest. Like the
+documents in a trashed folder, the trashed ones are removed from open
+lists and trigger nothing per document. *)
+    }
+      (** Documents whose mail is gone stopped being email attachments, in one
+batch: the system moved some to the Trash and left the rest. Like the
+documents in a trashed folder, the trashed ones are removed from open
+lists and trigger nothing per document. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -12080,6 +12375,13 @@ val make_document_topic_event_document_copied :
 val make_document_topic_event_document_interaction :
   metadata:document_interaction_metadata -> unit -> document_topic_event
 (** A peer joined, left, or a periodic save occurred. *)
+
+val make_document_topic_event_document_email_attachments_released :
+  metadata:email_attachments_released_metadata -> unit -> document_topic_event
+(** Documents whose mail is gone stopped being email attachments, in one
+batch: the system moved some to the Trash and left the rest. Like the
+documents in a trashed folder, the trashed ones are removed from open
+lists and trigger nothing per document. *)
 
 type nonrec duplicate_database_request = {
   name : string option;  (** The copy's name; left out, "<name> copy". *)
@@ -15260,6 +15562,12 @@ val make_email_followup_response :
 
 (** One explicit privacy change, avoiding lost updates to whole blocklists. *)
 type nonrec email_privacy_change =
+  | Set_thread_exclusion of {
+      excluded : bool;
+          (** False removes this exception; consent and other exclusions still apply. *)
+      thread_id : string;
+          (** Must belong to a mailbox owned by the authenticated member. *)
+    }  (** Hold back or restore only the caller's contribution of one thread. *)
   | Set_consent of {
       enabled : bool;
           (** False withdraws this mailbox's CRM contribution without deleting records. *)
@@ -15281,6 +15589,10 @@ type nonrec email_privacy_change =
 
 val email_privacy_change_of_yojson : Yojson.Safe.t -> email_privacy_change
 val yojson_of_email_privacy_change : email_privacy_change -> Yojson.Safe.t
+
+val make_email_privacy_change_set_thread_exclusion :
+  excluded:bool -> thread_id:string -> unit -> email_privacy_change
+(** Hold back or restore only the caller's contribution of one thread. *)
 
 val make_email_privacy_change_set_consent :
   enabled:bool -> ?link_id:string -> unit -> email_privacy_change
@@ -15801,6 +16113,41 @@ This is a list of views that are excluded from the default views list on the fro
 
 It is important that the frontend can quickly iterate on default views, for that reason
 we don't keep track of default views in the database, only those that are explicitly excluded. *)
+
+type nonrec excluded_email_thread = {
+  link_id : string;  (** Exact mailbox containing this copy. *)
+  subject : string option;
+      (** Current subject, for the owner's privacy settings. *)
+  thread_id : string;  (** Mailbox-local thread identity. *)
+}
+(** One private thread from the caller's own mailbox, never a teammate's copy. *)
+
+val excluded_email_thread_of_yojson : Yojson.Safe.t -> excluded_email_thread
+val yojson_of_excluded_email_thread : excluded_email_thread -> Yojson.Safe.t
+
+val make_excluded_email_thread :
+  link_id:string ->
+  ?subject:string ->
+  thread_id:string ->
+  unit ->
+  excluded_email_thread
+(** One private thread from the caller's own mailbox, never a teammate's copy. *)
+
+type nonrec excluded_email_threads = {
+  next_cursor : string option;  (** Pass as [after] to read the next page. *)
+  threads : excluded_email_thread list;  (** At most fifty exclusions. *)
+}
+(** A bounded page of the caller's private threads, ordered by thread ID. *)
+
+val excluded_email_threads_of_yojson : Yojson.Safe.t -> excluded_email_threads
+val yojson_of_excluded_email_threads : excluded_email_threads -> Yojson.Safe.t
+
+val make_excluded_email_threads :
+  ?next_cursor:string ->
+  threads:excluded_email_thread list ->
+  unit ->
+  excluded_email_threads
+(** A bounded page of the caller's private threads, ordered by thread ID. *)
 
 type nonrec export_document_response = {
   presigned_url : string;
@@ -20290,6 +20637,24 @@ val make_soup_harness :
 access requests and removals are notifications filed under it, and it has
 no page of its own, so Settings → Machines opens it. *)
 
+type nonrec soup_team = {
+  id : string;  (** The team uuid. *)
+  name : string;  (** The team's display name. *)
+  owner_id : string;  (** The user who owns the team. *)
+}
+(** A team, listed only by attention feeds: team-scoped notifications (a
+vault access request) are filed under it, and it has no page of its own.
+Teams carry no timestamps; attention feeds order by attention time. *)
+
+val soup_team_of_yojson : Yojson.Safe.t -> soup_team
+val yojson_of_soup_team : soup_team -> Yojson.Safe.t
+
+val make_soup_team :
+  id:string -> name:string -> owner_id:string -> unit -> soup_team
+(** A team, listed only by attention feeds: team-scoped notifications (a
+vault access request) are filed under it, and it has no page of its own.
+Teams carry no timestamps; attention feeds order by attention time. *)
+
 (** A single item in the Soup feed. *)
 type nonrec soup_item =
   | Document of {
@@ -20340,6 +20705,8 @@ type nonrec soup_item =
       data : soup_harness;
           (** Paired runtime, listed only by attention feeds. *)
     }  (** Paired runtime, listed only by attention feeds. *)
+  | Team of { data : soup_team  (** Team, listed only by attention feeds. *) }
+      (** Team, listed only by attention feeds. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -20405,6 +20772,9 @@ val make_soup_item_database_row :
 
 val make_soup_item_harness : data:soup_harness -> unit -> soup_item
 (** Paired runtime, listed only by attention feeds. *)
+
+val make_soup_item_team : data:soup_team -> unit -> soup_item
+(** Team, listed only by attention feeds. *)
 
 type nonrec soup_api_item = {
   soup_item : soup_item;
@@ -22774,6 +23144,636 @@ val make_password_activity :
   password_activity
 (** Bounded audit entry, correlated by opaque item/event IDs. *)
 
+(** Grant capability. *)
+type nonrec password_permission =
+  | View
+  | Edit
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_permission_of_yojson : Yojson.Safe.t -> password_permission
+val yojson_of_password_permission : password_permission -> Yojson.Safe.t
+
+type nonrec password_agent_access_request_body = {
+  permission : password_permission;  (** Requested permission. *)
+}
+(** Access request body. *)
+
+val password_agent_access_request_body_of_yojson :
+  Yojson.Safe.t -> password_agent_access_request_body
+
+val yojson_of_password_agent_access_request_body :
+  password_agent_access_request_body -> Yojson.Safe.t
+
+val make_password_agent_access_request_body :
+  permission:password_permission -> unit -> password_agent_access_request_body
+(** Access request body. *)
+
+(** Whether the agent can use an item now. *)
+type nonrec password_agent_access_status =
+  | Usable
+  | Request_access
+  | Pending
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_access_status_of_yojson :
+  Yojson.Safe.t -> password_agent_access_status
+
+val yojson_of_password_agent_access_status :
+  password_agent_access_status -> Yojson.Safe.t
+
+(** Why a usable item is usable. *)
+type nonrec password_agent_use_basis =
+  | Creator_grant
+  | Approved_grant
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_use_basis_of_yojson :
+  Yojson.Safe.t -> password_agent_use_basis
+
+val yojson_of_password_agent_use_basis :
+  password_agent_use_basis -> Yojson.Safe.t
+
+type nonrec password_agent_item_access = {
+  can_set_totp : bool;
+      (** Whether the agent may enroll a verification-code seed. *)
+  can_update : bool;  (** Whether the agent may update values and metadata. *)
+  grant_permission : password_permission option;
+  pending_request_id : string option;  (** Live request awaiting review. *)
+  permission_revision : int64;
+      (** Revision of this agent's grant/approval on the item. *)
+  status : password_agent_access_status;  (** Current status. *)
+  use_basis : password_agent_use_basis option;
+}
+(** Current agent access to one item, recomputed on every use. *)
+
+val password_agent_item_access_of_yojson :
+  Yojson.Safe.t -> password_agent_item_access
+
+val yojson_of_password_agent_item_access :
+  password_agent_item_access -> Yojson.Safe.t
+
+val make_password_agent_item_access :
+  can_set_totp:bool ->
+  can_update:bool ->
+  ?grant_permission:password_permission ->
+  ?pending_request_id:string ->
+  permission_revision:int64 ->
+  status:password_agent_access_status ->
+  ?use_basis:password_agent_use_basis ->
+  unit ->
+  password_agent_item_access
+(** Current agent access to one item, recomputed on every use. *)
+
+(** Wire request status. *)
+type nonrec password_agent_request_status =
+  | None_
+  | Pending
+  | Approved
+  | Denied
+  | Revoked
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_request_status_of_yojson :
+  Yojson.Safe.t -> password_agent_request_status
+
+val yojson_of_password_agent_request_status :
+  password_agent_request_status -> Yojson.Safe.t
+
+type nonrec password_agent_access_request_state = {
+  access : password_agent_item_access;  (** Current access. *)
+  agent_account_id : string;  (** Agent account. *)
+  item_id : password_item_id;  (** Item id. *)
+  permission : password_permission option;
+  request_id : string option;  (** Request id; null when none exists. *)
+  revision : int64;  (** Request revision; 0 when none exists. *)
+  status : password_agent_request_status;  (** Request status. *)
+  updated_at : string option;  (** Last transition. *)
+}
+(** An agent's request state. *)
+
+val password_agent_access_request_state_of_yojson :
+  Yojson.Safe.t -> password_agent_access_request_state
+
+val yojson_of_password_agent_access_request_state :
+  password_agent_access_request_state -> Yojson.Safe.t
+
+val make_password_agent_access_request_state :
+  access:password_agent_item_access ->
+  agent_account_id:string ->
+  item_id:password_item_id ->
+  ?permission:password_permission ->
+  ?request_id:string ->
+  revision:int64 ->
+  status:password_agent_request_status ->
+  ?updated_at:string ->
+  unit ->
+  password_agent_access_request_state
+(** An agent's request state. *)
+
+type nonrec password_agent_access_request_page = {
+  next_cursor : string option;  (** Opaque cursor of the next page. *)
+  requests : password_agent_access_request_state list;
+      (** Pending requests on items the caller may manage. *)
+}
+(** A page of requests for human review. *)
+
+val password_agent_access_request_page_of_yojson :
+  Yojson.Safe.t -> password_agent_access_request_page
+
+val yojson_of_password_agent_access_request_page :
+  password_agent_access_request_page -> Yojson.Safe.t
+
+val make_password_agent_access_request_page :
+  ?next_cursor:string ->
+  requests:password_agent_access_request_state list ->
+  unit ->
+  password_agent_access_request_page
+(** A page of requests for human review. *)
+
+(** API credential fields an agent may select. *)
+type nonrec password_agent_api_field =
+  | Key
+  | Secret
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_api_field_of_yojson :
+  Yojson.Safe.t -> password_agent_api_field
+
+val yojson_of_password_agent_api_field :
+  password_agent_api_field -> Yojson.Safe.t
+
+type nonrec password_secret_string = string
+(** Owned sensitive text. Deliberately does not implement Debug or Display. *)
+
+val password_secret_string_of_yojson : Yojson.Safe.t -> password_secret_string
+val yojson_of_password_secret_string : password_secret_string -> Yojson.Safe.t
+
+(** New item values; the item kind is this tag. *)
+type nonrec password_agent_create_secret =
+  | Login of {
+      password : password_secret_string;  (** Required non-empty password. *)
+      username : password_secret_string option;
+    }  (** A website or application login. *)
+  | Api of {
+      key : password_secret_string option;
+      secret : password_secret_string;  (** Required non-empty API secret. *)
+    }  (** An API credential. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_agent_create_secret_of_yojson :
+  Yojson.Safe.t -> password_agent_create_secret
+
+val yojson_of_password_agent_create_secret :
+  password_agent_create_secret -> Yojson.Safe.t
+
+val make_password_agent_create_secret_login :
+  password:password_secret_string ->
+  ?username:password_secret_string ->
+  unit ->
+  password_agent_create_secret
+(** A website or application login. *)
+
+val make_password_agent_create_secret_api :
+  ?key:password_secret_string ->
+  secret:password_secret_string ->
+  unit ->
+  password_agent_create_secret
+(** An API credential. *)
+
+type nonrec password_login_url = string
+(** A public HTTP(S) login URL; credentials and userinfo are rejected before indexing. *)
+
+val password_login_url_of_yojson : Yojson.Safe.t -> password_login_url
+val yojson_of_password_login_url : password_login_url -> Yojson.Safe.t
+
+type nonrec password_agent_create_item = {
+  name : string;  (** Display name. *)
+  operation_id : string;
+      (** UUIDv7, stable across retries; becomes the item id. *)
+  secret : password_agent_create_secret;  (** Typed values. *)
+  url : password_login_url option;
+}
+(** Agent item creation; the kind is the secret's tag. *)
+
+val password_agent_create_item_of_yojson :
+  Yojson.Safe.t -> password_agent_create_item
+
+val yojson_of_password_agent_create_item :
+  password_agent_create_item -> Yojson.Safe.t
+
+val make_password_agent_create_item :
+  name:string ->
+  operation_id:string ->
+  secret:password_agent_create_secret ->
+  ?url:password_login_url ->
+  unit ->
+  password_agent_create_item
+(** Agent item creation; the kind is the secret's tag. *)
+
+(** Accepted disclosure intent. Typing is a later additive value. *)
+type nonrec password_agent_purpose =
+  | Copy
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_purpose_of_yojson : Yojson.Safe.t -> password_agent_purpose
+val yojson_of_password_agent_purpose : password_agent_purpose -> Yojson.Safe.t
+
+(** Login item fields an agent may select. *)
+type nonrec password_agent_login_field =
+  | Username
+  | Password
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_login_field_of_yojson :
+  Yojson.Safe.t -> password_agent_login_field
+
+val yojson_of_password_agent_login_field :
+  password_agent_login_field -> Yojson.Safe.t
+
+(** Closed kind-aware selector of exactly one stored slot. Notes, custom fields
+and TOTP seeds are never selectable. *)
+type nonrec password_agent_secret_selector =
+  | Login of {
+      field : password_agent_login_field;  (** Selected login field. *)
+    }  (** A login item field. *)
+  | Api of {
+      field : password_agent_api_field;  (** Selected API credential field. *)
+    }  (** An API credential field. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_agent_secret_selector_of_yojson :
+  Yojson.Safe.t -> password_agent_secret_selector
+
+val yojson_of_password_agent_secret_selector :
+  password_agent_secret_selector -> Yojson.Safe.t
+
+val make_password_agent_secret_selector_login :
+  field:password_agent_login_field -> unit -> password_agent_secret_selector
+(** A login item field. *)
+
+val make_password_agent_secret_selector_api :
+  field:password_agent_api_field -> unit -> password_agent_secret_selector
+(** An API credential field. *)
+
+type nonrec password_agent_disclose_request = {
+  expected_version : int option;
+      (** When given, the committed version must match. *)
+  purpose : password_agent_purpose;  (** Audited intent. *)
+  selector : password_agent_secret_selector;  (** The single slot to disclose. *)
+}
+(** One-field disclosure request. *)
+
+val password_agent_disclose_request_of_yojson :
+  Yojson.Safe.t -> password_agent_disclose_request
+
+val yojson_of_password_agent_disclose_request :
+  password_agent_disclose_request -> Yojson.Safe.t
+
+val make_password_agent_disclose_request :
+  ?expected_version:int ->
+  purpose:password_agent_purpose ->
+  selector:password_agent_secret_selector ->
+  unit ->
+  password_agent_disclose_request
+(** One-field disclosure request. *)
+
+type nonrec password_agent_disclosed = {
+  selector : password_agent_secret_selector;
+      (** The selector that was disclosed. *)
+  value : password_secret_string;  (** The selected value. *)
+  version : int;  (** Committed version it was read from. *)
+}
+(** One disclosed field. *)
+
+val password_agent_disclosed_of_yojson :
+  Yojson.Safe.t -> password_agent_disclosed
+
+val yojson_of_password_agent_disclosed :
+  password_agent_disclosed -> Yojson.Safe.t
+
+val make_password_agent_disclosed :
+  selector:password_agent_secret_selector ->
+  value:password_secret_string ->
+  version:int ->
+  unit ->
+  password_agent_disclosed
+(** One disclosed field. *)
+
+type nonrec password_agent_editable_metadata = {
+  name : string option;  (** New display name. *)
+  url : string option;  (** New URL; null clears it, absent keeps it. *)
+}
+(** Agent-editable display fields. *)
+
+val password_agent_editable_metadata_of_yojson :
+  Yojson.Safe.t -> password_agent_editable_metadata
+
+val yojson_of_password_agent_editable_metadata :
+  password_agent_editable_metadata -> Yojson.Safe.t
+
+val make_password_agent_editable_metadata :
+  ?name:string -> ?url:string -> unit -> password_agent_editable_metadata
+(** Agent-editable display fields. *)
+
+(** Closed, payload-free failure codes of the agent vault API. *)
+type nonrec password_agent_error_code =
+  | Unauthorized
+  | Invalid_agent
+  | Invalid_session_attribution
+  | Not_found
+  | Not_granted
+  | Pending
+  | Forbidden
+  | Invalid_request
+  | Unsupported_kind
+  | Field_not_set
+  | Version_conflict
+  | Vault_busy
+  | Rate_limited
+  | Vault_unavailable
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_error_code_of_yojson :
+  Yojson.Safe.t -> password_agent_error_code
+
+val yojson_of_password_agent_error_code :
+  password_agent_error_code -> Yojson.Safe.t
+
+type nonrec password_agent_failure = {
+  code : password_agent_error_code;
+      (** Machine-readable category; never contains request or secret values. *)
+  retry_after_ms : int64 option;  (** Present only on [rate_limited]. *)
+}
+(** Sanitized agent vault failure. *)
+
+val password_agent_failure_of_yojson : Yojson.Safe.t -> password_agent_failure
+val yojson_of_password_agent_failure : password_agent_failure -> Yojson.Safe.t
+
+val make_password_agent_failure :
+  code:password_agent_error_code ->
+  ?retry_after_ms:int64 ->
+  unit ->
+  password_agent_failure
+(** Sanitized agent vault failure. *)
+
+(** Replacement of supplied slots; absent slots keep their stored value. *)
+type nonrec password_agent_secret_patch =
+  | Login of {
+      password : password_secret_string option;
+      username : password_secret_string option;
+    }  (** Login slots to replace. *)
+  | Api of {
+      key : password_secret_string option;
+      secret : password_secret_string option;
+    }  (** API credential slots to replace. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_agent_secret_patch_of_yojson :
+  Yojson.Safe.t -> password_agent_secret_patch
+
+val yojson_of_password_agent_secret_patch :
+  password_agent_secret_patch -> Yojson.Safe.t
+
+val make_password_agent_secret_patch_login :
+  ?password:password_secret_string ->
+  ?username:password_secret_string ->
+  unit ->
+  password_agent_secret_patch
+(** Login slots to replace. *)
+
+val make_password_agent_secret_patch_api :
+  ?key:password_secret_string ->
+  ?secret:password_secret_string ->
+  unit ->
+  password_agent_secret_patch
+(** API credential slots to replace. *)
+
+type nonrec password_agent_patch_item = {
+  expected_version : int;  (** Committed version the update applies to. *)
+  metadata_patch : password_agent_editable_metadata option;
+  operation_id : string;
+      (** UUIDv7, stable across retries of this one update. *)
+  secret_patch : password_agent_secret_patch option;
+}
+(** Agent item update. *)
+
+val password_agent_patch_item_of_yojson :
+  Yojson.Safe.t -> password_agent_patch_item
+
+val yojson_of_password_agent_patch_item :
+  password_agent_patch_item -> Yojson.Safe.t
+
+val make_password_agent_patch_item :
+  expected_version:int ->
+  ?metadata_patch:password_agent_editable_metadata ->
+  operation_id:string ->
+  ?secret_patch:password_agent_secret_patch ->
+  unit ->
+  password_agent_patch_item
+(** Agent item update. *)
+
+(** Human decision on a pending request. *)
+type nonrec password_agent_resolve_request =
+  | Approve of {
+      permission : password_permission;  (** Granted permission. *)
+      revision : int64;  (** Request revision observed by the reviewer. *)
+    }  (** Grant the permission and standing approval together. *)
+  | Deny of {
+      revision : int64;  (** Request revision observed by the reviewer. *)
+    }  (** Deny the request. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_agent_resolve_request_of_yojson :
+  Yojson.Safe.t -> password_agent_resolve_request
+
+val yojson_of_password_agent_resolve_request :
+  password_agent_resolve_request -> Yojson.Safe.t
+
+val make_password_agent_resolve_request_approve :
+  permission:password_permission ->
+  revision:int64 ->
+  unit ->
+  password_agent_resolve_request
+(** Grant the permission and standing approval together. *)
+
+val make_password_agent_resolve_request_deny :
+  revision:int64 -> unit -> password_agent_resolve_request
+(** Deny the request. *)
+
+(** What a revocation removes. *)
+type nonrec password_agent_revoke_scope =
+  | Approval
+  | Grant_and_approval
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_agent_revoke_scope_of_yojson :
+  Yojson.Safe.t -> password_agent_revoke_scope
+
+val yojson_of_password_agent_revoke_scope :
+  password_agent_revoke_scope -> Yojson.Safe.t
+
+type nonrec password_agent_revoke_body = {
+  expected_permission_revision : int64;
+      (** Permission revision observed by the reviewer. *)
+  scope : password_agent_revoke_scope;  (** What to remove. *)
+}
+(** Human revocation of agent access. *)
+
+val password_agent_revoke_body_of_yojson :
+  Yojson.Safe.t -> password_agent_revoke_body
+
+val yojson_of_password_agent_revoke_body :
+  password_agent_revoke_body -> Yojson.Safe.t
+
+val make_password_agent_revoke_body :
+  expected_permission_revision:int64 ->
+  scope:password_agent_revoke_scope ->
+  unit ->
+  password_agent_revoke_body
+(** Human revocation of agent access. *)
+
+(** Product template. Values use the same protected representation for every template. *)
+type nonrec password_item_kind =
+  | Login
+  | Card
+  | Note
+  | Identity
+  | Api
+  | Verification_code
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_item_kind_of_yojson : Yojson.Safe.t -> password_item_kind
+val yojson_of_password_item_kind : password_item_kind -> Yojson.Safe.t
+
+type nonrec password_agent_search_hit = {
+  access : password_agent_item_access;  (** Current access. *)
+  id : password_item_id;  (** Item id. *)
+  kind : password_item_kind;  (** Stored kind. *)
+  name : string;  (** Display name. *)
+  url : string option;  (** Website URL. *)
+  version : int;  (** Committed positive version. *)
+}
+(** Metadata-only search hit; never values, usernames, notes or custom fields. *)
+
+val password_agent_search_hit_of_yojson :
+  Yojson.Safe.t -> password_agent_search_hit
+
+val yojson_of_password_agent_search_hit :
+  password_agent_search_hit -> Yojson.Safe.t
+
+val make_password_agent_search_hit :
+  access:password_agent_item_access ->
+  id:password_item_id ->
+  kind:password_item_kind ->
+  name:string ->
+  ?url:string ->
+  version:int ->
+  unit ->
+  password_agent_search_hit
+(** Metadata-only search hit; never values, usernames, notes or custom fields. *)
+
+type nonrec password_agent_search_page = {
+  items : password_agent_search_hit list;  (** Hits, newest first. *)
+  next_cursor : string option;  (** Opaque cursor of the next page. *)
+}
+(** One search page. *)
+
+val password_agent_search_page_of_yojson :
+  Yojson.Safe.t -> password_agent_search_page
+
+val yojson_of_password_agent_search_page :
+  password_agent_search_page -> Yojson.Safe.t
+
+val make_password_agent_search_page :
+  items:password_agent_search_hit list ->
+  ?next_cursor:string ->
+  unit ->
+  password_agent_search_page
+(** One search page. *)
+
+type nonrec password_agent_set_totp = {
+  expected_version : int;  (** Committed version the setup applies to. *)
+  operation_id : string;
+      (** UUIDv7, stable across retries; identifies the enrollment generation. *)
+  seed : password_secret_string;  (** Base32 seed. *)
+}
+(** Verification-code seed setup for an item the agent created. *)
+
+val password_agent_set_totp_of_yojson : Yojson.Safe.t -> password_agent_set_totp
+val yojson_of_password_agent_set_totp : password_agent_set_totp -> Yojson.Safe.t
+
+val make_password_agent_set_totp :
+  expected_version:int ->
+  operation_id:string ->
+  seed:password_secret_string ->
+  unit ->
+  password_agent_set_totp
+(** Verification-code seed setup for an item the agent created. *)
+
+type nonrec password_agent_totp_code = {
+  code : password_secret_string;  (** Current code; never the seed. *)
+  expires_at : string;
+      (** Conservative usable-until time under the documented provider clock bound;
+not an observed generation instant. *)
+  period_seconds : int;  (** Code period in seconds. *)
+  valid_for_ms : int64;
+      (** Whole milliseconds from the server's final check until [expiresAt]. *)
+}
+(** A verification code with a conservative server-computed lifetime. *)
+
+val password_agent_totp_code_of_yojson :
+  Yojson.Safe.t -> password_agent_totp_code
+
+val yojson_of_password_agent_totp_code :
+  password_agent_totp_code -> Yojson.Safe.t
+
+val make_password_agent_totp_code :
+  code:password_secret_string ->
+  expires_at:string ->
+  period_seconds:int ->
+  valid_for_ms:int64 ->
+  unit ->
+  password_agent_totp_code
+(** A verification code with a conservative server-computed lifetime. *)
+
+type nonrec password_agent_totp_code_request = {
+  purpose : password_agent_purpose;  (** Audited intent. *)
+}
+(** Verification-code request. *)
+
+val password_agent_totp_code_request_of_yojson :
+  Yojson.Safe.t -> password_agent_totp_code_request
+
+val yojson_of_password_agent_totp_code_request :
+  password_agent_totp_code_request -> Yojson.Safe.t
+
+val make_password_agent_totp_code_request :
+  purpose:password_agent_purpose -> unit -> password_agent_totp_code_request
+(** Verification-code request. *)
+
+type nonrec password_agent_write_result = {
+  item : password_agent_search_hit;  (** Item after the write. *)
+  version : int;  (** Committed version. *)
+}
+(** Created or updated item. *)
+
+val password_agent_write_result_of_yojson :
+  Yojson.Safe.t -> password_agent_write_result
+
+val yojson_of_password_agent_write_result :
+  password_agent_write_result -> Yojson.Safe.t
+
+val make_password_agent_write_result :
+  item:password_agent_search_hit ->
+  version:int ->
+  unit ->
+  password_agent_write_result
+(** Created or updated item. *)
+
 type nonrec password_create_folder_body = {
   name : string;  (** Folder display name. *)
   parent_id : string option;
@@ -22856,23 +23856,16 @@ val yojson_of_password_folder_body : password_folder_body -> Yojson.Safe.t
 val make_password_folder_body : name:string -> unit -> password_folder_body
 (** Validated folder display-name request. *)
 
-(** Future principals can extend this without exposing agent controls in v1. *)
+(** Grant recipient category. Agent grants are managed only through the agent
+access routes and never appear in, or count toward, human sharing. *)
 type nonrec password_grantee_kind =
   | User
   | Team
+  | Agent
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val password_grantee_kind_of_yojson : Yojson.Safe.t -> password_grantee_kind
 val yojson_of_password_grantee_kind : password_grantee_kind -> Yojson.Safe.t
-
-(** Grant capability. *)
-type nonrec password_permission =
-  | View
-  | Edit
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val password_permission_of_yojson : Yojson.Safe.t -> password_permission
-val yojson_of_password_permission : password_permission -> Yojson.Safe.t
 
 type nonrec password_grant = {
   id : string;  (** Identity of this resource within its team. *)
@@ -22893,24 +23886,252 @@ val make_password_grant :
   password_grant
 (** Explicit grant within a team vault. *)
 
-(** Product template. Values use the same protected representation for every template. *)
-type nonrec password_item_kind =
-  | Login
-  | Card
-  | Note
-  | Identity
-  | Api
-  | Verification_code
+type nonrec password_import_key = string
+(** Opaque source identity, bounded before hashing or returning it to a caller. *)
+
+val password_import_key_of_yojson : Yojson.Safe.t -> password_import_key
+val yojson_of_password_import_key : password_import_key -> Yojson.Safe.t
+
+type nonrec password_import_folder = {
+  key : password_import_key;  (** Opaque identity from the client parser. *)
+  name : string;  (** Validated using ordinary vault folder rules. *)
+  parent_key : password_import_key option;
+}
+(** Source folder; parents must precede children in every batch. *)
+
+val password_import_folder_of_yojson : Yojson.Safe.t -> password_import_folder
+val yojson_of_password_import_folder : password_import_folder -> Yojson.Safe.t
+
+val make_password_import_folder :
+  key:password_import_key ->
+  name:string ->
+  ?parent_key:password_import_key ->
+  unit ->
+  password_import_folder
+(** Source folder; parents must precede children in every batch. *)
+
+(** Recognized client-side source parser; contains no export contents. *)
+type nonrec password_import_format =
+  | One_password_pux
+  | One_password_csv
+  | Bitwarden_json
+  | Bitwarden_csv
+  | Bitwarden_zip
   | Unknown of string  (** A value this SDK version does not know. *)
 
-val password_item_kind_of_yojson : Yojson.Safe.t -> password_item_kind
-val yojson_of_password_item_kind : password_item_kind -> Yojson.Safe.t
+val password_import_format_of_yojson : Yojson.Safe.t -> password_import_format
+val yojson_of_password_import_format : password_import_format -> Yojson.Safe.t
 
-type nonrec password_login_url = string
-(** A public HTTP(S) login URL; credentials and userinfo are rejected before indexing. *)
+type nonrec password_secret_field = {
+  label : string;
+      (** Private field label, stored alongside its value in OpenBao. *)
+  value : password_secret_string;  (** Private field content. *)
+}
+(** One private custom field. *)
 
-val password_login_url_of_yojson : Yojson.Safe.t -> password_login_url
-val yojson_of_password_login_url : password_login_url -> Yojson.Safe.t
+val password_secret_field_of_yojson : Yojson.Safe.t -> password_secret_field
+val yojson_of_password_secret_field : password_secret_field -> Yojson.Safe.t
+
+val make_password_secret_field :
+  label:string -> value:password_secret_string -> unit -> password_secret_field
+(** One private custom field. *)
+
+type nonrec password_secret_values = {
+  fields : password_secret_field list;
+      (** Additional private fields, including their labels. *)
+  notes : password_secret_string;
+      (** Private free-form notes, stored only by the secret provider. *)
+  password : password_secret_string;
+      (** Private credential, zeroized when the owned buffer is dropped. *)
+  username : password_secret_string;
+      (** Account identifier; authorized humans may resolve it separately from confidential values. *)
+}
+(** Secret payload; never persisted in the metadata database or traced. *)
+
+val password_secret_values_of_yojson : Yojson.Safe.t -> password_secret_values
+val yojson_of_password_secret_values : password_secret_values -> Yojson.Safe.t
+
+val make_password_secret_values :
+  fields:password_secret_field list ->
+  notes:password_secret_string ->
+  password:password_secret_string ->
+  username:password_secret_string ->
+  unit ->
+  password_secret_values
+(** Secret payload; never persisted in the metadata database or traced. *)
+
+type nonrec password_import_item = {
+  favorite : bool;  (** Favorite state from the export. *)
+  folder_key : password_import_key option;
+  kind : password_item_kind;  (** Ordinary vault template. *)
+  name : string;  (** Display name, validated by the ordinary create path. *)
+  source_key : password_import_key;
+      (** Stable source identity for idempotent retries. *)
+  totp : password_secret_string option;
+  url : password_login_url option;
+  values : password_secret_values;
+      (** Zeroizing confidential values sent only to the provider. *)
+}
+(** One normalized credential; intentionally has no Debug implementation. *)
+
+val password_import_item_of_yojson : Yojson.Safe.t -> password_import_item
+val yojson_of_password_import_item : password_import_item -> Yojson.Safe.t
+
+val make_password_import_item :
+  favorite:bool ->
+  ?folder_key:password_import_key ->
+  kind:password_item_kind ->
+  name:string ->
+  source_key:password_import_key ->
+  ?totp:password_secret_string ->
+  ?url:password_login_url ->
+  values:password_secret_values ->
+  unit ->
+  password_import_item
+(** One normalized credential; intentionally has no Debug implementation. *)
+
+(** Destination under which source folders are nested. *)
+type nonrec password_import_target =
+  | Existing of { folder_id : string  (** Destination folder identity. *) }
+      (** Validate and use a folder already in this team. *)
+  | New of {
+      name : string;  (** Validated using ordinary vault folder rules. *)
+    }  (** Idempotently create a top-level destination folder. *)
+  | Root  (** Import directly into the team vault root. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_import_target_of_yojson : Yojson.Safe.t -> password_import_target
+val yojson_of_password_import_target : password_import_target -> Yojson.Safe.t
+
+val make_password_import_target_existing :
+  folder_id:string -> unit -> password_import_target
+(** Validate and use a folder already in this team. *)
+
+val make_password_import_target_new :
+  name:string -> unit -> password_import_target
+(** Idempotently create a top-level destination folder. *)
+
+type nonrec password_import_batch = {
+  folders : password_import_folder list;
+      (** Source folder tree, parents first; resend with each batch. *)
+  format : password_import_format;
+      (** Source category recorded in the batch audit. *)
+  items : password_import_item list;
+      (** Independently validated credentials. *)
+  private_ : bool;
+      (** Omit the default team Edit grant on newly created items. *)
+  target : password_import_target;
+      (** Root for source folders and otherwise unfiled items. *)
+}
+(** At most 25 credentials and 200 source folders in a request bounded to 4 MiB. *)
+
+val password_import_batch_of_yojson : Yojson.Safe.t -> password_import_batch
+val yojson_of_password_import_batch : password_import_batch -> Yojson.Safe.t
+
+val make_password_import_batch :
+  folders:password_import_folder list ->
+  format:password_import_format ->
+  items:password_import_item list ->
+  private_:bool ->
+  target:password_import_target ->
+  unit ->
+  password_import_batch
+(** At most 25 credentials and 200 source folders in a request bounded to 4 MiB. *)
+
+type nonrec password_import_folder_result = {
+  folder_id : string;  (** Existing or ensured folder identity. *)
+  key : password_import_key;  (** Opaque source identity. *)
+}
+(** Source-to-vault folder identity without display names. *)
+
+val password_import_folder_result_of_yojson :
+  Yojson.Safe.t -> password_import_folder_result
+
+val yojson_of_password_import_folder_result :
+  password_import_folder_result -> Yojson.Safe.t
+
+val make_password_import_folder_result :
+  folder_id:string ->
+  key:password_import_key ->
+  unit ->
+  password_import_folder_result
+(** Source-to-vault folder identity without display names. *)
+
+(** Closed, sanitized per-item failure categories. *)
+type nonrec password_import_error_code =
+  | Not_found
+  | Forbidden
+  | Invalid_request
+  | Version_conflict
+  | Folder_missing
+  | Busy
+  | Vault_unavailable
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_import_error_code_of_yojson :
+  Yojson.Safe.t -> password_import_error_code
+
+val yojson_of_password_import_error_code :
+  password_import_error_code -> Yojson.Safe.t
+
+(** Fixed per-item outcome. *)
+type nonrec password_import_outcome =
+  | Created
+  | Already_present
+  | Failed
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val password_import_outcome_of_yojson : Yojson.Safe.t -> password_import_outcome
+val yojson_of_password_import_outcome : password_import_outcome -> Yojson.Safe.t
+
+type nonrec password_import_item_result = {
+  error_code : password_import_error_code option;
+  item_id : password_item_id option;
+  outcome : password_import_outcome;
+      (** Whether the item was newly created, retained, or failed. *)
+  source_key : password_import_key;  (** Opaque identity matching the request. *)
+}
+(** Result for a single item; failed TOTP enrollment can still return the created item id. *)
+
+val password_import_item_result_of_yojson :
+  Yojson.Safe.t -> password_import_item_result
+
+val yojson_of_password_import_item_result :
+  password_import_item_result -> Yojson.Safe.t
+
+val make_password_import_item_result :
+  ?error_code:password_import_error_code ->
+  ?item_id:password_item_id ->
+  outcome:password_import_outcome ->
+  source_key:password_import_key ->
+  unit ->
+  password_import_item_result
+(** Result for a single item; failed TOTP enrollment can still return the created item id. *)
+
+type nonrec password_import_batch_result = {
+  folders : password_import_folder_result list;
+      (** Ensured source folders, in request order. *)
+  items : password_import_item_result list;
+      (** One result per input item, in request order. *)
+  target_folder_id : string option;
+      (** Destination folder; null for the vault root. *)
+}
+(** Partial batch success without credential values or display metadata. *)
+
+val password_import_batch_result_of_yojson :
+  Yojson.Safe.t -> password_import_batch_result
+
+val yojson_of_password_import_batch_result :
+  password_import_batch_result -> Yojson.Safe.t
+
+val make_password_import_batch_result :
+  folders:password_import_folder_result list ->
+  items:password_import_item_result list ->
+  ?target_folder_id:string ->
+  unit ->
+  password_import_batch_result
+(** Partial batch success without credential values or display metadata. *)
 
 type nonrec password_item_fields = {
   created_at : string;  (** Resource creation timestamp. *)
@@ -23011,6 +24232,22 @@ val make_password_item_metadata :
   password_item_metadata
 (** Actor-specific response capabilities, never part of persisted metadata or write intents. *)
 
+type nonrec password_match_names = {
+  names : string list;
+      (** Names trimmed and lower-cased by the caller, compared with each item's
+lower-cased name; at most 500 ([password_import::vault::MAX_IMPORT_MATCH_NAMES]). *)
+}
+(** Item names to look for before an import, in the body so they stay out of
+URLs and access logs. *)
+
+val password_match_names_of_yojson : Yojson.Safe.t -> password_match_names
+val yojson_of_password_match_names : password_match_names -> Yojson.Safe.t
+
+val make_password_match_names :
+  names:string list -> unit -> password_match_names
+(** Item names to look for before an import, in the body so they stay out of
+URLs and access logs. *)
+
 type nonrec password_move_folder_body = {
   parent_id : string option;
       (** Containing folder; null moves the folder to the top level. *)
@@ -23066,50 +24303,6 @@ val yojson_of_password_reveal_body : password_reveal_body -> Yojson.Safe.t
 val make_password_reveal_body : ?version:int -> unit -> password_reveal_body
 (** Explicit historical version selection for protected disclosure. *)
 
-type nonrec password_secret_string = string
-(** Owned sensitive text. Deliberately does not implement Debug or Display. *)
-
-val password_secret_string_of_yojson : Yojson.Safe.t -> password_secret_string
-val yojson_of_password_secret_string : password_secret_string -> Yojson.Safe.t
-
-type nonrec password_secret_field = {
-  label : string;
-      (** Private field label, stored alongside its value in OpenBao. *)
-  value : password_secret_string;  (** Private field content. *)
-}
-(** One private custom field. *)
-
-val password_secret_field_of_yojson : Yojson.Safe.t -> password_secret_field
-val yojson_of_password_secret_field : password_secret_field -> Yojson.Safe.t
-
-val make_password_secret_field :
-  label:string -> value:password_secret_string -> unit -> password_secret_field
-(** One private custom field. *)
-
-type nonrec password_secret_values = {
-  fields : password_secret_field list;
-      (** Additional private fields, including their labels. *)
-  notes : password_secret_string;
-      (** Private free-form notes, stored only by the secret provider. *)
-  password : password_secret_string;
-      (** Private credential, zeroized when the owned buffer is dropped. *)
-  username : password_secret_string;
-      (** Account identifier; authorized humans may resolve it separately from confidential values. *)
-}
-(** Secret payload; never persisted in the metadata database or traced. *)
-
-val password_secret_values_of_yojson : Yojson.Safe.t -> password_secret_values
-val yojson_of_password_secret_values : password_secret_values -> Yojson.Safe.t
-
-val make_password_secret_values :
-  fields:password_secret_field list ->
-  notes:password_secret_string ->
-  password:password_secret_string ->
-  username:password_secret_string ->
-  unit ->
-  password_secret_values
-(** Secret payload; never persisted in the metadata database or traced. *)
-
 type nonrec password_revealed = {
   values : password_secret_values;
       (** Private payload; never serialize into the metadata repository. *)
@@ -23136,6 +24329,23 @@ val yojson_of_password_share_body : password_share_body -> Yojson.Safe.t
 val make_password_share_body :
   grants:password_grant list -> unit -> password_share_body
 (** Owner-requested replacement of the explicit grant set. *)
+
+(** Events that can be published to \[[MacroPasswordsTopic]\]. *)
+type nonrec password_topic_event =
+  | Passwords_access_request_resolved of {
+      metadata : access_request_resolved_metadata;
+          (** An authorized human resolved, or revoked, an agent's access request. *)
+    }
+      (** An authorized human resolved, or revoked, an agent's access request. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val password_topic_event_of_yojson : Yojson.Safe.t -> password_topic_event
+val yojson_of_password_topic_event : password_topic_event -> Yojson.Safe.t
+
+val make_password_topic_event_passwords_access_request_resolved :
+  metadata:access_request_resolved_metadata -> unit -> password_topic_event
+(** An authorized human resolved, or revoked, an agent's access request. *)
 
 type nonrec password_totp_body = {
   key : password_secret_string;
@@ -24376,7 +25586,10 @@ val make_read_spreadsheet_request :
 (** What to read from a workbook. *)
 
 type nonrec recently_deleted_response_data = {
-  items : item list;  (** The items returned from the call *)
+  items : item list;
+      (** The items returned from the call, most recently trashed first *)
+  next_cursor : string option;
+      (** Pass as [cursor] to get the next page; absent on the last page *)
 }
 
 val recently_deleted_response_data_of_yojson :
@@ -24386,7 +25599,10 @@ val yojson_of_recently_deleted_response_data :
   recently_deleted_response_data -> Yojson.Safe.t
 
 val make_recently_deleted_response_data :
-  items:item list -> unit -> recently_deleted_response_data
+  items:item list ->
+  ?next_cursor:string ->
+  unit ->
+  recently_deleted_response_data
 
 type nonrec record_entries_request = {
   record_ids : string list;  (** CRM company or contact ids. *)
@@ -26804,7 +28020,10 @@ val make_trash_pipeline : trashed:bool -> unit -> trash_pipeline
 (** Trash/restore input. *)
 
 type nonrec typed_success_response_data = {
-  items : item list;  (** The items returned from the call *)
+  items : item list;
+      (** The items returned from the call, most recently trashed first *)
+  next_cursor : string option;
+      (** Pass as [cursor] to get the next page; absent on the last page *)
 }
 
 val typed_success_response_data_of_yojson :
@@ -26814,7 +28033,7 @@ val yojson_of_typed_success_response_data :
   typed_success_response_data -> Yojson.Safe.t
 
 val make_typed_success_response_data :
-  items:item list -> unit -> typed_success_response_data
+  items:item list -> ?next_cursor:string -> unit -> typed_success_response_data
 
 type nonrec typed_success_response = {
   data : typed_success_response_data;  (** Data to be returned *)
@@ -27562,6 +28781,8 @@ type nonrec webhook_event =
 topic. *)
   | User_topic_event of user_topic_event
       (** User profile events from the [macro.users] topic. *)
+  | Password_topic_event of password_topic_event
+      (** Vault facts addressed to one account from the [macro.passwords] topic. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -29837,6 +31058,7 @@ values on entries of a company pipeline. *)
 
 val get_company :
   company_id:string ->
+  ?include_contacts:bool ->
   unit ->
   (crm_company_response, error_response) Macro_sdk_runtime.Request.t
 (** [GET /crm/companies/{company_id}]
@@ -29875,6 +31097,22 @@ that owns the company (hidden companies are reachable for
 admin/owner only, and the new contact then inherits [hidden]). The
 company must not already track the email (409), and the team's CRM
 killswitch must be on (403). *)
+
+val list_company_contacts_page :
+  company_id:string ->
+  ?archived:bool ->
+  ?query:string ->
+  ?cursor:string ->
+  ?limit:int64 ->
+  unit ->
+  (company_contacts_page_response, error_response) Macro_sdk_runtime.Request.t
+(** [GET /crm/companies/{company_id}/contacts/page]
+
+List a CRM company's contacts a page at a time, filtered by archive
+state and an optional name or email search. Access is enforced by
+\[[CrmCompanyAccessLevelExtractor]\] as for
+[GET /crm/companies/{company_id}/contacts]; hidden contacts are
+invisible to plain members. *)
 
 val set_email_sync :
   company_id:string ->
@@ -29950,14 +31188,14 @@ match; callers must choose an explicit contact ID instead. *)
 val get_contact :
   contact_id:string ->
   unit ->
-  (crm_contact_response, error_response) Macro_sdk_runtime.Request.t
+  (crm_contact_detail_response, error_response) Macro_sdk_runtime.Request.t
 (** [GET /crm/contacts/{contact_id}]
 
-Fetch a single CRM contact by id. Access is enforced by
-\[[CrmContactAccessLevelExtractor]\]: the user must be on the team that
-owns the contact's parent company, and hidden contacts are invisible
-to plain members. Admin/owner callers see hidden contacts so they can
-render the right unhide UI. *)
+Fetch a single CRM contact by id, with its company's name and
+visibility. Access is enforced by \[[CrmContactAccessLevelExtractor]\]:
+the user must be on the team that owns the contact, and hidden
+contacts are invisible to plain members. Admin/owner callers see
+hidden contacts so they can render the right unhide UI. *)
 
 val set_crm_contact_company :
   contact_id:string ->
@@ -30048,7 +31286,26 @@ val update_crm_email_privacy :
   Macro_sdk_runtime.Request.t
 (** [PUT /crm/email-privacy]
 
-Apply one consent or domain-exclusion change as the authenticated member. *)
+Apply one consent, domain, or thread exclusion change as the member. *)
+
+val list_crm_excluded_email_threads :
+  ?after:string ->
+  unit ->
+  ( excluded_email_threads,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/email-privacy/threads]
+
+List only the authenticated member's thread exclusions. *)
+
+val get_crm_member_access :
+  unit ->
+  ( crm_member_access_response,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /crm/member-access]
+
+Read fresh authority without requiring CRM access. *)
 
 val list_crm_pipelines :
   unit ->
@@ -30337,6 +31594,18 @@ val get_crm_pipeline_view_positions :
 (** [GET /crm/pipelines/{id}/views/{view}/positions]
 
 Read saved board positions through pipeline access. *)
+
+val preview_crm_records :
+  ?company_ids:string list ->
+  ?contact_ids:string list ->
+  unit ->
+  (crm_previews, error_response) Macro_sdk_runtime.Request.t
+(** [POST /crm/previews]
+
+Title many CRM company and contact chips at once. Each record answers as
+its own read ([GET /crm/companies/{company_id}],
+[GET /crm/contacts/{contact_id}]) would: a record the caller may not open,
+or that does not exist, is left out of the response. *)
 
 val get_crm_team_settings :
   unit ->
@@ -32345,11 +33614,137 @@ val entity_message_typing :
 
 Broadcast typing within an authorized discussion. *)
 
+val passwords_agent_search :
+  team:string ->
+  x_macro_agent_session_id:string ->
+  ?q:string ->
+  ?limit:string ->
+  ?cursor:string ->
+  unit ->
+  ( password_agent_search_page,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [GET /passwords/agent/teams/{team}/items]
+
+Search the agent's catalog: metadata and current access only. *)
+
+val passwords_agent_create :
+  team:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  name:string ->
+  operation_id:string ->
+  secret:password_agent_create_secret ->
+  ?url:password_login_url ->
+  unit ->
+  ( password_agent_write_result,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [POST /passwords/agent/teams/{team}/items]
+
+Create a login or API item attributed to this agent. *)
+
+val passwords_agent_update :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  expected_version:int ->
+  operation_id:string ->
+  ?metadata_patch:password_agent_editable_metadata ->
+  ?secret_patch:password_agent_secret_patch ->
+  unit ->
+  ( password_agent_write_result,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [PATCH /passwords/agent/teams/{team}/items/{item}]
+
+Replace supplied fields of a login or API item. *)
+
+val passwords_agent_request_access :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  permission:password_permission ->
+  unit ->
+  ( password_agent_access_request_state,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [POST /passwords/agent/teams/{team}/items/{item}/access-requests]
+
+Ask authorized humans for access to an item. *)
+
+val passwords_agent_my_request :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  unit ->
+  ( password_agent_access_request_state,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [GET /passwords/agent/teams/{team}/items/{item}/access-requests/mine]
+
+This agent's own request state for the item. *)
+
+val passwords_agent_disclose :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  purpose:password_agent_purpose ->
+  selector:password_agent_secret_selector ->
+  ?expected_version:int ->
+  unit ->
+  (password_agent_disclosed, password_agent_failure) Macro_sdk_runtime.Request.t
+(** [POST /passwords/agent/teams/{team}/items/{item}/disclose]
+
+Disclose one selected field to the agent's capability. *)
+
+val passwords_agent_set_totp :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  expected_version:int ->
+  operation_id:string ->
+  seed:password_secret_string ->
+  unit ->
+  (unit, password_agent_failure) Macro_sdk_runtime.Request.t
+(** [PUT /passwords/agent/teams/{team}/items/{item}/totp]
+
+Enroll a verification-code seed on an item this agent created. *)
+
+val passwords_agent_totp_code :
+  team:string ->
+  item:string ->
+  x_macro_agent_session_id:string ->
+  x_macro_passwords:string ->
+  purpose:password_agent_purpose ->
+  unit ->
+  (password_agent_totp_code, password_agent_failure) Macro_sdk_runtime.Request.t
+(** [POST /passwords/agent/teams/{team}/items/{item}/totp/code]
+
+The current verification code of a login or verification-code item. *)
+
 val passwords_teams :
   unit -> (password_team_id list, password_failure) Macro_sdk_runtime.Request.t
 (** [GET /passwords/teams]
 
 List current teams available to the authenticated human. *)
+
+val passwords_agent_access_requests :
+  team:string ->
+  ?item_id:string ->
+  ?limit:string ->
+  ?cursor:string ->
+  unit ->
+  ( password_agent_access_request_page,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [GET /passwords/teams/{team}/agent-access-requests]
+
+Pending agent requests on items the caller may manage. *)
 
 val passwords_folders :
   team:string ->
@@ -32402,6 +33797,21 @@ val passwords_move_folder :
 
 Move a folder under another folder of the team, or to the top level. *)
 
+val passwords_import_batch :
+  team:string ->
+  import_id:string ->
+  x_macro_passwords:string ->
+  folders:password_import_folder list ->
+  format:password_import_format ->
+  items:password_import_item list ->
+  private_:bool ->
+  target:password_import_target ->
+  unit ->
+  (password_import_batch_result, password_failure) Macro_sdk_runtime.Request.t
+(** [POST /passwords/teams/{team}/imports/{import_id}/items]
+
+Import normalized credentials with independently retryable per-item outcomes. *)
+
 val passwords_list :
   team:string ->
   ?search:string ->
@@ -32428,6 +33838,17 @@ val passwords_create :
 (** [POST /passwords/teams/{team}/items]
 
 Create one item using an idempotent logical operation identifier. *)
+
+val passwords_match :
+  team:string ->
+  x_macro_passwords:string ->
+  names:string list ->
+  unit ->
+  (password_item_metadata list, password_failure) Macro_sdk_runtime.Request.t
+(** [POST /passwords/teams/{team}/items/match]
+
+Visible items named like the given names, for an import's duplicate check;
+names travel in the body so they stay out of URLs and access logs. *)
 
 val passwords_detail :
   team:string ->
@@ -32491,6 +33912,35 @@ val passwords_activity :
 (** [GET /passwords/teams/{team}/items/{item}/activity]
 
 List recorded activity for an authorized item. *)
+
+val passwords_agent_resolve_request :
+  team:string ->
+  item:string ->
+  request:string ->
+  x_macro_passwords:string ->
+  body:password_agent_resolve_request ->
+  unit ->
+  ( password_agent_access_request_state,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [POST /passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve]
+
+Approve or deny a pending agent request. *)
+
+val passwords_agent_revoke :
+  team:string ->
+  item:string ->
+  agent:string ->
+  x_macro_passwords:string ->
+  expected_permission_revision:int64 ->
+  scope:password_agent_revoke_scope ->
+  unit ->
+  ( password_agent_item_access,
+    password_agent_failure )
+  Macro_sdk_runtime.Request.t
+(** [POST /passwords/teams/{team}/items/{item}/agents/{agent}/revoke]
+
+Revoke an agent's standing approval, or its grant and approval. *)
 
 val passwords_copy :
   team:string ->
@@ -32760,11 +34210,14 @@ val revert_delete_project :
 Restore a soft-deleted project and its children. *)
 
 val recently_deleted :
+  ?limit:int ->
+  ?cursor:string ->
   unit ->
   (typed_success_response, generic_error_response) Macro_sdk_runtime.Request.t
 (** [GET /recents/deleted]
 
-Gets the users recently deleted items. *)
+Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first. *)
 
 val list_email_reminders :
   ?inbox_ids:string list ->

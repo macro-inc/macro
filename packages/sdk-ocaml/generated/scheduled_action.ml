@@ -2274,6 +2274,136 @@ let make_draft_job_state_failed ~(created : draft_created list)
     ~(finished_at : string) ~(message : string) () =
   (Failed { created; finished_at; message } : draft_job_state)
 
+(** A kind of item a request can name. *)
+type nonrec item_kind =
+  | Channel
+  | Person
+  | Project
+  | Initiative
+  | Document
+  | Task
+  | Database
+  | Agent
+  | Label
+  | Tag
+  | Channel_label
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let item_kind_of_yojson : Yojson.Safe.t -> item_kind =
+ fun json ->
+  match Json.string json with
+  | "channel" -> Channel
+  | "person" -> Person
+  | "project" -> Project
+  | "initiative" -> Initiative
+  | "document" -> Document
+  | "task" -> Task
+  | "database" -> Database
+  | "agent" -> Agent
+  | "label" -> Label
+  | "tag" -> Tag
+  | "channel_label" -> Channel_label
+  | other -> Json.unknown "item_kind" json (Unknown other)
+
+and yojson_of_item_kind : item_kind -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Channel -> `String "channel"
+  | Person -> `String "person"
+  | Project -> `String "project"
+  | Initiative -> `String "initiative"
+  | Document -> `String "document"
+  | Task -> `String "task"
+  | Database -> `String "database"
+  | Agent -> `String "agent"
+  | Label -> `String "label"
+  | Tag -> `String "tag"
+  | Channel_label -> `String "channel_label"
+  | Unknown other -> `String other
+
+type nonrec found_name = {
+  kind : item_kind;
+  name : string;  (** Its name as stored. *)
+}
+(** An item found by the name the words use. *)
+
+let found_name_of_yojson : Yojson.Safe.t -> found_name =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    kind = Json.required fields "kind" item_kind_of_yojson;
+    name = Json.required fields "name" Json.string;
+  }
+
+and yojson_of_found_name : found_name -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("kind", Some (yojson_of_item_kind value.kind));
+      ("name", Some (Json.of_string value.name));
+    ]
+
+let make_found_name ~(kind : item_kind) ~(name : string) () =
+  ({ kind; name } : found_name)
+
+type nonrec left_name = {
+  kind : item_kind option;
+  matches : int;  (** How many items have it: none, or several. *)
+  name : string;  (** The name as the words use it. *)
+}
+(** A name the words use that the drafter couldn't settle on one item for. *)
+
+let left_name_of_yojson : Yojson.Safe.t -> left_name =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    kind = Json.optional fields "kind" item_kind_of_yojson;
+    matches = Json.required fields "matches" Json.int;
+    name = Json.required fields "name" Json.string;
+  }
+
+and yojson_of_left_name : left_name -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("kind", Option.map yojson_of_item_kind value.kind);
+      ("matches", Some (Json.of_int value.matches));
+      ("name", Some (Json.of_string value.name));
+    ]
+
+let make_left_name ?kind ~(matches : int) ~(name : string) () =
+  ({ kind; matches; name } : left_name)
+
+type nonrec found_names = {
+  found : found_name list;
+      (** Each the only item of its kinds with the name the words use. *)
+  left : left_name list;
+      (** Names no item has, or several do: the draft leaves them out for the
+person to pick. *)
+}
+(** The items a draft's words name, as the drafter looked them up by name.
+Names only, as the person wrote them or the items are called: never
+ids. *)
+
+let found_names_of_yojson : Yojson.Safe.t -> found_names =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    found = Json.required fields "found" (Json.list found_name_of_yojson);
+    left = Json.required fields "left" (Json.list left_name_of_yojson);
+  }
+
+and yojson_of_found_names : found_names -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("found", Some ((Json.of_list yojson_of_found_name) value.found));
+      ("left", Some ((Json.of_list yojson_of_left_name) value.left));
+    ]
+
+let make_found_names ~(found : found_name list) ~(left : left_name list) () =
+  ({ found; left } : found_names)
+
 (** The stage a draft is at. *)
 type nonrec draft_stage =
   | Started
@@ -2308,6 +2438,7 @@ type nonrec draft_job_progress = {
   found : int option;
       (** How many items the words name were found; absent before they were
 looked up. *)
+  names : found_names option;
   stage : draft_stage;
 }
 (** How far a draft has got: its latest stage, and what it reported on the
@@ -2319,6 +2450,7 @@ let draft_job_progress_of_yojson : Yojson.Safe.t -> draft_job_progress =
   {
     check = Json.optional fields "check" check_summary_of_yojson;
     found = Json.optional fields "found" Json.int;
+    names = Json.optional fields "names" found_names_of_yojson;
     stage = Json.required fields "stage" draft_stage_of_yojson;
   }
 
@@ -2328,11 +2460,12 @@ and yojson_of_draft_job_progress : draft_job_progress -> Yojson.Safe.t =
     [
       ("check", Option.map yojson_of_check_summary value.check);
       ("found", Option.map Json.of_int value.found);
+      ("names", Option.map yojson_of_found_names value.names);
       ("stage", Some (yojson_of_draft_stage value.stage));
     ]
 
-let make_draft_job_progress ?check ?found ~(stage : draft_stage) () =
-  ({ check; found; stage } : draft_job_progress)
+let make_draft_job_progress ?check ?found ?names ~(stage : draft_stage) () =
+  ({ check; found; names; stage } : draft_job_progress)
 
 type nonrec draft_job = {
   draft_job_state : draft_job_state;

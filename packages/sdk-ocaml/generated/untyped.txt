@@ -30,7 +30,6 @@ cognition.json #/components/schemas/ToolActivityAction/oneOf/7/properties/from: 
 cognition.json #/components/schemas/ToolActivityAction/oneOf/7/properties/to: the spec gives no type (serde_json::Value)
 cognition.json #/components/schemas/TrackImportEntityRequest/properties/metadata: a free-form object
 cognition.json #/components/schemas/UpdateToolCallRequest/properties/args: the spec gives no type (serde_json::Value)
-cognition.json #/components/schemas/UpsertProjectionRequest/properties/output_schema: a free-form object
 cognition.json #/components/schemas/UserToolResponse_Value/oneOf/2/properties/UserAction: the spec gives no type (serde_json::Value)
 cognition.json #/paths/~1calendar~1events~1create-confirmed/post/requestBody/content/application~1json/schema: a free-form object
 cognition.json #/paths/~1calendar~1events~1create-confirmed/post/responses/200/content/application~1json/schema: a free-form object

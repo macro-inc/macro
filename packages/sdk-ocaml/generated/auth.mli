@@ -2045,8 +2045,8 @@ type nonrec patch_team_crm_settings_response = {
       (** Always false: the legacy command does not change availability. *)
   enabled : bool;  (** Always true: CRM records are available to team members. *)
 }
-(** Compatibility response for [PATCH /team/crm]. CRM records are always
-available; this endpoint does not enroll mailboxes or backfill emails. *)
+(** Compatibility response for [PATCH /team/crm]. Record access follows member
+permissions; this endpoint does not enroll mailboxes or backfill emails. *)
 
 val patch_team_crm_settings_response_of_yojson :
   Yojson.Safe.t -> patch_team_crm_settings_response
@@ -2061,8 +2061,25 @@ val make_patch_team_crm_settings_response :
   enabled:bool ->
   unit ->
   patch_team_crm_settings_response
-(** Compatibility response for [PATCH /team/crm]. CRM records are always
-available; this endpoint does not enroll mailboxes or backfill emails. *)
+(** Compatibility response for [PATCH /team/crm]. Record access follows member
+permissions; this endpoint does not enroll mailboxes or backfill emails. *)
+
+type nonrec patch_team_member_crm_access = {
+  enabled : bool;
+      (** Whether the member may use CRM records and team-shared pipelines. *)
+  user_id : string;  (** The current member to update. *)
+}
+(** An administrator's change to one member's CRM access. *)
+
+val patch_team_member_crm_access_of_yojson :
+  Yojson.Safe.t -> patch_team_member_crm_access
+
+val yojson_of_patch_team_member_crm_access :
+  patch_team_member_crm_access -> Yojson.Safe.t
+
+val make_patch_team_member_crm_access :
+  enabled:bool -> user_id:string -> unit -> patch_team_member_crm_access
+(** An administrator's change to one member's CRM access. *)
 
 type nonrec patch_team_member_plan_request = {
   plan : seat_plan;  (** The plan to bill the member's seat at from now on. *)
@@ -2105,6 +2122,7 @@ val make_patch_team_user_role :
 type nonrec patch_team_request = {
   default_link_share : link_share option;
   language : language option;
+  member_crm_access : patch_team_member_crm_access option;
   name : string option;  (** The new name for the team *)
   slug : string option;
       (** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. *)
@@ -2119,6 +2137,7 @@ val yojson_of_patch_team_request : patch_team_request -> Yojson.Safe.t
 val make_patch_team_request :
   ?default_link_share:link_share ->
   ?language:language ->
+  ?member_crm_access:patch_team_member_crm_access ->
   ?name:string ->
   ?slug:string ->
   ?user_role_updates:patch_team_user_role list ->
@@ -3095,6 +3114,8 @@ val team_plan_of_yojson : Yojson.Safe.t -> team_plan
 val yojson_of_team_plan : team_plan -> Yojson.Safe.t
 
 type nonrec team_with_members = {
+  crm_member_access : (string * bool) list;
+      (** Current effective CRM access for each member, independent of mailbox consent. *)
   members : team_member list;  (** The members of the team *)
   scheduled_seat_plans : (string * scheduled_seat_plan) list option;
       (** Provider-confirmed pending seat changes, keyed by member user ID.
@@ -3107,6 +3128,7 @@ val team_with_members_of_yojson : Yojson.Safe.t -> team_with_members
 val yojson_of_team_with_members : team_with_members -> Yojson.Safe.t
 
 val make_team_with_members :
+  crm_member_access:(string * bool) list ->
   members:team_member list ->
   ?scheduled_seat_plans:(string * scheduled_seat_plan) list ->
   team:team ->
@@ -4025,6 +4047,7 @@ This action is **irreversible** and you will not be able to recover the team aft
 val patch_team :
   ?default_link_share:link_share ->
   ?language:language ->
+  ?member_crm_access:patch_team_member_crm_access ->
   ?name:string ->
   ?slug:string ->
   ?user_role_updates:patch_team_user_role list ->

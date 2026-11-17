@@ -3496,8 +3496,8 @@ type nonrec patch_team_crm_settings_response = {
       (** Always false: the legacy command does not change availability. *)
   enabled : bool;  (** Always true: CRM records are available to team members. *)
 }
-(** Compatibility response for [PATCH /team/crm]. CRM records are always
-available; this endpoint does not enroll mailboxes or backfill emails. *)
+(** Compatibility response for [PATCH /team/crm]. Record access follows member
+permissions; this endpoint does not enroll mailboxes or backfill emails. *)
 
 let patch_team_crm_settings_response_of_yojson :
     Yojson.Safe.t -> patch_team_crm_settings_response =
@@ -3525,6 +3525,34 @@ let make_patch_team_crm_settings_response ~(backfill_enqueued : int)
     ~(backfill_failed : int) ~(changed : bool) ~(enabled : bool) () =
   ({ backfill_enqueued; backfill_failed; changed; enabled }
     : patch_team_crm_settings_response)
+
+type nonrec patch_team_member_crm_access = {
+  enabled : bool;
+      (** Whether the member may use CRM records and team-shared pipelines. *)
+  user_id : string;  (** The current member to update. *)
+}
+(** An administrator's change to one member's CRM access. *)
+
+let patch_team_member_crm_access_of_yojson :
+    Yojson.Safe.t -> patch_team_member_crm_access =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    enabled = Json.required fields "enabled" Json.bool;
+    user_id = Json.required fields "user_id" Json.string;
+  }
+
+and yojson_of_patch_team_member_crm_access :
+    patch_team_member_crm_access -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("enabled", Some (Json.of_bool value.enabled));
+      ("user_id", Some (Json.of_string value.user_id));
+    ]
+
+let make_patch_team_member_crm_access ~(enabled : bool) ~(user_id : string) () =
+  ({ enabled; user_id } : patch_team_member_crm_access)
 
 type nonrec patch_team_member_plan_request = {
   plan : seat_plan;  (** The plan to bill the member's seat at from now on. *)
@@ -3595,6 +3623,7 @@ let make_patch_team_user_role ~(role : team_role) ~(team_user_id : string) () =
 type nonrec patch_team_request = {
   default_link_share : link_share option;
   language : language option;
+  member_crm_access : patch_team_member_crm_access option;
   name : string option;  (** The new name for the team *)
   slug : string option;
       (** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. *)
@@ -3610,6 +3639,9 @@ let patch_team_request_of_yojson : Yojson.Safe.t -> patch_team_request =
     default_link_share =
       Json.optional fields "default_link_share" link_share_of_yojson;
     language = Json.optional fields "language" language_of_yojson;
+    member_crm_access =
+      Json.optional fields "member_crm_access"
+        patch_team_member_crm_access_of_yojson;
     name = Json.optional fields "name" Json.string;
     slug = Json.optional fields "slug" Json.string;
     user_role_updates =
@@ -3624,6 +3656,9 @@ and yojson_of_patch_team_request : patch_team_request -> Yojson.Safe.t =
       ( "default_link_share",
         Option.map yojson_of_link_share value.default_link_share );
       ("language", Option.map yojson_of_language value.language);
+      ( "member_crm_access",
+        Option.map yojson_of_patch_team_member_crm_access
+          value.member_crm_access );
       ("name", Option.map Json.of_string value.name);
       ("slug", Option.map Json.of_string value.slug);
       ( "user_role_updates",
@@ -3632,9 +3667,16 @@ and yojson_of_patch_team_request : patch_team_request -> Yojson.Safe.t =
           value.user_role_updates );
     ]
 
-let make_patch_team_request ?default_link_share ?language ?name ?slug
-    ?user_role_updates () =
-  ({ default_link_share; language; name; slug; user_role_updates }
+let make_patch_team_request ?default_link_share ?language ?member_crm_access
+    ?name ?slug ?user_role_updates () =
+  ({
+     default_link_share;
+     language;
+     member_crm_access;
+     name;
+     slug;
+     user_role_updates;
+   }
     : patch_team_request)
 
 type nonrec patch_user_group_request = {
@@ -5284,6 +5326,8 @@ and yojson_of_team_plan : team_plan -> Yojson.Safe.t =
   | Unknown other -> `String other
 
 type nonrec team_with_members = {
+  crm_member_access : (string * bool) list;
+      (** Current effective CRM access for each member, independent of mailbox consent. *)
   members : team_member list;  (** The members of the team *)
   scheduled_seat_plans : (string * scheduled_seat_plan) list option;
       (** Provider-confirmed pending seat changes, keyed by member user ID.
@@ -5296,6 +5340,8 @@ let team_with_members_of_yojson : Yojson.Safe.t -> team_with_members =
  fun json ->
   let fields = Json.obj json in
   {
+    crm_member_access =
+      Json.required fields "crm_member_access" (Json.map Json.bool);
     members = Json.required fields "members" (Json.list team_member_of_yojson);
     scheduled_seat_plans =
       Json.optional fields "scheduled_seat_plans"
@@ -5307,6 +5353,8 @@ and yojson_of_team_with_members : team_with_members -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ( "crm_member_access",
+        Some ((Json.of_map Json.of_bool) value.crm_member_access) );
       ("members", Some ((Json.of_list yojson_of_team_member) value.members));
       ( "scheduled_seat_plans",
         Option.map
@@ -5315,9 +5363,10 @@ and yojson_of_team_with_members : team_with_members -> Yojson.Safe.t =
       ("team", Some (yojson_of_team value.team));
     ]
 
-let make_team_with_members ~(members : team_member list) ?scheduled_seat_plans
-    ~(team : team) () =
-  ({ members; scheduled_seat_plans; team } : team_with_members)
+let make_team_with_members ~(crm_member_access : (string * bool) list)
+    ~(members : team_member list) ?scheduled_seat_plans ~(team : team) () =
+  ({ crm_member_access; members; scheduled_seat_plans; team }
+    : team_with_members)
 
 type nonrec toggle_auto_join_domain_response = {
   auto_join_domain : string option;
@@ -7855,7 +7904,8 @@ let delete_team () =
 (** [PATCH /team]
 
 Updates a team. *)
-let patch_team ?default_link_share ?language ?name ?slug ?user_role_updates () =
+let patch_team ?default_link_share ?language ?member_crm_access ?name ?slug
+    ?user_role_updates () =
   ({
      Request.service = "auth";
      operation = "patch_team";
@@ -7870,11 +7920,18 @@ let patch_team ?default_link_share ?language ?name ?slug ?user_role_updates () =
        Some
          (Request.Json
             (yojson_of_patch_team_request
-               ({ default_link_share; language; name; slug; user_role_updates }
+               ({
+                  default_link_share;
+                  language;
+                  member_crm_access;
+                  name;
+                  slug;
+                  user_role_updates;
+                }
                  : patch_team_request)));
      decode_reply = Request.unit;
      decode_error =
-       Request.error_json [ 400; 401; 404; 500 ] error_response_of_yojson;
+       Request.error_json [ 400; 401; 404; 500; 503 ] error_response_of_yojson;
    }
     : (unit, error_response) Macro_sdk_runtime.Request.t)
 

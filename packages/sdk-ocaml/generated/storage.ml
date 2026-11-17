@@ -136,6 +136,66 @@ let make_access_request ~(created_at : string) ?granted_level ~(id : string)
    }
     : access_request)
 
+(** How an agent's access request was resolved. *)
+type nonrec access_request_resolution =
+  | Approved
+  | Denied
+  | Revoked
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let access_request_resolution_of_yojson :
+    Yojson.Safe.t -> access_request_resolution =
+ fun json ->
+  match Json.string json with
+  | "approved" -> Approved
+  | "denied" -> Denied
+  | "revoked" -> Revoked
+  | other -> Json.unknown "access_request_resolution" json (Unknown other)
+
+and yojson_of_access_request_resolution :
+    access_request_resolution -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Approved -> `String "approved"
+  | Denied -> `String "denied"
+  | Revoked -> `String "revoked"
+  | Unknown other -> `String other
+
+type nonrec access_request_resolved_metadata = {
+  item_id : string;  (** Requested item. *)
+  request_id : string;  (** Resolved request. *)
+  status : access_request_resolution;  (** Resolution. *)
+  team_id : string;  (** Team owning the item. *)
+}
+(** Metadata for \[[PasswordTopicEvent::AccessRequestResolved]\]. *)
+
+let access_request_resolved_metadata_of_yojson :
+    Yojson.Safe.t -> access_request_resolved_metadata =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    item_id = Json.required fields "itemId" Json.string;
+    request_id = Json.required fields "requestId" Json.string;
+    status = Json.required fields "status" access_request_resolution_of_yojson;
+    team_id = Json.required fields "teamId" Json.string;
+  }
+
+and yojson_of_access_request_resolved_metadata :
+    access_request_resolved_metadata -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("itemId", Some (Json.of_string value.item_id));
+      ("requestId", Some (Json.of_string value.request_id));
+      ("status", Some (yojson_of_access_request_resolution value.status));
+      ("teamId", Some (Json.of_string value.team_id));
+    ]
+
+let make_access_request_resolved_metadata ~(item_id : string)
+    ~(request_id : string) ~(status : access_request_resolution)
+    ~(team_id : string) () =
+  ({ item_id; request_id; status; team_id } : access_request_resolved_metadata)
+
 type nonrec access_request_state = {
   access_level : access_level option;
   can_review : bool;
@@ -6698,6 +6758,7 @@ let make_new_option ~(id : string) ~(label : string) () =
 type nonrec column_kind =
   | Text  (** Free text. *)
   | Number  (** A number. *)
+  | Percentage  (** A number shown as a percent: 0.25 displays as 25%. *)
   | Boolean  (** A checkbox. *)
   | Date  (** A date-time. *)
   | Date_range  (** A span from one date-time to another. *)
@@ -6725,6 +6786,7 @@ let column_kind_of_yojson : Yojson.Safe.t -> column_kind =
   match Json.tag fields "type" with
   | "text" -> Text
   | "number" -> Number
+  | "percentage" -> Percentage
   | "boolean" -> Boolean
   | "date" -> Date
   | "date_range" -> Date_range
@@ -6752,6 +6814,7 @@ and yojson_of_column_kind : column_kind -> Yojson.Safe.t =
   match value with
   | Text -> Json.record [ ("type", Some (`String "text")) ]
   | Number -> Json.record [ ("type", Some (`String "number")) ]
+  | Percentage -> Json.record [ ("type", Some (`String "percentage")) ]
   | Boolean -> Json.record [ ("type", Some (`String "boolean")) ]
   | Date -> Json.record [ ("type", Some (`String "date")) ]
   | Date_range -> Json.record [ ("type", Some (`String "date_range")) ]
@@ -13900,9 +13963,14 @@ type nonrec column_config =
       database_id : string;  (** Target database. *)
       table_id : string;  (** Target table. *)
     }  (** A relation column: its cells reference rows of another table. *)
-  | Derived of { formula : formula  (** How its cells are computed. *) }
+  | Derived of {
+      formula : formula;  (** How its cells are computed. *)
+      percentage : bool option;
+          (** Whether a number formula is shown as a percent. *)
+    }
       (** A derived column: its cells are computed from the row's others, and
 its definition, a number or date one, never holds a value. *)
+  | Percentage  (** A number shown as a percent: 0.25 displays as 25%. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -13917,7 +13985,12 @@ let column_config_of_yojson : Yojson.Safe.t -> column_config =
           table_id = Json.required fields "table_id" Json.string;
         }
   | "derived" ->
-      Derived { formula = Json.required fields "formula" formula_of_yojson }
+      Derived
+        {
+          formula = Json.required fields "formula" formula_of_yojson;
+          percentage = Json.optional fields "percentage" Json.bool;
+        }
+  | "percentage" -> Percentage
   | _ -> Json.unknown "column_config" json (Unknown json)
 
 and yojson_of_column_config : column_config -> Yojson.Safe.t =
@@ -13935,14 +14008,16 @@ and yojson_of_column_config : column_config -> Yojson.Safe.t =
         [
           ("kind", Some (`String "derived"));
           ("formula", Some (yojson_of_formula case.formula));
+          ("percentage", Option.map Json.of_bool case.percentage);
         ]
+  | Percentage -> Json.record [ ("kind", Some (`String "percentage")) ]
   | Unknown json -> json
 
 let make_column_config_link ~(database_id : string) ~(table_id : string) () =
   (Link { database_id; table_id } : column_config)
 
-let make_column_config_derived ~(formula : formula) () =
-  (Derived { formula } : column_config)
+let make_column_config_derived ~(formula : formula) ?percentage () =
+  (Derived { formula; percentage } : column_config)
 
 (** A schema operation reserved by a feature using a column. *)
 type nonrec column_protection =
@@ -14141,6 +14216,8 @@ type nonrec column_cast = {
   failures : int;
       (** For a [checked] cast, how many cells would not convert. *)
   is_multi_select : bool;  (** Whether the target holds several values. *)
+  percentage : bool option;
+      (** Whether the target shows a number as a percent. *)
   reason : string option;  (** Why nothing converts, for a [never] cast. *)
   relation : bool;
       (** Whether the target is a relation to another table's rows. *)
@@ -14161,6 +14238,7 @@ let column_cast_of_yojson : Yojson.Safe.t -> column_cast =
     examples = Json.required fields "examples" (Json.list Json.string);
     failures = Json.required fields "failures" Json.int;
     is_multi_select = Json.required fields "is_multi_select" Json.bool;
+    percentage = Json.optional fields "percentage" Json.bool;
     reason = Json.optional fields "reason" Json.string;
     relation = Json.required fields "relation" Json.bool;
     specific_entity_type =
@@ -14177,6 +14255,7 @@ and yojson_of_column_cast : column_cast -> Yojson.Safe.t =
       ("examples", Some ((Json.of_list Json.of_string) value.examples));
       ("failures", Some (Json.of_int value.failures));
       ("is_multi_select", Some (Json.of_bool value.is_multi_select));
+      ("percentage", Option.map Json.of_bool value.percentage);
       ("reason", Some ((Json.of_option Json.of_string) value.reason));
       ("relation", Some (Json.of_bool value.relation));
       ( "specific_entity_type",
@@ -14187,13 +14266,14 @@ and yojson_of_column_cast : column_cast -> Yojson.Safe.t =
 
 let make_column_cast ~(cast : cast_verdict) ~(data_type : data_type)
     ~(examples : string list) ~(failures : int) ~(is_multi_select : bool)
-    ?reason ~(relation : bool) ?specific_entity_type ?summary () =
+    ?percentage ?reason ~(relation : bool) ?specific_entity_type ?summary () =
   ({
      cast;
      data_type;
      examples;
      failures;
      is_multi_select;
+     percentage;
      reason;
      relation;
      specific_entity_type;
@@ -15000,6 +15080,137 @@ and yojson_of_comment_on_text_response :
 let make_comment_on_text_response ~(comment : message) ~(marked_text : string)
     () =
   ({ comment; marked_text } : comment_on_text_response)
+
+type nonrec crm_contact_response = {
+  company_domain : bool option;
+      (** Whether the contact has an address on one of its company's domains.
+Such a contact cannot be unlinked from the company or moved to another.
+Older servers omit this classification; clients must then keep it read-only. *)
+  company_domain_emails : string list option;
+      (** The addresses on one of the company's domains. The last one cannot be
+removed while the contact is linked to the company. *)
+  company_id : string option;
+      (** The id of the company the contact belongs to; absent for a
+contact without a company. *)
+  created_at : string;  (** When the contact record was created. *)
+  email : string option;
+      (** The contact's primary email address; absent for contacts added by
+name alone. *)
+  emails : string list option;
+      (** Every address the contact is known by: the primary first, then the
+rest oldest first. Older servers omit it; clients then show [email]. *)
+  first_interaction : string;
+      (** Earliest known interaction with this contact. *)
+  hidden : bool;
+      (** Whether the contact is hidden from CRM listings for the
+requesting team. Non-admin viewers never see [hidden = true]
+rows (the endpoint filters them out); admin/owner callers see
+hidden contacts so they can render the right toggle state. *)
+  id : string;  (** The id of the contact record. *)
+  last_interaction : string;
+      (** Most recent known interaction with this contact. *)
+  name : string option;  (** Display name observed for the contact, if any. *)
+  personal_email : bool option;
+      (** Whether the primary address uses a known personal provider. Linking
+or switching the company needs this and [companyDomain = false].
+Older servers omit this classification; clients must then keep it read-only. *)
+  updated_at : string;  (** When the contact record was last updated. *)
+}
+(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+
+let crm_contact_response_of_yojson : Yojson.Safe.t -> crm_contact_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    company_domain = Json.optional fields "companyDomain" Json.bool;
+    company_domain_emails =
+      Json.optional fields "companyDomainEmails" (Json.list Json.string);
+    company_id = Json.optional fields "companyId" Json.string;
+    created_at = Json.required fields "createdAt" Json.string;
+    email = Json.optional fields "email" Json.string;
+    emails = Json.optional fields "emails" (Json.list Json.string);
+    first_interaction = Json.required fields "firstInteraction" Json.string;
+    hidden = Json.required fields "hidden" Json.bool;
+    id = Json.required fields "id" Json.string;
+    last_interaction = Json.required fields "lastInteraction" Json.string;
+    name = Json.optional fields "name" Json.string;
+    personal_email = Json.optional fields "personalEmail" Json.bool;
+    updated_at = Json.required fields "updatedAt" Json.string;
+  }
+
+and yojson_of_crm_contact_response : crm_contact_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("companyDomain", Option.map Json.of_bool value.company_domain);
+      ( "companyDomainEmails",
+        Option.map (Json.of_list Json.of_string) value.company_domain_emails );
+      ("companyId", Option.map Json.of_string value.company_id);
+      ("createdAt", Some (Json.of_string value.created_at));
+      ("email", Option.map Json.of_string value.email);
+      ("emails", Option.map (Json.of_list Json.of_string) value.emails);
+      ("firstInteraction", Some (Json.of_string value.first_interaction));
+      ("hidden", Some (Json.of_bool value.hidden));
+      ("id", Some (Json.of_string value.id));
+      ("lastInteraction", Some (Json.of_string value.last_interaction));
+      ("name", Option.map Json.of_string value.name);
+      ("personalEmail", Option.map Json.of_bool value.personal_email);
+      ("updatedAt", Some (Json.of_string value.updated_at));
+    ]
+
+let make_crm_contact_response ?company_domain ?company_domain_emails ?company_id
+    ~(created_at : string) ?email ?emails ~(first_interaction : string)
+    ~(hidden : bool) ~(id : string) ~(last_interaction : string) ?name
+    ?personal_email ~(updated_at : string) () =
+  ({
+     company_domain;
+     company_domain_emails;
+     company_id;
+     created_at;
+     email;
+     emails;
+     first_interaction;
+     hidden;
+     id;
+     last_interaction;
+     name;
+     personal_email;
+     updated_at;
+   }
+    : crm_contact_response)
+
+type nonrec company_contacts_page_response = {
+  contacts : crm_contact_response list;
+      (** The page's contacts, alphabetically by name (the email when
+unnamed), in the same order as [GET /crm/companies/{company_id}/contacts]. *)
+  next_cursor : string option;
+      (** Cursor for the next page; absent on the last page. *)
+}
+(** One page of a company's contacts. *)
+
+let company_contacts_page_response_of_yojson :
+    Yojson.Safe.t -> company_contacts_page_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    contacts =
+      Json.required fields "contacts" (Json.list crm_contact_response_of_yojson);
+    next_cursor = Json.optional fields "nextCursor" Json.string;
+  }
+
+and yojson_of_company_contacts_page_response :
+    company_contacts_page_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "contacts",
+        Some ((Json.of_list yojson_of_crm_contact_response) value.contacts) );
+      ("nextCursor", Option.map Json.of_string value.next_cursor);
+    ]
+
+let make_company_contacts_page_response ~(contacts : crm_contact_response list)
+    ?next_cursor () =
+  ({ contacts; next_cursor } : company_contacts_page_response)
 
 type nonrec skipped_import_record = {
   key : string;  (** The company's domain or the contact's email. *)
@@ -19096,103 +19307,41 @@ and yojson_of_crm_company_filters : crm_company_filters -> Yojson.Safe.t =
 let make_crm_company_filters ?company_ids ?hidden () =
   ({ company_ids; hidden } : crm_company_filters)
 
-type nonrec crm_contact_response = {
-  company_domain : bool option;
-      (** Whether the contact has an address on one of its company's domains.
-Such a contact cannot be unlinked from the company or moved to another.
-Older servers omit this classification; clients must then keep it read-only. *)
-  company_domain_emails : string list option;
-      (** The addresses on one of the company's domains. The last one cannot be
-removed while the contact is linked to the company. *)
-  company_id : string option;
-      (** The id of the company the contact belongs to; absent for a
-contact without a company. *)
-  created_at : string;  (** When the contact record was created. *)
-  email : string option;
-      (** The contact's primary email address; absent for contacts added by
-name alone. *)
-  emails : string list option;
-      (** Every address the contact is known by: the primary first, then the
-rest oldest first. Older servers omit it; clients then show [email]. *)
-  first_interaction : string;
-      (** Earliest known interaction with this contact. *)
-  hidden : bool;
-      (** Whether the contact is hidden from CRM listings for the
-requesting team. Non-admin viewers never see [hidden = true]
-rows (the endpoint filters them out); admin/owner callers see
-hidden contacts so they can render the right toggle state. *)
-  id : string;  (** The id of the contact record. *)
-  last_interaction : string;
-      (** Most recent known interaction with this contact. *)
-  name : string option;  (** Display name observed for the contact, if any. *)
-  personal_email : bool option;
-      (** Whether the primary address uses a known personal provider. Linking
-or switching the company needs this and [companyDomain = false].
-Older servers omit this classification; clients must then keep it read-only. *)
-  updated_at : string;  (** When the contact record was last updated. *)
+type nonrec crm_company_preview = {
+  id : string;  (** The company. *)
+  name : string option;
+      (** The team's name override, else the primary domain's directory name. *)
+  primary_domain : string option;
+      (** The company's first domain, which titles a company with no name. *)
+  updated_at : string;
+      (** The company's last interaction, as the company read's [updatedAt]. *)
 }
-(** A CRM contact as returned by [GET /crm/companies/{company_id}/contacts]. *)
+(** What a company chip shows: the fields the company read returns for its
+title, without its contacts. *)
 
-let crm_contact_response_of_yojson : Yojson.Safe.t -> crm_contact_response =
+let crm_company_preview_of_yojson : Yojson.Safe.t -> crm_company_preview =
  fun json ->
   let fields = Json.obj json in
   {
-    company_domain = Json.optional fields "companyDomain" Json.bool;
-    company_domain_emails =
-      Json.optional fields "companyDomainEmails" (Json.list Json.string);
-    company_id = Json.optional fields "companyId" Json.string;
-    created_at = Json.required fields "createdAt" Json.string;
-    email = Json.optional fields "email" Json.string;
-    emails = Json.optional fields "emails" (Json.list Json.string);
-    first_interaction = Json.required fields "firstInteraction" Json.string;
-    hidden = Json.required fields "hidden" Json.bool;
     id = Json.required fields "id" Json.string;
-    last_interaction = Json.required fields "lastInteraction" Json.string;
     name = Json.optional fields "name" Json.string;
-    personal_email = Json.optional fields "personalEmail" Json.bool;
+    primary_domain = Json.optional fields "primaryDomain" Json.string;
     updated_at = Json.required fields "updatedAt" Json.string;
   }
 
-and yojson_of_crm_contact_response : crm_contact_response -> Yojson.Safe.t =
+and yojson_of_crm_company_preview : crm_company_preview -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
-      ("companyDomain", Option.map Json.of_bool value.company_domain);
-      ( "companyDomainEmails",
-        Option.map (Json.of_list Json.of_string) value.company_domain_emails );
-      ("companyId", Option.map Json.of_string value.company_id);
-      ("createdAt", Some (Json.of_string value.created_at));
-      ("email", Option.map Json.of_string value.email);
-      ("emails", Option.map (Json.of_list Json.of_string) value.emails);
-      ("firstInteraction", Some (Json.of_string value.first_interaction));
-      ("hidden", Some (Json.of_bool value.hidden));
       ("id", Some (Json.of_string value.id));
-      ("lastInteraction", Some (Json.of_string value.last_interaction));
       ("name", Option.map Json.of_string value.name);
-      ("personalEmail", Option.map Json.of_bool value.personal_email);
+      ("primaryDomain", Option.map Json.of_string value.primary_domain);
       ("updatedAt", Some (Json.of_string value.updated_at));
     ]
 
-let make_crm_contact_response ?company_domain ?company_domain_emails ?company_id
-    ~(created_at : string) ?email ?emails ~(first_interaction : string)
-    ~(hidden : bool) ~(id : string) ~(last_interaction : string) ?name
-    ?personal_email ~(updated_at : string) () =
-  ({
-     company_domain;
-     company_domain_emails;
-     company_id;
-     created_at;
-     email;
-     emails;
-     first_interaction;
-     hidden;
-     id;
-     last_interaction;
-     name;
-     personal_email;
-     updated_at;
-   }
-    : crm_contact_response)
+let make_crm_company_preview ~(id : string) ?name ?primary_domain
+    ~(updated_at : string) () =
+  ({ id; name; primary_domain; updated_at } : crm_company_preview)
 
 type nonrec crm_domain_response = {
   company_id : string;  (** The id of the company the domain belongs to. *)
@@ -19229,7 +19378,8 @@ let make_crm_domain_response ~(company_id : string) ~(created_at : string)
 type nonrec crm_company_response = {
   contacts : crm_contact_response list;
       (** Contacts attached to this company. Hidden contacts are filtered
-out for non-admin viewers. *)
+out for non-admin viewers. Empty when the request set
+[includeContacts=false]. *)
   created_at : string;  (** Earliest known interaction with this company. *)
   description : string option;
       (** Display description from the primary domain's directory entry. *)
@@ -19251,9 +19401,9 @@ hidden companies so they can render the right toggle state. *)
 }
 (** A CRM company as returned by [GET /crm/companies/{company_id}].
 Mirrors the soup-listed [crmCompany] shape ([name] / [description]
-resolved from the primary domain's [crm_domain_directory] entry) and
-embeds the company's contacts so the panel can render in a single
-request. *)
+resolved from the primary domain's [crm_domain_directory] entry). It
+embeds the company's contacts unless the caller asks it not to
+([includeContacts=false]). *)
 
 let crm_company_response_of_yojson : Yojson.Safe.t -> crm_company_response =
  fun json ->
@@ -19309,6 +19459,213 @@ let make_crm_company_response ~(contacts : crm_contact_response list)
    }
     : crm_company_response)
 
+type nonrec crm_contact_company_response = {
+  domain : string option;
+      (** The company's oldest domain, which clients show when it has no
+name. *)
+  hidden : bool;
+      (** Whether the company is hidden. Only admin/owner callers can see a
+hidden company. *)
+  id : string;
+      (** The id of the company; equal to the contact's [companyId]. *)
+  name : string option;  (** The company's display name, if it has one. *)
+}
+(** The name and visibility of a contact's company. *)
+
+let crm_contact_company_response_of_yojson :
+    Yojson.Safe.t -> crm_contact_company_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    domain = Json.optional fields "domain" Json.string;
+    hidden = Json.required fields "hidden" Json.bool;
+    id = Json.required fields "id" Json.string;
+    name = Json.optional fields "name" Json.string;
+  }
+
+and yojson_of_crm_contact_company_response :
+    crm_contact_company_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("domain", Option.map Json.of_string value.domain);
+      ("hidden", Some (Json.of_bool value.hidden));
+      ("id", Some (Json.of_string value.id));
+      ("name", Option.map Json.of_string value.name);
+    ]
+
+let make_crm_contact_company_response ?domain ~(hidden : bool) ~(id : string)
+    ?name () =
+  ({ domain; hidden; id; name } : crm_contact_company_response)
+
+type nonrec crm_contact_detail_response = {
+  company_domain : bool option;
+      (** Whether the contact has an address on one of its company's domains.
+Such a contact cannot be unlinked from the company or moved to another.
+Older servers omit this classification; clients must then keep it read-only. *)
+  company_domain_emails : string list option;
+      (** The addresses on one of the company's domains. The last one cannot be
+removed while the contact is linked to the company. *)
+  company_id : string option;
+      (** The id of the company the contact belongs to; absent for a
+contact without a company. *)
+  created_at : string;  (** When the contact record was created. *)
+  email : string option;
+      (** The contact's primary email address; absent for contacts added by
+name alone. *)
+  emails : string list option;
+      (** Every address the contact is known by: the primary first, then the
+rest oldest first. Older servers omit it; clients then show [email]. *)
+  first_interaction : string;
+      (** Earliest known interaction with this contact. *)
+  hidden : bool;
+      (** Whether the contact is hidden from CRM listings for the
+requesting team. Non-admin viewers never see [hidden = true]
+rows (the endpoint filters them out); admin/owner callers see
+hidden contacts so they can render the right toggle state. *)
+  id : string;  (** The id of the contact record. *)
+  last_interaction : string;
+      (** Most recent known interaction with this contact. *)
+  name : string option;  (** Display name observed for the contact, if any. *)
+  personal_email : bool option;
+      (** Whether the primary address uses a known personal provider. Linking
+or switching the company needs this and [companyDomain = false].
+Older servers omit this classification; clients must then keep it read-only. *)
+  updated_at : string;  (** When the contact record was last updated. *)
+  company : crm_contact_company_response option;
+}
+(** A CRM contact as returned by [GET /crm/contacts/{contact_id}]: the
+contact, with what its page shows of its company. *)
+
+let crm_contact_detail_response_of_yojson :
+    Yojson.Safe.t -> crm_contact_detail_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    company_domain = Json.optional fields "companyDomain" Json.bool;
+    company_domain_emails =
+      Json.optional fields "companyDomainEmails" (Json.list Json.string);
+    company_id = Json.optional fields "companyId" Json.string;
+    created_at = Json.required fields "createdAt" Json.string;
+    email = Json.optional fields "email" Json.string;
+    emails = Json.optional fields "emails" (Json.list Json.string);
+    first_interaction = Json.required fields "firstInteraction" Json.string;
+    hidden = Json.required fields "hidden" Json.bool;
+    id = Json.required fields "id" Json.string;
+    last_interaction = Json.required fields "lastInteraction" Json.string;
+    name = Json.optional fields "name" Json.string;
+    personal_email = Json.optional fields "personalEmail" Json.bool;
+    updated_at = Json.required fields "updatedAt" Json.string;
+    company =
+      Json.optional fields "company" crm_contact_company_response_of_yojson;
+  }
+
+and yojson_of_crm_contact_detail_response :
+    crm_contact_detail_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("companyDomain", Option.map Json.of_bool value.company_domain);
+      ( "companyDomainEmails",
+        Option.map (Json.of_list Json.of_string) value.company_domain_emails );
+      ("companyId", Option.map Json.of_string value.company_id);
+      ("createdAt", Some (Json.of_string value.created_at));
+      ("email", Option.map Json.of_string value.email);
+      ("emails", Option.map (Json.of_list Json.of_string) value.emails);
+      ("firstInteraction", Some (Json.of_string value.first_interaction));
+      ("hidden", Some (Json.of_bool value.hidden));
+      ("id", Some (Json.of_string value.id));
+      ("lastInteraction", Some (Json.of_string value.last_interaction));
+      ("name", Option.map Json.of_string value.name);
+      ("personalEmail", Option.map Json.of_bool value.personal_email);
+      ("updatedAt", Some (Json.of_string value.updated_at));
+      ( "company",
+        Option.map yojson_of_crm_contact_company_response value.company );
+    ]
+
+let make_crm_contact_detail_response ?company_domain ?company_domain_emails
+    ?company_id ~(created_at : string) ?email ?emails
+    ~(first_interaction : string) ~(hidden : bool) ~(id : string)
+    ~(last_interaction : string) ?name ?personal_email ~(updated_at : string)
+    ?company () =
+  ({
+     company_domain;
+     company_domain_emails;
+     company_id;
+     created_at;
+     email;
+     emails;
+     first_interaction;
+     hidden;
+     id;
+     last_interaction;
+     name;
+     personal_email;
+     updated_at;
+     company;
+   }
+    : crm_contact_detail_response)
+
+type nonrec crm_contact_preview = {
+  email : string option;
+      (** The contact's primary email, which titles a contact with no name. *)
+  id : string;  (** The contact. *)
+  name : string option;  (** The contact's display name. *)
+  updated_at : string;  (** When the contact record last changed. *)
+}
+(** What a contact chip shows. *)
+
+let crm_contact_preview_of_yojson : Yojson.Safe.t -> crm_contact_preview =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    email = Json.optional fields "email" Json.string;
+    id = Json.required fields "id" Json.string;
+    name = Json.optional fields "name" Json.string;
+    updated_at = Json.required fields "updatedAt" Json.string;
+  }
+
+and yojson_of_crm_contact_preview : crm_contact_preview -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("email", Option.map Json.of_string value.email);
+      ("id", Some (Json.of_string value.id));
+      ("name", Option.map Json.of_string value.name);
+      ("updatedAt", Some (Json.of_string value.updated_at));
+    ]
+
+let make_crm_contact_preview ?email ~(id : string) ?name ~(updated_at : string)
+    () =
+  ({ email; id; name; updated_at } : crm_contact_preview)
+
+type nonrec crm_member_access_response = {
+  allowed : bool;  (** Whether the viewer may access that team's CRM. *)
+  team_id : string option;  (** The viewer's current team, if any. *)
+}
+(** Current authority for the authenticated viewer; contribution consent is separate. *)
+
+let crm_member_access_response_of_yojson :
+    Yojson.Safe.t -> crm_member_access_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    allowed = Json.required fields "allowed" Json.bool;
+    team_id = Json.optional fields "team_id" Json.string;
+  }
+
+and yojson_of_crm_member_access_response :
+    crm_member_access_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("allowed", Some (Json.of_bool value.allowed));
+      ("team_id", Option.map Json.of_string value.team_id);
+    ]
+
+let make_crm_member_access_response ~(allowed : bool) ?team_id () =
+  ({ allowed; team_id } : crm_member_access_response)
+
 (** Minimum team role required for a CRM governance capability. Members
 can edit visible CRM records (e.g. company properties), but the
 governance capabilities these settings gate stay restricted to
@@ -19332,6 +19689,64 @@ and yojson_of_crm_permission_role : crm_permission_role -> Yojson.Safe.t =
   | Admin -> `String "admin"
   | Owner -> `String "owner"
   | Unknown other -> `String other
+
+type nonrec crm_previews = {
+  companies : crm_company_preview list;
+      (** Company previews, in no particular order. *)
+  contacts : crm_contact_preview list;
+      (** Contact previews, in no particular order. *)
+}
+(** The previews of the requested records the viewer may open; a record the
+viewer may not open, or that does not exist, is left out. *)
+
+let crm_previews_of_yojson : Yojson.Safe.t -> crm_previews =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    companies =
+      Json.required fields "companies" (Json.list crm_company_preview_of_yojson);
+    contacts =
+      Json.required fields "contacts" (Json.list crm_contact_preview_of_yojson);
+  }
+
+and yojson_of_crm_previews : crm_previews -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "companies",
+        Some ((Json.of_list yojson_of_crm_company_preview) value.companies) );
+      ( "contacts",
+        Some ((Json.of_list yojson_of_crm_contact_preview) value.contacts) );
+    ]
+
+let make_crm_previews ~(companies : crm_company_preview list)
+    ~(contacts : crm_contact_preview list) () =
+  ({ companies; contacts } : crm_previews)
+
+type nonrec crm_previews_request = {
+  company_ids : string list option;  (** Companies to preview, at most 100. *)
+  contact_ids : string list option;  (** Contacts to preview, at most 100. *)
+}
+(** The CRM records whose chips to title. *)
+
+let crm_previews_request_of_yojson : Yojson.Safe.t -> crm_previews_request =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    company_ids = Json.optional fields "companyIds" (Json.list Json.string);
+    contact_ids = Json.optional fields "contactIds" (Json.list Json.string);
+  }
+
+and yojson_of_crm_previews_request : crm_previews_request -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("companyIds", Option.map (Json.of_list Json.of_string) value.company_ids);
+      ("contactIds", Option.map (Json.of_list Json.of_string) value.contact_ids);
+    ]
+
+let make_crm_previews_request ?company_ids ?contact_ids () =
+  ({ company_ids; contact_ids } : crm_previews_request)
 
 type nonrec crm_stage_input = {
   id : string option;  (** Existing stage to keep; omit to add one. *)
@@ -22589,6 +23004,43 @@ let make_document_updated_metadata ?actor ?actor_user_id ?appearance_change
    }
     : document_updated_metadata)
 
+type nonrec email_attachments_released_metadata = {
+  kept_document_ids : string list;
+      (** Documents left as they were: kept by their owner, or already in the
+Trash. They are no longer email attachments either. *)
+  trashed_document_ids : string list;
+      (** Documents the batch moved to the Trash. *)
+}
+(** Metadata for \[[DocumentTopicEvent::EmailAttachmentsReleased]\]: the
+documents of one queue batch that lost their last email link. *)
+
+let email_attachments_released_metadata_of_yojson :
+    Yojson.Safe.t -> email_attachments_released_metadata =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    kept_document_ids =
+      Json.required fields "kept_document_ids" (Json.list Json.string);
+    trashed_document_ids =
+      Json.required fields "trashed_document_ids" (Json.list Json.string);
+  }
+
+and yojson_of_email_attachments_released_metadata :
+    email_attachments_released_metadata -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "kept_document_ids",
+        Some ((Json.of_list Json.of_string) value.kept_document_ids) );
+      ( "trashed_document_ids",
+        Some ((Json.of_list Json.of_string) value.trashed_document_ids) );
+    ]
+
+let make_email_attachments_released_metadata ~(kept_document_ids : string list)
+    ~(trashed_document_ids : string list) () =
+  ({ kept_document_ids; trashed_document_ids }
+    : email_attachments_released_metadata)
+
 (** Events that can be published to \[[MacroDocumentsTopic]\]. *)
 type nonrec document_topic_event =
   | Document_created of {
@@ -22621,6 +23073,17 @@ type nonrec document_topic_event =
       metadata : document_interaction_metadata;
           (** A peer joined, left, or a periodic save occurred. *)
     }  (** A peer joined, left, or a periodic save occurred. *)
+  | Document_email_attachments_released of {
+      metadata : email_attachments_released_metadata;
+          (** Documents whose mail is gone stopped being email attachments, in one
+batch: the system moved some to the Trash and left the rest. Like the
+documents in a trashed folder, the trashed ones are removed from open
+lists and trigger nothing per document. *)
+    }
+      (** Documents whose mail is gone stopped being email attachments, in one
+batch: the system moved some to the Trash and left the rest. Like the
+documents in a trashed folder, the trashed ones are removed from open
+lists and trigger nothing per document. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -22678,6 +23141,13 @@ let document_topic_event_of_yojson : Yojson.Safe.t -> document_topic_event =
           metadata =
             Json.required fields "metadata"
               document_interaction_metadata_of_yojson;
+        }
+  | "document.email_attachments_released" ->
+      Document_email_attachments_released
+        {
+          metadata =
+            Json.required fields "metadata"
+              email_attachments_released_metadata_of_yojson;
         }
   | _ -> Json.unknown "document_topic_event" json (Unknown json)
 
@@ -22737,6 +23207,14 @@ and yojson_of_document_topic_event : document_topic_event -> Yojson.Safe.t =
           ( "metadata",
             Some (yojson_of_document_interaction_metadata case.metadata) );
         ]
+  | Document_email_attachments_released case ->
+      Json.record
+        [
+          ("event_type", Some (`String "document.email_attachments_released"));
+          ( "metadata",
+            Some (yojson_of_email_attachments_released_metadata case.metadata)
+          );
+        ]
   | Unknown json -> json
 
 let make_document_topic_event_document_created
@@ -22770,6 +23248,10 @@ let make_document_topic_event_document_copied
 let make_document_topic_event_document_interaction
     ~(metadata : document_interaction_metadata) () =
   (Document_interaction { metadata } : document_topic_event)
+
+let make_document_topic_event_document_email_attachments_released
+    ~(metadata : email_attachments_released_metadata) () =
+  (Document_email_attachments_released { metadata } : document_topic_event)
 
 type nonrec duplicate_database_request = {
   name : string option;  (** The copy's name; left out, "<name> copy". *)
@@ -28570,6 +29052,12 @@ let make_email_followup_response ?followup () =
 
 (** One explicit privacy change, avoiding lost updates to whole blocklists. *)
 type nonrec email_privacy_change =
+  | Set_thread_exclusion of {
+      excluded : bool;
+          (** False removes this exception; consent and other exclusions still apply. *)
+      thread_id : string;
+          (** Must belong to a mailbox owned by the authenticated member. *)
+    }  (** Hold back or restore only the caller's contribution of one thread. *)
   | Set_consent of {
       enabled : bool;
           (** False withdraws this mailbox's CRM contribution without deleting records. *)
@@ -28593,6 +29081,12 @@ let email_privacy_change_of_yojson : Yojson.Safe.t -> email_privacy_change =
  fun json ->
   let fields = Json.obj json in
   match Json.tag fields "action" with
+  | "set_thread_exclusion" ->
+      Set_thread_exclusion
+        {
+          excluded = Json.required fields "excluded" Json.bool;
+          thread_id = Json.required fields "thread_id" Json.string;
+        }
   | "set_consent" ->
       Set_consent
         {
@@ -28616,6 +29110,13 @@ let email_privacy_change_of_yojson : Yojson.Safe.t -> email_privacy_change =
 and yojson_of_email_privacy_change : email_privacy_change -> Yojson.Safe.t =
  fun value ->
   match value with
+  | Set_thread_exclusion case ->
+      Json.record
+        [
+          ("action", Some (`String "set_thread_exclusion"));
+          ("excluded", Some (Json.of_bool case.excluded));
+          ("thread_id", Some (Json.of_string case.thread_id));
+        ]
   | Set_consent case ->
       Json.record
         [
@@ -28638,6 +29139,10 @@ and yojson_of_email_privacy_change : email_privacy_change -> Yojson.Safe.t =
           ("scope", Some (yojson_of_email_block_scope case.scope));
         ]
   | Unknown json -> json
+
+let make_email_privacy_change_set_thread_exclusion ~(excluded : bool)
+    ~(thread_id : string) () =
+  (Set_thread_exclusion { excluded; thread_id } : email_privacy_change)
 
 let make_email_privacy_change_set_consent ~(enabled : bool) ?link_id () =
   (Set_consent { enabled; link_id } : email_privacy_change)
@@ -29592,6 +30097,64 @@ and yojson_of_excluded_default_view : excluded_default_view -> Yojson.Safe.t =
 let make_excluded_default_view ~(default_view_id : string) ~(id : string)
     ~(user_id : string) () =
   ({ default_view_id; id; user_id } : excluded_default_view)
+
+type nonrec excluded_email_thread = {
+  link_id : string;  (** Exact mailbox containing this copy. *)
+  subject : string option;
+      (** Current subject, for the owner's privacy settings. *)
+  thread_id : string;  (** Mailbox-local thread identity. *)
+}
+(** One private thread from the caller's own mailbox, never a teammate's copy. *)
+
+let excluded_email_thread_of_yojson : Yojson.Safe.t -> excluded_email_thread =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    link_id = Json.required fields "link_id" Json.string;
+    subject = Json.optional fields "subject" Json.string;
+    thread_id = Json.required fields "thread_id" Json.string;
+  }
+
+and yojson_of_excluded_email_thread : excluded_email_thread -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("link_id", Some (Json.of_string value.link_id));
+      ("subject", Option.map Json.of_string value.subject);
+      ("thread_id", Some (Json.of_string value.thread_id));
+    ]
+
+let make_excluded_email_thread ~(link_id : string) ?subject
+    ~(thread_id : string) () =
+  ({ link_id; subject; thread_id } : excluded_email_thread)
+
+type nonrec excluded_email_threads = {
+  next_cursor : string option;  (** Pass as [after] to read the next page. *)
+  threads : excluded_email_thread list;  (** At most fifty exclusions. *)
+}
+(** A bounded page of the caller's private threads, ordered by thread ID. *)
+
+let excluded_email_threads_of_yojson : Yojson.Safe.t -> excluded_email_threads =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    next_cursor = Json.optional fields "next_cursor" Json.string;
+    threads =
+      Json.required fields "threads" (Json.list excluded_email_thread_of_yojson);
+  }
+
+and yojson_of_excluded_email_threads : excluded_email_threads -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("next_cursor", Option.map Json.of_string value.next_cursor);
+      ( "threads",
+        Some ((Json.of_list yojson_of_excluded_email_thread) value.threads) );
+    ]
+
+let make_excluded_email_threads ?next_cursor
+    ~(threads : excluded_email_thread list) () =
+  ({ next_cursor; threads } : excluded_email_threads)
 
 type nonrec export_document_response = {
   presigned_url : string;
@@ -37793,6 +38356,36 @@ let make_soup_harness ~(created_at : string) ~(id : string) ~(name : string)
     ~(owner_id : string) ~(updated_at : string) () =
   ({ created_at; id; name; owner_id; updated_at } : soup_harness)
 
+type nonrec soup_team = {
+  id : string;  (** The team uuid. *)
+  name : string;  (** The team's display name. *)
+  owner_id : string;  (** The user who owns the team. *)
+}
+(** A team, listed only by attention feeds: team-scoped notifications (a
+vault access request) are filed under it, and it has no page of its own.
+Teams carry no timestamps; attention feeds order by attention time. *)
+
+let soup_team_of_yojson : Yojson.Safe.t -> soup_team =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    id = Json.required fields "id" Json.string;
+    name = Json.required fields "name" Json.string;
+    owner_id = Json.required fields "ownerId" Json.string;
+  }
+
+and yojson_of_soup_team : soup_team -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("id", Some (Json.of_string value.id));
+      ("name", Some (Json.of_string value.name));
+      ("ownerId", Some (Json.of_string value.owner_id));
+    ]
+
+let make_soup_team ~(id : string) ~(name : string) ~(owner_id : string) () =
+  ({ id; name; owner_id } : soup_team)
+
 (** A single item in the Soup feed. *)
 type nonrec soup_item =
   | Document of {
@@ -37843,6 +38436,8 @@ type nonrec soup_item =
       data : soup_harness;
           (** Paired runtime, listed only by attention feeds. *)
     }  (** Paired runtime, listed only by attention feeds. *)
+  | Team of { data : soup_team  (** Team, listed only by attention feeds. *) }
+      (** Team, listed only by attention feeds. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -37937,6 +38532,7 @@ let soup_item_of_yojson : Yojson.Safe.t -> soup_item =
         }
   | "harness" ->
       Harness { data = Json.required fields "data" soup_harness_of_yojson }
+  | "team" -> Team { data = Json.required fields "data" soup_team_of_yojson }
   | _ -> Json.unknown "soup_item" json (Unknown json)
 
 and yojson_of_soup_item : soup_item -> Yojson.Safe.t =
@@ -38046,6 +38642,12 @@ and yojson_of_soup_item : soup_item -> Yojson.Safe.t =
           ("tag", Some (`String "harness"));
           ("data", Some (yojson_of_soup_harness case.data));
         ]
+  | Team case ->
+      Json.record
+        [
+          ("tag", Some (`String "team"));
+          ("data", Some (yojson_of_soup_team case.data));
+        ]
   | Unknown json -> json
 
 let make_soup_item_document ~(data : soup_document_soup_properties_field) () =
@@ -38099,6 +38701,8 @@ let make_soup_item_database_row
 
 let make_soup_item_harness ~(data : soup_harness) () =
   (Harness { data } : soup_item)
+
+let make_soup_item_team ~(data : soup_team) () = (Team { data } : soup_item)
 
 type nonrec soup_api_item = {
   soup_item : soup_item;
@@ -42402,6 +43006,1125 @@ let make_password_activity ~(action : password_action) ~(id : string)
     =
   ({ action; id; item_id; occurred_at; user_id } : password_activity)
 
+(** Grant capability. *)
+type nonrec password_permission =
+  | View
+  | Edit
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_permission_of_yojson : Yojson.Safe.t -> password_permission =
+ fun json ->
+  match Json.string json with
+  | "view" -> View
+  | "edit" -> Edit
+  | other -> Json.unknown "password_permission" json (Unknown other)
+
+and yojson_of_password_permission : password_permission -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | View -> `String "view"
+  | Edit -> `String "edit"
+  | Unknown other -> `String other
+
+type nonrec password_agent_access_request_body = {
+  permission : password_permission;  (** Requested permission. *)
+}
+(** Access request body. *)
+
+let password_agent_access_request_body_of_yojson :
+    Yojson.Safe.t -> password_agent_access_request_body =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    permission = Json.required fields "permission" password_permission_of_yojson;
+  }
+
+and yojson_of_password_agent_access_request_body :
+    password_agent_access_request_body -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [ ("permission", Some (yojson_of_password_permission value.permission)) ]
+
+let make_password_agent_access_request_body ~(permission : password_permission)
+    () =
+  ({ permission } : password_agent_access_request_body)
+
+(** Whether the agent can use an item now. *)
+type nonrec password_agent_access_status =
+  | Usable
+  | Request_access
+  | Pending
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_access_status_of_yojson :
+    Yojson.Safe.t -> password_agent_access_status =
+ fun json ->
+  match Json.string json with
+  | "usable" -> Usable
+  | "request_access" -> Request_access
+  | "pending" -> Pending
+  | other -> Json.unknown "password_agent_access_status" json (Unknown other)
+
+and yojson_of_password_agent_access_status :
+    password_agent_access_status -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Usable -> `String "usable"
+  | Request_access -> `String "request_access"
+  | Pending -> `String "pending"
+  | Unknown other -> `String other
+
+(** Why a usable item is usable. *)
+type nonrec password_agent_use_basis =
+  | Creator_grant
+  | Approved_grant
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_use_basis_of_yojson :
+    Yojson.Safe.t -> password_agent_use_basis =
+ fun json ->
+  match Json.string json with
+  | "creator_grant" -> Creator_grant
+  | "approved_grant" -> Approved_grant
+  | other -> Json.unknown "password_agent_use_basis" json (Unknown other)
+
+and yojson_of_password_agent_use_basis :
+    password_agent_use_basis -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Creator_grant -> `String "creator_grant"
+  | Approved_grant -> `String "approved_grant"
+  | Unknown other -> `String other
+
+type nonrec password_agent_item_access = {
+  can_set_totp : bool;
+      (** Whether the agent may enroll a verification-code seed. *)
+  can_update : bool;  (** Whether the agent may update values and metadata. *)
+  grant_permission : password_permission option;
+  pending_request_id : string option;  (** Live request awaiting review. *)
+  permission_revision : int64;
+      (** Revision of this agent's grant/approval on the item. *)
+  status : password_agent_access_status;  (** Current status. *)
+  use_basis : password_agent_use_basis option;
+}
+(** Current agent access to one item, recomputed on every use. *)
+
+let password_agent_item_access_of_yojson :
+    Yojson.Safe.t -> password_agent_item_access =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    can_set_totp = Json.required fields "canSetTotp" Json.bool;
+    can_update = Json.required fields "canUpdate" Json.bool;
+    grant_permission =
+      Json.optional fields "grantPermission" password_permission_of_yojson;
+    pending_request_id = Json.optional fields "pendingRequestId" Json.string;
+    permission_revision = Json.required fields "permissionRevision" Json.int64;
+    status =
+      Json.required fields "status" password_agent_access_status_of_yojson;
+    use_basis =
+      Json.optional fields "useBasis" password_agent_use_basis_of_yojson;
+  }
+
+and yojson_of_password_agent_item_access :
+    password_agent_item_access -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("canSetTotp", Some (Json.of_bool value.can_set_totp));
+      ("canUpdate", Some (Json.of_bool value.can_update));
+      ( "grantPermission",
+        Option.map yojson_of_password_permission value.grant_permission );
+      ("pendingRequestId", Option.map Json.of_string value.pending_request_id);
+      ("permissionRevision", Some (Json.of_int64 value.permission_revision));
+      ("status", Some (yojson_of_password_agent_access_status value.status));
+      ("useBasis", Option.map yojson_of_password_agent_use_basis value.use_basis);
+    ]
+
+let make_password_agent_item_access ~(can_set_totp : bool) ~(can_update : bool)
+    ?grant_permission ?pending_request_id ~(permission_revision : int64)
+    ~(status : password_agent_access_status) ?use_basis () =
+  ({
+     can_set_totp;
+     can_update;
+     grant_permission;
+     pending_request_id;
+     permission_revision;
+     status;
+     use_basis;
+   }
+    : password_agent_item_access)
+
+(** Wire request status. *)
+type nonrec password_agent_request_status =
+  | None_
+  | Pending
+  | Approved
+  | Denied
+  | Revoked
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_request_status_of_yojson :
+    Yojson.Safe.t -> password_agent_request_status =
+ fun json ->
+  match Json.string json with
+  | "none" -> None_
+  | "pending" -> Pending
+  | "approved" -> Approved
+  | "denied" -> Denied
+  | "revoked" -> Revoked
+  | other -> Json.unknown "password_agent_request_status" json (Unknown other)
+
+and yojson_of_password_agent_request_status :
+    password_agent_request_status -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | None_ -> `String "none"
+  | Pending -> `String "pending"
+  | Approved -> `String "approved"
+  | Denied -> `String "denied"
+  | Revoked -> `String "revoked"
+  | Unknown other -> `String other
+
+type nonrec password_agent_access_request_state = {
+  access : password_agent_item_access;  (** Current access. *)
+  agent_account_id : string;  (** Agent account. *)
+  item_id : password_item_id;  (** Item id. *)
+  permission : password_permission option;
+  request_id : string option;  (** Request id; null when none exists. *)
+  revision : int64;  (** Request revision; 0 when none exists. *)
+  status : password_agent_request_status;  (** Request status. *)
+  updated_at : string option;  (** Last transition. *)
+}
+(** An agent's request state. *)
+
+let password_agent_access_request_state_of_yojson :
+    Yojson.Safe.t -> password_agent_access_request_state =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    access = Json.required fields "access" password_agent_item_access_of_yojson;
+    agent_account_id = Json.required fields "agentAccountId" Json.string;
+    item_id = Json.required fields "itemId" password_item_id_of_yojson;
+    permission = Json.optional fields "permission" password_permission_of_yojson;
+    request_id = Json.optional fields "requestId" Json.string;
+    revision = Json.required fields "revision" Json.int64;
+    status =
+      Json.required fields "status" password_agent_request_status_of_yojson;
+    updated_at = Json.optional fields "updatedAt" Json.string;
+  }
+
+and yojson_of_password_agent_access_request_state :
+    password_agent_access_request_state -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("access", Some (yojson_of_password_agent_item_access value.access));
+      ("agentAccountId", Some (Json.of_string value.agent_account_id));
+      ("itemId", Some (yojson_of_password_item_id value.item_id));
+      ("permission", Option.map yojson_of_password_permission value.permission);
+      ("requestId", Option.map Json.of_string value.request_id);
+      ("revision", Some (Json.of_int64 value.revision));
+      ("status", Some (yojson_of_password_agent_request_status value.status));
+      ("updatedAt", Option.map Json.of_string value.updated_at);
+    ]
+
+let make_password_agent_access_request_state
+    ~(access : password_agent_item_access) ~(agent_account_id : string)
+    ~(item_id : password_item_id) ?permission ?request_id ~(revision : int64)
+    ~(status : password_agent_request_status) ?updated_at () =
+  ({
+     access;
+     agent_account_id;
+     item_id;
+     permission;
+     request_id;
+     revision;
+     status;
+     updated_at;
+   }
+    : password_agent_access_request_state)
+
+type nonrec password_agent_access_request_page = {
+  next_cursor : string option;  (** Opaque cursor of the next page. *)
+  requests : password_agent_access_request_state list;
+      (** Pending requests on items the caller may manage. *)
+}
+(** A page of requests for human review. *)
+
+let password_agent_access_request_page_of_yojson :
+    Yojson.Safe.t -> password_agent_access_request_page =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    next_cursor = Json.optional fields "nextCursor" Json.string;
+    requests =
+      Json.required fields "requests"
+        (Json.list password_agent_access_request_state_of_yojson);
+  }
+
+and yojson_of_password_agent_access_request_page :
+    password_agent_access_request_page -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("nextCursor", Option.map Json.of_string value.next_cursor);
+      ( "requests",
+        Some
+          ((Json.of_list yojson_of_password_agent_access_request_state)
+             value.requests) );
+    ]
+
+let make_password_agent_access_request_page ?next_cursor
+    ~(requests : password_agent_access_request_state list) () =
+  ({ next_cursor; requests } : password_agent_access_request_page)
+
+(** API credential fields an agent may select. *)
+type nonrec password_agent_api_field =
+  | Key
+  | Secret
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_api_field_of_yojson :
+    Yojson.Safe.t -> password_agent_api_field =
+ fun json ->
+  match Json.string json with
+  | "key" -> Key
+  | "secret" -> Secret
+  | other -> Json.unknown "password_agent_api_field" json (Unknown other)
+
+and yojson_of_password_agent_api_field :
+    password_agent_api_field -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Key -> `String "key"
+  | Secret -> `String "secret"
+  | Unknown other -> `String other
+
+type nonrec password_secret_string = string
+(** Owned sensitive text. Deliberately does not implement Debug or Display. *)
+
+let password_secret_string_of_yojson : Yojson.Safe.t -> password_secret_string =
+ fun json -> Json.string json
+
+and yojson_of_password_secret_string : password_secret_string -> Yojson.Safe.t =
+ fun value -> Json.of_string value
+
+(** New item values; the item kind is this tag. *)
+type nonrec password_agent_create_secret =
+  | Login of {
+      password : password_secret_string;  (** Required non-empty password. *)
+      username : password_secret_string option;
+    }  (** A website or application login. *)
+  | Api of {
+      key : password_secret_string option;
+      secret : password_secret_string;  (** Required non-empty API secret. *)
+    }  (** An API credential. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_agent_create_secret_of_yojson :
+    Yojson.Safe.t -> password_agent_create_secret =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "login" ->
+      Login
+        {
+          password =
+            Json.required fields "password" password_secret_string_of_yojson;
+          username =
+            Json.optional fields "username" password_secret_string_of_yojson;
+        }
+  | "api" ->
+      Api
+        {
+          key = Json.optional fields "key" password_secret_string_of_yojson;
+          secret =
+            Json.required fields "secret" password_secret_string_of_yojson;
+        }
+  | _ -> Json.unknown "password_agent_create_secret" json (Unknown json)
+
+and yojson_of_password_agent_create_secret :
+    password_agent_create_secret -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Login case ->
+      Json.record
+        [
+          ("kind", Some (`String "login"));
+          ("password", Some (yojson_of_password_secret_string case.password));
+          ("username", Option.map yojson_of_password_secret_string case.username);
+        ]
+  | Api case ->
+      Json.record
+        [
+          ("kind", Some (`String "api"));
+          ("key", Option.map yojson_of_password_secret_string case.key);
+          ("secret", Some (yojson_of_password_secret_string case.secret));
+        ]
+  | Unknown json -> json
+
+let make_password_agent_create_secret_login ~(password : password_secret_string)
+    ?username () =
+  (Login { password; username } : password_agent_create_secret)
+
+let make_password_agent_create_secret_api ?key
+    ~(secret : password_secret_string) () =
+  (Api { key; secret } : password_agent_create_secret)
+
+type nonrec password_login_url = string
+(** A public HTTP(S) login URL; credentials and userinfo are rejected before indexing. *)
+
+let password_login_url_of_yojson : Yojson.Safe.t -> password_login_url =
+ fun json -> Json.string json
+
+and yojson_of_password_login_url : password_login_url -> Yojson.Safe.t =
+ fun value -> Json.of_string value
+
+type nonrec password_agent_create_item = {
+  name : string;  (** Display name. *)
+  operation_id : string;
+      (** UUIDv7, stable across retries; becomes the item id. *)
+  secret : password_agent_create_secret;  (** Typed values. *)
+  url : password_login_url option;
+}
+(** Agent item creation; the kind is the secret's tag. *)
+
+let password_agent_create_item_of_yojson :
+    Yojson.Safe.t -> password_agent_create_item =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    name = Json.required fields "name" Json.string;
+    operation_id = Json.required fields "operationId" Json.string;
+    secret =
+      Json.required fields "secret" password_agent_create_secret_of_yojson;
+    url = Json.optional fields "url" password_login_url_of_yojson;
+  }
+
+and yojson_of_password_agent_create_item :
+    password_agent_create_item -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("name", Some (Json.of_string value.name));
+      ("operationId", Some (Json.of_string value.operation_id));
+      ("secret", Some (yojson_of_password_agent_create_secret value.secret));
+      ("url", Option.map yojson_of_password_login_url value.url);
+    ]
+
+let make_password_agent_create_item ~(name : string) ~(operation_id : string)
+    ~(secret : password_agent_create_secret) ?url () =
+  ({ name; operation_id; secret; url } : password_agent_create_item)
+
+(** Accepted disclosure intent. Typing is a later additive value. *)
+type nonrec password_agent_purpose =
+  | Copy
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_purpose_of_yojson : Yojson.Safe.t -> password_agent_purpose =
+ fun json ->
+  match Json.string json with
+  | "copy" -> Copy
+  | other -> Json.unknown "password_agent_purpose" json (Unknown other)
+
+and yojson_of_password_agent_purpose : password_agent_purpose -> Yojson.Safe.t =
+ fun value ->
+  match value with Copy -> `String "copy" | Unknown other -> `String other
+
+(** Login item fields an agent may select. *)
+type nonrec password_agent_login_field =
+  | Username
+  | Password
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_login_field_of_yojson :
+    Yojson.Safe.t -> password_agent_login_field =
+ fun json ->
+  match Json.string json with
+  | "username" -> Username
+  | "password" -> Password
+  | other -> Json.unknown "password_agent_login_field" json (Unknown other)
+
+and yojson_of_password_agent_login_field :
+    password_agent_login_field -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Username -> `String "username"
+  | Password -> `String "password"
+  | Unknown other -> `String other
+
+(** Closed kind-aware selector of exactly one stored slot. Notes, custom fields
+and TOTP seeds are never selectable. *)
+type nonrec password_agent_secret_selector =
+  | Login of {
+      field : password_agent_login_field;  (** Selected login field. *)
+    }  (** A login item field. *)
+  | Api of {
+      field : password_agent_api_field;  (** Selected API credential field. *)
+    }  (** An API credential field. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_agent_secret_selector_of_yojson :
+    Yojson.Safe.t -> password_agent_secret_selector =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "login" ->
+      Login
+        {
+          field =
+            Json.required fields "field" password_agent_login_field_of_yojson;
+        }
+  | "api" ->
+      Api
+        {
+          field =
+            Json.required fields "field" password_agent_api_field_of_yojson;
+        }
+  | _ -> Json.unknown "password_agent_secret_selector" json (Unknown json)
+
+and yojson_of_password_agent_secret_selector :
+    password_agent_secret_selector -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Login case ->
+      Json.record
+        [
+          ("kind", Some (`String "login"));
+          ("field", Some (yojson_of_password_agent_login_field case.field));
+        ]
+  | Api case ->
+      Json.record
+        [
+          ("kind", Some (`String "api"));
+          ("field", Some (yojson_of_password_agent_api_field case.field));
+        ]
+  | Unknown json -> json
+
+let make_password_agent_secret_selector_login
+    ~(field : password_agent_login_field) () =
+  (Login { field } : password_agent_secret_selector)
+
+let make_password_agent_secret_selector_api ~(field : password_agent_api_field)
+    () =
+  (Api { field } : password_agent_secret_selector)
+
+type nonrec password_agent_disclose_request = {
+  expected_version : int option;
+      (** When given, the committed version must match. *)
+  purpose : password_agent_purpose;  (** Audited intent. *)
+  selector : password_agent_secret_selector;  (** The single slot to disclose. *)
+}
+(** One-field disclosure request. *)
+
+let password_agent_disclose_request_of_yojson :
+    Yojson.Safe.t -> password_agent_disclose_request =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    expected_version = Json.optional fields "expectedVersion" Json.int;
+    purpose = Json.required fields "purpose" password_agent_purpose_of_yojson;
+    selector =
+      Json.required fields "selector" password_agent_secret_selector_of_yojson;
+  }
+
+and yojson_of_password_agent_disclose_request :
+    password_agent_disclose_request -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("expectedVersion", Option.map Json.of_int value.expected_version);
+      ("purpose", Some (yojson_of_password_agent_purpose value.purpose));
+      ( "selector",
+        Some (yojson_of_password_agent_secret_selector value.selector) );
+    ]
+
+let make_password_agent_disclose_request ?expected_version
+    ~(purpose : password_agent_purpose)
+    ~(selector : password_agent_secret_selector) () =
+  ({ expected_version; purpose; selector } : password_agent_disclose_request)
+
+type nonrec password_agent_disclosed = {
+  selector : password_agent_secret_selector;
+      (** The selector that was disclosed. *)
+  value : password_secret_string;  (** The selected value. *)
+  version : int;  (** Committed version it was read from. *)
+}
+(** One disclosed field. *)
+
+let password_agent_disclosed_of_yojson :
+    Yojson.Safe.t -> password_agent_disclosed =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    selector =
+      Json.required fields "selector" password_agent_secret_selector_of_yojson;
+    value = Json.required fields "value" password_secret_string_of_yojson;
+    version = Json.required fields "version" Json.int;
+  }
+
+and yojson_of_password_agent_disclosed :
+    password_agent_disclosed -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "selector",
+        Some (yojson_of_password_agent_secret_selector value.selector) );
+      ("value", Some (yojson_of_password_secret_string value.value));
+      ("version", Some (Json.of_int value.version));
+    ]
+
+let make_password_agent_disclosed ~(selector : password_agent_secret_selector)
+    ~(value : password_secret_string) ~(version : int) () =
+  ({ selector; value; version } : password_agent_disclosed)
+
+type nonrec password_agent_editable_metadata = {
+  name : string option;  (** New display name. *)
+  url : string option;  (** New URL; null clears it, absent keeps it. *)
+}
+(** Agent-editable display fields. *)
+
+let password_agent_editable_metadata_of_yojson :
+    Yojson.Safe.t -> password_agent_editable_metadata =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    name = Json.optional fields "name" Json.string;
+    url = Json.optional fields "url" Json.string;
+  }
+
+and yojson_of_password_agent_editable_metadata :
+    password_agent_editable_metadata -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("name", Option.map Json.of_string value.name);
+      ("url", Option.map Json.of_string value.url);
+    ]
+
+let make_password_agent_editable_metadata ?name ?url () =
+  ({ name; url } : password_agent_editable_metadata)
+
+(** Closed, payload-free failure codes of the agent vault API. *)
+type nonrec password_agent_error_code =
+  | Unauthorized
+  | Invalid_agent
+  | Invalid_session_attribution
+  | Not_found
+  | Not_granted
+  | Pending
+  | Forbidden
+  | Invalid_request
+  | Unsupported_kind
+  | Field_not_set
+  | Version_conflict
+  | Vault_busy
+  | Rate_limited
+  | Vault_unavailable
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_error_code_of_yojson :
+    Yojson.Safe.t -> password_agent_error_code =
+ fun json ->
+  match Json.string json with
+  | "unauthorized" -> Unauthorized
+  | "invalid_agent" -> Invalid_agent
+  | "invalid_session_attribution" -> Invalid_session_attribution
+  | "not_found" -> Not_found
+  | "not_granted" -> Not_granted
+  | "pending" -> Pending
+  | "forbidden" -> Forbidden
+  | "invalid_request" -> Invalid_request
+  | "unsupported_kind" -> Unsupported_kind
+  | "field_not_set" -> Field_not_set
+  | "version_conflict" -> Version_conflict
+  | "vault_busy" -> Vault_busy
+  | "rate_limited" -> Rate_limited
+  | "vault_unavailable" -> Vault_unavailable
+  | other -> Json.unknown "password_agent_error_code" json (Unknown other)
+
+and yojson_of_password_agent_error_code :
+    password_agent_error_code -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Unauthorized -> `String "unauthorized"
+  | Invalid_agent -> `String "invalid_agent"
+  | Invalid_session_attribution -> `String "invalid_session_attribution"
+  | Not_found -> `String "not_found"
+  | Not_granted -> `String "not_granted"
+  | Pending -> `String "pending"
+  | Forbidden -> `String "forbidden"
+  | Invalid_request -> `String "invalid_request"
+  | Unsupported_kind -> `String "unsupported_kind"
+  | Field_not_set -> `String "field_not_set"
+  | Version_conflict -> `String "version_conflict"
+  | Vault_busy -> `String "vault_busy"
+  | Rate_limited -> `String "rate_limited"
+  | Vault_unavailable -> `String "vault_unavailable"
+  | Unknown other -> `String other
+
+type nonrec password_agent_failure = {
+  code : password_agent_error_code;
+      (** Machine-readable category; never contains request or secret values. *)
+  retry_after_ms : int64 option;  (** Present only on [rate_limited]. *)
+}
+(** Sanitized agent vault failure. *)
+
+let password_agent_failure_of_yojson : Yojson.Safe.t -> password_agent_failure =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    code = Json.required fields "code" password_agent_error_code_of_yojson;
+    retry_after_ms = Json.optional fields "retryAfterMs" Json.int64;
+  }
+
+and yojson_of_password_agent_failure : password_agent_failure -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("code", Some (yojson_of_password_agent_error_code value.code));
+      ("retryAfterMs", Option.map Json.of_int64 value.retry_after_ms);
+    ]
+
+let make_password_agent_failure ~(code : password_agent_error_code)
+    ?retry_after_ms () =
+  ({ code; retry_after_ms } : password_agent_failure)
+
+(** Replacement of supplied slots; absent slots keep their stored value. *)
+type nonrec password_agent_secret_patch =
+  | Login of {
+      password : password_secret_string option;
+      username : password_secret_string option;
+    }  (** Login slots to replace. *)
+  | Api of {
+      key : password_secret_string option;
+      secret : password_secret_string option;
+    }  (** API credential slots to replace. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_agent_secret_patch_of_yojson :
+    Yojson.Safe.t -> password_agent_secret_patch =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "login" ->
+      Login
+        {
+          password =
+            Json.optional fields "password" password_secret_string_of_yojson;
+          username =
+            Json.optional fields "username" password_secret_string_of_yojson;
+        }
+  | "api" ->
+      Api
+        {
+          key = Json.optional fields "key" password_secret_string_of_yojson;
+          secret =
+            Json.optional fields "secret" password_secret_string_of_yojson;
+        }
+  | _ -> Json.unknown "password_agent_secret_patch" json (Unknown json)
+
+and yojson_of_password_agent_secret_patch :
+    password_agent_secret_patch -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Login case ->
+      Json.record
+        [
+          ("kind", Some (`String "login"));
+          ("password", Option.map yojson_of_password_secret_string case.password);
+          ("username", Option.map yojson_of_password_secret_string case.username);
+        ]
+  | Api case ->
+      Json.record
+        [
+          ("kind", Some (`String "api"));
+          ("key", Option.map yojson_of_password_secret_string case.key);
+          ("secret", Option.map yojson_of_password_secret_string case.secret);
+        ]
+  | Unknown json -> json
+
+let make_password_agent_secret_patch_login ?password ?username () =
+  (Login { password; username } : password_agent_secret_patch)
+
+let make_password_agent_secret_patch_api ?key ?secret () =
+  (Api { key; secret } : password_agent_secret_patch)
+
+type nonrec password_agent_patch_item = {
+  expected_version : int;  (** Committed version the update applies to. *)
+  metadata_patch : password_agent_editable_metadata option;
+  operation_id : string;
+      (** UUIDv7, stable across retries of this one update. *)
+  secret_patch : password_agent_secret_patch option;
+}
+(** Agent item update. *)
+
+let password_agent_patch_item_of_yojson :
+    Yojson.Safe.t -> password_agent_patch_item =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    expected_version = Json.required fields "expectedVersion" Json.int;
+    metadata_patch =
+      Json.optional fields "metadataPatch"
+        password_agent_editable_metadata_of_yojson;
+    operation_id = Json.required fields "operationId" Json.string;
+    secret_patch =
+      Json.optional fields "secretPatch" password_agent_secret_patch_of_yojson;
+  }
+
+and yojson_of_password_agent_patch_item :
+    password_agent_patch_item -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("expectedVersion", Some (Json.of_int value.expected_version));
+      ( "metadataPatch",
+        Option.map yojson_of_password_agent_editable_metadata
+          value.metadata_patch );
+      ("operationId", Some (Json.of_string value.operation_id));
+      ( "secretPatch",
+        Option.map yojson_of_password_agent_secret_patch value.secret_patch );
+    ]
+
+let make_password_agent_patch_item ~(expected_version : int) ?metadata_patch
+    ~(operation_id : string) ?secret_patch () =
+  ({ expected_version; metadata_patch; operation_id; secret_patch }
+    : password_agent_patch_item)
+
+(** Human decision on a pending request. *)
+type nonrec password_agent_resolve_request =
+  | Approve of {
+      permission : password_permission;  (** Granted permission. *)
+      revision : int64;  (** Request revision observed by the reviewer. *)
+    }  (** Grant the permission and standing approval together. *)
+  | Deny of {
+      revision : int64;  (** Request revision observed by the reviewer. *)
+    }  (** Deny the request. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_agent_resolve_request_of_yojson :
+    Yojson.Safe.t -> password_agent_resolve_request =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "decision" with
+  | "approve" ->
+      Approve
+        {
+          permission =
+            Json.required fields "permission" password_permission_of_yojson;
+          revision = Json.required fields "revision" Json.int64;
+        }
+  | "deny" -> Deny { revision = Json.required fields "revision" Json.int64 }
+  | _ -> Json.unknown "password_agent_resolve_request" json (Unknown json)
+
+and yojson_of_password_agent_resolve_request :
+    password_agent_resolve_request -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Approve case ->
+      Json.record
+        [
+          ("decision", Some (`String "approve"));
+          ("permission", Some (yojson_of_password_permission case.permission));
+          ("revision", Some (Json.of_int64 case.revision));
+        ]
+  | Deny case ->
+      Json.record
+        [
+          ("decision", Some (`String "deny"));
+          ("revision", Some (Json.of_int64 case.revision));
+        ]
+  | Unknown json -> json
+
+let make_password_agent_resolve_request_approve
+    ~(permission : password_permission) ~(revision : int64) () =
+  (Approve { permission; revision } : password_agent_resolve_request)
+
+let make_password_agent_resolve_request_deny ~(revision : int64) () =
+  (Deny { revision } : password_agent_resolve_request)
+
+(** What a revocation removes. *)
+type nonrec password_agent_revoke_scope =
+  | Approval
+  | Grant_and_approval
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_agent_revoke_scope_of_yojson :
+    Yojson.Safe.t -> password_agent_revoke_scope =
+ fun json ->
+  match Json.string json with
+  | "approval" -> Approval
+  | "grant_and_approval" -> Grant_and_approval
+  | other -> Json.unknown "password_agent_revoke_scope" json (Unknown other)
+
+and yojson_of_password_agent_revoke_scope :
+    password_agent_revoke_scope -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Approval -> `String "approval"
+  | Grant_and_approval -> `String "grant_and_approval"
+  | Unknown other -> `String other
+
+type nonrec password_agent_revoke_body = {
+  expected_permission_revision : int64;
+      (** Permission revision observed by the reviewer. *)
+  scope : password_agent_revoke_scope;  (** What to remove. *)
+}
+(** Human revocation of agent access. *)
+
+let password_agent_revoke_body_of_yojson :
+    Yojson.Safe.t -> password_agent_revoke_body =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    expected_permission_revision =
+      Json.required fields "expectedPermissionRevision" Json.int64;
+    scope = Json.required fields "scope" password_agent_revoke_scope_of_yojson;
+  }
+
+and yojson_of_password_agent_revoke_body :
+    password_agent_revoke_body -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "expectedPermissionRevision",
+        Some (Json.of_int64 value.expected_permission_revision) );
+      ("scope", Some (yojson_of_password_agent_revoke_scope value.scope));
+    ]
+
+let make_password_agent_revoke_body ~(expected_permission_revision : int64)
+    ~(scope : password_agent_revoke_scope) () =
+  ({ expected_permission_revision; scope } : password_agent_revoke_body)
+
+(** Product template. Values use the same protected representation for every template. *)
+type nonrec password_item_kind =
+  | Login
+  | Card
+  | Note
+  | Identity
+  | Api
+  | Verification_code
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_item_kind_of_yojson : Yojson.Safe.t -> password_item_kind =
+ fun json ->
+  match Json.string json with
+  | "login" -> Login
+  | "card" -> Card
+  | "note" -> Note
+  | "identity" -> Identity
+  | "api" -> Api
+  | "verification_code" -> Verification_code
+  | other -> Json.unknown "password_item_kind" json (Unknown other)
+
+and yojson_of_password_item_kind : password_item_kind -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Login -> `String "login"
+  | Card -> `String "card"
+  | Note -> `String "note"
+  | Identity -> `String "identity"
+  | Api -> `String "api"
+  | Verification_code -> `String "verification_code"
+  | Unknown other -> `String other
+
+type nonrec password_agent_search_hit = {
+  access : password_agent_item_access;  (** Current access. *)
+  id : password_item_id;  (** Item id. *)
+  kind : password_item_kind;  (** Stored kind. *)
+  name : string;  (** Display name. *)
+  url : string option;  (** Website URL. *)
+  version : int;  (** Committed positive version. *)
+}
+(** Metadata-only search hit; never values, usernames, notes or custom fields. *)
+
+let password_agent_search_hit_of_yojson :
+    Yojson.Safe.t -> password_agent_search_hit =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    access = Json.required fields "access" password_agent_item_access_of_yojson;
+    id = Json.required fields "id" password_item_id_of_yojson;
+    kind = Json.required fields "kind" password_item_kind_of_yojson;
+    name = Json.required fields "name" Json.string;
+    url = Json.optional fields "url" Json.string;
+    version = Json.required fields "version" Json.int;
+  }
+
+and yojson_of_password_agent_search_hit :
+    password_agent_search_hit -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("access", Some (yojson_of_password_agent_item_access value.access));
+      ("id", Some (yojson_of_password_item_id value.id));
+      ("kind", Some (yojson_of_password_item_kind value.kind));
+      ("name", Some (Json.of_string value.name));
+      ("url", Option.map Json.of_string value.url);
+      ("version", Some (Json.of_int value.version));
+    ]
+
+let make_password_agent_search_hit ~(access : password_agent_item_access)
+    ~(id : password_item_id) ~(kind : password_item_kind) ~(name : string) ?url
+    ~(version : int) () =
+  ({ access; id; kind; name; url; version } : password_agent_search_hit)
+
+type nonrec password_agent_search_page = {
+  items : password_agent_search_hit list;  (** Hits, newest first. *)
+  next_cursor : string option;  (** Opaque cursor of the next page. *)
+}
+(** One search page. *)
+
+let password_agent_search_page_of_yojson :
+    Yojson.Safe.t -> password_agent_search_page =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    items =
+      Json.required fields "items"
+        (Json.list password_agent_search_hit_of_yojson);
+    next_cursor = Json.optional fields "nextCursor" Json.string;
+  }
+
+and yojson_of_password_agent_search_page :
+    password_agent_search_page -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "items",
+        Some ((Json.of_list yojson_of_password_agent_search_hit) value.items) );
+      ("nextCursor", Option.map Json.of_string value.next_cursor);
+    ]
+
+let make_password_agent_search_page ~(items : password_agent_search_hit list)
+    ?next_cursor () =
+  ({ items; next_cursor } : password_agent_search_page)
+
+type nonrec password_agent_set_totp = {
+  expected_version : int;  (** Committed version the setup applies to. *)
+  operation_id : string;
+      (** UUIDv7, stable across retries; identifies the enrollment generation. *)
+  seed : password_secret_string;  (** Base32 seed. *)
+}
+(** Verification-code seed setup for an item the agent created. *)
+
+let password_agent_set_totp_of_yojson : Yojson.Safe.t -> password_agent_set_totp
+    =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    expected_version = Json.required fields "expectedVersion" Json.int;
+    operation_id = Json.required fields "operationId" Json.string;
+    seed = Json.required fields "seed" password_secret_string_of_yojson;
+  }
+
+and yojson_of_password_agent_set_totp : password_agent_set_totp -> Yojson.Safe.t
+    =
+ fun value ->
+  Json.record
+    [
+      ("expectedVersion", Some (Json.of_int value.expected_version));
+      ("operationId", Some (Json.of_string value.operation_id));
+      ("seed", Some (yojson_of_password_secret_string value.seed));
+    ]
+
+let make_password_agent_set_totp ~(expected_version : int)
+    ~(operation_id : string) ~(seed : password_secret_string) () =
+  ({ expected_version; operation_id; seed } : password_agent_set_totp)
+
+type nonrec password_agent_totp_code = {
+  code : password_secret_string;  (** Current code; never the seed. *)
+  expires_at : string;
+      (** Conservative usable-until time under the documented provider clock bound;
+not an observed generation instant. *)
+  period_seconds : int;  (** Code period in seconds. *)
+  valid_for_ms : int64;
+      (** Whole milliseconds from the server's final check until [expiresAt]. *)
+}
+(** A verification code with a conservative server-computed lifetime. *)
+
+let password_agent_totp_code_of_yojson :
+    Yojson.Safe.t -> password_agent_totp_code =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    code = Json.required fields "code" password_secret_string_of_yojson;
+    expires_at = Json.required fields "expiresAt" Json.string;
+    period_seconds = Json.required fields "periodSeconds" Json.int;
+    valid_for_ms = Json.required fields "validForMs" Json.int64;
+  }
+
+and yojson_of_password_agent_totp_code :
+    password_agent_totp_code -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("code", Some (yojson_of_password_secret_string value.code));
+      ("expiresAt", Some (Json.of_string value.expires_at));
+      ("periodSeconds", Some (Json.of_int value.period_seconds));
+      ("validForMs", Some (Json.of_int64 value.valid_for_ms));
+    ]
+
+let make_password_agent_totp_code ~(code : password_secret_string)
+    ~(expires_at : string) ~(period_seconds : int) ~(valid_for_ms : int64) () =
+  ({ code; expires_at; period_seconds; valid_for_ms }
+    : password_agent_totp_code)
+
+type nonrec password_agent_totp_code_request = {
+  purpose : password_agent_purpose;  (** Audited intent. *)
+}
+(** Verification-code request. *)
+
+let password_agent_totp_code_request_of_yojson :
+    Yojson.Safe.t -> password_agent_totp_code_request =
+ fun json ->
+  let fields = Json.obj json in
+  { purpose = Json.required fields "purpose" password_agent_purpose_of_yojson }
+
+and yojson_of_password_agent_totp_code_request :
+    password_agent_totp_code_request -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [ ("purpose", Some (yojson_of_password_agent_purpose value.purpose)) ]
+
+let make_password_agent_totp_code_request ~(purpose : password_agent_purpose) ()
+    =
+  ({ purpose } : password_agent_totp_code_request)
+
+type nonrec password_agent_write_result = {
+  item : password_agent_search_hit;  (** Item after the write. *)
+  version : int;  (** Committed version. *)
+}
+(** Created or updated item. *)
+
+let password_agent_write_result_of_yojson :
+    Yojson.Safe.t -> password_agent_write_result =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    item = Json.required fields "item" password_agent_search_hit_of_yojson;
+    version = Json.required fields "version" Json.int;
+  }
+
+and yojson_of_password_agent_write_result :
+    password_agent_write_result -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("item", Some (yojson_of_password_agent_search_hit value.item));
+      ("version", Some (Json.of_int value.version));
+    ]
+
+let make_password_agent_write_result ~(item : password_agent_search_hit)
+    ~(version : int) () =
+  ({ item; version } : password_agent_write_result)
+
 type nonrec password_create_folder_body = {
   name : string;  (** Folder display name. *)
   parent_id : string option;
@@ -42542,10 +44265,12 @@ and yojson_of_password_folder_body : password_folder_body -> Yojson.Safe.t =
 let make_password_folder_body ~(name : string) () =
   ({ name } : password_folder_body)
 
-(** Future principals can extend this without exposing agent controls in v1. *)
+(** Grant recipient category. Agent grants are managed only through the agent
+access routes and never appear in, or count toward, human sharing. *)
 type nonrec password_grantee_kind =
   | User
   | Team
+  | Agent
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let password_grantee_kind_of_yojson : Yojson.Safe.t -> password_grantee_kind =
@@ -42553,6 +44278,7 @@ let password_grantee_kind_of_yojson : Yojson.Safe.t -> password_grantee_kind =
   match Json.string json with
   | "user" -> User
   | "team" -> Team
+  | "agent" -> Agent
   | other -> Json.unknown "password_grantee_kind" json (Unknown other)
 
 and yojson_of_password_grantee_kind : password_grantee_kind -> Yojson.Safe.t =
@@ -42560,26 +44286,7 @@ and yojson_of_password_grantee_kind : password_grantee_kind -> Yojson.Safe.t =
   match value with
   | User -> `String "user"
   | Team -> `String "team"
-  | Unknown other -> `String other
-
-(** Grant capability. *)
-type nonrec password_permission =
-  | View
-  | Edit
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let password_permission_of_yojson : Yojson.Safe.t -> password_permission =
- fun json ->
-  match Json.string json with
-  | "view" -> View
-  | "edit" -> Edit
-  | other -> Json.unknown "password_permission" json (Unknown other)
-
-and yojson_of_password_permission : password_permission -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | View -> `String "view"
-  | Edit -> `String "edit"
+  | Agent -> `String "agent"
   | Unknown other -> `String other
 
 type nonrec password_grant = {
@@ -42612,46 +44319,449 @@ let make_password_grant ~(id : string) ~(kind : password_grantee_kind)
     ~(permission : password_permission) () =
   ({ id; kind; permission } : password_grant)
 
-(** Product template. Values use the same protected representation for every template. *)
-type nonrec password_item_kind =
-  | Login
-  | Card
-  | Note
-  | Identity
-  | Api
-  | Verification_code
-  | Unknown of string  (** A value this SDK version does not know. *)
+type nonrec password_import_key = string
+(** Opaque source identity, bounded before hashing or returning it to a caller. *)
 
-let password_item_kind_of_yojson : Yojson.Safe.t -> password_item_kind =
- fun json ->
-  match Json.string json with
-  | "login" -> Login
-  | "card" -> Card
-  | "note" -> Note
-  | "identity" -> Identity
-  | "api" -> Api
-  | "verification_code" -> Verification_code
-  | other -> Json.unknown "password_item_kind" json (Unknown other)
-
-and yojson_of_password_item_kind : password_item_kind -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Login -> `String "login"
-  | Card -> `String "card"
-  | Note -> `String "note"
-  | Identity -> `String "identity"
-  | Api -> `String "api"
-  | Verification_code -> `String "verification_code"
-  | Unknown other -> `String other
-
-type nonrec password_login_url = string
-(** A public HTTP(S) login URL; credentials and userinfo are rejected before indexing. *)
-
-let password_login_url_of_yojson : Yojson.Safe.t -> password_login_url =
+let password_import_key_of_yojson : Yojson.Safe.t -> password_import_key =
  fun json -> Json.string json
 
-and yojson_of_password_login_url : password_login_url -> Yojson.Safe.t =
+and yojson_of_password_import_key : password_import_key -> Yojson.Safe.t =
  fun value -> Json.of_string value
+
+type nonrec password_import_folder = {
+  key : password_import_key;  (** Opaque identity from the client parser. *)
+  name : string;  (** Validated using ordinary vault folder rules. *)
+  parent_key : password_import_key option;
+}
+(** Source folder; parents must precede children in every batch. *)
+
+let password_import_folder_of_yojson : Yojson.Safe.t -> password_import_folder =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    key = Json.required fields "key" password_import_key_of_yojson;
+    name = Json.required fields "name" Json.string;
+    parent_key = Json.optional fields "parentKey" password_import_key_of_yojson;
+  }
+
+and yojson_of_password_import_folder : password_import_folder -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("key", Some (yojson_of_password_import_key value.key));
+      ("name", Some (Json.of_string value.name));
+      ("parentKey", Option.map yojson_of_password_import_key value.parent_key);
+    ]
+
+let make_password_import_folder ~(key : password_import_key) ~(name : string)
+    ?parent_key () =
+  ({ key; name; parent_key } : password_import_folder)
+
+(** Recognized client-side source parser; contains no export contents. *)
+type nonrec password_import_format =
+  | One_password_pux
+  | One_password_csv
+  | Bitwarden_json
+  | Bitwarden_csv
+  | Bitwarden_zip
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_import_format_of_yojson : Yojson.Safe.t -> password_import_format =
+ fun json ->
+  match Json.string json with
+  | "one_password_pux" -> One_password_pux
+  | "one_password_csv" -> One_password_csv
+  | "bitwarden_json" -> Bitwarden_json
+  | "bitwarden_csv" -> Bitwarden_csv
+  | "bitwarden_zip" -> Bitwarden_zip
+  | other -> Json.unknown "password_import_format" json (Unknown other)
+
+and yojson_of_password_import_format : password_import_format -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | One_password_pux -> `String "one_password_pux"
+  | One_password_csv -> `String "one_password_csv"
+  | Bitwarden_json -> `String "bitwarden_json"
+  | Bitwarden_csv -> `String "bitwarden_csv"
+  | Bitwarden_zip -> `String "bitwarden_zip"
+  | Unknown other -> `String other
+
+type nonrec password_secret_field = {
+  label : string;
+      (** Private field label, stored alongside its value in OpenBao. *)
+  value : password_secret_string;  (** Private field content. *)
+}
+(** One private custom field. *)
+
+let password_secret_field_of_yojson : Yojson.Safe.t -> password_secret_field =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    label = Json.required fields "label" Json.string;
+    value = Json.required fields "value" password_secret_string_of_yojson;
+  }
+
+and yojson_of_password_secret_field : password_secret_field -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("label", Some (Json.of_string value.label));
+      ("value", Some (yojson_of_password_secret_string value.value));
+    ]
+
+let make_password_secret_field ~(label : string)
+    ~(value : password_secret_string) () =
+  ({ label; value } : password_secret_field)
+
+type nonrec password_secret_values = {
+  fields : password_secret_field list;
+      (** Additional private fields, including their labels. *)
+  notes : password_secret_string;
+      (** Private free-form notes, stored only by the secret provider. *)
+  password : password_secret_string;
+      (** Private credential, zeroized when the owned buffer is dropped. *)
+  username : password_secret_string;
+      (** Account identifier; authorized humans may resolve it separately from confidential values. *)
+}
+(** Secret payload; never persisted in the metadata database or traced. *)
+
+let password_secret_values_of_yojson : Yojson.Safe.t -> password_secret_values =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    fields =
+      Json.required fields "fields" (Json.list password_secret_field_of_yojson);
+    notes = Json.required fields "notes" password_secret_string_of_yojson;
+    password = Json.required fields "password" password_secret_string_of_yojson;
+    username = Json.required fields "username" password_secret_string_of_yojson;
+  }
+
+and yojson_of_password_secret_values : password_secret_values -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "fields",
+        Some ((Json.of_list yojson_of_password_secret_field) value.fields) );
+      ("notes", Some (yojson_of_password_secret_string value.notes));
+      ("password", Some (yojson_of_password_secret_string value.password));
+      ("username", Some (yojson_of_password_secret_string value.username));
+    ]
+
+let make_password_secret_values ~(fields : password_secret_field list)
+    ~(notes : password_secret_string) ~(password : password_secret_string)
+    ~(username : password_secret_string) () =
+  ({ fields; notes; password; username } : password_secret_values)
+
+type nonrec password_import_item = {
+  favorite : bool;  (** Favorite state from the export. *)
+  folder_key : password_import_key option;
+  kind : password_item_kind;  (** Ordinary vault template. *)
+  name : string;  (** Display name, validated by the ordinary create path. *)
+  source_key : password_import_key;
+      (** Stable source identity for idempotent retries. *)
+  totp : password_secret_string option;
+  url : password_login_url option;
+  values : password_secret_values;
+      (** Zeroizing confidential values sent only to the provider. *)
+}
+(** One normalized credential; intentionally has no Debug implementation. *)
+
+let password_import_item_of_yojson : Yojson.Safe.t -> password_import_item =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    favorite = Json.required fields "favorite" Json.bool;
+    folder_key = Json.optional fields "folderKey" password_import_key_of_yojson;
+    kind = Json.required fields "kind" password_item_kind_of_yojson;
+    name = Json.required fields "name" Json.string;
+    source_key = Json.required fields "sourceKey" password_import_key_of_yojson;
+    totp = Json.optional fields "totp" password_secret_string_of_yojson;
+    url = Json.optional fields "url" password_login_url_of_yojson;
+    values = Json.required fields "values" password_secret_values_of_yojson;
+  }
+
+and yojson_of_password_import_item : password_import_item -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("favorite", Some (Json.of_bool value.favorite));
+      ("folderKey", Option.map yojson_of_password_import_key value.folder_key);
+      ("kind", Some (yojson_of_password_item_kind value.kind));
+      ("name", Some (Json.of_string value.name));
+      ("sourceKey", Some (yojson_of_password_import_key value.source_key));
+      ("totp", Option.map yojson_of_password_secret_string value.totp);
+      ("url", Option.map yojson_of_password_login_url value.url);
+      ("values", Some (yojson_of_password_secret_values value.values));
+    ]
+
+let make_password_import_item ~(favorite : bool) ?folder_key
+    ~(kind : password_item_kind) ~(name : string)
+    ~(source_key : password_import_key) ?totp ?url
+    ~(values : password_secret_values) () =
+  ({ favorite; folder_key; kind; name; source_key; totp; url; values }
+    : password_import_item)
+
+(** Destination under which source folders are nested. *)
+type nonrec password_import_target =
+  | Existing of { folder_id : string  (** Destination folder identity. *) }
+      (** Validate and use a folder already in this team. *)
+  | New of {
+      name : string;  (** Validated using ordinary vault folder rules. *)
+    }  (** Idempotently create a top-level destination folder. *)
+  | Root  (** Import directly into the team vault root. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_import_target_of_yojson : Yojson.Safe.t -> password_import_target =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "existing" ->
+      Existing { folder_id = Json.required fields "folderId" Json.string }
+  | "new" -> New { name = Json.required fields "name" Json.string }
+  | "root" -> Root
+  | _ -> Json.unknown "password_import_target" json (Unknown json)
+
+and yojson_of_password_import_target : password_import_target -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Existing case ->
+      Json.record
+        [
+          ("kind", Some (`String "existing"));
+          ("folderId", Some (Json.of_string case.folder_id));
+        ]
+  | New case ->
+      Json.record
+        [
+          ("kind", Some (`String "new"));
+          ("name", Some (Json.of_string case.name));
+        ]
+  | Root -> Json.record [ ("kind", Some (`String "root")) ]
+  | Unknown json -> json
+
+let make_password_import_target_existing ~(folder_id : string) () =
+  (Existing { folder_id } : password_import_target)
+
+let make_password_import_target_new ~(name : string) () =
+  (New { name } : password_import_target)
+
+type nonrec password_import_batch = {
+  folders : password_import_folder list;
+      (** Source folder tree, parents first; resend with each batch. *)
+  format : password_import_format;
+      (** Source category recorded in the batch audit. *)
+  items : password_import_item list;
+      (** Independently validated credentials. *)
+  private_ : bool;
+      (** Omit the default team Edit grant on newly created items. *)
+  target : password_import_target;
+      (** Root for source folders and otherwise unfiled items. *)
+}
+(** At most 25 credentials and 200 source folders in a request bounded to 4 MiB. *)
+
+let password_import_batch_of_yojson : Yojson.Safe.t -> password_import_batch =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    folders =
+      Json.required fields "folders"
+        (Json.list password_import_folder_of_yojson);
+    format = Json.required fields "format" password_import_format_of_yojson;
+    items =
+      Json.required fields "items" (Json.list password_import_item_of_yojson);
+    private_ = Json.required fields "private" Json.bool;
+    target = Json.required fields "target" password_import_target_of_yojson;
+  }
+
+and yojson_of_password_import_batch : password_import_batch -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "folders",
+        Some ((Json.of_list yojson_of_password_import_folder) value.folders) );
+      ("format", Some (yojson_of_password_import_format value.format));
+      ("items", Some ((Json.of_list yojson_of_password_import_item) value.items));
+      ("private", Some (Json.of_bool value.private_));
+      ("target", Some (yojson_of_password_import_target value.target));
+    ]
+
+let make_password_import_batch ~(folders : password_import_folder list)
+    ~(format : password_import_format) ~(items : password_import_item list)
+    ~(private_ : bool) ~(target : password_import_target) () =
+  ({ folders; format; items; private_; target } : password_import_batch)
+
+type nonrec password_import_folder_result = {
+  folder_id : string;  (** Existing or ensured folder identity. *)
+  key : password_import_key;  (** Opaque source identity. *)
+}
+(** Source-to-vault folder identity without display names. *)
+
+let password_import_folder_result_of_yojson :
+    Yojson.Safe.t -> password_import_folder_result =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    folder_id = Json.required fields "folderId" Json.string;
+    key = Json.required fields "key" password_import_key_of_yojson;
+  }
+
+and yojson_of_password_import_folder_result :
+    password_import_folder_result -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("folderId", Some (Json.of_string value.folder_id));
+      ("key", Some (yojson_of_password_import_key value.key));
+    ]
+
+let make_password_import_folder_result ~(folder_id : string)
+    ~(key : password_import_key) () =
+  ({ folder_id; key } : password_import_folder_result)
+
+(** Closed, sanitized per-item failure categories. *)
+type nonrec password_import_error_code =
+  | Not_found
+  | Forbidden
+  | Invalid_request
+  | Version_conflict
+  | Folder_missing
+  | Busy
+  | Vault_unavailable
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_import_error_code_of_yojson :
+    Yojson.Safe.t -> password_import_error_code =
+ fun json ->
+  match Json.string json with
+  | "not_found" -> Not_found
+  | "forbidden" -> Forbidden
+  | "invalid_request" -> Invalid_request
+  | "version_conflict" -> Version_conflict
+  | "folder_missing" -> Folder_missing
+  | "busy" -> Busy
+  | "vault_unavailable" -> Vault_unavailable
+  | other -> Json.unknown "password_import_error_code" json (Unknown other)
+
+and yojson_of_password_import_error_code :
+    password_import_error_code -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Not_found -> `String "not_found"
+  | Forbidden -> `String "forbidden"
+  | Invalid_request -> `String "invalid_request"
+  | Version_conflict -> `String "version_conflict"
+  | Folder_missing -> `String "folder_missing"
+  | Busy -> `String "busy"
+  | Vault_unavailable -> `String "vault_unavailable"
+  | Unknown other -> `String other
+
+(** Fixed per-item outcome. *)
+type nonrec password_import_outcome =
+  | Created
+  | Already_present
+  | Failed
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let password_import_outcome_of_yojson : Yojson.Safe.t -> password_import_outcome
+    =
+ fun json ->
+  match Json.string json with
+  | "created" -> Created
+  | "already_present" -> Already_present
+  | "failed" -> Failed
+  | other -> Json.unknown "password_import_outcome" json (Unknown other)
+
+and yojson_of_password_import_outcome : password_import_outcome -> Yojson.Safe.t
+    =
+ fun value ->
+  match value with
+  | Created -> `String "created"
+  | Already_present -> `String "already_present"
+  | Failed -> `String "failed"
+  | Unknown other -> `String other
+
+type nonrec password_import_item_result = {
+  error_code : password_import_error_code option;
+  item_id : password_item_id option;
+  outcome : password_import_outcome;
+      (** Whether the item was newly created, retained, or failed. *)
+  source_key : password_import_key;  (** Opaque identity matching the request. *)
+}
+(** Result for a single item; failed TOTP enrollment can still return the created item id. *)
+
+let password_import_item_result_of_yojson :
+    Yojson.Safe.t -> password_import_item_result =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    error_code =
+      Json.optional fields "errorCode" password_import_error_code_of_yojson;
+    item_id = Json.optional fields "itemId" password_item_id_of_yojson;
+    outcome = Json.required fields "outcome" password_import_outcome_of_yojson;
+    source_key = Json.required fields "sourceKey" password_import_key_of_yojson;
+  }
+
+and yojson_of_password_import_item_result :
+    password_import_item_result -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "errorCode",
+        Option.map yojson_of_password_import_error_code value.error_code );
+      ("itemId", Option.map yojson_of_password_item_id value.item_id);
+      ("outcome", Some (yojson_of_password_import_outcome value.outcome));
+      ("sourceKey", Some (yojson_of_password_import_key value.source_key));
+    ]
+
+let make_password_import_item_result ?error_code ?item_id
+    ~(outcome : password_import_outcome) ~(source_key : password_import_key) ()
+    =
+  ({ error_code; item_id; outcome; source_key } : password_import_item_result)
+
+type nonrec password_import_batch_result = {
+  folders : password_import_folder_result list;
+      (** Ensured source folders, in request order. *)
+  items : password_import_item_result list;
+      (** One result per input item, in request order. *)
+  target_folder_id : string option;
+      (** Destination folder; null for the vault root. *)
+}
+(** Partial batch success without credential values or display metadata. *)
+
+let password_import_batch_result_of_yojson :
+    Yojson.Safe.t -> password_import_batch_result =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    folders =
+      Json.required fields "folders"
+        (Json.list password_import_folder_result_of_yojson);
+    items =
+      Json.required fields "items"
+        (Json.list password_import_item_result_of_yojson);
+    target_folder_id = Json.optional fields "targetFolderId" Json.string;
+  }
+
+and yojson_of_password_import_batch_result :
+    password_import_batch_result -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "folders",
+        Some
+          ((Json.of_list yojson_of_password_import_folder_result) value.folders)
+      );
+      ( "items",
+        Some ((Json.of_list yojson_of_password_import_item_result) value.items)
+      );
+      ("targetFolderId", Option.map Json.of_string value.target_folder_id);
+    ]
+
+let make_password_import_batch_result
+    ~(folders : password_import_folder_result list)
+    ~(items : password_import_item_result list) ?target_folder_id () =
+  ({ folders; items; target_folder_id } : password_import_batch_result)
 
 type nonrec password_item_fields = {
   created_at : string;  (** Resource creation timestamp. *)
@@ -42841,6 +44951,26 @@ let make_password_item_metadata ~(created_at : string) ~(favorite : bool)
    }
     : password_item_metadata)
 
+type nonrec password_match_names = {
+  names : string list;
+      (** Names trimmed and lower-cased by the caller, compared with each item's
+lower-cased name; at most 500 ([password_import::vault::MAX_IMPORT_MATCH_NAMES]). *)
+}
+(** Item names to look for before an import, in the body so they stay out of
+URLs and access logs. *)
+
+let password_match_names_of_yojson : Yojson.Safe.t -> password_match_names =
+ fun json ->
+  let fields = Json.obj json in
+  { names = Json.required fields "names" (Json.list Json.string) }
+
+and yojson_of_password_match_names : password_match_names -> Yojson.Safe.t =
+ fun value ->
+  Json.record [ ("names", Some ((Json.of_list Json.of_string) value.names)) ]
+
+let make_password_match_names ~(names : string list) () =
+  ({ names } : password_match_names)
+
 type nonrec password_move_folder_body = {
   parent_id : string option;
       (** Containing folder; null moves the folder to the top level. *)
@@ -42919,81 +45049,6 @@ and yojson_of_password_reveal_body : password_reveal_body -> Yojson.Safe.t =
 
 let make_password_reveal_body ?version () = ({ version } : password_reveal_body)
 
-type nonrec password_secret_string = string
-(** Owned sensitive text. Deliberately does not implement Debug or Display. *)
-
-let password_secret_string_of_yojson : Yojson.Safe.t -> password_secret_string =
- fun json -> Json.string json
-
-and yojson_of_password_secret_string : password_secret_string -> Yojson.Safe.t =
- fun value -> Json.of_string value
-
-type nonrec password_secret_field = {
-  label : string;
-      (** Private field label, stored alongside its value in OpenBao. *)
-  value : password_secret_string;  (** Private field content. *)
-}
-(** One private custom field. *)
-
-let password_secret_field_of_yojson : Yojson.Safe.t -> password_secret_field =
- fun json ->
-  let fields = Json.obj json in
-  {
-    label = Json.required fields "label" Json.string;
-    value = Json.required fields "value" password_secret_string_of_yojson;
-  }
-
-and yojson_of_password_secret_field : password_secret_field -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ("label", Some (Json.of_string value.label));
-      ("value", Some (yojson_of_password_secret_string value.value));
-    ]
-
-let make_password_secret_field ~(label : string)
-    ~(value : password_secret_string) () =
-  ({ label; value } : password_secret_field)
-
-type nonrec password_secret_values = {
-  fields : password_secret_field list;
-      (** Additional private fields, including their labels. *)
-  notes : password_secret_string;
-      (** Private free-form notes, stored only by the secret provider. *)
-  password : password_secret_string;
-      (** Private credential, zeroized when the owned buffer is dropped. *)
-  username : password_secret_string;
-      (** Account identifier; authorized humans may resolve it separately from confidential values. *)
-}
-(** Secret payload; never persisted in the metadata database or traced. *)
-
-let password_secret_values_of_yojson : Yojson.Safe.t -> password_secret_values =
- fun json ->
-  let fields = Json.obj json in
-  {
-    fields =
-      Json.required fields "fields" (Json.list password_secret_field_of_yojson);
-    notes = Json.required fields "notes" password_secret_string_of_yojson;
-    password = Json.required fields "password" password_secret_string_of_yojson;
-    username = Json.required fields "username" password_secret_string_of_yojson;
-  }
-
-and yojson_of_password_secret_values : password_secret_values -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ( "fields",
-        Some ((Json.of_list yojson_of_password_secret_field) value.fields) );
-      ("notes", Some (yojson_of_password_secret_string value.notes));
-      ("password", Some (yojson_of_password_secret_string value.password));
-      ("username", Some (yojson_of_password_secret_string value.username));
-    ]
-
-let make_password_secret_values ~(fields : password_secret_field list)
-    ~(notes : password_secret_string) ~(password : password_secret_string)
-    ~(username : password_secret_string) () =
-  ({ fields; notes; password; username } : password_secret_values)
-
 type nonrec password_revealed = {
   values : password_secret_values;
       (** Private payload; never serialize into the metadata repository. *)
@@ -43041,6 +45096,45 @@ and yojson_of_password_share_body : password_share_body -> Yojson.Safe.t =
 
 let make_password_share_body ~(grants : password_grant list) () =
   ({ grants } : password_share_body)
+
+(** Events that can be published to \[[MacroPasswordsTopic]\]. *)
+type nonrec password_topic_event =
+  | Passwords_access_request_resolved of {
+      metadata : access_request_resolved_metadata;
+          (** An authorized human resolved, or revoked, an agent's access request. *)
+    }
+      (** An authorized human resolved, or revoked, an agent's access request. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let password_topic_event_of_yojson : Yojson.Safe.t -> password_topic_event =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "event_type" with
+  | "passwords.access_request.resolved" ->
+      Passwords_access_request_resolved
+        {
+          metadata =
+            Json.required fields "metadata"
+              access_request_resolved_metadata_of_yojson;
+        }
+  | _ -> Json.unknown "password_topic_event" json (Unknown json)
+
+and yojson_of_password_topic_event : password_topic_event -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Passwords_access_request_resolved case ->
+      Json.record
+        [
+          ("event_type", Some (`String "passwords.access_request.resolved"));
+          ( "metadata",
+            Some (yojson_of_access_request_resolved_metadata case.metadata) );
+        ]
+  | Unknown json -> json
+
+let make_password_topic_event_passwords_access_request_resolved
+    ~(metadata : access_request_resolved_metadata) () =
+  (Passwords_access_request_resolved { metadata } : password_topic_event)
 
 type nonrec password_totp_body = {
   key : password_secret_string;
@@ -45182,22 +47276,32 @@ let make_read_spreadsheet_request ?include_styles ?ranges ?sheet_id () =
   ({ include_styles; ranges; sheet_id } : read_spreadsheet_request)
 
 type nonrec recently_deleted_response_data = {
-  items : item list;  (** The items returned from the call *)
+  items : item list;
+      (** The items returned from the call, most recently trashed first *)
+  next_cursor : string option;
+      (** Pass as [cursor] to get the next page; absent on the last page *)
 }
 
 let recently_deleted_response_data_of_yojson :
     Yojson.Safe.t -> recently_deleted_response_data =
  fun json ->
   let fields = Json.obj json in
-  { items = Json.required fields "items" (Json.list item_of_yojson) }
+  {
+    items = Json.required fields "items" (Json.list item_of_yojson);
+    next_cursor = Json.optional fields "next_cursor" Json.string;
+  }
 
 and yojson_of_recently_deleted_response_data :
     recently_deleted_response_data -> Yojson.Safe.t =
  fun value ->
-  Json.record [ ("items", Some ((Json.of_list yojson_of_item) value.items)) ]
+  Json.record
+    [
+      ("items", Some ((Json.of_list yojson_of_item) value.items));
+      ("next_cursor", Option.map Json.of_string value.next_cursor);
+    ]
 
-let make_recently_deleted_response_data ~(items : item list) () =
-  ({ items } : recently_deleted_response_data)
+let make_recently_deleted_response_data ~(items : item list) ?next_cursor () =
+  ({ items; next_cursor } : recently_deleted_response_data)
 
 type nonrec record_entries_request = {
   record_ids : string list;  (** CRM company or contact ids. *)
@@ -49393,22 +51497,32 @@ and yojson_of_trash_pipeline : trash_pipeline -> Yojson.Safe.t =
 let make_trash_pipeline ~(trashed : bool) () = ({ trashed } : trash_pipeline)
 
 type nonrec typed_success_response_data = {
-  items : item list;  (** The items returned from the call *)
+  items : item list;
+      (** The items returned from the call, most recently trashed first *)
+  next_cursor : string option;
+      (** Pass as [cursor] to get the next page; absent on the last page *)
 }
 
 let typed_success_response_data_of_yojson :
     Yojson.Safe.t -> typed_success_response_data =
  fun json ->
   let fields = Json.obj json in
-  { items = Json.required fields "items" (Json.list item_of_yojson) }
+  {
+    items = Json.required fields "items" (Json.list item_of_yojson);
+    next_cursor = Json.optional fields "next_cursor" Json.string;
+  }
 
 and yojson_of_typed_success_response_data :
     typed_success_response_data -> Yojson.Safe.t =
  fun value ->
-  Json.record [ ("items", Some ((Json.of_list yojson_of_item) value.items)) ]
+  Json.record
+    [
+      ("items", Some ((Json.of_list yojson_of_item) value.items));
+      ("next_cursor", Option.map Json.of_string value.next_cursor);
+    ]
 
-let make_typed_success_response_data ~(items : item list) () =
-  ({ items } : typed_success_response_data)
+let make_typed_success_response_data ~(items : item list) ?next_cursor () =
+  ({ items; next_cursor } : typed_success_response_data)
 
 type nonrec typed_success_response = {
   data : typed_success_response_data;  (** Data to be returned *)
@@ -50711,6 +52825,8 @@ type nonrec webhook_event =
 topic. *)
   | User_topic_event of user_topic_event
       (** User profile events from the [macro.users] topic. *)
+  | Password_topic_event of password_topic_event
+      (** Vault facts addressed to one account from the [macro.passwords] topic. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -50749,6 +52865,11 @@ let webhook_event_of_yojson : Yojson.Safe.t -> webhook_event =
             (match user_topic_event_of_yojson json with
             | Unknown _ -> Json.fail "unknown value"
             | known -> known));
+        (fun json ->
+          Password_topic_event
+            (match password_topic_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
       ]
       json
   with
@@ -50765,6 +52886,7 @@ and yojson_of_webhook_event : webhook_event -> Yojson.Safe.t =
   | Agent_session_lifecycle_event inner ->
       yojson_of_agent_session_lifecycle_event inner
   | User_topic_event inner -> yojson_of_user_topic_event inner
+  | Password_topic_event inner -> yojson_of_password_topic_event inner
   | Unknown json -> json
 
 type nonrec webhook_filter = {
@@ -56364,7 +58486,7 @@ and the company's contacts. Access is enforced by
 that owns the company, and hidden companies are invisible to plain
 members. Admin/owner callers see hidden companies and contacts so
 they can render the right unhide UI. *)
-let get_company ~(company_id : string) () =
+let get_company ~(company_id : string) ?include_contacts () =
   ({
      Request.service = "storage";
      operation = "get_company";
@@ -56374,7 +58496,15 @@ let get_company ~(company_id : string) () =
          [
            "/crm/companies/"; Request.segment ((fun value -> value) company_id);
          ];
-     query = List.filter (fun (_, values) -> values <> []) [];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "includeContacts",
+             match include_contacts with
+             | None -> []
+             | Some value -> [ string_of_bool value ] );
+         ];
      headers =
        List.concat_map
          (fun (name, values) -> List.map (fun v -> (name, v)) values)
@@ -56454,6 +58584,60 @@ let create_crm_contact ~(company_id : string) ~(name : string) ?email () =
          error_response_of_yojson;
    }
     : (crm_contact_response, error_response) Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/companies/{company_id}/contacts/page]
+
+List a CRM company's contacts a page at a time, filtered by archive
+state and an optional name or email search. Access is enforced by
+\[[CrmCompanyAccessLevelExtractor]\] as for
+[GET /crm/companies/{company_id}/contacts]; hidden contacts are
+invisible to plain members. *)
+let list_company_contacts_page ~(company_id : string) ?archived ?query ?cursor
+    ?limit () =
+  ({
+     Request.service = "storage";
+     operation = "list_company_contacts_page";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/crm/companies/";
+           Request.segment ((fun value -> value) company_id);
+           "/contacts/page";
+         ];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "archived",
+             match archived with
+             | None -> []
+             | Some value -> [ string_of_bool value ] );
+           ( "query",
+             match query with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "cursor",
+             match cursor with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "limit",
+             match limit with
+             | None -> []
+             | Some value -> [ Int64.to_string value ] );
+         ];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json company_contacts_page_response_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 401; 404; 500 ] error_response_of_yojson;
+   }
+    : ( company_contacts_page_response,
+        error_response )
+      Macro_sdk_runtime.Request.t)
 
 (** [PUT /crm/companies/{company_id}/email-sync]
 
@@ -56651,11 +58835,11 @@ let get_contact_by_email ~(email : string) () =
 
 (** [GET /crm/contacts/{contact_id}]
 
-Fetch a single CRM contact by id. Access is enforced by
-\[[CrmContactAccessLevelExtractor]\]: the user must be on the team that
-owns the contact's parent company, and hidden contacts are invisible
-to plain members. Admin/owner callers see hidden contacts so they can
-render the right unhide UI. *)
+Fetch a single CRM contact by id, with its company's name and
+visibility. Access is enforced by \[[CrmContactAccessLevelExtractor]\]:
+the user must be on the team that owns the contact, and hidden
+contacts are invisible to plain members. Admin/owner callers see
+hidden contacts so they can render the right unhide UI. *)
 let get_contact ~(contact_id : string) () =
   ({
      Request.service = "storage";
@@ -56670,11 +58854,11 @@ let get_contact ~(contact_id : string) () =
          (fun (name, values) -> List.map (fun v -> (name, v)) values)
          [];
      body = None;
-     decode_reply = Request.json crm_contact_response_of_yojson;
+     decode_reply = Request.json crm_contact_detail_response_of_yojson;
      decode_error =
        Request.error_json [ 401; 404; 500 ] error_response_of_yojson;
    }
-    : (crm_contact_response, error_response) Macro_sdk_runtime.Request.t)
+    : (crm_contact_detail_response, error_response) Macro_sdk_runtime.Request.t)
 
 (** [PUT /crm/contacts/{contact_id}/company]
 
@@ -56933,7 +59117,7 @@ let get_crm_email_privacy () =
 
 (** [PUT /crm/email-privacy]
 
-Apply one consent or domain-exclusion change as the authenticated member. *)
+Apply one consent, domain, or thread exclusion change as the member. *)
 let update_crm_email_privacy ~(body : email_privacy_change) () =
   ({
      Request.service = "storage";
@@ -56950,6 +59134,58 @@ let update_crm_email_privacy ~(body : email_privacy_change) () =
      decode_error = Request.no_error;
    }
     : ( email_privacy_settings,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/email-privacy/threads]
+
+List only the authenticated member's thread exclusions. *)
+let list_crm_excluded_email_threads ?after () =
+  ({
+     Request.service = "storage";
+     operation = "list_crm_excluded_email_threads";
+     meth = `GET;
+     path = "/crm/email-privacy/threads";
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "after",
+             match after with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+         ];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json excluded_email_threads_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( excluded_email_threads,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /crm/member-access]
+
+Read fresh authority without requiring CRM access. *)
+let get_crm_member_access () =
+  ({
+     Request.service = "storage";
+     operation = "get_crm_member_access";
+     meth = `GET;
+     path = "/crm/member-access";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json crm_member_access_response_of_yojson;
+     decode_error = Request.no_error;
+   }
+    : ( crm_member_access_response,
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
 
@@ -57742,6 +59978,34 @@ let get_crm_pipeline_view_positions ~(id : string) ~(view : string) () =
     : ( card_position list,
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
+
+(** [POST /crm/previews]
+
+Title many CRM company and contact chips at once. Each record answers as
+its own read ([GET /crm/companies/{company_id}],
+[GET /crm/contacts/{contact_id}]) would: a record the caller may not open,
+or that does not exist, is left out of the response. *)
+let preview_crm_records ?company_ids ?contact_ids () =
+  ({
+     Request.service = "storage";
+     operation = "preview_crm_records";
+     meth = `POST;
+     path = "/crm/previews";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_crm_previews_request
+               ({ company_ids; contact_ids } : crm_previews_request)));
+     decode_reply = Request.json crm_previews_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 401; 500 ] error_response_of_yojson;
+   }
+    : (crm_previews, error_response) Macro_sdk_runtime.Request.t)
 
 (** [GET /crm/settings]
 
@@ -63778,6 +66042,354 @@ let entity_message_typing ~(parent_type : string) ~(parent_id : string)
    }
     : (unit, Macro_sdk_runtime.Request.no_error) Macro_sdk_runtime.Request.t)
 
+(** [GET /passwords/agent/teams/{team}/items]
+
+Search the agent's catalog: metadata and current access only. *)
+let passwords_agent_search ~(team : string) ~(x_macro_agent_session_id : string)
+    ?q ?limit ?cursor () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_search";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items";
+         ];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "q",
+             match q with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "limit",
+             match limit with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "cursor",
+             match cursor with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+         ];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+         ];
+     body = None;
+     decode_reply = Request.json password_agent_search_page_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_search_page,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/agent/teams/{team}/items]
+
+Create a login or API item attributed to this agent. *)
+let passwords_agent_create ~(team : string) ~(x_macro_agent_session_id : string)
+    ~(x_macro_passwords : string) ~(name : string) ~(operation_id : string)
+    ~(secret : password_agent_create_secret) ?url () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_create";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_create_item
+               ({ name; operation_id; secret; url }
+                 : password_agent_create_item)));
+     decode_reply = Request.json password_agent_write_result_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_write_result,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [PATCH /passwords/agent/teams/{team}/items/{item}]
+
+Replace supplied fields of a login or API item. *)
+let passwords_agent_update ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) ~(x_macro_passwords : string)
+    ~(expected_version : int) ~(operation_id : string) ?metadata_patch
+    ?secret_patch () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_update";
+     meth = `PATCH;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_patch_item
+               ({ expected_version; metadata_patch; operation_id; secret_patch }
+                 : password_agent_patch_item)));
+     decode_reply = Request.json password_agent_write_result_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_write_result,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/agent/teams/{team}/items/{item}/access-requests]
+
+Ask authorized humans for access to an item. *)
+let passwords_agent_request_access ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) ~(x_macro_passwords : string)
+    ~(permission : password_permission) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_request_access";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/access-requests";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_access_request_body
+               ({ permission } : password_agent_access_request_body)));
+     decode_reply = Request.json password_agent_access_request_state_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 429; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_access_request_state,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /passwords/agent/teams/{team}/items/{item}/access-requests/mine]
+
+This agent's own request state for the item. *)
+let passwords_agent_my_request ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_my_request";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/access-requests/mine";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+         ];
+     body = None;
+     decode_reply = Request.json password_agent_access_request_state_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_access_request_state,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/agent/teams/{team}/items/{item}/disclose]
+
+Disclose one selected field to the agent's capability. *)
+let passwords_agent_disclose ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) ~(x_macro_passwords : string)
+    ~(purpose : password_agent_purpose)
+    ~(selector : password_agent_secret_selector) ?expected_version () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_disclose";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/disclose";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_disclose_request
+               ({ expected_version; purpose; selector }
+                 : password_agent_disclose_request)));
+     decode_reply = Request.json password_agent_disclosed_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_disclosed,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [PUT /passwords/agent/teams/{team}/items/{item}/totp]
+
+Enroll a verification-code seed on an item this agent created. *)
+let passwords_agent_set_totp ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) ~(x_macro_passwords : string)
+    ~(expected_version : int) ~(operation_id : string)
+    ~(seed : password_secret_string) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_set_totp";
+     meth = `PUT;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/totp";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_set_totp
+               ({ expected_version; operation_id; seed }
+                 : password_agent_set_totp)));
+     decode_reply = Request.unit;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : (unit, password_agent_failure) Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/agent/teams/{team}/items/{item}/totp/code]
+
+The current verification code of a login or verification-code item. *)
+let passwords_agent_totp_code ~(team : string) ~(item : string)
+    ~(x_macro_agent_session_id : string) ~(x_macro_passwords : string)
+    ~(purpose : password_agent_purpose) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_totp_code";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/agent/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/totp/code";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [
+           ( "X-Macro-Agent-Session-Id",
+             [ (fun value -> value) x_macro_agent_session_id ] );
+           ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]);
+         ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_totp_code_request
+               ({ purpose } : password_agent_totp_code_request)));
+     decode_reply = Request.json password_agent_totp_code_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 401; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_totp_code,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
 (** [GET /passwords/teams]
 
 List current teams available to the authenticated human. *)
@@ -63797,6 +66409,53 @@ let passwords_teams () =
      decode_error = Request.error_json [ 403; 409 ] password_failure_of_yojson;
    }
     : (password_team_id list, password_failure) Macro_sdk_runtime.Request.t)
+
+(** [GET /passwords/teams/{team}/agent-access-requests]
+
+Pending agent requests on items the caller may manage. *)
+let passwords_agent_access_requests ~(team : string) ?item_id ?limit ?cursor ()
+    =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_access_requests";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/agent-access-requests";
+         ];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "itemId",
+             match item_id with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "limit",
+             match limit with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+           ( "cursor",
+             match cursor with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+         ];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json password_agent_access_request_page_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 403; 404; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_access_request_page,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
 
 (** [GET /passwords/teams/{team}/folders]
 
@@ -63948,6 +66607,45 @@ let passwords_move_folder ~(team : string) ~(folder : string)
    }
     : (password_folder, password_failure) Macro_sdk_runtime.Request.t)
 
+(** [POST /passwords/teams/{team}/imports/{import_id}/items]
+
+Import normalized credentials with independently retryable per-item outcomes. *)
+let passwords_import_batch ~(team : string) ~(import_id : string)
+    ~(x_macro_passwords : string) ~(folders : password_import_folder list)
+    ~(format : password_import_format) ~(items : password_import_item list)
+    ~(private_ : bool) ~(target : password_import_target) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_import_batch";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/imports/";
+           Request.segment ((fun value -> value) import_id);
+           "/items";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_import_batch
+               ({ folders; format; items; private_; target }
+                 : password_import_batch)));
+     decode_reply = Request.json password_import_batch_result_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 403; 404; 409; 503 ] password_failure_of_yojson;
+   }
+    : ( password_import_batch_result,
+        password_failure )
+      Macro_sdk_runtime.Request.t)
+
 (** [GET /passwords/teams/{team}/items]
 
 Search authorized metadata without resolving private values. *)
@@ -64027,6 +66725,40 @@ let passwords_create ~(team : string) ~(x_macro_passwords : string)
      decode_error = Request.error_json [ 403; 409 ] password_failure_of_yojson;
    }
     : (password_item_metadata, password_failure) Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/teams/{team}/items/match]
+
+Visible items named like the given names, for an import's duplicate check;
+names travel in the body so they stay out of URLs and access logs. *)
+let passwords_match ~(team : string) ~(x_macro_passwords : string)
+    ~(names : string list) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_match";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/match";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_match_names ({ names } : password_match_names)));
+     decode_reply = Request.json (Json.list password_item_metadata_of_yojson);
+     decode_error =
+       Request.error_json [ 400; 403; 404; 409 ] password_failure_of_yojson;
+   }
+    : ( password_item_metadata list,
+        password_failure )
+      Macro_sdk_runtime.Request.t)
 
 (** [GET /passwords/teams/{team}/items/{item}]
 
@@ -64190,6 +66922,85 @@ let passwords_activity ~(team : string) ~(item : string) () =
      decode_error = Request.error_json [ 403; 409 ] password_failure_of_yojson;
    }
     : (password_activity list, password_failure) Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve]
+
+Approve or deny a pending agent request. *)
+let passwords_agent_resolve_request ~(team : string) ~(item : string)
+    ~(request : string) ~(x_macro_passwords : string)
+    ~(body : password_agent_resolve_request) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_resolve_request";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/agent-access-requests/";
+           Request.segment ((fun value -> value) request);
+           "/resolve";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body = Some (Request.Json (yojson_of_password_agent_resolve_request body));
+     decode_reply = Request.json password_agent_access_request_state_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_access_request_state,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
+
+(** [POST /passwords/teams/{team}/items/{item}/agents/{agent}/revoke]
+
+Revoke an agent's standing approval, or its grant and approval. *)
+let passwords_agent_revoke ~(team : string) ~(item : string) ~(agent : string)
+    ~(x_macro_passwords : string) ~(expected_permission_revision : int64)
+    ~(scope : password_agent_revoke_scope) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_agent_revoke";
+     meth = `POST;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/agents/";
+           Request.segment ((fun value -> value) agent);
+           "/revoke";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_password_agent_revoke_body
+               ({ expected_permission_revision; scope }
+                 : password_agent_revoke_body)));
+     decode_reply = Request.json password_agent_item_access_of_yojson;
+     decode_error =
+       Request.error_json
+         [ 400; 403; 404; 409; 503 ]
+         password_agent_failure_of_yojson;
+   }
+    : ( password_agent_item_access,
+        password_agent_failure )
+      Macro_sdk_runtime.Request.t)
 
 (** [POST /passwords/teams/{team}/items/{item}/copy]
 
@@ -64961,14 +67772,27 @@ let revert_delete_project ~(id : string) () =
 
 (** [GET /recents/deleted]
 
-Gets the users recently deleted items. *)
-let recently_deleted () =
+Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first. *)
+let recently_deleted ?limit ?cursor () =
   ({
      Request.service = "storage";
      operation = "recently_deleted";
      meth = `GET;
      path = "/recents/deleted";
-     query = List.filter (fun (_, values) -> values <> []) [];
+     query =
+       List.filter
+         (fun (_, values) -> values <> [])
+         [
+           ( "limit",
+             match limit with
+             | None -> []
+             | Some value -> [ string_of_int value ] );
+           ( "cursor",
+             match cursor with
+             | None -> []
+             | Some value -> [ (fun value -> value) value ] );
+         ];
      headers =
        List.concat_map
          (fun (name, values) -> List.map (fun v -> (name, v)) values)

@@ -1524,16 +1524,6 @@ val make_error_response : message:string -> unit -> error_response
 (** A plain old json error response for use with axum.
 yup, thats it. *)
 
-(** How long a projection remains active without being requested. *)
-type nonrec expiry =
-  | Day
-  | Week
-  | Month
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val expiry_of_yojson : Yojson.Safe.t -> expiry
-val yojson_of_expiry : expiry -> Yojson.Safe.t
-
 type nonrec explicit_memory = { content : string; revision : int64 }
 (** A private explicit memory document and its optimistic concurrency token. *)
 
@@ -1789,6 +1779,7 @@ val make_get_chats_for_attachment_response :
 (** The requested inference speed. Standard is backward compatible with old clients. *)
 type nonrec model_speed =
   | Standard
+  | Priority
   | Fast
   | Ultrafast
   | Unknown of string  (** A value this SDK version does not know. *)
@@ -2054,6 +2045,8 @@ type nonrec import_run = {
   review_id : string option;
       (** The review presenting the run's plan, once one does. A Notion plan is
 presented while it is still [running]; rows staged after that take it. *)
+  review_session_id : string option;
+      (** The agent session presenting that review. *)
   scanned : scan_counts option;
   source : import_source;  (** The source this run discovered from. *)
   status : run_status;  (** Where the run is in its lifecycle. *)
@@ -2067,6 +2060,7 @@ val yojson_of_import_run : import_run -> Yojson.Safe.t
 val make_import_run :
   ?error:string ->
   ?review_id:string ->
+  ?review_session_id:string ->
   ?scanned:scan_counts ->
   source:import_source ->
   status:run_status ->
@@ -2803,47 +2797,6 @@ val make_pipedream_update_request :
   pipedream_update_request
 (** Request body for updating a connected app. *)
 
-(** The materialization status of a user's projection instance. *)
-type nonrec projection_status =
-  | Loading
-  | Cold
-  | Ready
-  | Refreshing
-  | Error_
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val projection_status_of_yojson : Yojson.Safe.t -> projection_status
-val yojson_of_projection_status : projection_status -> Yojson.Safe.t
-
-type nonrec projection_state_response = {
-  data : string option;
-      (** The cached result, if any. JSON-encoded when the projection defines an
-[output_schema]. *)
-  error : string option;  (** The most recent materialization error, if any. *)
-  generated_at : string option;  (** When the result was generated. *)
-  id : string;  (** The projection id. *)
-  stale_at : string option;  (** When the result becomes stale. *)
-  status : projection_status;  (** The materialization status. *)
-}
-(** The current state of a user's projection instance. *)
-
-val projection_state_response_of_yojson :
-  Yojson.Safe.t -> projection_state_response
-
-val yojson_of_projection_state_response :
-  projection_state_response -> Yojson.Safe.t
-
-val make_projection_state_response :
-  ?data:string ->
-  ?error:string ->
-  ?generated_at:string ->
-  id:string ->
-  ?stale_at:string ->
-  status:projection_status ->
-  unit ->
-  projection_state_response
-(** The current state of a user's projection instance. *)
-
 (** One activity action returned to the AI. *)
 type nonrec tool_activity_action =
   | Created  (** The entity was created. *)
@@ -2955,16 +2908,6 @@ val make_read_activity_response :
   unit ->
   read_activity_response
 (** Response from \[[ReadActivity]\]. *)
-
-(** How frequently an active projection is regenerated. *)
-type nonrec refresh_cadence =
-  | High
-  | Medium
-  | Low
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val refresh_cadence_of_yojson : Yojson.Safe.t -> refresh_cadence
-val yojson_of_refresh_cadence : refresh_cadence -> Yojson.Safe.t
 
 type nonrec reject_tool_call_request = {
   message_id : string;  (** The message ID containing the tool call. *)
@@ -3429,15 +3372,6 @@ val make_structured_completion_response :
   unit ->
   structured_completion_response
 
-(** The kind of entity a projection is materialized for. *)
-type nonrec target_type =
-  | User
-  | Team
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val target_type_of_yojson : Yojson.Safe.t -> target_type
-val yojson_of_target_type : target_type -> Yojson.Safe.t
-
 (** Whether a tracked item is a candidate or an import already made. *)
 type nonrec track_import_status =
   | Staged
@@ -3604,55 +3538,6 @@ val make_update_tool_response_request :
   unit ->
   update_tool_response_request
 (** Request body for updating a tool response. *)
-
-type nonrec upsert_projection_request = {
-  await : bool option;
-      (** When [true] and generation is needed (cold instance or [regenerate]),
-the server generates inline and responds with the finished result
-instead of returning immediately and pushing an update through the
-connection gateway. *)
-  expiry : expiry;
-      (** How long the projection remains active without being requested. *)
-  id : string;
-      (** The frontend-defined projection id (e.g. [notification_important_widget]). *)
-  model : string option;
-      (** Optional [provider/model] id used for generation (e.g.
-[cerebras/llama-3.3-70b]). The default model is used when absent. *)
-  output_schema : Yojson.Safe.t option;
-      (** Optional JSON schema the generated result must conform to. When set,
-[data] holds the JSON serialization of a conforming value. Enforcement
-is prompted (non-strict), so it works across providers. *)
-  prompt : string;  (** The prompt used to materialize the projection. *)
-  refresh_cadence : refresh_cadence;
-      (** How frequently the projection should be regenerated. *)
-  regenerate : bool option;
-      (** When [true], regenerate even if a cached result exists. *)
-  target_type : target_type;
-      (** Whether the projection is materialized for the requesting user or their team. *)
-}
-(** Request body for getting or creating an ai projection. The concrete target
-id is resolved from the authenticated user, so only the target type is sent. *)
-
-val upsert_projection_request_of_yojson :
-  Yojson.Safe.t -> upsert_projection_request
-
-val yojson_of_upsert_projection_request :
-  upsert_projection_request -> Yojson.Safe.t
-
-val make_upsert_projection_request :
-  ?await:bool ->
-  expiry:expiry ->
-  id:string ->
-  ?model:string ->
-  ?output_schema:Yojson.Safe.t ->
-  prompt:string ->
-  refresh_cadence:refresh_cadence ->
-  ?regenerate:bool ->
-  target_type:target_type ->
-  unit ->
-  upsert_projection_request
-(** Request body for getting or creating an ai projection. The concrete target
-id is resolved from the authenticated user, so only the target type is sent. *)
 
 type nonrec usage_request = {
   features : ai_feature list option;  (** If empty, include all features. *)
@@ -3865,23 +3750,6 @@ val get_usage_handler :
 (** [POST /ai-cost/usage]
 
 Query recorded AI usage. Admin only. *)
-
-val upsert_ai_projection :
-  expiry:expiry ->
-  id:string ->
-  prompt:string ->
-  refresh_cadence:refresh_cadence ->
-  target_type:target_type ->
-  ?await:bool ->
-  ?model:string ->
-  ?output_schema:Yojson.Safe.t ->
-  ?regenerate:bool ->
-  unit ->
-  (projection_state_response, error_response) Macro_sdk_runtime.Request.t
-(** [POST /ai-projections]
-
-Gets or creates an ai projection and the requesting user's instance,
-triggering (or awaiting) materialization when needed. *)
 
 val get_chats_for_attachment_handler :
   attachment_id:string ->

@@ -2691,6 +2691,43 @@ let make_channel_access_requested_metadata ?channel_name
   ({ channel_name; channel_type; request_id; sender_profile_picture_url }
     : channel_access_requested_metadata)
 
+type nonrec password_access_requested_metadata = {
+  item_id : string;  (** Requested item. *)
+  item_name : string;  (** Item display name when the request was made. *)
+  request_id : string;  (** Request under review. *)
+  team_id : string;  (** Team owning the item. *)
+}
+(** An agent asked for access to a team vault item. Sent to the item's current
+human creator and the team's current administrators, with the agent as
+sender. Carries the item name and opaque ids only, never values. *)
+
+let password_access_requested_metadata_of_yojson :
+    Yojson.Safe.t -> password_access_requested_metadata =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    item_id = Json.required fields "itemId" Json.string;
+    item_name = Json.required fields "itemName" Json.string;
+    request_id = Json.required fields "requestId" Json.string;
+    team_id = Json.required fields "teamId" Json.string;
+  }
+
+and yojson_of_password_access_requested_metadata :
+    password_access_requested_metadata -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("itemId", Some (Json.of_string value.item_id));
+      ("itemName", Some (Json.of_string value.item_name));
+      ("requestId", Some (Json.of_string value.request_id));
+      ("teamId", Some (Json.of_string value.team_id));
+    ]
+
+let make_password_access_requested_metadata ~(item_id : string)
+    ~(item_name : string) ~(request_id : string) ~(team_id : string) () =
+  ({ item_id; item_name; request_id; team_id }
+    : password_access_requested_metadata)
+
 (** How a routine run ended, as its notification reports it. *)
 type nonrec routine_run_outcome =
   | Succeeded
@@ -3058,6 +3095,10 @@ user shared with the channel. *)
       content : channel_access_requested_metadata;
           (** Someone asked to join a channel the user participates in. *)
     }  (** Someone asked to join a channel the user participates in. *)
+  | Password_access_requested of {
+      content : password_access_requested_metadata;
+          (** An agent asked for access to a vault item the user manages. *)
+    }  (** An agent asked for access to a vault item the user manages. *)
   | Routine_run_finished of {
       content : routine_run_finished_metadata;
           (** One of the user's routines finished a run, successfully or not. *)
@@ -3289,6 +3330,13 @@ let notif_event_of_yojson : Yojson.Safe.t -> notif_event =
           content =
             Json.required fields "content"
               channel_access_requested_metadata_of_yojson;
+        }
+  | "password_access_requested" ->
+      Password_access_requested
+        {
+          content =
+            Json.required fields "content"
+              password_access_requested_metadata_of_yojson;
         }
   | "routine_run_finished" ->
       Routine_run_finished
@@ -3542,6 +3590,13 @@ and yojson_of_notif_event : notif_event -> Yojson.Safe.t =
           ( "content",
             Some (yojson_of_channel_access_requested_metadata case.content) );
         ]
+  | Password_access_requested case ->
+      Json.record
+        [
+          ("tag", Some (`String "password_access_requested"));
+          ( "content",
+            Some (yojson_of_password_access_requested_metadata case.content) );
+        ]
   | Routine_run_finished case ->
       Json.record
         [
@@ -3689,6 +3744,10 @@ let make_notif_event_calendar_event_join_request
 let make_notif_event_channel_access_requested
     ~(content : channel_access_requested_metadata) () =
   (Channel_access_requested { content } : notif_event)
+
+let make_notif_event_password_access_requested
+    ~(content : password_access_requested_metadata) () =
+  (Password_access_requested { content } : notif_event)
 
 let make_notif_event_routine_run_finished
     ~(content : routine_run_finished_metadata) () =

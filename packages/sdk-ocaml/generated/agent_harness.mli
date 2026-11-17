@@ -2526,6 +2526,29 @@ val make_create_review :
 (** Review creation. Decoding it validates every draft; creating a review only
 presents the drafts, and the account holder acts separately. *)
 
+type nonrec credential_rejected_response = {
+  code : string;  (** Always \[[Self::CODE]\]. *)
+  message : string;
+      (** What to tell the caller, e.g. which kind of key to reconnect with. *)
+}
+(** Error body for a provider that refused the caller's connected credential.
+
+JSON rather than the plain text other failures answer with, so a client
+can tell this 409 from a disconnected runtime and show [message] as is. *)
+
+val credential_rejected_response_of_yojson :
+  Yojson.Safe.t -> credential_rejected_response
+
+val yojson_of_credential_rejected_response :
+  credential_rejected_response -> Yojson.Safe.t
+
+val make_credential_rejected_response :
+  code:string -> message:string -> unit -> credential_rejected_response
+(** Error body for a provider that refused the caller's connected credential.
+
+JSON rather than the plain text other failures answer with, so a client
+can tell this 409 from a disconnected runtime and show [message] as is. *)
+
 (** Surface of a review decision. *)
 type nonrec decision_via =
   | Card
@@ -3924,7 +3947,7 @@ val discover_agent_capabilities_handler :
   ?model:string ->
   unit ->
   ( discover_agent_capabilities_response,
-    Macro_sdk_runtime.Request.no_error )
+    credential_rejected_response )
   Macro_sdk_runtime.Request.t
 (** [POST /agent-capabilities/discover]
 
@@ -3997,7 +4020,7 @@ val load_agent_models_handler :
   ?harness_id:string ->
   unit ->
   ( load_agent_models_response,
-    Macro_sdk_runtime.Request.no_error )
+    credential_rejected_response )
   Macro_sdk_runtime.Request.t
 (** [POST /agent-models/load]
 
@@ -4519,7 +4542,7 @@ val answer_agent_session_tool_approval :
 
 Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
-anyone's with edit access. *)
+anyone's with edit access. Agent runs may deny or cancel, but never approve. *)
 
 val open_in_app :
   session_id:string ->

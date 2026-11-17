@@ -1221,6 +1221,70 @@ val make_draft_job_state_failed :
 (** Why AI couldn't draft it, for the person, and anything it created
 before it gave up. *)
 
+(** A kind of item a request can name. *)
+type nonrec item_kind =
+  | Channel
+  | Person
+  | Project
+  | Initiative
+  | Document
+  | Task
+  | Database
+  | Agent
+  | Label
+  | Tag
+  | Channel_label
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val item_kind_of_yojson : Yojson.Safe.t -> item_kind
+val yojson_of_item_kind : item_kind -> Yojson.Safe.t
+
+type nonrec found_name = {
+  kind : item_kind;
+  name : string;  (** Its name as stored. *)
+}
+(** An item found by the name the words use. *)
+
+val found_name_of_yojson : Yojson.Safe.t -> found_name
+val yojson_of_found_name : found_name -> Yojson.Safe.t
+
+val make_found_name : kind:item_kind -> name:string -> unit -> found_name
+(** An item found by the name the words use. *)
+
+type nonrec left_name = {
+  kind : item_kind option;
+  matches : int;  (** How many items have it: none, or several. *)
+  name : string;  (** The name as the words use it. *)
+}
+(** A name the words use that the drafter couldn't settle on one item for. *)
+
+val left_name_of_yojson : Yojson.Safe.t -> left_name
+val yojson_of_left_name : left_name -> Yojson.Safe.t
+
+val make_left_name :
+  ?kind:item_kind -> matches:int -> name:string -> unit -> left_name
+(** A name the words use that the drafter couldn't settle on one item for. *)
+
+type nonrec found_names = {
+  found : found_name list;
+      (** Each the only item of its kinds with the name the words use. *)
+  left : left_name list;
+      (** Names no item has, or several do: the draft leaves them out for the
+person to pick. *)
+}
+(** The items a draft's words name, as the drafter looked them up by name.
+Names only, as the person wrote them or the items are called: never
+ids. *)
+
+val found_names_of_yojson : Yojson.Safe.t -> found_names
+val yojson_of_found_names : found_names -> Yojson.Safe.t
+
+val make_found_names :
+  found:found_name list -> left:left_name list -> unit -> found_names
+(** The items a draft's words name, as the drafter looked them up by name.
+Names only, as the person wrote them or the items are called: never
+ids. *)
+
 (** The stage a draft is at. *)
 type nonrec draft_stage =
   | Started
@@ -1238,6 +1302,7 @@ type nonrec draft_job_progress = {
   found : int option;
       (** How many items the words name were found; absent before they were
 looked up. *)
+  names : found_names option;
   stage : draft_stage;
 }
 (** How far a draft has got: its latest stage, and what it reported on the
@@ -1249,6 +1314,7 @@ val yojson_of_draft_job_progress : draft_job_progress -> Yojson.Safe.t
 val make_draft_job_progress :
   ?check:check_summary ->
   ?found:int ->
+  ?names:found_names ->
   stage:draft_stage ->
   unit ->
   draft_job_progress

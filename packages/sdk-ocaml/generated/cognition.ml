@@ -3399,29 +3399,6 @@ and yojson_of_error_response : error_response -> Yojson.Safe.t =
 
 let make_error_response ~(message : string) () = ({ message } : error_response)
 
-(** How long a projection remains active without being requested. *)
-type nonrec expiry =
-  | Day
-  | Week
-  | Month
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let expiry_of_yojson : Yojson.Safe.t -> expiry =
- fun json ->
-  match Json.string json with
-  | "day" -> Day
-  | "week" -> Week
-  | "month" -> Month
-  | other -> Json.unknown "expiry" json (Unknown other)
-
-and yojson_of_expiry : expiry -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Day -> `String "day"
-  | Week -> `String "week"
-  | Month -> `String "month"
-  | Unknown other -> `String other
-
 type nonrec explicit_memory = { content : string; revision : int64 }
 (** A private explicit memory document and its optimistic concurrency token. *)
 
@@ -3896,6 +3873,7 @@ let make_get_chats_for_attachment_response ~(all_chats : chat list) ?recent_chat
 (** The requested inference speed. Standard is backward compatible with old clients. *)
 type nonrec model_speed =
   | Standard
+  | Priority
   | Fast
   | Ultrafast
   | Unknown of string  (** A value this SDK version does not know. *)
@@ -3904,6 +3882,7 @@ let model_speed_of_yojson : Yojson.Safe.t -> model_speed =
  fun json ->
   match Json.string json with
   | "standard" -> Standard
+  | "priority" -> Priority
   | "fast" -> Fast
   | "ultrafast" -> Ultrafast
   | other -> Json.unknown "model_speed" json (Unknown other)
@@ -3912,6 +3891,7 @@ and yojson_of_model_speed : model_speed -> Yojson.Safe.t =
  fun value ->
   match value with
   | Standard -> `String "standard"
+  | Priority -> `String "priority"
   | Fast -> `String "fast"
   | Ultrafast -> `String "ultrafast"
   | Unknown other -> `String other
@@ -4408,6 +4388,8 @@ type nonrec import_run = {
   review_id : string option;
       (** The review presenting the run's plan, once one does. A Notion plan is
 presented while it is still [running]; rows staged after that take it. *)
+  review_session_id : string option;
+      (** The agent session presenting that review. *)
   scanned : scan_counts option;
   source : import_source;  (** The source this run discovered from. *)
   status : run_status;  (** Where the run is in its lifecycle. *)
@@ -4421,6 +4403,7 @@ let import_run_of_yojson : Yojson.Safe.t -> import_run =
   {
     error = Json.optional fields "error" Json.string;
     review_id = Json.optional fields "review_id" Json.string;
+    review_session_id = Json.optional fields "review_session_id" Json.string;
     scanned = Json.optional fields "scanned" scan_counts_of_yojson;
     source = Json.required fields "source" import_source_of_yojson;
     status = Json.required fields "status" run_status_of_yojson;
@@ -4433,15 +4416,17 @@ and yojson_of_import_run : import_run -> Yojson.Safe.t =
     [
       ("error", Option.map Json.of_string value.error);
       ("review_id", Option.map Json.of_string value.review_id);
+      ("review_session_id", Option.map Json.of_string value.review_session_id);
       ("scanned", Option.map yojson_of_scan_counts value.scanned);
       ("source", Some (yojson_of_import_source value.source));
       ("status", Some (yojson_of_run_status value.status));
       ("updated_at", Some (Json.of_string value.updated_at));
     ]
 
-let make_import_run ?error ?review_id ?scanned ~(source : import_source)
-    ~(status : run_status) ~(updated_at : string) () =
-  ({ error; review_id; scanned; source; status; updated_at } : import_run)
+let make_import_run ?error ?review_id ?review_session_id ?scanned
+    ~(source : import_source) ~(status : run_status) ~(updated_at : string) () =
+  ({ error; review_id; review_session_id; scanned; source; status; updated_at }
+    : import_run)
 
 type nonrec import_state = {
   entities : import_entity list;  (** Visible import entities, newest first. *)
@@ -5733,78 +5718,6 @@ let make_pipedream_update_request ~(app_slug : string) ?enabled ?server_name ()
     =
   ({ app_slug; enabled; server_name } : pipedream_update_request)
 
-(** The materialization status of a user's projection instance. *)
-type nonrec projection_status =
-  | Loading
-  | Cold
-  | Ready
-  | Refreshing
-  | Error_
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let projection_status_of_yojson : Yojson.Safe.t -> projection_status =
- fun json ->
-  match Json.string json with
-  | "loading" -> Loading
-  | "cold" -> Cold
-  | "ready" -> Ready
-  | "refreshing" -> Refreshing
-  | "error" -> Error_
-  | other -> Json.unknown "projection_status" json (Unknown other)
-
-and yojson_of_projection_status : projection_status -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Loading -> `String "loading"
-  | Cold -> `String "cold"
-  | Ready -> `String "ready"
-  | Refreshing -> `String "refreshing"
-  | Error_ -> `String "error"
-  | Unknown other -> `String other
-
-type nonrec projection_state_response = {
-  data : string option;
-      (** The cached result, if any. JSON-encoded when the projection defines an
-[output_schema]. *)
-  error : string option;  (** The most recent materialization error, if any. *)
-  generated_at : string option;  (** When the result was generated. *)
-  id : string;  (** The projection id. *)
-  stale_at : string option;  (** When the result becomes stale. *)
-  status : projection_status;  (** The materialization status. *)
-}
-(** The current state of a user's projection instance. *)
-
-let projection_state_response_of_yojson :
-    Yojson.Safe.t -> projection_state_response =
- fun json ->
-  let fields = Json.obj json in
-  {
-    data = Json.optional fields "data" Json.string;
-    error = Json.optional fields "error" Json.string;
-    generated_at = Json.optional fields "generated_at" Json.string;
-    id = Json.required fields "id" Json.string;
-    stale_at = Json.optional fields "stale_at" Json.string;
-    status = Json.required fields "status" projection_status_of_yojson;
-  }
-
-and yojson_of_projection_state_response :
-    projection_state_response -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ("data", Option.map Json.of_string value.data);
-      ("error", Option.map Json.of_string value.error);
-      ("generated_at", Option.map Json.of_string value.generated_at);
-      ("id", Some (Json.of_string value.id));
-      ("stale_at", Option.map Json.of_string value.stale_at);
-      ("status", Some (yojson_of_projection_status value.status));
-    ]
-
-let make_projection_state_response ?data ?error ?generated_at ~(id : string)
-    ?stale_at ~(status : projection_status) () =
-  ({ data; error; generated_at; id; stale_at; status }
-    : projection_state_response)
-
 (** One activity action returned to the AI. *)
 type nonrec tool_activity_action =
   | Created  (** The entity was created. *)
@@ -6032,29 +5945,6 @@ and yojson_of_read_activity_response : read_activity_response -> Yojson.Safe.t =
 let make_read_activity_response ~(activities : tool_activity_event list)
     ~(truncated : bool) () =
   ({ activities; truncated } : read_activity_response)
-
-(** How frequently an active projection is regenerated. *)
-type nonrec refresh_cadence =
-  | High
-  | Medium
-  | Low
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let refresh_cadence_of_yojson : Yojson.Safe.t -> refresh_cadence =
- fun json ->
-  match Json.string json with
-  | "high" -> High
-  | "medium" -> Medium
-  | "low" -> Low
-  | other -> Json.unknown "refresh_cadence" json (Unknown other)
-
-and yojson_of_refresh_cadence : refresh_cadence -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | High -> `String "high"
-  | Medium -> `String "medium"
-  | Low -> `String "low"
-  | Unknown other -> `String other
 
 type nonrec reject_tool_call_request = {
   message_id : string;  (** The message ID containing the tool call. *)
@@ -6874,26 +6764,6 @@ let make_structured_completion_response
     ~(tool_activity : structured_tool_activity list) () =
   ({ outcome; tool_activity } : structured_completion_response)
 
-(** The kind of entity a projection is materialized for. *)
-type nonrec target_type =
-  | User
-  | Team
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let target_type_of_yojson : Yojson.Safe.t -> target_type =
- fun json ->
-  match Json.string json with
-  | "user" -> User
-  | "team" -> Team
-  | other -> Json.unknown "target_type" json (Unknown other)
-
-and yojson_of_target_type : target_type -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | User -> `String "user"
-  | Team -> `String "team"
-  | Unknown other -> `String other
-
 (** Whether a tracked item is a candidate or an import already made. *)
 type nonrec track_import_status =
   | Staged
@@ -7168,84 +7038,6 @@ and yojson_of_update_tool_response_request :
 let make_update_tool_response_request ~(message_id : string)
     ~(response : user_tool_response_value) ~(tool_call_id : string) () =
   ({ message_id; response; tool_call_id } : update_tool_response_request)
-
-type nonrec upsert_projection_request = {
-  await : bool option;
-      (** When [true] and generation is needed (cold instance or [regenerate]),
-the server generates inline and responds with the finished result
-instead of returning immediately and pushing an update through the
-connection gateway. *)
-  expiry : expiry;
-      (** How long the projection remains active without being requested. *)
-  id : string;
-      (** The frontend-defined projection id (e.g. [notification_important_widget]). *)
-  model : string option;
-      (** Optional [provider/model] id used for generation (e.g.
-[cerebras/llama-3.3-70b]). The default model is used when absent. *)
-  output_schema : Yojson.Safe.t option;
-      (** Optional JSON schema the generated result must conform to. When set,
-[data] holds the JSON serialization of a conforming value. Enforcement
-is prompted (non-strict), so it works across providers. *)
-  prompt : string;  (** The prompt used to materialize the projection. *)
-  refresh_cadence : refresh_cadence;
-      (** How frequently the projection should be regenerated. *)
-  regenerate : bool option;
-      (** When [true], regenerate even if a cached result exists. *)
-  target_type : target_type;
-      (** Whether the projection is materialized for the requesting user or their team. *)
-}
-(** Request body for getting or creating an ai projection. The concrete target
-id is resolved from the authenticated user, so only the target type is sent. *)
-
-let upsert_projection_request_of_yojson :
-    Yojson.Safe.t -> upsert_projection_request =
- fun json ->
-  let fields = Json.obj json in
-  {
-    await = Json.optional fields "await" Json.bool;
-    expiry = Json.required fields "expiry" expiry_of_yojson;
-    id = Json.required fields "id" Json.string;
-    model = Json.optional fields "model" Json.string;
-    output_schema = Json.optional fields "output_schema" Json.json;
-    prompt = Json.required fields "prompt" Json.string;
-    refresh_cadence =
-      Json.required fields "refresh_cadence" refresh_cadence_of_yojson;
-    regenerate = Json.optional fields "regenerate" Json.bool;
-    target_type = Json.required fields "target_type" target_type_of_yojson;
-  }
-
-and yojson_of_upsert_projection_request :
-    upsert_projection_request -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ("await", Option.map Json.of_bool value.await);
-      ("expiry", Some (yojson_of_expiry value.expiry));
-      ("id", Some (Json.of_string value.id));
-      ("model", Option.map Json.of_string value.model);
-      ("output_schema", Option.map Json.of_json value.output_schema);
-      ("prompt", Some (Json.of_string value.prompt));
-      ("refresh_cadence", Some (yojson_of_refresh_cadence value.refresh_cadence));
-      ("regenerate", Option.map Json.of_bool value.regenerate);
-      ("target_type", Some (yojson_of_target_type value.target_type));
-    ]
-
-let make_upsert_projection_request ?await ~(expiry : expiry) ~(id : string)
-    ?model ?output_schema ~(prompt : string)
-    ~(refresh_cadence : refresh_cadence) ?regenerate
-    ~(target_type : target_type) () =
-  ({
-     await;
-     expiry;
-     id;
-     model;
-     output_schema;
-     prompt;
-     refresh_cadence;
-     regenerate;
-     target_type;
-   }
-    : upsert_projection_request)
 
 type nonrec usage_request = {
   features : ai_feature list option;  (** If empty, include all features. *)
@@ -7647,45 +7439,6 @@ let get_usage_handler ?features ?from ?include_users ?until () =
      decode_error = Request.error_json [ 400; 403; 500 ] error_body_of_yojson;
    }
     : (usage_summary, error_body) Macro_sdk_runtime.Request.t)
-
-(** [POST /ai-projections]
-
-Gets or creates an ai projection and the requesting user's instance,
-triggering (or awaiting) materialization when needed. *)
-let upsert_ai_projection ~(expiry : expiry) ~(id : string) ~(prompt : string)
-    ~(refresh_cadence : refresh_cadence) ~(target_type : target_type) ?await
-    ?model ?output_schema ?regenerate () =
-  ({
-     Request.service = "cognition";
-     operation = "upsert_ai_projection";
-     meth = `POST;
-     path = "/ai-projections";
-     query = List.filter (fun (_, values) -> values <> []) [];
-     headers =
-       List.concat_map
-         (fun (name, values) -> List.map (fun v -> (name, v)) values)
-         [];
-     body =
-       Some
-         (Request.Json
-            (yojson_of_upsert_projection_request
-               ({
-                  await;
-                  expiry;
-                  id;
-                  model;
-                  output_schema;
-                  prompt;
-                  refresh_cadence;
-                  regenerate;
-                  target_type;
-                }
-                 : upsert_projection_request)));
-     decode_reply = Request.json projection_state_response_of_yojson;
-     decode_error =
-       Request.error_json [ 400; 403; 500 ] error_response_of_yojson;
-   }
-    : (projection_state_response, error_response) Macro_sdk_runtime.Request.t)
 
 (** [GET /attachments/{attachment_id}/chats] *)
 let get_chats_for_attachment_handler ~(attachment_id : string) () =
@@ -8831,7 +8584,9 @@ let edit_explicit_memory ~(edit : memory_edit) ~(revision : int64) () =
                ({ edit; revision } : update_explicit_memory_request)));
      decode_reply = Request.json explicit_memory_of_yojson;
      decode_error =
-       Request.error_json [ 400; 409; 422; 500 ] memory_error_body_of_yojson;
+       Request.error_json
+         [ 400; 409; 422; 500; 503 ]
+         memory_error_body_of_yojson;
    }
     : (explicit_memory, memory_error_body) Macro_sdk_runtime.Request.t)
 

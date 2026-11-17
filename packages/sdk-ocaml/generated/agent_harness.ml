@@ -4321,6 +4321,37 @@ and yojson_of_create_review : create_review -> Yojson.Safe.t =
 let make_create_review ?execution_id ~(title : string) () =
   ({ execution_id; title } : create_review)
 
+type nonrec credential_rejected_response = {
+  code : string;  (** Always \[[Self::CODE]\]. *)
+  message : string;
+      (** What to tell the caller, e.g. which kind of key to reconnect with. *)
+}
+(** Error body for a provider that refused the caller's connected credential.
+
+JSON rather than the plain text other failures answer with, so a client
+can tell this 409 from a disconnected runtime and show [message] as is. *)
+
+let credential_rejected_response_of_yojson :
+    Yojson.Safe.t -> credential_rejected_response =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    code = Json.required fields "code" Json.string;
+    message = Json.required fields "message" Json.string;
+  }
+
+and yojson_of_credential_rejected_response :
+    credential_rejected_response -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("code", Some (Json.of_string value.code));
+      ("message", Some (Json.of_string value.message));
+    ]
+
+let make_credential_rejected_response ~(code : string) ~(message : string) () =
+  ({ code; message } : credential_rejected_response)
+
 (** Surface of a review decision. *)
 type nonrec decision_via =
   | Card
@@ -6756,10 +6787,11 @@ let discover_agent_capabilities_handler ~(harness : capability_harness_dto)
                ({ harness; harness_id; model }
                  : discover_agent_capabilities_request)));
      decode_reply = Request.json discover_agent_capabilities_response_of_yojson;
-     decode_error = Request.no_error;
+     decode_error =
+       Request.error_json [ 409 ] credential_rejected_response_of_yojson;
    }
     : ( discover_agent_capabilities_response,
-        Macro_sdk_runtime.Request.no_error )
+        credential_rejected_response )
       Macro_sdk_runtime.Request.t)
 
 (** [GET /agent-coding-preferences]
@@ -6953,10 +6985,11 @@ let load_agent_models_handler ~(harness : model_harness_dto) ?harness_id () =
             (yojson_of_load_agent_models_request
                ({ harness; harness_id } : load_agent_models_request)));
      decode_reply = Request.json load_agent_models_response_of_yojson;
-     decode_error = Request.no_error;
+     decode_error =
+       Request.error_json [ 409 ] credential_rejected_response_of_yojson;
    }
     : ( load_agent_models_response,
-        Macro_sdk_runtime.Request.no_error )
+        credential_rejected_response )
       Macro_sdk_runtime.Request.t)
 
 (** [GET /agent-repositories]
@@ -8344,7 +8377,7 @@ let link_agent_session_task ~(session_id : string) ~(task_id : string) () =
 
 Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
-anyone's with edit access. *)
+anyone's with edit access. Agent runs may deny or cancel, but never approve. *)
 let answer_agent_session_tool_approval ~(session_id : string)
     ~(approval_id : string) ~(answer : tool_approval_answer_dto) () =
   ({

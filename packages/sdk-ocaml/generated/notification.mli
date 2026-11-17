@@ -1472,6 +1472,33 @@ val make_channel_access_requested_metadata :
   channel_access_requested_metadata
 (** A person asked to join a channel the recipient participates in. *)
 
+type nonrec password_access_requested_metadata = {
+  item_id : string;  (** Requested item. *)
+  item_name : string;  (** Item display name when the request was made. *)
+  request_id : string;  (** Request under review. *)
+  team_id : string;  (** Team owning the item. *)
+}
+(** An agent asked for access to a team vault item. Sent to the item's current
+human creator and the team's current administrators, with the agent as
+sender. Carries the item name and opaque ids only, never values. *)
+
+val password_access_requested_metadata_of_yojson :
+  Yojson.Safe.t -> password_access_requested_metadata
+
+val yojson_of_password_access_requested_metadata :
+  password_access_requested_metadata -> Yojson.Safe.t
+
+val make_password_access_requested_metadata :
+  item_id:string ->
+  item_name:string ->
+  request_id:string ->
+  team_id:string ->
+  unit ->
+  password_access_requested_metadata
+(** An agent asked for access to a team vault item. Sent to the item's current
+human creator and the team's current administrators, with the agent as
+sender. Carries the item name and opaque ids only, never values. *)
+
 (** How a routine run ended, as its notification reports it. *)
 type nonrec routine_run_outcome =
   | Succeeded
@@ -1753,6 +1780,10 @@ user shared with the channel. *)
       content : channel_access_requested_metadata;
           (** Someone asked to join a channel the user participates in. *)
     }  (** Someone asked to join a channel the user participates in. *)
+  | Password_access_requested of {
+      content : password_access_requested_metadata;
+          (** An agent asked for access to a vault item the user manages. *)
+    }  (** An agent asked for access to a vault item the user manages. *)
   | Routine_run_finished of {
       content : routine_run_finished_metadata;
           (** One of the user's routines finished a run, successfully or not. *)
@@ -1921,6 +1952,10 @@ user shared with the channel. *)
 val make_notif_event_channel_access_requested :
   content:channel_access_requested_metadata -> unit -> notif_event
 (** Someone asked to join a channel the user participates in. *)
+
+val make_notif_event_password_access_requested :
+  content:password_access_requested_metadata -> unit -> notif_event
+(** An agent asked for access to a vault item the user manages. *)
 
 val make_notif_event_routine_run_finished :
   content:routine_run_finished_metadata -> unit -> notif_event
