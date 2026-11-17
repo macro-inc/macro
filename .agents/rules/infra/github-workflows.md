@@ -17,6 +17,9 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   `steps` instead of inlining labels, env, or step definitions.
 - The workflow model is our vendored `tooling/xtask/crates/gh_workflow`. When it
   can't express something, extend it there instead of patching rendered YAML.
+- Build expressions with `gh_workflow::expr::typed` (`github()`, `needs()`,
+  `steps()`, `input()`, ...). Rendering rejects any expression, raw or typed,
+  that reads a context its key doesn't offer (e.g. `secrets` in a step `if:`).
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
 - `cargo x workflows` also writes `tooling/xtask/crates/xtask_workflows/checks.lock`:

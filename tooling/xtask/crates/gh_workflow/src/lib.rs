@@ -5,6 +5,7 @@ mod env;
 mod environment;
 pub mod error;
 mod event;
+pub mod expr;
 mod expression;
 mod job;
 mod permissions;

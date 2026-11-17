@@ -248,10 +248,10 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      GITHUB_TOKEN: ${{secrets.GITHUBTOKEN}}
-      GA_API_SECRET: ${{secrets.GA_API_SECRET}}
-      GA_MEASUREMENT_ID: ${{secrets.GA_MEASUREMENT_ID}}
-      POSTHOG_API_SECRET: ${{secrets.POSTHOG_API_SECRET}}
+      GITHUB_TOKEN: ${{ secrets.GITHUBTOKEN }}
+      GA_API_SECRET: ${{ secrets.GA_API_SECRET }}
+      GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
+      POSTHOG_API_SECRET: ${{ secrets.POSTHOG_API_SECRET }}
       APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
 
     steps:
@@ -265,13 +265,13 @@ jobs:
 
       - name: Build
         env:
-          APP_VERSION: ${{ needs.draft_release.outputs.create_release_name}}
+          APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         uses: ClementTsang/cargo-action@v0.0.6
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: ${{matrix.features}} --release --target ${{ matrix.target }}
+          args: ${{ matrix.features }} --release --target ${{ matrix.target }}
 
       - name: Install Node.js
         if: (startsWith(github.event.head_commit.message, 'feat') || startsWith(github.event.head_commit.message, 'fix')) && (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -290,7 +290,7 @@ jobs:
         if: (startsWith(github.event.head_commit.message, 'feat') || startsWith(github.event.head_commit.message, 'fix')) && (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: |
           cd npm
-          npm run gen -- --target ${{matrix.target}} --version ${{ env.APP_VERSION }} --build ${{matrix.build}} --ext ${{ matrix.ext || '' }} --libc ${{ matrix.libc }}
+          npm run gen -- --target ${{ matrix.target }} --version ${{ env.APP_VERSION }} --build ${{ matrix.build }} --ext ${{ matrix.ext || '' }} --libc ${{ matrix.libc }}
       - name: Setup .npmrc file to publish to npm
         run: echo "//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
 
@@ -299,7 +299,7 @@ jobs:
         uses: JS-DevTools/npm-publish@main
         with:
           token: ${{ secrets.NPM_TOKEN }}
-          package: npm/@tailcallhq/core-${{matrix.build}}
+          package: npm/@tailcallhq/core-${{ matrix.build }}
           access: public
 
       - name: Rename Binary with Target Name
@@ -324,7 +324,7 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      GITHUB_TOKEN: ${{secrets.GITHUBTOKEN}}
+      GITHUB_TOKEN: ${{ secrets.GITHUBTOKEN }}
       APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
 
     steps:
@@ -369,7 +369,7 @@ jobs:
       pull-requests: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      APP_VERSION: ${{needs.draft_release.outputs.create_release_name }}
+      APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
     steps:
       - name: Publish Release
         uses: test-room-7/action-publish-release-drafts@v0
@@ -377,7 +377,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          tag-name: ${{needs.draft_release.outputs.create_release_name }}
+          tag-name: ${{ needs.draft_release.outputs.create_release_name }}
 
   publish_npm_root:
     name: Publish NPM main package
@@ -404,7 +404,7 @@ jobs:
           npm install
       - name: Run generate-root.js script
         env:
-          APP_VERSION: ${{needs.draft_release.outputs.create_release_name }}
+          APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
         run: |
           cd npm
           npm run gen-root -- --version ${{ env.APP_VERSION }} --name @tailcallhq/tailcall
@@ -418,7 +418,7 @@ jobs:
           access: public
 
         env:
-          APP_VERSION: ${{needs.draft_release.outputs.create_release_name }}
+          APP_VERSION: ${{ needs.draft_release.outputs.create_release_name }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   build-and-push-image:
@@ -480,4 +480,4 @@ jobs:
           token: ${{ secrets.HOMEBREW_ACCESS }}
 
       - name: Update Homebrew Formula
-        run: ./update-formula.sh ${{needs.draft_release.outputs.create_release_name }}
+        run: ./update-formula.sh ${{ needs.draft_release.outputs.create_release_name }}

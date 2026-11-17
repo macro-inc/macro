@@ -38,3 +38,23 @@ fn a_string_and_a_boolean_are_different_values() {
         vec!["w.yml.with.clean: false -> \"false\""]
     );
 }
+
+#[test]
+fn expression_spelling_is_not_semantic_but_its_meaning_is() {
+    let before = "jobs:\n  a:\n    if: (a.x=='1') || b.y\n    env:\n      X: pr-${{github.sha}}\n";
+    let same = "jobs:\n  a:\n    if: a.x == '1' || b.y\n    env:\n      X: pr-${{ github.sha }}\n";
+    let changed =
+        "jobs:\n  a:\n    if: a.x == '1' && b.y\n    env:\n      X: pr-${{ github.ref }}\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(same)).unwrap(),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(changed)).unwrap(),
+        vec![
+            "w.yml.jobs.a.if: \"(a.x=='1') || b.y\" -> \"a.x == '1' && b.y\"",
+            "w.yml.jobs.a.env.X: \"pr-${{github.sha}}\" -> \"pr-${{ github.ref }}\"",
+        ]
+    );
+}

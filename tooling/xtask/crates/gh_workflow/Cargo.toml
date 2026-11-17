@@ -10,6 +10,7 @@ version = "0.8.1"
 derive_setters = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 merge = { workspace = true }
+nom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

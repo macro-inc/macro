@@ -13,6 +13,9 @@ We own it now: change it here instead of patching rendered YAML in
 
 - `src/workflow.rs`: `Workflow`, `Jobs`, and serialization.
 - `src/job.rs`, `src/step.rs`, `src/event.rs`: jobs, steps, and triggers.
+- `src/expr.rs`: expressions: the AST, `parse`, the canonical spelling, and
+  `check`. `expr/typed.rs` builds them with types; `expr/scope.rs` is
+  GitHub's context availability table.
 - `src/yaml.rs`: our YAML emitter; its fixed style is what every generated
   workflow looks like.
 
@@ -36,6 +39,9 @@ We own it now: change it here instead of patching rendered YAML in
 - Keep `LICENSE` and `NOTICE`; Apache-2.0 requires them for the derived code.
 - Every serialized field must be a real GitHub key; anything else renders YAML
   GitHub rejects.
+- Rendering a workflow parses every `${{ }}` (and bare `if:`), fails on an
+  unknown context or function or one its key doesn't offer, and re-spells it
+  canonically, so raw text and the typed builders render the same bytes.
 - A change to `src/yaml.rs` rewrites every workflow file: it must keep
   `strings_read_back_unchanged` passing and `cargo x workflows diff` empty.
 

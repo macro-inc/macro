@@ -15,12 +15,65 @@ use std::fmt::Write;
 use serde::ser::{self, Serialize};
 
 use crate::error::{Error, Result};
+use crate::expr;
 
-/// Render `value` as a YAML document.
+/// Render `value` as a YAML document, without the expression checks.
+#[cfg(test)]
 pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<String> {
-    let node = value.serialize(NodeSerializer)?;
+    Ok(emit(&value.serialize(NodeSerializer)?))
+}
+
+/// Render a workflow: like [`to_string`], after checking every expression
+/// against the contexts its key allows and spelling it canonically.
+pub fn workflow_to_string<T: Serialize + ?Sized>(workflow: &T) -> Result<String> {
+    let mut node = workflow.serialize(NodeSerializer)?;
+    canonicalize_expressions(&mut node, &mut Vec::new())?;
+    Ok(emit(&node))
+}
+
+/// Check and re-spell the expressions in every string under `node`, where
+/// `path` leads to `node` (`[]` for a sequence item).
+fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<()> {
+    match node {
+        Node::Map(entries) => {
+            for (key, value) in entries {
+                path.push(key.clone());
+                canonicalize_expressions(value, path)?;
+                path.pop();
+            }
+        }
+        Node::Seq(items) => {
+            for item in items {
+                path.push("[]".to_string());
+                canonicalize_expressions(item, path)?;
+                path.pop();
+            }
+        }
+        Node::Str(text) => {
+            let keys: Vec<&str> = path.iter().map(String::as_str).collect();
+            let invalid = |message: String| Error::Expression {
+                path: keys.join("."),
+                message,
+            };
+            match expr::scope::at(&keys) {
+                Some(scope) => {
+                    *text = expr::canonicalize(text, scope.contexts, scope.whole_expression)
+                        .map_err(invalid)?;
+                }
+                None if text.contains("${{") => {
+                    return Err(invalid("GitHub evaluates no expressions here".to_string()));
+                }
+                None => {}
+            }
+        }
+        Node::Null | Node::Bool(_) | Node::Int(_) | Node::Float(_) => {}
+    }
+    Ok(())
+}
+
+fn emit(node: &Node) -> String {
     let mut out = String::new();
-    match &node {
+    match node {
         Node::Map(entries) if !entries.is_empty() => emit_entries(&mut out, entries, 0, false),
         Node::Seq(items) if !items.is_empty() => emit_items(&mut out, items, 0),
         scalar => {
@@ -28,7 +81,7 @@ pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<String> {
             out.push('\n');
         }
     }
-    Ok(out)
+    out
 }
 
 /// The serialized value: what YAML can represent, with mapping order kept.

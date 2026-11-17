@@ -96,7 +96,7 @@ impl Workflow {
 
     /// Converts the `Workflow` to a YAML string representation.
     pub fn to_string(&self) -> Result<String> {
-        crate::yaml::to_string(self)
+        crate::yaml::workflow_to_string(self)
     }
 
     /// Adds a job to the workflow with the specified ID and job configuration.

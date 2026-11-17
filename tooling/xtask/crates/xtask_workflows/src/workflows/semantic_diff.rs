@@ -3,9 +3,11 @@
 //!
 //! Every workflow and composite action is parsed at `<rev>` (default `HEAD`)
 //! and in the working tree, and the two trees are compared as data: mapping
-//! key order, quoting, block-scalar style and comments do not count. A
-//! formatting-only change (a new emitter, reordered keys) must print
-//! `no semantic changes`; anything else is listed by its YAML path.
+//! key order, quoting, block-scalar style, comments, and the spacing and
+//! redundant parentheses of `${{ }}` expressions do not count. A
+//! formatting-only change (a new emitter, reordered keys, re-spelled
+//! expressions) must print `no semantic changes`; anything else is listed by
+//! its YAML path.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -13,6 +15,7 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
+use gh_workflow::expr::{self, TemplatePart};
 use serde_yaml::Value;
 
 /// Directories holding the YAML GitHub reads for CI.
@@ -94,12 +97,41 @@ fn diff_value(at: &str, before: &Value, after: &Value, changes: &mut Vec<String>
 
         _ if before == after => {}
 
+        (Value::String(before), Value::String(after))
+            if same_expressions(before, after, at.ends_with(".if")) => {}
+
         _ => changes.push(format!(
             "{at}: {} -> {}",
             scalar_label(before),
             scalar_label(after)
         )),
     }
+}
+
+/// Whether two strings differ only in how their expressions are spelled:
+/// spacing and redundant parentheses. `whole_expression` is an `if:` value,
+/// which is an expression even without `${{ }}`.
+fn same_expressions(before: &str, after: &str, whole_expression: bool) -> bool {
+    let meaning = |text: &str| -> Option<Vec<String>> {
+        if whole_expression && !text.contains("${{") {
+            return expr::parse(text)
+                .ok()
+                .map(|ast| vec![ast.meaning().to_string()]);
+        }
+        let parts = expr::parse_template(text).ok()?;
+        Some(
+            parts
+                .into_iter()
+                .map(|part| match part {
+                    TemplatePart::Text(text) => text.to_string(),
+                    TemplatePart::Expression(ast) => {
+                        format!("${{{{ {} }}}}", ast.meaning())
+                    }
+                })
+                .collect(),
+        )
+    };
+    matches!((meaning(before), meaning(after)), (Some(before), Some(after)) if before == after)
 }
 
 fn key_label(key: &Value) -> String {
