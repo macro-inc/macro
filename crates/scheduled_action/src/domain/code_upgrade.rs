@@ -3,13 +3,16 @@
 //! it calls, and then only the recorded SDK changes. When the check fails, a
 //! model rewrites the failing steps, once per routine and SDK. The rewrite is
 //! checked, dry-run on this run's trigger, and saved; if any of that fails,
-//! the routine is paused for its owner with the reason and the rewrite.
+//! the routine is paused for its owner with the reason and the rewrite. Code
+//! that writes as its owner (`dangerously_operate_as_user`) is never
+//! rewritten: unreviewed code must not act under their name, so the routine
+//! is paused for them with its code as it was.
 
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use routine_program::{RoutineProgram, SdkFingerprint};
+use routine_program::{CodeIdentity, RoutineProgram, SdkFingerprint};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -99,11 +102,30 @@ pub async fn current_code(
         program.sdk = Some(version);
         return Ok(program);
     }
+    // Code that writes as its owner is never rewritten: unreviewed code must
+    // not act under their name.
+    let owner_reason = (program.code_identity() == CodeIdentity::Owner).then(|| {
+        let step = failing.first();
+        bounded(format!(
+            "\"{}\" doesn't work with Macro's current SDK, and it writes as you, so Macro doesn't rewrite it:\n{}",
+            step.map(|step| step.title.trim()).unwrap_or_default(),
+            step.and_then(|step| step.problems.first())
+                .map(String::as_str)
+                .unwrap_or_default()
+        ))
+    });
     if !upgrades.claim_rewrite(action, &version).await? {
         span.record("outcome", "waiting");
-        bail!(NeedsUpdate(
+        bail!(NeedsUpdate(owner_reason.unwrap_or_else(|| {
             "This routine's code doesn't work with Macro's current SDK. It is being updated, or is waiting for review on the routine's page.".to_owned()
-        ));
+        })));
+    }
+    if let Some(reason) = owner_reason {
+        upgrades
+            .needs_update(action, &version, &reason, None)
+            .await?;
+        span.record("outcome", "owner_identity");
+        bail!(NeedsUpdate(reason))
     }
     match rewrite(code, owner, action, program, &failing, context, &version).await {
         Ok((program, task)) => {
