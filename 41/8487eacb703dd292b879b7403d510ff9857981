@@ -1,0 +1,107 @@
+packages/sdk-mcp/src/tools.ts
+  s_8c8730c08d5e2b::t_a34710e615d7fd 71-82,88,91-93,95
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_8c8730c08d5e2b::t_69907b0af6ac8c 4,7-8,10,12-13,15-16,18,21-22,24-25,28,30-31,33-34,39-40,42-43,45-46,48,51,53,55-56,59-60,62,64,66-67,69,71,74,77,79,81-82,84-85,89-90,92-93,96,98,104-106,108-109,111
+packages/sdk-mcp/src/tools.test.ts
+  s_8c8730c08d5e2b::t_fead13ba44888f 54,56,59-64,66-72,75,86,94
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_8c8730c08d5e2b::t_e27f1601182daf 2-4,7-9,12-13,16,18,20-22,24,26,31,33-34,41-45,47-51,54,62-64,66-67,69,71,76-77,80-83,85,88,92,95,98,104-105,110,114,118,121,124-127,129-131,133-135,137-140,143,145-146,148-151,157,161-165,167,170,176-182,184-186,188-189,191-195,198-200,202,204,206-208,210-214,216,220-221,223,226-228,230,232,237-239,241,244-245,248-250,254-256,258-262,264-266,268-271,273-276,278,281-284,289,292,294-297,299,301,303,305-306,310-311,313-315,317,319,325-336,338,340,342,344,348,355,357,361,363,365-366,369-370,374-376,388-390,392,394-396,398,401-403,406-407,411-419,421-422,425,433-440,442,444,449-451,453-454,456-461,468,471-473,475,485,489-494,496-500,502-505,507-509,511,514-515,517-519,521-524,527,529,531,533-534,541-545,547-549,552-553,556-557,560,564,567-570,574,576-577,580,582,584-586,589,594,596-597,599-600,614,620,622-624,626-629,631,634-636,638-640,642-644,646,648,650,652,654,656,663-664,667-668,671,674,678-681,683-687,689-694,696,700-701,703,705-706,708,710-712,714,716-718,720,724-726,728-731,733,736-737,740-741,745,747-748,750-754,756,759,761-762,764-765,767,770,775,777,784,793,797-798,802-803,805,807,813,815-817,821-826,828-831,837
+services/mcp-chatgpt-worker/src/app.test.ts
+  s_8c8730c08d5e2b::t_7564047566c0e9 100,188,218,229,230,235-236,256,271,316,370
+  s_4de99c3be44255::t_755a2eed17642c 11-15,189-234,237-255,257-270,272,274-342,345-352,354-369
+  s_4e1561ae826eb8::t_448258f19be433 343-344,353
+services/mcp-chatgpt-worker/src/person-tokens.ts
+  s_4de99c3be44255::t_be4817aec014c4 1-17,21-44,48,51-53,56-161,162-177
+  s_4de99c3be44255::t_b60ff64296c525 178-203
+  s_4e1561ae826eb8::t_6d435dafd74696 18-20,45-47,49-50,54-55
+services/mcp-chatgpt-worker/src/config.ts
+  s_4de99c3be44255::t_de3269cd54761a 15
+  s_4de99c3be44255::t_d432f78d1bed5e 29,31-32,36,40,42-61
+  s_4de99c3be44255::t_1180f9db7c60d3 2
+  s_4de99c3be44255::t_0b3f161200a96f 18-28,30,33-35,37-39,41,62
+packages/sdk-mcp/src/call.test.ts
+  s_4de99c3be44255::t_2f2b9a32ee8312 4
+packages/sdk-mcp/src/call.ts
+  s_4de99c3be44255::t_435d8f5bb119bc 220,276
+services/mcp-chatgpt-worker/AGENTS.md
+  s_4de99c3be44255::t_a7a166deb877d2 41-52
+services/mcp-chatgpt-worker/src/app.ts
+  s_4de99c3be44255::t_5f99d0695fd101 28-33,43-87,168-249,270-284,286-287,292-304,317-319,321-325
+  s_4e1561ae826eb8::t_a3231501b6ab0c 150
+services/mcp-chatgpt-worker/wrangler.jsonc
+  s_4de99c3be44255::t_9225162fd8210d 13-15
+services/mcp-chatgpt-worker/src/replace-all.test.ts
+  s_4e1561ae826eb8::t_8841c917fd0b79 1-38
+services/mcp-chatgpt-worker/src/replace-all.ts
+  s_4e1561ae826eb8::t_5e01d42b03216f 1-21
+apps/web/src/lib/service-clients/service-calendar/generated/schemas/bookingLinkEvent.ts
+  s_bec78062e28411::t_928b46cf03fe26 57
+apps/web/src/lib/service-clients/service-calendar/openapi.json
+  s_bec78062e28411::t_4c106750d28651 2027
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_bec78062e28411::t_455331c8f09810 7157
+crates/calendar_scheduling/src/domain/booking_link_models.rs
+  s_bec78062e28411::t_ee6a3d51beac5b 24
+packages/sdk/generated/calendar/types.gen.ts
+  s_bec78062e28411::t_31d4ed8ca453ef 369
+packages/sdk/specs/calendar.json
+  s_bec78062e28411::t_b9a85d53eacd68 2027
+packages/sdk/src/entities/ai/namespace.ts
+  s_bec78062e28411::t_c5652fd40b0fb8 22,62
+packages/sdk/src/entities/calendar/booking-namespace.ts
+  s_bec78062e28411::t_df7354bd36ca53 111
+packages/sdk/src/entities/entity.ts
+  s_bec78062e28411::t_535b1998e856cf 300-301
+packages/sdk/src/entities/foreign/namespace.ts
+  s_bec78062e28411::t_4b1b39a593a36f 47
+packages/sdk/src/entities/harnesses/namespace.ts
+  s_bec78062e28411::t_ca263f6792f14a 12
+packages/sdk/src/entities/me/namespace.ts
+  s_bec78062e28411::t_e4da2146a90c7a 31
+packages/sdk/src/entities/referrals/namespace.ts
+  s_bec78062e28411::t_1e25f0d7c97de7 46
+packages/sdk/src/entities/teams/team.ts
+  s_bec78062e28411::t_90fb8c9d6d3c54 128
+packages/sdk/src/entities/web/namespace.ts
+  s_bec78062e28411::t_b922370c82f01d 58,88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "418487eacb703dd292b879b7403d510ff9857981",
+  "prompts": {},
+  "sessions": {
+    "s_4de99c3be44255": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb80936-77b8-47b6-8e64-a86407cfc90b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4e1561ae826eb8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36cf77f6-824b-4f1c-9196-fcda157e5653",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8c8730c08d5e2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c600d448-418a-4335-8e4d-4d2c4092e5a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_bec78062e28411": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c0ff1a-3e55-44b7-a4a3-5becc353bd90",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
