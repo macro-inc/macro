@@ -3,8 +3,10 @@
 //! each send here also accounts for `GenericEventSource` reconnect executions.
 //! No GenAI spans or aggregate analytics are emitted by this adapter; it only
 //! adds the provider's stop reason to Rig's streaming span, which Rig drops,
-//! and logs responses that mean Macro's provider account is suspended or out
-//! of credit ([`genai_telemetry::provider_account`]).
+//! logs responses that mean Macro's provider account is suspended or out of
+//! credit ([`genai_telemetry::provider_account`]), and drops interim usage
+//! from Gemini streams so Rig's span records the final counts
+//! ([`interim_usage`]).
 
 use std::time::Duration;
 
@@ -22,13 +24,14 @@ use serde_json::Value;
 
 use super::metering::{Attempt, MeteringContext, MeteringError, WireProtocol};
 
+mod interim_usage;
 #[cfg(test)]
 mod test;
 
 /// Maximum time to drain a provider execution after its consumer disappears.
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Bound transient SSE parsing memory; never retain or journal model content.
-const MAX_EVENT_BYTES: usize = 1024 * 1024;
+pub(in crate::model) const MAX_EVENT_BYTES: usize = 1024 * 1024;
 
 /// HTTP adapter installed when building a Rig provider client. Attribution is
 /// obtained from the request scope, never stored on this shared client.
@@ -284,6 +287,24 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
 
 impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
     async fn send_streaming_metered<T>(
+        &self,
+        request: Request<T>,
+    ) -> http_client::Result<StreamingResponse>
+    where
+        T: Into<Bytes> + Send,
+    {
+        let response = self.send_streaming_observed(request).await?;
+        if self.protocol != WireProtocol::Gemini || !response.status().is_success() {
+            return Ok(response);
+        }
+        let (parts, body) = response.into_parts();
+        Ok(Response::from_parts(
+            parts,
+            interim_usage::without_interim_usage(body),
+        ))
+    }
+
+    async fn send_streaming_observed<T>(
         &self,
         request: Request<T>,
     ) -> http_client::Result<StreamingResponse>

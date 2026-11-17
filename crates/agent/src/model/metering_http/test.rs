@@ -1,4 +1,5 @@
 mod account;
+mod gemini_usage;
 mod review;
 mod tracking;
 
