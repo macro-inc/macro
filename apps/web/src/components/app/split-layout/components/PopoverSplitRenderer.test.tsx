@@ -36,25 +36,32 @@ it.each([undefined, 82])(
   'exposes one scroll body and returns to natural height when a %s-height owner unmounts',
   (requestedHeight) => {
     const content: SplitContent = { type: 'component', id: 'test-composer' };
-    const Fill = () => {
+    const Fill = (props: { height?: number }) => {
       const panel = useContext(SplitPanelContext);
-      panel?.fillDrawer?.(requestedHeight);
+      panel?.fillDrawer?.(props.height);
       return <div>Filling content</div>;
     };
     const TestContent = () => {
       const panel = useContext(SplitPanelContext);
       const [filling, setFilling] = createSignal(false);
+      const [otherFilling, setOtherFilling] = createSignal(false);
       const [footerVisible, setFooterVisible] = createSignal(false);
       return (
         <>
           <button onClick={() => setFilling((current) => !current)}>
             Toggle fill
           </button>
+          <button onClick={() => setOtherFilling((current) => !current)}>
+            Toggle other fill
+          </button>
           <button onClick={() => setFooterVisible((current) => !current)}>
             Toggle footer
           </button>
           <Show when={filling()}>
-            <Fill />
+            <Fill height={requestedHeight} />
+          </Show>
+          <Show when={otherFilling()}>
+            <Fill height={90} />
           </Show>
           <Show when={footerVisible() && panel?.drawerFooter?.()}>
             {(footer) => <Portal mount={footer()}>Pinned actions</Portal>}
@@ -118,6 +125,18 @@ it.each([undefined, 82])(
       `${requestedHeight ?? 70}dvh`
     );
     expect(drawer.style.getPropertyValue('--drawer-max-h')).toBe('92dvh');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle other fill' }));
+    expect(drawer.style.getPropertyValue('--drawer-h')).toBe('90dvh');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle fill' }));
+    expect(drawer.style.getPropertyValue('--drawer-h')).toBe('90dvh');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle fill' }));
+    expect(drawer.style.getPropertyValue('--drawer-h')).toBe(
+      `${requestedHeight ?? 70}dvh`
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle other fill' }));
+    expect(drawer.style.getPropertyValue('--drawer-h')).toBe(
+      `${requestedHeight ?? 70}dvh`
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Toggle fill' }));
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Toggle footer' }));

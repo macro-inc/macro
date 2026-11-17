@@ -68,10 +68,19 @@ function PopoverSplitModal(props: {
   const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
   const [drawerFooter, setDrawerFooter] = createSignal<HTMLElement>();
   const [drawerScrollBody, setDrawerScrollBody] = createSignal<HTMLElement>();
-  const [drawerTargetHeight, setDrawerTargetHeight] = createSignal<number>();
+  const [drawerHeightRequests, setDrawerHeightRequests] = createSignal<
+    { height: number }[]
+  >([]);
+  const drawerTargetHeight = () => drawerHeightRequests().at(-1)?.height;
   const fillDrawer = (requestedHeight = 70) => {
-    setDrawerTargetHeight(requestedHeight);
-    onCleanup(() => setDrawerTargetHeight(undefined));
+    // The latest live owner wins; disposing either owner only removes its request.
+    const request = { height: requestedHeight };
+    setDrawerHeightRequests((requests) => [...requests, request]);
+    onCleanup(() =>
+      setDrawerHeightRequests((requests) =>
+        requests.filter((current) => current !== request)
+      )
+    );
   };
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
