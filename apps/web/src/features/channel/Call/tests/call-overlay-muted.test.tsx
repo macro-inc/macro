@@ -44,10 +44,6 @@ const registeredWork = vi.hoisted(() => ({
 
 vi.mock('@core/component/UserGroup', () => ({ UserGroup: () => null }));
 
-vi.mock('@app/features/agent-work/views/use-work-client', () => ({
-  useWorkClient: () => () => undefined,
-}));
-
 vi.mock('@app/features/agent-work/primitives/create-registered-work', () => ({
   createRegisteredWork: () => ({
     loaded: () => registeredWork.loaded?.() ?? false,

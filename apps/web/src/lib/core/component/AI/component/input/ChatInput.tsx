@@ -38,10 +38,10 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
-import { speedForModel } from '../../constant/speed';
-import { fastModeEnabled } from '../../signal/speed';
+import { speedForModel, speedsForModel } from '../../constant/speed';
+import { preferredSpeed, setPreferredSpeed } from '../../signal/speed';
 import { AttachmentList } from './Attachment';
-import { SpeedToggle } from './SpeedToggle';
+import { SpeedSelector } from './SpeedSelector';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
 /**
@@ -205,7 +205,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       const sendInput: ChatSendInput = {
         content: markdownText(),
         model: opts?.modelOverride ?? model(),
-        speed: speedForModel(opts?.modelOverride ?? model(), fastModeEnabled()),
+        speed: speedForModel(opts?.modelOverride ?? model(), preferredSpeed()),
         attachments: attachments.attached(),
         toolset: toolsetSignal[0](),
         metaKey: opts?.metaKey,
@@ -326,7 +326,11 @@ export function ChatInput(props: ChatInputComponentProps) {
         onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
-      <SpeedToggle model={model()} />
+      <SpeedSelector
+        offered={speedsForModel(model()).map((value) => ({ value }))}
+        value={speedForModel(model(), preferredSpeed())}
+        onChange={setPreferredSpeed}
+      />
       <DictationButton dictation={dictation} />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>
         <StopButton />

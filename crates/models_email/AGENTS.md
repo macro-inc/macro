@@ -36,6 +36,12 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 Preview wire names include `spam` and `trash`; provider folder semantics belong to
 the email domain and use normalized mailbox facts, not Gmail-only label names.
 
+Historical CRM messages use `PopulateCrmPolicy` with mandatory team, mailbox,
+work ID, consent incarnation and policy version. Missing `live_mail` on a
+`PopulateCrmContact` payload means legacy history; new per-message hints set it
+true and reconcile current stored eligibility. Preserve this distinction during
+rolling upgrades; decoding old payloads must never attach a current generation.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

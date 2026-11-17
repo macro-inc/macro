@@ -3,7 +3,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
-import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
+import {
+  entityIsMentionsOnly,
+  entityIsMuted,
+  muteItemForEntity,
+} from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
@@ -24,6 +28,9 @@ type MakeMuteActionOptions = {
  * `execute` mutes every entity that is not yet muted; when all of them
  * already are, it unmutes them instead. Channel threads mute the parent
  * channel — that is the notification's primary entity.
+ *
+ * Channels other than one-to-one direct messages can also notify for direct
+ * @mentions only; `menu` offers that when every target is such a channel.
  */
 export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const muteMutation = useMuteItemMutation();
@@ -136,6 +143,44 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     }
   };
 
+  const supportsMentionsOnly = (entity: EntityData): boolean =>
+    entity.type === 'channel' && entity.channelType !== 'direct_message';
+
+  const isMentionsOnly = (entity: EntityData): boolean =>
+    entityIsMentionsOnly(options.notificationSource().mutedEntities(), entity);
+
+  /** Turning it off returns the channels to notifying for every message. */
+  const setMentionsOnly = async (entities: EntityData[], active: boolean) => {
+    if (
+      muteMutation.isPending ||
+      unmuteMutation.isPending ||
+      bulkMutation.isPending
+    )
+      return;
+
+    const items = itemsFor(entities.filter(supportsMentionsOnly));
+    if (items.length === 0) return;
+
+    const results = await Promise.allSettled(
+      items.map((item) =>
+        active
+          ? muteMutation.mutateAsync({ ...item, mentions_only: true })
+          : unmuteMutation.mutateAsync(item)
+      )
+    );
+    if (results.some((result) => result.status === 'rejected')) {
+      toast.failure(t('entityActions.toastNotificationLevelFailed'));
+      return;
+    }
+    toast.success(
+      t(
+        active
+          ? 'entityActions.toastMentionsOnly'
+          : 'entityActions.toastAllMessages'
+      )
+    );
+  };
+
   const execute = async (entities: EntityData[]) => {
     const muteable = entities.filter(canExecute);
     await setMuted(muteable, !muteable.every(isMuted), true);
@@ -152,6 +197,17 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     onMute: (muted) =>
       fireAndForget(setMuted(entities, muted), 'entity-actions'),
     onSnooze: (until) => snooze(entities, until),
+    mentionsOnly:
+      entities.length > 0 && entities.every(supportsMentionsOnly)
+        ? {
+            active: entities.every(isMentionsOnly),
+            onChange: (active) =>
+              fireAndForget(
+                setMentionsOnly(entities, active),
+                'entity-actions'
+              ),
+          }
+        : undefined,
   });
   const executeWithSoup = async (
     entities: EntityData[],

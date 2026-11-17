@@ -205,7 +205,7 @@ fn test() -> Job {
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay
 /// identical.
-fn with_test_compile_env(job: Job) -> Job {
+pub(crate) fn with_test_compile_env(job: Job) -> Job {
     // Debug info is most of what test builds write and link. Panic locations
     // don't depend on it; only backtrace frames lose their file and line.
     job.add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
@@ -431,7 +431,7 @@ fn cargo_clippy() -> Step<Run> {
 /// database per test, and those file operations are what limit the test run on
 /// the runner's disk. A bind mount, not `--tmpfs`: `configure_postgres` restarts
 /// the container, and a restart empties a `--tmpfs` mount.
-fn postgres_service() -> Container {
+pub(crate) fn postgres_service() -> Container {
     Container::default()
         .image("pgvector/pgvector:pg14")
         .env(
@@ -448,7 +448,7 @@ fn postgres_service() -> Container {
 }
 
 /// redis service container.
-fn redis_service() -> Container {
+pub(crate) fn redis_service() -> Container {
     Container::default()
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
@@ -459,7 +459,7 @@ fn redis_service() -> Container {
 }
 
 /// Tune the postgres service container for fast concurrent tests.
-fn configure_postgres() -> Step<Run> {
+pub(crate) fn configure_postgres() -> Step<Run> {
     Step::new("configure postgres for concurrent tests")
         .run(include_str!("scripts/configure_postgres.sh"))
 }

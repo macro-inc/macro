@@ -504,6 +504,15 @@ const DOCUMENT_BODY = {
         index: true,
         doc_values: true,
       },
+      // True on a document linked to an email attachment (`document_email`).
+      // Every full parent write sets it, true or false. A parent indexed
+      // before the field existed lacks it, and reads as not an attachment,
+      // until the email attachment status backfill sets it.
+      is_email_attachment: {
+        type: 'boolean',
+        index: true,
+        doc_values: true,
+      },
       updated_at_seconds: {
         type: 'date',
         format: 'epoch_second',

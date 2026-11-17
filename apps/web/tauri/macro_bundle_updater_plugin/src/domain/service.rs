@@ -172,8 +172,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                     .get_native_app_info()
                     .await
                     .context(UpdateError::Other)?;
+                let active = self.bundle_routes.active_identity().await;
+                let current_git_sha = (active.source == BundleSourceKind::Embedded)
+                    .then_some(native_app_info.embedded_git_sha)
+                    .flatten();
                 let app_info = AppInfo {
-                    current_bundle_build: self.bundle_routes.active_identity().await.bundle_build,
+                    current_bundle_build: active.bundle_build,
+                    current_git_sha,
                     native_build: native_app_info.native_build,
                     arch: native_app_info.arch,
                     target: native_app_info.target,
@@ -1327,6 +1332,9 @@ mod tests {
         }
     }
 
+    /// Commit the fake native app's embedded bundle was built from.
+    const EMBEDDED_GIT_SHA: &str = "cd95980";
+
     #[derive(Clone)]
     pub(super) struct FakeSystemQuery {
         network_type: Arc<StdMutex<Option<String>>>,
@@ -1376,6 +1384,7 @@ mod tests {
         async fn get_native_app_info(&self) -> Result<NativeAppInfo, rootcause::Report> {
             Ok(NativeAppInfo {
                 native_build: *self.native_build.lock().unwrap(),
+                embedded_git_sha: Some(EMBEDDED_GIT_SHA.to_string()),
                 arch: Arch::Aarch64,
                 target: *self.target.lock().unwrap(),
             })
@@ -1539,6 +1548,7 @@ mod tests {
     fn app_info(native_build: u64) -> AppInfo {
         AppInfo {
             current_bundle_build: 0,
+            current_git_sha: None,
             native_build,
             arch: Arch::Aarch64,
             target: Target::Ios,
@@ -2360,5 +2370,28 @@ mod tests {
             &*service.status().borrow(),
             Ok(UpdateStatus::Idle)
         ));
+    }
+
+    #[tokio::test]
+    async fn update_check_names_the_embedded_commit_only_while_it_is_served() {
+        let mut worker = worker_with_fs_and_native_build(FakeFs::default(), None, cache_dir(), 1);
+
+        let embedded = worker.next_status(UpdateStatus::Idle).await.unwrap();
+        let UpdateStatus::CheckingForDownload(app_info) = embedded else {
+            panic!("expected an update check, got {embedded:?}");
+        };
+        assert_eq!(app_info.current_git_sha.as_deref(), Some(EMBEDDED_GIT_SHA));
+
+        // An applied OTA bundle is identified by its build number alone.
+        worker
+            .bundle_routes
+            .restore(BundleSource::ota(20, cache_dir().join("1")))
+            .await;
+        let ota = worker.next_status(UpdateStatus::Idle).await.unwrap();
+        let UpdateStatus::CheckingForDownload(app_info) = ota else {
+            panic!("expected an update check, got {ota:?}");
+        };
+        assert_eq!(app_info.current_bundle_build, 20);
+        assert_eq!(app_info.current_git_sha, None);
     }
 }

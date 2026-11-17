@@ -26,7 +26,8 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationRejection,
+    AnyPrincipal, BOT_TOKEN_HEADER, BotAuthentication, BotOnly, CredentialAttribution,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationRejection,
     MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -207,6 +208,10 @@ fn caller_from_receipt(
 pub async fn create_channel_scoped_bot_handler<BotSvc, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
+    // The channel receipt drops the credential's attribution, which the mint
+    // refusal needs.
+    authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>
@@ -215,6 +220,15 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let attribution = match &authorization.authorization {
+        MacroAuthorization::User(user) => user.attribution(),
+        _ => CredentialAttribution::Person,
+    };
+    if super::axum_router::refuses_program_mint(attribution, &headers) {
+        return Err(ChannelBotWebhookHandlerErr::Forbidden(
+            super::axum_router::PROGRAM_MINT_REFUSAL,
+        ));
+    }
     let caller = caller_from_receipt(&access.entity_access_receipt)?;
     let response = state
         .bot_service
@@ -379,6 +393,9 @@ pub enum ChannelBotWebhookHandlerErr {
     /// Bad request.
     #[error("{0}")]
     BadRequest(&'static str),
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
     /// Bot service error.
     #[error(transparent)]
     Bot(#[from] BotError),
@@ -397,7 +414,7 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
                 StatusCode::CONFLICT
             }
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
-            Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
+            Self::Message(MessageError::Forbidden) | Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }

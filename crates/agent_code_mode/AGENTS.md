@@ -36,9 +36,11 @@ stacks. Process isolation belongs to
   Submit refuses incomplete drafts (no recipients, no title, ends before it
   starts) before claiming the batch.
   `decide_for_session` (the `DecideReview` tool, `inbound/reviews.rs`) is the
-  agent deciding on the account holder's word in chat: a turn they prompted,
-  never a System turn (per `ReviewSession::prompter`), and a Submit only once
-  the action is `approvable`.
+  agent deciding on the account holder's word in chat: a turn they prompted
+  (`PrompterKind::User`), never a System turn or a Program turn (a program
+  prompted it, or rewrote the queued prompt, or a routine step ran it; per
+  `ReviewSession::prompter`), and a Submit only once the action is
+  `approvable`.
   An import review only starts its write: its `review.decided` is quiet, and
   its `review.settled` comes from the import when the write ends; only an
   import that could not start settles here.
@@ -118,8 +120,8 @@ Reviews persist the immutable acting account. Only that account may edit or
 submit.
 ACP presentation uses the session owner's transcript capability, independently
 of the account that later sends the email or creates the event. Cards require
-direct user authentication; agent runs (agent attribution or the execution
-header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
+direct user authentication; programs (`macro_authorization::is_program_run`:
+agent or routine attribution, or the execution header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
 which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
 review's acting account, and its Submit waits for `ReviewActions::approvable`
 (default: always), the hook a kind uses to refuse until it is ready. `GetReview`

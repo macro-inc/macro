@@ -268,7 +268,10 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
-Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
+Narrow touch layouts have no docked conversation side panel. Above 720px,
+including unfolded Duo, selecting a session or legacy chat opens it in the
+right preview instead of a standalone split. The Agents sidebar stays left and can
+be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 The mobile conversation list omits the desktop **Agents** and **Connections** controls. Use the Agents composer or global create menu to start
@@ -303,13 +306,21 @@ Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
 Repository controls appear alongside it in Code mode.
 Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model or effort selector on mobile returns focus to the message input.
+Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
-In new and active agent composers, check that the model selector and lightning
-speed toggle share a height and vertical center: 32px on desktop and 36px with
-touch emulation. Open the model picker and toggle fast mode to verify both
-controls remain interactive at desktop, phone, and tablet widths.
+Beside the model selector, the composer shows **Effort** (a dial plus the
+current level, such as *High*) for models that advertise reasoning effort, and
+**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
+for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
+touch both are icon buttons that open a bottom sheet. The tier is one browser
+preference shared by every composer (`macro:ai-speed`); a model that doesn't
+offer it runs at standard, and the agent composer applies it before the next
+prompt only when the session reports a different tier. Priority sends
+`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
+In new and active agent composers, check that the model selector and these
+controls share a height and vertical center: 32px on desktop and 36px with
+touch emulation, and stay interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -542,11 +553,9 @@ the shimmer.
   session update.
   Sessions with a linked PR show
   **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the synced
-  GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
-  inline previews retain their legacy block host. Until GitHub has synced the
-  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  status word). Clicking it opens the pull request on GitHub (a new tab, or the
+  system browser in the desktop app), as the session header chip and Magic Chip
+  do. The click leaves the session unopened.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -768,7 +777,7 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
+- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
   New conversations remember the last effort picked for each runtime and model,
   per signed-in user, across sends, mode switches, and reloads, while that model
@@ -1459,7 +1468,8 @@ account the review uses answers yes, it submits the review with
 request”. The HTTP review decision endpoint requires direct user authentication;
 agent runs receive 403 for edits, submissions, and dismissals before their
 request body is decoded. The separate **DecideReview** chat tool keeps its
-existing user-prompted-turn checks. SDK operation
+existing user-prompted-turn checks, and refuses in a turn a program or a
+routine started. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1865,9 +1875,9 @@ an inline edit.
 
 When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
-to open the PR entity in a split; until GitHub has synced the entity the
-chip is a GitHub link instead. The icon and status word follow open /
-merged / closed. Merging happens from the PR entity's top bar or from a channel
+to open the pull request on GitHub; once GitHub has synced it, the chip
+previews it on hover. The icon and status word follow open / merged /
+closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
 Agent prose sets the documents, sessions, pull requests, and contacts it
@@ -2625,23 +2635,26 @@ to a text-only model is rejected by the backend when sending, with guidance to
 choose a vision model or start a conversation without images.
 
 
-## Accelerated model speed
+## Priority tier
 
-The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
-and GPT-6.1 Sol (6× token pricing). Its tooltip shows the mode, state, and usage
-multiplier before sending. Claude models, including Opus 5.5, stay on standard
-speed until Anthropic approves fast mode for this account. Other models keep
-standard speed. The preference is saved in browser local storage and shared by
-legacy chat and native Macro agent composers. External coding agents use their
-own speed controls.
+The **Priority tier** menu beside the model selector picks how a model's requests
+are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
+*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
+usage multiplier before sending. Claude models, including Opus 5.5, stay on
+standard speed until Anthropic fast mode is enabled for this deployment
+(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
+models keep standard speed and show no menu. The preference is saved in browser
+local storage and shared by legacy chat and native Macro agent composers; an old
+saved "fast mode on" becomes Ultrafast. External coding agents use their own
+speed controls.
 
-Preview the controls at `/app/debug/ui?ui=speed-toggle`.
-Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Preview the control at `/app/debug/ui?ui=speed-selector`.
+Pick Priority and verify the trigger reads *Priority*.
 Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the bolt is hidden; switching back restores
-the preference. With reduced motion enabled, toggling changes the state without
-animation. Native sessions confirm speed configuration before sending the prompt;
-a rejected configuration must retain the unsent draft and attachments.
+Select an unsupported model and verify the menu is hidden; switching back restores
+the preference. Native sessions confirm the tier before sending the prompt when
+the session reports a different one; a rejected configuration must retain the
+unsent draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
