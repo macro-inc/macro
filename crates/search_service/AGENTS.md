@@ -119,14 +119,21 @@ per-entity-type search plus a unified search across them — mounted into
   pagination (`domain/email_search.rs`). Shared threads are resolved from
   `entity_access` grants to the caller's sources, leaving out their own
   inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
-  narrow by id; Calendar only is an allowlist read from
-  `idx_email_threads_calendar_view` (at most `MAX_CALENDAR_ALLOWLIST`, past
-  which it is checked per hit). Read, done (`inbox_visible`) and notification
-  state can each cover most of a mailbox, so `read_until_page_kept` checks each
+  narrow by id. Calendar only and `view` (Sent, Drafts) are `ThreadSet`
+  allowlists read from the partial index each view reads
+  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view`,
+  `idx_email_messages_drafts_view`), at most `MAX_THREAD_SET_ALLOWLIST` per set,
+  past which the set is checked per hit; two sets intersect. Read, done
+  (`inbox_visible`), notification state and attachment kinds can each cover
+  most of a mailbox or have no index, so `read_until_page_kept` checks each
   page's email threads in Postgres and reads further pages until the page is
   full, the results end, or `MAX_EMAIL_STATE_ROUNDS`; the span records the
-  rounds and whether the bound was reached. Enrichment reads a shared hit
-  through its owner's inbox after `shared_among` confirms the grant.
+  rounds and whether the bound was reached. Attachment kinds are read from
+  `email_attachments`, as the list's built-in tabs filter them, not from the
+  thread flags, which saved views read and which are not backfilled
+  everywhere. `email_filters.view` is search only: expanding it into a list
+  filter is an `ExpandErr`. Enrichment reads a shared hit through its owner's
+  inbox after `shared_among` confirms the grant.
 
 ## Related
 
