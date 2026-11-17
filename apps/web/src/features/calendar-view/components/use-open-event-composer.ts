@@ -31,6 +31,7 @@ export function useOpenEventComposer() {
           event: options.event,
           initialValues: options.initialValues,
           suggestedValues: options.suggestedValues,
+          dayDraftRange: options.dayDraftRange,
           initialDrawerHeight: options.initialDrawerHeight,
           onCalendarChange: options.onCalendarChange,
           onDirtyChange: (dirty: boolean) => {

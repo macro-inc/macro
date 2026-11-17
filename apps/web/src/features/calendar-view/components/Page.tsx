@@ -8,6 +8,7 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { DayDraftRangeBinding } from '@app/features/calendar/core/day-draft';
 import { phoneSlotRange } from '@app/features/calendar/core/phone-slot';
 import {
   type CalendarOccurrenceData,
@@ -15,6 +16,7 @@ import {
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
+import { createDayDraftRange } from '@app/features/calendar/primitives/create-day-draft-range';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
@@ -222,6 +224,9 @@ export function Page(props: {
   );
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
   const [selectionColor, setSelectionColor] = createSignal<string>();
+  const [dayDraft, setDayDraft] = createSignal<DayDraftRangeBinding>();
+  let requestDayDraftClose: (() => void) | undefined;
+  onCleanup(() => dayDraft()?.dispose());
   const effectiveSelectionColor = () =>
     selectionColor() ??
     firstWritableCalendar()?.color ??
@@ -259,12 +264,18 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleDateClick = (selection: DateClickArg) => {
     if (!isActive() || pager.periodView() !== 'timeGridDay') return;
+    if (dayDraft()) {
+      requestDayDraftClose?.();
+      return;
+    }
     if (consumeSuppressedCalendarDateSelection()) return;
     const interaction = beginInteraction('calendar.slot.create');
     const calendar = firstWritableCalendar();
     const range = phoneSlotRange(selection.date, selection.allDay);
     try {
-      selection.view.calendar.select(range);
+      const draft = selection.allDay ? undefined : createDayDraftRange(range);
+      if (draft) setDayDraft(draft);
+      else selection.view.calendar.select(range);
       // Keep the full selected hour above the low sheet after its layout settles.
       const scrollFrame = requestAnimationFrame(() => {
         if (isActive())
@@ -273,8 +284,9 @@ export function Page(props: {
           });
       });
       setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
-      openEventComposer({
+      const handle = openEventComposer({
         initialDrawerHeight: 42,
+        dayDraftRange: draft,
         initialValues: {
           ...calendarSelectionToEditorInitialValues(
             range,
@@ -286,9 +298,15 @@ export function Page(props: {
         onClose: () => {
           cancelAnimationFrame(scrollFrame);
           selection.view.calendar.unselect();
+          draft?.dispose();
+          if (dayDraft() === draft) {
+            setDayDraft(undefined);
+            requestDayDraftClose = undefined;
+          }
           setSelectionColor(undefined);
         },
       });
+      requestDayDraftClose = handle?.close;
     } finally {
       interaction.end();
     }
@@ -391,6 +409,7 @@ export function Page(props: {
     >
       <CalendarGrid
         initialDate={props.initialDate}
+        dayDraft={dayDraft()}
         events={visibleEvents()}
         eventsById={eventsById()}
         settings={{
@@ -407,7 +426,12 @@ export function Page(props: {
           onDateSelect: isMobile() ? undefined : handleSelect,
           onDateClick: isMobile() ? handleDateClick : undefined,
           onEventSelect: (event, element) => {
-            if (isActive()) calendarView.selectEvent(event, element);
+            if (!isActive()) return;
+            if (dayDraft()) {
+              requestDayDraftClose?.();
+              return;
+            }
+            calendarView.selectEvent(event, element);
           },
           onSelectedEventMount: (event, element) => {
             if (isActive()) calendarView.reanchorSelectedEvent(event, element);

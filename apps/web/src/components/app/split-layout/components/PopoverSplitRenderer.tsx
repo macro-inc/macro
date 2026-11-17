@@ -1,3 +1,4 @@
+import { isDayDraftRangeBinding } from '@app/features/calendar/context/day-draft-range-context';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -62,6 +63,11 @@ function PopoverSplitModal(props: {
   popover: PopoverSplitData;
   onClose: () => void;
 }) {
+  const draftParam =
+    props.popover.content.type === 'component'
+      ? props.popover.content.params?.dayDraftRange
+      : undefined;
+  const dayDraft = isDayDraftRangeBinding(draftParam) ? draftParam : undefined;
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
@@ -214,12 +220,24 @@ function PopoverSplitModal(props: {
     >
       <MobileDrawer
         side="bottom"
+        modal={dayDraft ? false : undefined}
+        closeOnOutsidePointer={dayDraft ? true : undefined}
         open={props.popover.isOpen}
         onOpenChange={onOpenChange}
+        onOutsidePointer={(event) => {
+          if (
+            dayDraft?.interacting() ||
+            (event.target instanceof Element &&
+              event.target.closest('.calendar-day-draft'))
+          )
+            event.preventDefault();
+        }}
         onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
-          <MobileDrawer.Overlay />
+          <Show when={!dayDraft}>
+            <MobileDrawer.Overlay />
+          </Show>
           <MobileDrawer.Content
             ref={attachPanel}
             aria-label={displayName()}

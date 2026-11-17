@@ -45,6 +45,18 @@ function zonedInstant(
   return date.toISOString();
 }
 
+/** Project the editor's wall-clock range into grid instants in its chosen zone. */
+export function composerRangeInstants(
+  range: DateTimeRangeValue,
+  timeZone: string
+): { start: Date; end: Date } | undefined {
+  if (range.allDay || !isValidComposerTimeZone(timeZone)) return undefined;
+  const start = zonedInstant(range.start, timeZone, false);
+  const end = zonedInstant(range.end, timeZone, false);
+  if (!start || !end || Date.parse(end) <= Date.parse(start)) return undefined;
+  return { start: new Date(start), end: new Date(end) };
+}
+
 /** An explicit zone choice keeps the shown wall-clock fields and changes their instants. */
 export function withComposerTimeZone(
   time: EventTime,

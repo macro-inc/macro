@@ -1,3 +1,4 @@
+import { createDayDraftRange } from '@app/features/calendar/primitives/create-day-draft-range';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, Show, useContext } from 'solid-js';
@@ -146,3 +147,71 @@ it.each([undefined, 82])(
     expect(footer?.childElementCount).toBe(0);
   }
 );
+
+it('leaves only a Day-slot drawer non-modal while other drawer owners retain their scrim', async () => {
+  const content: SplitContent = {
+    type: 'component',
+    id: 'calendar-event-compose',
+  };
+  const draft = createDayDraftRange({
+    start: new Date('2030-07-01T10:00:00Z'),
+    end: new Date('2030-07-01T11:00:00Z'),
+  });
+  const onClose = vi.fn();
+  const mount: SplitMount = {
+    kind: 'component',
+    name: 'calendar-event-compose',
+    meta: {},
+    updateMeta: () => {},
+    element: () => <div>Day draft composer</div>,
+  };
+  const [activeDraft, setActiveDraft] = createSignal(true);
+  render(() => {
+    useHotKeyRoot();
+    return (
+      <PopoverSplitRenderer
+        onClosePopover={onClose}
+        popovers={() =>
+          new Map([
+            [
+              'composer',
+              {
+                id: 'composer',
+                content: activeDraft()
+                  ? { ...content, params: { dayDraftRange: draft } }
+                  : content,
+                mount,
+                isOpen: true,
+                options: { content },
+              },
+            ],
+          ])
+        }
+      />
+    );
+  });
+  expect(document.querySelector('.scrim-glass')).toBeNull();
+  expect(screen.getByRole('dialog').getAttribute('aria-modal')).not.toBe(
+    'true'
+  );
+  draft.startInteraction();
+  fireEvent.pointerDown(document.body);
+  fireEvent.pointerUp(document.body);
+  expect(onClose).not.toHaveBeenCalled();
+  draft.stopInteraction();
+  const gridDraft = document.createElement('div');
+  gridDraft.className = 'calendar-day-draft';
+  document.body.append(gridDraft);
+  fireEvent.pointerDown(gridDraft);
+  fireEvent.pointerUp(gridDraft);
+  expect(onClose).not.toHaveBeenCalled();
+  gridDraft.remove();
+  fireEvent.pointerDown(document.body);
+  fireEvent.pointerUp(document.body);
+  await Promise.resolve();
+  expect(onClose).toHaveBeenCalledOnce();
+  onClose.mockClear();
+  setActiveDraft(false);
+  expect(document.querySelector('.scrim-glass')).not.toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+});

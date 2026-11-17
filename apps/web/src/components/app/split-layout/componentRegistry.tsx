@@ -1,6 +1,10 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import {
+  DayDraftRangeContext,
+  isDayDraftRangeBinding,
+} from '@app/features/calendar/context/day-draft-range-context';
 import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
@@ -448,7 +452,7 @@ registerComponent('agent-session-compose', () => (
 ));
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
-  return (
+  const composer = () => (
     <CalendarComposerSplitAdapter
       event={params?.event as CalendarEvent | undefined}
       initialValues={
@@ -479,6 +483,16 @@ registerComponent('calendar-event-compose', (params) => {
           | undefined
       }
     />
+  );
+  const dayDraftRange = isDayDraftRangeBinding(params?.dayDraftRange)
+    ? params.dayDraftRange
+    : undefined;
+  return dayDraftRange ? (
+    <DayDraftRangeContext.Provider value={dayDraftRange}>
+      {composer()}
+    </DayDraftRangeContext.Provider>
+  ) : (
+    composer()
   );
 });
 registerComponent('skill-compose', (params) => {

@@ -22,7 +22,9 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { DAY_DRAFT_ID, type DayDraftRangeBinding } from '../core/day-draft';
 import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
+import { dispatchDayDraftTimeChange } from '../primitives/dispatch-day-draft-time-change';
 import {
   type CalendarEvent,
   type CalendarGridPeriodView,
@@ -36,6 +38,7 @@ import {
   calendarEventRenderId,
   calendarEventRenderIds,
 } from '../utils/event-interaction';
+import { dayDraftSelectionPlugin } from '../utils/fullcalendar-day-draft';
 import {
   isMultiDaySelectionPreview,
   multiDaySelectionRenderingPlugin,
@@ -47,6 +50,7 @@ import {
 } from '../utils/time-format';
 import { TIME_GRID_OPENING_SCROLL_TIME } from '../utils/time-grid-scroller';
 import { mergeWorkingLocationEvents } from '../utils/working-location-events';
+import { DayDraftContent } from './day-draft/DayDraftContent';
 import { EventContent } from './EventContent';
 import '../calendar.css';
 
@@ -113,6 +117,8 @@ export interface CalendarGridProps {
   selection: CalendarGridSelection;
   /** Rendered occurrence ids that should visually stand out from nearby events. */
   emphasizedEventIds?: ReadonlySet<string>;
+  /** The unsaved phone Day-slot event is not part of persisted occurrence data. */
+  dayDraft?: DayDraftRangeBinding;
   eventTimeChangePending?: boolean;
   onDatesSet?: (info: DatesSetArg) => void;
   onEventTimeChange?: (
@@ -242,6 +248,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         interactionPlugin,
         timeGridPlugin,
         multiDaySelectionRenderingPlugin,
+        dayDraftSelectionPlugin,
       ]}
       initialView={initialView}
       initialDate={props.initialDate}
@@ -273,31 +280,58 @@ export function CalendarGrid(props: CalendarGridProps) {
       firstDay={props.settings.weekStartsOn}
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
-      events={renderedEvents()}
-      eventAllow={() =>
-        props.onEventTimeChange !== undefined &&
-        props.eventTimeChangePending !== true
+      events={[
+        ...renderedEvents(),
+        ...(props.dayDraft?.range()
+          ? [
+              {
+                id: DAY_DRAFT_ID,
+                start: props.dayDraft.range()?.start,
+                end: props.dayDraft.range()?.end,
+                startEditable: false,
+                durationEditable: props.dayDraft.canResize(),
+                classNames: ['calendar-day-draft'],
+              },
+            ]
+          : []),
+      ]}
+      eventAllow={(_drop, moving) =>
+        moving?.id === DAY_DRAFT_ID
+          ? props.dayDraft?.canResize() === true
+          : props.onEventTimeChange !== undefined &&
+            props.eventTimeChangePending !== true
       }
       eventResizableFromStart
       eventDragStart={handleEventInteractionStart}
       eventDragStop={handleEventInteractionStop}
       eventDrop={(change) =>
-        props.onEventTimeChange?.(
-          change,
-          eventByRenderId(calendarEventRenderId(change.event))
+        dispatchDayDraftTimeChange(change, 'drag', props.dayDraft, () =>
+          props.onEventTimeChange?.(
+            change,
+            eventByRenderId(calendarEventRenderId(change.event))
+          )
         )
       }
-      eventResizeStart={handleEventInteractionStart}
-      eventResizeStop={handleEventInteractionStop}
+      eventResizeStart={(info) => {
+        handleEventInteractionStart();
+        if (info.event.id === DAY_DRAFT_ID) props.dayDraft?.startInteraction();
+      }}
+      eventResizeStop={(info) => {
+        handleEventInteractionStop();
+        if (info.event.id === DAY_DRAFT_ID)
+          queueMicrotask(() => props.dayDraft?.stopInteraction());
+      }}
       eventResize={(change) =>
-        props.onEventTimeChange?.(
-          change,
-          eventByRenderId(calendarEventRenderId(change.event))
+        dispatchDayDraftTimeChange(change, 'resize', props.dayDraft, () =>
+          props.onEventTimeChange?.(
+            change,
+            eventByRenderId(calendarEventRenderId(change.event))
+          )
         )
       }
       selectable={props.selection.onDateSelect !== undefined}
       unselectAuto={false}
-      selectMirror
+      selectMirror={props.dayDraft === undefined}
       // A zero-distance selection lets a click create one snapped time slot,
       // while pointer movement still supports selecting a longer range.
       selectMinDistance={0}
@@ -325,7 +359,12 @@ export function CalendarGrid(props: CalendarGridProps) {
             calendarEvent.calendar.color
           );
         }
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
+        if (
+          isMirror ||
+          isMultiDaySelectionPreview(event) ||
+          event.id === DAY_DRAFT_ID
+        )
+          return;
 
         const occurrenceIds = calendarEventRenderIds(event);
         for (const id of occurrenceIds) eventElements.set(id, el);
@@ -337,7 +376,12 @@ export function CalendarGrid(props: CalendarGridProps) {
         notifyChipMount();
       }}
       eventWillUnmount={({ el, event, isMirror }) => {
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
+        if (
+          isMirror ||
+          isMultiDaySelectionPreview(event) ||
+          event.id === DAY_DRAFT_ID
+        )
+          return;
 
         for (const id of calendarEventRenderIds(event)) {
           if (eventElements.get(id) === el) {
@@ -399,6 +443,8 @@ export function CalendarGrid(props: CalendarGridProps) {
           const event = eventByRenderId(
             calendarEventRenderId(renderProps.event)
           );
+          if (renderProps.event.id === DAY_DRAFT_ID)
+            return <DayDraftContent renderProps={renderProps} />;
           if (
             !event &&
             (isMultiDaySelectionPreview(renderProps.event) ||

@@ -445,6 +445,14 @@ export function createCalendarEventFormController(
     );
   };
 
+  /** Apply a grid resize atomically without changing any other edited field. */
+  const setRange = (start: string, end: string) => {
+    const current = state();
+    if (current.start === start && current.end === end) return;
+    endChosen = true;
+    replaceState({ ...current, start, end });
+  };
+
   const setEnd = (end: string) => {
     if (end === state().end) return;
     endChosen = true;
@@ -684,6 +692,7 @@ export function createCalendarEventFormController(
     setField,
     setStart,
     setEnd,
+    setRange,
     setAllDay,
     setDuration,
     eventKind,

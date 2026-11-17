@@ -70,11 +70,18 @@ at the bottom. First tap on a time pill opens the keyboard-free list, a second
 tap enters typing, and choosing an overnight end advances the end date. People
 selection opens a staged picker: Done applies; Cancel or lost permission drops
 the draft. Verify both ordinary and recurring edits, keyboard dismissal, and
-save-failure retry on a physical phone. Phone Day slot taps select one hour
-and open the same composer low enough to retain calendar context; New opens
-at full sheet height. The phone date/time pills share 110px columns and keep
-the meridiem at the right edge. Type choices use accent chips, every option
-stays in the one scroller, and the sheet surface is opaque.
+save-failure retry on a physical phone. Phone Day slot taps open the same
+composer low enough to retain calendar context; timed slots show a separate
+unsaved one-hour dashed draft with native start and end resize handles.
+Resize either end while the composer remains open:
+its date/time fields update without clearing other edits. Editing those fields
+or choosing a time zone updates the draft's grid instants; switching calendars
+updates its color. The Day-slot sheet has no scrim, leaves the grid interactive,
+and dismisses on outside taps except during the draft gesture. Other sheets
+remain modal. Closing removes the draft; saving creates one persisted event.
+New opens at full sheet height. The phone date/time pills share 110px columns
+and keep the meridiem at the right edge. Type choices use accent chips, every
+option stays in the one scroller, and the sheet surface is opaque.
 
 Phone agent review cards use the same grouped fields and clock picker as the
 standalone sheet. Adding Location inserts and focuses it after the call row.

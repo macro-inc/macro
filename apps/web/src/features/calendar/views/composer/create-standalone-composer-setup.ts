@@ -2,6 +2,7 @@ import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { createCalendarEventFormController } from '../../components/composer/create-calendar-event-form-controller';
+import { useDayDraftRange } from '../../context/day-draft-range-context';
 import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
@@ -18,6 +19,7 @@ import type { StandaloneComposerProps } from './StandaloneComposer';
 export function createStandaloneComposerSetup(
   props: StandaloneComposerProps & { macroCallsEnabled: Accessor<boolean> }
 ) {
+  const dayDraftRange = useDayDraftRange();
   const [preferences] = useCalendarPreferences();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const forwardEnabled = useCalendarInvitationForwardFlag();
@@ -92,6 +94,7 @@ export function createStandaloneComposerSetup(
     onDirtyChange: (dirty) => props.onDirtyChange?.(dirty),
     onCalendarChange: (id, color) => props.onCalendarChange?.(id, color),
   });
+  dayDraftRange?.bind(model);
   const suggestions = createComposerSuggestions({
     suggestion: isEdit() ? undefined : props.suggestedValues,
     isDirty: model.isDirty,

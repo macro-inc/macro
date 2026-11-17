@@ -308,6 +308,27 @@
 	height: 2px;
 }
 
+/* The phone Day draft is a distinct, unsaved event with native resize ends. */
+.calendar-view .fc .calendar-day-draft {
+	--fc-event-border-color: var(--calendar-selection-color, var(--color-accent));
+	border: 1px dashed var(--fc-event-border-color);
+	border-radius: 0.375rem;
+	background: var(--color-panel);
+	color: var(--calendar-selection-color, var(--color-accent));
+}
+
+.calendar-view .fc .calendar-day-draft .fc-event-main {
+	color: inherit;
+}
+
+.calendar-view .fc .calendar-day-draft .fc-event-resizer {
+	display: block;
+	opacity: 1;
+	min-height: 0.75rem;
+	/* Claim the handle gesture before the browser starts scrolling the grid. */
+	touch-action: none;
+}
+
 .calendar-view .fc .fc-event-mirror,
 .calendar-view .fc .fc-highlight,
 .calendar-view .fc .calendar-multi-day-selection-preview-event {
@@ -379,6 +400,13 @@
 	.calendar-multi-day-selection-preview-event
 	.calendar-event-selection-preview {
 	filter: invert(1) grayscale(1) contrast(100);
+}
+
+/* Keep the resize mirror legible over the same dashed draft treatment. */
+.calendar-view .fc .fc-event-mirror.calendar-day-draft {
+	background: var(--color-panel);
+	color: var(--calendar-selection-color, var(--color-accent));
+	border-style: dashed;
 }
 
 .calendar-view .fc .fc-timegrid-event .fc-event-main {

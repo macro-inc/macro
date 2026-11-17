@@ -40,6 +40,11 @@ host lives in `../block-calendar/`.
   Single-occurrence visibility stays unavailable because neither read API returns its override.
 - `primitives/default-composer-values.ts` seeds only unsupplied new drafts at the
   next half hour for thirty minutes; preserve supplied ranges and edit values.
+- `primitives/create-day-draft-range.ts` binds phone Day-grid instants to the
+  mounted composer's wall-clock range and selected time zone; grid resizing
+  changes only the controller's start/end fields. `dispatch-day-draft-time-change.ts`
+  routes unsaved resizes away from persisted-event mutations. The popover registry
+  supplies the binding through context without changing the legacy split adapter.
 - `types.ts`: occurrence identity, source metadata, viewer capabilities, and the
   grid-only `CalendarGridPeriodView` versus route-level `CalendarPeriodView`.
 
@@ -64,9 +69,13 @@ host lives in `../block-calendar/`.
   `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
   `views/composer/mobile/MobileComposer.tsx` composes the 2J sheet around those fields;
   `MobileComposerHost.tsx` uses the popover's footer, header, and sole scroll viewport.
-  New-menu sheets use 92% height; Day slot taps request a low 42% sheet with a
-  one-hour draft. The sheet requests an opaque surface through the same owned
-  drawer-height registration. Add-field visibility and compact-title observation live in composer primitives.
+  New-menu sheets use 92% height; timed phone Day slot taps request a low 42%
+  non-modal sheet with no scrim and a separate unsaved FullCalendar draft.
+  Its native start/end resize handles bind only to the mounted composer's range;
+  only that sheet ignores outside dismissal during a draft interaction. The
+  sheet requests an opaque surface through the same owned drawer-height
+  registration. Add-field visibility and compact-title observation live in
+  composer primitives.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `MobileAgentComposer` for the same 2J fields on touch.
