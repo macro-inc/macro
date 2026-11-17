@@ -1,12 +1,11 @@
-diff --git a/apps/web/src/lib/queries/messages/local/waiting-writes.ts b/apps/web/src/lib/queries/messages/local/waiting-writes.ts
-index 2414e06328..feed4def88 100644
 --- a/apps/web/src/lib/queries/messages/local/waiting-writes.ts
 +++ b/apps/web/src/lib/queries/messages/local/waiting-writes.ts
-@@ -52,6 +52,7 @@ export function announceWaitingWrite(channelId: string): void {
- /** Has this window read a channel again from the device when another window's write to it waits. */
+@@ -54,7 +54,7 @@
  export function watchWaitingWrites(): void {
    stopWatching ??= waitingWrites.subscribe((message) => {
+     // With channels back on REST there is no device copy to read again.
+-    if (message.windowId === WINDOW_ID || !channelCacheHost()) return;
 +    if (message) return;
-     if (message.windowId !== WINDOW_ID) refreshChannelViews(message.channelId);
+     refreshChannelViews(message.channelId);
    });
  }

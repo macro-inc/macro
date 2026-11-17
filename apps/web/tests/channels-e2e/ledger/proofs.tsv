@@ -99,7 +99,6 @@ OFF-08	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVi
 OFF-09	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
 OFF-10	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-11	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
-OFF-13	none: the build as it is, with the flag	failed: Error: expect(locator).toBeVisible() failed
 OFF-12	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OPEN-01	ledger/breaks/device-page-loses-a-message.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
 OPEN-01	ledger/breaks/page-loses-a-message.patch	failed: Error: the last messages in the list
@@ -162,7 +161,9 @@ WRT-13	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel a
 WRT-14	ledger/breaks/waiting-write-not-shown-in-other-window.patch	failed: Error: the channel as it is on the screen
 WRT-15	ledger/breaks/stored-send-never-forgotten.patch	failed: Error: the channel as the services hold it
 CHN-16	none: the build as it is, with or without the flag	failed: Error: expect(locator).toContainText(expected) failed
-CHN-15	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
-DM-06	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
-MEM-03	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
-CHN-08	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
+OFF-13	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-14	ledger/breaks/left-behind-reads-not-held.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+CHN-08	ledger/breaks/favorite-does-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed
+DM-06	ledger/breaks/teammate-not-offered-by-name.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-15	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 2 of 3 without the break
+MEM-03	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 0 of 3 without the break

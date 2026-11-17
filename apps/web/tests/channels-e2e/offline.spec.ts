@@ -13,7 +13,6 @@ import {
 import {
   expect,
   failsSometimes,
-  knownDefect,
   LOCAL_SYNC_BUILD,
   test,
 } from './harness/fixtures';
@@ -24,6 +23,7 @@ import {
   goOffline,
   goOfflineAtOnce,
   goOnline,
+  holdDeviceBack,
   slowLink,
 } from './harness/network';
 
@@ -219,13 +219,7 @@ test('OFF-06 a thread read while connected shows its replies with no connection,
   const offline = await openOffline(page, channel);
   await offline.hiddenReplies(root.id).click();
 
-  await expect
-    .poll(async () => (await offline.replies(root.id)).slice(0, 3))
-    .toEqual(replies.slice(0, 3));
-  // Defect, in some runs: only the first three replies show.
-  await failsSometimes(async () => {
-    await expect.poll(() => offline.replies(root.id)).toEqual(replies);
-  });
+  await expect.poll(() => offline.replies(root.id)).toEqual(replies);
 });
 
 // If this fails, a thread whose replies the device never fetched shows an
@@ -353,10 +347,6 @@ test('OFF-13 a channel read while connected opens with no connection after a hun
   pageFor,
   dee,
 }) => {
-  // Known defect: after a reload with no connection the page knows only about
-  // a hundred of the newest channels, and says "Conversation
-  // unavailable" for an older one although the device holds its messages.
-  knownDefect('on');
   test.setTimeout(240_000);
   // Dee's, so that the other tests' people keep under a hundred channels.
   const page = await pageFor('dee');
@@ -382,6 +372,40 @@ test('OFF-13 a channel read while connected opens with no connection after a hun
 
   await view.shown();
   await expectShown(view, ['in the old channel']);
+});
+
+// If this fails, what a person read just before a reload, in the second or
+// two a new page takes to start keeping channels, is not on their device:
+// without a connection the thread they read shows no replies.
+test('OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection', async ({
+  pageFor,
+  ada,
+  ben,
+}) => {
+  const channel = await ada.createChannel({ members: [ben.person] });
+  const elsewhere = await ada.createChannel({ members: [ben.person] });
+  await ada.post(elsewhere.id, 'elsewhere');
+  const root = await ada.post(channel.id, 'root');
+  const replies = ['reply 1', 'reply 2', 'reply 3', 'reply 4', 'reply 5'];
+  for (const text of replies) {
+    await ben.post(channel.id, text, { threadId: root.id });
+  }
+  const page = await pageFor('ben');
+  // The page that reads the thread never gets to keep it.
+  const letDeviceStart = await holdDeviceBack(page.context());
+  const view = new Conversation(page, channel.id);
+  await view.open();
+  await view.hiddenReplies(root.id).click();
+  await expect.poll(() => view.replies(root.id)).toEqual(replies);
+  // A device fetches the channels a person had open lately by itself, but
+  // not their threads: only the thread shows what the lost page left behind.
+  await new Conversation(page, elsewhere.id).open();
+  await letDeviceStart();
+
+  const offline = await openOffline(page, channel);
+  await offline.hiddenReplies(root.id).click();
+
+  await expect.poll(() => offline.replies(root.id)).toEqual(replies);
 });
 
 // If this fails, a person cannot go back to an old message they followed a

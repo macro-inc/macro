@@ -118,6 +118,35 @@ export async function slowLink(
   };
 }
 
+/** The code of the engine a device keeps channels with. */
+const DEVICE_ENGINE = '**/cache_wasm_bg*.wasm';
+
+/**
+ * Holds back the code a device keeps channels with, as a slow link does on a
+ * first visit: pages open and read from the services, and nothing they read
+ * is kept. Answers the function that lets the code through to the pages
+ * still open.
+ */
+export async function holdDeviceBack(
+  context: BrowserContext
+): Promise<() => Promise<void>> {
+  const held: Array<() => void> = [];
+  let holding = true;
+  const handler = async (route: Route) => {
+    if (holding) await new Promise<void>((letGo) => held.push(letGo));
+    try {
+      await route.fallback();
+    } catch {
+      // the page that asked is gone
+    }
+  };
+  await context.route(DEVICE_ENGINE, handler);
+  return async () => {
+    holding = false;
+    for (const letGo of held) letGo();
+  };
+}
+
 const MESSAGE_MUTATION = /mutation (Send|Edit|Delete|ReactTo)ChannelMessage\b/;
 
 /** Whether the request asks the services to change a message. */

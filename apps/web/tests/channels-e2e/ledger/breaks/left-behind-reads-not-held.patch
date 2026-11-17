@@ -1,0 +1,11 @@
+--- a/apps/web/src/lib/queries/messages/local/unheld-reads.ts
++++ b/apps/web/src/lib/queries/messages/local/unheld-reads.ts
+@@ -65,7 +65,7 @@
+ 
+ /** The reads pages that are gone left noted: not the ones this page is storing. */
+ export function unheldReadsLeft(): UnheldRead[] {
+-  return unheldReads().filter((read) => !noted.has(idOf(read)));
++  return unheldReads().filter((read) => noted.has(`left:${idOf(read)}`));
+ }
+ 
+ export function noteUnheldRead(read: UnheldRead): void {

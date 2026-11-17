@@ -1,0 +1,10 @@
+--- a/apps/web/src/lib/queries/channel/detail.ts
++++ b/apps/web/src/lib/queries/channel/detail.ts
+@@ -98,6 +98,7 @@
+           ) {
+             return;
+           }
++          if (earlier?.id === id && includesChannel(earlier?.result.data) && !includesChannel(result.data)) return;
+           setServer({ id, client, result });
+           return;
+         }
