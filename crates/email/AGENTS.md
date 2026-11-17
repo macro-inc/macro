@@ -178,12 +178,17 @@ tools — hexagonal, heavily feature-gated.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
-- Address supersets keep joined and indexed recipient branches. Use the
-  indexed branches only for all-recipient-role groups in the initial capped
-  probe and the sparse page it selects, in both Team and Owned reads. A rare
+- Address supersets keep joined and indexed text branches. Use indexed sender
+  lookups in the initial capped probe and the sparse page it selects, in both
+  Team and Owned reads; the `OFFSET 0` keeps generic plans on
+  `idx_email_messages_from_contact_id` instead of scanning every message. Each
+  sender lookup stops one past the initial superset cap, so generic plans can
+  stop on that index instead of building a bitmap of all its messages; the
+  cap cannot truncate a page the probe proved sparse.
+  Indexed recipient lookups apply only to all-recipient-role groups. A rare
   requested role can scan a dense domain before the cap finds a match, so
-  role-restricted groups keep joined SQL. Dense underfill fallbacks and larger
-  Owned round probes also keep joined SQL; per-message probes can make those
+  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
+  and larger Owned round probes also keep joined SQL; per-message probes can make those
   large sets slower. Checked General branches keep their original joins so
   mailbox-fact checks are planned with the messages. Optimized Team probes
   and pages share a read-only repeatable-read snapshot, as Owned reads do,
