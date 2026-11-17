@@ -254,6 +254,10 @@ pub enum TeamAgentError {
     /// settles.
     #[error("the agent's computer purchase is still confirming; try again in a minute")]
     PurchaseConfirming,
+    /// An earlier request with this purchase key is still setting up the
+    /// agent and hasn't bought its computer yet.
+    #[error("this invite is still being set up; try again in a moment")]
+    InviteInProgress,
     /// The agent's repository has no valid `config/voice.json`.
     #[error("the agent has no voice set")]
     NoVoice,

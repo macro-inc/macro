@@ -196,6 +196,14 @@ fn env_entry(
     Ok(())
 }
 
+/// What [`TeamAgentServiceImpl::prepare`] led to.
+enum Prepared {
+    /// A new account, joined to the team, with its repo.
+    New(MacroUserIdStr<'static>, PersonaSeed),
+    /// The invite's purchase key already made this agent.
+    Repeat(TeamAgentRecord),
+}
+
 /// What a failed invite must take back, newest first.
 #[derive(Default)]
 struct Undo {
@@ -268,7 +276,7 @@ where
         created_by: &MacroUserIdStr<'static>,
         request: &CreateTeamAgent,
         undo: &mut Undo,
-    ) -> Result<(MacroUserIdStr<'static>, PersonaSeed), TeamAgentError> {
+    ) -> Result<Prepared, TeamAgentError> {
         let team_id = team_id(receipt)?;
         // A short suffix keeps two agents with the same name apart.
         let suffix: String = Uuid::now_v7()
@@ -309,15 +317,11 @@ where
             .await
             .map_err(TeamAgentError::internal)?;
         if let CreatedAccount::AlreadyInvited(record) = created {
-            // A repeat of an invite (a double click, or a retry after a lost
-            // answer): it goes on to the same purchase, which hosted_runtimes
-            // dedupes on the same key. The first request owns any undo, so
-            // nothing is recorded here.
             tracing::Span::current().record(
                 "agent_user_id",
                 tracing::field::display(agent_credentials::telemetry_id(record.user_id.as_ref())),
             );
-            return Ok((record.user_id, record.persona_seed));
+            return Ok(Prepared::Repeat(*record));
         }
         undo.account = Some(user_id.clone());
 
@@ -327,7 +331,21 @@ where
         self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
-        Ok((user_id, seed))
+        Ok(Prepared::New(user_id, seed))
+    }
+
+    /// A repeat of an invite (a double click, or a retry after a lost
+    /// answer) answers with the agent the first request made, and changes
+    /// nothing: the first request owns the setup and its undo. Until that
+    /// one has bought the computer (a purchase still confirming counts), the
+    /// agent may yet be taken back, so the repeat is refused.
+    async fn repeated_invite(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
+        let agent = self.team_agent(record).await?;
+        let Some(computer_id) = agent.computer_id else {
+            return Err(TeamAgentError::InviteInProgress);
+        };
+        tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
+        Ok(agent)
     }
 
     async fn team_agent(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
@@ -390,7 +408,8 @@ where
             .prepare(&receipt, &created_by, &request, &mut undo)
             .await
         {
-            Ok(prepared) => prepared,
+            Ok(Prepared::New(user_id, seed)) => (user_id, seed),
+            Ok(Prepared::Repeat(record)) => return self.repeated_invite(record).await,
             Err(error) => {
                 self.undo(receipt, undo).await;
                 return Err(error);

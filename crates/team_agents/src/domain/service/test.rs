@@ -435,6 +435,36 @@ async fn a_retried_invite_returns_the_first_agent_without_a_second_account() {
     assert_eq!(made("account.create"), 1);
     assert_eq!(made("team.add"), 1);
     assert_eq!(made("repo.create"), 1);
+    assert_eq!(made("computer.purchase"), 1);
+}
+
+#[tokio::test]
+async fn a_repeated_invite_before_the_first_bought_its_computer_is_refused_and_changes_nothing() {
+    let (service, journal) = service(true, FakeComputers::default());
+    // The first request has made the account and is still joining it to the
+    // team, making its repo or buying its computer; it may yet take it back.
+    service.repository.agents.lock().unwrap().push((
+        TeamAgentRecord {
+            user_id: user("macro|sam-rivera-abc123@agents.macro.invalid"),
+            team_id: Uuid::parse_str(TEAM).unwrap(),
+            created_by: Some(user(ADMIN)),
+            persona_seed: PersonaSeed {
+                creator_id: Some(user(ADMIN)),
+                name: "Sam Rivera".to_owned(),
+                job_description: "Runs vendor relations.".to_owned(),
+                personality: "Dry, direct, kind.".to_owned(),
+                voice: None,
+            },
+            created_at: chrono::DateTime::UNIX_EPOCH,
+        },
+        "invite-1".to_owned(),
+    ));
+
+    let result = service.create(receipt(), request()).await;
+
+    assert!(matches!(result, Err(TeamAgentError::InviteInProgress)));
+    assert!(journal.entries().is_empty());
+    assert_eq!(service.repository.records().len(), 1);
 }
 
 #[tokio::test]

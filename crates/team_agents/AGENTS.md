@@ -19,9 +19,10 @@ undoes the repo, membership and account, newest first.
 
 The invite is idempotent on its `purchaseKey` (one per Invite dialog):
 `team_agents` is unique on `(team_id, purchase_key)`, so a double click or a
-retry after a lost answer creates no second account and goes on to the same
-purchase, which hosted_runtimes dedupes on the same key. Only the request that
-created the account undoes it.
+retry after a lost answer creates nothing and answers with the first agent once
+its computer is bought (a purchase still confirming counts). Before that the
+first request may still take the agent back, so the repeat is a 409
+(`InviteInProgress`). Only the request that created the account undoes it.
 
 When the computer operator creates the guest it calls the internal
 `POST /internal/team_agent_enrollment/{computer}/{generation}`; for an agent
