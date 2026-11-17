@@ -144,7 +144,9 @@ the app's JavaScript, style and layout about four times slower, so unthrottled
 lab view switches read like an iPhone's, not an Android phone's.
 `--cpu-throttle <rate>` slows the WebView renderer by that factor with DevTools
 (`Emulation.setCPUThrottlingRate`; 4 is Chrome's "mid-tier mobile" preset). At
-4× the median view switch in the lab is close to the field Android median.
+4× the lab's median view switch (Notifications excluded) was 1.75–1.79 s in
+two runs, against 1.65 s for Android in the field; at 1× it was 0.40–0.42 s,
+close to iOS in the field (0.29 s).
 
 | Profile | Use it for |
 | --- | --- |
@@ -186,7 +188,8 @@ Caveats:
   wait for the Android UI thread, about one frame each while anything
   animates, so IPC-bound flows such as the cold channel open are slower in the
   lab than on phones at either rate. Don't read them at 4× as phone numbers.
-- 4× spreads the samples more; see [Noise and comparing builds](#noise-and-comparing-builds).
+- At 4× the spread grows with the times, by about the same share of the
+  median as at 1×; see [Noise and comparing builds](#noise-and-comparing-builds).
 
 ## Noise and comparing builds
 
@@ -197,6 +200,12 @@ power. To compare two builds, run each with the same iterations on the same
 AVD, alternating the builds (ABAB), and treat differences below the larger of
 `detect` and the run-to-run drift in the baseline report as noise. Other
 emulators or heavy jobs on the host widen the spread; note the host load.
+
+At 4× `detect` is 13–49% of a step's median for 10 iterations (median 28%,
+against 25% at 1× in the same runs, host load 11–77), and two runs' medians
+differed by a median 5%, at most 19%, for view switches and document opens. The
+median over all view switches moved 2% between those runs. More iterations
+narrow `detect` by the square root: 40 halve it.
 
 A step fails rather than producing a number when its spans never arrive, the
 route afterwards is not the expected one, the target is missing, or the CPU
