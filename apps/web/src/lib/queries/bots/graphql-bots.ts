@@ -51,6 +51,8 @@ type Revalidator = {
   /** Whether a push changes what this read returns. */
   affected: (push: BotPush) => boolean;
   refresh: () => Promise<unknown>;
+  /** The channel a mentionable list is scoped to, if it is one. */
+  channel?: () => string | null | undefined;
 };
 const revalidators = new Set<Revalidator>();
 
@@ -78,13 +80,15 @@ export async function revalidateBotReads(
 function registerRevalidator(
   client: () => Client,
   affected: Revalidator['affected'],
-  refetch: () => Promise<unknown>
+  refetch: () => Promise<unknown>,
+  channel?: Revalidator['channel']
 ) {
   let disposed = false;
   const revalidator: Revalidator = {
     client,
     affected,
     refresh: createTrailingRefetch(() => !disposed, refetch),
+    channel,
   };
   revalidators.add(revalidator);
   onCleanup(() => {
@@ -199,9 +203,9 @@ export function createBotIdentities(ids: Accessor<readonly string[]>) {
 /**
  * The bots the viewer can `@` mention, live. `channelId` scopes it to a
  * channel's bots plus agents available everywhere; null means every agent the
- * viewer can start; undefined reads nothing. A rename or new picture
- * re-renders from the cache; a pushed bot this list lacks, or a deletion,
- * reads the list again.
+ * viewer can start; undefined reads nothing. Names and pictures re-render
+ * from the cache; every bot push, and an invite or removal in its channel
+ * (`revalidateMentionableBots`), reads the list again.
  */
 export function createMentionableBots(
   channelId: Accessor<string | null | undefined>
@@ -218,17 +222,36 @@ export function createMentionableBots(
     })
   );
   const listed = () => query.data?.user.mentionableBots ?? [];
+  // Any push can change who belongs: a new bot, a deletion, or an agent
+  // narrowed to selected channels, which is still the same bot. Pushes are
+  // rare, so the list reads again for every one.
   registerRevalidator(
     getGraphqlSoupClient,
-    (push) =>
-      push.bots.some((bot) => {
-        const present = listed().some((row) => row.id === bot.id);
-        return bot.deletedAt != null || !present || !push.shown;
-      }),
-    () => query.refetch({ requestPolicy: 'network-only' })
+    () => true,
+    () => query.refetch({ requestPolicy: 'network-only' }),
+    channelId
   );
   return {
     bots: (): BotIdentity[] => listed().map(toIdentity),
     isPending: () => query.data === undefined && !query.error,
   };
+}
+
+/**
+ * Read again the mounted mentionable lists of `channelIds`, after a bot
+ * joined or left one of them: membership changes push no bot.
+ */
+export function revalidateMentionableBots(channelIds: readonly string[]) {
+  const channels = new Set(channelIds);
+  return Promise.all(
+    [...revalidators].map(async (entry) => {
+      const channel = entry.channel?.();
+      if (!channel || !channels.has(channel)) return;
+      try {
+        await entry.refresh();
+      } catch (error) {
+        console.warn('Mentionable bots revalidation failed', error);
+      }
+    })
+  );
 }

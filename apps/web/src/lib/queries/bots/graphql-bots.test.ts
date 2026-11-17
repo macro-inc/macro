@@ -42,6 +42,7 @@ import {
   createBotIdentities,
   createBotIdentity,
   createMentionableBots,
+  revalidateMentionableBots,
 } from './graphql-bots';
 
 const RELEASE_BOT = '5f0c8a4e-2d1b-4c3a-9e7f-6a5b4c3d2e1f';
@@ -337,19 +338,39 @@ describe('createMentionableBots', () => {
     return { server, list };
   }
 
-  it('lists the channel scope and keeps it through a rename the cache applied', async () => {
+  it('reads again for any push about a bot it lists, which may have left its scope', async () => {
     const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
-    const { server, list } = mountList(rows, [RELEASE_BOT]);
+    const ids = [RELEASE_BOT];
+    const { server, list } = mountList(rows, ids);
     await vi.waitFor(() =>
       expect(list.bots().map((row) => row.name)).toEqual(['Release bot'])
     );
 
+    // Narrowed to selected channels: still the same bot, no longer listed.
+    ids.splice(0, 1);
     createBotUpdatesHandler(client).onResult(
-      pushed([bot(RELEASE_BOT, 'Shipper')], true)
+      pushed([bot(RELEASE_BOT, 'Release bot')], true)
     );
 
-    await Promise.resolve();
-    expect(server.listRequests).toEqual(['channel-1']);
+    await vi.waitFor(() => expect(list.bots()).toEqual([]));
+    expect(server.listRequests).toEqual(['channel-1', 'channel-1']);
+  });
+
+  it('reads a channel’s list again after a bot joins or leaves that channel', async () => {
+    const rows = new Map([
+      [RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')],
+      [REVIEW_BOT, bot(REVIEW_BOT, 'Reviewer')],
+    ]);
+    const ids = [RELEASE_BOT];
+    const { server, list } = mountList(rows, ids);
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(1));
+
+    await revalidateMentionableBots(['channel-2']);
+    ids.push(REVIEW_BOT);
+    await revalidateMentionableBots(['channel-1']);
+
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(2));
+    expect(server.listRequests).toEqual(['channel-1', 'channel-1']);
   });
 
   it('reads again for a bot it lacks, and for a deletion', async () => {
