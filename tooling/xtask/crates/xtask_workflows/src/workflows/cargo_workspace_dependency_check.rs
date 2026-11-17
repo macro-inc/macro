@@ -12,6 +12,7 @@
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
@@ -72,7 +73,7 @@ fn hakari_and_dep_closures() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
+    ActionsCheckout::new("Checkout Repo").step()
 }
 
 /// `cargo install` skips the build when the same version is already present

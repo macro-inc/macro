@@ -16,6 +16,7 @@ use gh_workflow::expr::typed::{
 use gh_workflow::{Container, Env, Event, Job, Port, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RuntimePath;
 
+use crate::workflows::actions::{DenolandSetupDeno, DornyPathsFilter};
 use crate::workflows::{
     runners,
     steps::{self, FluentBuilder},
@@ -353,13 +354,9 @@ fn tests_execution_runtime() -> Expr<Bool> {
 
 /// Install the same pinned runtime shipped in the agent harness container.
 fn setup_execution_runtime() -> Step<gh_workflow::Use> {
-    Step::new("Set up code execution runtime")
-        .uses(
-            "denoland",
-            "setup-deno",
-            "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
-        ) // v2
-        .add_with(("deno-version", "2.9.6"))
+    DenolandSetupDeno::new("Set up code execution runtime")
+        .deno_version("2.9.6")
+        .step()
         .if_condition(tests_execution_runtime())
 }
 
@@ -398,16 +395,9 @@ fn status_check() -> Job {
 /// change could affect a service's Doppler config contract (a superset of
 /// what `xtask doppler-bins` checks, so the gate never hides a bin).
 fn paths_filter() -> Step<gh_workflow::Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(FILTER.id())
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    DornyPathsFilter::new(
+        "Filter changed paths",
+        indoc::indoc! {r#"
                 should_run:
                   - 'Cargo.toml'
                   - 'Cargo.lock'
@@ -448,7 +438,9 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 /// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked

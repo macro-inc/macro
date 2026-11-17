@@ -23,7 +23,6 @@ jobs:
       - name: Run CLA check
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const WORKER_ORIGIN = 'https://macro-cla.macroverse.workers.dev';
             const SIGN_URL = `${WORKER_ORIGIN}/cla`;
@@ -144,6 +143,7 @@ jobs:
                 });
               }
             }
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
           ORG_READ_TOKEN: ${{ secrets.CLA_ORG_READ_TOKEN || github.token }}
           CLA_CHECK_API_KEY: ${{ secrets.CLA_CHECK_API_KEY }}

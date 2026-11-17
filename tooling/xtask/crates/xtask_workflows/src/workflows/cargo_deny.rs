@@ -9,9 +9,10 @@
 //! [`super::cargo_deny_advisories`] fails on the rest, daily on `main`.
 
 use gh_workflow::expr::typed::{StepHandle, cancelled};
-use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps};
 
 #[cfg(test)]
@@ -52,7 +53,7 @@ fn cargo_deny_job() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         // `PR CI` checks out the PR's merge commit, whose first parent is the
         // base: the advisories step reads the base's `Cargo.lock` from it.
-        .add_step(checkout().add_with(("fetch-depth", 2)))
+        .add_step(checkout().fetch_depth(2))
         .add_step(steps::setup_rust_light())
         .add_step(install_cargo_deny())
         .add_step(deny("bans licenses sources").id(BANS.id()))
@@ -70,8 +71,8 @@ fn cargo_deny_job() -> Job {
         )
 }
 
-pub(crate) fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
+pub(crate) fn checkout() -> ActionsCheckout {
+    ActionsCheckout::new("Checkout Repo")
 }
 
 /// Put the pinned cargo-deny release on `PATH`, after checking its archive.

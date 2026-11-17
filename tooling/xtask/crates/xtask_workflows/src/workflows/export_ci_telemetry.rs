@@ -6,6 +6,10 @@ use gh_workflow::expr::typed::{
 };
 use gh_workflow::{Event, Job, Level, Permissions, Step, Workflow, WorkflowRun, WorkflowRunType};
 
+use crate::workflows::actions::{
+    ActionsGithubScript, AwsActionsConfigureAwsCredentials,
+    GrafanaGrafanaGithubActionsGhaOtelExport,
+};
 use crate::workflows::steps;
 
 #[cfg(test)]
@@ -157,15 +161,13 @@ fn export() -> Job {
         .cond(ran())
         // The only step that lists the run's jobs; it leaves them for the collector.
         .add_step(
-            Step::new("Check API budget and upstream exporter limits")
-                .uses(
-                    "actions",
-                    "github-script",
-                    "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-                )
-                .id(PREFLIGHT.id())
-                .add_env(("CI_TELEMETRY_JOBS", jobs_file()))
-                .add_with(("script", include_str!("scripts/ci_telemetry_preflight.js"))),
+            ActionsGithubScript::new(
+                "Check API budget and upstream exporter limits",
+                include_str!("scripts/ci_telemetry_preflight.js"),
+            )
+            .step()
+            .id(PREFLIGHT.id())
+            .add_env(("CI_TELEMETRY_JOBS", jobs_file())),
         )
         // Before any credential exists, so nothing the run produced shares a step with it.
         .add_step(
@@ -182,19 +184,11 @@ fn export() -> Job {
                 .add_env(("CI_TELEMETRY_EVENTS", events_file())),
         )
         .add_step(
-            Step::new("Assume CI telemetry role")
-                .uses(
-                    "aws-actions",
-                    "configure-aws-credentials",
-                    "e7f100cf4c008499ea8adda475de1042d6975c7b",
-                )
-                .if_condition(always())
-                .add_with((
-                    "role-to-assume",
-                    "arn:aws:iam::569036502058:role/macro-observability-ci",
-                ))
-                .add_with(("aws-region", "us-east-1"))
-                .add_with(("role-duration-seconds", 900)),
+            AwsActionsConfigureAwsCredentials::new("Assume CI telemetry role", "us-east-1")
+                .role_to_assume("arn:aws:iam::569036502058:role/macro-observability-ci")
+                .role_duration_seconds(900)
+                .step()
+                .if_condition(always()),
         )
         .add_step(
             Step::new("Read ingestion credential")
@@ -219,22 +213,20 @@ fn export() -> Job {
                 .add_env(("OTLP_HEADERS", INGEST.outputs.headers.read())),
         )
         .add_step(
-            Step::new("Export workflow, job and step traces")
-                .uses(
-                    "grafana",
-                    "grafana-github-actions/gha-otel-export",
-                    "b1c422726cc4ff4adb0838ebca67586f24babb42",
-                )
-                .id("traces")
-                .if_condition(PREFLIGHT.outputs.export.read().is_set())
-                .add_with(("github-token", github().token()))
-                .add_env(("OTEL_SERVICE_NAME", "github-actions"))
-                .add_env(("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=ci"))
-                .add_env(("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"))
-                .add_env((
-                    "OTEL_EXPORTER_OTLP_ENDPOINT",
-                    "https://otlp.macro-internal.com",
-                ))
-                .add_env(("OTEL_EXPORTER_OTLP_HEADERS", INGEST.outputs.headers.read())),
+            GrafanaGrafanaGithubActionsGhaOtelExport::new(
+                "Export workflow, job and step traces",
+                github().token(),
+            )
+            .step()
+            .id("traces")
+            .if_condition(PREFLIGHT.outputs.export.read().is_set())
+            .add_env(("OTEL_SERVICE_NAME", "github-actions"))
+            .add_env(("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=ci"))
+            .add_env(("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"))
+            .add_env((
+                "OTEL_EXPORTER_OTLP_ENDPOINT",
+                "https://otlp.macro-internal.com",
+            ))
+            .add_env(("OTEL_EXPORTER_OTLP_HEADERS", INGEST.outputs.headers.read())),
         )
 }

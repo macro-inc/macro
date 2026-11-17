@@ -8,11 +8,8 @@ use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
 };
 
-use crate::workflows::{
-    runners,
-    steps::{self, FluentBuilder},
-    vars,
-};
+use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
+use crate::workflows::{runners, steps, vars};
 
 mod android_native_check;
 mod ios_native_check;
@@ -509,18 +506,23 @@ fn gated_web_job(name: &str) -> Job {
 }
 
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
-    Step::new(name)
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    let checkout = ActionsCheckout::new(name);
+    let checkout = if full_history {
+        checkout.fetch_depth(0)
+    } else {
+        checkout
+    };
+    checkout.step()
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]
 /// reads trees and a few blobs, so path-check fetches no blobs up front and
 /// writes almost no work tree: 18 s became 6 s on the tiny runner.
 fn path_check_checkout() -> Step<Use> {
-    checkout("Checkout Repo", false)
-        .add_with(("filter", "blob:none"))
-        .add_with(("sparse-checkout", ".github"))
+    ActionsCheckout::new("Checkout Repo")
+        .filter("blob:none")
+        .sparse_checkout(".github")
+        .step()
 }
 
 /// Whether a pull request can change generated output. Schemas come from
@@ -588,19 +590,14 @@ fn paths_filter() -> Step<Use> {
     // `calendar_details_changed` covers what the event details browser tests
     // render and the query modules their fixture replaces, whose exports the
     // fixture must keep matching.
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(FILTER.id())
-        .add_with((
-            "filters",
+    DornyPathsFilter::new(
+        "Filter changed paths",
             format!(
                 "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 /// Build every schema binary the later steps run in one cargo invocation:

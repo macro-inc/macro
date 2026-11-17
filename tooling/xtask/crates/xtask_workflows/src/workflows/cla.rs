@@ -25,6 +25,7 @@ use gh_workflow::{
     PullRequestType, Step, Use, Workflow,
 };
 
+use crate::workflows::actions::ActionsGithubScript;
 use crate::workflows::{runners, vars};
 
 /// Base URL of the signing worker (`services/cla-worker`). On workers.dev
@@ -92,12 +93,9 @@ fn cla_job() -> Job {
 }
 
 fn cla_script() -> Step<Use> {
-    Step::new("Run CLA check")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
+    ActionsGithubScript::new("Run CLA check", script())
+        .github_token(vars::GITHUB_TOKEN)
+        .step()
         // Org-membership probe. The default GITHUB_TOKEN only sees public org
         // members; set the CLA_ORG_READ_TOKEN secret (read:org PAT or app
         // token) so private members pass without signing.
@@ -107,8 +105,6 @@ fn cla_script() -> Step<Use> {
         ))
         // Shared secret for the signing worker's /cla/check endpoint.
         .add_env(("CLA_CHECK_API_KEY", vars::CLA_CHECK_API_KEY))
-        .add_with(("github-token", vars::GITHUB_TOKEN))
-        .add_with(("script", script()))
 }
 
 /// The whole enforcement logic. Comment bodies are only ever read from the

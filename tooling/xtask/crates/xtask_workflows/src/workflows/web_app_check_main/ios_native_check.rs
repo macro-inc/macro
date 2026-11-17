@@ -45,7 +45,8 @@ use gh_workflow::expr::typed::{
 };
 use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::actions::{ActionsGithubScript, DornyPathsFilter, OvenShSetupBun};
+use crate::workflows::{runners, vars};
 
 /// The job in the web app check workflow.
 pub(super) const JOB: JobHandle<()> = JobHandle::new("ios-native-check", ());
@@ -132,25 +133,17 @@ fn gated() -> Expr<Bool> {
 }
 
 fn paths_filter() -> Step<Use> {
-    Step::new("Detect native iOS changes")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(NATIVE_FILTER.id())
-        .add_with(("predicate-quantifier", "every"))
-        .add_with((
-            "filters",
-            // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
-            // named for another platform (android, macos, linux, windows,
-            // desktop) never reach the iOS binary; `desktop_*` stays counted
-            // because desktop_update compiles into mobile. The generator rejects
-            // globs that match nothing, so only the shapes present in the
-            // tree today are listed; when a file in a new shape appears
-            // (e.g. the first windows_* module), extend this list to keep it
-            // in step with the regex.
-            indoc::indoc! {"
+    DornyPathsFilter::new(
+        "Detect native iOS changes",
+        // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
+        // named for another platform (android, macos, linux, windows,
+        // desktop) never reach the iOS binary; `desktop_*` stays counted
+        // because desktop_update compiles into mobile. The generator rejects
+        // globs that match nothing, so only the shapes present in the
+        // tree today are listed; when a file in a new shape appears
+        // (e.g. the first windows_* module), extend this list to keep it
+        // in step with the regex.
+        indoc::indoc! {"
                 ios_native:
                   - 'apps/web/tauri/**'
                   - '!apps/web/tauri/**/android/**'
@@ -173,7 +166,10 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/.helix/**'
                   - '!apps/web/tauri/**/*.md'
             "},
-        ))
+    )
+    .predicate_quantifier("every")
+    .step()
+    .id(NATIVE_FILTER.id())
 }
 
 /// Did this PR move the client cache wasm package version against its base?
@@ -232,11 +228,11 @@ fn read_labels() -> Step<Run> {
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .id("bun")
         .if_condition(gated())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn verify_bump() -> Step<Run> {
@@ -295,22 +291,17 @@ fn skip_notice() -> Step<Run> {
 
 /// Keep release instructions visible on the PR even when an earlier step fails.
 fn pr_comment() -> Step<Use> {
-    Step::new("Update iOS gate status on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        .if_condition(
-            (!cancelled()).and(
-                github()
-                    .event::<Str>("pull_request.head.repo.full_name")
-                    .eq(github().repository()),
-            ),
-        )
-        .add_env(("IOS_GATE_STEPS", to_json(whole_steps())))
-        .add_with((
-            "script",
-            include_str!("../scripts/ios_native_check_comment.js"),
-        ))
+    ActionsGithubScript::new(
+        "Update iOS gate status on the PR",
+        include_str!("../scripts/ios_native_check_comment.js"),
+    )
+    .step()
+    .if_condition(
+        (!cancelled()).and(
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
+        ),
+    )
+    .add_env(("IOS_GATE_STEPS", to_json(whole_steps())))
 }

@@ -999,9 +999,9 @@ jobs:
         if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
         uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
         with:
+          aws-region: us-east-1
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
         continue-on-error: true
       - id: preview-id
         name: Get or create preview ID
@@ -1072,7 +1072,6 @@ jobs:
         name: Detect native iOS changes
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
         with:
-          predicate-quantifier: every
           filters: |
             ios_native:
               - 'apps/web/tauri/**'
@@ -1095,6 +1094,7 @@ jobs:
               - '!apps/web/tauri/desktop-release.json'
               - '!apps/web/tauri/.helix/**'
               - '!apps/web/tauri/**/*.md'
+          predicate-quantifier: every
       - id: cache-wasm
         name: Detect a client cache wasm version bump
         run: |

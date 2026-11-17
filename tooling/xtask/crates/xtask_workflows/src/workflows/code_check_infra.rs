@@ -7,11 +7,8 @@
 use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 
-use crate::workflows::{
-    runners,
-    steps::{self, FluentBuilder},
-    vars,
-};
+use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
+use crate::workflows::{runners, steps, vars};
 
 /// The infra checks need the same cache content as the web checks (Nix
 /// dev-shell closure + bun cache), so they share the `web-ci` volume — cache
@@ -114,22 +111,19 @@ fn status_check() -> Job {
 }
 
 fn checkout(full_history: bool) -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    let checkout = ActionsCheckout::new("Checkout Repo");
+    let checkout = if full_history {
+        checkout.fetch_depth(0)
+    } else {
+        checkout
+    };
+    checkout.step()
 }
 
 fn paths_filter() -> Step<Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(FILTER.id())
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    DornyPathsFilter::new(
+        "Filter changed paths",
+        indoc::indoc! {r#"
                 should_run:
                   - 'infra/**'
                   - 'flake.nix'
@@ -138,7 +132,9 @@ fn paths_filter() -> Step<Use> {
                   - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_infra.yml'
             "#},
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 fn run_biome() -> Step<Run> {

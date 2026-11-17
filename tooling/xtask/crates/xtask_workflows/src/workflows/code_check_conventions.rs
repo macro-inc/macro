@@ -10,6 +10,7 @@
 use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall};
 
+use crate::workflows::actions::DornyPathsFilter;
 use crate::workflows::{runners, steps, vars};
 
 /// ast-grep is fetched with bunx, so this shares the `web-ci` bun cache volume
@@ -96,16 +97,9 @@ fn status_check() -> Job {
 }
 
 fn paths_filter() -> Step<Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(FILTER.id())
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    DornyPathsFilter::new(
+        "Filter changed paths",
+        indoc::indoc! {r#"
                 should_run:
                   - 'crates/**'
                   - 'services/**'
@@ -117,7 +111,9 @@ fn paths_filter() -> Step<Use> {
                   - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_conventions.yml'
             "#},
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 fn run_ast_grep() -> Step<Run> {

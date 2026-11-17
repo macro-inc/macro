@@ -13,6 +13,7 @@ use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutpu
 use gh_workflow::{Event, Job, Level, Permissions, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::DornyPathsFilter;
 use crate::workflows::{runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
@@ -83,16 +84,9 @@ fn check_tauri_lockfiles_job() -> Job {
 }
 
 fn vendoring_inputs_filter() -> Step<Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id(FILTER.id())
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    DornyPathsFilter::new(
+        "Filter changed paths",
+        indoc::indoc! {r#"
                 vendoring_inputs:
                   - 'apps/web/tauri/Cargo.lock'
                   - 'apps/web/tauri/desktop-cef/Cargo.lock'
@@ -101,7 +95,9 @@ fn vendoring_inputs_filter() -> Step<Use> {
                   - 'flake.lock'
                   - '.github/workflows/check_tauri_lockfiles.yml'
             "#},
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 fn check_tauri_vendoring_job() -> Job {

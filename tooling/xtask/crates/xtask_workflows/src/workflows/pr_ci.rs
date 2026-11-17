@@ -31,6 +31,7 @@ use gh_workflow::{
 };
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::DornyPathsFilter;
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
     check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
@@ -260,14 +261,9 @@ fn paths_filter() -> Step<Use> {
         })
         .collect();
 
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
+    DornyPathsFilter::new("Filter changed paths", filters)
+        .step()
         .id(FILTER.id())
-        .add_with(("filters", filters))
 }
 
 fn call_job(call: &Call) -> CallJob {

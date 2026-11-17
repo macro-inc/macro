@@ -10,6 +10,7 @@
 use gh_workflow::expr::typed::{Bool, Expr, StepHandle, Str, github};
 use gh_workflow::{Env, Run, Step, Use};
 
+use crate::workflows::actions::AwsActionsConfigureAwsCredentials;
 use crate::workflows::vars;
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
@@ -76,15 +77,10 @@ pub fn steps() -> (Step<Use>, Vec<Step<Run>>) {
 }
 
 fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 fn get_or_create_preview_id() -> Step<Run> {
