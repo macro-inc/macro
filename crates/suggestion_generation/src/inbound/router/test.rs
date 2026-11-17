@@ -31,6 +31,7 @@ impl JwtValidator for Jwt {
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: USER.to_owned(),
                     fusion_user_id: "fusion-user".to_owned(),
                     organization_id: None,

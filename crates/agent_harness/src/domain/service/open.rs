@@ -605,6 +605,7 @@ where
                 actor: Some(actor),
                 announce: Some(announcement),
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await?;

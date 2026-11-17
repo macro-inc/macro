@@ -33,9 +33,6 @@ vi.mock('@queries/client', () => ({
     cancelQueries: async () => {},
   },
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true }),
-}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.client,
 }));

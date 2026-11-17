@@ -2,15 +2,10 @@ import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import { Badge, Item, Card as UiCard } from '@ui';
 import { For, type ParentProps, Show } from 'solid-js';
-import {
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  CardHiddenCount,
-} from './kit/card';
-import { CardGroupHeader, CardPill, Skeleton, Tile } from './kit/parts';
+import { Card, CardBody, CardFooter, CardHiddenCount } from './kit/card';
+import { CardGroupHeader, Skeleton } from './kit/parts';
 
 /** A collection longer than this holds a fixed height and says what is below. */
 const COLLECTION_ROWS = 5;
@@ -47,54 +42,53 @@ export function CollectionCard(
             ? 320
             : 'auto'
       }
+      region={props.title}
+      busy={props.state === 'loading'}
       data-agent-card="collection"
     >
-      <section
-        aria-label={props.title}
-        aria-busy={props.state === 'loading'}
-        class="flex min-h-0 flex-1 flex-col"
-      >
-        <CardHeader
-          center
-          tile={
-            <Tile size={32}>
-              <EntityIcon targetType={props.icon ?? 'files'} size="sm" />
-            </Tile>
-          }
-          title={props.title}
-          subtitle={props.subtitle}
-          trailing={
-            <Show when={props.live}>
-              <CardPill tone="ok">
+      <UiCard.Header>
+        <Item class="gap-3 border-0 p-0">
+          <Item.Media class="self-center">
+            <EntityIcon targetType={props.icon ?? 'files'} size="sm" />
+          </Item.Media>
+          <Item.Content class="gap-0">
+            <UiCard.Title class="truncate">{props.title}</UiCard.Title>
+            <Show when={props.subtitle}>
+              <UiCard.Description class="truncate">
+                {props.subtitle}
+              </UiCard.Description>
+            </Show>
+          </Item.Content>
+          <Show when={props.live}>
+            <Item.Actions>
+              <Badge variant="success" size="xs">
                 <span
                   class="size-1.5 rounded-full bg-current"
                   aria-hidden="true"
                 />
                 Live
-              </CardPill>
-            </Show>
-          }
-        />
-        <CardBody tight>
-          <Show when={props.state === 'ready'} fallback={<SkeletonRows />}>
-            <Show
-              when={props.count > 0}
-              fallback={
-                <p class="px-1.5 py-2 text-xs text-ink-muted">
-                  Nothing matches.
-                </p>
-              }
-            >
-              {props.children}
-            </Show>
+              </Badge>
+            </Item.Actions>
           </Show>
-        </CardBody>
-        <Show when={props.state === 'ready' && props.count > COLLECTION_ROWS}>
-          <CardFooter small>
-            <CardHiddenCount total={props.count} noun={props.noun} />
-          </CardFooter>
+        </Item>
+      </UiCard.Header>
+      <CardBody tight>
+        <Show when={props.state === 'ready'} fallback={<SkeletonRows />}>
+          <Show
+            when={props.count > 0}
+            fallback={
+              <p class="px-2 py-2 text-xs text-ink-muted">Nothing matches.</p>
+            }
+          >
+            {props.children}
+          </Show>
         </Show>
-      </section>
+      </CardBody>
+      <Show when={props.state === 'ready' && props.count > COLLECTION_ROWS}>
+        <CardFooter small>
+          <CardHiddenCount total={props.count} noun={props.noun} />
+        </CardFooter>
+      </Show>
     </Card>
   );
 }
@@ -112,7 +106,7 @@ export function CollectionGroup(props: ParentProps<{ label: string }>) {
 /** Rows that hold the card's height while what fills them loads. */
 function SkeletonRows() {
   return (
-    <div class="flex flex-col gap-3.5 px-1.5 pt-2">
+    <div class="flex flex-col gap-3.5 px-2 pt-2">
       <For each={['55%', '70%', '45%']}>
         {(width) => (
           <span class="flex items-center gap-2">

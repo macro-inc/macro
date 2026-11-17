@@ -39,6 +39,7 @@ export type ChannelRailItemProps = {
   channel: ChannelEntity;
   unread: boolean;
   muted: boolean;
+  mentionsOnly?: boolean;
   callStatus?: ChannelCallStatus;
   incomingCallId?: string;
   selected: boolean;
@@ -335,7 +336,11 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
-            <ChannelMutedIndicator muted={props.muted} class="size-3.5" />
+            <ChannelMutedIndicator
+              muted={props.muted}
+              mentionsOnly={props.mentionsOnly}
+              class="size-3.5"
+            />
             <ChannelCallIndicator
               channelId={props.channel.id}
               status={props.incomingCallId ? undefined : props.callStatus}

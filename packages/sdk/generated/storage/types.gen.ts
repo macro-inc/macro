@@ -1468,6 +1468,11 @@ export type AttachmentChange = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -7584,6 +7589,15 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_released';
+    /**
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9250,14 +9264,53 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
+ */
+export type EmailAttachmentsReleasedMetadata = {
+    /**
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
+     */
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
+};
+
+/**
  * The audience affected by a domain exclusion.
  */
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Current mailbox consent without loading domain exclusion lists.
+ */
+export type EmailContributionConsent = {
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute, if connected.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary mailbox connection.
+     */
+    mailbox_link_id?: string | null;
+};
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9278,7 +9331,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9287,9 +9341,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9324,7 +9385,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -9340,6 +9408,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9466,6 +9535,11 @@ export type EmailPrivacyChange = {
 };
 
 /**
+ * Full settings by default, or mailbox consent when explicitly requested.
+ */
+export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConsent;
+
+/**
  * Current consent and exclusions, readable by any team member.
  */
 export type EmailPrivacySettings = {
@@ -9527,6 +9601,11 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -17787,9 +17866,13 @@ export type ReadSpreadsheetRequest = {
 
 export type RecentlyDeletedResponseData = {
     /**
-     * The items returned from the call
+     * The items returned from the call, most recently trashed first
      */
     items: Array<Item>;
+    /**
+     * Pass as `cursor` to get the next page; absent on the last page
+     */
+    next_cursor?: string | null;
 };
 
 /**
@@ -22871,9 +22954,13 @@ export type TypedSuccessResponse = {
      */
     data: {
         /**
-         * The items returned from the call
+         * The items returned from the call, most recently trashed first
          */
         items: Array<Item>;
+        /**
+         * Pass as `cursor` to get the next page; absent on the last page
+         */
+        next_cursor?: string | null;
     };
     /**
      * Indicates if an error occurred
@@ -28462,12 +28549,17 @@ export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmC
 export type GetCrmEmailPrivacyData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Return only consent and mailbox fields, without querying domain lists.
+         */
+        consent_only?: boolean;
+    };
     url: '/crm/email-privacy';
 };
 
 export type GetCrmEmailPrivacyResponses = {
-    200: EmailPrivacySettings;
+    200: EmailPrivacyResponse;
 };
 
 export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
@@ -28493,6 +28585,10 @@ export type ListCrmExcludedEmailThreadsData = {
          * Read entries after this thread ID.
          */
         after?: string | null;
+        /**
+         * Look up one thread instead of paging. Cannot be combined with `after`.
+         */
+        thread_id?: string | null;
     };
     url: '/crm/email-privacy/threads';
 };
@@ -36083,7 +36179,16 @@ export type RevertDeleteProjectResponse = RevertDeleteProjectResponses[keyof Rev
 export type RecentlyDeletedData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-500, default 100)
+         */
+        limit?: number;
+        /**
+         * The previous page's next_cursor
+         */
+        cursor?: string;
+    };
     url: '/recents/deleted';
 };
 

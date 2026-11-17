@@ -5,7 +5,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX, type ParentProps } from 'solid-js';
+import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSettingsPage } from '../primitives/settings-page';
 import { CrmWorkspaceView } from './crm-workspace';
@@ -15,6 +15,7 @@ const fixture = vi.hoisted(() => ({
   pipelinesEnabled: true,
   listsEnabled: true,
   touch: true,
+  width: 600,
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
   root: vi.fn(),
@@ -24,6 +25,18 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => fixture.activityFlag(),
 }));
 vi.mock('@app/components/view-shell', () => ({
+  CollectionPanes: (props: {
+    hasDetail: boolean;
+    list: JSX.Element;
+    children: JSX.Element;
+  }) => (
+    <>
+      <Show when={(fixture.touch && fixture.width > 720) || !props.hasDetail}>
+        {props.list}
+      </Show>
+      <Show when={props.hasDetail}>{props.children}</Show>
+    </>
+  ),
   asideCollapsedPreferenceKey: (app: string) =>
     `macro:pref:view-sidebar:collapsed:${app}`,
   ViewShell: {
@@ -38,13 +51,29 @@ vi.mock('@app/components/view-shell', () => ({
     Main: (props: ParentProps) => props.children,
     Header: (props: ParentProps) => <header>{props.children}</header>,
   },
-  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
+  ViewSidebar: {
+    Title: (props: ParentProps) => <h1>{props.children}</h1>,
+    Toggle: () => <button type="button" aria-label="Show navigation" />,
+  },
   ViewNavigationControls: () => (
     <div role="group" aria-label="Navigation controls" />
   ),
   useViewControlHotkeys: () => {},
   SearchBar: () => null,
 }));
+vi.mock('@components/app/split-layout/context', async () => {
+  const { createContext } = await import('solid-js');
+  return {
+    SplitLayoutContext: createContext(),
+    SplitPanelContext: createContext({
+      panelSize: {
+        get width() {
+          return fixture.width;
+        },
+      },
+    }),
+  };
+});
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => fixture.touch,
 }));
@@ -239,6 +268,7 @@ afterEach(() => {
   fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
   fixture.touch = true;
+  fixture.width = 600;
   fixture.openWithSplit.mockReset();
   fixture.root.mockReset();
   vi.unstubAllGlobals();
@@ -339,7 +369,10 @@ it('omits pipelines and lists when those features are disabled', () => {
   setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
-    tabs.getAllByRole('button').map((button) => button.textContent)
+    tabs
+      .getAllByRole('button')
+      .filter((button) => button.hasAttribute('aria-pressed'))
+      .map((button) => button.textContent)
   ).toEqual([
     'Companies',
     'People',
@@ -422,6 +455,17 @@ it('opens the company of a pipeline row through the route on desktop', () => {
   ]);
   expect(screen.getByText('Sales record company:acme')).toBeTruthy();
   expect(screen.queryByText('Sales table')).toBeNull();
+  expect(fixture.openWithSplit).not.toHaveBeenCalled();
+});
+
+it('opens a pipeline record inline on wide touch', () => {
+  fixture.width = 1000;
+  const { record, captureEntryState } = setup('pipeline:sales');
+  fireEvent.click(screen.getByRole('button', { name: 'Open Acme' }));
+  expect(captureEntryState).toHaveBeenCalledBefore(record.open);
+  expect(record.open).toHaveBeenCalledExactlyOnceWith([
+    { type: 'company', id: 'acme', name: '' },
+  ]);
   expect(fixture.openWithSplit).not.toHaveBeenCalled();
 });
 

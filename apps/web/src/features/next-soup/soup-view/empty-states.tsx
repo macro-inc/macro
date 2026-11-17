@@ -7,6 +7,7 @@ import {
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
@@ -22,7 +23,8 @@ import EmptyStateRoutinesGraphic from '@design/empty-state-routines.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { type Component, type JSXElement, Match, Switch } from 'solid-js';
+import { getNormalizedKeyString } from '@ui/components/Hotkey';
+import { type Component, type JSXElement, Match, Show, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
@@ -86,6 +88,9 @@ export function EmptyState(props: {
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
   const isCreatableEnabled = useCreatableEnabled();
+
+  const commandMenuKey = () =>
+    getNormalizedKeyString({ token: TOKENS.global.commandMenu });
 
   const onConnectEmail = () => {
     fireAndForget(startAddInbox(), 'add-inbox');
@@ -294,7 +299,24 @@ export function EmptyState(props: {
           centered
           graphic={EmptyStateNoSearchMatchGraphic}
           title="No items to show"
-          description="Search across messages, documents, tasks, and more."
+          description={
+            <>
+              Search across messages, documents, tasks, and more.
+              {/* The rail opens Search directly, so point to the command menu here. */}
+              <Show when={commandMenuKey()}>
+                {(key) => (
+                  <>
+                    <br />
+                    Press{' '}
+                    <kbd class="rounded border border-edge-muted bg-inset px-1 font-sans text-xs text-ink">
+                      {key()}
+                    </kbd>{' '}
+                    to jump to anything or run a command.
+                  </>
+                )}
+              </Show>
+            </>
+          }
           documentationUrl={`${DOCS_BASE}/product/search`}
         />
       </Match>

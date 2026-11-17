@@ -136,3 +136,75 @@ async fn finish_drops_local_cancel_entry() {
 
     assert!(!jobs.local_cancels.lock().unwrap().contains_key(&id));
 }
+
+#[tokio::test]
+async fn record_page_moves_the_cursor_and_adds_the_counts() {
+    let Some(jobs) = try_jobs().await else {
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
+        return;
+    };
+    let handle = jobs.start("email-attachment-status").await.expect("start");
+
+    let before = jobs.snapshot(&handle.id).await.expect("snapshot").unwrap();
+    assert_eq!(before.cursor, None);
+    assert_eq!(before.updated, None);
+
+    handle
+        .progress
+        .record_page(PageProgress {
+            cursor: "doc-b",
+            processed: 2,
+            updated: 1,
+            missing: 1,
+            failed: 0,
+        })
+        .await;
+    handle
+        .progress
+        .record_page(PageProgress {
+            cursor: "doc-d",
+            processed: 2,
+            updated: 0,
+            missing: 0,
+            failed: 1,
+        })
+        .await;
+
+    let snap = jobs.snapshot(&handle.id).await.expect("snapshot").unwrap();
+    assert_eq!(snap.status, JobStatus::Running);
+    assert_eq!(snap.enqueued, 4);
+    assert_eq!(snap.cursor.as_deref(), Some("doc-d"));
+    assert_eq!(snap.updated, Some(1));
+    assert_eq!(snap.missing, Some(1));
+    assert_eq!(snap.failed, Some(1));
+}
+
+#[tokio::test]
+async fn finish_stopped_records_the_reason_and_the_cursor_to_resume_after() {
+    let Some(jobs) = try_jobs().await else {
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
+        return;
+    };
+    let handle = jobs.start("email-attachment-status").await.expect("start");
+    jobs.finish(
+        &handle.id,
+        Err(BackfillError::Stopped {
+            reason: "disk usage exceeded flood-stage watermark".to_owned(),
+            cursor: Some("doc-b".to_owned()),
+        }),
+    )
+    .await
+    .expect("finish");
+
+    let snap = jobs.snapshot(&handle.id).await.expect("snapshot").unwrap();
+    assert_eq!(snap.status, JobStatus::Stopped);
+    assert!(snap.finished_at.is_some());
+    assert!(
+        snap.error
+            .as_deref()
+            .is_some_and(|e| e.contains("flood-stage watermark")),
+        "{:?}",
+        snap.error
+    );
+    assert_eq!(snap.cursor.as_deref(), Some("doc-b"));
+}

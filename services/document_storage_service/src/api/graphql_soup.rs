@@ -30,8 +30,8 @@ mod websocket;
 
 use websocket::GraphqlWebSocketUpgrade;
 
-const GRAPHQL_PATH: &str = "/soup/graphql";
-const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
+pub(crate) const GRAPHQL_PATH: &str = "/soup/graphql";
+pub(crate) const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new()
@@ -211,6 +211,7 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_work_feed_context.clone());
     data.insert(state.graphql_registered_work_context.clone());
     data.insert(state.graphql_notification_inbox_context.clone());
+    data.insert(state.graphql_active_notification_ids_context.clone());
     data.insert(state.graphql_initiative_entity_loader.clone());
     data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(state.graphql_primary_soup_item_loader.clone());
