@@ -84,8 +84,8 @@ in-call chat.
   participant events; an archived call's recreated room evicts the bot.
 - `enable-programmatic-calls` fails closed for explicit start and leave. For
   `POST /call/record/{call_id}/join`, only `MacroUserAuthentication::is_human_session()`
-  bypasses the flag; API credentials and agent-attributed sessions remain gated.
-  The handler still refuses code-execution tokens, and the domain service still
+  bypasses the flag; API credentials remain gated. Programs are refused before
+  the flag (see below), and the domain service still
   checks live-call admission and returns Gone for ended calls. Meeting join
   ignores optional join settings while disabled.
 - Accept bodyless meeting joins even with `Content-Type: application/json`;

@@ -7,8 +7,8 @@ Not built yet:
 - Bot joins. Identities, attendance and orphan-room handling are in place, but the routes
   still refuse bot tokens: the `enable-programmatic-calls` flag is keyed on a user, and a
   team-scoped bot token has no acting user.
-- Approved starts. An agent-attributed start is always refused; approval through
-  `execution.reviews` is not wired.
+- Approved starts. Every program is refused a call token (`is_program_run`);
+  approval through `execution.reviews` is not wired.
 - Reading other participants' registered work: it has no REST route.
 
 Screen share has not been run end to end.
@@ -221,9 +221,9 @@ rule: when only programs have been in the call for 60 seconds, the existing
 that nobody answered within the 30 second ring. `stale_call_sweeper` is the backstop.
 
 **Limit starts.** `channel.startCall()` rings people, so it takes a per-caller rate limit
-through the existing `rate_limit` crate. An agent-attributed credential acting as a person
-(`is_agent_run`) is refused unless approved through `execution.reviews`, as `email.send`
-is. An agent account's own API key acts as itself, and is only rate limited.
+through the existing `rate_limit` crate. A program's credential (signed for an agent or a routine
+run, `is_program_run`) is refused. An agent account's own API key acts as itself, and is
+only rate limited.
 
 **Events.** Add these to `WebhookEvent`, with access checks in fan-out and an SDK hydrator
 (`src/events/hydrate/call.ts`), so `macro.events.on()` and `listen()` receive them:

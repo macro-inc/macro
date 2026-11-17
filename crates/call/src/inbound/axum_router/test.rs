@@ -379,12 +379,11 @@ mod authenticated_join_routes {
     async fn join_route_preserves_programmatic_access_when_enabled() {
         for actor in ["program", "api-jwt"] {
             let mut service = MockCallService::new();
-            let is_program = true;
             service
                 .expect_join_call()
                 .times(1)
                 .returning(move |_, _, _, credential_is_program| {
-                    assert_eq!(credential_is_program, is_program);
+                    assert!(credential_is_program);
                     Box::pin(async { Err(CallError::Ended) })
                 });
 
@@ -419,8 +418,17 @@ mod authenticated_join_routes {
                 service.expect_start_call().never();
                 service.expect_join_meeting().never();
                 service.expect_join_meeting_with_options().never();
+                // Refused before the feature-flag lookup.
+                service.expect_programmatic_calls_enabled().never();
 
-                let response = router(service).oneshot(request).await.unwrap();
+                let response = call_router(CallRouterState::new(
+                    Arc::new(service),
+                    Arc::new(NoOpEntityAccessService),
+                    MacroAuthorizationState::new(Arc::new(Auth)),
+                ))
+                .oneshot(request)
+                .await
+                .unwrap();
                 assert_eq!(response.status(), StatusCode::FORBIDDEN, "{actor} {route}");
             }
         }
