@@ -31,7 +31,8 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, observability_cluster, observability_image, runners, sdk_check, steps,
+    test_macrod_update,
 };
 
 #[cfg(test)]
@@ -129,6 +130,12 @@ const CALLS: &[Call] = &[
         name: "Observability image",
         file: "observability_image.yml",
         paths: Some(observability_image::PATHS),
+    },
+    Call {
+        id: "observability-cluster",
+        name: "Observability cluster",
+        file: "observability_cluster.yml",
+        paths: Some(observability_cluster::PATHS),
     },
     Call {
         id: "macrod-update",
