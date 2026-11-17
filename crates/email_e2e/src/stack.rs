@@ -1051,8 +1051,10 @@ impl Stack {
                 let _missing = std::fs::remove_file(self.evidence_path());
             }
         }
-        self.finished = health.is_ok();
+        // Only once everything is removed: a `finish` dropped half-way
+        // leaves the rest to `Drop`.
         self.tear_down().await;
+        self.finished = health.is_ok();
         health
     }
 
@@ -1077,12 +1079,20 @@ impl Stack {
     async fn write_evidence(&self) -> Result<(), Report> {
         // Work that stays due (a scenario that leaves a provider failing) is
         // not waited out: the record is then of what happened until now.
-        let _settled = eventually("the due Outlook work", PROJECTIONS_SETTLE, async || {
-            let due: i64 = sqlx::query_scalar(DUE_PROJECTIONS_QUERY)
-                .fetch_one(self.db())
-                .await
-                .context("could not count the due Outlook work")?;
-            Ok((due == 0).then_some(()))
+        // The check owns its pool handle: one that borrows the stack makes this
+        // future one rustc cannot prove `Send` (a higher-ranked lifetime
+        // error), and the browser suite's stack server finishes stacks from a
+        // request handler, which must be `Send`.
+        let db = self.db().clone();
+        let _settled = eventually("the due Outlook work", PROJECTIONS_SETTLE, move || {
+            let db = db.clone();
+            async move {
+                let due: i64 = sqlx::query_scalar(DUE_PROJECTIONS_QUERY)
+                    .fetch_one(&db)
+                    .await
+                    .context("could not count the due Outlook work")?;
+                Ok((due == 0).then_some(()))
+            }
         })
         .await;
 
@@ -1197,6 +1207,11 @@ impl Stack {
 
     pub(crate) fn http(&self) -> &reqwest::Client {
         &self.http
+    }
+
+    /// Where the stack's services write their logs.
+    pub(crate) fn log_dir(&self) -> &std::path::Path {
+        &self.log_dir
     }
 
     pub(crate) fn internal_api_key(&self) -> &str {
@@ -1378,17 +1393,27 @@ impl Drop for Stack {
 
         // `drop` cannot await, and the scenario's own runtime may be the one
         // unwinding, so the cleanup runs to its end on a thread of its own.
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                else {
-                    return;
-                };
-                runtime.block_on(self.tear_down());
+        let mut clean_up = || {
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        return;
+                    };
+                    runtime.block_on(self.tear_down());
+                });
             });
-        });
+        };
+        // The teardown waits for tasks of the scenario's runtime to end. On
+        // one of its workers, hand the worker's other tasks to another
+        // thread first: with every worker waiting here, none would run them.
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(clean_up);
+        } else {
+            clean_up();
+        }
     }
 }
 
