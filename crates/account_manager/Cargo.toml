@@ -47,3 +47,7 @@ bot_id = { path = "../bot_id" }
 tower = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# The crate depends on itself in tests to turn on `inbound`, which shear reads as unused.
+[package.metadata.cargo-shear]
+ignored = ["account_manager"]
