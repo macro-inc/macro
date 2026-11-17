@@ -415,6 +415,20 @@ shared with the web app's suite) and backend entry points second.
 - A session connected to a template database blocks every clone of it;
   the harness waits up to a minute for it and closes templates to
   connections.
+- Many stacks at once can run the machine out of local ports: the
+  connections of a stack that ended keep theirs for a minute, and CI's
+  runners cannot widen the range (`/proc/sys` is read-only in their
+  containers). Bind the harness's listeners, the emulators' included
+  (`start_with_listener`), through `host::local_listener`, and pick a
+  service's port with `host::free_port`; both wait for a port when none is
+  left. Release the `ReservedPort` only when the service starts: a listener
+  that took the port it sends to would send every request back to itself,
+  opening a connection a turn until the machine runs out of ports and
+  files. A service that finds its port taken is started again on another
+  (`PORT_ATTEMPTS`).
+- The stack server raises its open-file limit to 65536 at startup and stops
+  when the system allows less. A stack that fails to start reports the open
+  files, TCP sockets and port range the machine had left.
 
 ## Related
 
