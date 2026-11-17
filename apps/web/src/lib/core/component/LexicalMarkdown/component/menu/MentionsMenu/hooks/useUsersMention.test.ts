@@ -26,6 +26,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|gab@macro.com',
 }));
 
 const seamus: IUser = {
@@ -42,6 +43,36 @@ const sean: IUser = {
   id: 'macro|sean@macro.com',
   name: 'Sean Aye',
   email: 'sean@macro.com',
+};
+const viewer: IUser = {
+  id: 'macro|gab@macro.com',
+  name: 'Gab Birman',
+  email: 'gab@macro.com',
+};
+const macroAgent: IUser = {
+  id: 'bot|00000000-0000-0000-0000-00000000a2a2',
+  name: 'Macro',
+  email: 'Macro',
+};
+const vmCodex: IUser = {
+  id: 'bot|00000000-0000-0000-0000-000000000101',
+  name: 'Peter VM Codex',
+  email: '@peter-vm-codex',
+};
+const ssdCodex: IUser = {
+  id: 'bot|00000000-0000-0000-0000-000000000102',
+  name: 'Peter SSD Codex',
+  email: '@peter-ssd-codex',
+};
+const tod: IUser = {
+  id: 'macro|tod@macro.com',
+  name: 'Tod',
+  email: 'tod.example@macro.com',
+};
+const teo: IUser = {
+  id: 'macro|teo@macro.com',
+  name: 'Teo Nys',
+  email: 'teo@macro.com',
 };
 const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
   id: user.id,
@@ -81,6 +112,98 @@ it('ranks shared people identically in body and discussion mention searches', ()
       );
       expect(discussion.users()[0].id).toBe(seamus.id);
     }
+    dispose();
+  });
+});
+
+it('lists you, then people, then Macro and the other agents while browsing', () => {
+  createRoot((dispose) => {
+    const scoped = useUsersMention({
+      searchTerm: () => '',
+      users: () => [vmCodex, sean, macroAgent, viewer, seamus],
+    });
+    expect(scoped.users().map((item) => item.id)).toEqual([
+      viewer.id,
+      seamus.id,
+      sean.id,
+      macroAgent.id,
+      vmCodex.id,
+    ]);
+
+    mocks.users = () => [
+      { ...userItem(vmCodex, new Date()), personOrder: 0 },
+      { ...userItem(sean), personOrder: 1 },
+      { ...userItem(seamus), personOrder: 2 },
+      { ...userItem(viewer), personOrder: 3 },
+      userItem(macroAgent),
+    ];
+    const directory = useUsersMention({ searchTerm: () => '' });
+    expect(directory.users().map((item) => item.id)).toEqual([
+      viewer.id,
+      sean.id,
+      seamus.id,
+      macroAgent.id,
+      vmCodex.id,
+    ]);
+    dispose();
+  });
+});
+
+it('lists an agent only when it holds the typed words, never above a person who matches as well', () => {
+  createRoot((dispose) => {
+    const [searchTerm, setSearchTerm] = createSignal('teo');
+    // Every row holds t…e…o in order; only Teo Nys has the word itself.
+    mocks.users = () => [
+      userItem(tod, new Date()),
+      userItem(teo, new Date('2026-09-15T12:00:00Z')),
+    ];
+    const scoped = useUsersMention({
+      searchTerm,
+      users: () => [vmCodex, ssdCodex, tod, teo],
+    });
+    expect(scoped.users().map((item) => item.data.name)).toEqual([
+      'Teo Nys',
+      'Tod',
+    ]);
+    setSearchTerm('codex');
+    expect(scoped.users().map((item) => item.data.name)).toEqual([
+      'Peter VM Codex',
+      'Peter SSD Codex',
+    ]);
+
+    // The directory's window is the server's match for the query.
+    setSearchTerm('teo');
+    mocks.users = () => [
+      { ...userItem(teo), personOrder: 0 },
+      { ...userItem(tod, new Date()), personOrder: 1 },
+      userItem(vmCodex, new Date()),
+      userItem(ssdCodex, new Date()),
+    ];
+    const directory = useUsersMention({ searchTerm });
+    expect(directory.users().map((item) => item.data.name)).toEqual([
+      'Teo Nys',
+      'Tod',
+    ]);
+    dispose();
+  });
+});
+
+it('puts an agent ahead of only the people it matches better than', () => {
+  createRoot((dispose) => {
+    const mackenzie: IUser = {
+      id: 'macro|mackenzie@example.com',
+      name: 'Mackenzie Hale',
+      email: 'mackenzie@example.com',
+    };
+    const scoped = useUsersMention({
+      searchTerm: () => 'mac',
+      users: () => [sean, macroAgent, mackenzie],
+    });
+    expect(scoped.users().map((item) => item.id)).toEqual([
+      mackenzie.id,
+      macroAgent.id,
+      sean.id,
+    ]);
     dispose();
   });
 });

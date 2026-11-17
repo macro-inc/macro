@@ -1657,6 +1657,13 @@ use the same paged personal directory. Channel people remain participant-scoped,
 and CRM discussions remain team-scoped; an empty or loading roster never opens
 personal-directory search. Available agents are added to the current window or
 scope with the existing rollout rules. Group mentions remain channel-only.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
+browsing lists you, then other people, then agents with Macro first; a search
+uses the shared name-match ranking, lists an agent only when its name or handle
+holds every typed word, and never above a person whose name matches as well.
+Typing `@teo` lists Teo before anyone whose letters merely include t, e and o,
+and no agent at all. Phone rows keep that People order in the slots the blended
+ranking gives people.
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
