@@ -3,6 +3,7 @@ import type { QuickAccessListOptions } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { sortMobileMentions } from '../utils/mobileSort';
 import { useUsersMention } from './useUsersMention';
 
 const mocks = vi.hoisted(() => ({
@@ -118,6 +119,55 @@ it('uses supplied interaction history for people absent from the workspace list'
     dispose();
   });
 });
+
+it.each([undefined, new Date('2026-01-01')])(
+  'ranks a first-name match before recent prefix, contains and subsequence matches with history %s',
+  (lastInteraction) => {
+    mocks.users = () => [];
+    createRoot((dispose) => {
+      const users: IUser[] = [
+        {
+          id: 'macro|alina@example.com',
+          name: 'Alina Ellis',
+          email: 'alina@example.com',
+          lastInteraction: new Date(),
+        },
+        {
+          id: 'macro|sam@example.com',
+          name: 'Sam Alexson',
+          email: 'sam@example.com',
+          lastInteraction: new Date(),
+        },
+        {
+          id: 'macro|alexandra@example.com',
+          name: 'Alexandra Rowan',
+          email: 'alexandra@example.com',
+          lastInteraction: new Date(),
+        },
+        {
+          id: 'macro|alex@example.com',
+          name: 'Alex Rowan',
+          email: 'alex@example.com',
+          lastInteraction,
+        },
+      ];
+      const mention = useUsersMention({
+        searchTerm: () => 'alex',
+        users: () => users,
+      });
+      expect(mention.users().map((item) => item.id)).toEqual([
+        'macro|alex@example.com',
+        'macro|alexandra@example.com',
+        'macro|sam@example.com',
+        'macro|alina@example.com',
+      ]);
+      expect(
+        sortMobileMentions(mention.users(), 'alex', mention.users())[0].id
+      ).toBe('macro|alex@example.com');
+      dispose();
+    });
+  }
+);
 
 it('preserves explicitly empty participant lists', () => {
   createRoot((dispose) => {
