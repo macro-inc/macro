@@ -69,7 +69,7 @@ See `eval/README.md` for read-only local quality and latency evaluation.
 - `just check`.
 - With model credentials configured, run the opt-in prompt regression with
   `cargo test -p universal_input search_query_excludes_consumed_filters -- --ignored`.
-- `python3 -m unittest discover -s crates/universal_input/eval -p 'test_*.py'`
+- `python3 -m unittest discover -s crates/ai/universal_input/eval -p 'test_*.py'`
   checks the baseline comparison logic without calling providers.
 - With model credentials configured, measure the thread due date's quality with
   `cargo run -p universal_input --example thread_due_date_eval`.

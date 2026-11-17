@@ -117,7 +117,7 @@ word docs, Illustrator/Photoshop files).
 ## Recipes
 
 - Add an AI document tool: new module under `src/inbound/toolset/` → wire it
-  into `src/inbound/toolset.rs` → register it where `agent_tools`/`crates/agent_tools`
+  into `src/inbound/toolset.rs` → register it where `agent_tools`/`crates/ai/agent_tools`
   assembles the toolset.
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
@@ -149,7 +149,7 @@ realtime appearance events do not re-ingest history.
   migrated local MacroDB for `outbound`/`document_create_adapters` tests).
 - Point `REDIS_URL` at the local Redis endpoint for editing-session tests;
   the default is `redis://127.0.0.1:6379`.
-- `just -f crates/documents/justfile check` for an all-features `cargo check`.
+- `just -f crates/documents/documents/justfile check` for an all-features `cargo check`.
 
 ## Gotchas
 

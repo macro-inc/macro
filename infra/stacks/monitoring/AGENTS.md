@@ -69,7 +69,7 @@ From `infra/`:
 - `monitors/stripe-inbox.ts` reads the logs `stripe inbox cursor
   dead-lettered`, `stripe inbox dead cursors`, `stripe inbox backlog` and
   `stripe audit mismatch` that
-  `crates/stripe_inbox` writes from authentication-service; its header is the
+  `crates/billing/stripe_inbox` writes from authentication-service; its header is the
   message and field contract.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
   `crates/agents/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
@@ -79,8 +79,8 @@ From `infra/`:
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
 - `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
-  `ai usage priced` logs (`crates/genai_telemetry/src/provider_account.rs`,
-  `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
+  `ai usage priced` logs (`crates/platform/genai_telemetry/src/provider_account.rs`,
+  `crates/billing/ai_usage/src/domain/service.rs`) and the AI editing worker's
   `ai.provider_account_unavailable` span; its header is the field contract.
   `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log
@@ -89,7 +89,7 @@ From `infra/`:
   behind their flag.
 - `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
   in `crates/agents/agent_harness/src/domain/service.rs` and matches the text of the
-  `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
+  `tokio runtime starvation detected` warning in `crates/platform/macro_tower_layers`;
   its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notifications/notification/src/domain/service/voip.rs` and the
@@ -105,8 +105,8 @@ From `infra/`:
   `execute_tool*` alone double-counts tools reached through MCP.
 - `monitors/search-freshness.ts` reads the `search.index.*` metrics that
   `services/search_processing_service/src/inbound/kafka_consumer/metrics.rs`
-  records, `kafka.consumer.offset_resets` from `crates/kafka_util` and
-  `event_broker.publishes` from `crates/macro_event_broker`; its header is the
+  records, `kafka.consumer.offset_resets` from `crates/platform/kafka_util` and
+  `event_broker.publishes` from `crates/platform/macro_event_broker`; its header is the
   name and tag contract. `search.index.oldest_pending_ms` is per task and
   partition: read it with `max`. Its retention monitors repeat each topic's
   retention from `infra/stacks/kafka-cluster/topics.ts`; change them together.
@@ -114,7 +114,7 @@ From `infra/`:
   its no-readings monitor fires on missing data.
 - `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
   cloud-storage-service records and the `perform_unified_search` span fields
-  from `crates/search_service`; its header is the name and tag contract.
+  from `crates/search/search_service`; its header is the name and tag contract.
 - The Kafka lag monitors in `monitors/queues.ts` read MSK's offset lag. Do not
   alert on `aws.kafka.estimated_max_time_lag` or
   `rolling_estimated_time_lag_max`: they divide lag by the current consumption

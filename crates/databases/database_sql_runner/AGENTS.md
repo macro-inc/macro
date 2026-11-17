@@ -28,17 +28,17 @@ through `databases`' typed ops.
 - Owns: binding the `database_sql_engine` engine to live Macro data for agents, the HTTP
   query and saved-question routes (`POST /databases/query`, `POST /databases/queries`),
   and the two SQL agent tools. Saving compiles the question here, so its route
-  lives here rather than in `crates/databases`, which keeps `GET
+  lives here rather than in `crates/databases/databases`, which keeps `GET
   /databases/queries/{id}`.
-- Not here: the SQL grammar/engine itself → `crates/database_sql_engine`; table/row
-  persistence and the ops API → `crates/databases`.
+- Not here: the SQL grammar/engine itself → `crates/databases/database_sql_engine`; table/row
+  persistence and the ops API → `crates/databases/databases`.
 
 ## Boundaries
 
 - Depends on: `database_sql_engine` (engine), `databases` (ops/storage, `ports` only),
   `soup`, `contacts`, `entity_access` (all `ports`-only — this crate is an
   adapter, not a composition root).
-- Used by: `crates/ai_tools` (wires the `ai_tools` feature's `QueryDatabase`/
+- Used by: `crates/ai/agent_tools` (wires the `ai_tools` feature's `QueryDatabase`/
   `SaveDatabaseQuery` into the agent toolset), and DSS (HTTP query composition).
 
 ## Recipes

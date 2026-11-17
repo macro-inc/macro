@@ -1,7 +1,7 @@
 # Slack archive import contract (v1)
 
 This is repository interface documentation, not an execution plan. The Rust
-source of truth is `crates/slack_integration/src/domain/{models,ports}.rs`.
+source of truth is `crates/comms/slack_integration/src/domain/{models,ports}.rs`.
 The browser, administrator API, PostgreSQL repository and independent worker share
 these contracts. Persisted selection, not browser state or queue input, owns job scope.
 

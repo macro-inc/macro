@@ -4,7 +4,7 @@ use agent_code_mode::domain::{
 };
 use agent_session::domain::model::AgentSession;
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution_core::ExecuteRequest;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use opentelemetry::trace::{SpanContext, TraceContextExt as _, TracerProvider as _};
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;

@@ -4,7 +4,7 @@
 
 Part of Home — the combined work feed: one paginated, stacked, live-updating
 list of things that need the viewer's attention plus work they recently did.
-Built on the shared feed layer, `crates/attention_feed`.
+Built on the shared feed layer, `crates/search/attention_feed`.
 
 ## Start here
 
@@ -17,8 +17,8 @@ Built on the shared feed layer, `crates/attention_feed`.
 
 - Owns: Home's items, membership policy, stacking, primary reason and state.
 - Not here: paging, refill, notification loading, done/undo plumbing, live
-  batching and the adapters → `crates/attention_feed`; candidate SQL →
-  `crates/soup`.
+  batching and the adapters → `crates/search/attention_feed`; candidate SQL →
+  `crates/search/soup`.
 
 ## Boundaries
 

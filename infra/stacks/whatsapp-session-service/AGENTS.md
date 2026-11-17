@@ -52,7 +52,7 @@ From `infra/`: `bun run check`, `bunx biome check stacks/whatsapp-session-servic
   deploys with each published release (`release-production.yml` →
   `deploy_all_services.yml`, after the MacroDB migrations); dev on merge.
 - The KMS key only answers calls whose encryption context has
-  `macro:purpose = whatsapp-session` (`crates/whatsapp_store_pg/src/kms.rs`).
+  `macro:purpose = whatsapp-session` (`crates/whatsapp/whatsapp_store_pg/src/kms.rs`).
   Changing that string strands every stored session.
 - Deploys need the `doppler-projects` stack applied first: `DopplerEcsEnvironment`
   reads `/doppler-sync/whatsapp-session-service/<stack>`, which its sync writes.

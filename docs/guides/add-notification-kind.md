@@ -16,7 +16,7 @@ If the notification is about an entity type that has never carried notifications
 | --- | --- | --- |
 | A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/comms/channels_outbound/src/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
 | Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agents/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
-| A scheduled kind | `CalendarEventReminder` (`crates/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
+| A scheduled kind | `CalendarEventReminder` (`crates/calendar/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
 
 Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, the
 `notification_event_type` column, and the web `tag` are all its `snake_case`
@@ -56,7 +56,7 @@ In `crates/notifications/model_notifications/src/metadata.rs` (or a submodule li
 - Add title/body tests to `crates/notifications/model_notifications/src/metadata/test.rs`.
 
 Only invite-style kinds send direct email (`NotificationExtEmail`, see
-`crates/invite_email`). Everything else reaches email through the digest, which
+`crates/email/invite_email`). Everything else reaches email through the digest, which
 formats any `NotifEvent` via `NotificationTitle`.
 
 ## 2. Register the variant (required)
@@ -226,9 +226,9 @@ kinds introduced by a newer backend.
 
 ## 7. Server-built feeds (when relevant)
 
-- **Home work feed:** `crates/attention_feed/src/domain/keying.rs`
+- **Home work feed:** `crates/search/attention_feed/src/domain/keying.rs`
   (`channel_thread_root`) attributes channel notifications to thread roots, and
-  `crates/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
+  `crates/search/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
   new kind defaults to a standalone stack (`_ => None`); add it to the thread-root
   and `is_channel_event` / `is_comment_event` matches if it belongs to a
   conversation.

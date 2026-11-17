@@ -25,7 +25,7 @@ MacroDB migrations.
 - Owns: booking links, event types, availability computation, and the booking/
   cancellation/reschedule lifecycle.
 - Not here: the underlying `CalendarEvent` entity, sync, or team sharing →
-  `crates/calendar_events`.
+  `crates/calendar/calendar_events`.
 
 ## Boundaries
 

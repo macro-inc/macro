@@ -9,7 +9,7 @@ contexts, and low-level components and utilities that are genuinely shared by
 multiple features. Product-specific code should stay under `src/features`.
 
 `constant/color-palette.ts` owns the fixed palette shared by tags and entity
-appearance; tag AI color values mirror it in `crates/properties/src/tag_color.rs`.
+appearance; tag AI color values mirror it in `crates/databases/properties/src/tag_color.rs`.
 
 Imports use the `@core/*` alias configured in `apps/web/tsconfig.json`:
 

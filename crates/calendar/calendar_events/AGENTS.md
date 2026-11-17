@@ -36,7 +36,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 - Owns: the `CalendarEvent` entity, its Google/Outlook/email sources, recurrence
   occurrences, reminder dispatch, and team calendar sharing/availability.
 - Not here: booking links, scheduling pages, and host/attendee booking policy →
-  `crates/calendar_scheduling`; the calendar service's HTTP composition root →
+  `crates/calendar/calendar_scheduling`; the calendar service's HTTP composition root →
   `services/calendar_service`.
 
 ## Boundaries
@@ -157,14 +157,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   it takes the card's only target calendar or asks which one. An event file
   forwarded by email takes the same import through
   `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
-  `crates/email`'s `invitation_import` builds from the email's saved snapshot.
+  `crates/email/email`'s `invitation_import` builds from the email's saved snapshot.
   Only the channel-share path strips the Macro call
   (`content_without_macro_call`, behind `EventSnapshot::without_macro_call`);
   a forwarded file keeps the join link it carries.
   The other direction, a guest forwarding their copy of an event, renders it
   through `CalendarEventForwardSource::event_forward`, which also names the
   inbox holding that copy (`meeting_copies`), and is `None` for a channel
-  share or a delegated inbox's copy; `crates/email`'s `event_forward` sends
+  share or a delegated inbox's copy; `crates/email/email`'s `event_forward` sends
   it. The copy decides the kind (`ForwardedCopy::outside_organizer`, read by
   `forwarded_copy` from every source of the copy): Google's private copy
   (`privateCopy` in the stored raw payload, which Google sets on every

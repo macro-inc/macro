@@ -22,7 +22,7 @@ schema types (entity type, owner type, property filters).
 
 - Owns: cross-domain GraphQL conventions — context, auth checks, filter/limit
   input parsing, shared entity/owner/property types.
-- Not here: any one domain's resolvers or objects → `crates/graphql_<domain>`.
+- Not here: any one domain's resolvers or objects → `crates/graphql/graphql_<domain>`.
 
 ## Boundaries
 

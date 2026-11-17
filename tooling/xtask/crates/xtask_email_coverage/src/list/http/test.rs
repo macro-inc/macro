@@ -85,6 +85,13 @@ fn follows_nest_merge_const_prefix_and_other_crates() {
         "crates/other/src/inbound.rs",
         OTHER_CRATE_ROUTER,
     );
+    crate::repo::test::workspace(
+        root.path(),
+        &[
+            ("services/svc", "svc", None),
+            ("crates/other", "other", None),
+        ],
+    );
 
     let entries = list(&Repo::new(root.path()), &source()).unwrap();
     let mut rows: Vec<String> = entries
@@ -113,6 +120,7 @@ fn fails_on_a_router_function_it_cannot_find() {
     write(root.path(), "services/svc/src/api.rs", API);
     write(root.path(), "services/svc/src/api/things.rs", THINGS);
     write(root.path(), "services/svc/src/api/health.rs", HEALTH);
+    crate::repo::test::workspace(root.path(), &[("services/svc", "svc", None)]);
 
     let error = list(&Repo::new(root.path()), &source()).unwrap_err();
 

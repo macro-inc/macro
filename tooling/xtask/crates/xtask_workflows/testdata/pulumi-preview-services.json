@@ -1,0 +1,11 @@
+{"services": {
+        "email-service": {
+            "source_paths": ["services/email_service/**", "crates/email/**"],
+            "stack_path": "infra/stacks/email-service/**",
+            "deploy_binaries": ["email_service"]
+        },
+        "kafka-cluster": {
+            "source_paths": ["crates/macro_event_topics/**"],
+            "stack_path": "infra/stacks/kafka-cluster/**"
+        }
+    }}

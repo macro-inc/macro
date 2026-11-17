@@ -2,7 +2,7 @@
 
 ## What it is
 
-The WhatsApp provider of external chats (`crates/external_chat`): personal
+The WhatsApp provider of external chats (`crates/comms/external_chat`): personal
 WhatsApp accounts linked as devices, owner-bound pairing, the account's chat
 list and rosters, adding an existing group or direct chat as the adder's
 own `ExternalChat` entity (one per owner, provider and remote chat, named
@@ -145,7 +145,7 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   an outcome becomes `unknown` on takeover and is never resent; a later echo
   with its `allocated_source_id` settles it.
 - View access is independent of WhatsApp membership (see
-  `crates/external_chat`); only the adopter receives an owner grant. Queries
+  `crates/comms/external_chat`); only the adopter receives an owner grant. Queries
   look chats up by `(provider, remote_id)`.
 - Store messages/reactions/attachments/poll votes in `external_chat_message`,
   `external_chat_reaction`, `external_chat_attachment` and

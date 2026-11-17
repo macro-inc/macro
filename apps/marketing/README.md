@@ -841,7 +841,7 @@ with the same transition; text and headings inside the doc retain their position
 
 Verified against `block-project/component/Block.tsx`,
 `property/tags/tagNavigation.ts`, `block-md/component/MarkdownDocument.tsx`, and
-`crates/projects/src/inbound/toolset/move_to_project.rs` at e2bd582d.
+[historical move-to-folder source](https://github.com/macro-inc/macro/blob/e2bd582d5f991896bbc69921ee2447def7360636/crates/projects/src/inbound/toolset/move_to_project.rs).
 Folders and tags are separate organization mechanisms, not multiple physical
 copies or nested docs. Keep competitor comparisons in the comparison table;
 the FAQ leads with writing, importing, collaboration, and sharing in Macro.

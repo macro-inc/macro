@@ -17,7 +17,7 @@ Chat sidebar, following the standard hexagonal crate layout.
 
 - Owns: manual and smart channel labels, their team-wide ordering, and per-member
   channel visibility within a label.
-- Not here: the channels/messages themselves → `crates/channels`.
+- Not here: the channels/messages themselves → `crates/comms/channels`.
 
 ## Boundaries
 

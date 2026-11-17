@@ -69,4 +69,4 @@ deliberately stable and widely depended on.
 
 ## Related
 
-- Docs: `crates/ai_toolset/TOOL_DESIGN.md` · Skill: `create-ai-tool`
+- Docs: `crates/ai/ai_toolset/TOOL_DESIGN.md` · Skill: `create-ai-tool`

@@ -218,7 +218,7 @@ fn concrete(path: &str) -> String {
 #[test]
 fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
-    for (key, operation) in code_execution::domain::operations() {
+    for (key, operation) in code_execution_core::operations() {
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -726,7 +726,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
 /// unreadable, they go directly.
 #[tokio::test]
 async fn the_egress_flag_fails_closed_to_direct() {
-    use code_execution::domain::Egress;
+    use code_execution_core::Egress;
     use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let flags = |result: Result<FlagSnapshot, String>| {
@@ -806,7 +806,7 @@ async fn a_scoped_session_calls_no_connected_apps_tool_directly() {
 /// shorter while before asking again.
 #[tokio::test(start_paused = true)]
 async fn the_egress_flag_is_read_once_per_user_for_a_while() {
-    use code_execution::domain::Egress;
+    use code_execution_core::Egress;
     use feature_flags::{FlagSnapshot, FlagValue};
     use std::sync::atomic::{AtomicUsize, Ordering};
 

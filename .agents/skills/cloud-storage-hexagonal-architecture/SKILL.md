@@ -202,7 +202,7 @@ For every Rust backend diff, reject or refactor if any of these are true:
 
 ## Useful inspection commands
 
-Set `CRATE` to the crate you are touching, for example `CRATE=crates/documents`.
+Set `CRATE` to the crate you are touching, for example `CRATE=crates/documents/documents`.
 
 ```bash
 # Domain must not know transport or concrete infrastructure.

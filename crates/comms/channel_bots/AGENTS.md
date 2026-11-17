@@ -22,7 +22,7 @@ decides whether to trigger, authorizes, and delivers a reply.
 - Owns: deciding when a built-in agent responds to a channel message or document
   comment, and delivering that response back through the same message boundary.
 - Not here: bot CRUD/ownership → `crates/agents/bots`; the message store itself →
-  `crates/channels`, `crates/messages`.
+  `crates/comms/channels`, `crates/comms/messages`.
 
 ## Boundaries
 

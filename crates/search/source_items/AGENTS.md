@@ -33,8 +33,8 @@ The migrations leave the triggers off: `source_items_install_triggers()` and
 ## Scope
 
 - Owns: the tests and tooling for the projection's maintenance.
-- Not here: reading the projection → `crates/soup` (`expanded/dynamic/feed.rs`);
-  rollout and recovery → `crates/soup/SOURCE_ITEMS_ROLLOUT.md`.
+- Not here: reading the projection → `crates/search/soup` (`expanded/dynamic/feed.rs`);
+  rollout and recovery → `crates/search/soup/SOURCE_ITEMS_ROLLOUT.md`.
 
 ## Recipes
 

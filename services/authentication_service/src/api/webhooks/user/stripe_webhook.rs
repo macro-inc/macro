@@ -1,6 +1,6 @@
 //! Stripe's webhook. It verifies the signature, stores the event in the
 //! Stripe inbox and answers 200; the inbox's consumers apply it in the
-//! background (`crates/stripe_inbox`). It calls no Stripe API and does no
+//! background (`crates/billing/stripe_inbox`). It calls no Stripe API and does no
 //! domain work, so Stripe never waits on, or redelivers because of, one.
 
 use axum::{

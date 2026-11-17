@@ -1,7 +1,7 @@
 # Adding a GraphQL field, query, mutation, or subscription
 
 The GraphQL API is composed in `crates/graphql/complete_graph` from per-domain adapter
-crates (`crates/graphql_<domain>`), served by `document_storage_service`, and read
+crates (`crates/graphql/graphql_<domain>`), served by `document_storage_service`, and read
 by the web app through a normalized cache. One change touches the adapter crate,
 the composed schema, the service wiring, the committed SDL, the web documents,
 and the cache's mutation policy. Most misses compile cleanly and fail at runtime
@@ -12,7 +12,7 @@ new entity kind, see [add-entity.md](add-entity.md).
 
 Read first: [`crates/graphql/complete_graph/AGENTS.md`](../../crates/graphql/complete_graph/AGENTS.md)
 (the `id` convention, the viewer pattern, the Soup entity interface), the owning
-`crates/graphql_<domain>/AGENTS.md`, and section 8 of
+`crates/graphql/graphql_<domain>/AGENTS.md`, and section 8 of
 [the normalized cache plan](../../apps/web/docs/graphql-normalized-cache-plan.md).
 
 ## Pick a model to copy
@@ -49,7 +49,7 @@ Read first: [`crates/graphql/complete_graph/AGENTS.md`](../../crates/graphql/com
   `crates/graphql/complete_graph/src/sdl_test.rs` both enforce it. Doc comments become
   the SDL descriptions.
 
-## 2. The adapter crate (`crates/graphql_<domain>`)
+## 2. The adapter crate (`crates/graphql/graphql_<domain>`)
 
 It is an inbound adapter: resolvers convert input, call the domain service, and
 map output. No SQL here ([CS-53](../../.agents/rules/rust/architecture.md)). If the

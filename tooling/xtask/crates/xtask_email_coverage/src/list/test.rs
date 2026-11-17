@@ -14,7 +14,7 @@ fn providers_come_from_the_key_before_the_path() {
     assert_eq!(
         default_providers(
             "gmail-ops:DeleteLabel",
-            "crates/models_email/src/gmail/gmail_ops.rs"
+            include_str!("../../testdata/provider-source.txt")
         ),
         Providers::Gmail
     );
@@ -66,7 +66,7 @@ fn a_route_listed_by_hand_must_be_in_its_file() {
     let repo_root = xtask_paths::repo_root();
     let source = |routes: &[&str]| ElsewhereSource {
         service: "document_storage_service".to_owned(),
-        file: "crates/reminders/src/inbound/axum_router.rs".to_owned(),
+        file: "crates/email/reminders/src/inbound/axum_router.rs".to_owned(),
         routes: routes.iter().map(|route| (*route).to_owned()).collect(),
     };
 

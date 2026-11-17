@@ -7,7 +7,7 @@ provider) added to Macro as an independently shared `ExternalChat` entity.
 This crate is the provider-neutral part: list and detail, timeline, read
 state, sharing, deliberate sends and uploads, attachment import into static
 files, notification effects and the `/external-chats` routes, over the
-`external_chat*` tables. A provider (`crates/whatsapp_linked`) implements the
+`external_chat*` tables. A provider (`crates/whatsapp/whatsapp_linked`) implements the
 `ChatProvider` port; DSS composes `ExternalChatService<WhatsAppProvider>`.
 
 ## Start here

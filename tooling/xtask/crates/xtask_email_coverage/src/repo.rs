@@ -11,9 +11,6 @@ use std::rc::Rc;
 use rootcause::prelude::*;
 use syn::{Item, UseTree};
 
-/// Directories that hold workspace crates, searched for `<dir>/<crate name>`.
-const CRATE_PARENTS: [&str; 2] = ["crates", "services"];
-
 /// How many `use` re-exports a path may pass through before it is a cycle.
 const MAX_IMPORT_HOPS: u8 = 8;
 
@@ -55,6 +52,7 @@ pub(crate) struct Module {
 pub(crate) struct Repo {
     root: PathBuf,
     parsed: RefCell<BTreeMap<String, Rc<syn::File>>>,
+    crate_sources: RefCell<Option<BTreeMap<String, Vec<Module>>>>,
 }
 
 impl Repo {
@@ -62,6 +60,7 @@ impl Repo {
         Self {
             root: root.to_owned(),
             parsed: RefCell::new(BTreeMap::new()),
+            crate_sources: RefCell::new(None),
         }
     }
 
@@ -125,8 +124,15 @@ impl Repo {
     /// The module at `path` in the crate whose sources are in `crate_src`.
     fn module_at(&self, crate_src: &str, path: &[String]) -> Option<Module> {
         let files = if path.is_empty() {
+            let library = self.crate_sources.borrow().as_ref().and_then(|sources| {
+                sources
+                    .values()
+                    .flatten()
+                    .find(|module| module.crate_src == crate_src)
+                    .map(|module| module.file.clone())
+            });
             [
-                format!("{crate_src}/lib.rs"),
+                library.unwrap_or_else(|| format!("{crate_src}/lib.rs")),
                 format!("{crate_src}/main.rs"),
             ]
         } else {
@@ -218,13 +224,18 @@ impl Repo {
                 return self.resolve_within(from, &full, loc, hops_left);
             }
             other_crate => {
-                crate_src = self.crate_src(other_crate).ok_or_else(|| {
-                    report!(
-                        "{loc}: cannot resolve `{written}`: `{other_crate}` is not a module of \
-                         {}, an import, or a crate under crates/ or services/",
-                        from.file
-                    )
-                })?;
+                crate_src = self
+                    .crate_src(other_crate)
+                    .context(format!(
+                        "{loc}: could not resolve workspace library `{other_crate}`"
+                    ))?
+                    .ok_or_else(|| {
+                        report!(
+                            "{loc}: cannot resolve `{written}`: `{other_crate}` is not a module of \
+                         {}, an import, or a workspace library",
+                            from.file
+                        )
+                    })?;
                 module_path.clear();
             }
         }
@@ -251,11 +262,68 @@ impl Repo {
         }
     }
 
-    fn crate_src(&self, crate_name: &str) -> Option<String> {
-        CRATE_PARENTS
-            .iter()
-            .map(|parent| format!("{parent}/{crate_name}/src"))
-            .find(|src| self.is_file(&format!("{src}/lib.rs")))
+    fn crate_src(&self, crate_name: &str) -> Result<Option<String>, Report> {
+        if self.crate_sources.borrow().is_none() {
+            let root = self
+                .root
+                .canonicalize()
+                .context("resolving workspace root")?;
+            let graph = xtask_graph::build_graph_at(&root, true)
+                .map_err(|error| report!("could not read workspace metadata: {error:#}"))?;
+            let mut sources: BTreeMap<String, Vec<Module>> = BTreeMap::new();
+            for package in graph.workspace().iter() {
+                for target in package.build_targets() {
+                    // Cargo library targets have no binary/test selector name.
+                    if target.id().name().is_some() {
+                        continue;
+                    }
+                    let file = target
+                        .path()
+                        .as_std_path()
+                        .strip_prefix(&root)
+                        .context("workspace library source is outside the repository")?;
+                    let directory = file.parent().ok_or_else(|| {
+                        report!("library source has no parent: {}", file.display())
+                    })?;
+                    sources
+                        .entry(target.name().to_owned())
+                        .or_default()
+                        .push(Module {
+                            file: file.to_string_lossy().into_owned(),
+                            crate_src: directory.to_string_lossy().into_owned(),
+                            path: Vec::new(),
+                        });
+                }
+            }
+            self.crate_sources.replace(Some(sources));
+        }
+        let sources = self.crate_sources.borrow();
+        let candidates = sources.as_ref().and_then(|sources| sources.get(crate_name));
+        match candidates.map(Vec::as_slice).unwrap_or_default() {
+            [] => Ok(None),
+            [module] => {
+                if sources
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|sources| sources.values().flatten())
+                    .any(|other| other.crate_src == module.crate_src && other.file != module.file)
+                {
+                    bail!(
+                        "ambiguous workspace library roots under {}",
+                        module.crate_src
+                    );
+                }
+                Ok(Some(module.crate_src.clone()))
+            }
+            modules => bail!(
+                "ambiguous workspace library `{crate_name}`: {}",
+                modules
+                    .iter()
+                    .map(|module| module.file.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
     }
 
     /// Every file of the crate in `crate_dir` that its library compiles
@@ -402,4 +470,4 @@ fn holds_outside_tests(condition: &syn::Meta) -> bool {
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

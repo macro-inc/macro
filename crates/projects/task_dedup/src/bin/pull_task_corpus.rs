@@ -27,8 +27,8 @@
 //! ```text
 //! cargo run -p task_dedup --features backfill --bin pull_task_corpus -- prod \
 //!   --limit-per-set 100 \
-//!   --out-title-only crates/task_dedup/fixtures/eval/prod_title_only.json \
-//!   --out-with-body  crates/task_dedup/fixtures/eval/prod_with_body.json
+//!   --out-title-only crates/projects/task_dedup/fixtures/eval/prod_title_only.json \
+//!   --out-with-body  crates/projects/task_dedup/fixtures/eval/prod_with_body.json
 //! ```
 //! Requires `aws` auth (source DB URL + secrets) and `ANTHROPIC_API_KEY` /
 //! `OPENAI_API_KEY` / `CEREBRAS_API_KEY` in the environment (the agent router

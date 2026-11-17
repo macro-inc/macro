@@ -44,7 +44,7 @@ const EVALUATE_ROUTE: &str = "/v1/systemone";
 /// Where the worker asks the harness for a due date, under its base.
 const DUE_DATE_ROUTE: &str = "/universal_input/thread-due-date";
 /// The question the worker asks first: would the owner want this thread
-/// in Focus (`FocusQuestion::ALL` in `crates/email`).
+/// in Focus (`FocusQuestion::ALL` in `crates/email/email`).
 const FOCUS_QUESTION: &str = "q0";
 /// The key the worker is given for the model API, which the stand-in asks
 /// for as the API does.

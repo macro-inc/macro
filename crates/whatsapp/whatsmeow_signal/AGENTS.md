@@ -4,7 +4,7 @@
 
 The Signal protocol for WhatsApp linked devices: `Libsignal` implements the
 whatsmeow port's `signal::{CurveSignatures, SignalProtocol}` traits
-(`crates/whatsmeow/src/signal.rs`), so it is a `whatsmeow::Signal`;
+(`crates/whatsapp/whatsmeow/src/signal.rs`), so it is a `whatsmeow::Signal`;
 `libsignal()` returns it as the `Arc<dyn whatsmeow::Signal>` a `Client`
 takes. `LibsignalProtocol` and `LibsignalCurveSignatures` are older aliases.
 AGPL-3.0-only.
@@ -55,4 +55,4 @@ AGPL-3.0-only.
 
 ## Related
 
-- `crates/whatsmeow/AGENTS.md` (the trait boundary)
+- `crates/whatsapp/whatsmeow/AGENTS.md` (the trait boundary)

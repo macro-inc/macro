@@ -18,7 +18,7 @@ port. Also sends invite-to-Macro emails.
 ## Scope
 
 - Owns: referral code lifecycle and invite-to-Macro.
-- Not here: the reward itself → `crates/ai_billing` (`InviteRewardService`,
+- Not here: the reward itself → `crates/billing/ai_billing` (`InviteRewardService`,
   wired in `services/authentication_service/src/outbound/invite_rewards.rs`);
   sending the notification itself → `notification`.
 

@@ -18,8 +18,8 @@ in the workspace yet.
 
 - Owns: cal.com webhook signature verification and the booking→analytics-event
   mapping.
-- Not here: Macro's own calendar/booking domain → `crates/calendar_events`,
-  `crates/calendar_scheduling`.
+- Not here: Macro's own calendar/booking domain → `crates/calendar/calendar_events`,
+  `crates/calendar/calendar_scheduling`.
 
 ## Boundaries
 

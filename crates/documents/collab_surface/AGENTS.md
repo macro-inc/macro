@@ -40,7 +40,7 @@ table.
 
 - Add a new parent type: `src/domain/models.rs` (`SurfaceOwnership`/parent
   policy) → `src/domain/service.rs` → the consuming feature's domain port (see
-  `crates/initiative_description/src/lib.rs` for the pattern).
+  `crates/projects/initiative_description/src/lib.rs` for the pattern).
 - Wire a new feature onto an existing surface kind: the feature's domain port
   → `OwnedSurfaceService` methods (`ensure_owned_surface`,
   `owned_surface_markdown`, `retire_surface`) → its cleanup path for

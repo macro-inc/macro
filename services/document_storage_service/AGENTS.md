@@ -8,7 +8,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
-- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/document_sync_router`
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/documents/document_sync_router`
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
@@ -33,8 +33,8 @@ threads, pins, recents, notifications, folders, activity.
   It also builds the attention feeds (Home's work feed and the notifications
   inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
-  mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
-  (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
+  mounts `/external-chats` (`crates/comms/external_chat`) and `/whatsapp`
+  (`crates/whatsapp/whatsapp_linked`) and runs the notification/import worker (LISTEN
   `external_chat_effects`, `whatsapp_media_ready`; attachments become static
   files through the static file service, which also deletes released ones) and
   the `external_chat_changed` pusher (bare connection-gateway events to the
@@ -43,7 +43,7 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
-- Authenticated call routes are composed from `crates/call` under `/call`;
+- Authenticated call routes are composed from `crates/comms/call` under `/call`;
   `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
   `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
@@ -85,7 +85,7 @@ threads, pins, recents, notifications, folders, activity.
 - Owns: document/item HTTP CRUD, the Soup GraphQL schema, and cross-entity
   surfaces (history, annotations, threads, pins, recents, notifications,
   folders, saved views, activity).
-- Not here: document content/collaboration itself → `crates/collab_surface`
+- Not here: document content/collaboration itself → `crates/documents/collab_surface`
   and the sync service; AI chat → `document_cognition_service`.
 
 ## Recipes
