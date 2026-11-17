@@ -1567,9 +1567,10 @@ async fn outlook_newest_mail_is_read_from_the_provider() -> Result<(), Report> {
 }
 
 /// An Outlook draft that has no sender and carries a file is imported, its
-/// file is stored as a document, and the search service's lookups answer
-/// for it. When this fails the file is claimed for upload and never
-/// uploaded, and the draft's import waits on it forever.
+/// file is stored as a document when it is opened (the sync leaves drafts'
+/// files out of the Drive import), and the search service's lookups answer
+/// for it. When this fails a draft without a sender is not imported, its
+/// file never opens, or the search lookups miss it.
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_draft_without_a_sender_gets_its_attachment_stored() -> Result<(), Report> {
     let stack = Stack::start().await?;
@@ -1635,6 +1636,14 @@ async fn outlook_draft_without_a_sender_gets_its_attachment_stored() -> Result<(
     assert_eq!(message["is_draft"], true);
     assert_eq!(attachment_names(message), ["notes.pdf"]);
 
+    let attachment = message["attachments"][0]["db_id"]
+        .as_str()
+        .unwrap_or_default();
+    let opened = inbox
+        .get(&format!("/email/attachments/{attachment}/document_id"))
+        .await?;
+    assert_eq!(opened.status, 200, "{}", opened.text);
+    assert!(opened.json["document_id"].is_string(), "{}", opened.text);
     eventually(
         "the draft's attachment to be stored as a document",
         DEFAULT_TIMEOUT,

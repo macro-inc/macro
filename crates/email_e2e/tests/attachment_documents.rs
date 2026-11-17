@@ -127,8 +127,7 @@ async fn save_in_gmail(stack: &Stack, email: &str, draft: Option<&str>) -> Resul
 /// (every save in Gmail replaces the draft's message) answers not found:
 /// document storage tells the email service that the attachment is gone.
 ///
-/// When it fails: opening the attachment answers a server error, and the
-/// import of a replaced draft's attachment is retried for nothing.
+/// When it fails: opening the attachment answers a server error.
 #[tokio::test(flavor = "multi_thread")]
 async fn gmail_attachment_of_a_replaced_draft_is_not_found() -> Result<(), Report> {
     let stack = Stack::start_with(StackOptions {
@@ -139,9 +138,6 @@ async fn gmail_attachment_of_a_replaced_draft_is_not_found() -> Result<(), Repor
     let ada = stack.user("ada").await?;
     let inbox = ada.link_gmail().await?;
 
-    // The sync that brings the draft tries to store the attachment and
-    // goes on without it, so the first document is the one the user asks for.
-    stack.fail_next_service_request("document-storage", "POST", CREATE_DOCUMENT, 503)?;
     let draft = save_in_gmail(&stack, inbox.email(), None).await?;
     let preview = inbox.wait_for_preview("all", "The report").await?;
     let thread = inbox
@@ -155,13 +151,13 @@ async fn gmail_attachment_of_a_replaced_draft_is_not_found() -> Result<(), Repor
         .as_str()
         .unwrap_or_default()
         .to_owned();
-    // The request to hold is the one the user's click makes.
-    eventually(
-        "the sync to have asked for the document",
-        DEFAULT_TIMEOUT,
-        async || Ok((documents_asked_for(&stack) > 0).then_some(())),
-    )
-    .await?;
+    // The sync leaves a draft's attachments out of the Drive import, so the
+    // request to hold is the one the user's click makes.
+    assert_eq!(
+        documents_asked_for(&stack),
+        0,
+        "the sync asked for a document for the draft's attachment"
+    );
 
     let mut held = stack.hold_next_service_request("document-storage", "POST", CREATE_DOCUMENT)?;
     let path = format!("/email/attachments/{id}/document_id");
