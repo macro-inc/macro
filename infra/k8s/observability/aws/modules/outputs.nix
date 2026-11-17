@@ -16,6 +16,8 @@ in
     cluster_security_group_id = out "Security group on the nodes and pods." (
       ref "aws_eks_cluster.observability.vpc_config[0].cluster_security_group_id"
     );
+    edge_zones = out "Zones the edge nginx pods must run in (the ALB's zones)." settings.existing.albZones;
+    alb_source_cidrs = out "Where ALB traffic and health checks to the pods come from (allow in NetworkPolicy)." settings.existing.albSubnetCidrs;
     target_group_arns = out "TargetGroupBinding targets, by host." (
       lib.mapAttrs (name: _: ref "aws_lb_target_group.${name}.arn") settings.hosts
     );

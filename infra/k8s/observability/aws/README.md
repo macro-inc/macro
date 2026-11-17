@@ -4,8 +4,8 @@ The AWS resources for the observability EKS cluster in Ohio (us-east-2), in
 OpenTofu written in Nix with [terranix](https://terranix.org). It is the first
 of the two layers that move Grafana, Loki, Tempo, Mimir and Alloy ingest off
 the single NixOS host in [`infra/stacks/observability`](../../../stacks/observability/README.md);
-what runs inside the cluster is [`../cluster`](../cluster) (nixidy, applied by
-Argo CD).
+what runs inside the cluster is `../cluster` (nixidy, applied by Argo CD; added
+by its own pull request).
 
 Nothing here is applied by CI. Every `tofu apply` is run by hand, after
 approval, with the steps under [First apply](#first-apply).
@@ -37,6 +37,9 @@ associations, two listener rules (priorities 10 and 11; Pulumi has 1 and 2), a
 listener certificate, DNS records, and one egress rule on the ALB's security
 group, which, like the stack's own `observability-alb-to-host` rule, Pulumi
 does not manage inline. Nothing in this layer changes how the host is served.
+The cluster security group's ingress rule references the ALB's security
+group, so a Pulumi change that replaces that group fails until this rule is
+removed first.
 
 ## Contract with the cluster layer
 
@@ -50,11 +53,21 @@ does not manage inline. Nothing in this layer changes how the host is served.
 - The load balancer controller may only describe and register/deregister
   targets in the two target groups: TargetGroupBinding only, no load balancers
   or security group management. Give it `--aws-vpc-id` and `--aws-region`:
-  pods can't reach the node's instance metadata (hop limit 1).
+  pods can't reach the node's instance metadata (hop limit 1). The same holds
+  for every AWS client in the cluster: give Loki, Tempo, Mimir and External
+  Secrets the region explicitly; if the EBS CSI controller can't find it, set it
+  in the add-on's configuration.
 - The edge nginx Service is the only ALB target: IP targets, port 8080, health
   check `GET /healthz` → 200, one TargetGroupBinding per target group.
+  The ALB is enabled only in us-east-2a and 2b (`edge_zones` output) and sends
+  nothing to a target in 2c, so the edge pods need node affinity to those two
+  zones, spread across both. NetworkPolicies must allow port 8080 from the
+  ALB's subnets `10.88.0.0/24` and `10.88.1.0/24` (`alb_source_cidrs`): the
+  VPC CNI's policies match addresses, not security groups.
 - Grafana's database: `grafana_db_address`, port 5432, database and user
-  `grafana`, password from the RDS-managed secret. RDS rotates that password
+  `grafana`, password from the RDS-managed secret. Connect with TLS
+  (`ssl_mode = require`, or `verify-full` with the RDS CA bundle): Postgres 17
+  on RDS refuses unencrypted connections. RDS rotates that password
   every 7 days, so Grafana must pick up a changed Secret (restart on change).
 
 ## Secrets
@@ -105,7 +118,7 @@ Multi-AZ database up to 20.
    export TF_VAR_admin_principal_arns='["arn:aws:iam::569036502058:role/<path>/<role>"]'
    export TF_VAR_public_access_cidrs='["<your public IP>/32"]'
    ```
-4. Plan and review. Expect only additions (83 for one admin) and no change or
+4. Plan and review. Expect only additions (81) and no change or
    destroy:
    ```sh
    nix run .#tofu -- main init
@@ -115,7 +128,7 @@ Multi-AZ database up to 20.
    ```sh
    nix run .#tofu -- main apply tfplan
    ```
-6. Check:
+6. Check, from `nix develop` (it has `kubectl`):
    ```sh
    aws eks update-kubeconfig --region us-east-2 --name observability
    kubectl get nodes -L topology.kubernetes.io/zone   # 3 Ready, one per zone

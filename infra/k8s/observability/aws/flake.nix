@@ -103,6 +103,10 @@
               work="$(git rev-parse --show-toplevel)/infra/k8s/observability/aws/.tofu/bootstrap"
               mkdir -p "$work"
               cd "$work"
+              # Not bootstrapped yet, so any S3 backend recorded here is from a
+              # run whose migration failed; its local state is still here and the
+              # rerun applies nothing new before migrating again.
+              rm -rf .terraform
               install -m 0644 ${configs.bootstrap-local} config.tf.json
               tofu init -input=false
               tofu apply

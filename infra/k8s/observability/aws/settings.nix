@@ -28,6 +28,16 @@ rec {
       environment = "prod";
     };
     privateSubnetCidr = "10.88.10.0/24"; # us-east-2a, shared with the host
+    # The ALB's subnets: it is enabled only in 2a and 2b, and its traffic and
+    # health checks to pods come from these addresses.
+    albZones = [
+      "us-east-2a"
+      "us-east-2b"
+    ];
+    albSubnetCidrs = [
+      "10.88.0.0/24"
+      "10.88.1.0/24"
+    ];
     zone = "macro-internal.com";
     alarmTopic = "observability-prod-alerts";
     secret = "observability/prod";
@@ -110,6 +120,8 @@ rec {
 
   # The ALB forwards to the edge nginx pods (IP targets) on this port; the
   # cluster's TargetGroupBinding and edge Service must use the same.
+  # The ALB sends nothing to a target in a zone it isn't enabled in, so the edge
+  # pods must run only in `existing.albZones` (node affinity), never in 2c.
   edge = {
     port = 8080;
     healthPath = "/healthz";

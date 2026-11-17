@@ -142,7 +142,10 @@ in
           service_account = settings.serviceAccounts.ebsCsi.name;
           role_arn = ref "aws_iam_role.pod_ebsCsi.arn";
         };
-        depends_on = [ "aws_eks_node_group.observability" ];
+        depends_on = [
+          "aws_eks_node_group.observability"
+          "aws_iam_role_policy_attachment.pod_ebsCsi"
+        ];
       };
     };
 
@@ -202,6 +205,9 @@ in
         version = ref "aws_launch_template.node.latest_version";
       };
       depends_on = beforeNodes ++ [
+        # Until these exist the new subnets use the main route table: no NAT.
+        "aws_route_table_association.private_b"
+        "aws_route_table_association.private_c"
         "aws_iam_role_policy_attachment.node_worker"
         "aws_iam_role_policy_attachment.node_cni"
         "aws_iam_role_policy_attachment.node_ecr"
