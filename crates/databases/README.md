@@ -104,7 +104,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    answers them. An id that already names something (a row id: in any table),
    or is minted twice in one batch, refuses the batch with a 400 whose `taken`
    is `{kind: "table" | "column" | "option" | "view" | "row", id}`; a retry of
-   a committed batch lands there instead of writing twice.
+   a committed batch whose new things all carry client-minted ids lands there
+   instead of writing twice. An `insert` without `ids` writes its rows again.
 5. The optional request-level `baseVersions` names tables and the version the
    caller read; a table at another version answers 409 and writes nothing. A
    column type change follows one cast rule for the type menu, the agent tool
@@ -131,7 +132,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    otherwise gets a property of the copy's own with the same options and
    values. Relation cells naming rows that are gone are left out, and formula values
    are computed again in the copy from its own columns. Grants, the team share, forms,
-   webhooks, saved queries, column protections and the journal stay behind; the
+   webhooks, synced tables' syncs (the copied tables keep their rows but stop
+   syncing), saved queries, column protections and the journal stay behind; the
    copy's history starts empty.
 
 SQL lives outside this crate. The browser compiles statements with the

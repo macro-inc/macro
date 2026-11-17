@@ -5,6 +5,7 @@ import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
@@ -37,6 +38,7 @@ import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
 } from '../../database/core/write-failure';
+import { SyncDialog } from '../component/SyncDialog';
 import { WebhooksDialog } from '../component/WebhooksDialog';
 import {
   exportDatabaseTableCsv,
@@ -64,7 +66,8 @@ export function DatabasePageActions(props: {
   detail: DatabaseDetail;
   table?: TableDetail;
   entityActions?: DatabaseEntityActions;
-  onImported: (tableId: string) => void;
+  /** Show a table the menu just added (an imported CSV or a synced table). */
+  onTableAdded: (tableId: string) => void;
   onRename: () => void;
   onDelete: () => ResultAsync<void, DatabaseEntityFailure>;
 }) {
@@ -76,6 +79,7 @@ export function DatabasePageActions(props: {
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
   const [webhooksOpen, setWebhooksOpen] = createSignal(false);
+  const [syncOpen, setSyncOpen] = createSignal(false);
   let fileInput: HTMLInputElement | undefined;
   let menuButton: HTMLButtonElement | undefined;
   let focusTitleAfterClose = false;
@@ -139,7 +143,7 @@ export function DatabasePageActions(props: {
   function importFile(request: ImportTable) {
     return importDatabaseTable(props.detail.database.id, request).map(
       (table) => {
-        props.onImported(table.id);
+        props.onTableAdded(table.id);
         toast.success('CSV imported');
       }
     );
@@ -276,6 +280,10 @@ export function DatabasePageActions(props: {
                 <WebhookIcon class="size-4 shrink-0" />
                 Webhooks
               </Dropdown.Item>
+              <Dropdown.Item onSelect={() => setSyncOpen(true)}>
+                <ArrowsClockwiseIcon class="size-4 shrink-0" />
+                {t('databaseSyncs.syncFrom')}
+              </Dropdown.Item>
             </Show>
             <Dropdown.Sub>
               <Dropdown.SubTrigger disabled={exporting()}>
@@ -334,6 +342,14 @@ export function DatabasePageActions(props: {
             />
           </Show>
         )}
+      </Show>
+      <Show when={syncOpen()}>
+        <SyncDialog
+          detail={props.detail}
+          onTableAdded={props.onTableAdded}
+          onClose={() => setSyncOpen(false)}
+          returnFocus={menuButton}
+        />
       </Show>
       <DeleteDialog
         open={confirmDelete()}

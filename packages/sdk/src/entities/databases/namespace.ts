@@ -1,3 +1,4 @@
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { type CreateDatabaseOptions, Database } from './database';
 import {
@@ -6,6 +7,12 @@ import {
   queryDatabases,
 } from './query';
 import { SavedQuery, type SaveQueryOptions } from './saved-query';
+import {
+  type DatabaseSync,
+  type DatabaseSyncSource,
+  type DatabaseSyncSources,
+  NotionDataSource,
+} from './sync';
 
 /**
  * Macro databases: named collections of tables, owned and shared as one
@@ -127,5 +134,46 @@ export class DatabaseNamespace {
    */
   list(): Promise<Database[]> {
     return Database.list(this.client);
+  }
+
+  /**
+   * Sources the caller can sync from. They are Granola, and the Notion data
+   * sources the caller's connection can read.
+   *
+   * Granola counts only when connected. Pass one to
+   * {@link createSynced} or {@link Database.addSync}.
+   *
+   * @readonly
+   * @openworld
+   */
+  async syncSources(): Promise<DatabaseSyncSources> {
+    const { granola, notion } = unwrap(
+      await this.client.cognition.listDatabaseSyncSources(),
+    );
+    return {
+      granola,
+      notion: {
+        connected: notion.connected,
+        dataSources: notion.dataSources.map(({ id, title }) =>
+          NotionDataSource.of(id, title),
+        ),
+      },
+    };
+  }
+
+  /**
+   * Create a database with one table synced with `source`. The first sync
+   * runs at once.
+   *
+   * The database is named after the source, and rows are upserted from it on
+   * a schedule, acting as the caller. The sync's `database` is the new
+   * database.
+   *
+   * @write
+   * @openworld
+   * @mcp-exclude Takes a source handle built from a listing record, which an MCP call can't reference.
+   */
+  createSynced(source: DatabaseSyncSource): Promise<DatabaseSync> {
+    return Database.createSynced(this.client, source);
   }
 }

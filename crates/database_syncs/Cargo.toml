@@ -1,0 +1,63 @@
+[package]
+edition = "2024"
+name = "database_syncs"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Axum HTTP router, the background worker, and the call-import hook.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:tokio-util",
+  "databases/inbound",
+  "entity_access/inbound",
+]
+# Postgres persistence, and adapters over the databases service, entity
+# access, Granola accounts and team rosters.
+postgres = [
+  "dep:granola_sync",
+  "dep:sqlx",
+  "dep:teams",
+  "databases/outbound",
+]
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, optional = true }
+call = { path = "../call", default-features = false, features = ["ports"] }
+chrono = { workspace = true, features = ["serde"] }
+databases = { path = "../databases", features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+granola_sync = { path = "../granola_sync", optional = true }
+import_notion = { path = "../import_notion" }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model-error-response = { path = "../model-error-response", optional = true }
+models_databases = { path = "../models_databases" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-util = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+# The real databases service and entity access, for the end-to-end test.
+databases = { path = "../databases", features = ["postgres"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+teams = { path = "../teams", default-features = false, features = ["outbound"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

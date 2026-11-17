@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_syncs SET due_at = now() WHERE created_by = $1 AND source = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c814c8b5edb786d4743593975419beecc11aadee8cce9ff038ba50e1f3a8002"
+}

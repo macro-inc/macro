@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT external_id, row_id, fingerprint\n            FROM database_sync_rows\n            WHERE sync_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "fingerprint",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "4bea9bc2e95994bd5bb22fba7465c9c8b00202d199923deaf908010229882f4b"
+}

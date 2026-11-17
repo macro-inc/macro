@@ -138,7 +138,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills listImportEntities',
+    listed:
+      'listSkills listImportEntities listDatabaseSyncSources listDatabaseSyncs',
     added: 'trackImportEntity',
     rejected: 'declineImportEntity',
     imported: 'importNotionPage',
@@ -148,8 +149,9 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     searched: 'searchWeb',
     queried: 'decisions structuredCompletion',
-    created: 'createConfirmedCalendarEvent createChat',
-    deleted: 'deleteChat permanentlyDeleteChat',
+    created:
+      'createConfirmedCalendarEvent createChat createSyncedDatabase createDatabaseSync',
+    deleted: 'deleteChat permanentlyDeleteChat deleteDatabaseSync',
     edited: `
       patchChat
       editExplicitMemory
@@ -159,6 +161,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendConfirmedEmail sendChatMessage',
     generated: 'generateImage',
     stopped: 'stopChatStream',
+    ran: 'runDatabaseSync',
   },
   contacts: { searched: 'searchPeople' },
   email: {

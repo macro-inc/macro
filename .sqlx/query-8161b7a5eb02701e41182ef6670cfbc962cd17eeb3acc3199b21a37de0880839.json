@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE database_syncs\n            SET lease_id = $1,\n                lease_expires_at = now() + make_interval(secs => $2),\n                due_at = 'infinity'\n            WHERE id = (\n                SELECT id FROM database_syncs\n                WHERE (lease_expires_at IS NULL AND due_at <= now())\n                    OR lease_expires_at < now()\n                ORDER BY due_at\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING id, database_id, table_id, created_by, source, source_config, columns,\n                detached_columns, last_synced_at, last_failure, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "columns",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "detached_columns",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_synced_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_failure",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "8161b7a5eb02701e41182ef6670cfbc962cd17eeb3acc3199b21a37de0880839"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO database_sync_rows (sync_id, external_id, row_id)\n            SELECT $1, external_id, row_id\n            FROM UNNEST($2::text[], $3::uuid[]) AS reserved(external_id, row_id)\n            ON CONFLICT (sync_id, external_id)\n                DO UPDATE SET row_id = EXCLUDED.row_id, fingerprint = NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac4c517dcbad04239f866cc55ad31bfbd609672ec294f1ef4fe8f0a82911d9d7"
+}

@@ -28,6 +28,8 @@ through `call::domain::imports`.
 
 - Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
 - Used by: `services/agent_harness_service` (composition root, worker, webhook route).
+  Its `calls` is wrapped in `database_syncs::inbound::call_imports::SyncOnCallImport`,
+  so each ingest marks the owner's synced Granola tables due.
 
 ## Checks
 
