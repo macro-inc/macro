@@ -741,6 +741,17 @@ general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
 
+## Agent program reads of sign-in mail
+
+A program (`macro_authorization::is_program_run`) never reads one of Macro's
+own sign-in emails: a sign-in code or verification link would let it sign in
+as the user. Every email-service response, and the storage service's REST
+`/items` and `/search` responses, pass `rewrite_program_json` with
+`models_email::sign_in_email::hide_sign_in_emails`, which replaces the
+subject, snippet, body, headers and search highlights of any message or
+thread from a sign-in sender. `GET /email/messages/{id}/eml` refuses such a
+message, and GraphQL refuses programs. A person reads the email whole.
+
 ## Agent program sends
 
 An agent's program (a token with agent attribution, or a code-mode request
