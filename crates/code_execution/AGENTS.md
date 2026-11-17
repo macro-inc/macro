@@ -44,6 +44,19 @@ credential, so the header is what refuses a program there.
 
 A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
 
+A run whose `RunEnvironment::egress` is `Egress::Proxied` reaches the hosts
+only through a loopback forwarder the runner starts for it
+(`src/outbound/deno/egress.rs`): `--allow-net` names only that listener.
+The child keeps the real hosts, which the links it builds need, and its
+fetch sends a request to a host's base to that service under the forwarder
+(`forwarder` in the child's context, `http://127.0.0.1:<port>/<service>`).
+The forwarder sets the mark and trace context itself, outside the realm, drops
+the ones the program set, follows no redirects and records a
+`code_execution.egress` span per request. It stops when the run ends, is
+cancelled or times out. The agent harness picks it per user with the
+fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
+default) is the old path.
+
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
