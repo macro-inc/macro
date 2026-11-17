@@ -41,7 +41,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/chats", post(chats))
         .route("/channels", post(channels))
         .route("/documents", post(documents))
-        .route("/email_attachment_status", post(email_attachment_status))
+        .route("/email-attachment-status", post(email_attachment_status))
         .route("/emails", post(emails))
         .route("/properties", post(properties))
         .route("/projects", post(projects))

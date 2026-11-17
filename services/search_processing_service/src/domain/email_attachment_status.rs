@@ -67,7 +67,7 @@ impl TryFrom<u16> for PageSize {
     }
 }
 
-/// Body of `POST /internal/backfill/email_attachment_status`.
+/// Body of `POST /internal/backfill/email-attachment-status`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EmailAttachmentStatusBackfillRequest {

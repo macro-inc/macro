@@ -145,7 +145,7 @@ So the flow for a new field is:
    mapping existed pick the field up. A field with its own partial-update
    backfill uses that instead of re-extracting every document:
    `is_email_attachment` on `documents` uses
-   `POST /internal/backfill/email_attachment_status` (see that service's
+   `POST /internal/backfill/email-attachment-status` (see that service's
    README).
 4. Confirm with `bun scripts/verify_mappings.ts`.
 
