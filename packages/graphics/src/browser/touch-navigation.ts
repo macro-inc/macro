@@ -9,10 +9,57 @@ const PINCH_WINDOW_MS = 160;
 /** How long one finger rests before it is a long press, and how far it may drift. */
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP_PX = 10;
+/** How long after a long press lifts the browser's click for it may still come. */
+const LIFT_CLICK_MS = 500;
 
 const insideEditableText = (target: Element) =>
   target.closest('[contenteditable]')?.getAttribute('contenteditable') ===
   'true';
+
+/**
+ * A browser clicks whatever is under a finger as it lifts. Under a finger that
+ * long-pressed, that is what the host opened for the press (a menu, with a row
+ * there), and the browser clicks it although the press itself was cancelled.
+ * The lift belongs to the long press, so the mouse events and the click the
+ * browser makes for it stop here. A script's own `click()` is not the finger's
+ * and passes.
+ *
+ * Not every lift is followed by a click: a browser sends none once the hold is
+ * too long to be a tap. So this ends with the click, with the next press or
+ * key, or a moment after the lift, whichever comes first.
+ */
+function swallowLiftClick() {
+  const listening = new AbortController();
+  const { signal } = listening;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    clearTimeout(timer);
+    listening.abort();
+  };
+  const swallow = (event: Event) => {
+    if (!event.isTrusted) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.type === 'click') stop();
+  };
+  for (const type of ['mousedown', 'mouseup', 'click'])
+    window.addEventListener(type, swallow, { capture: true, signal });
+  window.addEventListener('keydown', stop, { capture: true, signal });
+  return {
+    /** The finger is up: its click comes now or not at all. */
+    lifted() {
+      if (!signal.aborted) timer ??= setTimeout(stop, LIFT_CLICK_MS);
+    },
+    /**
+     * A press is its own, and so is what it clicks. A finger landing beside
+     * the one that long-pressed is not a new press: that one has yet to lift.
+     */
+    pressed(event: PointerEvent) {
+      if (timer !== undefined || event.isPrimary) stop();
+    },
+    stop,
+  };
+}
 
 /**
  * Two fingers navigate, whatever the tool: their midpoint pans the camera and
@@ -29,7 +76,7 @@ const insideEditableText = (target: Element) =>
  *
  * One finger held still is a long press when the host has a use for it. It
  * voids the first finger's gesture the same way, and the finger then does
- * nothing more until it lifts.
+ * nothing more: not before it lifts, and not by lifting.
  *
  * The listeners sit on the window's capture phase so they see every touch on
  * the surface, including the ones a tool handler stops from propagating.
@@ -66,6 +113,8 @@ export function attachTouchNavigation(
     if (longPress) clearTimeout(longPress.timer);
     longPress = undefined;
   };
+  // What the lift of the last long press would click.
+  let liftClick: ReturnType<typeof swallowLiftClick> | undefined;
 
   const glide = createGlide((delta) => {
     editor.panBy(delta);
@@ -194,6 +243,7 @@ export function attachTouchNavigation(
   const pointerDown = (event: PointerEvent) => {
     // Any press catches a glide in flight.
     glide.cancel();
+    liftClick?.pressed(event);
     const target = event.target;
     if (!(target instanceof Element) || !element.contains(target)) return;
     if (event.pointerType !== 'touch') {
@@ -229,6 +279,7 @@ export function attachTouchNavigation(
         // nor begins anything else before it lifts.
         navigating = true;
         voidSingleFingerGesture();
+        liftClick = swallowLiftClick();
         onLongPress(point);
       };
       longPress = {
@@ -298,6 +349,7 @@ export function attachTouchNavigation(
     if (touches.size) return;
 
     navigating = false;
+    liftClick?.lifted();
     const flicked =
       !cancelled &&
       event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS &&
@@ -342,6 +394,7 @@ export function attachTouchNavigation(
       glide.cancel();
       dropFrame();
       cancelLongPress();
+      liftClick?.stop();
       window.removeEventListener('pointerdown', pointerDown, true);
       window.removeEventListener('pointermove', pointerMove, true);
       window.removeEventListener('pointerup', pointerEnd, true);
