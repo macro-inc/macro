@@ -82,6 +82,8 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Install catalog dependencies
+      run: bun install --frozen-lockfile
     - name: Editor Loro with native-editor off matches crates.io 1.17.1
       run: just check-loro-editor-vendor
     - name: native-editor stays out of server dependency graphs
@@ -90,8 +92,6 @@ jobs:
       run: just test-loro-servers-upstream
     - name: Editor Loro with native-editor matches crates.io 1.17.1
       run: just test-loro-editor-differential
-    - name: Install catalog dependencies
-      run: bun install --frozen-lockfile
     - name: Native projection and catalog Loro compatibility
       run: PROPTEST_CASES=64 cargo test --locked -p lexical_loro -j4
     - name: Teardown Nix

@@ -46,6 +46,10 @@ pub fn loro_pair() -> Workflow {
                 .add_step(steps::setup_nix())
                 .add_step(steps::setup_dev_shell())
                 .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+                // The server gate and lexical_loro tests run Bun oracles over the workspace packages.
+                .add_step(
+                    Step::new("Install catalog dependencies").run("bun install --frozen-lockfile"),
+                )
                 // With native-editor off, the editor copy is crates.io 1.17.1.
                 .add_step(
                     Step::new("Editor Loro with native-editor off matches crates.io 1.17.1")
@@ -64,9 +68,6 @@ pub fn loro_pair() -> Workflow {
                 .add_step(
                     Step::new("Editor Loro with native-editor matches crates.io 1.17.1")
                         .run("just test-loro-editor-differential"),
-                )
-                .add_step(
-                    Step::new("Install catalog dependencies").run("bun install --frozen-lockfile"),
                 )
                 .add_step(
                     Step::new("Native projection and catalog Loro compatibility")
