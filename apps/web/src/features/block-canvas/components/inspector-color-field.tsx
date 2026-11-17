@@ -26,33 +26,37 @@ function SwatchRow(props: {
   value: string | undefined;
   onPick: (color: string) => void;
 }) {
-  const colors = () => [
-    ...swatches,
+  // Listed by value, so a swatch keeps its button (and the focus on it) when
+  // picking it changes the canvas's colours.
+  const values = () => [
+    ...swatches.map((color) => color.value),
     // The canvas's own colours that the palette does not already offer.
-    ...props.canvasColors
-      .filter((value) => !swatches.some((color) => color.value === value))
-      .map((value) => ({ label: value, value })),
+    ...props.canvasColors.filter(
+      (value) => !swatches.some((color) => color.value === value)
+    ),
   ];
+  const label = (value: string) =>
+    swatches.find((color) => color.value === value)?.label ?? value;
   return (
     <div
       role="group"
       aria-label={`${props.label} colors`}
       class="-mx-1 flex gap-2 overflow-x-auto overscroll-x-contain px-1 py-1 scrollbar-hidden"
     >
-      <For each={colors()}>
-        {(color) => (
+      <For each={values()}>
+        {(value) => (
           <button
             type="button"
-            aria-label={`${props.label}: ${color.label}`}
-            aria-pressed={props.value === color.value}
+            aria-label={`${props.label}: ${label(value)}`}
+            aria-pressed={props.value === value}
             class="grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ink-muted"
-            onClick={() => props.onPick(color.value)}
+            onClick={() => props.onPick(value)}
           >
             <span
-              class="grid size-8 place-items-center rounded-full border border-ink/10 text-xs text-ink-muted ring-offset-2 ring-offset-surface in-aria-pressed:ring-2 in-aria-pressed:ring-ink"
-              style={{ background: color.value }}
+              class="grid size-8 place-items-center rounded-full border border-ink/10 text-xs text-ink-muted ring-offset-2 ring-offset-menu in-aria-pressed:ring-2 in-aria-pressed:ring-ink"
+              style={{ background: value }}
             >
-              {color.value === 'transparent' ? '╱' : null}
+              {value === 'transparent' ? '╱' : null}
             </span>
           </button>
         )}

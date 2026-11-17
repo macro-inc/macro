@@ -433,8 +433,10 @@ test('a fill is picked from swatches in the sheet, with the shape still in view'
   expect(box?.height).toBeGreaterThanOrEqual(44);
   await accent.tap();
 
-  // The colour is on the shape, and nothing opened over it.
+  // The colour is on the shape, and no picker opened over it.
   await expect(accent).toHaveAttribute('aria-pressed', 'true');
+  const customPicker = page.getByRole('textbox', { name: 'hex' });
+  await expect(customPicker).toHaveCount(0);
   const fill = await page.evaluate(() => {
     const item = window.canvasTouchFixture.editor.document.items.filled;
     return item?.type === 'rectangle' ? item.appearance.fill : undefined;
@@ -450,7 +452,7 @@ test('a fill is picked from swatches in the sheet, with the shape still in view'
 
   // A custom colour is still one tap away.
   await sheet.getByRole('button', { name: 'Fill color picker' }).tap();
-  await expect(page.getByRole('textbox', { name: 'hex' })).toBeVisible();
+  await expect(customPicker).toBeVisible();
 });
 
 /** A pen going down or lifting: CDP sends a pen as a mouse of pointer type pen. */
