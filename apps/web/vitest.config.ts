@@ -160,6 +160,15 @@ export default defineConfig({
         },
       },
       {
+        // The coverage ledger of the email browser suite; the suite's own
+        // tests are `*.spec.ts` and run under Playwright.
+        extends: false,
+        test: {
+          include: ['tests/email-e2e/**/*.test.ts'],
+          name: 'email-e2e-ledger',
+        },
+      },
+      {
         extends: false,
         test: {
           environment: 'jsdom',

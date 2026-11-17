@@ -1087,9 +1087,12 @@ circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The task
 toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
-task accessible. On phones (touch, under 640px) Add existing tasks and New task
-show as icon buttons named by those labels and the open search field narrows, so
-the row fits from 320px wide without scrolling. Opening an associated task
+task accessible. On touch devices New task leaves the toolbar for the floating
+`+ Task` pill above the dock: on this tab it creates the task in this project,
+and people who can't edit the project get no pill. Elsewhere in Tasks, including
+the project's Overview, the pill creates a task with no project. On phones (touch, under 640px) Add existing tasks shows as an
+icon button named by its label and the open search field narrows, so the row fits
+from 320px wide without scrolling. Opening an associated task
 extends the breadcrumb trail; choose the project breadcrumb to return, or
 Projects to restore the collection and its filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
@@ -1177,7 +1180,8 @@ set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears
 once the task is created. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`; both actions use bordered buttons with a background. `Add existing
+`New task` (on touch, New task is the floating pill); both actions use bordered
+buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
 confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
 the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
@@ -1264,7 +1268,13 @@ GitHub instead.
 
 Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
-when opening the picker. Rows stay in place while selecting or deselecting.
+when opening the picker. Unsearched, it lists you, then team members, then agents
+with Macro first; the Tasks filter keeps the saved-view **Me** above you, and the
+other Assignee filters put **Unassigned** right after you. A search ranks names
+as the @ menu does, lists an agent only when its name or handle holds the typed
+words (not just their letters scattered), and never above a person whose name
+matches as well. Team-member limits on the list never hide agents. The rule lives
+in `@core/user/people-before-agents`. Rows stay in place while selecting or deselecting.
 Initially selected outsiders remain visible and removable, including references
 absent from contacts. They stay searchable for re-adding while the record stays
 mounted, even after the picker closes. Unrelated non-team contacts stay excluded.

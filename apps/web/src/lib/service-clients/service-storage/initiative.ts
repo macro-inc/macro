@@ -196,12 +196,16 @@ export function createInitiativeClient(
   }
   return {
     get: (id: string, signal?: AbortSignal) =>
-      catchToResult(async () =>
-        mapInitiativeDetail(
-          (await query(InitiativeDocument, { initiativeId: id }, signal)).user
-            .initiative
-        )
-      ),
+      catchToResult(async () => {
+        const project = (
+          await query(InitiativeDocument, { initiativeId: id }, signal)
+        ).user.visibleInitiative;
+        if (!project)
+          throw new ThrownResultError([
+            { code: 'NOT_FOUND', message: 'initiative not found' },
+          ]);
+        return mapInitiativeDetail(project);
+      }),
     create: (input: CreateInitiativeInput) =>
       catchToResult(async () =>
         mapInitiativeDetail(

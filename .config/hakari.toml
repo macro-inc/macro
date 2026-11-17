@@ -55,6 +55,7 @@ workspace-members = [
     "xtask_graphql_schema_compat",
     "xtask_kafka_topics",
     "xtask_workflows",
+    "xtask_email_coverage",
     "xtask_local",
     "xtask_ports",
     "xtask_local_telemetry",

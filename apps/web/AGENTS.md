@@ -50,6 +50,14 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
+- Email and calendar against the real email services and the Gmail and Outlook
+  emulators, in a built bundle in Chromium: `just email-e2e-browser` from the
+  repository root (`tests/email-e2e/README.md`). `just email-e2e-full-stack`
+  runs its tests tagged `@any-stack` or `@full-stack` against a local stack
+  instance, through the real gateway and sign-in; it clears the sign-up
+  counter in that instance's Redis (README, "The full-stack tier"). Add a test there for an email
+  bug only the whole path can decide; one component's logic stays in its
+  feature's `browser-test/` suite.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 - Supported browsers are the `browserslist` in `package.json`. Safari and iOS
   16.4 is the oldest WebKit the app starts on: startup code, including
@@ -289,11 +297,14 @@ field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
 the search in the field and clears it from the list after a selection.
 
-A project's Tasks header keeps search, filters, Add existing tasks and New task on
-screen at 320–430px phone widths, with search closed and open, by collapsing both
-actions to icons and narrowing the open search on phones only; tablet and desktop
-keep the labels. Its backend-free regression renders the real row with a stand-in
-for the task filters (the real phone filter trigger, one button on desktop):
+A project's Tasks header keeps search, filters and Add existing tasks on screen at
+320–430px phone widths, with search closed and open, by collapsing Add existing
+tasks to an icon and narrowing the open search on phones only; tablet and desktop
+keep the labels. On touch, New task is the project's own floating `+ Task`
+pill, which replaces the Tasks view's (that one creates outside any project), and
+read-only viewers get none. Its backend-free regression renders the real row and
+float host with a stand-in for the task filters (the real phone filter trigger,
+one button on desktop) and for the Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
@@ -454,7 +465,8 @@ Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
 meter on every row except on phones, with the direction in its label while
-importance moves:
+importance moves, and a preview cut short ending in an ellipsis (its box must
+not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
@@ -854,8 +866,10 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
-Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
+Project identity chips use cache-first reads and the shared `GraphqlUser.visibleInitiative`
 entity resolver to reuse complete authorized records from project lists or details.
+A missing or hidden project reads as `null`, and a cached null outranks a record
+that arrives later, so project reads ask the server once before showing it.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
@@ -1872,6 +1886,11 @@ people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
+Order assignee menus and @ mention People rows with `@core/user/people-before-agents`:
+you, other people, then agents with Macro first. While searching, rank with
+`NAME_MATCH_RANKING`; an agent needs the typed words, not scattered letters, and never ranks
+above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
+don't boost bots in a menu's search score.
 
 ### Tag picker selection and creation
 
