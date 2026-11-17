@@ -257,7 +257,7 @@ export function RowIndicator(props: {
   );
 }
 
-/** `hidden` keeps the line's pixel, so the row's height doesn't change. */
+/** `hidden` keeps the line's pixel for a line the row draws itself. */
 export function InboxDivider(props: { hidden?: boolean }) {
   return (
     <div

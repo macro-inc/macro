@@ -108,8 +108,8 @@ export function NarrowEmailLayout(
         setContainerRef={props.setSnippetContainerRef}
         previewLeading={props.previewLeading}
       />
-      {/* A lifted Classic row's own edge already separates it. */}
-      <InboxDivider hidden={props.classic && props.unread} />
+      {/* Classic rows draw their wall-to-wall line over this pixel. */}
+      <InboxDivider hidden={props.classic} />
     </Entity.Layout>
   );
 }

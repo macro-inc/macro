@@ -211,8 +211,8 @@ export function NarrowInboxLayout(props: LayoutProps) {
           <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
         </Match>
       </Switch>
-      {/* A lifted Classic row's own edge already separates it. */}
-      <InboxDivider hidden={props.classic && props.unread} />
+      {/* Classic rows draw their wall-to-wall line over this pixel. */}
+      <InboxDivider hidden={props.classic} />
     </Entity.Layout>
   );
 }

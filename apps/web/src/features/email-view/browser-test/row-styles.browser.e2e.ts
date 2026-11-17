@@ -150,23 +150,63 @@ for (const size of SIZES) {
       });
     }
 
-    test('Classic draws a faint line under each read row', async ({ page }) => {
+    test('Classic rows share one faint line, read or unread', async ({
+      page,
+    }) => {
       test.skip(phone);
       await open(page, 'classic');
-      const lineUnder = (id: string) =>
-        rowSurface(page, id).evaluate((root, wide) => {
-          if (wide) {
-            const after = getComputedStyle(root, '::after');
-            return after.content === 'none' ? null : after.height;
-          }
-          const divider = root.querySelector('.bg-edge-divider');
-          return divider ? `${divider.getBoundingClientRect().height}px` : null;
-        }, size.wide);
+      const ORDER = [
+        'unread-1',
+        'unread-2',
+        'read-1',
+        'unread-3',
+        'read-2',
+        'read-3',
+        'unread-4',
+        'read-4',
+      ];
+      const edges = async (id: string) =>
+        rowSurface(page, id).evaluate((root) => {
+          const style = getComputedStyle(root);
+          const line = getComputedStyle(root, '::after');
+          const box = root.getBoundingClientRect();
+          // Lines the row paints itself, besides the shared one.
+          const ownLines = [...root.querySelectorAll('*')].filter((node) => {
+            const own = getComputedStyle(node);
+            return (
+              own.visibility !== 'hidden' &&
+              own.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+              node.getBoundingClientRect().height <= 1
+            );
+          }).length;
+          return {
+            top: box.top,
+            bottom: box.bottom,
+            borders: `${style.borderTopWidth} ${style.borderBottomWidth}`,
+            shadow: style.boxShadow,
+            line: line.content === 'none' ? null : line.height,
+            lineColor: line.backgroundColor,
+            lineWidth: line.width,
+            rowWidth: `${box.width}px`,
+            ownLines,
+          };
+        });
 
-      expect(await lineUnder('read-2')).toBe('1px');
-      expect(await lineUnder('read-3')).toBe('1px');
-      // A lifted row's own edge separates it.
-      expect(await lineUnder('unread-1')).toBeNull();
+      const rows = [];
+      for (const id of ORDER) rows.push(await edges(id));
+      for (const [index, row] of rows.entries()) {
+        // No border or shadow of its own: only the line under it.
+        expect(row.borders).toBe('0px 0px');
+        expect(row.shadow).toBe('none');
+        expect(row.ownLines).toBe(0);
+        expect(row.line).toBe('1px');
+        expect(row.lineColor).toBe(rows[0].lineColor);
+        // Wall to wall.
+        expect(row.lineWidth).toBe(row.rowWidth);
+        // Each row starts where the one above ends, so the pair shares it.
+        const next = rows[index + 1];
+        if (next) expect(next.top).toBe(row.bottom);
+      }
     });
 
     test('Classic checkboxes select without opening; rows still open', async ({

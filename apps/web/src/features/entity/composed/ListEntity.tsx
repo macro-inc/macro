@@ -285,7 +285,7 @@ export function ListEntity(props: ListEntityProps) {
       email: isEmailEntity(props.entity),
     });
 
-  // Classic rows run wall to wall too, square and edged only above and below.
+  // Classic rows run wall to wall too, square, with a line between rows.
   const fullBleed = () => isNarrowEmail() || classic();
 
   const mobileStacks = createMemo(() => {
@@ -327,22 +327,18 @@ export function ListEntity(props: ListEntityProps) {
         // Keep avatar-group separators in sync with the row background so they
         // blend into it instead of creating visible rings.
         '[--avatar-group-separator:var(--color-panel)]',
-        // Classic rows reserve the lifted surface's top and bottom border, so
-        // an unread row is as tall as a read one. Wide read rows draw the line
-        // between rows here; the stacked layouts already end in one
-        // (`InboxDivider`), and a lifted row's own edges separate it.
-        classic() && 'border-y border-transparent',
+        // Every Classic row ends in the same faint line, wall to wall, so
+        // each pair of rows shares exactly one, read or unread. It sits on
+        // the row's own last pixel, which the stacked layouts reserve with
+        // their (hidden) `InboxDivider`.
         classic() &&
-          isWide() &&
-          !unread() &&
-          'after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-edge-divider',
-        // The lifted surface of the sidebar's Accounts section (its fill, edge
-        // and control shadow), edged only above and below because it runs
-        // wall to wall. State fills below (selected, highlighted, hover) still
-        // win over it.
+          'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-divider',
+        // Unread rows are lifted onto the control surface of the sidebar's
+        // Accounts section, with no edge of their own beside the shared line.
+        // State fills below (selected, highlighted, hover) still win over it.
         classic() &&
           unread() &&
-          'bg-control border-edge-button not-touch:shadow-(--shadow-control) [--avatar-group-separator:var(--color-control)]',
+          'bg-control [--avatar-group-separator:var(--color-control)]',
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
