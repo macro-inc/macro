@@ -99,6 +99,7 @@ OFF-08	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVi
 OFF-09	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
 OFF-10	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-11	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-13	none: the build as it is, with the flag	failed: Error: expect(locator).toBeVisible() failed
 OFF-12	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OPEN-01	ledger/breaks/device-page-loses-a-message.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
 OPEN-01	ledger/breaks/page-loses-a-message.patch	failed: Error: the last messages in the list

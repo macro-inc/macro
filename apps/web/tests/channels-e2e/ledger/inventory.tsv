@@ -59,6 +59,7 @@ device-open-offline	A channel the device holds opens whole with no connection, f
 device-not-held	A channel the device has never held says it cannot load offline and loads when the connection is back	OFF-02	
 device-slow-link	On a very slow connection a held channel shows at once and is brought up to date when the answer arrives	OFF-03	
 device-scroll-offline	History read while connected can be scrolled through offline; past the oldest held message the held ones stay	OFF-04,OFF-05	
+device-many-channels-offline	A held channel opens offline however many newer channels the person has	OFF-13	
 device-jump-offline	Going back to a link to an older held message opens at that message offline	OFF-12	
 device-threads-offline	Threads show their replies offline, long ones included	OFF-06,OFF-07	
 device-first-visit	A channel seen once and left at once is held; a message that arrived while it was open is held	OFF-09,OFF-10	

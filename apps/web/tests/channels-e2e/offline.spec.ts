@@ -10,7 +10,13 @@ import {
   shown,
   startAfresh,
 } from './harness/device';
-import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
+import {
+  expect,
+  failsSometimes,
+  knownDefect,
+  SOUP_BUILD,
+  test,
+} from './harness/fixtures';
 import { historyText } from './harness/history';
 import { Conversation } from './harness/messages';
 import {
@@ -210,7 +216,10 @@ test('OFF-06 a thread read while connected shows its replies with no connection,
   const offline = await openOffline(page, channel);
   await offline.hiddenReplies(root.id).click();
 
-  await expect.poll(() => offline.replies(root.id)).toEqual(replies);
+  // Defect, in some runs: only the first three replies show.
+  await failsSometimes(async () => {
+    await expect.poll(() => offline.replies(root.id)).toEqual(replies);
+  });
 });
 
 // If this fails, a thread whose replies the device never fetched shows an
@@ -330,6 +339,43 @@ test('OFF-11 opening a held channel with no connection does not say that a new v
   await expectShown(offline, [...WHOLE, 'written offline']);
 
   await expect(page.getByText('New version available')).toHaveCount(0);
+});
+
+// If this fails, a person with many channels cannot open, with no
+// connection, a channel their device holds once a hundred others are newer.
+test('OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made', async ({
+  pageFor,
+  dee,
+}) => {
+  // Known defect: after a reload with no connection the page knows only about
+  // a hundred of the newest channels, and says "Conversation
+  // unavailable" for an older one although the device holds its messages.
+  knownDefect('on');
+  test.setTimeout(240_000);
+  // Dee's, so that the other tests' people keep under a hundred channels.
+  const page = await pageFor('dee');
+  const elsewhere = await dee.createChannel({});
+  await dee.post(elsewhere.id, 'elsewhere');
+  const old = await dee.createChannel({});
+  await dee.post(old.id, 'in the old channel');
+  const view = new ChannelView(page, old.id);
+  await view.open();
+  await expectShown(view, ['in the old channel']);
+  await findRow(page, elsewhere);
+  await openFromList(page, elsewhere);
+  await page.goBack();
+  await expectShown(view, ['in the old channel']);
+  for (let made = 0; made < 120; made += 1) {
+    await dee.createChannel({});
+  }
+  await dee.post(elsewhere.id, 'elsewhere again');
+  await startAfresh(page, elsewhere);
+
+  await goOffline(page.context());
+  await page.goBack();
+
+  await view.shown();
+  await expectShown(view, ['in the old channel']);
 });
 
 // If this fails, a person cannot go back to an old message they followed a

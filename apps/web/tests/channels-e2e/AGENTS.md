@@ -103,3 +103,11 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - The Invite dialog's one row reads "Invite <address>" until the device's own
   list of people answers, then becomes that person's row, sometimes under the
   click: find the row by the address (`inviteByEmail`), not by that name.
+- With the flag, a page reloaded and then cut off knows only about a hundred
+  of its person's newest channels (OFF-13): a test repeated thirty times in
+  one run makes more than that, and the run's `history` channel then says
+  "Conversation unavailable" offline (OFF-04, OFF-12). Judge those two from
+  whole runs, or from repeats short enough to stay under a hundred channels.
+- Two people's first conversation exists once for the life of a stack, so
+  what happens the first time (DM-02) shows once for each cast on a new
+  stack and never on an old one: prove such a thing on a new stack.
