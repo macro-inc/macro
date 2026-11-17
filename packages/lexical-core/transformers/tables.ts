@@ -39,14 +39,18 @@ import {
   E_USER_MENTION,
   I_AGENT_SESSION_MENTION,
   I_BOOKING_LINK_MENTION,
+  I_CONNECT_APP,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_DOCUMENT_MENTION,
   I_GROUP_MENTION,
   I_PR_MENTION,
+  I_TAG_MENTION,
+  I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
 import { BR_TAG_TO_LINE_BREAK, HTML_ENTITY_TRANSFORMERS } from './transformers';
+import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO } from './video';
 
 // Internal Table Node
@@ -113,7 +117,14 @@ const HEADER_STATE_BY_ATTR: Record<string, TableCellHeaderState> = {
   both: TableCellHeaderStates.BOTH,
 };
 
-const CELL_ALIGNMENTS = ['left', 'center', 'right', 'start', 'end'] as const;
+const CELL_ALIGNMENTS = [
+  'left',
+  'center',
+  'right',
+  'start',
+  'end',
+  'justify',
+] as const;
 
 type CellAlignment = (typeof CELL_ALIGNMENTS)[number];
 
@@ -295,8 +306,8 @@ const externalTransformersWithinTables: Transformer[] = [
   ...TRANSFORMERS,
 ];
 
-// Agents write the in-app chip tags inside cells, as they do in prose. These
-// only import: a cell exports its chips as plain text, like a paragraph does.
+// Cells import every inline chip a paragraph imports, since agents write them
+// in cells too. These only import: a cell exports chips as a paragraph does.
 const importTransformersWithinTables: Transformer[] = [
   I_USER_MENTION,
   I_GROUP_MENTION,
@@ -304,8 +315,12 @@ const importTransformersWithinTables: Transformer[] = [
   I_PR_MENTION,
   I_BOOKING_LINK_MENTION,
   I_AGENT_SESSION_MENTION,
+  I_TAG_MENTION,
+  I_THEME_MENTION,
+  I_CONNECT_APP,
   I_EQUATION_NODE,
   ...externalTransformersWithinTables,
+  UNKNOWN_MENTION, // Last: the fallback for tags nothing above recognizes
 ];
 
 function getTableColumnsSize(table: TableNode): number {
@@ -326,11 +341,11 @@ function createTableCell(cellContent: string): TableCellNode {
   return cellNode;
 }
 
-// An inline `<m-…>` tag starting at `lastIndex`, up to its closing tag.
-const REG_EXP_XML_TAG_AT = /<(m-[\w-]+)(?:\s[^>]*)?>.*?<\/\1>/sy;
-// An inline code span starting at `lastIndex`.
-const REG_EXP_CODE_SPAN_AT = /(`+)(.*?[^`])\1(?!`)/sy;
-const REG_EXP_BACKTICKS_AT = /`+/y;
+// A complete inline `<m-…>{json}</m-…>` tag starting at `lastIndex`. Its body
+// may hold pipes (`macro|` user ids) but no other tag, so an unclosed tag
+// cannot swallow the cells after it.
+const REG_EXP_XML_TAG_AT =
+  /<(m-[\w-]+)(?:\s[^>]*)?>\{(?:(?!<\/?m-)[^\n])*?\}<\/\1>/y;
 
 function matchAt(regExp: RegExp, text: string, index: number): string | null {
   regExp.lastIndex = index;
@@ -338,12 +353,11 @@ function matchAt(regExp: RegExp, text: string, index: number): string | null {
 }
 
 /**
- * Splits the inside of a pipe-table row into raw cell strings. A pipe does
- * not separate cells when escaped (`\|`, unescaped here as in GFM), inside an
- * inline code span, or inside an `<m-…>` tag, whose JSON carries `macro|`
- * user ids.
+ * Splits the inside of a pipe-table row into raw cell strings. As in GFM, a
+ * pipe separates cells unless escaped (`\|`, unescaped here), code spans
+ * included; it also stays inside a complete `<m-…>` tag.
  */
-export function splitTableRow(row: string): string[] {
+function splitTableRow(row: string): string[] {
   const cells: string[] = [];
   let cell = '';
   let index = 0;
@@ -362,16 +376,9 @@ export function splitTableRow(row: string): string[] {
       continue;
     }
     const tag = char === '<' ? matchAt(REG_EXP_XML_TAG_AT, row, index) : null;
-    const code =
-      char === '`'
-        ? (matchAt(REG_EXP_CODE_SPAN_AT, row, index) ??
-          matchAt(REG_EXP_BACKTICKS_AT, row, index))
-        : null;
-    const span = tag ?? code;
-    if (span) {
-      // GFM unescapes `\|` inside a code span in a table cell.
-      cell += code ? span.replaceAll('\\|', '|') : span;
-      index += span.length;
+    if (tag) {
+      cell += tag;
+      index += tag.length;
       continue;
     }
     cell += char;
@@ -438,6 +445,11 @@ function delimiterFor(format: ElementFormatType): string {
     .otherwise(() => '---');
 }
 
+/** Aligns a cell unless it already has an alignment of its own. */
+function $alignCell(cell: TableCellNode, alignment: ElementFormatType) {
+  if (cell.getFormatType() === '') cell.setFormat(alignment);
+}
+
 /** Gives rows joining a table the alignment of their column's header cell. */
 function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
   const header = table.getFirstChild();
@@ -453,7 +465,7 @@ function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
       .getChildren()
       .filter($isTableCellNode)
       .forEach((cell, column) => {
-        cell.setFormat(headerCells[column]?.getFormatType() ?? '');
+        $alignCell(cell, headerCells[column]?.getFormatType() ?? '');
       });
   }
 }
@@ -509,21 +521,18 @@ export const E_TABLE_NODE: ElementTransformer = {
     return output.join('\n');
   },
   replace: (parentNode, _unused, match) => {
-    if (REG_EXP_TABLE_ROW_DIVIDER.test(match[0])) {
-      const table = parentNode.getPreviousSibling();
-      if (!$isTableNode(table)) {
-        return;
-      }
-      parentNode.remove();
-      // Only a delimiter right after the first row makes that row the header;
-      // tables without one load as body rows.
-      if (table.getChildrenSize() !== 1) {
-        return;
-      }
-      const headerRow = table.getFirstChild();
-      if (!$isTableRowNode(headerRow)) {
-        return;
-      }
+    // A delimiter right after a table's first row makes that row the header.
+    // Anywhere else a delimiter-looking line imports as an ordinary row.
+    const tableAbove = parentNode.getPreviousSibling();
+    const headerRow = $isTableNode(tableAbove)
+      ? tableAbove.getFirstChild()
+      : null;
+    if (
+      REG_EXP_TABLE_ROW_DIVIDER.test(match[0]) &&
+      $isTableNode(tableAbove) &&
+      tableAbove.getChildrenSize() === 1 &&
+      $isTableRowNode(headerRow)
+    ) {
       const alignments = columnAlignments(match[0]);
       headerRow
         .getChildren()
@@ -533,8 +542,10 @@ export const E_TABLE_NODE: ElementTransformer = {
             TableCellHeaderStates.ROW,
             TableCellHeaderStates.ROW
           );
-          cell.setFormat(alignments[column] ?? '');
+          $alignCell(cell, alignments[column] ?? '');
         });
+      tableAbove.selectEnd();
+      parentNode.remove();
       return;
     }
 
@@ -591,11 +602,13 @@ export const E_TABLE_NODE: ElementTransformer = {
       const rows = table.getChildren().filter($isTableRowNode);
       previousSibling.append(...rows);
       $alignToHeader(previousSibling, rows);
+      // Move the selection before removing the line it sits in.
+      previousSibling.selectEnd();
       parentNode.remove();
-    } else {
-      parentNode.replace(table);
+      return;
     }
 
+    parentNode.replace(table);
     table.selectEnd();
   },
 };
