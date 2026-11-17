@@ -137,7 +137,8 @@ impl RigTurnEngine {
 /// turn already got, spend nobody's access.
 const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
-/// A turn's tools, each call to one of Macro's own asked of the gate first.
+/// A turn's tools, each call to one of Macro's own asked of the gate first,
+/// those that use nobody's access included.
 /// Remote MCP tools are left to the egress proxy, which gates them already.
 struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
@@ -161,9 +162,29 @@ where
         Box::pin(async move {
             let mut request_context = request_context;
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
-                && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
-            let arguments = if native {
+                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
+            // A native tool that uses nobody's access (looking things up on
+            // the web, Macro's help) takes no account and waits for nobody,
+            // but still asks the gate: a scoped session's gate refuses it.
+            let spends_owner_access =
+                native && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+            if native && !spends_owner_access {
+                let verdict = check_unless_cancelled(
+                    self.gate.as_ref(),
+                    &request_context.cancel,
+                    self.session,
+                    tool_name,
+                    json,
+                )
+                .await;
+                if let NativeToolVerdict::Refuse(reason) = verdict {
+                    return Ok(Err(ai_toolset::ToolCallError {
+                        internal_error: anyhow::anyhow!("{tool_name} was not approved"),
+                        description: reason,
+                    }));
+                }
+            }
+            let arguments = if spends_owner_access {
                 let _waiting = self.awaiting.begin();
                 let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
                     NativeToolVerdict::Run

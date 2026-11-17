@@ -67,6 +67,10 @@ milliseconds instead of waiting on container provisioning.
 
 Native user tools bypass the ordinary gate only when the final-draft review
 finisher is installed; otherwise dispatch must resolve their actor normally.
+Native tools that use nobody's access (`WebSearch`, `WebFetch`,
+`SelfKnowledge`) take no `acting_as` and wait for nobody, but still ask the
+gate: the harness's scoped gate refuses them in suggestion generations and
+runs that send nothing.
 
 Session tool schemas require `acting_as: requester | owner` for tools using
 account access, including deferred tools. The gate resolves the selected account

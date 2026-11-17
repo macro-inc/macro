@@ -685,3 +685,98 @@ async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval
         "nobody is left waiting to act on a later approval"
     );
 }
+
+/// Records every call it is handed with its arguments, and answers each
+/// with its name.
+#[derive(Default)]
+struct RecordingTools(Mutex<Vec<(String, serde_json::Value)>>);
+
+impl AiToolSet<String> for RecordingTools {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        _: String,
+        _: RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> ai_toolset::ToolCallFuture<'a> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((tool_name.to_owned(), json.clone()));
+        Box::pin(async move { Ok(Ok(serde_json::json!(tool_name))) })
+    }
+
+    fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
+        None
+    }
+}
+
+/// Refuses the tools it names and remembers every tool it was asked about.
+struct RefusesTools {
+    refused: &'static [&'static str],
+    asked: Mutex<Vec<String>>,
+}
+
+impl NativeToolGate for RefusesTools {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        tool: &'a str,
+        _: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        self.asked.lock().unwrap().push(tool.to_owned());
+        let verdict = if self.refused.contains(&tool) {
+            NativeToolVerdict::Refuse("outside this session's scope".to_owned())
+        } else {
+            NativeToolVerdict::Run
+        };
+        Box::pin(async move { verdict })
+    }
+}
+
+/// A tool that uses nobody's access still asks the gate, so a scoped
+/// session's gate can refuse it; one it lets through runs with its
+/// arguments as they came, since it takes no account.
+#[tokio::test]
+async fn a_tool_that_uses_nobodys_access_still_asks_the_gate() {
+    let inner = Arc::new(RecordingTools::default());
+    let gate = Arc::new(RefusesTools {
+        refused: &["WebFetch"],
+        asked: Mutex::new(Vec::new()),
+    });
+    let tools = GatedToolSet {
+        tools: inner.clone(),
+        gate: gate.clone(),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+    };
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let fetch = serde_json::json!({"url": "https://example.com/?q=secret"});
+    let refused = tools
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(owner.clone()),
+            "WebFetch",
+            &fetch,
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(refused.description, "outside this session's scope");
+
+    let search = serde_json::json!({"query": "weather"});
+    let result = tools
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(owner),
+            "WebSearch",
+            &search,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result, serde_json::json!("WebSearch"));
+    assert_eq!(*gate.asked.lock().unwrap(), ["WebFetch", "WebSearch"]);
+    assert_eq!(*inner.0.lock().unwrap(), [("WebSearch".to_owned(), search)]);
+}

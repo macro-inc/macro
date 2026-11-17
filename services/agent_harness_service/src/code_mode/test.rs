@@ -155,6 +155,33 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// The tools that use nobody's access (the web, Macro's help) are outside
+/// every scope too: a run that sends nothing could send data out in a URL.
+#[tokio::test]
+async fn a_scoped_session_uses_no_web_or_help_tool() {
+    let gate = |scope| ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(scope)),
+    };
+    let session = AgentSessionId::new();
+    let args = serde_json::json!({});
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        for tool in ["WebSearch", "WebFetch", "SelfKnowledge"] {
+            assert!(
+                matches!(
+                    gate(Some(scope)).check(session, tool, &args).await,
+                    NativeToolVerdict::Refuse(_)
+                ),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    assert_eq!(
+        gate(None).check(session, "WebFetch", &args).await,
+        NativeToolVerdict::Run
+    );
+}
+
 /// An SDK operation's path with every parameter filled in.
 fn concrete(path: &str) -> String {
     path.split('/')
