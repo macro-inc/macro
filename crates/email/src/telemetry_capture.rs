@@ -52,6 +52,11 @@ impl Telemetry {
             .collect()
     }
 
+    /// Every closed span with its name, oldest first.
+    pub(crate) fn all_spans(&self) -> Vec<(&'static str, Fields)> {
+        self.0.lock().unwrap().spans.clone()
+    }
+
     /// Events whose message is `message`, with their level.
     pub(crate) fn events(&self, message: &str) -> Vec<(tracing::Level, Fields)> {
         let captured = self.0.lock().unwrap();

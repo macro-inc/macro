@@ -99,7 +99,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, input))]
+    #[tracing::instrument(err, skip(self, macro_id, input))]
     pub(crate) async fn save_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -240,7 +240,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, macro_id))]
     pub(crate) async fn delete_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
