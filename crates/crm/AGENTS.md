@@ -82,8 +82,12 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Selected-email policy types live in `domain/email_rules.rs`; their validation
   checks format/resource bounds only. Target authorization and activation are
-  separate operations. Dormant selected storage keeps legacy `enabled` false;
-  never treat that bit as the effective selected consent or bypass its guards.
+  separate operations. Selected storage keeps legacy `enabled` false;
+  recognize `enabled OR selected_enabled` for compatible grant readers without
+  bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
+  and inlined Team reader in parity; live contact/company selectors follow
+  same-team role visibility and retain every exclusion veto. Activation remains
+  unavailable until the policy API and generation-safe backfill are ready.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 

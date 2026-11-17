@@ -2,7 +2,7 @@
 
 Status: implementation in phases. The product direction is direct agent
 activation, whole-thread matching, live contact/company selectors and retained
-CRM records after narrowing. Source observations are from `203e2f82320`.
+CRM records after narrowing. Source observations are from `e417be81d6`.
 The first phase supplies dormant storage and compatibility guards; selected
 contribution must remain unavailable until every eligibility path is upgraded.
 
@@ -488,7 +488,17 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    update `crm_email_thread_allowed`, set-based ingestion and the inlined Team
    reader together, plus compatible consent readers. Reuse its veto, add indexed
    live-target joins/reverse references and parity/performance evidence. Still
-   expose no selected activation. Base new migrations after the latest merged
+   expose no selected activation. The migration asserts that no selected-mode
+   consent exists before replacing the function, making the old-inline-reader
+   deployment assumption executable. The Team reader retains its shared
+   ten-second deadline; ingestion admission and rechecks use a fifteen-second
+   statement timeout. Sparse policies probe positive targets before record
+   history; live domains resolve against scoped mailbox contacts once
+   per page, and fenced participant lookups reuse existing indexes. Resolve
+   contribution modes inside the optimized Team snapshot; all-mail-only pages
+   keep their existing SQL without selected-rule work. Test both directions
+   of a concurrent mode change across resolution, probe and page.
+   Base new migrations after the latest merged
    dependency; never change an applied migration.
 3. **Policy API and historical work.** First add forward-compatible incarnation
    storage/initialization and fence idempotency and historical-work completion
@@ -503,9 +513,13 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    registry entry and responsive presentation. Coordinate with the existing
    privacy SDK task. Depends on PR 3; regenerate storage SDK conflicts.
 5. **Rollout hardening and readiness.** Integration/parity/performance tests,
-   mixed-version drills, concurrent source edits/backfill recovery, flag-off and
-   rollback checks, operational counters and rollout runbook. Depends on all
-   prior PRs. Enabling flags or deployment requires separate authorization.
+   mixed-version drills, mixed sparse/dense policies across contributors,
+   concurrent source edits/backfill recovery, flag-off and
+   rollback checks, operational counters and rollout runbook. Measure the
+   **1m-thread mailbox tier before activation**, including sparse selections,
+   large live targets and fresh/stale custom/generic plans; the eligibility
+   phase does not establish that tier's budget. Depends on all prior PRs.
+   Enabling flags or deployment requires separate authorization.
 
 ## Remaining implementation questions
 

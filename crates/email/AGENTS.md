@@ -67,6 +67,9 @@ tools — hexagonal, heavily feature-gated.
   Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
+- `src/outbound/email_pg_repo/dynamic/filters/address_queries.rs`: shared
+  address-index streams for owned and Team reads; Team selection queries live
+  beside `dynamic/query/team_scope.rs`.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
@@ -193,8 +196,10 @@ tools — hexagonal, heavily feature-gated.
   mailbox-fact checks are planned with the messages. Optimized Team probes
   and pages share a read-only repeatable-read snapshot, as Owned reads do,
   so imports cannot outgrow the probe's cap between statements; privacy changes
-  committed mid-request apply to the next request. General reads keep their
-  existing transaction.
+  committed mid-request apply to the next request. Resolve contribution modes
+  in that snapshot too. If none of the requested contributors uses selected
+  mode, keep the all-mail probe/page SQL without selected-rule work. General
+  reads keep their existing page transaction.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -258,12 +263,25 @@ tools — hexagonal, heavily feature-gated.
   whole stream before the LIMIT, and keep the superset stream's lookup by id
   (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
   inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
-  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
+  scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
-  them together. Apply `crm_email_thread_excluded` to both the candidate and
-  competing copies; a copy stays only when no better copy passes the same checks,
+  them together. Selected mode also resolves the active policy's live targets
+  once per page, retaining bounded IDs for per-thread indexed probes. Its
+  positive-target probe runs before the record probe and
+  resolves live company domains once against each selected mailbox's
+  contacts. All-mail-only reads retain their existing candidate path.
+  Keep selected-policy contact resolution within the requested mailboxes;
+  record probes and sparse pages reuse the shared indexed sender/recipient
+  branches. Positive-target discovery probes participants by their IDs. Do not
+  add a redundant mailbox condition inside a sender lookup; contacts already
+  scope it, and the competing index can scan the entire mailbox. All statements share
+  the ten-second deadline. The three-way selected parity suite compares the
+  real scalar, ingestion SQL and inline rule, including whole-thread matches
+  and hidden/deleted live targets. Apply `crm_email_thread_excluded` to both the
+  candidate and competing copies; a copy stays only when no better copy passes
+  the same checks,
   so the representative never depends on the cursor; `test/crm_team_read.rs`
   compares every stream with the general builder page by page. The superset
   keeps only the read inboxes' own contacts, because a message lists only its
