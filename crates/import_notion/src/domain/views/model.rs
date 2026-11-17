@@ -157,3 +157,19 @@ pub(super) fn column<'a>(
                 .find(|column| column.property_name == property)
         })
 }
+
+// View lists require their result array and pagination flag. The shared
+// search decoder deliberately tolerates omitted fields, which would turn a
+// malformed view response into an apparently empty set of saved presets.
+#[derive(Deserialize)]
+pub(crate) struct ViewList {
+    pub results: Vec<ViewReference>,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub request_status: Option<Value>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ViewReference {
+    pub id: NotionId,
+}

@@ -18,7 +18,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{NotionApi, NotionError};
 
-use crate::domain::views::{NotionView, ViewScope};
+use crate::domain::views::{NotionView, ViewList, ViewScope};
 
 mod wire;
 
@@ -424,29 +424,23 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
         scope: &ViewScope,
         cursor: Option<String>,
     ) -> Result<Paged<NotionId>, NotionError> {
-        let list: WireList = self
+        let list: ViewList = self
             .request(NotionRead::ListViews {
                 scope: scope.clone(),
                 cursor,
             })
             .await?;
-        if list.incomplete() || (list.has_more && list.next_cursor.is_none()) {
+        let incomplete = list.request_status.as_ref().is_some_and(|status| {
+            status.get("type").and_then(serde_json::Value::as_str) != Some("complete")
+        });
+        if incomplete || (list.has_more && list.next_cursor.is_none()) {
             return Err(NotionError::Decode(
                 "view list is incomplete or missing its next cursor".to_owned(),
             ));
         }
-        let mut results = Vec::with_capacity(list.results.len());
-        for item in &list.results {
-            let id = item
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .and_then(NotionId::parse)
-                .ok_or_else(|| NotionError::Decode("view reference has no valid id".to_owned()))?;
-            results.push(id);
-        }
         Ok(Paged {
-            results,
-            next_cursor: list.next(),
+            results: list.results.into_iter().map(|view| view.id).collect(),
+            next_cursor: list.next_cursor.filter(|_| list.has_more),
         })
     }
 

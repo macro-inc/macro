@@ -125,7 +125,6 @@ fn condition(value: &Value, columns: &[ViewColumnBinding]) -> Option<FilterNode>
         }
         "select" | "status" => binding.kind == ColumnKind::Select { multi: false },
         "multi_select" => binding.kind == ColumnKind::Select { multi: true },
-        "people" => matches!(binding.kind, ColumnKind::Entity { .. }),
         _ => false,
     };
     if !compatible {

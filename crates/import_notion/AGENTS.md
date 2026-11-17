@@ -86,7 +86,8 @@ maps a data source onto Macro database columns and cells
 - Table columns preserve order/width; Macro has no table column-hiding setting.
   Boards require single-select/single-person grouping; timelines require an
   imported date-range column. Unsupported settings, computed filters/sorts,
-  relative dates, timestamp sorts, and separate timeline end columns are
+  people predicates without a complete account mapping, relative dates,
+  timestamp sorts, and separate timeline end columns are
   reported as losses. The writer owns saved-view ids and name uniqueness.
 
 ## Related

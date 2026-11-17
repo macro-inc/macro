@@ -4,6 +4,7 @@ mod layout;
 mod model;
 mod translate;
 
+pub(crate) use model::ViewList;
 pub use model::*;
 pub use translate::{bindings, translate};
 

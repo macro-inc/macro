@@ -414,3 +414,33 @@ fn date_range_presence_is_valid_and_instant_predicates_report_a_loss() {
             .any(|loss| loss.kind == ViewLossKind::Filter)
     );
 }
+
+#[test]
+fn people_presence_cannot_assume_every_source_person_was_matched_to_macro() {
+    let view: NotionView = serde_json::from_value(json!({
+        "parent":{"type":"database_id", "database_id":"00000000-0000-4000-8000-000000000002"},
+        "id":"00000000-0000-4000-8000-000000000001", "name":"Assigned", "type":"table",
+        "data_source_id":"00000000-0000-4000-8000-000000000003",
+        "filter":{"property":"owner", "people":{"is_not_empty":true}}
+    }))
+    .unwrap();
+    let columns = vec![ViewColumnBinding {
+        property_id: "owner".into(),
+        property_name: "Owner".into(),
+        column: ColumnId::from_uuid(Uuid::from_u128(1)),
+        kind: ColumnKind::Entity {
+            target: models_databases::EntityKind::User,
+            multi: true,
+        },
+        options: BTreeMap::new(),
+        snapshot: false,
+    }];
+    let translated = translate(&view, &columns);
+    assert!(translated.view.query.filter.is_none());
+    assert!(
+        translated
+            .losses
+            .iter()
+            .any(|loss| loss.kind == ViewLossKind::Filter && loss.path == "filter")
+    );
+}
