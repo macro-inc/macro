@@ -795,7 +795,7 @@ impl BootStubEnv {
             "local-account-link-state-secret-0123456789".into(),
         );
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
-        env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
+        env.insert("STRIPE_PRICE_ID".into(), "price_local".into());
         env.insert(
             "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID".into(),
             "price_local_computer_standard_monthly".into(),
