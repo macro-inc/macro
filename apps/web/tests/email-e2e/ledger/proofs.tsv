@@ -234,8 +234,8 @@ AL-101	The tutorial row's button (TutorialRowView in TutorialEntries.tsx) loses 
 AL-102	The tutorial row's Dismiss button (TutorialRowView in TutorialEntries.tsx) gets a handler that does nothing instead of onDismiss.
 AL-103	The ? hotkey's handler in GlobalHotkeys.tsx returns before toggling the keyboard shortcuts sheet.
 AL-104	the breadcrumb name at the list opens no menu of views
-AL-105	The email saved-view row (EmailSavedViewRow in email-saved-views.tsx) no longer calls selectSavedView when clicked.
-AL-106	The Saved views header's "New saved view" button in email-saved-views.tsx no longer opens the empty builder; the empty state's "Create view" button is untouched.
+AL-105	The email saved-view row (EmailSavedViewRow in email-saved-views.tsx) no longer calls selectSavedView when clicked. The touch sidebar sheet lists the same rows: with the same break a tapped view closes the sheet but does not open.
+AL-106	The Saved views header's "New saved view" button in email-saved-views.tsx no longer opens the empty builder; the empty state's "Create view" button is untouched. The sheet's New saved view is that same header button, and with the break it opens no builder there either.
 AL-107	the changed view's Save view opens no dialog to name the view
 AL-108	the changed view's Revert keeps the changed filters
 AL-109	The saved-view builder's Name field in saved-view-dialog.tsx ignores what is typed into it, so the view is saved under the name the builder opened with.
@@ -244,13 +244,11 @@ AL-111	The email saved-view menu's "Edit" entry (EmailSavedViewMenuItems in emai
 AL-112	The email saved-view menu's "Duplicate" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder named "<name> (copy)".
 AL-113	The delete confirmation's "Delete view" button (DeleteSavedViewDialog in saved-view-dialogs.tsx) no longer calls the delete mutation; the menu entry that opens the confirmation is untouched.
 AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; the phone picker's Move up and Move down are untouched.
-AL-115	Move up in the phone picker's row menu moves nothing
 AL-116	Save changes on an edited saved view saves nothing
 AL-117	Reset on an edited saved view keeps the edits
 AL-118	Reload saved view after a refused save reloads nothing
 AL-119	Return to Email on a missing saved view goes nowhere
 AL-120	Retry loading views asks for nothing
-AL-121	the phone's views pill opens no drawer
 AL-122	the open thread's Back does not return to the list
 AL-123	Escape in an inline thread is swallowed: the escape hotkey EmailDetailView.tsx registers returns true before unwinding the thread or going back to the list.
 AL-124	j / ArrowRight and k / ArrowLeft in an open thread do nothing: the keyDownHandlers in use-list-navigation-hotkeys.ts still report the key handled but no longer call navigation.next() or previous().
@@ -367,8 +365,6 @@ AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects
 AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
 AL-700	Load more views loads nothing
 AL-701	the Saved views header does not fold the section
-AL-702	a view chosen in the phone drawer is not opened
-AL-703	Create view in the empty phone drawer opens nothing
 AL-704	a tag picked in the view builder is not added to the view
 AL-705	Advanced settings in the view builder shows nothing
 AL-706	Cancel in the view builder leaves it open
@@ -965,14 +961,13 @@ STL-700	not shown as the row says (toast with the reason the edits cannot be sav
 STL-701	The email saved-view row in email-saved-views.tsx is never marked selected, so the open view's row has no aria-current="page".
 STL-702	The desktop saved-views list in email-saved-views.tsx keeps showing its rows in the order they first loaded, ignoring both the pending move and the reordered list the server returns.
 STL-703	not shown as the row says ("Load more views" button, disabled while loading more): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
-STL-704	not shown as the row says (pill reads "Saved views"; active and named after the view while one is open): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-705	The saved-view builder's default title in saved-view-dialogs.tsx reads "View builder" instead of "Save view" or "Edit “<name>”".
 STL-706	not shown as the row says (submit disabled with an empty name or a definition that does not decode; "Saving…" while pending): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-707	not shown as the row says (alert with the save error inside the dialog): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
 STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-710	Deleting the open saved view in email-saved-views.tsx no longer calls leaveSavedView, so the list does not return to the tab it was opened from.
-STL-711	not shown as the row says (desktop row menus have no Move items; picker row menus have Move up / Move down (absent at either end)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-711	not shown as the row says (desktop row menus have no Move items; on touch the sheet's row menus have Move up / Move down (absent at either end)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.
