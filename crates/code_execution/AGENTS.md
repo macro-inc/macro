@@ -31,13 +31,13 @@ The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
 Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
-credential it carries; it is the only mark a run under a plain user
-token (public MCP) has. APIs that ask a program to
-confirm what a person picks by opening something read it; the calendar
-mutation routes demand the copy's `inbox` from such requests, the calendar
-create route refuses them, and the email send and schedule routes refuse
-them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`).
+credential it carries. It never overrides a signed claim: it counts only for a
+credential that signs no program. The calendar mutation routes demand the
+copy's `inbox` from every program run (`macro_authorization::is_program_run`);
+the calendar create route and the email send and schedule routes refuse agent
+runs (`macro_authorization::is_agent_run`) unless the send quotes the user's
+approval, so an owner routine step (signed `routine_id`, no agent) sends and
+creates.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
