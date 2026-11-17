@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -5,6 +6,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from '../channel/keys';
 import { botKeys } from './keys';
+import { applyOwnBotWrite } from './own-bot-writes';
 
 type CreateBotParams = {
   avatarUrl?: string;
@@ -94,6 +96,16 @@ export function useUpdateBotMutation() {
       ),
     onSuccess: async (bot) => {
       queryClient.setQueryData(botKeys.detail(bot.id).queryKey, bot);
+      // The cache write never holds up or fails the confirmed write.
+      fireAndForget(
+        applyOwnBotWrite({
+          id: bot.id,
+          name: bot.name,
+          handle: bot.handle,
+          avatarUrl: bot.avatar_url ?? null,
+        }),
+        'bot-writes'
+      );
       await Promise.all([invalidateBots()]);
     },
     onError: (error) => console.error('failed to update bot', error),
@@ -118,6 +130,11 @@ export function useDeleteBotMutation() {
         queryKey: botKeys.tokens(vars.botId).queryKey,
       });
 
+      // The cache write never holds up or fails the confirmed write.
+      fireAndForget(
+        applyOwnBotWrite({ id: vars.botId, deleted: true }),
+        'bot-writes'
+      );
       await Promise.all([
         invalidateBots(),
         ...vars.channelIds.flatMap((channelId) => [

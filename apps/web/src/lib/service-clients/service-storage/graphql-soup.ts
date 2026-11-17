@@ -445,11 +445,6 @@ export function getGraphqlSoupNetworkClient(): Client {
   return graphqlSoupClient;
 }
 
-/** Whether the current client carries the websocket's live subscriptions. */
-export function graphqlSoupRealtimeActive(): boolean {
-  return getGraphqlSoupClient() !== graphqlSoupClient;
-}
-
 const reconnectListeners = new Set<() => void>();
 
 /**

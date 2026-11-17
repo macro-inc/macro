@@ -35,7 +35,6 @@ const client = createClient({
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => client,
-  graphqlSoupRealtimeActive: () => true,
 }));
 
 import { createBotUpdatesHandler } from '@queries/bots/bot-updates';

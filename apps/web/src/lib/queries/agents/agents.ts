@@ -1,5 +1,7 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { botKeys } from '@queries/bots/keys';
+import { applyOwnBotWrite } from '@queries/bots/own-bot-writes';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -163,6 +165,16 @@ export function useUpdateAgentMutation() {
         botKeys.detail(updated.bot.id).queryKey,
         updated.bot
       );
+      // The cache write never holds up or fails the confirmed write.
+      fireAndForget(
+        applyOwnBotWrite({
+          id: updated.bot.id,
+          name: updated.bot.name,
+          handle: updated.bot.handle,
+          avatarUrl: updated.bot.avatar_url ?? null,
+        }),
+        'bot-writes'
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
         // Global agents have no selected channel IDs but can still appear in
@@ -199,6 +211,11 @@ export function useDeleteAgentMutation() {
         queryKey: botKeys.tokens(vars.agentId).queryKey,
       });
 
+      // The cache write never holds up or fails the confirmed write.
+      fireAndForget(
+        applyOwnBotWrite({ id: vars.agentId, deleted: true }),
+        'bot-writes'
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
         ...[...new Set(vars.channelIds)].flatMap((channelId) => [

@@ -294,6 +294,25 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
   },
 ] as const;
 
+/**
+ * The error `botUpdates` ends with when this subscriber fell behind
+ * (`graphql_bots::subscription`). Only then is it resubscribed on its own;
+ * any other ending, such as a server that predates the field, leaves it off
+ * until the whole set reattaches.
+ */
+const BOT_UPDATES_FELL_BEHIND =
+  'bot updates fell behind; resubscribe and refetch';
+const BOT_UPDATES_RETRY_MS = 1_000;
+const BOT_UPDATES_MAX_RETRY_MS = 60_000;
+
+function botUpdatesFellBehind(result: OperationResult): boolean {
+  return (
+    result.error?.graphQLErrors?.some(
+      (error) => error.message === BOT_UPDATES_FELL_BEHIND
+    ) ?? false
+  );
+}
+
 /** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
 export function createGraphqlSoupSubscriptionsLifecycle(
   options: { suspendOnPagehide?: boolean } = {}
@@ -313,6 +332,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
   let bots: ReturnType<typeof createBotUpdatesHandler> | undefined;
   let generation = 0;
+  let connectedBefore = false;
   let signaledFailure = false;
   let stopWatchingForReattach: (() => void) | undefined;
 
@@ -381,7 +401,31 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               ({ document }) => document !== SoupUpdatesDocument
             );
       const setGeneration = generation;
-      unsubscribes = subscriptions.map(({ document, errorMessage }) => {
+      // `botUpdates` ends on its own when it falls behind; it comes back
+      // after a short, growing wait, and readers then reread what they show.
+      let botRetryMs = BOT_UPDATES_RETRY_MS;
+      let botRetry: ReturnType<typeof setTimeout> | undefined;
+      let unsubscribeBots: (() => void) | undefined;
+      const botStreamEnded = (result: OperationResult) => {
+        if (setGeneration !== generation || !botUpdatesFellBehind(result))
+          return;
+        botRetry = setTimeout(() => {
+          botRetry = undefined;
+          if (setGeneration !== generation) return;
+          unsubscribeBots?.();
+          unsubscribeBots = subscribe(BotUpdatesDocument, botErrorMessage);
+          botHandler.reconnect();
+        }, botRetryMs);
+        botRetryMs = Math.min(botRetryMs * 2, BOT_UPDATES_MAX_RETRY_MS);
+      };
+      const botErrorMessage =
+        LIVE_UPDATE_SUBSCRIPTIONS.find(
+          ({ document }) => document === BotUpdatesDocument
+        )?.errorMessage ?? '';
+      const subscribe = (
+        document: Parameters<Client['subscription']>[0],
+        errorMessage: string
+      ) => {
         const subscription = client
           .subscription(document, {})
           .subscribe((result) => {
@@ -417,6 +461,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               );
             }
             if (document === BotUpdatesDocument) {
+              if (result.data != null) botRetryMs = BOT_UPDATES_RETRY_MS;
               botHandler.onResult(
                 result as OperationResult<BotUpdatesSubscription>
               );
@@ -431,18 +476,34 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               }
             }
             // urql ends a subscription with a final `hasNext: false` result.
-            if (result.hasNext === false && setGeneration === generation) {
+            if (result.hasNext === false && document === BotUpdatesDocument) {
+              botStreamEnded(result);
+            } else if (
+              result.hasNext === false &&
+              setGeneration === generation
+            ) {
               reattachOnNextOpportunity();
             }
           });
         return () => subscription.unsubscribe();
+      };
+      unsubscribes = subscriptions.map(({ document, errorMessage }) => {
+        if (document !== BotUpdatesDocument)
+          return subscribe(document, errorMessage);
+        unsubscribeBots = subscribe(document, errorMessage);
+        return () => {
+          clearTimeout(botRetry);
+          unsubscribeBots?.();
+        };
       });
     },
     connected: () => {
       signaledFailure = false;
       activity?.reconnect();
       channels?.reconnect();
-      bots?.reconnect();
+      // Bot readers fetch on mount; only a reconnect can have missed pushes.
+      if (connectedBefore) bots?.reconnect();
+      connectedBefore = true;
     },
     dispose() {
       if (options.suspendOnPagehide) {

@@ -15,7 +15,7 @@ import {
   type Operation,
   type OperationResult,
 } from '@urql/core';
-import { createRoot } from 'solid-js';
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import { agentKeys } from '../agents/keys';
@@ -25,7 +25,6 @@ import { useLiveRestBots } from './live-rest-bots';
 
 let testQueryClient: QueryClient;
 let client: Client;
-let realtime = true;
 
 vi.mock('../client', () => ({
   get queryClient() {
@@ -35,15 +34,11 @@ vi.mock('../client', () => ({
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => client,
-  graphqlSoupRealtimeActive: () => realtime,
 }));
 
 import { createBotUpdatesHandler } from './bot-updates';
 import {
-  handleBotProfileChanged,
-  recoverGatewayBotProfiles,
-} from './gateway-profile-bridge';
-import {
+  type BotIdentity,
   createBotIdentities,
   createBotIdentity,
   createMentionableBots,
@@ -133,7 +128,6 @@ function mounted<T>(factory: () => T): T {
 }
 
 beforeEach(() => {
-  realtime = true;
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -142,13 +136,11 @@ beforeEach(() => {
 afterEach(() => {
   for (const dispose of disposers) dispose();
   disposers = [];
-  realtime = false;
-  recoverGatewayBotProfiles();
   testQueryClient.clear();
 });
 
 describe('createBotIdentity', () => {
-  it('reads every mounted bot in one request and shows the payload copy until it answers', async () => {
+  it('reads every mounted bot in one request', async () => {
     const server = createServer(
       new Map([
         [RELEASE_BOT, bot(RELEASE_BOT, 'Shipper')],
@@ -157,15 +149,10 @@ describe('createBotIdentity', () => {
     );
     client = createClient({ url: '/graphql', exchanges: [server.exchange] });
 
-    const release = mounted(() =>
-      createBotIdentity(
-        () => RELEASE_BOT,
-        () => ({ name: 'Release bot' })
-      )
-    );
+    const release = mounted(() => createBotIdentity(() => RELEASE_BOT));
     const review = mounted(() => createBotIdentity(() => REVIEW_BOT));
 
-    expect(release.data()?.name).toBe('Release bot');
+    expect(release.data()).toBeUndefined();
     expect(review.data()).toBeUndefined();
     await vi.waitFor(() => expect(release.data()?.name).toBe('Shipper'));
     expect(review.data()?.name).toBe('Reviewer');
@@ -182,6 +169,35 @@ describe('createBotIdentity', () => {
     await vi.waitFor(() => expect(unknown.data()).toBeNull());
     expect(malformed.data()).toBeUndefined();
     expect(server.requests).toEqual([[RELEASE_BOT]]);
+  });
+
+  it('shows a bot at once on a remount soon after its last reader left', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Shipper')]]);
+    const server = createServer(rows);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const first = mount(() => createBotIdentity(() => RELEASE_BOT));
+    await vi.waitFor(() => expect(first.value.data()?.name).toBe('Shipper'));
+    first.dispose();
+
+    const again = mounted(() => createBotIdentity(() => RELEASE_BOT));
+
+    expect(again.data()?.name).toBe('Shipper');
+    expect(server.requests).toEqual([[RELEASE_BOT]]);
+  });
+
+  it('keeps a missing bot missing while its batch reads again', async () => {
+    const server = createServer(new Map());
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const unknown = mounted(() => createBotIdentity(() => RELEASE_BOT));
+    await vi.waitFor(() => expect(unknown.data()).toBeNull());
+    const seen: (BotIdentity | null | undefined)[] = [];
+    mounted(() => createComputed(() => seen.push(unknown.data())));
+
+    createBotUpdatesHandler(client).reconnect();
+
+    await vi.waitFor(() => expect(server.requests).toHaveLength(2));
+    await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    expect(seen.every((value) => value === null)).toBe(true);
   });
 });
 
@@ -311,65 +327,6 @@ describe('botUpdates', () => {
     );
   });
 });
-
-describe('gateway bot_profile_changed bridge', () => {
-  const change = {
-    id: RELEASE_BOT,
-    name: 'Shipper',
-    avatar_url: 'https://static.example/shipper.png',
-    deleted_at: null,
-    owner: { type: 'user', user_id: 'macro|owner@example.com' },
-  };
-
-  it('applies the pushed profile on a client without the Soup websocket', async () => {
-    realtime = false;
-    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
-    const server = createServer(rows);
-    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
-    const release = mounted(() => createBotIdentity(() => RELEASE_BOT));
-    await vi.waitFor(() => expect(release.data()?.name).toBe('Release bot'));
-
-    handleBotProfileChanged(change);
-
-    expect(release.data()).toMatchObject({
-      name: 'Shipper',
-      handle: 'release-bot',
-      avatarUrl: 'https://static.example/shipper.png',
-    });
-    expect(server.requests).toEqual([[RELEASE_BOT]]);
-  });
-
-  it('drops gateway profiles and reads again when the gateway reconnects', async () => {
-    realtime = false;
-    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
-    const server = createServer(rows);
-    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
-    const release = mounted(() => createBotIdentity(() => RELEASE_BOT));
-    await vi.waitFor(() => expect(release.data()?.name).toBe('Release bot'));
-    handleBotProfileChanged(change);
-
-    rows.set(RELEASE_BOT, bot(RELEASE_BOT, 'Deployer'));
-    recoverGatewayBotProfiles();
-
-    await vi.waitFor(() => expect(release.data()?.name).toBe('Deployer'));
-    expect(server.requests).toEqual([[RELEASE_BOT], [RELEASE_BOT]]);
-  });
-
-  it('is ignored where botUpdates delivers the change', async () => {
-    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
-    client = createClient({
-      url: '/graphql',
-      exchanges: [createServer(rows).exchange],
-    });
-    const release = mounted(() => createBotIdentity(() => RELEASE_BOT));
-    await vi.waitFor(() => expect(release.data()?.name).toBe('Release bot'));
-
-    handleBotProfileChanged(change);
-
-    expect(release.data()?.name).toBe('Release bot');
-  });
-});
-
 describe('createMentionableBots', () => {
   const NEW_BOT = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
 

@@ -36,7 +36,6 @@ const client = createClient({
 vi.mock('@service-storage/graphql-soup', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@service-storage/graphql-soup')>()),
   getGraphqlSoupClient: () => client,
-  graphqlSoupRealtimeActive: () => true,
 }));
 vi.mock('@core/component/UserCardTrigger', () => ({
   UserCardTrigger: (props: { trigger: JSX.Element }) => <>{props.trigger}</>,

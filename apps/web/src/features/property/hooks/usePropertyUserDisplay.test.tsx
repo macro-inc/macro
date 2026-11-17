@@ -51,7 +51,6 @@ const graphqlClient = createClient({
 });
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => graphqlClient,
-  graphqlSoupRealtimeActive: () => true,
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => 'Alice Example',
