@@ -91,6 +91,26 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   return filters;
 }
 
+/**
+ * The facet groups `buildEmailSearchRequest` sends to the service. Search hits
+ * carry no attachment or invitation fields, so these must not be re-tested on
+ * the client against a hit.
+ */
+const SERVICE_FACET_GROUPS = [
+  'read',
+  'done',
+  'calendar',
+  'attachments',
+  'tags',
+] as const;
+
+/** The part of `facets` that service search leaves to the client. */
+export function facetsLeftToClient(facets: FacetSelection): FacetSelection {
+  const left: FacetSelection = { ...facets };
+  for (const group of SERVICE_FACET_GROUPS) delete left[group];
+  return left;
+}
+
 /** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
 export function buildEmailSearchRequest(
   context: EmailQueryContext,

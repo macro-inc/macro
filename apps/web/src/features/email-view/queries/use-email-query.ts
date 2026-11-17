@@ -43,7 +43,7 @@ import {
   type EmailSavedViewScope,
 } from './email-query';
 import { buildEmailDateRows } from './email-results';
-import { buildEmailSearchRequest } from './email-search';
+import { buildEmailSearchRequest, facetsLeftToClient } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -340,7 +340,9 @@ export function useEmailDataSource(
   );
   const matchesOtherFacets = (email: EmailEntity) =>
     testFacets(
-      { ...state.facets, read: [] },
+      search.isSearching() && search.usesServiceSearch()
+        ? facetsLeftToClient(state.facets)
+        : { ...state.facets, read: [] },
       EMAIL_FACETS,
       email,
       facetContext()
