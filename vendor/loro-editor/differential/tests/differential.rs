@@ -2,6 +2,9 @@
 //!
 //! LORO_DIFF_SEED=<n> replays one seed; LORO_DIFF_CASES, LORO_DIFF_LEN,
 //! LORO_DIFF_BULK_CASES and LORO_DIFF_FIRST_SEED size the run.
+//! LORO_DIFF_PROGRESS=1 prints each seed before it runs: an upstream panic
+//! whose unwinding panics again aborts the process, and the last seed printed
+//! names it.
 
 use loro_editor_differential::{check, generate, generate_bulk, Stats};
 
@@ -25,7 +28,11 @@ fn random_scripts_match_upstream() {
         }
     };
     let mut stats = Stats::default();
+    let progress = std::env::var("LORO_DIFF_PROGRESS").is_ok_and(|v| v == "1");
     for &seed in &seeds {
+        if progress {
+            eprintln!("case random {seed}");
+        }
         if let Err(report) = check(&generate(seed, len, false), &mut stats) {
             panic!("{report}\nreplay: LORO_DIFF_SEED={seed} LORO_DIFF_LEN={len} cargo test --test differential random_scripts_match_upstream");
         }
@@ -47,7 +54,11 @@ fn bulk_shallow_scripts_match_upstream() {
         }
     };
     let mut stats = Stats::default();
+    let progress = std::env::var("LORO_DIFF_PROGRESS").is_ok_and(|v| v == "1");
     for &seed in &seeds {
+        if progress {
+            eprintln!("case bulk {seed}");
+        }
         if let Err(report) = check(&generate_bulk(seed, len), &mut stats) {
             panic!("{report}\nreplay: LORO_DIFF_BULK_SEED={seed} LORO_DIFF_LEN={len} cargo test --test differential bulk_shallow_scripts_match_upstream");
         }
