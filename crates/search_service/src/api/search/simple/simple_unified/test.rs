@@ -801,7 +801,7 @@ fn ids(content: &ContentHits) -> Vec<u128> {
 async fn matching_threads_behind_a_first_page_that_all_fails_are_returned() {
     // The first 100 hits fail the filter; the matching threads come after.
     let hits = mailbox(400);
-    let matches = |id: Uuid| id.as_u128() > 100 && id.as_u128() % 2 == 0;
+    let matches = |id: Uuid| id.as_u128() > 100 && id.as_u128().is_multiple_of(2);
 
     let (content, rounds) =
         read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
@@ -936,7 +936,7 @@ async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
     let hits: Vec<SearchHit> = mailbox(400)
         .into_iter()
         .map(|mut hit| {
-            hit.entity_id = Uuid::from_u128((hit.entity_id.as_u128() + 1) / 2);
+            hit.entity_id = Uuid::from_u128(hit.entity_id.as_u128().div_ceil(2));
             hit
         })
         .collect();
