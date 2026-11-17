@@ -174,12 +174,13 @@ test('UNR-04 scrolled up in an open channel, a new message shows “1 unread …
   const chip = page.getByRole('button', {
     name: '1 unread notification stack below',
   });
-  // Known defect, in about 1 run in 10: the
-  // notice never appears.
+  // Known defect, in about 1 run in 10: the notice never appears, or appears
+  // and is gone again before it can be clicked. The click is bounded so that
+  // the second form is recorded here rather than running out the test's time.
   await failsSometimes(async () => {
     await expect(chip).toBeVisible();
     await expect(view.message('came in below')).not.toBeInViewport();
-    await chip.click();
+    await chip.click({ timeout: 15_000 });
 
     await expect(view.message('came in below')).toBeInViewport();
     await expect(chip).toBeHidden();
