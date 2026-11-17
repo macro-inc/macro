@@ -10,7 +10,7 @@
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
 //! stack's README ("Deploying") describes them.
 
-use gh_workflow::expr::typed::{Bool, Expr, Str, always, github, input, steps};
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, always, github, input};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
     WorkflowInput,
@@ -24,15 +24,45 @@ mod test;
 const STACK_DIR: &str = "infra/stacks/observability";
 /// Shared with the PR image build, so a deploy after a PR starts warm.
 pub(crate) const CACHE_TAG: &str = "observability-image";
+pub(crate) struct FindOutputs {
+    /// Which stage this source's image has reached.
+    pub stage: StepOutput<Str>,
+    /// The AMI already published for this source, if any.
+    pub ami: StepOutput<Str>,
+    /// The Nix system the image is built for.
+    pub system: StepOutput<Str>,
+}
+
+/// The step that finds this source's image.
+pub(crate) const FIND: StepHandle<FindOutputs> = StepHandle::new(
+    "find",
+    FindOutputs {
+        stage: StepOutput::new("find", "stage"),
+        ami: StepOutput::new("find", "ami"),
+        system: StepOutput::new("find", "system"),
+    },
+);
+
+pub(crate) struct PublishOutputs {
+    /// The AMI this run published.
+    pub ami: StepOutput<Str>,
+}
+
+/// The step that publishes the AMI.
+pub(crate) const PUBLISH: StepHandle<PublishOutputs> = StepHandle::new(
+    "publish",
+    PublishOutputs {
+        ami: StepOutput::new("publish", "ami"),
+    },
+);
+
 /// Every step's `if` after `find`: which stage this source's image has reached.
 fn stage() -> Expr<Str> {
-    steps("find").output("stage")
+    FIND.outputs.stage.read()
 }
 
 fn ami() -> Expr<Str> {
-    steps("publish")
-        .output("ami")
-        .or_else(steps("find").output("ami"))
+    PUBLISH.outputs.ami.read().or_else(FIND.outputs.ami.read())
 }
 
 /// Build the workflow.
@@ -131,13 +161,13 @@ fn deploy_job() -> Job {
             .add_env(("GITHUB_TOKEN", github().token())),
         )
         .add_step(aws_credentials())
-        .add_step(release("Find this source's image", "find").id("find"))
+        .add_step(release("Find this source's image", "find").id(FIND.id()))
         .add_step(build_image().if_condition(stage().eq("build")))
         .add_step(
             release("Publish the AMI", "publish")
-                .id("publish")
+                .id(PUBLISH.id())
                 .if_condition(stage().eq("build"))
-                .add_env(("NIX_SYSTEM", steps("find").output("system"))),
+                .add_env(("NIX_SYSTEM", FIND.outputs.system.read())),
         )
         .add_step(
             release("Smoke-boot the AMI on a throwaway host", "smoke")

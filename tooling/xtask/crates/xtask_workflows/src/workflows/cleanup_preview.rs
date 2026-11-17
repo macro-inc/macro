@@ -2,7 +2,7 @@
 //! closes (companion to the web `Build` job's preview steps). Generated into
 //! `cleanup_preview.yml` (replaces the hand-written `cleanup-preview.yml`).
 
-use gh_workflow::expr::typed::{github, steps};
+use gh_workflow::expr::typed::{StepHandle, StepOutput, Str, github};
 use gh_workflow::{
     Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
@@ -10,6 +10,19 @@ use gh_workflow::{
 use crate::workflows::{runners, steps, vars};
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
+
+pub(crate) struct PreviewIdOutputs {
+    /// The PR's preview id, from its preview comment.
+    pub id: StepOutput<Str>,
+}
+
+/// The step that reads the PR's preview id.
+pub(crate) const PREVIEW_ID: StepHandle<PreviewIdOutputs> = StepHandle::new(
+    "preview-id",
+    PreviewIdOutputs {
+        id: StepOutput::new("preview-id", "id"),
+    },
+);
 
 /// Build the workflow.
 pub fn cleanup_preview() -> Workflow {
@@ -67,7 +80,7 @@ fn get_preview_id() -> Step<Run> {
             echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
-        .id("preview-id")
+        .id(PREVIEW_ID.id())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(Env::new("BRANCH", github().head_ref()))
 }
@@ -79,6 +92,6 @@ fn cleanup_preview_files() -> Step<Run> {
               --preview-id ${{ steps.preview-id.outputs.id }} \
               --cleanup
         "#})
-        .if_condition(steps("preview-id").output("id").ne(""))
+        .if_condition(PREVIEW_ID.outputs.id.read().ne(""))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

@@ -7,7 +7,7 @@
 
 use std::fmt::Display;
 
-use gh_workflow::expr::typed::{Expr, Num, Str, github, input, steps};
+use gh_workflow::expr::typed::{Expr, Num, StepHandle, StepOutput, Str, github, input};
 use gh_workflow::{
     Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
@@ -107,10 +107,36 @@ const ACTIONS_CACHE_SHA: &str = "27d5ce7f107fe9357f9df03efb73ab90386fccae";
 /// build goes on without them rather than holding the deploy.
 const WASM_CACHE_TIMEOUT_MINUTES: u32 = 3;
 
+pub(crate) struct RestoreWasmOutputs {
+    /// The key of the cache entry the restore matched, if any.
+    pub cache_matched_key: StepOutput<Str>,
+}
+
+/// The step that restores cached wasm packages.
+pub(crate) const RESTORE_WASM: StepHandle<RestoreWasmOutputs> = StepHandle::new(
+    "restore-wasm",
+    RestoreWasmOutputs {
+        cache_matched_key: StepOutput::new("restore-wasm", "cache-matched-key"),
+    },
+);
+
+pub(crate) struct WasmOutputs {
+    /// The key to save the built packages under, or empty when nothing to save.
+    pub key: StepOutput<Str>,
+}
+
+/// The step that builds the wasm packages.
+pub(crate) const WASM: StepHandle<WasmOutputs> = StepHandle::new(
+    "wasm",
+    WasmOutputs {
+        key: StepOutput::new("wasm", "key"),
+    },
+);
+
 fn restore_wasm_packages() -> Step<Use> {
     Step::new("Restore wasm packages")
         .uses("actions/cache", "restore", ACTIONS_CACHE_SHA)
-        .id("restore-wasm")
+        .id(RESTORE_WASM.id())
         .continue_on_error(true)
         .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
@@ -127,23 +153,23 @@ fn restore_wasm_packages() -> Step<Use> {
 fn build_wasm_packages() -> Step<Run> {
     Step::new("Build wasm packages")
         .run(include_str!("scripts/deploy_build_wasm.sh"))
-        .id("wasm")
+        .id(WASM.id())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX))
         .add_env((
             "RESTORED_KEY",
-            steps("restore-wasm").output("cache-matched-key"),
+            RESTORE_WASM.outputs.cache_matched_key.read(),
         ))
 }
 
 fn save_wasm_packages() -> Step<Use> {
     Step::new("Save wasm packages")
         .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
-        .if_condition(steps("wasm").output("key").ne(""))
+        .if_condition(WASM.outputs.key.read().ne(""))
         .continue_on_error(true)
         .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
-        .add_with(("key", steps("wasm").output("key")))
+        .add_with(("key", WASM.outputs.key.read()))
 }
 
 /// Build identical across dev/prod up to `MODE` (`just build-<env>`). Its

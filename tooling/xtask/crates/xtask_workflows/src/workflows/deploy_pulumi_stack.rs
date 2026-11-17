@@ -2,12 +2,43 @@
 //! folder under `infra/stacks`, to dev or prod. Generated into
 //! `deploy-pulumi-stack.yml`.
 
-use gh_workflow::expr::typed::{Expr, Str, cancelled, failure, github, input, needs, steps};
+use gh_workflow::expr::typed::{
+    Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, failure, github,
+    input,
+};
 use gh_workflow::{
     Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
+
+pub(crate) struct SetupOutputs {
+    /// Whether the stack ships service code (binaries or Lambdas).
+    pub ships_code: JobOutput<Flag>,
+}
+
+/// The job that resolves whether the stack ships service code.
+pub(crate) const SETUP: JobHandle<SetupOutputs> = JobHandle::new(
+    "setup",
+    SetupOutputs {
+        ships_code: JobOutput::new("setup", "ships_code"),
+    },
+);
+
+pub(crate) struct CheckOutputs {
+    /// Whether the stack ships service code.
+    pub ships_code: StepOutput<Flag>,
+}
+
+/// The step that writes [`SETUP`]'s output.
+pub(crate) const CHECK: StepHandle<CheckOutputs> = StepHandle::new(
+    "check",
+    CheckOutputs {
+        ships_code: StepOutput::new("check", "ships_code"),
+    },
+);
+
+pub(crate) const CHECK_MIGRATIONS: JobHandle<()> = JobHandle::new("check-migrations", ());
 
 /// The `pulumi-service-name` input: the stack's folder under `infra/stacks`.
 fn stack() -> Expr<Str> {
@@ -27,8 +58,8 @@ pub fn deploy_pulumi_stack() -> Workflow {
             ))
             .cancel_in_progress(false),
         )
-        .add_job("setup", setup())
-        .add_job("check-migrations", check_migrations())
+        .add_job(SETUP, setup())
+        .add_job(CHECK_MIGRATIONS, check_migrations())
         .add_job("deploy", deploy())
 }
 
@@ -39,7 +70,10 @@ fn setup() -> Job {
     Job::default()
         .name(format!("Check whether {} ships service code", stack()))
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("ships_code", steps("check").output("ships_code"))
+        .add_output(
+            SETUP.outputs.ships_code.name(),
+            CHECK.outputs.ships_code.read(),
+        )
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(check_artifact_config())
 }
@@ -63,14 +97,14 @@ fn check_artifact_config() -> Step<Run> {
             echo "ships_code=$ships_code" >> "$GITHUB_OUTPUT"
             echo "stack=$STACK ships_code=$ships_code"
         "#})
-        .id("check")
+        .id(CHECK.id())
         .add_env(Env::new("STACK", stack()))
 }
 
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         &format!("Check {} migrations are applied", stack()),
-        needs("setup").output("ships_code").is_true(),
+        SETUP.outputs.ships_code.read().is_set(),
     )
 }
 
@@ -78,7 +112,7 @@ fn check_migrations() -> Job {
 /// as long as nothing actually failed or was cancelled.
 fn deploy() -> Job {
     Job::default()
-        .needs(vec!["setup".to_string(), "check-migrations".to_string()])
+        .needs(vec![SETUP.to_string(), CHECK_MIGRATIONS.to_string()])
         .cond((!failure()).and(!cancelled()))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4())

@@ -11,13 +11,66 @@
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Str, cancelled, failure, format, github, input, needs, runner, steps,
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, failure,
+    format, github, input, runner,
 };
 use gh_workflow::{
     Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
+
+pub(crate) struct SetupOutputs {
+    /// Whether the service builds binaries.
+    pub has_binaries: JobOutput<Flag>,
+    /// Whether the service builds lambdas.
+    pub has_lambdas: JobOutput<Flag>,
+}
+
+/// The job that resolves which artifacts the service builds.
+pub(crate) const SETUP: JobHandle<SetupOutputs> = JobHandle::new(
+    "setup",
+    SetupOutputs {
+        has_binaries: JobOutput::new("setup", "has_binaries"),
+        has_lambdas: JobOutput::new("setup", "has_lambdas"),
+    },
+);
+
+pub(crate) struct CheckOutputs {
+    /// Whether the service builds binaries.
+    pub has_binaries: StepOutput<Flag>,
+    /// Whether the service builds lambdas.
+    pub has_lambdas: StepOutput<Flag>,
+}
+
+/// The step that writes [`SETUP`]'s outputs.
+pub(crate) const CHECK: StepHandle<CheckOutputs> = StepHandle::new(
+    "check",
+    CheckOutputs {
+        has_binaries: StepOutput::new("check", "has_binaries"),
+        has_lambdas: StepOutput::new("check", "has_lambdas"),
+    },
+);
+
+pub(crate) const BUILD_SERVICE_BINARIES: JobHandle<()> =
+    JobHandle::new("build-service-binaries", ());
+pub(crate) const BUILD_LAMBDA_ARTIFACTS: JobHandle<()> =
+    JobHandle::new("build-lambda-artifacts", ());
+pub(crate) const CHECK_MIGRATIONS: JobHandle<()> = JobHandle::new("check-migrations", ());
+
+pub(crate) struct ProjectNameOutputs {
+    /// The service's Pulumi project name.
+    pub project_name: StepOutput<Str>,
+}
+
+/// The step that resolves the service's Pulumi project, when no stack name is
+/// given.
+pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
+    "project-name",
+    ProjectNameOutputs {
+        project_name: StepOutput::new("project-name", "project-name"),
+    },
+);
 
 fn service_name() -> Expr<Str> {
     input("service-name")
@@ -75,10 +128,10 @@ pub fn reusable_deploy_service() -> Workflow {
                 .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
                 .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true)),
         ))
-        .add_job("setup", setup())
-        .add_job("build-service-binaries", build_service_binaries())
-        .add_job("build-lambda-artifacts", build_lambda_artifacts())
-        .add_job("check-migrations", check_migrations())
+        .add_job(SETUP, setup())
+        .add_job(BUILD_SERVICE_BINARIES, build_service_binaries())
+        .add_job(BUILD_LAMBDA_ARTIFACTS, build_lambda_artifacts())
+        .add_job(CHECK_MIGRATIONS, check_migrations())
         .add_job("deploy", deploy())
 }
 
@@ -89,8 +142,14 @@ fn setup() -> Job {
     Job::default()
         .name(format!("Check {} artifacts", service_name()))
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("has_binaries", steps("check").output("has_binaries"))
-        .add_output("has_lambdas", steps("check").output("has_lambdas"))
+        .add_output(
+            SETUP.outputs.has_binaries.name(),
+            CHECK.outputs.has_binaries.read(),
+        )
+        .add_output(
+            SETUP.outputs.has_lambdas.name(),
+            CHECK.outputs.has_lambdas.read(),
+        )
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(check_artifact_config())
 }
@@ -111,16 +170,16 @@ fn check_artifact_config() -> Step<Run> {
             echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
             echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
         "#})
-        .id("check")
+        .id(CHECK.id())
         .add_env(Env::new("SERVICE", service_name()))
 }
 
 /// Base for the two Nix build jobs using Namespace's warm `/nix` volume.
-fn build_job(name: &str, gate_output: &str) -> Job {
+fn build_job(name: &str, gate: &JobOutput<Flag>) -> Job {
     Job::default()
         .name(name)
-        .needs(vec!["setup".to_string()])
-        .cond(needs("setup").output(gate_output).is_true())
+        .needs(vec![SETUP.to_string()])
+        .cond(gate.read().is_set())
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::setup_bun_pinned())
@@ -131,7 +190,7 @@ fn build_job(name: &str, gate_output: &str) -> Job {
 fn build_service_binaries() -> Job {
     build_job(
         &format!("Build {} binaries", service_name()),
-        "has_binaries",
+        &SETUP.outputs.has_binaries,
     )
     .add_step(build_prebuilt_binaries())
     .add_step(steps::upload_handoff_artifact(
@@ -171,7 +230,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
 fn build_lambda_artifacts() -> Job {
     build_job(
         &format!("Build {} Lambda artifacts", service_name()),
-        "has_lambdas",
+        &SETUP.outputs.has_lambdas,
     )
     .add_step(build_lambdas())
     .add_step(log_lambda_receipt())
@@ -202,10 +261,12 @@ fn log_lambda_receipt() -> Step<Run> {
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         &format!("Check {} migrations are applied", service_name()),
-        needs("setup")
-            .output("has_binaries")
-            .is_true()
-            .or(needs("setup").output("has_lambdas").is_true()),
+        SETUP
+            .outputs
+            .has_binaries
+            .read()
+            .is_set()
+            .or(SETUP.outputs.has_lambdas.read().is_set()),
     )
 }
 
@@ -218,10 +279,10 @@ fn deploy() -> Job {
     Job::default()
         .name(format!("Deploy {}", service_name()))
         .needs(vec![
-            "setup".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
-            "check-migrations".to_string(),
+            SETUP.to_string(),
+            BUILD_SERVICE_BINARIES.to_string(),
+            BUILD_LAMBDA_ARTIFACTS.to_string(),
+            CHECK_MIGRATIONS.to_string(),
         ])
         .cond((!failure()).and(!cancelled()))
         .runs_on(runners::Runner::Small.to_string())
@@ -239,7 +300,7 @@ fn get_project_name() -> Step<Use> {
         "Get project name",
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
-    .id("project-name")
+    .id(PROJECT_NAME.id())
     .if_condition(input::<Str>("pulumi-stack-name").eq(""))
     .add_with(("service-name", service_name()))
 }
@@ -264,19 +325,21 @@ fn download_handoff_artifacts() -> Step<Run> {
             fi
         "#})
         .if_condition(
-            needs("setup")
-                .output("has_binaries")
-                .is_true()
-                .or(needs("setup").output("has_lambdas").is_true()),
+            SETUP
+                .outputs
+                .has_binaries
+                .read()
+                .is_set()
+                .or(SETUP.outputs.has_lambdas.read().is_set()),
         )
         .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
-            needs("setup").output("has_binaries"),
+            SETUP.outputs.has_binaries.read(),
         ))
         .add_env(Env::new(
             "HAS_LAMBDAS",
-            needs("setup").output("has_lambdas"),
+            SETUP.outputs.has_lambdas.read(),
         ))
         .add_env(Env::new(
             "BASE",
@@ -300,26 +363,26 @@ fn deploy_service() -> Step<Use> {
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        input::<Str>("pulumi-stack-name").or_else(steps("project-name").output("project-name")),
+        input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
     ))
     .add_with(("use-namespace-builder", "true"))
     .add_with(("use-docker", input::<Bool>("use-docker")))
     .add_with(("use-lfs", input::<Bool>("use-lfs")))
     .add_with((
         "prebuilt-binaries-tar",
-        handoff_tar_path("has_binaries", "prebuilt-binaries.tar.gz"),
+        handoff_tar_path(&SETUP.outputs.has_binaries, "prebuilt-binaries.tar.gz"),
     ))
     .add_with((
         "lambda-artifacts-tar",
-        handoff_tar_path("has_lambdas", "lambda-artifacts.tar.gz"),
+        handoff_tar_path(&SETUP.outputs.has_lambdas, "lambda-artifacts.tar.gz"),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))
 }
 
 /// The downloaded handoff tar when the service has one, else empty.
-fn handoff_tar_path(has_output: &str, file: &str) -> Expr<Str> {
-    needs("setup").output(has_output).is_true().then_else(
+fn handoff_tar_path(has: &JobOutput<Flag>, file: &str) -> Expr<Str> {
+    has.read().is_set().then_else(
         format(
             &format!("{{0}}/handoff/{file}"),
             [runner().temp().into_ast()],

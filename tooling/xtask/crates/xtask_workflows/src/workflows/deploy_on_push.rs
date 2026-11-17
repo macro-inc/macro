@@ -33,13 +33,17 @@
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
-use gh_workflow::expr::typed::github;
+use gh_workflow::expr::typed::{JobHandle, github};
 use gh_workflow::{CallJob, Concurrency, Event, Push, Workflow};
 
 use crate::workflows::vars;
 
 #[cfg(test)]
 mod test;
+
+pub(crate) const DEPLOY_CLOUD_STORAGE: JobHandle<()> = JobHandle::new("deploy-cloud-storage", ());
+pub(crate) const DEPLOY_SYNC_SERVICE: JobHandle<()> = JobHandle::new("deploy-sync-service", ());
+pub(crate) const BUILD_WEB_APP: JobHandle<()> = JobHandle::new("build-web-app", ());
 
 /// Prepended to the generated YAML, under the "do not edit" header. The
 /// no-gating decision is the single most likely thing for someone to try to
@@ -79,10 +83,10 @@ pub fn deploy_on_push() -> Workflow {
             // is only lossless because no stage is path-gated (see module docs).
             Concurrency::new(github().workflow().to_string()).cancel_in_progress(false),
         )
-        .add_job("deploy-cloud-storage", deploy_cloud_storage())
-        .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job(DEPLOY_CLOUD_STORAGE, deploy_cloud_storage())
+        .add_job(DEPLOY_SYNC_SERVICE, deploy_sync_service())
         .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
-        .add_job("build-web-app", build_web_app())
+        .add_job(BUILD_WEB_APP, build_web_app())
         .add_job("deploy-web-app", deploy_web_app())
 }
 
@@ -104,7 +108,7 @@ fn deploy_cloud_storage() -> CallJob {
 fn deploy_sync_service() -> CallJob {
     CallJob::new("./.github/workflows/deploy_sync_service.yml")
         .name("Deploy Sync Service")
-        .needs(vec!["deploy-cloud-storage".to_string()])
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
         .add_with("environment", "dev")
         .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
@@ -115,7 +119,7 @@ fn deploy_sync_service() -> CallJob {
 fn deploy_mcp_chatgpt_worker() -> CallJob {
     CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
         .name("Deploy MCP ChatGPT Worker")
-        .needs(vec!["deploy-cloud-storage".to_string()])
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
         .add_with("environment", "dev")
         .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
@@ -136,9 +140,9 @@ fn deploy_web_app() -> CallJob {
     CallJob::new("./.github/workflows/deploy_web_app.yml")
         .name("Deploy Web App")
         .needs(vec![
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
-            "build-web-app".to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
+            BUILD_WEB_APP.to_string(),
         ])
         .add_with("notify", false)
         .add_with("environment", "dev")

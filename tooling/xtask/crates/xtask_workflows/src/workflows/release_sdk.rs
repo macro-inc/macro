@@ -16,7 +16,7 @@
 //! recovery path. A tag pushed from here uses `GITHUB_TOKEN`, which by design
 //! does not start another workflow run, so the two never double-publish.
 
-use gh_workflow::expr::typed::{always, github, steps};
+use gh_workflow::expr::typed::{Flag, StepHandle, StepOutput, always, github};
 use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
 use crate::workflows::steps;
@@ -67,9 +67,22 @@ fn release() -> Job {
         .add_step(summarize())
 }
 
+pub(crate) struct ResolveOutputs {
+    /// Whether this push releases a new version.
+    pub release: StepOutput<Flag>,
+}
+
+/// The step that decides whether this push is a release.
+pub(crate) const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
+    "resolve",
+    ResolveOutputs {
+        release: StepOutput::new("resolve", "release"),
+    },
+);
+
 /// Every step after the resolver runs only for an actual release.
 fn guard(step: Step<Run>) -> Step<Run> {
-    step.if_condition(steps("resolve").output("release").is_true())
+    step.if_condition(RESOLVE.outputs.release.read().is_set())
 }
 
 fn setup_node() -> Step<Use> {
@@ -90,7 +103,7 @@ fn resolve_release() -> Step<Run> {
     Step::new("Resolve release version")
         .run("bun scripts/resolve-release.ts")
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
-        .id("resolve")
+        .id(RESOLVE.id())
 }
 
 fn install_dependencies() -> Step<Run> {

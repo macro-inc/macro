@@ -3,7 +3,10 @@
 //! Generated into `pulumi_preview_pr.yml` (replaces the hand-written
 //! `pulumi-preview-pr.yml`).
 
-use gh_workflow::expr::typed::{Json, Num, Str, always, from_json, github, matrix, needs, steps};
+use gh_workflow::expr::typed::{
+    Flag, JobHandle, JobOutput, Json, Num, StepHandle, StepOutput, Str, always, from_json, github,
+    matrix,
+};
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
     Workflow,
@@ -15,6 +18,43 @@ use crate::workflows::{runners, steps};
 
 #[cfg(test)]
 mod test;
+
+pub(crate) struct DetectChangesOutputs {
+    /// The affected services, as a JSON array.
+    pub services: JobOutput<Str>,
+    /// Whether any service is affected.
+    pub has_changes: JobOutput<Flag>,
+}
+
+/// The job that finds the services a PR affects.
+pub(crate) const DETECT_CHANGES: JobHandle<DetectChangesOutputs> = JobHandle::new(
+    "detect-changes",
+    DetectChangesOutputs {
+        services: JobOutput::new("detect-changes", "services"),
+        has_changes: JobOutput::new("detect-changes", "has-changes"),
+    },
+);
+
+pub(crate) struct DetectOutputs {
+    /// The affected services, as a JSON array.
+    pub services: StepOutput<Str>,
+    /// Whether any service is affected.
+    pub has_changes: StepOutput<Flag>,
+}
+
+/// The step that writes [`DETECT_CHANGES`]'s outputs.
+pub(crate) const DETECT: StepHandle<DetectOutputs> = StepHandle::new(
+    "detect",
+    DetectOutputs {
+        services: StepOutput::new("detect", "services"),
+        has_changes: StepOutput::new("detect", "has-changes"),
+    },
+);
+
+/// The changed-files action, which writes the files [`DETECT`] reads.
+pub(crate) const CHANGED_FILES: StepHandle<()> = StepHandle::new("changed-files", ());
+
+pub(crate) const PREVIEW_SERVICES: JobHandle<()> = JobHandle::new("preview-services", ());
 
 /// Inputs that can change a stack's definition. Crate and service code is left
 /// out on purpose: its preview is always the same "Lambda code / image changed"
@@ -55,8 +95,8 @@ pub fn pulumi_preview_pr() -> Workflow {
                 .pull_requests(Level::Write)
                 .id_token(Level::Write),
         )
-        .add_job("detect-changes", detect_changes())
-        .add_job("preview-services", preview_services())
+        .add_job(DETECT_CHANGES, detect_changes())
+        .add_job(PREVIEW_SERVICES, preview_services())
         .add_job("preview-status", preview_status())
 }
 
@@ -64,8 +104,14 @@ fn detect_changes() -> Job {
     Job::default()
         .name("Detect Changed Services")
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("services", steps("detect").output("services"))
-        .add_output("has-changes", steps("detect").output("has-changes"))
+        .add_output(
+            DETECT_CHANGES.outputs.services.name(),
+            DETECT.outputs.services.read(),
+        )
+        .add_output(
+            DETECT_CHANGES.outputs.has_changes.name(),
+            DETECT.outputs.has_changes.read(),
+        )
         .add_step(checkout())
         .add_step(changed_files())
         .add_step(detect_affected_services())
@@ -74,13 +120,13 @@ fn detect_changes() -> Job {
 fn preview_services() -> CallJob {
     CallJob::new("./.github/workflows/reusable_preview_service.yml")
         .name(format!("Preview {}", matrix::<Str>("service")))
-        .needs(vec!["detect-changes".to_string()])
-        .cond(needs("detect-changes").output("has-changes").is_true())
+        .needs(vec![DETECT_CHANGES.to_string()])
+        .cond(DETECT_CHANGES.outputs.has_changes.read().is_set())
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
                 "service": serde_json::Value::from(from_json::<Json>(
-                    needs("detect-changes").output("services")
+                    DETECT_CHANGES.outputs.services.read()
                 )),
             })),
             max_parallel: None,
@@ -95,8 +141,8 @@ fn preview_status() -> Job {
     Job::default()
         .name("Preview Status")
         .needs(vec![
-            "detect-changes".to_string(),
-            "preview-services".to_string(),
+            DETECT_CHANGES.to_string(),
+            PREVIEW_SERVICES.to_string(),
         ])
         .cond(always())
         .runs_on(runners::Runner::Small.to_string())
@@ -114,7 +160,7 @@ fn changed_files() -> Step<Use> {
             "changed-files",
             "24d32ffd492484c1d75e0c0b894501ddb9d30d62",
         ) // v47
-        .id("changed-files")
+        .id(CHANGED_FILES.id())
         .add_with((
             "files",
             TRIGGER_PATHS
@@ -212,7 +258,7 @@ fn detect_affected_services() -> Step<Run> {
               echo "Services to preview: ${services[*]}"
             fi
         "#})
-        .id("detect")
+        .id(DETECT.id())
 }
 
 fn summary() -> Step<Run> {

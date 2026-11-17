@@ -8,7 +8,7 @@
 
 use std::fmt::Display;
 
-use gh_workflow::expr::typed::{Bool, cancelled, input, needs};
+use gh_workflow::expr::typed::{Bool, JobHandle, cancelled, input};
 use gh_workflow::{
     CallJob, Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall,
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
@@ -16,6 +16,9 @@ use gh_workflow::{
 
 use crate::workflows::build_web_app::environment;
 use crate::workflows::{build_web_app, runners, steps, vars};
+
+/// The job that calls [`build_web_app`], unless the caller already built.
+pub(crate) const BUILD: JobHandle<()> = JobHandle::new("build", ());
 
 /// Build the workflow.
 pub fn deploy_web_app() -> Workflow {
@@ -87,7 +90,7 @@ pub fn deploy_web_app() -> Workflow {
             // could leave the stack half-applied.
             Concurrency::new(format!("deploy-web-app-{}", environment())).cancel_in_progress(false),
         )
-        .add_job("build", build())
+        .add_job(BUILD, build())
         .add_job("deploy", deploy())
 }
 
@@ -106,13 +109,13 @@ fn build() -> CallJob {
 fn deploy() -> Job {
     Job::default()
         .name("Deploy")
-        .needs(vec!["build".to_string()])
+        .needs(vec![BUILD.to_string()])
         .cond(
             (!cancelled()).and(
-                needs("build")
+                BUILD
                     .result()
                     .eq("success")
-                    .or(needs("build").result().eq("skipped")),
+                    .or(BUILD.result().eq("skipped")),
             ),
         )
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))

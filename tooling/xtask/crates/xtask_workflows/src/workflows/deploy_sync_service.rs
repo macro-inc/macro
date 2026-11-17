@@ -11,7 +11,7 @@
 //! serving, not with the previous push, so runs that were cancelled in the
 //! queue can't make an undeployed change look deployed.
 
-use gh_workflow::expr::typed::{Bool, Expr, Str, input, steps};
+use gh_workflow::expr::typed::{Bool, Expr, Flag, StepHandle, StepOutput, Str, input};
 use gh_workflow::{
     Concurrency, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowDispatch, WorkflowInput,
@@ -112,25 +112,54 @@ fn check_secrets() -> Step<Run> {
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
 
+pub(crate) struct WorkerKeyOutputs {
+    /// The worker's input key, empty when it couldn't be computed.
+    pub key: StepOutput<Str>,
+}
+
+/// The step that computes the worker's input key.
+pub(crate) const WORKER_KEY: StepHandle<WorkerKeyOutputs> = StepHandle::new(
+    "worker-key",
+    WorkerKeyOutputs {
+        key: StepOutput::new("worker-key", "key"),
+    },
+);
+
+pub(crate) struct WorkerStateOutputs {
+    /// Whether the live worker was built from the same inputs.
+    pub unchanged: StepOutput<Flag>,
+    /// Seconds left before active Durable Objects run the live version.
+    pub wait_seconds: StepOutput<Str>,
+}
+
+/// The step that compares the inputs with the live worker.
+pub(crate) const WORKER_STATE: StepHandle<WorkerStateOutputs> = StepHandle::new(
+    "worker-state",
+    WorkerStateOutputs {
+        unchanged: StepOutput::new("worker-state", "unchanged"),
+        wait_seconds: StepOutput::new("worker-state", "wait_seconds"),
+    },
+);
+
 fn worker_changed() -> Expr<Bool> {
-    steps("worker-state").output("unchanged").ne("true")
+    WORKER_STATE.outputs.unchanged.read().is_unset()
 }
 
 /// A failure here leaves the key empty, which the next step treats as changed.
 fn compute_worker_key() -> Step<Run> {
     Step::new("Compute worker input key")
         .run("echo \"key=$(.github/scripts/sync-worker-key.sh)\" >> \"$GITHUB_OUTPUT\"")
-        .id("worker-key")
+        .id(WORKER_KEY.id())
         .continue_on_error(true)
 }
 
 fn read_worker_state() -> Step<Run> {
     Step::new("Compare with the live worker")
         .run("../../.github/scripts/sync-worker-state.sh")
-        .id("worker-state")
+        .id(WORKER_STATE.id())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("ENVIRONMENT", environment()))
-        .add_env(("WORKER_KEY", steps("worker-key").output("key")))
+        .add_env(("WORKER_KEY", WORKER_KEY.outputs.key.read()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -158,7 +187,7 @@ fn deploy_step() -> Step<Run> {
         ))
         .if_condition(worker_changed())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
-        .add_env(("WORKER_KEY", steps("worker-key").output("key")))
+        .add_env(("WORKER_KEY", WORKER_KEY.outputs.key.read()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -171,5 +200,5 @@ fn deploy_step() -> Step<Run> {
 fn wait_for_active_objects() -> Step<Run> {
     Step::new("Wait for active Durable Objects to update")
         .run("sleep \"$WAIT_SECONDS\"")
-        .add_env(("WAIT_SECONDS", steps("worker-state").output("wait_seconds")))
+        .add_env(("WAIT_SECONDS", WORKER_STATE.outputs.wait_seconds.read()))
 }

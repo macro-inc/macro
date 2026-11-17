@@ -8,8 +8,8 @@
 //! `deploy-all-services.yml`).
 
 use gh_workflow::expr::typed::{
-    Expr, Json, Str, all_needs_results, always, cancelled, format, from_json, github, input,
-    matrix, needs, runner, steps, to_json, whole_needs,
+    Expr, Flag, JobHandle, JobOutput, Json, StepHandle, StepOutput, Str, all_needs_results, always,
+    cancelled, format, from_json, github, input, matrix, runner, to_json, whole_needs,
 };
 use gh_workflow::{
     Concurrency, Env, Event, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
@@ -20,6 +20,82 @@ use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
+
+pub(crate) struct SetupOutputs {
+    /// Every enabled service, as a JSON array.
+    pub services: JobOutput<Str>,
+    /// The enabled services that build binaries, as a JSON array.
+    pub binary_services: JobOutput<Str>,
+    /// The enabled services that build lambdas, as a JSON array.
+    pub lambda_services: JobOutput<Str>,
+}
+
+/// The job that lists which services to build and deploy.
+pub(crate) const SETUP: JobHandle<SetupOutputs> = JobHandle::new(
+    "setup",
+    SetupOutputs {
+        services: JobOutput::new("setup", "matrix"),
+        binary_services: JobOutput::new("setup", "binaries"),
+        lambda_services: JobOutput::new("setup", "lambdas"),
+    },
+);
+
+pub(crate) struct SetMatrixOutputs {
+    /// Every enabled service, as a JSON array.
+    pub services: StepOutput<Str>,
+    /// The enabled services that build binaries, as a JSON array.
+    pub binary_services: StepOutput<Str>,
+    /// The enabled services that build lambdas, as a JSON array.
+    pub lambda_services: StepOutput<Str>,
+}
+
+/// The step that writes [`SETUP`]'s outputs.
+pub(crate) const SET_MATRIX: StepHandle<SetMatrixOutputs> = StepHandle::new(
+    "set-matrix",
+    SetMatrixOutputs {
+        services: StepOutput::new("set-matrix", "matrix"),
+        binary_services: StepOutput::new("set-matrix", "binaries"),
+        lambda_services: StepOutput::new("set-matrix", "lambdas"),
+    },
+);
+
+pub(crate) const WARM_BINARIES: JobHandle<()> = JobHandle::new("warm-binaries", ());
+pub(crate) const WARM_LAMBDAS: JobHandle<()> = JobHandle::new("warm-lambdas", ());
+pub(crate) const BUILD_SERVICE_BINARIES: JobHandle<()> =
+    JobHandle::new("build-service-binaries", ());
+pub(crate) const BUILD_LAMBDA_ARTIFACTS: JobHandle<()> =
+    JobHandle::new("build-lambda-artifacts", ());
+pub(crate) const MIGRATE_DB: JobHandle<()> = JobHandle::new("migrate-db", ());
+pub(crate) const DEPLOY_SERVICES: JobHandle<()> = JobHandle::new("deploy-services", ());
+
+pub(crate) struct CheckArtifactsOutputs {
+    /// Whether the matrix service builds binaries.
+    pub has_binaries: StepOutput<Flag>,
+    /// Whether the matrix service builds lambdas.
+    pub has_lambdas: StepOutput<Flag>,
+}
+
+/// The step that reads which artifacts the matrix service builds.
+pub(crate) const CHECK_ARTIFACTS: StepHandle<CheckArtifactsOutputs> = StepHandle::new(
+    "check-artifacts",
+    CheckArtifactsOutputs {
+        has_binaries: StepOutput::new("check-artifacts", "has_binaries"),
+        has_lambdas: StepOutput::new("check-artifacts", "has_lambdas"),
+    },
+);
+
+pub(crate) struct ProjectNameOutputs {
+    /// The matrix service's Pulumi project name.
+    pub project_name: StepOutput<Str>,
+}
+
+/// The step that resolves the matrix service's Pulumi project.
+pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
+    "project-name",
+    ProjectNameOutputs {
+        project_name: StepOutput::new("project-name", "project-name"),
+    },
+);
 
 /// Build the workflow.
 pub fn deploy_all_services() -> Workflow {
@@ -74,31 +150,31 @@ pub fn deploy_all_services() -> Workflow {
             ))
             .cancel_in_progress(false),
         )
-        .add_job("setup", setup())
+        .add_job(SETUP, setup())
         .add_job(
-            "warm-binaries",
+            WARM_BINARIES,
             warm_job(
                 "Warm shared binary deps onto sticky disk",
-                "binaries",
+                &SETUP.outputs.binary_services,
                 "Warm shared release deps",
                 ".#deployCargoArtifacts",
                 "Shared release deps realised into /nix/store; committed on job exit.",
             ),
         )
         .add_job(
-            "warm-lambdas",
+            WARM_LAMBDAS,
             warm_job(
                 "Warm shared lambda deps onto sticky disk",
-                "lambdas",
+                &SETUP.outputs.lambda_services,
                 "Warm shared lambda dep closure",
                 ".#lambdaDeployCargoArtifacts .#callRecordingPreviewFfmpegLayer",
                 "Shared lambda deps realised into /nix/store; committed on job exit.",
             ),
         )
-        .add_job("build-service-binaries", build_service_binaries())
-        .add_job("build-lambda-artifacts", build_lambda_artifacts())
-        .add_job("migrate-db", migrate_db())
-        .add_job("deploy-services", deploy_services())
+        .add_job(BUILD_SERVICE_BINARIES, build_service_binaries())
+        .add_job(BUILD_LAMBDA_ARTIFACTS, build_lambda_artifacts())
+        .add_job(MIGRATE_DB, migrate_db())
+        .add_job(DEPLOY_SERVICES, deploy_services())
         .add_job("deployment-summary", deployment_summary())
 }
 
@@ -106,9 +182,18 @@ fn setup() -> Job {
     Job::default()
         .name("Setup Deployment Matrix")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("matrix", steps("set-matrix").output("matrix"))
-        .add_output("binaries", steps("set-matrix").output("binaries"))
-        .add_output("lambdas", steps("set-matrix").output("lambdas"))
+        .add_output(
+            SETUP.outputs.services.name(),
+            SET_MATRIX.outputs.services.read(),
+        )
+        .add_output(
+            SETUP.outputs.binary_services.name(),
+            SET_MATRIX.outputs.binary_services.read(),
+        )
+        .add_output(
+            SETUP.outputs.lambda_services.name(),
+            SET_MATRIX.outputs.lambda_services.read(),
+        )
         .add_step(steps::checkout_v4())
         .add_step(set_matrix())
 }
@@ -131,7 +216,7 @@ fn set_matrix() -> Step<Run> {
             echo "With binaries: ${binaries}"
             echo "With lambdas: ${lambdas}"
         "#})
-        .id("set-matrix")
+        .id(SET_MATRIX.id())
 }
 
 /// Warm one shared dep closure onto the /nix sticky disk, then push it to the
@@ -142,7 +227,7 @@ fn set_matrix() -> Step<Run> {
 /// cache volume is provided by Namespace's native Nix integration.
 fn warm_job(
     name: &str,
-    gate_output: &str,
+    gate: &JobOutput<Str>,
     build_step_name: &str,
     targets: &str,
     done_msg: &str,
@@ -154,8 +239,8 @@ fn warm_job(
         .join(" ");
     Job::default()
         .name(name)
-        .needs(vec!["setup".to_string()])
-        .cond(needs("setup").output(gate_output).ne("[]"))
+        .needs(vec![SETUP.to_string()])
+        .cond(gate.read().ne("[]"))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
@@ -169,16 +254,16 @@ fn warm_job(
 /// volume populated by the matching warm job, so only each service's own
 /// crate compiles. No max-parallel:
 /// runners autoscale, so all services build concurrently.
-fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
+fn build_job(name: &str, warm_job: &JobHandle<()>, gate: &JobOutput<Str>) -> Job {
     Job::default()
         .name(name)
-        .needs(vec!["setup".to_string(), warm_job_id.to_string()])
-        .cond(needs("setup").output(gate_output).ne("[]"))
+        .needs(vec![SETUP.to_string(), warm_job.to_string()])
+        .cond(gate.read().ne("[]"))
         .runs_on(runners::Runner::Mid.to_string())
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": serde_json::Value::from(from_json::<Json>(needs("setup").output(gate_output))),
+                "service": serde_json::Value::from(from_json::<Json>(gate.read())),
             })),
             max_parallel: None,
         })
@@ -191,8 +276,8 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
 fn build_service_binaries() -> Job {
     build_job(
         &format!("Build {} binaries", matrix::<Str>("service")),
-        "warm-binaries",
-        "binaries",
+        &WARM_BINARIES,
+        &SETUP.outputs.binary_services,
     )
     .add_step(build_prebuilt_binaries())
     // Pushing the built output is what makes this service a pure substitution
@@ -238,8 +323,8 @@ fn build_prebuilt_binaries() -> Step<Run> {
 fn build_lambda_artifacts() -> Job {
     build_job(
         &format!("Build {} Lambda artifacts", matrix::<Str>("service")),
-        "warm-lambdas",
-        "lambdas",
+        &WARM_LAMBDAS,
+        &SETUP.outputs.lambda_services,
     )
     .add_step(build_lambdas())
     .add_step(log_lambda_receipt())
@@ -284,15 +369,15 @@ fn migrate_db() -> Job {
     Job::default()
         .name("Run Database Migrations")
         .needs(vec![
-            "setup".to_string(),
-            "warm-binaries".to_string(),
-            "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
+            SETUP.to_string(),
+            WARM_BINARIES.to_string(),
+            WARM_LAMBDAS.to_string(),
+            BUILD_SERVICE_BINARIES.to_string(),
+            BUILD_LAMBDA_ARTIFACTS.to_string(),
         ])
         .cond(
             (!cancelled())
-                .and(needs("setup").output("matrix").ne("[]"))
+                .and(SETUP.outputs.services.read().ne("[]"))
                 .and(!all_needs_results().contains("failure"))
                 .and(!all_needs_results().contains("cancelled")),
         )
@@ -318,17 +403,17 @@ fn deploy_services() -> Job {
     Job::default()
         .name(format!("Deploy {}", matrix::<Str>("service")))
         .needs(vec![
-            "setup".to_string(),
-            "warm-binaries".to_string(),
-            "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
-            "migrate-db".to_string(),
+            SETUP.to_string(),
+            WARM_BINARIES.to_string(),
+            WARM_LAMBDAS.to_string(),
+            BUILD_SERVICE_BINARIES.to_string(),
+            BUILD_LAMBDA_ARTIFACTS.to_string(),
+            MIGRATE_DB.to_string(),
         ])
         .cond(
             (!cancelled())
-                .and(needs("setup").output("matrix").ne("[]"))
-                .and(needs("migrate-db").result().eq("success"))
+                .and(SETUP.outputs.services.read().ne("[]"))
+                .and(MIGRATE_DB.result().eq("success"))
                 .and(!all_needs_results().contains("failure"))
                 .and(!all_needs_results().contains("cancelled")),
         )
@@ -337,7 +422,7 @@ fn deploy_services() -> Job {
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": serde_json::Value::from(from_json::<Json>(needs("setup").output("matrix"))),
+                "service": serde_json::Value::from(from_json::<Json>(SETUP.outputs.services.read())),
             })),
             max_parallel: None,
         })
@@ -355,7 +440,7 @@ fn get_project_name() -> Step<Use> {
         "Get project name",
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
-    .id("project-name")
+    .id(PROJECT_NAME.id())
     .add_with(("service-name", matrix::<Str>("service")))
 }
 
@@ -367,7 +452,7 @@ fn check_artifact_config() -> Step<Run> {
             echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
             echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
         "#})
-        .id("check-artifacts")
+        .id(CHECK_ARTIFACTS.id())
         .add_env(Env::new("SERVICE", matrix::<Str>("service")))
 }
 
@@ -391,19 +476,21 @@ fn download_handoff_artifacts() -> Step<Run> {
             fi
         "#})
         .if_condition(
-            steps("check-artifacts")
-                .output("has_binaries")
-                .is_true()
-                .or(steps("check-artifacts").output("has_lambdas").is_true()),
+            CHECK_ARTIFACTS
+                .outputs
+                .has_binaries
+                .read()
+                .is_set()
+                .or(CHECK_ARTIFACTS.outputs.has_lambdas.read().is_set()),
         )
         .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
-            steps("check-artifacts").output("has_binaries"),
+            CHECK_ARTIFACTS.outputs.has_binaries.read(),
         ))
         .add_env(Env::new(
             "HAS_LAMBDAS",
-            steps("check-artifacts").output("has_lambdas"),
+            CHECK_ARTIFACTS.outputs.has_lambdas.read(),
         ))
         .add_env(Env::new(
             "BASE",
@@ -427,33 +514,36 @@ fn deploy_service() -> Step<Use> {
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        steps("project-name").output("project-name"),
+        PROJECT_NAME.outputs.project_name.read(),
     ))
     .add_with(("use-namespace-builder", "true"))
     .add_with((
         "prebuilt-binaries-tar",
-        handoff_tar_path("has_binaries", "prebuilt-binaries.tar.gz"),
+        handoff_tar_path(
+            &CHECK_ARTIFACTS.outputs.has_binaries,
+            "prebuilt-binaries.tar.gz",
+        ),
     ))
     .add_with((
         "lambda-artifacts-tar",
-        handoff_tar_path("has_lambdas", "lambda-artifacts.tar.gz"),
+        handoff_tar_path(
+            &CHECK_ARTIFACTS.outputs.has_lambdas,
+            "lambda-artifacts.tar.gz",
+        ),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))
 }
 
 /// The downloaded handoff tar when the service has one, else empty.
-fn handoff_tar_path(has_output: &str, file: &str) -> Expr<Str> {
-    steps("check-artifacts")
-        .output(has_output)
-        .is_true()
-        .then_else(
-            format(
-                &format!("{{0}}/handoff/{file}"),
-                [runner().temp().into_ast()],
-            ),
-            "",
-        )
+fn handoff_tar_path(has: &StepOutput<Flag>, file: &str) -> Expr<Str> {
+    has.read().is_set().then_else(
+        format(
+            &format!("{{0}}/handoff/{file}"),
+            [runner().temp().into_ast()],
+        ),
+        "",
+    )
 }
 
 fn deployment_summary() -> Job {
@@ -461,13 +551,13 @@ fn deployment_summary() -> Job {
         .name("Deployment Summary")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .needs(vec![
-            "setup".to_string(),
-            "warm-binaries".to_string(),
-            "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
-            "migrate-db".to_string(),
-            "deploy-services".to_string(),
+            SETUP.to_string(),
+            WARM_BINARIES.to_string(),
+            WARM_LAMBDAS.to_string(),
+            BUILD_SERVICE_BINARIES.to_string(),
+            BUILD_LAMBDA_ARTIFACTS.to_string(),
+            MIGRATE_DB.to_string(),
+            DEPLOY_SERVICES.to_string(),
         ])
         .cond(always())
         .add_step(steps::checkout_v4())

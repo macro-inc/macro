@@ -6,7 +6,7 @@
 //! into `release-production.yml`, the name it had when it was hand-written,
 //! which is its identity in GitHub Actions.
 
-use gh_workflow::expr::typed::{Bool, Expr, github};
+use gh_workflow::expr::typed::{Bool, Expr, JobHandle, github};
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
     Workflow,
@@ -16,6 +16,13 @@ use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
 
 #[cfg(test)]
 mod test;
+
+pub(crate) const DEPLOY_CLOUD_STORAGE: JobHandle<()> = JobHandle::new("deploy-cloud-storage", ());
+pub(crate) const DEPLOY_SYNC_SERVICE: JobHandle<()> = JobHandle::new("deploy-sync-service", ());
+/// Builds the web app.
+pub(crate) const BUILD: JobHandle<()> = JobHandle::new("build", ());
+/// Deploys the web app.
+pub(crate) const DEPLOY: JobHandle<()> = JobHandle::new("deploy", ());
 
 /// What the release deploys to.
 const ENVIRONMENT: &str = "prod";
@@ -36,14 +43,14 @@ pub fn release_production() -> Workflow {
                 .cancel_in_progress(false),
         )
         .add_env(("MODE", "production"))
-        .add_job("deploy-cloud-storage", deploy_cloud_storage())
-        .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job(DEPLOY_CLOUD_STORAGE, deploy_cloud_storage())
+        .add_job(DEPLOY_SYNC_SERVICE, deploy_sync_service())
         .add_job("deploy-ai-editing-worker", deploy_ai_editing_worker())
         .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
         .add_job("deploy-website", deploy_website())
         .add_job("publish-ios", publish_ios())
-        .add_job("build", build())
-        .add_job("deploy", deploy())
+        .add_job(BUILD, build())
+        .add_job(DEPLOY, deploy())
         .add_job("upload", upload())
 }
 
@@ -64,7 +71,7 @@ fn deploy_cloud_storage() -> CallJob {
 fn deploy_sync_service() -> CallJob {
     CallJob::new("./.github/workflows/deploy_sync_service.yml")
         .name("Deploy Sync Service")
-        .needs(vec!["deploy-cloud-storage".to_string()])
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
         .add_with("environment", ENVIRONMENT)
         .inherit_secrets()
 }
@@ -76,8 +83,8 @@ fn deploy_ai_editing_worker() -> CallJob {
     CallJob::new("./.github/workflows/deploy_ai_editing_worker.yml")
         .name("Deploy AI Editing Worker")
         .needs(vec![
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
         ])
         .add_with("environment", ENVIRONMENT)
         .inherit_secrets()
@@ -88,7 +95,7 @@ fn deploy_ai_editing_worker() -> CallJob {
 fn deploy_mcp_chatgpt_worker() -> CallJob {
     CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
         .name("Deploy MCP ChatGPT Worker")
-        .needs(vec!["deploy-cloud-storage".to_string()])
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
         .add_with("environment", ENVIRONMENT)
         .inherit_secrets()
 }
@@ -112,7 +119,7 @@ fn deploy_website() -> CallJob {
 fn publish_ios() -> CallJob {
     CallJob::new("./.github/workflows/ios-app-store-publish.yml")
         .name("Publish iOS App Store Version")
-        .needs(vec!["deploy".to_string()])
+        .needs(vec![DEPLOY.to_string()])
         .permissions(Permissions::default().contents(Level::Read))
         .add_secret("IOS_RELEASE_DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN)
 }
@@ -138,9 +145,9 @@ fn deploy() -> Job {
         .name("Deploy Web App")
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .needs(vec![
-            "build".to_string(),
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
+            BUILD.to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
         ])
         .add_env(("CI", "true"))
         .add_step(build_web_app::checkout())
@@ -162,7 +169,7 @@ fn upload() -> Job {
     Job::default()
         .name("Upload Release Artifacts")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .needs(vec!["build".to_string(), "deploy".to_string()])
+        .needs(vec![BUILD.to_string(), DEPLOY.to_string()])
         .add_step(build_web_app::checkout())
         .add_step(deploy_web_app::download_dist(&build_web_app::artifact(
             ENVIRONMENT,

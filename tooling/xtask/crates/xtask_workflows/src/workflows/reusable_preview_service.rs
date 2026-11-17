@@ -10,12 +10,26 @@
 //! too, which makes an unchanged handler a download. It holds no signing key, so
 //! it can't write to that cache.
 
-use gh_workflow::expr::typed::{Bool, Str, input, steps};
+use gh_workflow::expr::typed::{Bool, StepHandle, StepOutput, Str, input};
 use gh_workflow::{
     Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
+
+pub(crate) struct ProjectNameOutputs {
+    /// The service's Pulumi project name.
+    pub project_name: StepOutput<Str>,
+}
+
+/// The step that resolves the service's Pulumi project, when no stack name is
+/// given.
+pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
+    "project-name",
+    ProjectNameOutputs {
+        project_name: StepOutput::new("project-name", "project-name"),
+    },
+);
 
 /// Build the workflow.
 pub fn reusable_preview_service() -> Workflow {
@@ -98,7 +112,7 @@ fn get_project_name() -> Step<Use> {
         "Get project name",
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
-    .id("project-name")
+    .id(PROJECT_NAME.id())
     .add_with(("service-name", input::<Str>("service-name")))
 }
 
@@ -113,7 +127,7 @@ fn preview_pulumi() -> Step<Use> {
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        input::<Str>("pulumi-stack-name").or_else(steps("project-name").output("project-name")),
+        input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))
