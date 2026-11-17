@@ -416,6 +416,11 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   calendar synced or materialized, or its account ready, before the whole
   window finishes, so every coverage reader (sync health and booking, team
   availability, the syncing banner) still sees a first import in progress.
+  `checkpoint_outlook_calendar` reports both milestones (`OutlookCheckpoint`):
+  the span records `milestone` (`near_window_imported`,
+  `first_sync_finished`), and the log `an Outlook calendar's first import
+  reached a milestone` carries `since_discovery_s`, the only measure of time
+  to the current month, since spans are sampled.
   Google needs no such order: its first import writes each calendar's whole
   window from one snapshot within seconds. A delta round lists only changes,
   so it also reads again the members with no stored copy that an older `READER_REVISION` read (stamped

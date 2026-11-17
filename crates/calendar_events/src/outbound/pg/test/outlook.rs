@@ -696,9 +696,12 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
     .await
     .unwrap();
     let finish = claim(&repo).await.unwrap();
-    repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
-        .await
-        .unwrap();
+    assert_eq!(
+        repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
+            .await
+            .unwrap(),
+        OutlookCheckpoint::NearWindowImported
+    );
 
     // This month and next are imported, and nothing reads the rest of the
     // window as imported or as free time yet.
@@ -757,7 +760,13 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
         .await
         .unwrap();
     }
-    finish_round(&repo, &pool, READER_REVISION).await;
+    let finish = claim(&repo).await.unwrap();
+    assert_eq!(
+        repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
+            .await
+            .unwrap(),
+        OutlookCheckpoint::RoundFinished { first_sync: true }
+    );
     let (synced_at, materialized_from, status, account_synced) = coverage(&pool, calendar_id).await;
     assert!(synced_at.is_some(), "synced once the whole window is in");
     assert_eq!(
@@ -767,8 +776,34 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
     assert_eq!((status.as_str(), account_synced), ("ready", true));
 
     // A synced calendar never lists the near window again, even from scratch.
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at=now() WHERE id=$1",
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let delta = claim(&repo).await.unwrap();
     assert!(!delta.near_window);
+    repo.checkpoint_outlook_calendar(&delta, delta_page("second"))
+        .await
+        .unwrap();
+    let finish = claim(&repo).await.unwrap();
+    assert_eq!(
+        repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
+            .await
+            .unwrap(),
+        OutlookCheckpoint::RoundFinished { first_sync: false },
+        "a later round is not a first sync"
+    );
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at=now() WHERE id=$1",
+        lease.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let delta = claim(&repo).await.unwrap();
     repo.checkpoint_outlook_calendar(&delta, OutlookCalendarProgress::Reset)
         .await
         .unwrap();

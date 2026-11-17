@@ -96,7 +96,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         &self,
         lease: &OutlookCalendarLease,
         progress: OutlookCalendarProgress,
-    ) -> Result<(), Report> {
+    ) -> Result<OutlookCheckpoint, Report> {
         let target = lease
             .target
             .as_ref()
@@ -106,6 +106,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         fence(&mut tx, lease).await?;
         let state=sqlx::query!("SELECT scan_id,full_scan,page_loaded,page_cursor,next_page,terminal_cursor,pending_ids,visited_pages FROM calendar_outlook_work WHERE id=$1",lease.id).fetch_one(&mut *tx).await.map_err(report)?;
         let mut delay = false;
+        let mut checkpoint = OutlookCheckpoint::Step;
         match progress {
             OutlookCalendarProgress::Reset => reset_cursor(&mut tx, lease.id).await?,
             OutlookCalendarProgress::Page(page) => {
@@ -219,6 +220,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     // that scan finishes.
                     sqlx::query!("UPDATE calendar_outlook_work SET page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,page_loaded=false,visited_pages='{}',scan_id=$2,whole_window_scan_id=$2 WHERE id=$1",
                         lease.id,Uuid::now_v7()).execute(&mut *tx).await.map_err(report)?;
+                    checkpoint = OutlookCheckpoint::NearWindowImported;
                 } else {
                     if lease.is_primary && state.terminal_cursor.is_none() {
                         return Err(rootcause::report!(
@@ -248,17 +250,26 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                             CalendarChangeOp::UpsertCalendar(target.calendar_id),
                         );
                     }
+                    let first_sync = sqlx::query_scalar!(
+                        r#"SELECT synced_at IS NULL AS "first_sync!" FROM calendars WHERE id=$1"#,
+                        target.calendar_id
+                    )
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(report)?;
                     sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,last_sync_error_kind=NULL,consecutive_sync_failures=0,
                         materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
                     sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
                         last_synced_at=now(),last_sync_error=NULL WHERE a.id=$1"#,lease.account_id).execute(&mut *tx).await.map_err(report)?;
                     delay = true;
+                    checkpoint = OutlookCheckpoint::RoundFinished { first_sync };
                 }
             }
         }
         sqlx::query!("UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+make_interval(secs=>CASE WHEN $2 THEN 120 ELSE 0 END),last_error=NULL,attempts=0 WHERE id=$1",lease.id,delay).execute(&mut *tx).await.map_err(report)?;
-        log.commit(tx).await
+        log.commit(tx).await?;
+        Ok(checkpoint)
     }
     async fn claim_outlook_calendar(
         &self,
