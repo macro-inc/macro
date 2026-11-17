@@ -327,6 +327,33 @@ scale into its samples instead, preserving nominal brush width.
 Picking accepts painted stroke pixels or the existing 3-screen-pixel minimum
 outline tolerance; a thick stroke does not gain another 3px outside its paint.
 
+A finger gets larger targets than a cursor, decided by the pointer type of each
+press, while the handles are drawn the same size. A touch within 16px of a
+corner or the rotation knob, or 12px outside an edge, takes that handle even
+though nothing is drawn under it (`touchHandleAt` in the graphics core). A corner
+claims only the outer quarter of each side that meets at it, so a short side (one
+line of text) keeps its middle for its edge handle. Inside the frame the reach
+shrinks with it (a quarter of the shorter side for a corner, a sixth and at most
+8px for an edge), so the middle of a small shape still moves it; where the reach
+finds no handle a finger takes none, even on the strip drawn along the edge of a
+thin shape. Outside the frame the reach ends at another item's paint: a press
+there selects or drags that item. Inside the frame a press is the selection's,
+whatever is painted there, as it is for a cursor. A finger
+resizes or rotates once it has moved 3px; one that only taps near a handle
+changes nothing, and outside the frame it selects what it tapped or clears the
+selection. A touch that lands on nothing picks a stroke from 10px away rather
+than 3; paint under the finger always wins over a stroke that is merely near.
+The touch view also sets `touchHandles` on the surface, which holds for every
+pointer there: the rotation knob stands 32px off the frame instead of 16, a
+connector's endpoints are taken from 16px, and the corner-radius handles, which
+sit inside each corner, are left to the inspector's Corner radius field. An
+endpoint's reach holds over other items' paint, unlike a handle's: an end usually
+sits on the shape it is attached to, and only a selected connector has ends to
+take. An end taken from a distance (by a finger or pen, or by any pointer on
+that wider target) keeps its distance from the pointer and moves once the
+pointer has moved 3px, so a tap leaves the end, and what it is bound to, alone.
+A cursor that presses the end itself places it under the cursor, as on desktop.
+
 ## Ownership
 
 - `core/`: seed/defaults only. Editing algorithms and typed commands live in graphics.

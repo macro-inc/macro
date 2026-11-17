@@ -36,8 +36,9 @@ import {
   drawableIds,
   freezeDocument,
   groupNodes,
-  hitTest,
+  hitTestWithin,
   nodeBoundsPoints,
+  PICK_TOLERANCE,
   reparent,
   ungroupNode,
   worldBounds,
@@ -361,8 +362,19 @@ function createEditor(
     },
     select,
     selectMany: selection.selectMany,
-    hitTest: (point: Point, deep = false) =>
-      hitTest(document, point, deep, 3 / camera.scale),
+    /**
+     * The topmost item at a point. Its paint is picked as a cursor picks it;
+     * a wider `reach`, in screen pixels, is searched only when nothing is
+     * under the point.
+     */
+    hitTest: (point: Point, deep = false, reach = PICK_TOLERANCE) =>
+      hitTestWithin(
+        document,
+        point,
+        deep,
+        PICK_TOLERANCE / camera.scale,
+        reach / camera.scale
+      ),
     groupSelection(id: string) {
       if (disposed) return;
       commitDocument(

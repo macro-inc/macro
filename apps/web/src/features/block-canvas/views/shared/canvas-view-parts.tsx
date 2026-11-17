@@ -168,11 +168,14 @@ function createCanvasView(props: CanvasViewProps) {
       state.chooseTool('select');
       focus();
     },
-    /** Select the item under a screen point, as a context menu's subject. */
-    selectAt(clientX: number, clientY: number) {
+    /**
+     * Select the item under a screen point, as a context menu's subject. A
+     * finger passes a wider `reach` than a cursor's 3px.
+     */
+    selectAt(clientX: number, clientY: number, reach = 3) {
       if (state.embeds.active() || state.text.draft()) return;
       focus();
-      const id = editor.hitTest(worldPoint(clientX, clientY));
+      const id = editor.hitTest(worldPoint(clientX, clientY), false, reach);
       if (id && !state.session().selectedIds.includes(id)) {
         state.chooseTool('select');
         editor.select(id);
@@ -284,6 +287,8 @@ function Surface(props: {
    * screen; nothing while a long press should stay with the tool.
    */
   longPress?: () => ((point: Point) => void) | undefined;
+  /** Lay the selection's handles out for fingers. */
+  touchHandles?: boolean;
 }) {
   const view = useCanvasView();
   const { state, editor } = view;
@@ -431,6 +436,7 @@ function Surface(props: {
           duplicateOnAltDrag: true,
           onShapeCreated: state.shapeCreated,
           longPress: () => props.longPress?.(),
+          touchHandles: props.touchHandles,
         }}
         gridColor={
           state.grid()
