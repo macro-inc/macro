@@ -3,6 +3,7 @@ import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Property } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { UserFilterActions } from '@property/component/UserFilterActions';
 import type { PropertySaveFn } from '@property/core/context';
 import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -83,6 +84,7 @@ export function TaskBoardProperty(props: {
   iconOnly?: boolean;
   onSave: PropertySaveFn;
   dueDateUrgency?: 'danger' | 'warning';
+  onFilterByUser?: (userId: string) => void;
 }) {
   return (
     <Property.Root
@@ -102,7 +104,19 @@ export function TaskBoardProperty(props: {
 
         return (
           <>
-            <Property.Tooltip property={shown()}>
+            <Property.Tooltip
+              property={shown()}
+              actions={
+                <Show when={props.onFilterByUser}>
+                  {(onFilter) => (
+                    <UserFilterActions
+                      property={shown()}
+                      onFilter={onFilter()}
+                    />
+                  )}
+                </Show>
+              }
+            >
               <Property.Pill
                 variant="ghost"
                 aria-label={shown().displayName}

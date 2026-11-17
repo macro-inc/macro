@@ -91,7 +91,10 @@ vi.mock('./project-scoped-panel', () => ({
 vi.mock('./sidepanel/ProjectSidePanelSections', () => ({
   ProjectSidePanelSections: () => null,
 }));
-vi.mock('./TopBar', () => ({ TopBar: () => null }));
+vi.mock('../views/project-header', () => ({ ProjectHeader: () => null }));
+vi.mock('../views/mobile/project-header', () => ({
+  MobileProjectHeader: () => null,
+}));
 
 afterEach(() => {
   cleanup();

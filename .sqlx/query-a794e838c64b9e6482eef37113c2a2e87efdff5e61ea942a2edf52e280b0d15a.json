@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email_address AS address, name FROM email_contacts\n               WHERE link_id = $1 AND email_address > COALESCE($2, '')\n               ORDER BY email_address LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "a794e838c64b9e6482eef37113c2a2e87efdff5e61ea942a2edf52e280b0d15a"
+}
