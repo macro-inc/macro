@@ -4,7 +4,6 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 import type { TeamDefaultLinkShare } from './teamDefaultLinkShare';
 import type { TeamLanguage } from './teamLanguage';
 
@@ -15,9 +14,6 @@ export interface Team {
   /** Whether non-admin members may invite users to the team. Defaults to
 true; admins can turn it off so only admins/owners may invite. */
   allow_non_admin_invites: boolean;
-  /** The email domain new users are automatically joined to this team
-with, when automatic domain joining is enabled (None otherwise). */
-  auto_join_domain?: TeamAutoJoinDomain;
   /** CRM record availability, always true for teams. This compatibility
 field does not indicate whether any mailbox contributes emails. */
   crm_enabled: boolean;

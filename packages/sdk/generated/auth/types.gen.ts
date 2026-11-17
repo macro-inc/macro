@@ -532,11 +532,6 @@ export type CreateTeamAgent = {
  */
 export type CreateTeamRequest = {
     /**
-     * Whether colleagues who sign up with the owner's work email domain join
-     * the team automatically. Ignored for generic email providers.
-     */
-    allow_domain_join?: boolean;
-    /**
      * The name of the team
      */
     name: string;
@@ -1976,16 +1971,6 @@ export type ScheduledSeatPlan = {
 export type SeatPlan = 'premium' | 'max';
 
 /**
- * Response for the domain notice endpoint.
- */
-export type SendDomainNoticeResponse = {
-    /**
-     * How many colleagues were emailed by this call.
-     */
-    sent: number;
-};
-
-/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -2330,11 +2315,6 @@ export type Team = {
      */
     allow_non_admin_invites: boolean;
     /**
-     * The email domain new users are automatically joined to this team
-     * with, when automatic domain joining is enabled (None otherwise).
-     */
-    auto_join_domain?: string | null;
-    /**
      * CRM record availability, always true for teams. This compatibility
      * field does not indicate whether any mailbox contributes emails.
      */
@@ -2558,17 +2538,6 @@ export type TeamWithMembers = {
      * The team
      */
     team: Team;
-};
-
-/**
- * Response for the toggle auto-join domain endpoint.
- */
-export type ToggleAutoJoinDomainResponse = {
-    /**
-     * The team's auto-join domain after the toggle (null when it was
-     * unset by this call).
-     */
-    auto_join_domain?: string | null;
 };
 
 /**
@@ -4522,29 +4491,6 @@ export type CreateTeamResponses = {
 
 export type CreateTeamResponse = CreateTeamResponses[keyof CreateTeamResponses];
 
-export type ToggleTeamAutoJoinDomainData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/team/auto-join-domain/toggle';
-};
-
-export type ToggleTeamAutoJoinDomainErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ToggleTeamAutoJoinDomainError = ToggleTeamAutoJoinDomainErrors[keyof ToggleTeamAutoJoinDomainErrors];
-
-export type ToggleTeamAutoJoinDomainResponses = {
-    200: ToggleAutoJoinDomainResponse;
-};
-
-export type ToggleTeamAutoJoinDomainResponse = ToggleTeamAutoJoinDomainResponses[keyof ToggleTeamAutoJoinDomainResponses];
-
 export type ListTeamComputersData = {
     body?: never;
     path?: never;
@@ -4760,27 +4706,6 @@ export type PatchTeamCrmSettingsResponses = {
 };
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
-
-export type SendTeamDomainNoticeData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/team/domain-notice';
-};
-
-export type SendTeamDomainNoticeErrors = {
-    401: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
-
-export type SendTeamDomainNoticeResponses = {
-    200: SendDomainNoticeResponse;
-};
-
-export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
 
 export type InviteToTeamData = {
     body: InviteToTeamRequest;

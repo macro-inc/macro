@@ -99,7 +99,6 @@ import type {
   RedeemGtmInviteLinkRequest,
   ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
-  SendDomainNoticeResponse,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
@@ -124,7 +123,6 @@ import type {
   TeamInvitesResponse,
   TeamMember,
   TeamWithMembers,
-  ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
   TrialEligibility,
   UpdateAutoReloadRequest,
@@ -4735,86 +4733,6 @@ export const patchTeam = async (
 };
 
 /**
- * @summary Toggles automatic domain joining for the team. When the team has no
-auto-join domain, sets it to the team owner's email domain — rejected
-with a 400 when that domain is a generic email provider domain (e.g.
-gmail.com). When one is already set, removes it. New users whose email
-domain matches a team's auto-join domain are added to that team on
-signup. Requires the caller to be an Admin or Owner of the team.
- */
-export type toggleTeamAutoJoinDomainResponse200 = {
-  data: ToggleAutoJoinDomainResponse;
-  status: 200;
-};
-
-export type toggleTeamAutoJoinDomainResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type toggleTeamAutoJoinDomainResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type toggleTeamAutoJoinDomainResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type toggleTeamAutoJoinDomainResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type toggleTeamAutoJoinDomainResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type toggleTeamAutoJoinDomainResponseSuccess =
-  toggleTeamAutoJoinDomainResponse200 & {
-    headers: Headers;
-  };
-export type toggleTeamAutoJoinDomainResponseError = (
-  | toggleTeamAutoJoinDomainResponse400
-  | toggleTeamAutoJoinDomainResponse401
-  | toggleTeamAutoJoinDomainResponse403
-  | toggleTeamAutoJoinDomainResponse404
-  | toggleTeamAutoJoinDomainResponse500
-) & {
-  headers: Headers;
-};
-
-export type toggleTeamAutoJoinDomainResponse =
-  | toggleTeamAutoJoinDomainResponseSuccess
-  | toggleTeamAutoJoinDomainResponseError;
-
-export const getToggleTeamAutoJoinDomainUrl = () => {
-  return `/team/auto-join-domain/toggle`;
-};
-
-export const toggleTeamAutoJoinDomain = async (
-  options?: RequestInit
-): Promise<toggleTeamAutoJoinDomainResponse> => {
-  const res = await fetch(getToggleTeamAutoJoinDomainUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: toggleTeamAutoJoinDomainResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as toggleTeamAutoJoinDomainResponse;
-};
-
-/**
  * @summary The team's computers, oldest first.
  */
 export type listTeamComputersResponse200 = {
@@ -5421,73 +5339,6 @@ export const patchTeamCrmSettings = async (
     status: res.status,
     headers: res.headers,
   } as patchTeamCrmSettingsResponse;
-};
-
-/**
- * @summary Emails the caller's contacts on the team's auto-join domain that the team
-exists, so they can sign up and join. Contacts already on Macro, on the
-team, invited, or emailed before are skipped, and a team emails at most 25
-people in total. Call it after sending the team's invites. Requires the
-caller to be an Admin or Owner of the team.
- */
-export type sendTeamDomainNoticeResponse200 = {
-  data: SendDomainNoticeResponse;
-  status: 200;
-};
-
-export type sendTeamDomainNoticeResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type sendTeamDomainNoticeResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type sendTeamDomainNoticeResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type sendTeamDomainNoticeResponseSuccess =
-  sendTeamDomainNoticeResponse200 & {
-    headers: Headers;
-  };
-export type sendTeamDomainNoticeResponseError = (
-  | sendTeamDomainNoticeResponse401
-  | sendTeamDomainNoticeResponse403
-  | sendTeamDomainNoticeResponse500
-) & {
-  headers: Headers;
-};
-
-export type sendTeamDomainNoticeResponse =
-  | sendTeamDomainNoticeResponseSuccess
-  | sendTeamDomainNoticeResponseError;
-
-export const getSendTeamDomainNoticeUrl = () => {
-  return `/team/domain-notice`;
-};
-
-export const sendTeamDomainNotice = async (
-  options?: RequestInit
-): Promise<sendTeamDomainNoticeResponse> => {
-  const res = await fetch(getSendTeamDomainNoticeUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: sendTeamDomainNoticeResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as sendTeamDomainNoticeResponse;
 };
 
 /**
