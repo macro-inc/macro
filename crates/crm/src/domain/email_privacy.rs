@@ -42,6 +42,18 @@ pub struct EmailPrivacySettings {
     pub can_remove_team_domains: bool,
 }
 
+/// Current mailbox consent without loading domain exclusion lists.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EmailContributionConsent {
+    /// Whether this exact mailbox has explicit contribution consent.
+    pub enabled: bool,
+    /// The primary mailbox that would contribute, if connected.
+    pub mailbox_email: Option<String>,
+    /// Exact current primary mailbox connection.
+    pub mailbox_link_id: Option<Uuid>,
+}
+
 /// An explicitly consented primary mailbox for a current team member.
 #[derive(Debug, Clone)]
 pub struct EmailContributionMailbox {
@@ -107,6 +119,13 @@ pub enum EmailPrivacyChange {
 
 /// Persistence of consent and blocklists. Writes also schedule eligible backfill.
 pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
+    /// Read only this member's mailbox consent, without domain lists.
+    fn email_consent(
+        &self,
+        team: Uuid,
+        user: &str,
+    ) -> impl Future<Output = Result<EmailContributionConsent, CrmError>> + Send;
+
     /// List only this member's exclusions, with an exclusive thread-ID cursor.
     fn excluded_email_threads(
         &self,
@@ -150,6 +169,12 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
 
 /// Authorized user-facing privacy operations.
 pub trait EmailPrivacyService: Clone + Send + Sync + 'static {
+    /// Read only the authenticated member's mailbox consent.
+    fn email_consent(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<EmailContributionConsent, CrmError>> + Send;
+
     /// List the authenticated mailbox owner's private threads.
     fn excluded_email_threads(
         &self,

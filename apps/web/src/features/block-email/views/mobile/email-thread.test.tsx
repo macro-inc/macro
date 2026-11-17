@@ -80,7 +80,7 @@ vi.mock('../../component/useEmailThreadTools', () => ({
         share: action('Share'),
         moveToFolder: action('Move to folder'),
         downloadEml: action('Download'),
-        excludeFromCrm: action('Keep this thread out of CRM'),
+        excludeFromCrm: action('Exclude thread from CRM'),
         trash: action('Delete'),
         senderToSignal: action('Sender → Signal'),
         senderToNoise: action('Sender → Noise'),

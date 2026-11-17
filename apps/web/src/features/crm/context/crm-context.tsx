@@ -99,7 +99,7 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;

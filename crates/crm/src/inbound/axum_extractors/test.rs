@@ -236,6 +236,13 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeCrmService;
 
 impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<crate::domain::email_privacy::EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
     async fn excluded_email_threads(
         &self,
         _: &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,

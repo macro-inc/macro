@@ -3,7 +3,9 @@
 use super::CrmRouterState;
 use crate::domain::{
     auth::CrmTeamReceipt,
-    email_privacy::{EmailPrivacyChange, EmailPrivacySettings, ExcludedEmailThreads},
+    email_privacy::{
+        EmailContributionConsent, EmailPrivacyChange, EmailPrivacySettings, ExcludedEmailThreads,
+    },
     model::CrmError,
     service::CrmService,
 };
@@ -16,6 +18,24 @@ use entity_access::{
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
 use macro_authorization::MacroAuthorizationService;
+
+/// Select the lightweight mailbox-consent projection for thread controls.
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+pub struct EmailPrivacyQuery {
+    /// Return only consent and mailbox fields, without querying domain lists.
+    #[serde(default)]
+    pub consent_only: bool,
+}
+
+/// Full settings by default, or mailbox consent when explicitly requested.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(untagged)]
+pub enum EmailPrivacyResponse {
+    /// The default settings-page response.
+    Settings(EmailPrivacySettings),
+    /// The thread header's lightweight consent projection.
+    Consent(EmailContributionConsent),
+}
 
 /// Keyset cursor for the member's excluded threads.
 #[derive(serde::Deserialize, utoipa::IntoParams)]
@@ -48,7 +68,7 @@ pub async fn excluded_threads_handler<
 }
 
 /// Read the caller's mailbox consent and both exclusion lists.
-#[utoipa::path(get, path = "/crm/email-privacy", operation_id = "get_crm_email_privacy", responses((status = 200, body = EmailPrivacySettings)))]
+#[utoipa::path(get, path = "/crm/email-privacy", operation_id = "get_crm_email_privacy", params(EmailPrivacyQuery), responses((status = 200, body = EmailPrivacyResponse)))]
 pub async fn get_handler<
     C: CrmService,
     St,
@@ -57,9 +77,14 @@ pub async fn get_handler<
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
-) -> Result<Json<EmailPrivacySettings>, CrmError> {
+    Query(query): Query<EmailPrivacyQuery>,
+) -> Result<Json<EmailPrivacyResponse>, CrmError> {
     let access = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
-    Ok(Json(state.service.email_privacy(&access).await?))
+    Ok(Json(if query.consent_only {
+        EmailPrivacyResponse::Consent(state.service.email_consent(&access).await?)
+    } else {
+        EmailPrivacyResponse::Settings(state.service.email_privacy(&access).await?)
+    }))
 }
 
 /// Apply one consent, domain, or thread exclusion change as the member.

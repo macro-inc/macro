@@ -109,7 +109,11 @@ function DomainBlocklist(props: {
   );
 }
 
-function ThreadExclusions(props: { source: PrivacySource }) {
+function ThreadExclusions(props: {
+  source: PrivacySource;
+  onOpenThread?: () => void;
+}) {
+  const navigation = useCrmContext().createNavigation();
   const [after, setAfter] = createSignal<string>();
   const query = props.source.createExcludedThreads(after);
   return (
@@ -155,15 +159,30 @@ function ThreadExclusions(props: { source: PrivacySource }) {
           >
             {(thread) => (
               <SettingsRow
+                class="relative not-touch:hover:bg-hover"
                 label={
-                  <span class="break-words">
+                  <a
+                    class="break-words text-link focus-visible:outline-2 focus-visible:outline-accent after:absolute after:inset-0"
+                    href={`/app/mail/${thread.threadId}`}
+                    onClick={(event) => {
+                      if (event.metaKey || event.ctrlKey || event.altKey)
+                        return;
+                      event.preventDefault();
+                      navigation.openWithSplit(
+                        { type: 'email', id: thread.threadId },
+                        { activate: true, preferNewSplit: event.shiftKey }
+                      );
+                      props.onOpenThread?.();
+                    }}
+                  >
                     {thread.subject || t('crm.privacyThreadNoSubject')}
-                  </span>
+                  </a>
                 }
               >
                 <Button
                   variant="ghost"
                   size="sm"
+                  class="relative z-1"
                   disabled={props.source.update.isPending}
                   aria-label={t('crm.privacyRestoreThreadLabel', {
                     subject: thread.subject || t('crm.privacyThreadNoSubject'),
@@ -209,7 +228,10 @@ function ThreadExclusions(props: { source: PrivacySource }) {
   );
 }
 
-export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
+export function CrmEmailPrivacySettings(props: {
+  onOptIn?: () => void;
+  onOpenThread?: () => void;
+}) {
   const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
   const source = useCrmContext().createEmailPrivacy();
   const settings = () =>
@@ -256,7 +278,7 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
       <Show when={threadExclusions().enabled}>
-        <ThreadExclusions source={source} />
+        <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
       </Show>
       <div class="flex justify-end">
         <Button
@@ -334,7 +356,10 @@ export function CrmEmailPrivacyDialog(props: {
           </Dialog.CloseButton>
         </Panel.Header>
         <Panel.Body scroll class="p-4 flex flex-col gap-4">
-          <CrmEmailPrivacySettings onOptIn={() => props.onOpenChange(false)} />
+          <CrmEmailPrivacySettings
+            onOptIn={() => props.onOpenChange(false)}
+            onOpenThread={() => props.onOpenChange(false)}
+          />
         </Panel.Body>
       </Panel>
     </Dialog>
