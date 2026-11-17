@@ -91,6 +91,18 @@ tools/HTTP/GraphQL surfaces over them.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
+- Dormant policy storage lives in `domain/email_policy.rs` and
+  `outbound/companies_repo/email_policy/`. Initialize consent identity only via
+  `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
+  incarnation before idempotency lookup. The later API owns version CAS and
+  authentication. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview IDs
+  are immutable retry identities; a new ID replaces the member's slot.
+  Source events page raw contact/company rule references before filtering active
+  revisions. Wire event insertion inside the source edit's existing transaction,
+  under its privacy lock; do not call it as a separate post-commit effect.
+  No selected activation or policy worker is wired by this storage layer.
+
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
   column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`

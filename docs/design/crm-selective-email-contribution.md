@@ -500,14 +500,36 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    of a concurrent mode change across resolution, probe and page.
    Base new migrations after the latest merged
    dependency; never change an applied migration.
-3. **Policy API and historical work.** First add forward-compatible incarnation
-   storage/initialization and fence idempotency and historical-work completion
-   by incarnation/version. Then expose own-member/agent authorization independent
-   of CRM viewing, bounded validation/count preview, direct CAS activation,
-   audit, live-source durable reconciliation and generation-safe backfill.
-   Default-off backend flag; legacy and modern transitions share effective
-   consent semantics. Depends on PR 2 and confirmed ingestion compatibility;
-   no activation API may precede the incarnation and initial-absence guards.
+3. **Policy API and historical work, in three ordered PRs.** All remain dormant
+   until the last stage is deployed and the default-off flag is enabled after
+   the PR 5 gates and explicit rollout authorization.
+
+   - **3a: storage and repository contracts.** Add nullable consent incarnation
+     with guarded initialization/immutability; stamp audit, idempotency, preview
+     and durable work with incarnation/version. New owner inspection initializes
+     a disabled row only with an eligible primary; old-token operations never
+     initialize. Store one replaceable preview and historical-work slot per
+     member, retaining tiny start receipts through the applicable mailbox/member
+     lifetime to reject delayed starts after replacement or completion, plus
+     durable source events and bounded reverse-reference indexes on saved contact/company rule targets. No API, worker wiring, hot email-table
+     index, existing-consent conversion or historical mailbox scan.
+   - **3b: generation-safe historical and live-source work.** Carry the captured
+     incarnation/version through enqueue, publication, pages and conditional
+     completion; reauthorize before enrichment and population. Drain or replace
+     legacy unversioned work. Commit one source event with each relevant record
+     change and reconcile raw references in bounded pages, checking active
+     consent after paging. Preserve unfinished eligible history when narrowing.
+     Demonstrate unchanged all-mail backfill behavior and throughput.
+   - **3c: own-member and agent APIs.** Add validation, CAS/idempotency, verified
+     audit provenance, direct activation and bounded asynchronous count preview.
+     Keep private controls independent of CRM viewing. Regenerate OpenAPI/storage
+     SDK outputs and record SDK coverage deferrals. Refuse activation on a false
+     or unavailable flag; stored restrictions, inspection and withdrawal remain.
+
+   Merge 3a, then 3b, then 3c. These depend on PR 2 and confirmed reader/ingestion
+   compatibility. The unmatched discovery bound and million-thread mailbox tier
+   remain required PR 5 activation gates, not substitutes for these contracts.
+
 4. **SDK and member settings.** Read/validate/replace/preview/history methods,
    code-mode guidance, readable rules/JSON edit/history/withdrawal UI, default-off
    registry entry and responsive presentation. Coordinate with the existing
@@ -528,6 +550,11 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    An overflow must never authorize a truncated target set, and falling back
    to a dense record stream is not a sufficient bound. Retain the deterministic
    all-mail/selected snapshot-transition regressions added in PR 2.
+   CRM-scoped email search is a fourth contribution reader: the team-search
+   follow-up to [#11067](https://github.com/macro-inc/macro/pull/11067) must
+   enforce the same consent, selected-rule and thread-exclusion eligibility as
+   `crm_email_thread_allowed`. Add it to the cross-reader parity suite before
+   selected contribution can be activated. This storage phase adds no search code.
    Depends on all prior PRs. Enabling flags or deployment requires separate
    authorization.
 
