@@ -5732,6 +5732,58 @@
         }
       }
     },
+    "/team_agents/me/online": {
+      "post": {
+        "tags": ["team-agents"],
+        "summary": "The calling agent reports that it is online, with its own credential.\nThe first report makes it `running` and tells its inviter it is ready;\nlater ones change nothing. 404 for an account that isn't an agent of its\nteam.",
+        "operationId": "report_team_agent_online",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team_agents/{agent_user_id}": {
       "delete": {
         "tags": ["team-agents"],
@@ -10591,7 +10643,14 @@
       "TeamAgentStatus": {
         "type": "string",
         "description": "Where an agent teammate is, from its computer.",
-        "enum": ["provisioning", "running", "paused", "failed", "released"]
+        "enum": [
+          "provisioning",
+          "starting",
+          "running",
+          "paused",
+          "failed",
+          "released"
+        ]
       },
       "TeamAgents": {
         "type": "object",

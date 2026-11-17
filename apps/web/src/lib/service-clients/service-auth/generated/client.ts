@@ -6642,6 +6642,78 @@ export const createTeamAgent = async (
 };
 
 /**
+ * @summary The calling agent reports that it is online, with its own credential.
+The first report makes it `running` and tells its inviter it is ready;
+later ones change nothing. 404 for an account that isn't an agent of its
+team.
+ */
+export type reportTeamAgentOnlineResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type reportTeamAgentOnlineResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type reportTeamAgentOnlineResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type reportTeamAgentOnlineResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type reportTeamAgentOnlineResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type reportTeamAgentOnlineResponseSuccess =
+  reportTeamAgentOnlineResponse204 & {
+    headers: Headers;
+  };
+export type reportTeamAgentOnlineResponseError = (
+  | reportTeamAgentOnlineResponse401
+  | reportTeamAgentOnlineResponse403
+  | reportTeamAgentOnlineResponse404
+  | reportTeamAgentOnlineResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportTeamAgentOnlineResponse =
+  | reportTeamAgentOnlineResponseSuccess
+  | reportTeamAgentOnlineResponseError;
+
+export const getReportTeamAgentOnlineUrl = () => {
+  return `/team_agents/me/online`;
+};
+
+export const reportTeamAgentOnline = async (
+  options?: RequestInit
+): Promise<reportTeamAgentOnlineResponse> => {
+  const res = await fetch(getReportTeamAgentOnlineUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportTeamAgentOnlineResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportTeamAgentOnlineResponse;
+};
+
+/**
  * @summary Remove an agent teammate: release its computer, take it off the team and
 delete its repository and account. Requires a team admin or owner.
  */
