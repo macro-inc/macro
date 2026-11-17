@@ -206,6 +206,35 @@ mailbox identities or message payloads.
 
 ## Rollout
 
+The dormant policy repository stores a server-generated `consent_incarnation`
+for each consent row lifetime. Legacy rows stay null until an owner-bound
+inspection initializes identity without changing the grant or policy version;
+a previously absent row starts disabled and requires the exact connected primary
+mailbox. Old-token operations cannot initialize a row. Identity is immutable
+across updates, and deletion/recreation gets a fresh identifier. This storage
+layer has no policy activation API or live worker caller.
+
+Audit and idempotent outcomes carry incarnation/version. Preview and historical
+work each occupy one replaceable member slot; checkpoints and completion compare
+the captured generation and job identity. Retrying a preview ID preserves its
+progress and terminal outcome; a different definition/context requires a fresh
+ID. Job-start outcomes remain in incarnation-scoped idempotency storage, so a
+delayed start cannot resurrect an older slot occupant or completed history job.
+Only the large preview/work payload is one-slot bounded; small retry receipts
+remain until mailbox or membership cleanup. A separate durable work row survives
+outbox publication. Null generation fields in the existing outbox explicitly denote legacy work, which must be
+upgraded or drained before activation. Mailbox or membership deletion cascades
+private envelopes; deleting only consent cannot make old retry results valid.
+
+Source edits will enqueue durable contact/company events in the worker phase.
+The storage layer pages at most 100 raw saved-rule references before checking
+whether a revision is active, so inactive history cannot turn a miss into an
+unbounded scan. Reverse indexes live only on `crm_email_rule_contacts` and
+`crm_email_rule_companies`; ordinary mail ingestion maintains neither. Source
+IDs have no record FK so deletion can still be reconciled. Team deletion removes
+its pending source events. New policy/work tables remain empty until wired by
+later phases.
+
 Selected contribution remains default-off under
 `enable-crm-selective-email-contribution`; this phase adds no API or worker that
 sets selected mode or its grant bit. The eligibility migration refuses to run
@@ -214,7 +243,8 @@ new binaries roll out, while older Team and ingestion queries still require the
 legacy bit. That window is safe because every existing consent is all-mail and
 no deployed operation can activate selected mode. Activation must wait for all
 three readers, the policy API, generation-safe historical work and the PR 5
-performance gate, including the 1m-thread mailbox tier and a work bound for
+performance gate, including parity for the forthcoming CRM-scoped email search
+reader, the 1m-thread mailbox tier and a work bound for
 unmatched live target expansions and mailbox-contact discovery. The positive-
 thread probe's result cap alone does not bound that discovery work. The remote
 flag controls future writes, never enforcement of stored restrictions.

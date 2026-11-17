@@ -251,7 +251,10 @@ export function ChannelOption(props: {
                 </span>
               )}
             </Show>
-            <ChannelMutedIndicator muted={item().muted} />
+            <ChannelMutedIndicator
+              muted={item().muted}
+              mentionsOnly={item().mentionsOnly}
+            />
             <Show
               when={!item().incomingCallId && item().callStatus === 'active'}
             >
