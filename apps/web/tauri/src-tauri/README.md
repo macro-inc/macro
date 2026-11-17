@@ -620,7 +620,11 @@ defaults disable updates for local builds. `bun apps/web/scripts/desktop-release
 (run from the repository root) updates this tracked file in CI
 before Nix evaluates either package. Both packages receive the same native version,
 OTA compatibility build number, and source commit timestamp for the embedded
-frontend. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
+the same commit (numbered by build time), so the embedded bundle manifest also
+records the commit (`GIT_SHA` from Nix), and update checks send it as
+`current_git_sha` while the embedded bundle is active: the server offers no
+update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
 SemVer tags also work. Each component must be at most 9999. Do not reuse a version
 or rebuild an already published tag; publish a higher version for fixes/reverts.

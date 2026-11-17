@@ -87,6 +87,11 @@ impl AppEnvironment {
     }
 }
 
+/// The commit the embedded bundle was built from, when its manifest names one.
+fn embedded_bundle_git_sha() -> Option<&'static str> {
+    Some(env!("MACRO_EMBEDDED_BUNDLE_GIT_SHA")).filter(|sha| !sha.is_empty())
+}
+
 fn embedded_bundle_build() -> u64 {
     env!("MACRO_EMBEDDED_BUNDLE_BUILD")
         .parse()
@@ -342,6 +347,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
                 embedded_bundle_build,
                 bundle_routes.clone(),
             )
+            .with_embedded_git_sha(embedded_bundle_git_sha())
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual
             // checks from settings still work.
