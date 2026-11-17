@@ -338,13 +338,18 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation OR w.ends_at<$2)"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
         // Work of unclaimable accounts stays due, so the claim takes each
         // claimable account's first due row from calendar_outlook_work_account_due
-        // instead of walking the global due order past them.
+        // instead of walking the global due order past them. An account with a
+        // live lease gives no second row, so concurrent loops hold at most one
+        // of each mailbox's Graph slots, as Google's one job per account does.
+        // Two claims racing for an account both pick its first due row, which
+        // SKIP LOCKED and the re-checked lease give to one of them.
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.id FROM(SELECT due.id,due.next_run_at,due.calendar_id FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
             JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
             CROSS JOIN LATERAL(SELECT x.id,x.next_run_at,x.calendar_id FROM calendar_outlook_work x LEFT JOIN calendars c ON c.id=x.calendar_id
                 WHERE x.account_id=a.id AND x.next_run_at<=now() AND(x.lease_until IS NULL OR x.lease_until<now()) AND(x.calendar_id IS NULL OR NOT c.is_deleted)
                 ORDER BY x.next_run_at,x.calendar_id NULLS FIRST LIMIT 1) due
             WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]
+              AND NOT EXISTS(SELECT 1 FROM calendar_outlook_work y WHERE y.account_id=a.id AND y.lease_until>=now())
             ORDER BY due.next_run_at,due.calendar_id NULLS FIRST) due JOIN calendar_outlook_work w ON w.id=due.id
             WHERE w.next_run_at<=now() AND(w.lease_until IS NULL OR w.lease_until<now())
             ORDER BY due.next_run_at,due.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
@@ -550,6 +555,45 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         log.commit(tx).await
+    }
+    async fn defer_outlook_calendar(
+        &self,
+        lease: &OutlookCalendarLease,
+        delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        if fence(&mut tx, lease).await.is_err() {
+            return Ok(());
+        }
+        sqlx::query!(
+            "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+make_interval(secs=>$2) WHERE id=$1",
+            lease.id,
+            delay.as_secs_f64()
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
+    }
+    async fn outlook_queue_depth(&self) -> Result<OutlookQueueDepth, Report> {
+        // The rows a claim could take now, ignoring only the one-per-account
+        // rule: those wait behind their account's lease, not for a loop.
+        let depth = sqlx::query!(
+            r#"SELECT count(*) AS "due_items!",
+                floor(extract(epoch FROM now()-min(x.next_run_at)))::bigint AS oldest_due_seconds
+            FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
+            JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
+            JOIN calendar_outlook_work x ON x.account_id=a.id LEFT JOIN calendars c ON c.id=x.calendar_id
+            WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]
+              AND x.next_run_at<=now() AND(x.lease_until IS NULL OR x.lease_until<now()) AND(x.calendar_id IS NULL OR NOT c.is_deleted)"#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(OutlookQueueDepth {
+            due_items: depth.due_items,
+            oldest_due_seconds: depth.oldest_due_seconds,
+        })
     }
 }
 
