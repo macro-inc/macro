@@ -2,7 +2,9 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { isRecord, type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { LoginButton } from '@core/component/TopBar/LoginButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { EmptyStatePanel } from '@ui';
 import {
   type Component,
   type JSX,
@@ -22,7 +24,22 @@ export function usePageViewTracking(pageTitle: string) {
   });
 }
 
-/** Renders `View` once signed in; `Pending`, if given, draws while sign-in is confirmed. */
+function SignedOutRoute() {
+  return (
+    <EmptyStatePanel
+      centered
+      title="Sign in to view this page"
+      description="This page is available after you sign in."
+    >
+      <LoginButton />
+    </EmptyStatePanel>
+  );
+}
+
+/**
+ * Renders `View` once signed in; `Pending`, if given, draws while sign-in is
+ * confirmed. A confirmed sign-out shows Login and Sign Up.
+ */
 export function withAuth<P extends object>(
   View: Component<P>,
   Pending?: Component
@@ -33,6 +50,9 @@ export function withAuth<P extends object>(
       <Switch fallback={<LoadingBlock />}>
         <Match when={authenticated()}>
           <View {...props} />
+        </Match>
+        <Match when={authenticated() === false}>
+          <SignedOutRoute />
         </Match>
         <Match when={Pending && authenticated() === undefined}>
           {Pending && <Pending />}
