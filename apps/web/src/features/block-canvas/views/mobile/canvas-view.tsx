@@ -16,6 +16,7 @@ import {
   MobileCanvasViewButton,
 } from './canvas-action-islands';
 import { MobileCanvasChrome } from './canvas-chrome';
+import { MobileCanvasInsertMenu } from './canvas-insert';
 import {
   MobileCanvasInspectorPanel,
   MobileCanvasInspectorSheet,
@@ -38,6 +39,19 @@ const ONE_ROW_EVERY_TOOL_WIDTH = 900;
 const EVERY_TOOL_WIDTH = 520;
 
 const INSPECTOR_COLLAPSED_KEY = 'canvas-inspector-collapsed';
+
+/**
+ * Wraps an action so that the keyboard's focus is back on the canvas once it
+ * has run, and the canvas's shortcuts work again at once. Bars and sheets sit
+ * outside the canvas and keep the focus otherwise.
+ */
+const focusingAfter =
+  (focus: () => void) =>
+  <Args extends unknown[]>(action: (...args: Args) => void) =>
+  (...args: Args) => {
+    action(...args);
+    focus();
+  };
 /** How near a stroke a long press still picks its shape, in screen pixels. */
 const LONG_PRESS_REACH = 10;
 
@@ -63,11 +77,7 @@ function MobileCanvasBottomBar(props: {
     state.text.finish();
     if (state.embeds.active()) state.embeds.exit();
   };
-  /** Run an action, then hand the keyboard back to the canvas for its shortcuts. */
-  const thenFocus = (action: () => void) => () => {
-    action();
-    view.focus();
-  };
+  const thenFocus = focusingAfter(view.focus);
   const [bar, setBar] = createSignal<HTMLDivElement>();
   const size = createElementSize(bar);
   const width = () => size.width ?? 0;
@@ -197,10 +207,20 @@ function MobileCanvasLayout() {
     };
   };
 
+  // A sheet takes the keyboard's focus with it, so each way out of the Attach
+  // sheets hands it back to the canvas.
+  const thenFocus = focusingAfter(view.focus);
+
   return (
     <>
       <CanvasViewParts.Presentation />
-      <CanvasViewParts.InsertMenu />
+      <MobileCanvasInsertMenu
+        location={view.insert.location()}
+        onSelect={thenFocus(view.insert.select)}
+        onUpload={thenFocus(view.insert.upload)}
+        onArtifact={thenFocus(view.insert.artifact)}
+        onClose={thenFocus(view.insert.close)}
+      />
       <Show when={!isMobile() && hasSelection() && !panelCollapsed()}>
         <MobileCanvasInspectorPanel />
       </Show>

@@ -553,6 +553,13 @@ activates the highlighted slice instead of dismissing the menu. The center remai
 navigate; Enter selects and Escape closes. Scrolled results
 keep the same inset as the menu padding. The media picker includes a dashed drop
 area and Add files button for local images/videos.
+On touch the Attach button opens a sheet of the same choices, and Media and
+Reference open the picker in a second sheet with finger-sized rows; Media has an
+Upload media row where a desktop has the drop area.
+Uploading asks the device through `pickCanvasMedia`: the photo library in the iOS
+app (`pickPhotoLibraryMediaOrFiles`), a file picker everywhere else. The menu
+closes as the picker opens, and the picker's input stays in the document until it
+answers, so the files arrive although the menu that asked is gone.
 Insertion keeps the world position captured when the menu opened, even under
 pan/zoom. New embed insertion and preview-to-embed conversion are unavailable.
 Existing embeds can be converted to previews in the inspector. Double-click an
