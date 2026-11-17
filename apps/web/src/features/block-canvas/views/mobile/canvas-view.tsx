@@ -38,6 +38,8 @@ const ONE_ROW_EVERY_TOOL_WIDTH = 900;
 const EVERY_TOOL_WIDTH = 520;
 
 const INSPECTOR_COLLAPSED_KEY = 'canvas-inspector-collapsed';
+/** How near a stroke a long press still picks its shape, in screen pixels. */
+const LONG_PRESS_REACH = 10;
 
 /**
  * The canvas's bottom chrome. Zoom and history sit on the left, the tools in
@@ -190,7 +192,7 @@ function MobileCanvasLayout() {
     if (state.tool() !== 'select' && state.tool() !== 'pan') return;
     return (point: { x: number; y: number }) => {
       hapticImpact('medium');
-      view.selectAt(point.x, point.y);
+      view.selectAt(point.x, point.y, LONG_PRESS_REACH);
       setActions('long-press');
     };
   };
@@ -211,7 +213,7 @@ function MobileCanvasLayout() {
           event.preventDefault();
         }}
       >
-        <CanvasViewParts.Surface longPress={longPress} />
+        <CanvasViewParts.Surface longPress={longPress} touchHandles />
       </div>
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar

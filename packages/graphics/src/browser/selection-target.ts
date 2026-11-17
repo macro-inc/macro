@@ -1,5 +1,5 @@
 import type { GraphicsDocument, Point } from '../core/model';
-import { hitTest } from '../core/scene';
+import { hitTestWithin } from '../core/scene';
 import {
   selectionContainsPoint,
   selectionFrame,
@@ -15,6 +15,8 @@ export function selectionTarget(
     additive: boolean;
     handle: boolean;
     tolerance: number;
+    /** Searched only when nothing is within `tolerance`: a finger's reach. */
+    reach?: number;
   }
 ) {
   const frame = selectionFrame(document, selectedIds);
@@ -28,5 +30,11 @@ export function selectionTarget(
       frame &&
       selectionContainsPoint(frame, point))
     ? selectedIds[0]
-    : hitTest(document, point, options.deep, options.tolerance);
+    : hitTestWithin(
+        document,
+        point,
+        options.deep,
+        options.tolerance,
+        options.reach ?? options.tolerance
+      );
 }
