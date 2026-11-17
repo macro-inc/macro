@@ -2,7 +2,6 @@
 use crate::domain::{models::*, ports::SecretProvider};
 use async_trait::async_trait;
 use chrono::Utc;
-use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use opentelemetry::trace::TraceContextExt;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, sync::Arc, time::Duration};
@@ -10,7 +9,10 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use openbao_client::{Cause, OpenBaoClient, Session};
 
+pub mod settings;
+pub mod signer;
 mod token_cache;
+use signer::JwtSigner;
 use token_cache::TokenCache;
 
 #[derive(Serialize, Deserialize)]
@@ -29,7 +31,7 @@ enum NamespaceAccess {
 /// JWT-login token is reused until shortly before its lease ends.
 pub struct OpenBaoProvider {
     issuer: String,
-    signing_key: Arc<EncodingKey>,
+    signer: Arc<dyn JwtSigner>,
     api: OpenBaoClient,
     tokens: TokenCache,
 }
@@ -63,15 +65,12 @@ impl From<CallError> for Error {
 }
 
 impl OpenBaoProvider {
-    /// Explicit origin, issuer and RSA key; no environment credentials or root token.
-    pub fn new(address: String, issuer: String, signing_key: &str) -> Result<Self, Error> {
+    /// Explicit origin, issuer and ES256 signer; no environment credentials or root token.
+    pub fn new(address: String, issuer: String, signer: Arc<dyn JwtSigner>) -> Result<Self, Error> {
         let api = OpenBaoClient::new(&address).map_err(provider_error)?;
-        let signing_key = Arc::new(
-            EncodingKey::from_rsa_pem(signing_key.as_bytes()).map_err(|_| Error::Invalid)?,
-        );
         Ok(Self {
             issuer,
-            signing_key,
+            signer,
             api,
             tokens: TokenCache::new(token_cache::CAPACITY),
         })
@@ -138,8 +137,8 @@ impl OpenBaoProvider {
         let now = Utc::now().timestamp();
         let audit_id = audit_id();
         let jwt = openbao_client::SecretString::new(
-            jsonwebtoken::encode(
-                &Header::new(Algorithm::RS256),
+            signer::es256_jwt(
+                self.signer.as_ref(),
                 &Claims {
                     iss: &self.issuer,
                     sub: subject,
@@ -149,8 +148,8 @@ impl OpenBaoProvider {
                     exp: now + 60,
                     audit_id: audit_id.clone(),
                 },
-                &self.signing_key,
             )
+            .await
             .map_err(|_| Error::Unavailable)?,
         );
         match access {

@@ -71,8 +71,9 @@ maybe_env_vars! {
     pub struct OpenbaoAddress;
     /// Issuer accepted by the namespace-scoped OpenBao JWT role.
     pub struct PasswordsJwtIssuer;
-    /// PEM RSA key minting short-lived team-bound OpenBao service JWTs.
-    pub struct PasswordsJwtSigningKey;
+    /// ARN of the asymmetric KMS key (ECC_NIST_P256) that signs the ES256
+    /// OpenBao service JWTs; local stacks may name it by alias. Not a secret.
+    pub struct PasswordsJwtKmsKeyId;
     /// Rollout gate for entities owned by bots or teams.
     pub struct EnableNonUserOwners;
     /// Optional name of the LiveKit agent to dispatch for call transcription.
@@ -104,7 +105,7 @@ maybe_env_vars! {
 pub struct Config {
     pub openbao_address: OpenbaoAddress,
     pub passwords_jwt_issuer: PasswordsJwtIssuer,
-    pub passwords_jwt_signing_key: PasswordsJwtSigningKey,
+    pub passwords_jwt_kms_key_id: PasswordsJwtKmsKeyId,
     /// Required PostHog project key for backend feature flags.
     pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)

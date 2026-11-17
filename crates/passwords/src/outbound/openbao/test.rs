@@ -61,6 +61,8 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
                 &public_key_path,
                 "--jwt-issuer",
                 issuer,
+                "--jwt-alg",
+                "ES256",
             ])
             .status()
             .expect("local bootstrap executable");
@@ -69,7 +71,12 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
     let provider = OpenBaoProvider::new(
         address,
         issuer.into(),
-        &std::fs::read_to_string(key_path).expect("fixture key"),
+        Arc::new(
+            crate::outbound::openbao::signer::LocalJwtSigner::from_pkcs8_pem(
+                &std::fs::read_to_string(key_path).expect("fixture key"),
+            )
+            .expect("P-256 PKCS#8 signing key"),
+        ),
     )
     .expect("provider");
     let item = ItemId(uuid::Uuid::now_v7());
@@ -382,6 +389,8 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             &public_key_path,
             "--jwt-issuer",
             "macro-local-passwords",
+            "--jwt-alg",
+            "ES256",
         ])
         .status()
         .expect("bootstrap");
@@ -390,7 +399,12 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         OpenBaoProvider::new(
             address,
             "macro-local-passwords".into(),
-            &std::fs::read_to_string(key_path).expect("synthetic key"),
+            Arc::new(
+                crate::outbound::openbao::signer::LocalJwtSigner::from_pkcs8_pem(
+                    &std::fs::read_to_string(key_path).expect("synthetic key"),
+                )
+                .expect("P-256 PKCS#8 signing key"),
+            ),
         )
         .expect("provider"),
     );
@@ -676,17 +690,9 @@ async fn status_pins_operation_to_metadata_version_during_independent_write() {
         extract::Query,
         routing::{get, post},
     };
-    let key = Command::new("openssl")
-        .args([
-            "genpkey",
-            "-algorithm",
-            "RSA",
-            "-pkeyopt",
-            "rsa_keygen_bits:2048",
-        ])
-        .output()
-        .expect("synthetic RSA key generator");
-    assert!(key.status.success());
+    let signer = Arc::new(signer::LocalJwtSigner::new(
+        p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).expect("fixed P-256 scalar"),
+    ));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener");
@@ -709,7 +715,7 @@ async fn status_pins_operation_to_metadata_version_during_independent_write() {
     let provider = OpenBaoProvider::new(
         format!("http://{address}"),
         "synthetic-issuer".into(),
-        &String::from_utf8(key.stdout).expect("PEM"),
+        signer,
     )
     .expect("provider");
     assert_eq!(
