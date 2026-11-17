@@ -7,10 +7,6 @@ import {
 } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSidebarPromotions } from '@core/constant/featureFlags';
-import {
-  usePipedreamMcpFlag,
-  usePipedreamMcpFlagResult,
-} from '@core/pipedream/flag';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
@@ -40,15 +36,10 @@ export function ConnectorImportSidebar(props: {
   class?: string;
 }): JSX.Element {
   const flag = useFeatureFlag(enableSidebarPromotions);
-  const pipedream = usePipedreamMcpFlagResult();
   return (
     <ConnectorImportPromotion
       {...props}
-      applies={allOf(
-        flagVerdict(flag()),
-        flagVerdict(pipedream()),
-        props.applies ?? true
-      )}
+      applies={allOf(flagVerdict(flag()), props.applies ?? true)}
     />
   );
 }
@@ -69,12 +60,8 @@ export function ConnectorImportPromotion(props: {
   secondaryAction?: PromoAction;
   class?: string;
 }): JSX.Element {
-  const pipedream = usePipedreamMcpFlag();
   const config = () => IMPORT_CATEGORIES[props.category];
-  const dialogConfig = () => ({
-    ...config(),
-    providers: pipedream() ? config().providers : [],
-  });
+  const dialogConfig = config;
   const [open, setOpen] = createSignal(false);
   // The dialog's code loads on first open (and is fetched ahead on hover).
   const [opened, setOpened] = createSignal(false);

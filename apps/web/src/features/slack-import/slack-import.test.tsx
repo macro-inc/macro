@@ -37,9 +37,6 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@app/features/connector-import/primitives/promotion', () => ({
   hideImportPromotion: host.hidePromotion,
 }));
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => true,
-}));
 vi.mock('@core/pipedream/pendingConnect', () => ({
   requestConnectApp: host.requestConnect,
 }));

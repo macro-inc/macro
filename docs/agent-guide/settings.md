@@ -734,7 +734,7 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+Settings → Integrations is one searchable list
 styled like the Drive and Tasks lists, spanning nearly the full settings page
 width. Rows are separated by faint dividers and have Name (icon, name, an
 `mcp` or `native` badge, and a smaller, fainter second line on what it does in
@@ -823,9 +823,7 @@ custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
-featured or offered in the Connections catalog. Settings → Integrations lists
-Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
-available when `pipedream-mcp` is disabled.
+featured or offered in the Connections catalog.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
