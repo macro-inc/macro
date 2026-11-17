@@ -97,3 +97,15 @@ fn an_event_larger_than_the_limit_passes_through_as_sent() {
     );
     assert!(filter.finish().is_empty());
 }
+
+#[test]
+fn usage_removed_before_an_oversized_event_is_not_replayed() {
+    let mut filter = InterimUsageFilter::default();
+    filter.push(b"data: {\"candidates\":[{}],\"usageMetadata\":{\"promptTokenCount\":5}}\n\n");
+    let text = "x".repeat(MAX_EVENT_BYTES);
+
+    filter.push(format!("data: {{\"candidates\":[{{\"text\":\"{text}").as_bytes());
+    filter.push(b"\",\"finishReason\":\"STOP\"}]}\n\n");
+
+    assert!(filter.finish().is_empty());
+}

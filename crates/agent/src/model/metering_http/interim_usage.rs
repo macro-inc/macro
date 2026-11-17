@@ -79,6 +79,9 @@ impl InterimUsageFilter {
         }
         if self.pending.len() > MAX_EVENT_BYTES {
             self.passthrough = true;
+            // The final chunk now passes unread; replaying interim usage
+            // after it would undo it.
+            self.removed = None;
             out.extend_from_slice(&self.pending.split());
         }
         out.freeze()
@@ -103,12 +106,17 @@ impl InterimUsageFilter {
     /// line that ends it.
     fn next_event(&mut self) -> Option<BytesMut> {
         loop {
-            let newline = self
+            let Some(offset) = self
                 .pending
                 .get(self.scanned..)?
                 .iter()
-                .position(|byte| *byte == b'\n')?
-                + self.scanned;
+                .position(|byte| *byte == b'\n')
+            else {
+                // Searched to the end: the next chunk resumes from here.
+                self.scanned = self.pending.len();
+                return None;
+            };
+            let newline = self.scanned + offset;
             let line = self.pending.get(self.line_start..newline)?;
             let blank = line.is_empty() || line == b"\r";
             self.scanned = newline + 1;
