@@ -66,11 +66,14 @@ async function fetchProfilePictures(
     }));
   }
 
-  const { pictures } = result.value;
-  return pictures.map(({ id, url }) => ({
-    _createdAt: new Date(),
+  // The server omits users without a picture; they're loaded too, with no url,
+  // or they'd stay `loading` (and never refetch) for the rest of the session.
+  const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
+  const fetchedAt = new Date();
+  return ids.map((id) => ({
+    _createdAt: fetchedAt,
     id,
-    url,
+    url: urls.get(id),
     loading: false,
   }));
 }
@@ -173,11 +176,13 @@ const REFRESH_BATCH_SIZE = 100;
 
 /**
  * Refetches the given users' pictures, batched. The old URL stays visible until
- * the new one arrives, and a failed batch keeps its URLs.
+ * the new one arrives, and a failed batch keeps its URLs. An entry written
+ * after a batch was sent is newer than its response, so it is left alone.
  */
 async function refreshPictures(ids: string[]): Promise<void> {
   for (let start = 0; start < ids.length; start += REFRESH_BATCH_SIZE) {
     const batch = ids.slice(start, start + REFRESH_BATCH_SIZE);
+    const sentAt = new Date();
     const result = await authServiceClient.postProfilePictures({
       user_id_list: batch,
     });
@@ -189,6 +194,8 @@ async function refreshPictures(ids: string[]): Promise<void> {
     const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
     const fetchedAt = new Date();
     for (const id of batch) {
+      const current = userProfilePictures[id];
+      if (current && current._createdAt > sentAt) continue;
       setUserProfilePictures(id, {
         _createdAt: fetchedAt,
         id,
@@ -210,24 +217,39 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
 }
 
 /**
- * Refetches every cached picture that isn't already loading. Run when the
- * connection gateway (re)connects: `user_picture_changed` frames sent while the
- * socket was down are never replayed, and mounted avatars don't re-check the
- * cache TTL, so a missed frame would otherwise stay stale until a reload.
+ * Refetches every cached picture. Run when the connection gateway reconnects:
+ * `user_picture_changed` frames sent while the socket was down are never
+ * replayed, and mounted avatars don't re-check the cache TTL, so a missed frame
+ * would otherwise stay stale until a reload.
  */
 export async function refreshCachedProfilePictures(): Promise<void> {
-  const ids = Object.values(userProfilePictures)
-    .filter((item) => !item.loading)
-    .map((item) => item.id);
-  await refreshPictures(ids);
+  await refreshPictures(Object.keys(userProfilePictures));
 }
 
-/** Connection-gateway open listener for {@link refreshCachedProfilePictures}. */
-export function refreshCachedProfilePicturesOnOpen(): void {
-  fireAndForget(
-    refreshCachedProfilePictures(),
-    'profile-pictures-resync-on-open'
-  );
+let resync: Promise<void> | undefined;
+let resyncAgain = false;
+
+async function runResync(): Promise<void> {
+  do {
+    resyncAgain = false;
+    await refreshCachedProfilePictures();
+  } while (resyncAgain);
+}
+
+/**
+ * Connection-gateway reconnect listener for
+ * {@link refreshCachedProfilePictures}. Overlapping reconnects share one sweep,
+ * plus one more pass if a reconnect landed while it ran.
+ */
+export function refreshCachedProfilePicturesOnReconnect(): void {
+  if (resync) {
+    resyncAgain = true;
+    return;
+  }
+  resync = runResync().finally(() => {
+    resync = undefined;
+  });
+  fireAndForget(resync, 'profile-pictures-resync-on-reconnect');
 }
 
 const userPictureChangedSchema = z.object({ user_id: z.string().min(1) });
