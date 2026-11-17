@@ -268,8 +268,8 @@ pub enum ToggleAutoJoinDomainError {
     TeamError(#[from] TeamError),
 }
 
-/// Errors for adding a user to a team without an email invite: by matching
-/// the team's auto-join domain, or through the team's invite link.
+/// Errors for adding a user to a team without an email invite: through the
+/// team's invite link, or as a team agent.
 #[derive(Debug, thiserror::Error)]
 pub enum JoinTeamDirectlyError {
     /// Underlying team error

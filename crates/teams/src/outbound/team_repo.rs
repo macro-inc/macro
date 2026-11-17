@@ -1910,30 +1910,4 @@ impl TeamRepository for TeamRepositoryImpl {
         .fetch_all(&self.pool)
         .await?)
     }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_id_by_domain(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<uuid::Uuid>, TeamError> {
-        let user_email = user_id.email_part().lowercase();
-        let domain = user_email.domain_part();
-
-        // Uses the partial index on auto_join_domain; when several teams
-        // claim the same domain, pick the oldest (ids are UUIDv7).
-        let team_id = sqlx::query_scalar!(
-            r#"
-            SELECT id
-            FROM team
-            WHERE auto_join_domain = $1
-            ORDER BY id
-            LIMIT 1
-            "#,
-            domain,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(team_id)
-    }
 }

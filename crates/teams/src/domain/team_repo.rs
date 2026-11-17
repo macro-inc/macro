@@ -343,13 +343,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Gets the id of the team whose auto-join domain matches the email
-    /// domain of the provided user id, if any.
-    fn get_team_id_by_domain(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<uuid::Uuid>, TeamError>> + Send;
-
     /// Adds the user directly to the team as a member without requiring an
     /// invite, removes any pending invite for that user and team, and bumps
     /// the team's seat count. Returns None when the user is already on the
@@ -357,7 +350,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ///
     /// NOTE: this only touches team membership — billing, roles, and
     /// channel membership are handled by the service (see
-    /// `TeamService::try_join_team_by_domain`).
+    /// `TeamInviteLinkService::join_team_by_invite_link`).
     ///
     /// `seat_included` records a seat the team subscription never bills.
     fn add_user_to_team(
@@ -632,18 +625,6 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
-
-    /// Automatically joins the user to the team whose auto-join domain
-    /// matches the user's email domain, if such a team exists. The user is
-    /// added to the team directly (no invite), with the same billing /
-    /// roles / channel side effects as `join_team`.
-    ///
-    /// Returns the new team member, or None when no team matched or the
-    /// user is already on a team. Membership is not capped by plan or team size.
-    fn try_join_team_by_domain(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
 
     /// Adds a team agent's account to the receipt's team with the same roles,
     /// channels, and `team.member_joined` event as any direct join. Its seat is

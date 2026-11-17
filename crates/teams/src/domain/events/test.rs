@@ -325,7 +325,7 @@ fn member_joined_defaults_missing_teammate_ids() {
             "team_id": TEAM_ID,
             "member_id": "macro|member@acme.com",
             "role": "member",
-            "join_method": { "type": "domain_auto_join" }
+            "join_method": { "type": "invite_link" }
         }
     });
 
@@ -373,11 +373,11 @@ fn roles_and_join_methods_serialize_lowercase() {
         invited_by: user_id("macro|admin@acme.com"),
     })
     .expect("serializable join method");
-    let domain_join =
-        serde_json::to_value(TeamJoinMethod::DomainAutoJoin).expect("serializable join method");
+    let link_join =
+        serde_json::to_value(TeamJoinMethod::InviteLink).expect("serializable join method");
 
     assert_eq!(invite_join["type"], "invite_accepted");
-    assert_eq!(domain_join, json!({ "type": "domain_auto_join" }));
+    assert_eq!(link_join, json!({ "type": "invite_link" }));
     assert_eq!(serde_json::to_value(TeamRole::Member).unwrap(), "member");
     assert_eq!(serde_json::to_value(TeamRole::Admin).unwrap(), "admin");
     assert_eq!(serde_json::to_value(TeamRole::Owner).unwrap(), "owner");

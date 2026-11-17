@@ -331,8 +331,8 @@ where
     OSR: OpenSeatRelease,
     OEC: OwnedEntityCleanup,
 {
-    /// Adds the user to the team without an email invite (domain auto-join
-    /// or invite link), then runs the same billing / roles / channels side
+    /// Adds the user to the team without an email invite (invite link or
+    /// team agent), then runs the same billing / roles / channels side
     /// effects as `join_team`, rolling the membership back if any of them
     /// fail. Returns None when the user is already a member.
     #[tracing::instrument(skip(self), err)]
@@ -1357,7 +1357,7 @@ where
     }
 
     /// Best-effort rollback of a direct team add (from
-    /// `try_join_team_by_domain`): removes the membership again and undoes
+    /// `join_team_directly`): removes the membership again and undoes
     /// the team seat count bump. Failures are logged and swallowed, like
     /// the other join rollbacks.
     async fn rollback_add_user_to_team(
@@ -2793,24 +2793,6 @@ where
         self.team_repository
             .toggle_allow_non_admin_invites(&team_id)
             .await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn try_join_team_by_domain(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
-        let Some(team_id) = self.team_repository.get_team_id_by_domain(user_id).await? else {
-            return Ok(None);
-        };
-
-        self.join_team_directly(
-            &team_id,
-            user_id,
-            TeamJoinMethod::DomainAutoJoin,
-            SeatBilling::Billed,
-        )
-        .await
     }
 
     #[tracing::instrument(skip(self, entity_access_receipt), err)]

@@ -1822,43 +1822,6 @@ async fn test_toggle_auto_join_domain_missing_team(pool: Pool<Postgres>) -> anyh
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_get_team_id_by_domain(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone());
-
-    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
-
-    // No team has an auto-join domain yet.
-    let found = team_repo
-        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
-        .await?;
-    assert_eq!(found, None);
-
-    team_repo.toggle_auto_join_domain(&team_id).await?;
-
-    let found = team_repo
-        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
-        .await?;
-    assert_eq!(found, Some(team_id));
-
-    // Domain matching is case-insensitive on the user's email domain.
-    let found = team_repo
-        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@USER.COM")?)
-        .await?;
-    assert_eq!(found, Some(team_id));
-
-    // Unrelated domains do not match.
-    let found = team_repo
-        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@other.com")?)
-        .await?;
-    assert_eq!(found, None);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("teams"))
-)]
 async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 

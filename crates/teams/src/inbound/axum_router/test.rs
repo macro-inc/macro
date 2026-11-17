@@ -530,13 +530,6 @@ impl TeamService for FakeTeamService {
         panic!("unexpected remove_user_from_all_teams call")
     }
 
-    async fn try_join_team_by_domain(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
-        panic!("unexpected try_join_team_by_domain call")
-    }
-
     async fn add_team_agent(
         &self,
         _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
