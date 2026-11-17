@@ -98,13 +98,15 @@ function difference(a: Uint8Array, b: Uint8Array) {
 
 /**
  * Touch-to-settled time from the video, in milliseconds. The target is in
- * place and the screen still before recording starts, so the first change is
- * the touch dot; the screen has settled at the first frame from which every
+ * place and the screen still before recording starts, so the first frame that
+ * differs from the one before is the touch (the touch dot, or the row's
+ * pressed state); the screen has settled at the first frame from which every
  * later frame matches the last one.
  */
 function analyse(list: Frame[]) {
   const touched = list.findIndex(
-    (frame, index) => index > 0 && difference(frame.pixels, list[index - 1].pixels) > 0.2
+    (frame, index) =>
+      index > 0 && difference(frame.pixels, list[index - 1].pixels) > 0.2
   );
   const final = list.at(-1)?.pixels;
   if (touched < 0 || !final) return undefined;
@@ -112,7 +114,7 @@ function analyse(list: Frame[]) {
   for (let index = touched; index < list.length; index++)
     if (difference(list[index].pixels, final) > 1) settled = index + 1;
   const end = list[Math.min(settled, list.length - 1)];
-  return { settledMs: end.time - list[touched].time };
+  return { touchedAt: list[touched].time, settledMs: end.time - list[touched].time };
 }
 
 async function record(work: () => Promise<{ x: number; y: number; spanMs: number }>) {
@@ -170,7 +172,8 @@ try {
         return { ...point, spanMs: sample.readyMs };
       });
       const visual = analyse(await frames(recorded.video, width, height));
-      if (options.keep) console.log(`  recording: ${recorded.video}`);
+      if (options.keep)
+        console.log(`  recording: ${recorded.video} (touch at ${visual?.touchedAt} ms)`);
       else await rm(recorded.directory, { recursive: true, force: true });
       rows.push({ iteration, spanMs: recorded.spanMs, visualMs: visual?.settledMs });
       console.log(
