@@ -1,10 +1,14 @@
 """Tests for the viewer's exporters: python3 -m unittest discover tooling/agent-session-view"""
+import http.server
 import importlib.machinery
 import importlib.util
 import json
 import pathlib
+import tempfile
+import threading
 import unittest
 import urllib.error
+import urllib.request
 from unittest import mock
 
 import datadog_spans
@@ -232,6 +236,25 @@ class Cli(unittest.TestCase):
     def test_postgres_times_with_trimmed_fractions_parse(self):
         self.assertEqual(cli.postgres_time("2026-11-09T10:00:00.12+00:00").microsecond, 120000)
         self.assertEqual(cli.postgres_time("2026-11-09T10:00:00.1+00").microsecond, 100000)
+
+    def test_serve_answers_only_its_own_page(self):
+        with tempfile.TemporaryDirectory() as directory:
+            page = pathlib.Path(directory) / "s.html"
+            page.write_text("<p>page</p>")
+            (pathlib.Path(directory) / "other.html").write_text("private")
+            handler = type("Handler", (cli.OneFile,), {"path_served": page, "log_message": lambda *args: None})
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with urllib.request.urlopen(base + "/s.html") as response:
+                    self.assertEqual(response.read(), b"<p>page</p>")
+                with self.assertRaises(urllib.error.HTTPError) as missing:
+                    urllib.request.urlopen(base + "/other.html")
+                self.assertEqual(missing.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
 
     def test_session_text_cannot_end_or_change_its_script_element(self):
         text = "</script><!--<script>"
