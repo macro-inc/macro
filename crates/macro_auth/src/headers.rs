@@ -10,9 +10,7 @@ use axum_extra::{
 use cookie::Cookie;
 use macro_env::Environment;
 
-use crate::constant::{
-    MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_HEADER,
-};
+use crate::constant::{MACRO_REFRESH_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_HEADER};
 
 /// Extracts the access token from a cookie. Returns `UNAUTHORIZED` if the cookie is missing.
 pub struct AccessTokenCookieExtractor(pub Cookie<'static>);
@@ -28,14 +26,7 @@ where
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         let jar: CookieJar = parts.extract().await.expect("This extractor is infallible");
-        static ACCESS_COOKIE_NAME: LazyLock<String> =
-            LazyLock::new(|| match Environment::new_or_prod() {
-                Environment::Production => MACRO_ACCESS_TOKEN_COOKIE.to_string(),
-                Environment::Develop => format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}"),
-                Environment::Local => format!("local-{MACRO_ACCESS_TOKEN_COOKIE}"),
-            });
-
-        match jar.get(&ACCESS_COOKIE_NAME) {
+        match jar.get(crate::credential::access_token_cookie_name()) {
             Some(c) => Ok(Self(c.clone())),
             None => Err(StatusCode::UNAUTHORIZED),
         }

@@ -13,11 +13,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::{
-    headers::AccessTokenExtractor,
+    credential::RequestCredential,
     macro_api_token::MacroApiToken,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -45,12 +45,6 @@ impl CorrelationState {
 /// Optional signed invocation attribution. It grants no authorization.
 pub struct AgentCorrelationExtractor(pub Option<Uuid>, pub Option<crate::AgentVerb>);
 
-#[derive(Deserialize)]
-struct QueryToken {
-    #[serde(rename = "macro-api-token")]
-    token: Option<String>,
-}
-
 impl<S: Send + Sync> FromRequestParts<S> for AgentCorrelationExtractor
 where
     CorrelationState: FromRef<S>,
@@ -59,7 +53,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
-        let token = verified_api_token(parts, &state.jwt).await;
+        let token = verified_api_token(parts, &state.jwt)?;
         checked_signed_scope(token.as_ref(), parts)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
@@ -73,28 +67,28 @@ where
     }
 }
 
-/// The request's Macro API token, only if its signature verifies.
-async fn verified_api_token(parts: &mut Parts, jwt: &JwtValidationArgs) -> Option<MacroApiToken> {
-    let query = parts
-        .uri
-        .query()
-        .and_then(|q| serde_urlencoded::from_str::<QueryToken>(q).ok())
-        .and_then(|q| q.token);
-    let token = match query {
-        Some(token) => token,
-        None => AccessTokenExtractor::from_request_parts(parts, &())
-            .await
-            .ok()?
-            .as_ref()
-            .to_owned(),
+/// The request's Macro API token, only if its signature verifies. The token
+/// is the one [`macro_auth::credential::request_credential`] finds, the same
+/// one the route authenticates; a request carrying differing credentials is
+/// refused.
+fn verified_api_token(
+    parts: &mut Parts,
+    jwt: &JwtValidationArgs,
+) -> Result<Option<MacroApiToken>, CorrelationRejection> {
+    let credential = macro_auth::credential::request_credential(parts)
+        .map_err(|_| CorrelationRejection(CorrelationError::ConflictingCredentials))?;
+    let RequestCredential::UserToken { token, .. } = credential else {
+        return Ok(None);
     };
     // Authentication remains the route's responsibility. Public webhooks and
     // non-Macro credentials may share the listener; only a verified Macro
     // JWT can introduce attribution, never an unsigned header or claim.
-    match macro_auth::middleware::decode_jwt::handler(jwt, &token) {
-        Ok(JwtToken::MacroApiToken(token)) => Some(token),
-        _ => None,
-    }
+    Ok(
+        match macro_auth::middleware::decode_jwt::handler(jwt, &token) {
+            Ok(JwtToken::MacroApiToken(token)) => Some(token),
+            _ => None,
+        },
+    )
 }
 
 /// The scope `token` signs, or a refusal when the request is outside it. The
@@ -156,7 +150,9 @@ pub struct CorrelationRejection(CorrelationError);
 impl IntoResponse for CorrelationRejection {
     fn into_response(self) -> Response {
         let status = match &self.0 {
-            CorrelationError::MissingAgent => StatusCode::BAD_REQUEST,
+            CorrelationError::MissingAgent | CorrelationError::ConflictingCredentials => {
+                StatusCode::BAD_REQUEST
+            }
             CorrelationError::NotFound => StatusCode::NOT_FOUND,
             CorrelationError::AgentMismatch | CorrelationError::OutOfScope => StatusCode::FORBIDDEN,
             CorrelationError::Unavailable(error) => {
@@ -218,7 +214,10 @@ async fn propagate_request(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let token = verified_api_token(&mut parts, &state.jwt).await;
+    let token = match verified_api_token(&mut parts, &state.jwt) {
+        Ok(token) => token,
+        Err(rejection) => return rejection.into_response(),
+    };
     let signed = match checked_signed_scope(token.as_ref(), &parts) {
         Ok(signed) => signed,
         Err(rejection) => return rejection.into_response(),
@@ -284,7 +283,10 @@ async fn enforce_signed_scope_request(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let token = verified_api_token(&mut parts, &jwt).await;
+    let token = match verified_api_token(&mut parts, &jwt) {
+        Ok(token) => token,
+        Err(rejection) => return rejection.into_response(),
+    };
     if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
         return rejection.into_response();
     }

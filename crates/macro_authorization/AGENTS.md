@@ -81,11 +81,18 @@ managers.
 
 ## Gotchas
 
-- Both extractors reject (400) a request that combines explicit credential
-  types (internal key, bot token, user API key, bearer/query user) rather
-  than picking one — don't "fix" this by adding precedence logic.
-- Cookies are ambient and only considered when no explicit credential is
-  present; an explicit credential always wins over a cookie.
+- Both extractors read the request's credential only through
+  `macro_auth::credential::request_credential`, the same reading the agent
+  scope check (`agent_correlation`) uses, so authentication and scope can't
+  pick different credentials. A request carrying differing credentials (any
+  two of internal key, bot token, harness token, user API key and user
+  token, or two different user tokens across bearer, `macro-api-token`
+  query parameters with keys percent-decoded, and the access-token cookie)
+  is refused 400 `conflicting_credentials` before any is authorized. The
+  same token repeated is one credential. Don't "fix" this with precedence
+  logic.
+- Locally (`local_auth`), a configured user stands in for an ambient cookie
+  or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
 - `mark_harness_token_used` runs on every harness-authenticated request. It
   writes `last_used_at` at most once a minute and skips a row another request

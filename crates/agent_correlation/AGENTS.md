@@ -52,11 +52,14 @@ code, not in its prompt. The harness also signs the scope into the credential
   views, CRM pipeline edits. A new such field or edit route joins that check.
   Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
-- `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` checks the signed scope, then scopes the validated
+- `src/inbound.rs`: optional signed-claim extractor and HTTP propagation.
+  The token is the one `macro_auth::credential::request_credential` finds,
+  the same one the route authenticates; a request carrying differing
+  credentials is refused 400 `conflicting_credentials` before any handler
+  runs. `propagate` checks the signed scope, then scopes the validated
   correlation, its verb and the signed routine, and answers a request that
   recorded a sharing refusal with 403 `SharingRefused`, whatever error the
-  handler mapped it to). `enforce_signed_scope` is the
+  handler mapped it to. `enforce_signed_scope` is the
   check alone, for a service with no database to look a correlation up in.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 

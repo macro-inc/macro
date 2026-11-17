@@ -460,6 +460,75 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
     }
 }
 
+/// The scope check reads the request's credential as authentication does,
+/// through `macro_auth::credential`: a scoped token in the ambient cookie
+/// scopes the request however the query spells its key, and a request
+/// carrying differing credentials is refused before any handler runs.
+#[tokio::test]
+async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carries() {
+    use tower::ServiceExt;
+
+    let app = axum::Router::new()
+        .route(
+            "/api/file/{id}",
+            axum::routing::delete(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            enforce_signed_scope,
+        ));
+    let scoped = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("generation"),
+    );
+    let other = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        None,
+    );
+    let cookie = format!(
+        "{}={scoped}",
+        macro_auth::credential::access_token_cookie_name()
+    );
+    let bearer = format!("Bearer {other}");
+    for (query, authorization, expected) in [
+        ("", None, StatusCode::FORBIDDEN),
+        // Not a credential once decoded, so the cookie is the credential.
+        ("?Macro-Api-Token=junk", None, StatusCode::FORBIDDEN),
+        (
+            &format!("?macro-api-token={scoped}&macro-api-token={scoped}") as &str,
+            None,
+            StatusCode::FORBIDDEN,
+        ),
+        // A credential beside the cookie, which differs from it.
+        ("?macro%2Dapi%2Dtoken=junk", None, StatusCode::BAD_REQUEST),
+        ("?macro-api-token=junk", None, StatusCode::BAD_REQUEST),
+        ("", Some(bearer.as_str()), StatusCode::BAD_REQUEST),
+        (
+            &format!("?macro-api-token={other}") as &str,
+            Some(bearer.as_str()),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let mut request = Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/file/01a1{query}"))
+            .header("cookie", &cookie);
+        if let Some(authorization) = authorization {
+            request = request.header("authorization", authorization);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{query} {authorization:?}");
+    }
+}
+
 /// A refused sharing change is answered 403 on every route, whatever error
 /// the code between the refusal and the route made of it; a request that
 /// refused a change and still succeeded keeps its answer.
