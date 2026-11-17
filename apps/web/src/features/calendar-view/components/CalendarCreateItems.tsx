@@ -1,5 +1,4 @@
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import {
   bookingLinksSearch,
   bookingLinksSearchCodec,
@@ -14,7 +13,6 @@ import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import { useNavigate } from '@solidjs/router';
-import { Show } from 'solid-js';
 import { useOpenEventComposer } from './use-open-event-composer';
 
 type CreateItemProps = { onSelect?: () => void };
@@ -37,22 +35,19 @@ export function CalendarCreateEventItem(props: CreateItemProps) {
 }
 
 export function CalendarCreateCallItem(props: CreateItemProps) {
-  const quickCalls = useQuickCallsFlag();
   const navigate = useNavigate();
 
   return (
-    <Show when={quickCalls().enabled}>
-      <CreateMenuItem
-        icon={PhoneIcon}
-        title={t('create.callLabel')}
-        description={t('create.guideCall')}
-        closeOnSelect
-        onSelect={() => {
-          props.onSelect?.();
-          navigate('/meet/new');
-        }}
-      />
-    </Show>
+    <CreateMenuItem
+      icon={PhoneIcon}
+      title={t('create.callLabel')}
+      description={t('create.guideCall')}
+      closeOnSelect
+      onSelect={() => {
+        props.onSelect?.();
+        navigate('/meet/new');
+      }}
+    />
   );
 }
 

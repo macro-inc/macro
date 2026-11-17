@@ -527,12 +527,6 @@ export const ENABLE_GRAPHQL_BACKFILL = defineFlag({
 
 export const ENABLE_CALLS = true;
 
-export const enableQuickCalls = defineFlag({
-  key: 'enable-quick-calls',
-  env: 'ENABLE_QUICK_CALLS',
-  default: true,
-});
-
 // Email read receipts: the per-inbox switch in Settings › Email and the
 // opened status on sent messages. Which copies load Macro's pixels, and so
 // count as opens, does not depend on this flag.

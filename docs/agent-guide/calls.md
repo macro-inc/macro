@@ -14,9 +14,8 @@ refinements carry across the three views. The desktop header uses one row:
 title, an outlined filter group, a view-options group, `New`, and an expandable
 Search icon. Command-F expands and focuses search; Close or Escape clears it
 and restores the icon. Phones keep pill tabs and the header search.
-With `enable-quick-calls` enabled, `New call` opens a menu with `Start an instant
-call`, `Call a channel or contact`, and `Manage call links`; without the flag it
-opens the recipient picker directly. `Start an instant call` opens `/app/meet/new`
+`New call` opens a menu with `Start an instant
+call`, `Call a channel or contact`, and `Manage call links`. `Start an instant call` opens `/app/meet/new`
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.
@@ -367,9 +366,7 @@ same download flow and confirmations as Drive files.
 
 ### Call links and guests — `/app/meet/join/:shareToken`
 
-These routes require `enable-quick-calls` for both signed-in users and guests.
 In Calendar, create an event with `Macro call` selected (the default).
-The composer waits for the quick-call flag to load before choosing its default.
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.
 Teammate rings require a live call; selecting teammates during new-call setup

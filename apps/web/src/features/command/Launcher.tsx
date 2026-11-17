@@ -4,7 +4,6 @@ import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -912,13 +911,11 @@ export const CREATABLE_BLOCKS = createBlocks(runCreateAction);
 /** Router-backed commands are bound once in each host's component owner. */
 export function useCreateCommands(): CreatableBlock[] {
   const navigate = useNavigate();
-  const quickCalls = useQuickCallsFlag();
   return [
     ...createBlocks(useCreateAction()),
     createCallCommand({
       navigate,
       close: () => setCreateMenuOpen(false, false),
-      enabled: () => quickCalls().enabled,
     }),
   ];
 }

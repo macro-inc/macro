@@ -130,12 +130,6 @@ waiting for event responses or hidden-page redraws. Verify repeated forward clic
 and mixed directions reach the cumulative date while events are still loading.
 Touch swipes retain their page-readiness gates.
 
-Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
-the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
-flag loads or is off, those controls stay hidden and meeting routes do not mount
-call setup. Existing channel calls and the upcoming-events list remain available.
-For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
-
 During a quick or scheduled call, signed-in participants can open **Call chat**
 with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
 the bottom-left and becomes icon-only in narrow panes. Active phone calls fill
@@ -522,7 +516,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review cards)
-offers the same selector under the same quick-calls flag; `Macro call` there maps to
+offers the same selector; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
