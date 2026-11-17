@@ -338,6 +338,10 @@ extra height or lost subject, touch rows of at least 44px, and the importance
 meter on every row except on phones, with the direction in its label while
 importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
+real row: Minimalist unchanged, and Classic's shared line between rows, lifted
+unread fill, weights and always-visible checkbox on desktop and tablet, with
+phones kept on Minimalist.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the

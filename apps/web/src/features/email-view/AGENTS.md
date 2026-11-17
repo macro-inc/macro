@@ -17,6 +17,9 @@ the Soup-backed thread list, and saved email views (flag
   in `email-view.tsx` opens it from the search pill and keeps the list mounted
   below it. `primitives/create-email-mobile-search.ts` owns whether the page is
   open, and ends its search whenever it closes.
+- `primitives/email-row-style.ts`: the Minimalist/Classic row style chosen in
+  Settings → Email, a per-device preference passed to each row as
+  `ListEntity.rowStyle`; phones always get Minimalist.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: recent searches (`recent-searches.ts`, per person in browser
