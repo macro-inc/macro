@@ -197,11 +197,12 @@ for (const provider of PROVIDERS) {
       await row(page, agenda.id).click({ button: 'right' });
       await copyLink.click();
       did('AL-084');
+      // The check shows for about a second and a half.
       await expect(copyLink.locator(COPIED)).toBeAttached();
+      saw('STL-604');
       await expect
         .poll(() => clipboard(page))
         .toBe(`${mailbox.front.origin}/app/mail/${agenda.id}`);
-      saw('STL-604');
 
       // The link is one that opens the thread.
       await page.goto(await clipboard(page));

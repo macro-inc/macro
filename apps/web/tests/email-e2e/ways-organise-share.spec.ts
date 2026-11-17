@@ -54,9 +54,9 @@ test("the ways to open an open thread's Share dialog", async ({
   page,
   mailbox,
 }) => {
-  const ids = await deliverAll(mailbox, ['Agenda', 'Minutes']);
+  const ids = await deliverAll(mailbox, ['Minutes']);
   const bob = await mailbox.stack.user('bob@example.com');
-  for (const id of Object.values(ids)) await grantView(mailbox, id, bob);
+  await grantView(mailbox, ids.Minutes, bob);
   await answerSharingAsUser(page, mailbox);
   // The dialog opens with the keyboard in its To field, which keeps Escape.
   const closed = async (subject: string) => {

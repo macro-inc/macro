@@ -85,6 +85,6 @@ STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
 STX-319	-	needs	the tour is off unless the flag service turns on enable-in-app-tours, and the suite's bundle has no flag service
-AL-085	-	bug	Share in a row's menu opens the Share dialog and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug
+AL-085	-	bug	Share in a row's menu opens the Share dialog and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug. Share in the phone's long-press drawer works and is not marked for this row
 AL-082	-	bug	Remind me in a row's menu opens the menu and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug
 AL-091	-	bug	Move to folder in a row's menu opens the picker and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug

@@ -3,7 +3,9 @@
 // the Share dialog is reached from a row of the list: a thread that was
 // shared with the user and taken back while their list still shows it. The
 // row's Share opens the dialog with the owner the list knows; the dialog in
-// the open thread is never reached, since the thread no longer opens.
+// the open thread is never reached, since the thread no longer opens. On the
+// desktop that dialog closes at once (a known bug), so until it is fixed the
+// request is covered on a phone, with a Gmail inbox, alone.
 //
 // The app scans the threads shared with the user once it has loaded, and that
 // scan drops a thread whose access is gone; the access is taken back after it,

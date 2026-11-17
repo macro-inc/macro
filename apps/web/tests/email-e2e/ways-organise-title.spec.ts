@@ -77,9 +77,9 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // Known bug (row-menu-dialogs-close-at-once): the folder picker opened from a row's menu closes
-    // at once, because the row's menu dismisses itself with an Escape that
-    // the picker receives. When this passes, the bug is fixed: remove the
+    // Known bug (row-menu-dialogs-close-at-once): the folder picker opened
+    // from a row's menu closes at once, because the row's menu dismisses
+    // itself with an Escape that the picker receives. When this passes, the bug is fixed: remove the
     // tag and the row's line in `ledger/waivers.tsv`.
     test("known bug: row-menu-dialogs-close-at-once: Move to folder in a row's menu files the thread @known-bug", {
       tag: '@known-bug',
@@ -118,6 +118,8 @@ for (const provider of PROVIDERS) {
       await pickFolder(page, 'Receipts', /^New folder/);
       await expect.poll(folder(ids.Agenda)).toBe('Receipts');
 
+      // The picker leaves the keyboard on the page, where Escape closes
+      // nothing: back in the thread it closes the thread.
       await keyboardInThread(page, 'Agenda');
       await backToList(page);
       await openFromList(page, ids.Minutes, 'About Minutes.');

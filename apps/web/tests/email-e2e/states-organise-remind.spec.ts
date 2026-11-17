@@ -5,7 +5,9 @@
 //
 // A reminder is the storage service's, not the mailbox's: the menu reads and
 // writes it the same way whichever mailbox the thread is in. Gmail on the
-// desktop, from a row's menu; Outlook on the phone, from the thread's menu.
+// desktop, from the menu after the open thread's subject (the same menu
+// opened from a row's menu closes at once, a known bug); Outlook on the
+// phone, from the thread's menu.
 
 import type { Locator, Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
