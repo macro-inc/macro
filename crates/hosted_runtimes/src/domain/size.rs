@@ -57,13 +57,18 @@ pub struct ComputerResources {
     pub disk_gib: DiskGib,
 }
 
+/// vCPUs in one capacity unit.
+pub const VCPUS_PER_UNIT: u32 = 4;
+/// Memory in GiB in one capacity unit.
+pub const MEMORY_GIB_PER_UNIT: u32 = 8;
+
 impl ComputerResources {
     /// Compute capacity units from CPU and memory requirements.
     pub fn units(self) -> u32 {
         self.memory_gib
             .get()
-            .div_ceil(8)
-            .max(self.vcpus.get().div_ceil(4))
+            .div_ceil(MEMORY_GIB_PER_UNIT)
+            .max(self.vcpus.get().div_ceil(VCPUS_PER_UNIT))
     }
 }
 

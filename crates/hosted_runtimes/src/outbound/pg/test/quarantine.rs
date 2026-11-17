@@ -5,15 +5,7 @@ use crate::domain::ports::HostScope;
 async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    let host = repo
-        .register_host(HostRegistration {
-            name: crate::domain::models::HostName::try_new("quarantine-test").unwrap(),
-            memory_gb: 64,
-            reserve_gb: 8,
-            oversell_factor: 3,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "quarantine-test", 64, 8, 3).await;
     for id in [101, 102] {
         let computer = bought(&repo, id).await;
         let mut state = computer.state;

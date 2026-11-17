@@ -1607,9 +1607,12 @@ pub async fn run() -> anyhow::Result<()> {
             sessions,
             containers,
             announcer,
-            HarnessKeyedConnections::new(
-                PgHarnessBindings::new(pool.clone()),
-                Arc::clone(&runtimes),
+            computers::wake::WakingConnections::new(
+                HarnessKeyedConnections::new(
+                    PgHarnessBindings::new(pool.clone()),
+                    Arc::clone(&runtimes),
+                ),
+                computer_operator.clone(),
             ),
             prompt_context,
             prompt_composer,

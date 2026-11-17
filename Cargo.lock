@@ -10528,6 +10528,7 @@ dependencies = [
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry_sdk",
  "pairing_id",

@@ -692,9 +692,9 @@ authentication_service and agent_harness_service; set them only to override.
 
 Harness config required for a fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
-`COMPUTERS_AGENT_IMAGE` (agent teammates' computers),
-`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
-Local orchestration supplies reserve `7` GB and oversell factor `3`. The Docker images are `macro-box:latest` and `macro-box-agent:latest`
+and `COMPUTERS_AGENT_IMAGE` (agent teammates' computers). The local Docker host's
+capacity comes from its `hosted_runtime_host` row like any host's
+([overcommit runbook](../runbooks/computer-overcommit.md)). The Docker images are `macro-box:latest` and `macro-box-agent:latest`
 (`run_local` builds and loads both: `.#macro-box-docker` and
 `.#macro-box-agent-docker`).
 

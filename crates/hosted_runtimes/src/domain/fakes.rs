@@ -27,6 +27,7 @@ use crate::domain::ports::{
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerResources;
 
+mod overcommit;
 #[cfg(test)]
 mod test;
 
@@ -124,6 +125,8 @@ pub struct FakeRepo {
     pub registered: Mutex<Vec<crate::domain::models::HostName>>,
     /// The home host row's `max_concurrent_starts`; one when unset.
     pub home_max_concurrent_starts: Option<u32>,
+    /// Hosts' overcommit state, hibernations and wake requests.
+    pub overcommit: overcommit::FakeOvercommit,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -790,8 +793,8 @@ impl ComputerRepo for FakeRepo {
             .push(registration.name.clone());
         Ok(Host {
             id: other.unwrap_or(HOST),
-            awake_capacity_units: registration.awake_capacity_units(),
-            sold_capacity_units: registration.sold_capacity_units(),
+            awake_capacity_units: self.awake_units(),
+            sold_capacity_units: self.sold_units,
             name: registration.name,
         })
     }

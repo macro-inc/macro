@@ -5,14 +5,7 @@ use crate::domain::ports::HostScope;
 async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
-    repo.register_host(HostRegistration {
-        name: crate::domain::models::HostName::try_new("capacity-test").unwrap(),
-        memory_gb: 8,
-        reserve_gb: 0,
-        oversell_factor: 9,
-    })
-    .await
-    .unwrap();
+    host(&repo, "capacity-test", 8, 0, 9).await;
     for (first, waiting, prepare, release) in [
         (1, 2, Event::PowerOff, Event::InstanceStopped),
         (5, 6, Event::MacrodConnected, Event::ReleaseNow),

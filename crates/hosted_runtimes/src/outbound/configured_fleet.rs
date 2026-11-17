@@ -6,7 +6,9 @@ use crate::domain::enrollment::EnrollmentGeneration;
 use crate::domain::ids::ComputerId;
 use crate::domain::image::GuestImage;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, GuestProcess};
+use crate::domain::ports::{
+    Fleet, FleetEnrollment, FleetError, FleetInstance, GuestProcess, HostMemory,
+};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::firecracker_fleet::{FirecrackerFleet, FirecrackerFleetError};
 
@@ -100,6 +102,21 @@ impl Fleet for ConfiguredFleet {
 
     async fn host(&self) -> Result<HostRegistration, Self::Err> {
         each_backend!(self, fleet => Ok(fleet.host().await?))
+    }
+
+    async fn memory(&self) -> Result<HostMemory, Self::Err> {
+        each_backend!(self, fleet => Ok(fleet.memory().await?))
+    }
+
+    async fn set_host_limits(
+        &self,
+        limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> Result<(), Self::Err> {
+        each_backend!(self, fleet => Ok(fleet.set_host_limits(limits).await?))
+    }
+
+    async fn hibernate(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
+        each_backend!(self, fleet => Ok(fleet.hibernate(computer_id).await?))
     }
 
     async fn exec(

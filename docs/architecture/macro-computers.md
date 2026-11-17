@@ -163,6 +163,45 @@ attempt, so a busy database never fails a computer or abandons a removal.
   returns `ComputerError::SoldOut(size)` (409, "No capacity for <size> right
   now") before billing. `allocation` reads the same holdings per host; see
   Observability for its gauges.
+- **Overcommit** (`domain/overcommit.rs`, pure): each host row holds its
+  settings (`cpu_allocation_percent`, `ram_allocation_percent`,
+  `reserved_vcpus`, `reserved_memory_gib`, `oversell_factor`, the
+  low/high/hard-ceiling memory watermarks, `start_resident_memory_mib`,
+  `minimum_idle_seconds`, `memory_report_freshness_seconds`), so tuning a host
+  is an `UPDATE`. Defaults were measured on an n2-standard-32 (6:1 vCPUs with
+  the host agent weighting active computers' CPU, 4:1 memory, 2 vCPUs and
+  16 GiB reserved, oversell 2, 70/80/90 %). Units (sales)
+  are `min((vcpus - reserved) * cpu ratio / 4, (memory - reserved) * ram
+  ratio / 8)`. A start or wake is admitted under the host lock only when the
+  awake, unhibernated computers' vCPUs and memory fit the ratios **and** the
+  host's memory report is fresh, under the high watermark and stays under the
+  hard ceiling with the start, counting each start admitted since the report
+  (`admitted_since_report`) at `start_resident_memory_mib`. A stale or missing
+  report refuses (fail closed); the computer waits with the normal capacity
+  backoff. Refusals log `host refused a start` and count
+  `computer.overcommit.refusals{reason}`.
+- **Relief and wakes**: the operator's overcommit pass (every 10 s, per
+  host, span `computer.overcommit.host`) stores the host's report
+  (`MemTotal - MemAvailable` from the host agent), hands the agent its
+  limits (`memory.max` of the VMs' cgroup at the hard ceiling, and the zram
+  squeeze window from the low to the high watermark), mirrors which
+  guests are hibernated into `hosted_runtime.hibernated_at`, and above the
+  high watermark hibernates the idlest guests until under the low one. Idle
+  means under 10 % of a vCPU between passes for `minimum_idle`, and no agent
+  session on the computer's harness with a turn under way or prompts queued
+  (asked only under pressure). A hibernated computer stays `Running` to its
+  team and counts against neither allocation nor live memory. It wakes when
+  its team powers it on (`wake_requested_at`) or when a prompt finds its
+  runtime absent (`computers/wake.rs` wraps the runtime connections, waits up
+  to 20 s for macrod's dial, else the prompt stays queued until macrod dials).
+  Wakes are admitted like starts and run through a per-host queue
+  `max_concurrent_starts` wide; refused ones stay requested and the pass
+  retries them, longest waiting first. The host agent does the rest on its
+  own, inferring activity from each VM's CPU use: `cpu.weight` by activity
+  (what makes the 6:1 vCPU default safe) and the zram squeeze of idle guests
+  between the low and high watermarks, before relief hibernates anyone.
+  Each setting, its default and how to change it on a live host:
+  [computer overcommit runbook](../runbooks/computer-overcommit.md).
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { billing, purchase_key, team_id, created_by, size, name, extra_items })`
   → `Purchase::{Ready(id), Confirming(id)}`. The client's `purchase_key` (one
   per Buy dialog, reused on retry) makes `ComputerRepo::reserve` return what
@@ -538,3 +577,12 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   units have a total; hosts record no disk capacity. Read by
   `infra/stacks/monitoring/monitors/computer-capacity.ts`; see the
   [capacity runbook](../runbooks/computer-capacity.md).
+- Overcommit, every overcommit pass, by `host_id` and `host`:
+  `computer.host.memory.{used,low_watermark,high_watermark,hard_ceiling}_ratio`
+  (shares of host memory, so monitors compare usage with each host's own
+  limits) and `computer.host.memory.report_age` (s); counters
+  `computer.overcommit.refusals{reason}`,
+  `computer.overcommit.hibernations{outcome}` and
+  `computer.overcommit.wakes{reason, outcome}`. Spans:
+  `computer.overcommit.{pass,host,hibernate,wake,wake_queue,wake_request,dispatch_wake}`
+  and `computer.wake_for_prompt` in agent_harness_service.

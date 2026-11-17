@@ -10,6 +10,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::domain::ids::PairingId;
+
+mod memory;
 use tokio_tungstenite::tungstenite::Message;
 
 const COMPUTER_ID: ComputerId =
@@ -24,8 +26,6 @@ fn config() -> FirecrackerFleetConfig {
             agent: GuestImage::try_new("macro-box-agent/2026-11-17").unwrap(),
         },
         host_name: crate::domain::models::HostName::try_new("microvm-1").unwrap(),
-        reserve_gb: 8,
-        oversell_factor: 2,
     }
 }
 
@@ -435,9 +435,8 @@ async fn the_host_registers_under_its_row_name_with_the_rows_policy() {
         fleet(&server).host().await.unwrap(),
         HostRegistration {
             name: crate::domain::models::HostName::try_new("microvm-1").unwrap(),
+            vcpus: 32,
             memory_gb: 128,
-            reserve_gb: 8,
-            oversell_factor: 2,
         }
     );
 }

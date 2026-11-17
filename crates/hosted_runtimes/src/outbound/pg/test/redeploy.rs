@@ -5,15 +5,7 @@ use crate::domain::ports::HostScope;
 async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    let host = repo
-        .register_host(HostRegistration {
-            name: crate::domain::models::HostName::try_new("timer-test-host").unwrap(),
-            memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "timer-test-host", 31, 7, 3).await;
     let id = bought(&repo, 1).await.id;
     for kind in [TimerKind::MacrodMissing, TimerKind::RetentionExpired] {
         sqlx::query!(
@@ -49,14 +41,7 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
 async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    repo.register_host(HostRegistration {
-        name: crate::domain::models::HostName::try_new("lease-test-host").unwrap(),
-        memory_gb: 31,
-        reserve_gb: 7,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
+    host(&repo, "lease-test-host", 31, 7, 3).await;
     for number in 1..=4 {
         bought(&repo, number).await;
     }
@@ -103,14 +88,7 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
 async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    repo.register_host(HostRegistration {
-        name: crate::domain::models::HostName::try_new("completion-test-host").unwrap(),
-        memory_gb: 31,
-        reserve_gb: 7,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
+    host(&repo, "completion-test-host", 31, 7, 3).await;
     let id = bought(&repo, 1).await.id;
     let effect = repo
         .lease_effects(

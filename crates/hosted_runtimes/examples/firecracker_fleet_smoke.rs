@@ -84,8 +84,6 @@ async fn main() -> Result<(), rootcause::Report> {
                 agent: image,
             },
             host_name: hosted_runtimes::domain::models::HostName::try_new("smoke")?,
-            reserve_gb: 8,
-            oversell_factor: 1,
         },
     )?;
 

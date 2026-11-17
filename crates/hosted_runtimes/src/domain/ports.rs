@@ -25,6 +25,12 @@ use crate::domain::models::{
 };
 use crate::domain::size::ComputerSize;
 
+mod overcommit;
+pub use overcommit::{
+    ComputersInUse, ComputersInUseFuture, EveryComputerInUse, GuestUsage, HostLimitsState,
+    HostMemory, OvercommitRepo,
+};
+
 /// Supplies advisory fleet operator presence at the caller's time.
 pub trait FleetAttachmentSource: Send + Sync + 'static {
     /// Adapter failure type.
@@ -250,7 +256,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
-    /// Every awake computer that has a harness, as `(harness, computer)`.
+    /// Every awake, unhibernated computer that has a harness, as `(harness, computer)`.
     fn awake_computers(
         &self,
     ) -> impl Future<Output = Result<Vec<(HarnessId, ComputerId)>, Self::Err>> + Send;
@@ -623,6 +629,24 @@ pub trait Fleet: Send + Sync + 'static {
 
     /// The host this fleet drives, for registration.
     fn host(&self) -> impl Future<Output = Result<HostRegistration, Self::Err>> + Send;
+
+    /// The host's memory now: its resident memory, the limit on its guests
+    /// and what each of this control plane's guests holds.
+    fn memory(&self) -> impl Future<Output = Result<HostMemory, Self::Err>> + Send;
+
+    /// Have the host enforce `limits` itself. Called only on a fleet whose
+    /// [`HostMemory::limits`] is [`HostLimitsState::Enforced`].
+    fn set_host_limits(
+        &self,
+        limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Save the guest's memory to its disk and end its process; `start`
+    /// restores it. The computer stays on to the lifecycle.
+    fn hibernate(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Run `argv` in the guest as its [`GUEST_USER`], without a TTY. Resolves
     /// once the program started; a missing guest is [`FleetError::is_missing`].

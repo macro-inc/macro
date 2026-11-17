@@ -11,6 +11,7 @@ pub mod lifecycle;
 pub mod models;
 #[cfg(feature = "ports")]
 pub mod operator;
+pub mod overcommit;
 pub mod ports;
 pub mod rollout;
 pub mod service;

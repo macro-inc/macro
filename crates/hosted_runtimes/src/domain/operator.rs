@@ -23,8 +23,11 @@ use crate::domain::service::{Clock, ComputerError};
 
 mod effects;
 mod hosts;
+mod relief;
 #[cfg(test)]
 mod test;
+
+pub use relief::{DispatchWake, Wake};
 
 /// A fleet effect is retried this many times before the computer fails.
 pub const MAX_EFFECT_ATTEMPTS: u32 = 5;
@@ -66,6 +69,7 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     clock: Time,
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
+    relief: relief::Relief,
 }
 
 #[derive(Default)]
@@ -78,7 +82,8 @@ struct HostReadiness {
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo: ComputerRepo + crate::domain::agent::ComputerAgents,
+    Repo:
+        ComputerRepo + crate::domain::agent::ComputerAgents + crate::domain::ports::OvercommitRepo,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,
@@ -102,6 +107,7 @@ where
             clock,
             deployment,
             host: tokio::sync::Mutex::new(HostReadiness::default()),
+            relief: relief::Relief::default(),
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.
@@ -216,6 +222,7 @@ where
         &self,
         harness_id: HarnessId,
     ) -> Result<MacrodConnected, ComputerError> {
+        self.relief.macrod_connected(harness_id);
         let Some(computer_id) = self.computer_of(harness_id).await? else {
             return Ok(MacrodConnected::NotAComputer);
         };

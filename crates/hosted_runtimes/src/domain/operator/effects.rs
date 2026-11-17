@@ -6,7 +6,8 @@ use super::*;
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo: ComputerRepo + crate::domain::agent::ComputerAgents,
+    Repo:
+        ComputerRepo + crate::domain::agent::ComputerAgents + crate::domain::ports::OvercommitRepo,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,

@@ -463,8 +463,6 @@ pub struct FirecrackerFleetSettings {
     pub computers_control_plane_id: String,
     pub computers_image: String,
     pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
     pub computers_firecracker_client_cert: String,
     pub computers_firecracker_client_key: String,
 }
@@ -490,11 +488,6 @@ impl FirecrackerFleetSettings {
             if value.trim().is_empty() {
                 return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
             }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
         }
         Ok(())
     }
@@ -555,8 +548,6 @@ pub struct DockerFleetSettings {
     pub computers_host_name: String,
     pub computers_image: String,
     pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
     pub computers_docker_network: String,
     pub computers_docker_enrollment_dir: String,
     pub computers_docker_memory_gb: u32,
@@ -584,11 +575,6 @@ impl DockerFleetSettings {
             if value.trim().is_empty() {
                 return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
             }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
         }
         Ok(())
     }

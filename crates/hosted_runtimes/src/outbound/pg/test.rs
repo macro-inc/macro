@@ -8,6 +8,8 @@ mod billing_races;
 mod boot;
 mod effect_signals;
 mod host_scope;
+mod overcommit;
+mod overcommit_scenario;
 
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -129,6 +131,10 @@ async fn sold_out(repo: &PgComputerRepo) -> Vec<ComputerSize> {
         .collect()
 }
 
+/// A 16-vCPU host of `memory_gb` whose capacity is counted in units alone:
+/// `(memory_gb - reserve_gb) / 8` awake, `oversell_factor` sold per awake
+/// one, CPU never the scarcer, and a memory report that stays fresh and never
+/// fills, so live memory never refuses. Overcommit's own tests set the rest.
 async fn host(
     repo: &PgComputerRepo,
     name: &str,
@@ -136,14 +142,32 @@ async fn host(
     reserve_gb: u32,
     oversell_factor: u32,
 ) -> Host {
-    repo.register_host(HostRegistration {
+    let registration = || HostRegistration {
         name: crate::domain::models::HostName::try_new(name).unwrap(),
+        vcpus: 16,
         memory_gb,
-        reserve_gb,
-        oversell_factor,
-    })
+    };
+    let host = repo.register_host(registration()).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE hosted_runtime_host
+        SET cpu_allocation_percent = 100000, ram_allocation_percent = 100, reserved_vcpus = 0,
+            reserved_memory_gib = $2, oversell_factor = $3, memory_low_watermark_percent = 98,
+            memory_high_watermark_percent = 99, memory_hard_ceiling_percent = 100,
+            start_resident_memory_mib = 0, memory_report_freshness_seconds = 2000000000,
+            resident_memory_mib = 0, memory_reported_at = $4
+        WHERE id = $1
+        "#,
+        host.id.into_inner(),
+        i32::try_from(reserve_gb).unwrap(),
+        i32::try_from(oversell_factor).unwrap(),
+        now(),
+    )
+    .execute(&repo.pool)
     .await
-    .unwrap()
+    .unwrap();
+    // Registration recomputes the units from the row.
+    repo.register_host(registration()).await.unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -747,15 +771,7 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
         repo.attachment(now()).await.unwrap(),
         FleetAttachment::Detached
     );
-    let host = repo
-        .register_host(HostRegistration {
-            name: crate::domain::models::HostName::try_new("heartbeat-test").unwrap(),
-            memory_gb: 32,
-            reserve_gb: 8,
-            oversell_factor: 2,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "heartbeat-test", 32, 8, 2).await;
     assert_eq!(
         repo.attachment(Utc::now()).await.unwrap(),
         FleetAttachment::Attached

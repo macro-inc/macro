@@ -15,8 +15,6 @@ fn config() -> DockerFleetConfig {
         enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
         host_name: crate::domain::models::HostName::try_new("docker-local").unwrap(),
         memory_gb: 64,
-        reserve_gb: 16,
-        oversell_factor: 4,
     }
 }
 
@@ -314,15 +312,12 @@ fn the_fleet_refuses_every_environment_but_local() {
 async fn the_host_registers_with_its_configured_capacity() {
     let fleet = DockerFleet::new(config(), Environment::Local).unwrap();
 
+    let registration = fleet.host().await.unwrap();
     assert_eq!(
-        fleet.host().await.unwrap(),
-        HostRegistration {
-            name: crate::domain::models::HostName::try_new("docker-local").unwrap(),
-            memory_gb: 64,
-            reserve_gb: 16,
-            oversell_factor: 4,
-        }
+        (registration.name.as_str(), registration.memory_gb),
+        ("docker-local", 64)
     );
+    assert!(registration.vcpus > 0);
 }
 
 #[test]
@@ -366,3 +361,15 @@ fn listing_ignores_foreign_and_unlabelled_instances() {
 
 mod enrollment;
 mod exec;
+
+#[test]
+fn memory_usage_reads_the_used_half_of_a_stats_cell() {
+    assert_eq!(
+        memory_usage_bytes("512MiB / 15.5GiB"),
+        Some(512 * 1024 * 1024)
+    );
+    assert_eq!(memory_usage_bytes("1.5GiB / 31.2GiB"), Some(1_610_612_736));
+    assert_eq!(memory_usage_bytes("900kB / 2GB"), Some(900_000));
+    assert_eq!(memory_usage_bytes("12B / 1GiB"), Some(12));
+    assert_eq!(memory_usage_bytes("-- / --"), None);
+}

@@ -82,29 +82,17 @@ impl HostAllocation {
     }
 }
 
-/// What a host reports when it registers.
+/// What a host reports when it registers: its hardware. How far it may be
+/// overcommitted is its row's own settings
+/// ([`crate::domain::overcommit::OvercommitPolicy`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostRegistration {
     /// Unique name.
     pub name: HostName,
+    /// Logical CPUs.
+    pub vcpus: u32,
     /// Memory in GiB.
     pub memory_gb: u32,
-    /// RAM kept for the host itself.
-    pub reserve_gb: u32,
-    /// How many units are sold per awake unit.
-    pub oversell_factor: u32,
-}
-
-impl HostRegistration {
-    /// Compute awake capacity after reserving host memory.
-    pub fn awake_capacity_units(&self) -> u32 {
-        self.memory_gb.saturating_sub(self.reserve_gb) / 8
-    }
-
-    /// Compute sellable capacity with overselling.
-    pub fn sold_capacity_units(&self) -> u32 {
-        self.awake_capacity_units() * self.oversell_factor
-    }
 }
 
 /// How the control plane reaches a Firecracker host.

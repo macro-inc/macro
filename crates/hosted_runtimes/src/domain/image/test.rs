@@ -49,3 +49,17 @@ fn an_agent_computer_gets_the_agent_image_and_any_other_the_regular_one() {
         "macro-box/2026-11-10"
     );
 }
+
+#[test]
+fn the_sold_home_sizes_are_each_catalog_entrys_data_disk_once_smallest_first() {
+    let sizes = sold_home_disk_gib();
+    let mut expected: Vec<u32> = crate::domain::size::current_catalog()
+        .into_iter()
+        .filter_map(|entry| data_disk_gib(entry.resources))
+        .collect();
+    expected.sort_unstable();
+    expected.dedup();
+    assert_eq!(sizes, expected);
+    assert!(!sizes.is_empty());
+    assert!(sizes.windows(2).all(|pair| pair[0] < pair[1]));
+}

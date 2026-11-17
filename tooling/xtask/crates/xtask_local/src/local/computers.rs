@@ -151,8 +151,6 @@ impl Computers {
             ("COMPUTERS_HOST_NAME".into(), DOCKER_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), DOCKER_IMAGE.into()),
             ("COMPUTERS_AGENT_IMAGE".into(), DOCKER_AGENT_IMAGE.into()),
-            ("COMPUTERS_HOST_RESERVE_GB".into(), "7".into()),
-            ("COMPUTERS_OVERSELL_FACTOR".into(), "3".into()),
             ("COMPUTERS_DOCKER_MEMORY_GB".into(), "32".into()),
             (
                 "COMPUTERS_DOCKER_NETWORK".into(),

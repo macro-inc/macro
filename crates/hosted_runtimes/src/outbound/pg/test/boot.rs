@@ -7,15 +7,7 @@ use crate::domain::ports::InstanceStatus;
 async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    let host = repo
-        .register_host(HostRegistration {
-            name: crate::domain::models::HostName::try_new("boot-test-host").unwrap(),
-            memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "boot-test-host", 31, 7, 3).await;
     let id = bought(&repo, 1).await.id;
     repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
     let overdue = repo

@@ -24,6 +24,7 @@ use crate::domain::size::{ComputerResources, ComputerSize};
 
 mod agents;
 pub use agents::PgComputerAgents;
+mod admission;
 mod apply;
 mod effect_signals;
 pub use effect_signals::PgEffectSignals;
@@ -59,6 +60,14 @@ pub enum PgComputerError {
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
+    /// The host row's overcommit settings are incoherent.
+    #[error("host {name}: {error}")]
+    InvalidHostPolicy {
+        /// Host name.
+        name: crate::domain::models::HostName,
+        /// What is wrong.
+        error: crate::domain::overcommit::InvalidOvercommitPolicy,
+    },
     /// A host row's endpoint is not a URL.
     #[error("host {name} has an invalid endpoint")]
     InvalidHostEndpoint {
@@ -260,6 +269,7 @@ impl ComputerRepo for PgComputerRepo {
             reservation.host,
             reservation.id,
             reservation.resources,
+            now,
         )
         .await?;
         let (mut state, effects) = provision(
@@ -323,6 +333,9 @@ impl ComputerRepo for PgComputerRepo {
         )
         .execute(&mut *tx)
         .await?;
+        if effects.iter().any(Effect::starts_guest) {
+            Self::count_admitted_start(&mut tx, reservation.host, now).await?;
+        }
         Self::store_effects(&mut tx, reservation.id, effects, now).await?;
         let computer = Computer {
             id: reservation.id,
@@ -499,7 +512,8 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             SELECT id, harness_id AS "harness_id!"
             FROM hosted_runtime
-            WHERE awake AND harness_id IS NOT NULL
+            -- A hibernated guest runs no harnessd; asking would only fail.
+            WHERE awake AND hibernated_at IS NULL AND harness_id IS NOT NULL
             "#,
         )
         .fetch_all(&self.pool)
@@ -888,32 +902,7 @@ impl ComputerRepo for PgComputerRepo {
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, PgComputerError> {
-        let awake = i32::try_from(registration.awake_capacity_units())?;
-        let sold = i32::try_from(registration.sold_capacity_units())?;
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (name) DO UPDATE
-            SET awake_capacity_units = EXCLUDED.awake_capacity_units,
-                sold_capacity_units = EXCLUDED.sold_capacity_units,
-                updated_at = now()
-            RETURNING id, name, awake_capacity_units, sold_capacity_units
-            "#,
-            Uuid::now_v7(),
-            registration.name.as_str(),
-            awake,
-            sold,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(Host {
-            id: HostId::new(row.id),
-            name: host_name(&row.name)?,
-            awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
-            sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
-        })
+        self.upsert_host(registration).await
     }
 
     #[tracing::instrument(skip(self), err)]

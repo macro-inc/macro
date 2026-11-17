@@ -199,10 +199,36 @@ impl Fleet for FakeFleet {
                 self.host_name.unwrap_or("runtime-dev-1"),
             )
             .unwrap(),
+            vcpus: 16,
             memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
         })
+    }
+
+    async fn memory(&self) -> Result<crate::domain::ports::HostMemory, FakeFleetError> {
+        Ok(crate::domain::ports::HostMemory {
+            report: crate::domain::overcommit::MemoryReport {
+                resident_memory_mib: 0,
+                reported_at: now(),
+            },
+            limits: crate::domain::ports::HostLimitsState::Unsupported,
+            guests: Vec::new(),
+        })
+    }
+
+    async fn set_host_limits(
+        &self,
+        limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> Result<(), FakeFleetError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("set_host_limits {limits:?}"));
+        Ok(())
+    }
+
+    async fn hibernate(&self, id: ComputerId) -> Result<(), FakeFleetError> {
+        self.calls.lock().unwrap().push(format!("hibernate {id}"));
+        Ok(())
     }
 
     async fn exec(

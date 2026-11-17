@@ -18,8 +18,6 @@ fn settings() -> FirecrackerSettings {
         connect_timeout: Duration::from_secs(5),
         request_timeout: Duration::from_secs(60),
         images: images(),
-        reserve_gb: 8,
-        oversell_factor: 2,
     }
 }
 

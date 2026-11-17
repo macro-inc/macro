@@ -22,8 +22,9 @@ Email: [frontend architecture](architecture/email.md) and
 
 Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
 
-Macro computers: [architecture](architecture/macro-computers.md) and the
-[setup trace runbook](runbooks/computer-setup-traces.md).
+Macro computers: [architecture](architecture/macro-computers.md), the
+[setup trace runbook](runbooks/computer-setup-traces.md) and the
+[overcommit runbook](runbooks/computer-overcommit.md).
 
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).

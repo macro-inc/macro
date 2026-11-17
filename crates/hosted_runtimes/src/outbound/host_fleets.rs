@@ -39,10 +39,6 @@ pub struct FirecrackerSettings {
     pub request_timeout: Duration,
     /// Image names new computers are restored from.
     pub images: GuestImages<GuestImage>,
-    /// Memory in GiB each host keeps for itself.
-    pub reserve_gb: u32,
-    /// Sold units per awake unit on each host.
-    pub oversell_factor: u32,
 }
 
 impl std::fmt::Debug for FirecrackerSettings {
@@ -121,8 +117,6 @@ impl HostFleets {
                 control_plane_id: settings.control_plane_id.clone(),
                 images: settings.images.clone(),
                 host_name: host.name.clone(),
-                reserve_gb: settings.reserve_gb,
-                oversell_factor: settings.oversell_factor,
             },
         )?))
     }

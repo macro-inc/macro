@@ -42,8 +42,10 @@ pub(crate) mod claude;
 pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
+mod in_use;
 mod presence;
 pub mod sign_in_ahead;
+pub(crate) mod wake;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -52,6 +54,8 @@ use presence::PresenceGuard;
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
+/// Memory reports, relief and wakes: well inside the reports' 30 s freshness.
+const OVERCOMMIT_TICK: Duration = Duration::from_secs(10);
 /// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
@@ -114,8 +118,6 @@ pub(crate) async fn operator(
                     agent: settings.computers_agent_image.as_str(),
                 }
                 .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
-                reserve_gb: settings.computers_host_reserve_gb,
-                oversell_factor: settings.computers_oversell_factor,
             }),
         ),
         ComputerFleetConfig::Docker(settings) => HostFleets::new(
@@ -136,8 +138,6 @@ pub(crate) async fn operator(
                             &settings.computers_host_name,
                         )?,
                         memory_gb: settings.computers_docker_memory_gb,
-                        reserve_gb: settings.computers_host_reserve_gb,
-                        oversell_factor: settings.computers_oversell_factor,
                     },
                     config.environment,
                 )
@@ -167,7 +167,11 @@ pub(crate) async fn operator(
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
+    .with_computers_in_use(Arc::new(in_use::SessionsInUse::new(
+        PgComputerRepo::new(operator_pool(pool), config.computer_billing_policy()?),
+        pool.clone(),
+    )));
     Ok(Some(Arc::new(operator)))
 }
 
@@ -223,6 +227,7 @@ enum Pass {
     Effects,
     Timers,
     Reconcile,
+    Overcommit,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -233,6 +238,7 @@ impl Pass {
             Self::Effects => EFFECT_TICK,
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
+            Self::Overcommit => OVERCOMMIT_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -267,6 +273,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
+        Pass::Overcommit,
         Pass::ClaudeSignIns,
         Pass::ClaudeStatus,
     ] {
@@ -297,9 +304,11 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
         let queued = async {
             match pass {
                 Pass::Effects => effect_signals.fleet_effect_queued().await,
-                Pass::Timers | Pass::Reconcile | Pass::ClaudeSignIns | Pass::ClaudeStatus => {
-                    std::future::pending().await
-                }
+                Pass::Timers
+                | Pass::Reconcile
+                | Pass::Overcommit
+                | Pass::ClaudeSignIns
+                | Pass::ClaudeStatus => std::future::pending().await,
             }
         };
         tokio::select! {
@@ -323,6 +332,12 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::Reconcile => shutdown
                     .run_until_cancelled(operator.reconcile())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Overcommit => shutdown
+                    .run_until_cancelled(operator.overcommit())
                     .await
                     .transpose()
                     .map(|_| ())

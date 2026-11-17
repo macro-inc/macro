@@ -43,6 +43,17 @@ impl<Image> GuestImages<Image> {
     }
 }
 
+/// The `/home` sizes the current catalog sells, in GiB, smallest first.
+pub fn sold_home_disk_gib() -> Vec<u32> {
+    let mut sizes: Vec<u32> = crate::domain::size::current_catalog()
+        .into_iter()
+        .filter_map(|entry| data_disk_gib(entry.resources))
+        .collect();
+    sizes.sort_unstable();
+    sizes.dedup();
+    sizes
+}
+
 /// The data disk's share of the disk quota: everything but [`ROOT_DISK_GIB`].
 /// `None` when the quota leaves no data disk.
 pub fn data_disk_gib(resources: ComputerResources) -> Option<u32> {

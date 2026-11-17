@@ -381,8 +381,9 @@ Read the stable identity from Doppler in deployed environments; local stacks
 explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
-An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_AGENT_IMAGE`,
-`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR` (applied to every host).
+An enabled fleet also requires `COMPUTERS_IMAGE` and `COMPUTERS_AGENT_IMAGE`; how
+far each host is overcommitted is its own row's settings
+(`docs/runbooks/computer-overcommit.md`).
 Firecracker additionally requires `COMPUTERS_FIRECRACKER_CLIENT_CERT` and
 `COMPUTERS_FIRECRACKER_CLIENT_KEY`, the mTLS identity every host agent trusts; each
 host's endpoint and pinned certificate are on its row. Docker additionally requires

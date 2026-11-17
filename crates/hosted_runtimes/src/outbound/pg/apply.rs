@@ -107,7 +107,12 @@ impl PgComputerRepo {
         }
 
         let host = computer.host;
-        let host_has_room = Self::host_has_room(tx, host, computer.id, computer.resources).await?;
+        if matches!(event, Event::PowerOn) {
+            // On to the lifecycle already; only its guest sleeps.
+            Self::request_wake_in(tx, computer_id, now).await?;
+        }
+        let host_has_room =
+            Self::host_has_room(tx, host, computer.id, computer.resources, now).await?;
         let transitioned = transition(
             &computer.state,
             event,
@@ -133,6 +138,9 @@ impl PgComputerRepo {
             if let Effect::Create { generation, .. } = effect {
                 computer.enrollment_generation = *generation;
             }
+        }
+        if effects.iter().any(Effect::starts_guest) {
+            Self::count_admitted_start(tx, host, now).await?;
         }
         Self::store_effects(tx, computer_id, effects, now).await?;
 
@@ -231,37 +239,5 @@ impl PgComputerRepo {
                 },
             );
         }
-    }
-
-    /// Whether a computer of `resources` fits among the host's other awake
-    /// computers. Locks the host row so concurrent starts on one host are serialized.
-    pub(super) async fn host_has_room(
-        tx: &mut Tx<'_>,
-        host: HostId,
-        computer_id: ComputerId,
-        resources: ComputerResources,
-    ) -> Result<bool, PgComputerError> {
-        let capacity = sqlx::query_scalar!(
-            "SELECT awake_capacity_units FROM hosted_runtime_host WHERE id = $1 FOR UPDATE",
-            host.into_inner(),
-        )
-        .fetch_optional(&mut **tx)
-        .await?;
-        let Some(capacity) = capacity else {
-            return Ok(false);
-        };
-        let others = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(SUM(GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)), 0)::INTEGER AS "units!"
-            FROM hosted_runtime
-            WHERE host_id = $1 AND awake AND id <> $2
-            "#,
-            host.into_inner(),
-            computer_id.as_uuid(),
-        )
-        .fetch_one(&mut **tx)
-        .await?;
-
-        Ok(others + units(resources)? <= capacity)
     }
 }

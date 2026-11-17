@@ -23,8 +23,6 @@ fn docker_computers_dial_the_stack_in_network() {
     assert_eq!(env["COMPUTERS_HOST_NAME"], "local-docker");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box:latest");
     assert_eq!(env["COMPUTERS_AGENT_IMAGE"], "macro-box-agent:latest");
-    assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
-    assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
     assert_eq!(env["COMPUTERS_DOCKER_MEMORY_GB"], "32");
     assert_eq!(env["COMPUTERS_DOCKER_NETWORK"], "macro-computers_services");
     assert_eq!(env["COMPUTERS_DOCKER_ENROLLMENT_DIR"], enrollment_dir);

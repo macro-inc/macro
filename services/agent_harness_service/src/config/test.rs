@@ -262,8 +262,6 @@ fn computer_fleet_settings_require_the_selected_groups() {
         "COMPUTERS_HOST_NAME": "local-docker",
         "COMPUTERS_IMAGE": "macro-box:latest",
         "COMPUTERS_AGENT_IMAGE": "macro-box-agent:latest",
-        "COMPUTERS_HOST_RESERVE_GB": 7,
-        "COMPUTERS_OVERSELL_FACTOR": 3,
         "COMPUTERS_DOCKER_NETWORK": "test-services",
         "COMPUTERS_DOCKER_ENROLLMENT_DIR": "/tmp/enrollments",
         "COMPUTERS_DOCKER_MEMORY_GB": 32

@@ -338,6 +338,16 @@ pub enum SetupOutcome {
 }
 
 impl Effect {
+    /// Whether carrying it out brings a guest's memory onto its host: a
+    /// started creation, a start or a crash restart. Overcommit counts these
+    /// against the host until its next memory report.
+    pub fn starts_guest(&self) -> bool {
+        matches!(
+            self,
+            Self::Create { start: true, .. } | Self::Start { .. } | Self::Restart { .. }
+        )
+    }
+
     /// Which worker carries the effect out. Billing runs where Stripe lives.
     pub fn worker(&self) -> EffectWorker {
         match self {

@@ -21,7 +21,7 @@ use firecracker_host_api::client::{ClientError, ExecOutput, HostClient, HostEndp
 use firecracker_host_api::exec::{ExecRequest, Frame};
 use firecracker_host_api::{
     Action, Computer as HostComputer, ComputerResources as HostResources, CreateComputer,
-    EnrollmentDocument, ErrorCode, PowerState, SetEnrollment,
+    EnrollmentDocument, ErrorCode, HostLimits, PowerState, SetEnrollment,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -29,8 +29,10 @@ use crate::domain::enrollment::{EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::ComputerId;
 use crate::domain::image::{GuestImage, GuestImages, ROOT_DISK_GIB, data_disk_gib};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
+use crate::domain::overcommit::{HostAgentLimits, MemoryReport};
 use crate::domain::ports::{
-    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
+    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, GuestUsage,
+    HostLimitsState, HostMemory, InstanceStatus,
 };
 use crate::domain::size::ComputerResources;
 use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure};
@@ -43,6 +45,7 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Time for a whole request: a create from a cold golden takes seconds.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
+const BYTES_PER_MIB: u64 = 1024 * 1024;
 const MIB_PER_GIB: u32 = 1024;
 /// How much each exec pipe buffers before its writer waits.
 const PIPE_BYTES: usize = 64 * 1024;
@@ -59,10 +62,6 @@ pub struct FirecrackerFleetConfig {
     pub images: GuestImages<GuestImage>,
     /// The host row's name, which registration keeps.
     pub host_name: crate::domain::models::HostName,
-    /// Memory in GiB the host keeps for itself.
-    pub reserve_gb: u32,
-    /// Sold units per awake unit.
-    pub oversell_factor: u32,
 }
 
 /// Failure while operating a Firecracker host.
@@ -604,10 +603,87 @@ impl Fleet for FirecrackerFleet {
         })?;
         Ok(HostRegistration {
             name: self.config.host_name.clone(),
+            vcpus: info.cpus,
             memory_gb,
-            reserve_gb: self.config.reserve_gb,
-            oversell_factor: self.config.oversell_factor,
         })
+    }
+
+    /// Host-wide resident memory (`MemTotal - MemAvailable`: guests, the
+    /// agent and the kernel, without reclaimable cache), the limits the host
+    /// enforces and each of this control plane's guests' use.
+    #[tracing::instrument(name = "firecracker_fleet.memory", skip_all, fields(host = %self.config.host_name, resident_memory_mib = tracing::field::Empty, guests = tracing::field::Empty), err)]
+    async fn memory(&self) -> Result<HostMemory, FirecrackerFleetError> {
+        let host = self.client.host().await;
+        reachable(
+            self.config.host_name.as_str(),
+            Inventory::Host,
+            host.is_ok(),
+        );
+        let host = host?;
+        let measured_at = chrono::Utc::now();
+        let computers = self.client.computers().await;
+        reachable(
+            self.config.host_name.as_str(),
+            Inventory::Computers,
+            computers.is_ok(),
+        );
+        let guests: Vec<GuestUsage> = computers?
+            .into_iter()
+            .filter(|guest| guest.control_plane_id == self.config.control_plane_id)
+            .map(|guest| GuestUsage {
+                computer_id: guest.computer_id,
+                hibernated: guest.state == PowerState::Hibernated,
+                private_memory_bytes: guest.usage.map(|usage| usage.private_memory_bytes),
+                cpu_usage_microseconds: guest.usage.map(|usage| usage.cpu_usage_microseconds),
+            })
+            .collect();
+        let resident_memory_mib = host
+            .memory_total_bytes
+            .saturating_sub(host.memory_available_bytes)
+            / BYTES_PER_MIB;
+        let span = tracing::Span::current();
+        span.record("resident_memory_mib", resident_memory_mib);
+        span.record("guests", guests.len());
+        Ok(HostMemory {
+            report: MemoryReport {
+                resident_memory_mib,
+                reported_at: measured_at,
+            },
+            // Set only as a whole; anything less is resent.
+            limits: HostLimitsState::Enforced(match host.limits {
+                Some(HostLimits {
+                    guest_memory_max_bytes,
+                    squeeze_above_bytes: Some(above),
+                    squeeze_below_bytes: Some(below),
+                    home_disk_gib,
+                }) => Some(HostAgentLimits {
+                    guest_memory_max_mib: guest_memory_max_bytes / BYTES_PER_MIB,
+                    squeeze_above_mib: above / BYTES_PER_MIB,
+                    squeeze_below_mib: below / BYTES_PER_MIB,
+                    home_disk_gib,
+                }),
+                _ => None,
+            }),
+            guests,
+        })
+    }
+
+    #[tracing::instrument(name = "firecracker_fleet.set_host_limits", skip_all, fields(host = %self.config.host_name), err)]
+    async fn set_host_limits(&self, limits: HostAgentLimits) -> Result<(), FirecrackerFleetError> {
+        let bytes = |mib: u64| mib.saturating_mul(BYTES_PER_MIB);
+        self.client
+            .set_host_limits(&HostLimits {
+                guest_memory_max_bytes: bytes(limits.guest_memory_max_mib),
+                squeeze_above_bytes: Some(bytes(limits.squeeze_above_mib)),
+                squeeze_below_bytes: Some(bytes(limits.squeeze_below_mib)),
+                home_disk_gib: limits.home_disk_gib,
+            })
+            .await?;
+        Ok(())
+    }
+
+    async fn hibernate(&self, computer_id: ComputerId) -> Result<(), FirecrackerFleetError> {
+        FirecrackerFleet::hibernate(self, computer_id).await
     }
 
     #[tracing::instrument(name = "firecracker_fleet.exec", skip_all, fields(%computer_id, host = %self.config.host_name), err)]

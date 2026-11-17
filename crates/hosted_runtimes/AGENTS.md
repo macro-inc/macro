@@ -37,6 +37,13 @@ read it before changing behaviour.
 - `src/domain/operator/`: `hosts.rs` (home registration, per-host fleets,
   reconcile) and `effects.rs` (the effect pass: each host's effects in lease
   order, `max_concurrent_starts` at a time).
+- `src/domain/overcommit.rs` (+ `overcommit/`): pure per-host capacity,
+  admission (allocation + fresh memory report + pending starts), relief
+  (idlest guests to hibernate) and guest idleness. `src/domain/operator/relief.rs`
+  runs it: the overcommit pass, hibernation and wakes. Storage:
+  `src/outbound/pg/admission.rs` and `pg/hosts.rs`; ports:
+  `src/domain/ports/overcommit.rs`. Settings and live tuning:
+  [overcommit runbook](../../docs/runbooks/computer-overcommit.md).
 
 ## Scope
 
@@ -118,10 +125,25 @@ read it before changing behaviour.
   `Rejected::PaymentPending`, releases queue `Effect::SettleCharge`, and
   `TimerKind::ChargeUnsettled` (`CHARGE_TAKEOVER`) hands a charge the request
   never answered to the billing worker (`Effect::Charge`, never abandoned).
+- Each host's capacity comes from its own row (NOT NULL settings, measured
+  defaults); registration only reports hardware (`HostRegistration`: vCPUs and
+  memory), and recomputes the row's units from its settings.
+- Admission fails closed: a host without a fresh memory report (30 s by
+  default; the overcommit pass reports every 10 s) admits nothing. A
+  hibernated computer is `Running` to the lifecycle; only
+  `hosted_runtime.hibernated_at` and the fleet's power state say it sleeps.
+  Anything that execs into guests must skip hibernated ones
+  (`awake_computers` does).
+- Two kinds of "idle", two owners: relief's idle (hibernation) is this
+  crate's (`overcommit::ActivityTracker`: under 10 % of a vCPU between passes
+  for `minimum_idle_seconds`, and no agent session with a turn running or
+  queued); the zram squeeze's idle is the host agent's (guest CPU quiet for
+  30 minutes, `services/firecracker_host`). Neither reads the other's.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related
 
 - Docs: [Macro computers](../../docs/architecture/macro-computers.md) ·
   [setup trace runbook](../../docs/runbooks/computer-setup-traces.md) ·
+  [overcommit runbook](../../docs/runbooks/computer-overcommit.md) ·
   Skill: `cloud-storage-hexagonal-architecture`
