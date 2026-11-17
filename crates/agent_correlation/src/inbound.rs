@@ -291,5 +291,41 @@ async fn enforce_signed_scope_request(
     next.run(Request::from_parts(parts, body)).await
 }
 
+/// For a service no session scope may reach at all, such as one that fetches
+/// whatever its caller names: refuse every request whose credential signs a
+/// scope, a newer one included, before any handler runs. Requests with no
+/// Macro API token are the route's own to authenticate.
+pub fn refuse_signed_scopes(
+    state: State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> impl Future<Output = Response> + Send {
+    refuse_signed_scopes_request(state, request, next)
+}
+
+async fn refuse_signed_scopes_request(
+    State(jwt): State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let (mut parts, body) = request.into_parts();
+    let token = verified_api_token(&mut parts, &jwt).await;
+    let scope = SignedScope::from_claim(
+        token
+            .as_ref()
+            .and_then(|token| token.agent_scope.as_deref()),
+    );
+    if scope != SignedScope::Unscoped {
+        tracing::warn!(
+            ?scope,
+            method = %parts.method,
+            agent_correlation_id = ?token.as_ref().and_then(|token| token.agent_correlation_id),
+            "refused a scoped credential at a service no scope reaches"
+        );
+        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    }
+    next.run(Request::from_parts(parts, body)).await
+}
+
 #[cfg(test)]
 mod test;

@@ -47,6 +47,19 @@ pub struct SearchHandlerState {
 }
 
 impl SearchHandlerState {
+    /// Assemble the email search scoping use case from read-only adapters.
+    pub(crate) fn email_search(
+        &self,
+    ) -> crate::domain::email_search::EmailSearchService<
+        crate::outbound::email_search::EmailSearchPgSource,
+    > {
+        crate::domain::email_search::EmailSearchService(
+            crate::outbound::email_search::EmailSearchPgSource {
+                db: self.db.clone(),
+            },
+        )
+    }
+
     /// Assemble the agent-session search use case from read-only adapters.
     pub(crate) fn agent_session_search(
         &self,
