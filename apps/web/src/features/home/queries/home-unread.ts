@@ -45,11 +45,7 @@ export function hasHomeUnreadWitness(
       )
       .with(
         { __typename: 'GraphqlSoupDocument' },
-        (document) =>
-          (capabilities.snippets ||
-            document.subType?.__typename !== 'GraphqlSnippetSubType') &&
-          isRecent(document) &&
-          unread(document.unreadNotifications)
+        (document) => isRecent(document) && unread(document.unreadNotifications)
       )
       .with(
         { __typename: 'GraphqlSoupChat' },

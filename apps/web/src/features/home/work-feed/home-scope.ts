@@ -35,7 +35,6 @@ const ALL_ITEM_TYPES: WorkFeedItemType[] = [
 
 export type HomeWorkFeedCapabilities = {
   foreignEntities: boolean;
-  snippets: boolean;
 };
 
 const isHomeTypeFilter = (value: string): value is HomeTypeFilter =>
@@ -64,7 +63,7 @@ export function homeWorkFeedScope(
     mode: 'work',
     // Every kind is the server's default; send the narrowed list only.
     types: types.length === ALL_ITEM_TYPES.length ? [] : types,
-    includeSnippets: capabilities.snippets,
+    includeSnippets: true,
   };
 }
 

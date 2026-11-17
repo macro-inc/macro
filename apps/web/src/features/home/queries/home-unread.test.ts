@@ -16,7 +16,6 @@ type Email = Extract<Item, { __typename: 'GraphqlSoupEmailThread' }>;
 const now = new Date('2026-10-13T12:00:00Z');
 const capabilities: HomeQueryCapabilities = {
   foreignEntities: true,
-  snippets: true,
   notifiedSort: false,
 };
 const base = {
@@ -148,13 +147,6 @@ describe('Home bounded unread witnesses', () => {
     expect(hasUnread([{ ...email, sortTs: oldMetadata.updatedAt }])).toBe(
       false
     );
-    expect(
-      hasUnread(
-        [{ ...document, subType: { __typename: 'GraphqlSnippetSubType' } }],
-        {},
-        { ...capabilities, snippets: false }
-      )
-    ).toBe(false);
     expect(
       hasUnread(
         [{ ...base, __typename: 'GraphqlSoupForeignEntity' }],

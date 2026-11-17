@@ -8,14 +8,13 @@ describe('homeWorkFeedScope', () => {
     expect(homeWorkFeedScope(undefined, everything)).toEqual({
       mode: 'work',
       types: [],
-      includeSnippets: false,
+      includeSnippets: true,
     });
   });
 
   it('leaves out kinds this client cannot show', () => {
     const scope = homeWorkFeedScope([], {
       foreignEntities: false,
-      snippets: true,
     });
     expect(scope?.types).not.toContain('pull_request');
     expect(scope?.types).toContain('channel_thread');

@@ -270,7 +270,6 @@ describe('Home unread presence', () => {
     const inbox = setup();
     const read = vi.fn(() => [notification('hidden')]);
     const hidden: EntityData[] = [
-      { ...documentRow, fileType: 'md', subType: { type: 'snippet' } },
       {
         ...base,
         type: 'foreign',

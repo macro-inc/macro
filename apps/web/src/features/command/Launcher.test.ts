@@ -29,7 +29,6 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableProjects: 'projects',
   enablePsdEditor: 'psd',
   enableReminders: 'reminders',
-  enableSnippets: 'snippets',
   isFeatureEnabled: () => true,
 }));
 vi.mock('@core/directive/focusInput', () => ({}));

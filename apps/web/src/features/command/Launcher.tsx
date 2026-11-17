@@ -20,7 +20,6 @@ import {
   enableForms,
   enableProjects,
   enablePsdEditor,
-  enableSnippets,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import {
@@ -931,7 +930,6 @@ export function useCreateMenuBlocks(
   source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
   const commands = useCreateCommands();
-  const snippetsFlag = useFeatureFlag(enableSnippets);
   const projectsFlag = useFeatureFlag(enableProjects);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
@@ -948,7 +946,6 @@ export function useCreateMenuBlocks(
     aiFlag();
     formsFlag();
     return (source() ?? commands).filter((block) => {
-      if (block.blockName === 'snippet') return snippetsFlag().enabled;
       if (block.blockName === 'initiative') return projectsFlag().enabled;
       return block.enabled?.() ?? true;
     });
