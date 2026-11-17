@@ -13,6 +13,7 @@ export type ModelSpeed = (typeof ModelSpeed)[keyof typeof ModelSpeed];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ModelSpeed = {
   standard: 'standard',
+  priority: 'priority',
   fast: 'fast',
   ultrafast: 'ultrafast',
 } as const;

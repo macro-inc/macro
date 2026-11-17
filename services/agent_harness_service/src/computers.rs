@@ -43,7 +43,6 @@ pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
-pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -81,7 +80,7 @@ pub type Operator = ComputerOperator<
     ConfiguredFleet,
     HostedHarnesses,
     SystemClock,
-    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
+    team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
 
 /// Build the operator from explicit config, or `None` when this deployment
@@ -176,7 +175,10 @@ pub(crate) async fn operator(
             default_agents,
             redis,
         },
-        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notifications,
+            PgTeamAgentsRepo::new(pool.clone()),
+        ),
         SystemClock,
         Arc::new(ServiceDeployment),
     )

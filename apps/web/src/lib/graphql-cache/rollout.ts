@@ -1,10 +1,7 @@
 import { analytics } from '@app/lib/analytics';
-import {
-  disableBrowserTursoCache,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { disableBrowserTursoCache } from '@core/constant/featureFlags';
 import { isTauri } from '@core/util/platform';
+import { unsupportedBrowserReason } from './host/browser-support';
 import {
   type BrowserTursoCacheRolloutDecision,
   resolveBrowserTursoCacheRollout,
@@ -12,14 +9,12 @@ import {
 
 /** Resolves the current gate without constructing a browser cache resource. */
 export function getBrowserTursoCacheRolloutDecision(): BrowserTursoCacheRolloutDecision {
-  const native = isTauri();
-  const graphqlTransportEnabled = isFeatureEnabled(enableGraphqlSoup);
-  if (native) {
+  if (isTauri()) {
     // Do not touch browser rollout flags on Tauri. Besides preserving behavior,
     // this keeps native startup independent from PostHog browser-cache state.
     return resolveBrowserTursoCacheRollout({
       isTauri: true,
-      graphqlTransportEnabled,
+      browserSupported: true,
       disableEnvOverride: undefined,
       posthogDisable: undefined,
     });
@@ -27,7 +22,7 @@ export function getBrowserTursoCacheRolloutDecision(): BrowserTursoCacheRolloutD
 
   return resolveBrowserTursoCacheRollout({
     isTauri: false,
-    graphqlTransportEnabled,
+    browserSupported: unsupportedBrowserReason() === undefined,
     disableEnvOverride: disableBrowserTursoCache.override,
     posthogDisable: analytics.posthog.isFeatureEnabled(
       disableBrowserTursoCache.key

@@ -108,6 +108,7 @@ impl IntoResponse for TeamAgentError {
 ///
 /// - `POST /` — a team admin invites an agent teammate and buys its computer.
 /// - `GET /` — a team member lists the team's agents.
+/// - `POST /me/online` — an agent reports that it is online.
 /// - `DELETE /{agent_user_id}` — a team admin removes an agent.
 /// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads or changes the
 ///   agent's call voice.
@@ -124,6 +125,7 @@ where
             post(create_team_agent_handler::<S, Eas, Auth>)
                 .get(list_team_agents_handler::<S, Eas, Auth>),
         )
+        .route("/me/online", post(agent_online_handler::<S, Eas, Auth>))
         .route(
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
@@ -199,6 +201,40 @@ where
     Ok(Json(
         state.service.list(access.entity_access_receipt).await?,
     ))
+}
+
+/// The calling agent reports that it is online, with its own credential.
+/// The first report makes it `running` and tells its inviter it is ready;
+/// later ones change nothing. 404 for an account that isn't an agent of its
+/// team.
+#[utoipa::path(
+    post,
+    tag = "team-agents",
+    operation_id = "report_team_agent_online",
+    path = "/team_agents/me/online",
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn agent_online_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+) -> Result<StatusCode, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .agent_online(access.entity_access_receipt)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Path for one agent.

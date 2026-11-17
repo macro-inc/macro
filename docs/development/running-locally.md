@@ -1001,7 +1001,8 @@ stops sending [your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in)
 **What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
 plus a line per step (and when it started, in which lane and inside which
-step), per service build (cargo units compiled, sccache hits, and the compile
+step), per service build (cargo units compiled, sccache hits when the build
+goes through sccache, and the compile
 time of its slowest crates from `cargo build --timings`) and per container's wait
 for its first passing health probe. Lines carry step, crate and service names,
 timings, outcome, the commit, OS/arch, CPU count and model, memory size, and hashed

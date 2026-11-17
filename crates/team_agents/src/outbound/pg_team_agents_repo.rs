@@ -52,6 +52,7 @@ struct AgentRow {
     created_by: Option<String>,
     persona_seed: sqlx::types::Json<PersonaSeed>,
     created_at: DateTime<Utc>,
+    first_online_at: Option<DateTime<Utc>>,
 }
 
 impl TryFrom<AgentRow> for TeamAgentRecord {
@@ -64,6 +65,7 @@ impl TryFrom<AgentRow> for TeamAgentRecord {
             created_by: row.created_by.map(user_id).transpose()?,
             persona_seed: row.persona_seed.0,
             created_at: row.created_at,
+            first_online_at: row.first_online_at,
         })
     }
 }
@@ -196,7 +198,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
             r#"
             SELECT user_id, team_id, created_by,
                    persona_seed AS "persona_seed: sqlx::types::Json<PersonaSeed>",
-                   created_at
+                   created_at, first_online_at
             FROM team_agents
             WHERE user_id = $1
             "#,
@@ -215,7 +217,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
             r#"
             SELECT user_id, team_id, created_by,
                    persona_seed AS "persona_seed: sqlx::types::Json<PersonaSeed>",
-                   created_at
+                   created_at, first_online_at
             FROM team_agents
             WHERE team_id = $1
             ORDER BY created_at, user_id
@@ -226,6 +228,21 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         .await?;
 
         rows.into_iter().map(TeamAgentRecord::try_from).collect()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn mark_online(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE team_agents SET first_online_at = now()
+            WHERE user_id = $1 AND first_online_at IS NULL
+            "#,
+            user_id.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
 

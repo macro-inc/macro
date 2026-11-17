@@ -8,7 +8,7 @@ import {
   getGraphqlSoupClient,
   hasGraphqlCacheHost,
 } from '@service-storage/graphql-soup';
-import { type Accessor, onCleanup } from 'solid-js';
+import { onCleanup } from 'solid-js';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
@@ -23,25 +23,18 @@ function unreadWitnesses(data: ChannelUnreadPresenceQuery) {
 }
 
 /** Bounded unread evidence for the sidebar, independent of the full feed. */
-export function createChannelUnreadQuery(
-  input: SoupInput,
-  enabled: Accessor<boolean>
-) {
+export function createChannelUnreadQuery(input: SoupInput) {
   const variables = { input };
   const query = createUrqlQuery(() => ({
     query: ChannelUnreadPresenceDocument,
     client: getGraphqlSoupClient(),
     variables,
-    enabled: enabled(),
     requestPolicy: 'cache-and-network',
     select: unreadWitnesses,
   }));
   onCleanup(
     registerGraphqlSoupRevalidations(
-      () =>
-        enabled()
-          ? [{ document: ChannelUnreadPresenceDocument, variables }]
-          : [],
+      () => [{ document: ChannelUnreadPresenceDocument, variables }],
       getGraphqlSoupClient,
       // Unread is read from each witness's cached state.
       hasGraphqlCacheHost
@@ -51,7 +44,7 @@ export function createChannelUnreadQuery(
     client: getGraphqlSoupClient(),
     queries: [{ document: ChannelUnreadPresenceDocument, variables }],
     reader: {
-      enabled: enabled(),
+      enabled: true,
       fetching: query.isFetching,
       filtered: true,
       notificationIds: query.isSuccess
@@ -61,7 +54,7 @@ export function createChannelUnreadQuery(
   }));
   onCleanup(
     registerActiveGraphqlSoupQuery({
-      isEnabled: enabled,
+      isEnabled: () => true,
       refresh,
       cacheMaintained: hasGraphqlCacheHost,
     })

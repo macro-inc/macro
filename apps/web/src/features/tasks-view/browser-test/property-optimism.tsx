@@ -2,7 +2,6 @@
 // cache. Only HTTP is replaced; no hosted workspace data is read or changed.
 import '@app/index.css';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -30,7 +29,6 @@ import { stringifyDocument } from '@urql/core';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 
-enableGraphqlSoup.override = true;
 const taskIds = [
   '00000000-0000-0000-0000-000000000101',
   '00000000-0000-0000-0000-000000000102',

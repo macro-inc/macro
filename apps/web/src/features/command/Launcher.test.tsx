@@ -76,7 +76,9 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({}));
 vi.mock('@core/component/EntityIcon', () => ({
   getIconConfig: () => ({ icon: () => null, foreground: 'text-ink' }),
 }));
-vi.mock('@core/directive/focusInput', () => ({}));
+vi.mock('@core/directive/focusInput', () => ({
+  triggerFocusNewElement: () => {},
+}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
 vi.mock('@core/hotkey/state', () => ({ pressedKeys: () => new Set() }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

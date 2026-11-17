@@ -256,8 +256,8 @@ not activate these alerts.
 
 ## GraphQL soup rollout coverage
 
-`monitors/graphql-soup.ts` declares 19 new monitors for the `enable-graphql-soup`
-rollout: GraphQL latency, errors and volume, per-operation errors and latency,
+`monitors/graphql-soup.ts` declares 19 monitors for GraphQL soup, added for
+its rollout: GraphQL latency, errors and volume, per-operation errors and latency,
 unauthenticated mutations, websocket upgrades, cloud-storage-service capacity
 and 5xx, macro-db-prod connections and CPU, the gateway ALB, and web-app cache
 logs.

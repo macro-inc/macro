@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 pub use agent_credentials::{AgentApiKey, RepoToken};
 pub use agent_git::domain::voice::VoiceModel;
+pub use harness_id::HarnessId;
 pub use hosted_runtimes::domain::ids::ComputerId;
 pub use hosted_runtimes::domain::size::ComputerSize;
 
@@ -27,7 +28,9 @@ pub const AGENT_EMAIL_DOMAIN: &str = "agents.macro.invalid";
 pub enum TeamAgentStatus {
     /// Its computer is being bought, created or booted.
     Provisioning,
-    /// Its computer is up, so its brain is running.
+    /// Its computer is up, and the agent hasn't reported itself online yet.
+    Starting,
+    /// Its computer is up, and the agent has reported itself online.
     Running,
     /// Its computer is asleep, stopped, unreachable or ending.
     Paused,
@@ -150,6 +153,34 @@ pub struct TeamAgentRecord {
     pub persona_seed: PersonaSeed,
     /// When it was invited.
     pub created_at: DateTime<Utc>,
+    /// When the agent first reported itself online, if it has.
+    pub first_online_at: Option<DateTime<Utc>>,
+}
+
+/// What the agent's inviter is told when it first comes online.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentReady {
+    /// The agent's computer.
+    pub computer_id: ComputerId,
+    /// The agent's team.
+    pub team_id: Uuid,
+    /// The computer's name and harness.
+    pub computer: ComputerDetails,
+    /// The admin who invited the agent.
+    pub inviter: MacroUserIdStr<'static>,
+    /// The agent.
+    pub agent: MacroUserIdStr<'static>,
+    /// The agent's name.
+    pub agent_name: String,
+}
+
+/// What an agent's ready notice names about its computer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerDetails {
+    /// Display name.
+    pub name: String,
+    /// The computer's harness, once macrod has connected.
+    pub harness_id: Option<HarnessId>,
 }
 
 /// The agent's workspace repository.
@@ -195,10 +226,14 @@ pub enum ComputerState {
     Released,
 }
 
-impl From<ComputerState> for TeamAgentStatus {
-    fn from(state: ComputerState) -> Self {
+impl TeamAgentStatus {
+    /// The agent's status from its computer's, and whether the agent has
+    /// ever reported itself online: an up computer runs the agent only once
+    /// it has.
+    pub fn of(state: ComputerState, came_online: bool) -> Self {
         match state {
             ComputerState::Purchasing | ComputerState::SettingUp => Self::Provisioning,
+            ComputerState::Ready if !came_online => Self::Starting,
             ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,

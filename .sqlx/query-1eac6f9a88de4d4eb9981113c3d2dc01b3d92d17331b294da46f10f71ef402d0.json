@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4) ON CONFLICT(team_id,id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1eac6f9a88de4d4eb9981113c3d2dc01b3d92d17331b294da46f10f71ef402d0"
+}

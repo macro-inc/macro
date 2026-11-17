@@ -225,7 +225,7 @@ pub enum PipelineError {
 }
 
 /// Persistence contract. Transactions and grant writes belong to the adapter.
-pub trait PipelineRepo: Send + Sync + 'static {
+pub trait PipelineRepo: Send + Sync + 'static + super::auth::CrmMemberAccess {
     /// Adapter error.
     type Error: std::error::Error + Send + Sync + 'static;
     /// Holds a live pipeline against concurrent trash/deletion.
@@ -536,6 +536,7 @@ where
         input: CreatePipeline,
     ) -> Result<AccessiblePipeline, PipelineError> {
         let name = name(&input.name)?;
+        team.check_access(&self.repo).await?;
         let creator = actor(team.receipt())?;
         if !self
             .repo

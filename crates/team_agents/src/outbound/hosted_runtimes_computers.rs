@@ -12,7 +12,9 @@ use hosted_runtimes::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{ComputerId, ComputerPurchase, ComputerState, TeamAgentError};
+use crate::domain::models::{
+    ComputerDetails, ComputerId, ComputerPurchase, ComputerState, TeamAgentError,
+};
 use crate::domain::ports::Computers;
 
 #[cfg(test)]
@@ -172,6 +174,23 @@ where
             Ok((status, availability)) => Ok(computer_state(status.status, availability)),
             Err(error) => roster_error(error),
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn details(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerDetails, TeamAgentError> {
+        let (status, _) = self
+            .service
+            .status_for_roster(team_id, computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        Ok(ComputerDetails {
+            name: status.name,
+            harness_id: status.harness_id,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

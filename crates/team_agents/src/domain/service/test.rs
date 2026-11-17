@@ -9,7 +9,8 @@ use rootcause::Report;
 
 use super::*;
 use crate::domain::models::{
-    AgentApiKey, AgentRepo, ComputerSize, ComputerState, RepoToken, VoiceModel,
+    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState, RepoToken,
+    VoiceModel,
 };
 
 const ADMIN: &str = "macro|admin@example.com";
@@ -72,6 +73,7 @@ impl TeamAgentRepository for FakeRepository {
             created_by: Some(account.created_by.clone()),
             persona_seed: account.persona_seed.clone(),
             created_at: chrono::DateTime::UNIX_EPOCH,
+            first_online_at: None,
         });
         Ok(())
     }
@@ -116,6 +118,29 @@ impl TeamAgentRepository for FakeRepository {
             .filter(|agent| agent.team_id == team_id)
             .cloned()
             .collect())
+    }
+
+    async fn mark_online(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), FakeError> {
+        self.journal.record("agent.mark_online");
+        for agent in self.agents.lock().unwrap().iter_mut() {
+            if agent.user_id.as_ref() == user_id.as_ref() {
+                agent
+                    .first_online_at
+                    .get_or_insert(chrono::DateTime::UNIX_EPOCH);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The ready notices sent.
+#[derive(Clone, Default)]
+struct FakeNotices(Arc<Mutex<Vec<AgentReady>>>);
+
+impl AgentReadyNotices for FakeNotices {
+    async fn send(&self, notice: AgentReady) -> Result<(), TeamAgentError> {
+        self.0.lock().unwrap().push(notice);
+        Ok(())
     }
 }
 
@@ -270,6 +295,13 @@ impl Computers for FakeComputers {
         Ok(ComputerState::Ready)
     }
 
+    async fn details(&self, _: Uuid, _: ComputerId) -> Result<ComputerDetails, TeamAgentError> {
+        Ok(ComputerDetails {
+            name: "Sam Rivera".to_owned(),
+            harness_id: None,
+        })
+    }
+
     async fn release(&self, _: Uuid, _: ComputerId) -> Result<(), TeamAgentError> {
         self.journal.record("computer.release");
         Ok(())
@@ -333,6 +365,7 @@ type Service = TeamAgentServiceImpl<
     FakeComputers,
     FakeRepository,
     Flags,
+    FakeNotices,
 >;
 
 fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
@@ -355,6 +388,7 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
         computers,
         repository,
         Some(flags.clone()),
+        FakeNotices::default(),
         Addresses,
     );
     (service, journal, flags)
@@ -451,8 +485,101 @@ async fn the_list_shows_each_agent_with_its_computers_state() {
 
     assert_eq!(listed.agents.len(), 1);
     assert_eq!(listed.agents[0].user_id, created.user_id);
-    assert_eq!(listed.agents[0].status, TeamAgentStatus::Running);
     assert_eq!(listed.agents[0].job_description, "Runs vendor relations.");
+}
+
+/// The agent's own credential on its team, as its online report carries.
+fn agent_receipt(agent: &MacroUserIdStr<'static>) -> EntityAccessReceipt<MemberTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        agent.clone(),
+        TEAM,
+        EntityType::Team,
+    )
+}
+
+#[tokio::test]
+async fn an_up_computer_runs_its_agent_only_once_the_agent_reports_online() {
+    let (service, _) = service(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+
+    // The computer is up (macrod connected), but the agent hasn't started.
+    let before = service.list(receipt()).await.unwrap();
+    assert_eq!(before.agents[0].status, TeamAgentStatus::Starting);
+    assert!(service.notices.0.lock().unwrap().is_empty());
+
+    service
+        .agent_online(agent_receipt(&created.user_id))
+        .await
+        .expect("the agent reports online");
+
+    let after = service.list(receipt()).await.unwrap();
+    assert_eq!(after.agents[0].status, TeamAgentStatus::Running);
+    assert_eq!(
+        *service.notices.0.lock().unwrap(),
+        [AgentReady {
+            computer_id: ComputerId::new_from_uuid(COMPUTER),
+            team_id: Uuid::parse_str(TEAM).unwrap(),
+            computer: ComputerDetails {
+                name: "Sam Rivera".to_owned(),
+                harness_id: None,
+            },
+            inviter: user(ADMIN),
+            agent: created.user_id,
+            agent_name: "Sam Rivera".to_owned(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn only_the_first_online_report_tells_the_inviter() {
+    let (service, journal) = service(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+
+    service
+        .agent_online(agent_receipt(&created.user_id))
+        .await
+        .unwrap();
+    // A restart, or the agent's retry after a lost answer.
+    service
+        .agent_online(agent_receipt(&created.user_id))
+        .await
+        .unwrap();
+
+    assert_eq!(service.notices.0.lock().unwrap().len(), 1);
+    let marks = journal
+        .entries()
+        .iter()
+        .filter(|entry| *entry == "agent.mark_online")
+        .count();
+    assert_eq!(marks, 1);
+}
+
+#[tokio::test]
+async fn only_an_agent_of_the_team_can_report_itself_online() {
+    let (service, journal) = service(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+    let before = journal.entries().len();
+    let other_team = EntityAccessReceipt::dangerously_assert_authenticated_user(
+        created.user_id.clone(),
+        "0193a1b2-0000-7000-8000-0000000000bb",
+        EntityType::Team,
+    );
+
+    assert!(matches!(
+        service.agent_online(receipt()).await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert!(matches!(
+        service.agent_online(other_team).await,
+        Err(TeamAgentError::NotFound)
+    ));
+
+    assert_eq!(journal.entries().len(), before);
+    assert!(service.notices.0.lock().unwrap().is_empty());
+    assert_eq!(
+        service.list(receipt()).await.unwrap().agents[0].status,
+        TeamAgentStatus::Starting
+    );
 }
 
 #[tokio::test]

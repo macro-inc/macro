@@ -3,9 +3,11 @@ import {
   type BulkShareHandle,
 } from '@app/features/sharing/share-delivery/bulk-share';
 import { ShareDialog } from '@core/component/TopBar/ShareDialog';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
 import {
   ActionDialogShell,
   Dialog,
@@ -142,6 +144,8 @@ const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
 });
 
 export const openBulkEditModal = (session: BulkEditSession) => {
+  if (session.view === 'rename')
+    triggerFocusNewElement(RENAME_FIELD_SELECTOR, { touchOnly: true });
   setModalOpen(true);
   setGlobalSession(session);
 };
@@ -203,6 +207,8 @@ export function openOwnedBulkEditModal(
   session: BulkEditSession,
   owner: Owner | null
 ) {
+  if (session.view === 'rename')
+    triggerFocusNewElement(RENAME_FIELD_SELECTOR, { touchOnly: true });
   return openDialog<OwnedBulkEditProps>(
     OwnedBulkEditModal,
     { session },

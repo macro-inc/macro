@@ -6,8 +6,9 @@ import {
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
-import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -89,7 +90,12 @@ export function MobilePageCreateButton() {
         label: block.label,
         onSelect: block.keyDownHandler,
         ...(block.blockName === 'task'
-          ? { raiseKeyboard: raiseKeyboardForNewTaskTitle }
+          ? {
+              raiseKeyboard: () =>
+                triggerFocusNewElement(NEW_TASK_TITLE_SELECTOR, {
+                  touchOnly: true,
+                }),
+            }
           : {}),
       }
     );

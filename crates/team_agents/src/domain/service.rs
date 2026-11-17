@@ -15,13 +15,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AGENT_EMAIL_DOMAIN, ComputerId, ComputerPurchase, CreateTeamAgent, MAX_NAME_CHARS,
+    AGENT_EMAIL_DOMAIN, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent, MAX_NAME_CHARS,
     MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord,
     TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
-    AgentApiKeys, AgentRepos, Computers, EnrollmentEnvironment, TeamAgentRepository,
-    TeamAgentService, TeamMembership,
+    AgentApiKeys, AgentReadyNotices, AgentRepos, Computers, EnrollmentEnvironment,
+    TeamAgentRepository, TeamAgentService, TeamMembership,
 };
 use super::voice::AgentVoice;
 
@@ -55,7 +55,16 @@ pub mod env_keys {
 }
 
 /// The agent teammates service, over its ports.
-pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> {
+pub struct TeamAgentServiceImpl<
+    Repository,
+    Membership,
+    ApiKeys,
+    Repos,
+    Computer,
+    Creators,
+    Flags,
+    Notices,
+> {
     repository: Repository,
     membership: Membership,
     api_keys: ApiKeys,
@@ -64,11 +73,13 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer
     /// Whose rollout each agent follows, for its enrollment.
     creators: Creators,
     flags: Option<Flags>,
+    /// Tells an agent's inviter when the agent first comes online.
+    notices: Notices,
     environment: Box<dyn EnrollmentEnvironment>,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
 {
     /// Build the service. Without `flags`, agent teammates stay off.
     #[expect(
@@ -83,6 +94,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
         computers: Computer,
         creators: Creators,
         flags: Option<Flags>,
+        notices: Notices,
         environment: impl EnrollmentEnvironment,
     ) -> Self {
         Self {
@@ -93,6 +105,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
             computers,
             creators,
             flags,
+            notices,
             environment: Box::new(environment),
         }
     }
@@ -204,14 +217,15 @@ struct Undo {
     repo: bool,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
@@ -323,11 +337,10 @@ where
             .computer_for_agent(record.team_id, &record.user_id)
             .await?;
         let status = match computer_id {
-            Some(computer_id) => self
-                .computers
-                .state(record.team_id, computer_id)
-                .await?
-                .into(),
+            Some(computer_id) => TeamAgentStatus::of(
+                self.computers.state(record.team_id, computer_id).await?,
+                record.first_online_at.is_some(),
+            ),
             // The account exists but its purchase never completed.
             None => TeamAgentStatus::Failed,
         };
@@ -345,14 +358,24 @@ where
     }
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> TeamAgentService
-    for TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices> TeamAgentService
+    for TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+    >
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
@@ -516,6 +539,59 @@ where
             .set_voice(&record.user_id, record.team_id, &voice.model)
             .await?;
         Ok(voice)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.agent_online",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = tracing::field::Empty, computer_id = tracing::field::Empty, first = tracing::field::Empty),
+        err
+    )]
+    async fn agent_online(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<(), TeamAgentError> {
+        let agent = acting_user(&receipt)?;
+        let team_id = team_id(&receipt)?;
+        let span = tracing::Span::current();
+        span.record(
+            "agent_user_id",
+            tracing::field::display(agent_credentials::telemetry_id(agent.as_ref())),
+        );
+        let record = self
+            .repository
+            .get(&agent)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|record| record.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)?;
+        let first = record.first_online_at.is_none();
+        span.record("first", first);
+        if !first {
+            return Ok(());
+        }
+
+        // Told before the stamp, so a failed notice is retried by the agent's
+        // next report; the notice is idempotent, so a repeat sends nothing.
+        let computer_id = self.computers.computer_for_agent(team_id, &agent).await?;
+        if let (Some(computer_id), Some(inviter)) = (computer_id, record.created_by) {
+            span.record("computer_id", tracing::field::display(computer_id));
+            let computer = self.computers.details(team_id, computer_id).await?;
+            self.notices
+                .send(AgentReady {
+                    computer_id,
+                    team_id,
+                    computer,
+                    inviter,
+                    agent: agent.clone(),
+                    agent_name: record.persona_seed.name,
+                })
+                .await?;
+        }
+        self.repository
+            .mark_online(&agent)
+            .await
+            .map_err(TeamAgentError::internal)
     }
 
     #[tracing::instrument(

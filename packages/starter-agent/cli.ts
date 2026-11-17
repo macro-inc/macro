@@ -35,6 +35,10 @@ import { parallel } from '@macro-inc/muppet/runtimes/parallel';
 import { z } from 'zod';
 import { refusal } from './behavior/agent/guard.ts';
 import { guards } from './behavior/agent/guards/index.ts';
+import {
+  onlineRoute,
+  reportsOnline,
+} from './behavior/capabilities/chat/online.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
 import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
 import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
@@ -102,13 +106,26 @@ const run = async (): Promise<void> => {
   const files = launcherFiles();
   await configuredOrExit(claude);
   await configuredOrExit(sandboxProgram);
-  const { presence } = await configuredOrExit(wiring.addresses);
+  const { presence, hosts } = await configuredOrExit(wiring.addresses);
   const apiKey = await configuredOrExit(() => base.credentials.get(macroKey));
   process.on('SIGTERM', () => {
     void Telemetry.flush().finally(() => process.exit(exitCodes.stopped));
   });
+  // Once presence is open, the agent tells Macro it is up: its row turns
+  // Running and its inviter hears it is ready.
+  const online = reportsOnline({
+    post: async () =>
+      (
+        await fetch(`${hosts.auth}${onlineRoute}`, {
+          method: 'POST',
+          headers: { 'x-macro-user-api-key': apiKey },
+        })
+      ).status,
+    log: (entry) => void base.log.event(presenceLog, entry),
+  });
   // The agent shows online in Macro for as long as it runs.
   stayOnline({
+    onOnline: online.report,
     open: () => {
       const socket = new WebSocket(presence, {
         headers: { 'x-macro-user-api-key': apiKey },
