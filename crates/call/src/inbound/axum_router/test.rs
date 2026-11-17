@@ -348,7 +348,7 @@ mod authenticated_join_routes {
         ))
     }
 
-    fn router(service: MockCallService) -> axum::Router {
+    pub(super) fn router(service: MockCallService) -> axum::Router {
         router_with_flag(service, true)
     }
 
@@ -961,5 +961,55 @@ mod call_record_urls {
             &browser,
         );
         assert!(person.recording_url.is_some(), "a person keeps the URLs");
+    }
+}
+
+mod meeting_links {
+    use super::authenticated_join_routes::router;
+    use crate::domain::ports::MockCallService;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    async fn mint_link(bearer: &str, code_execution: bool) -> StatusCode {
+        let mut service = MockCallService::new();
+        service.expect_share_call().never();
+        let mut request = Request::post(format!("/record/{}/link", Uuid::nil()))
+            .header("authorization", format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+        router(service)
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// A new meeting link for a call lets anyone holding it join as a guest,
+    /// so a program never mints one; a person shares the call from Macro.
+    #[tokio::test]
+    async fn a_program_cannot_mint_a_link_for_a_call() {
+        for (program, bearer, code_execution) in [
+            ("an agent run", "agent-jwt", false),
+            ("an owner-identity routine run", "routine", false),
+            ("the code-mode runtime", "member", true),
+        ] {
+            assert_eq!(
+                mint_link(bearer, code_execution).await,
+                StatusCode::FORBIDDEN,
+                "{program}"
+            );
+        }
+    }
+
+    /// A person passes the guard; this test router's access store then
+    /// answers, so anything but 403 shows the guard let it through.
+    #[tokio::test]
+    async fn a_person_passes_the_guard() {
+        assert_ne!(mint_link("member", false).await, StatusCode::FORBIDDEN);
     }
 }

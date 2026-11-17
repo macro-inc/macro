@@ -318,7 +318,7 @@ pub trait EmailPolicyTransaction: Send {
     fn commit(self) -> impl Future<Output = Result<(), CrmError>> + Send;
 }
 
-/// One locked source event; future workers perform bounded reverse fan-out.
+/// One locked source event for bounded reverse fan-out.
 pub trait EmailPolicySourceTransaction: Send {
     /// Claimed event and its persisted cursor.
     fn event(&self) -> &EmailPolicySourceEvent;
@@ -327,7 +327,7 @@ pub trait EmailPolicySourceTransaction: Send {
         &mut self,
     ) -> impl Future<Output = Result<Vec<EmailPolicySourceReference>, CrmError>> + Send;
     /// Advance after the caller durably handled a page, or delete an exhausted
-    /// event. The worker added in the next stage owns that atomic hand-off.
+    /// event. The worker owns that durable hand-off.
     fn advance(
         &mut self,
         after: Option<&EmailPolicySourceReference>,
@@ -336,7 +336,7 @@ pub trait EmailPolicySourceTransaction: Send {
     fn commit(self) -> impl Future<Output = Result<(), CrmError>> + Send;
 }
 
-/// Dormant policy storage, separate from the live privacy API and its workers.
+/// Private policy storage, separate from the legacy privacy API.
 pub trait EmailPolicyRepository: Clone + Send + Sync + 'static {
     /// Owner-bound transaction; it cannot be used to operate on another member.
     type Transaction: EmailPolicyTransaction;
@@ -350,7 +350,7 @@ pub trait EmailPolicyRepository: Clone + Send + Sync + 'static {
         user: &str,
         open: OpenEmailPolicy,
     ) -> impl Future<Output = Result<Option<Self::Transaction>, CrmError>> + Send;
-    /// Claim one source event with SKIP LOCKED. No polling caller is wired yet.
+    /// Claim one source event with SKIP LOCKED for the bounded worker.
     fn next_email_policy_source_event(
         &self,
     ) -> impl Future<Output = Result<Option<Self::SourceTransaction>, CrmError>> + Send;

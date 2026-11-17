@@ -50,6 +50,11 @@ tools — hexagonal, heavily feature-gated.
   import, initialization, completion accounting and leases, metadata, attachments,
   sent contact seeding and CRM operations. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
+  `worker/crm_policy.rs` retains the original consent incarnation/version and
+  durable job ID through every page and effect. Legacy CRM history cannot adopt
+  initialized consent. Mark new per-message hints `live_mail=true`; the legacy
+  history fan-out explicitly uses false. Modern publication retains a recovery
+  signal until exact-generation progress/completion; legacy publication deletes.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
   CRM normalization and pending-label snapshot rules. Inbox sync and link manager
   share notification-recipient selection.

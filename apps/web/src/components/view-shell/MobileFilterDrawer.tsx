@@ -1,6 +1,7 @@
 import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
 import { SearchableSourceStatus } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import {
   MobileDrawer,
   scrollToFocusedInput,
@@ -301,6 +302,16 @@ function SourceOptions<TId extends string>(props: {
     const ids = new Set(source.visibleIds());
     return source.options().filter((option) => ids.has(option.id));
   });
+  // Further pages load as the end of the options scrolls into view. The
+  // sentinel opts out of scroll anchoring, which would otherwise hold it in
+  // view as pages land above it.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => source.hasNext() && !source.error(),
+    isFetchingNextPage: source.loading,
+    fetchNextPage: source.next,
+  });
   return (
     <>
       <div class="px-3 py-2">
@@ -330,12 +341,7 @@ function SourceOptions<TId extends string>(props: {
         when={source.error()}
         fallback={
           <Show when={source.hasNext()}>
-            <MobileDrawer.Item
-              disabled={source.loading()}
-              onClick={source.next}
-            >
-              {t('viewMenus.nextOptions')}
-            </MobileDrawer.Item>
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
           </Show>
         }
       >

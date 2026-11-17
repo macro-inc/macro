@@ -125,7 +125,7 @@ display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
-preserved across window changes. Next options replaces its page; Only changes
+preserved as further pages load on scroll. Only changes
 Owner without clearing Stage. Closed chips resolve only their selected labels,
 not the full personal directory.
 

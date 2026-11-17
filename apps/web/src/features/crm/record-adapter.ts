@@ -82,7 +82,8 @@ export function useCrmContactMentionSource(
     search,
     enabled,
     resolveUsers,
-    hasMore: () => !!query.hasNextPage,
+    // A failed page ends paging, so a menu reading on scroll cannot repeat it.
+    hasMore: () => !!query.hasNextPage && !query.isFetchNextPageError,
     loadMore: async () => {
       await query.fetchNextPage();
     },
