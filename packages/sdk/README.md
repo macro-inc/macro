@@ -842,7 +842,8 @@ takes typed source/target references and returns a deletable mention handle.
 
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
 the handle only retains metadata. `list()` and `key.delete()` manage keys.
-`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
+an agent's program (ExecuteCode, a routine) is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use

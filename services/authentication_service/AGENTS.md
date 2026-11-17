@@ -212,6 +212,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- `GET /jwt/macro_api_token` refuses a program (`macro_authorization::is_program_run`, 403): it would turn a run's minute-long credential into an hour-long token the model can read. A person's session or API key still exchanges.
 - Match Google link email display names without ASCII case sensitivity: FusionAuth preserves Google's capitalization, while Macro normalizes email addresses. Keep refresh, token lookup, removal, and grant relocation consistent.
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets
