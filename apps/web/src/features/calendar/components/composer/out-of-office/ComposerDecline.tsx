@@ -49,27 +49,29 @@ export function ComposerDecline(props: { fullWidth?: boolean } = {}) {
         <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local" class="min-w-56">
-        <Dropdown.RadioGroup
-          value={model.state().outOfOffice?.autoDeclineMode}
-          onChange={(value) => {
-            if (model.fieldIsDisabled('outOfOffice')) return;
-            const mode = DECLINE_MODES.find((mode) => mode.value === value);
-            if (!mode) return;
-            model.controller.setOutOfOffice({
-              autoDeclineMode: mode.value,
-              declineMessage: model.state().outOfOffice?.declineMessage ?? '',
-            });
-          }}
-        >
-          <For each={DECLINE_MODES}>
-            {(mode) => (
-              <Dropdown.RadioItem value={mode.value} closeOnSelect>
-                <span class="flex-1">{t(mode.label)}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={model.state().outOfOffice?.autoDeclineMode}
+            onChange={(value) => {
+              if (model.fieldIsDisabled('outOfOffice')) return;
+              const mode = DECLINE_MODES.find((mode) => mode.value === value);
+              if (!mode) return;
+              model.controller.setOutOfOffice({
+                autoDeclineMode: mode.value,
+                declineMessage: model.state().outOfOffice?.declineMessage ?? '',
+              });
+            }}
+          >
+            <For each={DECLINE_MODES}>
+              {(mode) => (
+                <Dropdown.RadioItem value={mode.value} closeOnSelect>
+                  <span class="flex-1">{t(mode.label)}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

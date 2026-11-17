@@ -1,3 +1,4 @@
+import { Popover } from '@kobalte/core/popover';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
@@ -78,5 +79,33 @@ describe('TimezoneSelect', () => {
     await userEvent.type(search, 'UTC');
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('UTC'));
+  });
+
+  it('consumes Escape in the search before closing its parent composer', async () => {
+    const closeParent = vi.fn();
+    render(() => (
+      <Popover open>
+        <Popover.Content
+          class="portal-scope"
+          onEscapeKeyDown={closeParent}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <TimezoneSelect
+            value="UTC"
+            options={OPTIONS}
+            onChange={vi.fn()}
+            portalScope="local"
+          />
+        </Popover.Content>
+      </Popover>
+    ));
+    await userEvent.click(screen.getByRole('button', { name: 'Timezone' }));
+    const search = await screen.findByPlaceholderText('Search timezones...');
+    await userEvent.click(search);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByPlaceholderText('Search timezones...')).toBeNull();
+    expect(closeParent).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(closeParent).toHaveBeenCalledOnce();
   });
 });

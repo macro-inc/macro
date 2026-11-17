@@ -1,6 +1,7 @@
 import CheckIcon from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
+import { Dropdown } from '@ui';
 import type { Accessor } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { TimezoneOption } from './types';
@@ -37,9 +38,9 @@ export function TimezoneListbox() {
             {(item) => (
               <Combobox.Item
                 item={item}
+                as={Dropdown.ItemFrame}
                 // Keep virtual focus in the search input inside parent popovers.
                 on:mousedown={(event: MouseEvent) => event.preventDefault()}
-                class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-sm data-highlighted:bg-ink/5"
               >
                 <span class="flex size-3.5 shrink-0 items-center justify-center text-accent">
                   <Combobox.ItemIndicator>

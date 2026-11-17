@@ -41,19 +41,21 @@ export function RecurrenceFrequency() {
           {label()}
         </Dropdown.Trigger>
         <Dropdown.Content portalScope="local" class="min-w-32">
-          <Dropdown.RadioGroup
-            value={model.input.value.frequency}
-            onChange={model.frequency}
-          >
-            <For each={FREQUENCIES}>
-              {(frequency) => (
-                <Dropdown.RadioItem value={frequency.value} closeOnSelect>
-                  <span class="flex-1">{t(frequency.label)}</span>
-                  <Dropdown.ItemIndicator />
-                </Dropdown.RadioItem>
-              )}
-            </For>
-          </Dropdown.RadioGroup>
+          <Dropdown.Group>
+            <Dropdown.RadioGroup
+              value={model.input.value.frequency}
+              onChange={model.frequency}
+            >
+              <For each={FREQUENCIES}>
+                {(frequency) => (
+                  <Dropdown.RadioItem value={frequency.value} closeOnSelect>
+                    <span class="flex-1">{t(frequency.label)}</span>
+                    <Dropdown.ItemIndicator />
+                  </Dropdown.RadioItem>
+                )}
+              </For>
+            </Dropdown.RadioGroup>
+          </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
     </div>

@@ -10,7 +10,11 @@ import { createRangeDateSelection } from '../primitives/create-range-date-select
 import { RangeDateTrigger } from './RangeDateTrigger';
 
 /** Date pills for one range; both share a one-month, two-click range picker. */
-export function RangeDates(props: { layout?: 'inline' | 'columns' }) {
+export function RangeDates(props: {
+  layout?: 'inline' | 'columns';
+  /** Keep both date pills aligned with a host's fixed-width time fields. */
+  fieldWidth?: string;
+}) {
   const range = useDateTimeRange();
   const columns = () => props.layout === 'columns';
   const [anchor, setAnchor] = createSignal<HTMLElement>();
@@ -67,6 +71,7 @@ export function RangeDates(props: { layout?: 'inline' | 'columns' }) {
         <RangeDateTrigger
           date={start()}
           fullWidth={columns()}
+          width={props.fieldWidth}
           label={t('common.editStartDate', { subject: range.subject })}
           placeholder={t('common.startDate')}
           active={open() && !choosingEnd()}
@@ -83,6 +88,7 @@ export function RangeDates(props: { layout?: 'inline' | 'columns' }) {
           <RangeDateTrigger
             date={end()}
             fullWidth={columns()}
+            width={props.fieldWidth}
             label={t('common.editEndDate', { subject: range.subject })}
             placeholder={t('common.endDate')}
             active={choosingEnd()}

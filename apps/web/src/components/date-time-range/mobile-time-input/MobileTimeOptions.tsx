@@ -1,5 +1,6 @@
 import { formatLocale } from '@app/lib/i18n';
 import { parseLocalDate } from '@core/util/local-date';
+import { Dropdown } from '@ui';
 import { addDays } from 'date-fns';
 import { createMemo, For, Show } from 'solid-js';
 import type { TimeOption } from '../time-options';
@@ -42,7 +43,12 @@ export function MobileTimeOptions(props: {
     }).format(addDays(date, offset));
   };
   return (
-    <div ref={props.ref} id={props.id} role="listbox" aria-label={props.label}>
+    <Dropdown.GroupFrame
+      ref={props.ref}
+      id={props.id}
+      role="listbox"
+      aria-label={props.label}
+    >
       <For each={groups()}>
         {(group) => (
           <div role="group" aria-label={dateLabel(group.offset)}>
@@ -67,6 +73,6 @@ export function MobileTimeOptions(props: {
           </div>
         )}
       </For>
-    </div>
+    </Dropdown.GroupFrame>
   );
 }

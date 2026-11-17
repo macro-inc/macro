@@ -54,19 +54,21 @@ export function ComposerConference(props: ComposerConferenceProps) {
         <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local" class="min-w-48">
-        <Dropdown.RadioGroup value={props.value} onChange={conference.choose}>
-          <For each={conference.choices()}>
-            {(choice) => (
-              <Dropdown.RadioItem value={choice.value} closeOnSelect>
-                <Show when={choice.value === 'macro'}>
-                  <MacroLogo class="size-3.5 text-ink-muted" />
-                </Show>
-                <span class="flex-1">{choice.label}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup value={props.value} onChange={conference.choose}>
+            <For each={conference.choices()}>
+              {(choice) => (
+                <Dropdown.RadioItem value={choice.value} closeOnSelect>
+                  <Show when={choice.value === 'macro'}>
+                    <MacroLogo class="size-3.5 text-ink-muted" />
+                  </Show>
+                  <span class="flex-1">{choice.label}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

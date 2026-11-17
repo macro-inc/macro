@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { Popover } from '@kobalte/core/popover';
-import { Button, cn, Input } from '@ui';
+import { Button, cn, Dropdown, Input } from '@ui';
 import {
   type ComponentProps,
   createEffect,
@@ -19,8 +19,8 @@ import {
   selectedTimeOptionId,
   type TimeOption,
 } from '../time-options';
+import { TimeValue } from '../time-value/TimeValue';
 import { MobileTimeOptions } from './MobileTimeOptions';
-import { MobileTimeValue } from './MobileTimeValue';
 
 type MobileTimeInputProps = ComponentProps<typeof TimeInput> & {
   /** Anchor date for end-list headings after midnight. */
@@ -152,10 +152,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             onClick={() => (model.isOpen() ? beginTyping() : openList())}
             onKeyDown={onKeyDown}
           >
-            <MobileTimeValue
-              value={props.value}
-              timeFormat={props.timeFormat}
-            />
+            <TimeValue value={props.value} timeFormat={props.timeFormat} />
           </Button>
         </span>
         <span hidden={!typing()} class="w-full">
@@ -199,8 +196,9 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
       <Show when={model.isOpen()}>
         <ScopedPortal scope="local">
           <Popover.Content
+            as={Dropdown.ContentFrame}
             class={cn(
-              'menu-surface z-action-menu max-h-[300px] max-w-[90vw] overflow-y-auto rounded-[22px] p-1.5 outline-none',
+              'max-h-[300px] max-w-[90vw] overflow-y-auto outline-none',
               props.date ? 'w-[196px]' : 'w-44'
             )}
             onOpenAutoFocus={(event) => event.preventDefault()}

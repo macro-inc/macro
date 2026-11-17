@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import { buttonClasses, Layer, selectTriggerClasses } from '@ui';
+import { buttonClasses, Dropdown, Layer, selectTriggerClasses } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { TimezoneListbox } from './TimezoneListbox';
 import type { TimezoneOption } from './types';
@@ -134,6 +134,7 @@ export function TimezoneSelect(props: {
         >
           <Layer depth={2}>
             <Combobox.Content
+              as={Dropdown.ContentFrame}
               onInteractOutside={() => {
                 restoreTriggerFocus = false;
               }}
@@ -143,18 +144,25 @@ export function TimezoneSelect(props: {
                   triggerRef.focus({ preventScroll: true });
                 }
               }}
-              class="menu-surface z-action-menu w-[24rem] max-w-[90vw] overflow-hidden"
+              class="w-[24rem] max-w-[90vw] overflow-hidden"
             >
               <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
                 <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
                 <Combobox.Input
                   ref={searchRef}
+                  onKeyDown={(event: KeyboardEvent) => {
+                    if (event.key !== 'Escape' || !open()) return;
+                    // Kobalte closes on the input before the parent's document listener.
+                    // Consume this press so it cannot also discard the composer.
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                  }}
                   class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
                   placeholder={t('common.searchTimezones')}
                   aria-label={t('common.searchTimezones')}
                 />
               </div>
-              <div class="p-1">
+              <Dropdown.GroupFrame>
                 <Show
                   when={hasMatches()}
                   fallback={
@@ -165,7 +173,7 @@ export function TimezoneSelect(props: {
                 >
                   <TimezoneListbox />
                 </Show>
-              </div>
+              </Dropdown.GroupFrame>
             </Combobox.Content>
           </Layer>
         </Combobox.Portal>

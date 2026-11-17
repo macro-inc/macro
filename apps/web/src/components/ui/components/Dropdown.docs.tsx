@@ -64,7 +64,7 @@ export default defineDoc({
   name: 'Dropdown',
   category: 'Overlays',
   description:
-    'Menus with shared keyboard navigation. Multiselect rows distinguish toggling, adding, and selecting only one option.',
+    'Menus with shared keyboard navigation. ContentFrame, GroupFrame, and ItemFrame share the same menu styling with listboxes and comboboxes without changing their semantics. Multiselect rows distinguish toggling, adding, and selecting only one option.',
   status: 'stable',
   import: "import { Dropdown } from '@ui';",
   exports: ['Dropdown'],

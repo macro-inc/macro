@@ -3,10 +3,7 @@ import { Show } from 'solid-js';
 import type { ClockFormat } from '../primitives/clock-format';
 import { mobileClockValue } from '../primitives/mobile-clock-value';
 
-export function MobileTimeValue(props: {
-  value: string;
-  timeFormat?: ClockFormat;
-}) {
+export function TimeValue(props: { value: string; timeFormat?: ClockFormat }) {
   const display = () =>
     mobileClockValue(props.value, props.timeFormat, formatLocale());
   return (

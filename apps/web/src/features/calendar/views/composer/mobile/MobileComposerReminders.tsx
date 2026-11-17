@@ -2,9 +2,9 @@ import { t } from '@app/lib/i18n';
 import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
 import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
+import { ComposerReminderPill } from '../../../components/composer/reminders/ComposerReminderPill';
 import type { ComposerReminderOptions } from '../../../core/composer-reminders';
 import { createComposerReminders } from '../../../primitives/create-composer-reminders';
 import { formatReminderOffset } from '../../../utils/event-reminders';
@@ -22,49 +22,13 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
               </Show>
             }
           >
-            <div class="flex min-w-0 items-center">
-              <Dropdown placement="bottom-start">
-                <Dropdown.Trigger
-                  variant="row"
-                  size="sheet-row"
-                  class="flex-1 justify-start"
-                  disabled={props.disabled}
-                >
-                  {formatReminderOffset(minutes)}
-                </Dropdown.Trigger>
-                <Dropdown.Content portalScope="local">
-                  <Dropdown.RadioGroup
-                    value={String(minutes)}
-                    onChange={(value) => reminders.replace(index(), value)}
-                  >
-                    <For each={reminders.offsets()}>
-                      {(offset) => (
-                        <Dropdown.RadioItem
-                          value={String(offset)}
-                          closeOnSelect
-                        >
-                          <span class="flex-1">
-                            {formatReminderOffset(offset)}
-                          </span>
-                          <Dropdown.ItemIndicator />
-                        </Dropdown.RadioItem>
-                      )}
-                    </For>
-                  </Dropdown.RadioGroup>
-                </Dropdown.Content>
-              </Dropdown>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                aria-label={t('calendar.removeNotification', {
-                  offset: formatReminderOffset(minutes),
-                })}
-                disabled={props.disabled}
-                onClick={() => reminders.remove(index())}
-              >
-                <CloseIcon class="size-4" />
-              </Button>
-            </div>
+            <ComposerReminderPill
+              minutes={minutes}
+              offsets={reminders.offsets()}
+              disabled={props.disabled}
+              onChange={(value) => reminders.replace(index(), value)}
+              onRemove={() => reminders.remove(index())}
+            />
           </SheetRow>
         )}
       </For>
@@ -86,16 +50,18 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
             {t('calendar.addReminder')}
           </Dropdown.Trigger>
           <Dropdown.Content portalScope="local">
-            <For each={reminders.offsets()}>
-              {(offset) => (
-                <Dropdown.Item
-                  disabled={props.minutes.includes(offset)}
-                  onSelect={() => reminders.add(offset)}
-                >
-                  {formatReminderOffset(offset)}
-                </Dropdown.Item>
-              )}
-            </For>
+            <Dropdown.Group>
+              <For each={reminders.offsets()}>
+                {(offset) => (
+                  <Dropdown.Item
+                    disabled={props.minutes.includes(offset)}
+                    onSelect={() => reminders.add(offset)}
+                  >
+                    {formatReminderOffset(offset)}
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
           </Dropdown.Content>
         </Dropdown>
       </SheetRow>

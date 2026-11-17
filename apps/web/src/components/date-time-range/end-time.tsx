@@ -4,7 +4,7 @@ import { createEndTimeField } from './primitives/create-end-time-field';
 import { TimeInput } from './time-input';
 
 /** The end's clock time, with durations and midnight rollover from the start. */
-export function EndTime(props: { class?: string }) {
+export function EndTime(props: { class?: string; splitMeridiem?: boolean }) {
   const range = useDateTimeRange();
   const fieldId = createUniqueId();
   const field = createEndTimeField(range);
@@ -22,6 +22,7 @@ export function EndTime(props: { class?: string }) {
         invalid={range.invalid}
         describedBy={range.describedBy}
         class={props.class}
+        splitMeridiem={props.splitMeridiem}
       />
     </Show>
   );

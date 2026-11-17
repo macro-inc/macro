@@ -1,7 +1,7 @@
 import { parseTimeValue } from '../time-options';
 import type { ClockFormat } from './clock-format';
 
-/** Split display parts so the phone pill can align its meridiem independently. */
+/** Split display parts so a clock field can align its meridiem independently. */
 export function mobileClockValue(
   value: string,
   format?: ClockFormat,

@@ -1,5 +1,5 @@
 import CheckIcon from '@icon/system/regular/check.svg';
-import { Button } from '@ui';
+import { Dropdown } from '@ui';
 import { Show } from 'solid-js';
 import type { TimeOption } from '../time-options';
 
@@ -11,17 +11,12 @@ export function MobileTimeOption(props: {
   onChoose: (option: TimeOption) => void;
 }) {
   return (
-    <Button
+    <Dropdown.ItemFrame
       id={props.id}
-      variant="ghost"
-      appearance="bare"
-      size="sheet"
       role="option"
       tabindex="-1"
       aria-selected={props.selected}
       data-highlighted={props.highlighted ? '' : undefined}
-      data-selected={props.selected ? '' : undefined}
-      class="w-full justify-between rounded-2xl text-left font-normal text-ink data-selected:bg-accent/18 data-selected:text-accent data-highlighted:not-data-selected:bg-ink/5"
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => props.onChoose(props.option)}
     >
@@ -36,6 +31,6 @@ export function MobileTimeOption(props: {
           <CheckIcon class="size-4 text-accent" />
         </Show>
       </span>
-    </Button>
+    </Dropdown.ItemFrame>
   );
 }

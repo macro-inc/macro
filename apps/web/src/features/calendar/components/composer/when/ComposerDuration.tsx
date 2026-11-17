@@ -42,23 +42,25 @@ export function ComposerDuration() {
         {label()}
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local" class="min-w-36">
-        <Dropdown.RadioGroup
-          value={model.state().allDay ? 'all-day' : String(minutes())}
-          onChange={choose}
-        >
-          <For each={DURATIONS}>
-            {(duration) => (
-              <Dropdown.RadioItem value={String(duration)} closeOnSelect>
-                <span class="flex-1">{formatDuration(duration)}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-          <Dropdown.RadioItem value="all-day" closeOnSelect>
-            <span class="flex-1">{t('calendar.allDay')}</span>
-            <Dropdown.ItemIndicator />
-          </Dropdown.RadioItem>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={model.state().allDay ? 'all-day' : String(minutes())}
+            onChange={choose}
+          >
+            <For each={DURATIONS}>
+              {(duration) => (
+                <Dropdown.RadioItem value={String(duration)} closeOnSelect>
+                  <span class="flex-1">{formatDuration(duration)}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+            <Dropdown.RadioItem value="all-day" closeOnSelect>
+              <span class="flex-1">{t('calendar.allDay')}</span>
+              <Dropdown.ItemIndicator />
+            </Dropdown.RadioItem>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

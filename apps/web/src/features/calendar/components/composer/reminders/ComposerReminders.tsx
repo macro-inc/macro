@@ -1,11 +1,11 @@
 import { t } from '@app/lib/i18n';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import type { ComposerReminderOptions } from '../../../core/composer-reminders';
 import { createComposerReminders } from '../../../primitives/create-composer-reminders';
 import { formatReminderOffset } from '../../../utils/event-reminders';
+import { ComposerReminderPill } from './ComposerReminderPill';
 
 export function ComposerReminders(props: ComposerReminderOptions) {
   const reminders = createComposerReminders(props);
@@ -14,50 +14,13 @@ export function ComposerReminders(props: ComposerReminderOptions) {
       <div class="flex flex-wrap items-center gap-1">
         <For each={props.minutes}>
           {(minutes, index) => (
-            <div class="group inline-flex items-center gap-0.5">
-              <Dropdown placement="bottom-start">
-                <Dropdown.Trigger
-                  variant="value"
-                  finish="flat"
-                  size="sm"
-                  disabled={props.disabled}
-                >
-                  {formatReminderOffset(minutes)}
-                </Dropdown.Trigger>
-                <Dropdown.Content portalScope="local" class="min-w-48">
-                  <Dropdown.RadioGroup
-                    value={String(minutes)}
-                    onChange={(value) => reminders.replace(index(), value)}
-                  >
-                    <For each={reminders.offsets()}>
-                      {(offset) => (
-                        <Dropdown.RadioItem
-                          value={String(offset)}
-                          closeOnSelect
-                        >
-                          <span class="flex-1">
-                            {formatReminderOffset(offset)}
-                          </span>
-                          <Dropdown.ItemIndicator />
-                        </Dropdown.RadioItem>
-                      )}
-                    </For>
-                  </Dropdown.RadioGroup>
-                </Dropdown.Content>
-              </Dropdown>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('calendar.removeNotification', {
-                  offset: formatReminderOffset(minutes),
-                })}
-                disabled={props.disabled}
-                class="not-touch:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => reminders.remove(index())}
-              >
-                <CloseIcon class="size-3" />
-              </Button>
-            </div>
+            <ComposerReminderPill
+              minutes={minutes}
+              offsets={reminders.offsets()}
+              disabled={props.disabled}
+              onChange={(value) => reminders.replace(index(), value)}
+              onRemove={() => reminders.remove(index())}
+            />
           )}
         </For>
         <Dropdown placement="bottom-start">
@@ -71,16 +34,18 @@ export function ComposerReminders(props: ComposerReminderOptions) {
             {t('calendar.add')}
           </Dropdown.Trigger>
           <Dropdown.Content portalScope="local" class="min-w-48">
-            <For each={reminders.offsets()}>
-              {(offset) => (
-                <Dropdown.Item
-                  disabled={props.minutes.includes(offset)}
-                  onSelect={() => reminders.add(offset)}
-                >
-                  {formatReminderOffset(offset)}
-                </Dropdown.Item>
-              )}
-            </For>
+            <Dropdown.Group>
+              <For each={reminders.offsets()}>
+                {(offset) => (
+                  <Dropdown.Item
+                    disabled={props.minutes.includes(offset)}
+                    onSelect={() => reminders.add(offset)}
+                  >
+                    {formatReminderOffset(offset)}
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
           </Dropdown.Content>
         </Dropdown>
       </div>

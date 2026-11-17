@@ -59,22 +59,24 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content portalScope="local" class="min-w-48">
-        <Dropdown.RadioGroup
-          value={model.visibility()}
-          onChange={(value) => {
-            const visibility = VALUES.find((choice) => choice === value);
-            if (visibility) model.setVisibility(visibility);
-          }}
-        >
-          <For each={VALUES}>
-            {(value) => (
-              <Dropdown.RadioItem value={value} closeOnSelect>
-                <span class="flex-1">{labels[value]}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={model.visibility()}
+            onChange={(value) => {
+              const visibility = VALUES.find((choice) => choice === value);
+              if (visibility) model.setVisibility(visibility);
+            }}
+          >
+            <For each={VALUES}>
+              {(value) => (
+                <Dropdown.RadioItem value={value} closeOnSelect>
+                  <span class="flex-1">{labels[value]}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

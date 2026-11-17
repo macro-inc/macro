@@ -82,7 +82,16 @@ export function ComposerGuests() {
         <Show when={isOpen()}>
           <ScopedPortal scope="local">
             <Layer depth={3}>
-              <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-2rem)] p-1.5 outline-none">
+              <Popover.Content
+                class="menu-surface z-action-menu w-80 max-w-[calc(100vw-2rem)] p-1.5 outline-none"
+                on:keydown={(event: KeyboardEvent) => {
+                  if (event.key !== 'Escape' || event.isComposing) return;
+                  // Consume the search's close before it reaches the outer composer.
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setOpen(false);
+                }}
+              >
                 <Popover.Title class="sr-only">
                   {t('calendar.guests')}
                 </Popover.Title>

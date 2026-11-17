@@ -4,7 +4,7 @@ import { TimeInput } from './time-input';
 import { splitLocalDateTime, withLocalTime } from './time-options';
 
 /** The start's clock time, omitted for an all-day range. */
-export function StartTime(props: { class?: string }) {
+export function StartTime(props: { class?: string; splitMeridiem?: boolean }) {
   const range = useDateTimeRange();
   const fieldId = createUniqueId();
   return (
@@ -21,6 +21,7 @@ export function StartTime(props: { class?: string }) {
         invalid={range.invalid}
         describedBy={range.describedBy}
         class={props.class}
+        splitMeridiem={props.splitMeridiem}
       />
     </Show>
   );

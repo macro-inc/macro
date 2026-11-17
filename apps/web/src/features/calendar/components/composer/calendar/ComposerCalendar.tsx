@@ -39,23 +39,25 @@ export function ComposerCalendar(props: { fullWidth?: boolean } = {}) {
         <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local" class="min-w-48">
-        <Dropdown.RadioGroup
-          value={model.controller.effectiveCalendarId()}
-          onChange={(calendarId) => {
-            if (!readOnly())
-              model.controller.setField('calendarId', calendarId);
-          }}
-        >
-          <For each={model.controller.calendarOptions()}>
-            {(calendar) => (
-              <Dropdown.RadioItem value={calendar.id} closeOnSelect>
-                <CalendarSwatch color={calendar.color} />
-                <span class="min-w-0 flex-1 truncate">{calendar.label}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={model.controller.effectiveCalendarId()}
+            onChange={(calendarId) => {
+              if (!readOnly())
+                model.controller.setField('calendarId', calendarId);
+            }}
+          >
+            <For each={model.controller.calendarOptions()}>
+              {(calendar) => (
+                <Dropdown.RadioItem value={calendar.id} closeOnSelect>
+                  <CalendarSwatch color={calendar.color} />
+                  <span class="min-w-0 flex-1 truncate">{calendar.label}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

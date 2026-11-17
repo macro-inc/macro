@@ -36,25 +36,27 @@ export function ComposerRecurrence(props: { fullWidth?: boolean } = {}) {
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content portalScope="local" class="min-w-48">
-        <Dropdown.RadioGroup
-          value={model.controller.recurrenceChoice()}
-          onChange={(value) => {
-            if (!reason()) model.controller.changeRecurrenceChoice(value);
-          }}
-        >
-          <For each={model.controller.recurrenceOptions()}>
-            {(option) => (
-              <Dropdown.RadioItem
-                value={option.value}
-                disabled={Boolean(reason())}
-                closeOnSelect
-              >
-                <span class="flex-1">{option.label}</span>
-                <Dropdown.ItemIndicator />
-              </Dropdown.RadioItem>
-            )}
-          </For>
-        </Dropdown.RadioGroup>
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={model.controller.recurrenceChoice()}
+            onChange={(value) => {
+              if (!reason()) model.controller.changeRecurrenceChoice(value);
+            }}
+          >
+            <For each={model.controller.recurrenceOptions()}>
+              {(option) => (
+                <Dropdown.RadioItem
+                  value={option.value}
+                  disabled={Boolean(reason())}
+                  closeOnSelect
+                >
+                  <span class="flex-1">{option.label}</span>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );

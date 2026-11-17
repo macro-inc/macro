@@ -1,6 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Popover } from '@kobalte/core/popover';
+import { Dropdown } from '@ui/components/Dropdown';
 import { Input } from '@ui/components/Input';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
@@ -13,6 +14,7 @@ import {
   selectedTimeOptionId,
   type TimeOption,
 } from './time-options';
+import { TimeValue } from './time-value/TimeValue';
 
 export const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
@@ -37,6 +39,8 @@ interface TimeInputProps {
   invalid?: boolean;
   describedBy?: string;
   class?: string;
+  /** Separate the resting clock value and meridiem without changing native typing. */
+  splitMeridiem?: boolean;
 }
 
 /**
@@ -125,45 +129,65 @@ export function TimeInput(props: TimeInputProps) {
       flip
       slide
     >
-      <Input
-        ref={input}
-        id={props.id}
-        type="text"
-        autocomplete="off"
-        spellcheck={false}
-        role="combobox"
-        aria-label={props.label}
-        aria-autocomplete="both"
-        aria-controls={listId}
-        aria-expanded={model.isOpen()}
-        aria-activedescendant={activeDescendant()}
-        aria-invalid={props.invalid || undefined}
-        aria-describedby={props.describedBy}
-        disabled={props.disabled}
-        value={
-          model.state.shown ??
-          formatTimeValue(props.value, props.timeFormat) ??
-          ''
-        }
-        placeholder="Time"
-        size="sm"
-        class={cn('w-[4.75rem] shrink-0', props.class)}
-        onFocus={() => {
-          openList();
-          input.select();
-        }}
-        onMouseDown={() => {
-          if (document.activeElement === input) openList();
-        }}
-        onInput={onInput}
-        onBlur={model.commit}
-        on:keydown={onKeyDown}
-      />
+      <span class="relative inline-flex shrink-0">
+        <Input
+          ref={input}
+          id={props.id}
+          type="text"
+          autocomplete="off"
+          spellcheck={false}
+          role="combobox"
+          aria-label={props.label}
+          aria-autocomplete="both"
+          aria-controls={listId}
+          aria-expanded={model.isOpen()}
+          aria-activedescendant={activeDescendant()}
+          aria-invalid={props.invalid || undefined}
+          aria-describedby={props.describedBy}
+          disabled={props.disabled}
+          value={
+            model.state.shown ??
+            formatTimeValue(props.value, props.timeFormat) ??
+            ''
+          }
+          placeholder="Time"
+          size="sm"
+          class={cn(
+            'w-[4.75rem] shrink-0',
+            props.splitMeridiem && 'h-7 text-sm',
+            props.splitMeridiem && !model.isOpen() && 'text-transparent',
+            props.class
+          )}
+          variant={props.splitMeridiem ? 'value' : undefined}
+          onFocus={() => {
+            openList();
+            input.select();
+          }}
+          onMouseDown={() => {
+            if (document.activeElement === input) openList();
+          }}
+          onInput={onInput}
+          onBlur={model.commit}
+          on:keydown={onKeyDown}
+        />
+        <Show when={props.splitMeridiem && !model.isOpen()}>
+          <span
+            aria-hidden="true"
+            class={cn(
+              'pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm',
+              props.disabled && 'opacity-50'
+            )}
+          >
+            <TimeValue value={props.value} timeFormat={props.timeFormat} />
+          </span>
+        </Show>
+      </span>
 
       <ScopedPortal scope="local">
         <Layer depth={4}>
           <Popover.Content
-            class="menu-surface z-action-menu max-h-64 min-w-36 overflow-y-auto p-1.5 menu-open-animation"
+            as={Dropdown.ContentFrame}
+            class="max-h-64 min-w-36 overflow-y-auto"
             style={{ 'z-index': 'calc(var(--z-index-action-menu) + 1)' }}
             onOpenAutoFocus={(event) => event.preventDefault()}
             onCloseAutoFocus={(event) => event.preventDefault()}
@@ -175,17 +199,21 @@ export function TimeInput(props: TimeInputProps) {
             }}
           >
             <Popover.Title class="sr-only">Choose {props.label}</Popover.Title>
-            <div ref={list} id={listId} role="listbox" aria-label={props.label}>
+            <Dropdown.GroupFrame
+              ref={list}
+              id={listId}
+              role="listbox"
+              aria-label={props.label}
+            >
               <For each={options()}>
                 {(option) => (
-                  <div
+                  <Dropdown.ItemFrame
                     id={optionDomId(option)}
                     role="option"
                     aria-selected={option.id === selectedId()}
                     data-highlighted={
                       option.id === model.state.highlightedId ? '' : undefined
                     }
-                    class="flex cursor-default items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-ink hover:bg-hover aria-selected:bg-active data-highlighted:bg-hover"
                     // Keep focus in the field, so it stays the one place keys go.
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => model.choose(option)}
@@ -203,10 +231,10 @@ export function TimeInput(props: TimeInputProps) {
                         <CheckIcon class="size-3.5 text-accent" />
                       </Show>
                     </span>
-                  </div>
+                  </Dropdown.ItemFrame>
                 )}
               </For>
-            </div>
+            </Dropdown.GroupFrame>
           </Popover.Content>
         </Layer>
       </ScopedPortal>
