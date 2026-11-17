@@ -4,7 +4,7 @@ import { TimeInput } from './time-input';
 import { splitLocalDateTime, withLocalTime } from './time-options';
 
 /** The start's clock time, omitted for an all-day range. */
-export function StartTime() {
+export function StartTime(props: { class?: string }) {
   const range = useDateTimeRange();
   const fieldId = createUniqueId();
   return (
@@ -20,6 +20,7 @@ export function StartTime() {
         disabled={range.startDisabled}
         invalid={range.invalid}
         describedBy={range.describedBy}
+        class={props.class}
       />
     </Show>
   );

@@ -27,6 +27,8 @@ selection. **Pin event composer** reserves a right-side panel; unpinning keeps t
 same draft and field state. Pinned editors ignore outside clicks. Close, Cancel,
 Escape, and leaving the view ask before discarding edits; an open field menu
 handles Escape first. Touch continues to use its existing sheet.
+New-menu drafts start at the next half hour and last thirty minutes. Grid
+selections and supplied draft values keep their chosen range.
 
 The desktop composer orders kind, title, time, description, guests, call, location,
 and calendar in aligned icon/value rows. Its title grows to three lines, then scrolls.
@@ -40,13 +42,16 @@ Dropdown triggers and date/time inputs use the theme control surface. Their menu
 stay inside the composer's portal scope. Verify that calendar, recurrence, Guests,
 conferencing, and Notifications open on the first click from the title field and
 accept changes without closing the composer.
-Each end is a date button (its calendar closes on a pick) and, unless all day,
-a time field: type `3p` or `15:30` and the list jumps there, Enter commits,
-Escape restores the old time. Escape dismisses the active menu before the composer.
-Moving the start date or time moves the end with it, keeping the event's length
-(all-day dates keep their day count), until the end is picked in the same edit;
-after that the end stays put, and a start past it shows the end-before-start
-error.
+Desktop date pills open one month for a start-then-end range selection. Both dates
+commit together; Escape or an outside press drops an incomplete selection. Same-day
+ranges show one date, except when only the end is editable; multi-day ranges show
+both. Each timed end keeps its time field: type `3p` or `15:30` and the list jumps
+there, Enter commits, and Escape restores the old time. Escape dismisses the active
+menu before the composer. Touch keeps its existing per-end date pickers until the
+phone composer replacement.
+Start-time edits keep the event's length until its end is explicitly changed.
+Legacy per-end date pickers also preserve the duration or all-day day count.
+A start past a fixed end shows the end-before-start error.
 
 The time-zone selector describes the displayed wall-clock fields, initially in
 the viewer's local zone. Explicitly selecting another zone reinterprets those
@@ -64,8 +69,9 @@ open standalone or agent event composer; shared date/time fields outside the
 calendar retain their locale default unless their host supplies a preference.
 
 Calendar foundation examples are in the UI gallery: `?ui=time-input`,
-`?ui=date-tile`, `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and
-`?ui=mobile-sheet-parts` under `/app/component/ui`. The sheet example keeps its
+`?ui=date-tile`, `?ui=calendar-range`, `?ui=calendar-swatch`, `?ui=busy-indicator`,
+`?ui=value-pill`, and `?ui=mobile-sheet-parts` under `/app/component/ui`.
+The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
 sheet handles use 12px above and 16px below the 36×4px grabber.
 The busy-indicator example distinguishes a confirmed conflict from free and

@@ -6,7 +6,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Spinner } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 import { createCalendarEventFormController } from '../../components/composer/create-calendar-event-form-controller';
-import { defaultEditorInitialValues } from '../../components/composer/event-form-model';
 import { ComposerRoot } from '../../components/composer/root/ComposerRoot';
 import {
   useCalendarGuestInvitesFlag,
@@ -16,6 +15,7 @@ import { useEventEditor } from '../../hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '../../hooks/use-synced-calendar-event';
 import { createCalendarComposer } from '../../primitives/create-calendar-composer';
 import { createComposerSuggestions } from '../../primitives/create-composer-suggestions';
+import { defaultComposerValues } from '../../primitives/default-composer-values';
 import { useCalendarPreferences } from '../../utils/preferences';
 import { DesktopComposer } from './DesktopComposer';
 import type { StandaloneComposerProps } from './StandaloneComposer';
@@ -48,7 +48,7 @@ export function StandaloneComposerEditor(
   const initial =
     editor.initialValues() ??
     props.initialValues ??
-    defaultEditorInitialValues(new Date(), props.macroCallsEnabled());
+    defaultComposerValues(new Date(), props.macroCallsEnabled());
   const initialValue =
     !isEdit() && initial.conference === 'macro' && !props.macroCallsEnabled()
       ? { ...initial, conference: 'none' as const }

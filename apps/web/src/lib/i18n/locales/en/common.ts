@@ -44,4 +44,11 @@ export default {
   timezone: 'Timezone',
   searchTimezones: 'Search timezones...',
   noMatchingTimezones: 'No timezones match "{{query}}"',
+  previousMonth: 'Go to previous month',
+  nextMonth: 'Go to next month',
+  chooseDateRange: 'Choose date range',
+  startDate: 'Start date',
+  endDate: 'End date',
+  editStartDate: 'Edit {{subject}} start date',
+  editEndDate: 'Edit {{subject}} end date',
 };

@@ -35,7 +35,7 @@ const docSources = import.meta.glob<string>(
 
 /** Component files backing the `@ui` barrel, used by the coverage report. */
 const uiComponentModules = import.meta.glob(
-  '../../components/ui/components/*.tsx'
+  '../../components/ui/components/**/*.tsx'
 );
 
 /**
@@ -45,8 +45,8 @@ const uiComponentModules = import.meta.glob(
  */
 const componentSources = import.meta.glob<string>(
   [
-    '../../components/ui/components/*.tsx',
-    '../../components/date-time-range/*.tsx',
+    '../../components/ui/components/**/*.tsx',
+    '../../components/date-time-range/**/*.tsx',
     '../../components/app/mobile/sheet-*/*.tsx',
     '../../features/calendar/components/**/*.tsx',
   ],

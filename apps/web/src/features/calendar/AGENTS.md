@@ -33,6 +33,8 @@ host lives in `../block-calendar/`.
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
   Initialize the zone to the zone represented by the form's wall-clock fields.
   Single-occurrence visibility stays unavailable because neither read API returns its override.
+- `primitives/default-composer-values.ts` seeds only unsupplied new drafts at the
+  next half hour for thirty minutes; preserve supplied ranges and edit values.
 - `types.ts`: occurrence identity, source metadata, viewer capabilities, and the
   grid-only `CalendarGridPeriodView` versus route-level `CalendarPeriodView`.
 
@@ -50,7 +52,8 @@ host lives in `../block-calendar/`.
 - Keep presentation components independent of production services; use the
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Extend `../../components/date-time-range/` for shared date/time fields and
-  arithmetic instead of creating a calendar-only implementation.
+  arithmetic; `DateTimeRange.Dates` stages and commits a two-click date range,
+  while the original per-end parts retain existing callers' behavior.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,

@@ -1,4 +1,3 @@
-import { formatLocalDate } from '@core/util/local-date';
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
@@ -11,7 +10,6 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import {
   createMemo,
   createSignal,
-  Index,
   onCleanup,
   onMount,
   Show,
@@ -20,29 +18,11 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
-import { CalendarDayMarkers } from './calendar-day-markers/CalendarDayMarkers';
+import {
+  type CalendarHighlightedRange,
+  CalendarTable,
+} from './calendar/CalendarTable';
 import { Dropdown } from './Dropdown';
-
-const formatWeekdayLong = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-}).format;
-const formatWeekdayNarrow = new Intl.DateTimeFormat(undefined, {
-  weekday: 'narrow',
-}).format;
-
-type HighlightedRange = { start: Date; end: Date };
-
-const isDateInRange = (date: Date, range: HighlightedRange | undefined) =>
-  range !== undefined && date >= range.start && date < range.end;
-
-const offsetDate = (date: Date, days: number) =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-
-const isRangeStart = (date: Date, range: HighlightedRange | undefined) =>
-  isDateInRange(date, range) && !isDateInRange(offsetDate(date, -1), range);
-
-const isRangeEnd = (date: Date, range: HighlightedRange | undefined) =>
-  isDateInRange(date, range) && !isDateInRange(offsetDate(date, 1), range);
 
 export interface CalendarMonthSelectorProps {
   /** Month currently displayed by the calendar. */
@@ -58,7 +38,7 @@ export type CalendarProps = Omit<
   /** Additional classes applied to the calendar container. */
   class?: string;
   /** Optional end-exclusive date range to highlight. */
-  highlightedRange?: HighlightedRange;
+  highlightedRange?: CalendarHighlightedRange;
   /** Event colors keyed by local YYYY-MM-DD day; omit for an unmarked calendar. */
   markersByDay?: ReadonlyMap<string, readonly string[]>;
 };
@@ -114,74 +94,10 @@ export function Calendar(props: CalendarProps) {
             </div>
           </div>
 
-          <CorvuCalendar.Table class="mt-2 w-full table-fixed border-collapse">
-            <thead>
-              <tr>
-                <Index each={calendar.weekdays}>
-                  {(weekday) => (
-                    <CorvuCalendar.HeadCell
-                      abbr={formatWeekdayLong(weekday())}
-                      class="h-7 text-center text-[10px] font-medium text-ink-extra-muted"
-                    >
-                      {formatWeekdayNarrow(weekday())}
-                    </CorvuCalendar.HeadCell>
-                  )}
-                </Index>
-              </tr>
-            </thead>
-            <tbody>
-              <Index each={calendar.weeks}>
-                {(week) => (
-                  <tr>
-                    <Index each={week()}>
-                      {(day) => (
-                        <CorvuCalendar.Cell
-                          class="p-0 text-center data-highlighted-range:bg-accent/10 data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
-                          data-highlighted-range={
-                            isDateInRange(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                          data-highlighted-range-end={
-                            isRangeEnd(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                          data-highlighted-range-start={
-                            isRangeStart(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                        >
-                          <CorvuCalendar.CellTrigger
-                            day={day()}
-                            month={calendar.month}
-                            data-highlighted-range={
-                              isDateInRange(day(), local.highlightedRange)
-                                ? ''
-                                : undefined
-                            }
-                            class="relative mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
-                          >
-                            {day().getDate()}
-                            <Show
-                              when={local.markersByDay?.get(
-                                formatLocalDate(day())
-                              )}
-                            >
-                              {(colors) => (
-                                <CalendarDayMarkers colors={colors()} />
-                              )}
-                            </Show>
-                          </CorvuCalendar.CellTrigger>
-                        </CorvuCalendar.Cell>
-                      )}
-                    </Index>
-                  </tr>
-                )}
-              </Index>
-            </tbody>
-          </CorvuCalendar.Table>
+          <CalendarTable
+            highlightedRange={local.highlightedRange}
+            markersByDay={local.markersByDay}
+          />
         </div>
       )}
     </CorvuCalendar>

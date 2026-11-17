@@ -48,6 +48,7 @@ describe('doc registry', () => {
   it('loads implementations for shared date/time and calendar docs', async () => {
     for (const slug of [
       'time-input',
+      'calendar-range',
       'date-tile',
       'busy-indicator',
       'calendar-swatch',

@@ -152,6 +152,7 @@ export default defineDoc({
     'Composable product tours. Features declare named targets with `defineTourTargets` and attach them with `tourTarget`; a tour lists steps that point at them.',
   status: 'beta',
   exports: ['Tour', 'defineTourTargets', 'tourTarget', 'useTour'],
+  propTypes: ['TourRootProps'],
   import:
     "import { defineTourTargets, Tour, tourTarget } from '@ui/components/Tour';",
   guidelines: {

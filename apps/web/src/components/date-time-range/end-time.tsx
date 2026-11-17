@@ -14,7 +14,7 @@ import {
 } from './time-options';
 
 /** The end's clock time, with durations and midnight rollover from the start. */
-export function EndTime() {
+export function EndTime(props: { class?: string }) {
   const range = useDateTimeRange();
   const fieldId = createUniqueId();
   const parts = () => splitLocalDateTime(range.end);
@@ -61,6 +61,7 @@ export function EndTime() {
         disabled={range.endDisabled}
         invalid={range.invalid}
         describedBy={range.describedBy}
+        class={props.class}
       />
     </Show>
   );

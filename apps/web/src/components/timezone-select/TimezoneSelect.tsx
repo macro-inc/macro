@@ -20,6 +20,7 @@ export function TimezoneSelect(props: {
   portalScope?: 'local';
   disabled?: boolean;
   label?: string;
+  selectionLabel?: string;
   appearance?: 'default' | 'value';
 }) {
   let triggerRef: HTMLButtonElement | undefined;
@@ -52,7 +53,7 @@ export function TimezoneSelect(props: {
   const selected = () =>
     optionsWithCurrent().find((option) => option.value === props.value) ?? null;
   const triggerLabel = () =>
-    selected()?.label ?? props.value.replace(/_/g, ' ');
+    props.selectionLabel ?? selected()?.label ?? props.value.replace(/_/g, ' ');
   const hasMatches = () => {
     const query = search().trim().toLowerCase();
     if (!query) return optionsWithCurrent().length > 0;
