@@ -63,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
-up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })` from your own
+key (an agent's program is refused), or sign up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.

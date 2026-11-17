@@ -207,12 +207,16 @@ where
         .with_state(state)
 }
 
-/// Inviting people, minting a lasting join link, changing members' roles or
-/// plans, and opening the team to a domain or to members' invites decide who
-/// is on the team: a person does those, never an agent's program
-/// (`is_program_run`: a credential signed for an agent or a routine run, or
-/// the code-mode header). A credential that does not verify counts as none;
-/// the route rejects it.
+/// Why a program may not change who is on the team or what they can reach.
+const PROGRAM_TEAM_REFUSAL: &str = "An agent's program cannot invite people, make a join link, or change members' roles, plans, CRM access or the team's sharing defaults. Tell the user to do it in Macro, under Settings, Team.";
+
+/// Inviting people, minting a lasting join link, changing members' roles,
+/// plans or CRM access, the team's default share scope, and opening the team
+/// to a domain or to members' invites decide who reaches the team's content:
+/// a person does those, never an agent's program (`is_program_run`: a
+/// credential signed for an agent or a routine run, or the code-mode header)
+/// nor a bot acting for a member. A credential that does not verify is
+/// rejected here, so a failed check cannot let the request through.
 async fn refuse_programs<Auth: MacroAuthorizationService>(
     axum::extract::State(authorization): axum::extract::State<MacroAuthorizationState<Auth>>,
     request: axum::extract::Request,
@@ -220,27 +224,30 @@ async fn refuse_programs<Auth: MacroAuthorizationService>(
 ) -> Response {
     use axum::extract::FromRequestParts as _;
     let (mut parts, body) = request.into_parts();
-    let attribution = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
         Auth,
         macro_authorization::AnyPrincipal,
     >::from_request_parts(&mut parts, &authorization)
     .await
     {
-        Ok(macro_authorization::OptionalMacroAuthorizationExtractor {
-            authorization: Some(macro_authorization::MacroAuthorization::User(user)),
-            ..
-        }) => user.attribution(),
-        _ => macro_authorization::CredentialAttribution::Person,
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
     };
-    if macro_authorization::is_program_run(attribution, &parts.headers) {
-        tracing::warn!(
-            ?attribution,
-            "refused a team membership change to a program"
-        );
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        Some(macro_authorization::MacroAuthorization::Bot(_)) => true,
+        _ => parts
+            .headers
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a team membership change to a program");
         return (
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
-                message: "An agent's program cannot invite people, make a join link, or change who is on the team or their role. Tell the user to do it in Macro, under Settings, Team.".into(),
+                message: PROGRAM_TEAM_REFUSAL.into(),
             }),
         )
             .into_response();

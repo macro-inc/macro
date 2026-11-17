@@ -1072,3 +1072,35 @@ async fn a_program_cannot_invite_or_change_who_is_on_the_team() {
         }
     }
 }
+
+/// The guard covers only the routes that grant access: reading or deleting
+/// the join link stays open to a program, and no credential is still a 401.
+#[tokio::test]
+async fn reading_the_join_link_stays_open_and_no_credential_is_unauthorized() {
+    for (method, bearer) in [
+        ("GET", Some("agent")),
+        ("DELETE", Some("agent")),
+        ("POST", None),
+    ] {
+        let mut request = Request::builder().method(method).uri("/invite-link");
+        if let Some(bearer) = bearer {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+        }
+        let response = router(
+            FakeTeamService::default(),
+            FakeEntityAccessService::default(),
+        )
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .expect("router should respond");
+
+        assert_ne!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "{method} {bearer:?}"
+        );
+        if bearer.is_none() {
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+    }
+}
