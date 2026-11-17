@@ -355,7 +355,7 @@ shared with the web app's suite) and backend entry points second.
 - A new or changed scenario: `just email-e2e --stress-count 20 <name>` passes.
 - CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
   runs the suite on pushes to `main` that change backend code and in the
-  daily sweep (21:00 UTC), the only run with the scenarios for known bugs.
+  daily sweep (21:00 UTC), which also runs the scenarios for known bugs.
   It is not part of `PR CI`: run a pull request branch by hand with `gh
   workflow run email_e2e.yml --ref <branch>` (add `-f known_bugs=true` for
   the known bugs too; `docs/development/ci.md`).
