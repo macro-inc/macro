@@ -26,7 +26,9 @@ Only document_session enables the feature (through lexical_loro's optional
 session, its WASM and FFI builds and sync_sim run these changes. Servers that
 link this crate through the workspace patch run upstream behaviour;
 `just check-loro-native-editor-features` fails if any other workspace package's
-own dependency graph enables it. The shallow-export fast path duplicates
+own dependency graph enables it. Cargo unifies features per build, so a build
+that links document_session beside server crates (sync_sim, a workspace-wide
+`cargo test`) runs the server side with these changes too; that is test-only. The shallow-export fast path duplicates
 upstream's forward-replay block under the feature instead of editing it, so the
 feature-off branch stays verbatim.
 
@@ -53,7 +55,10 @@ commit boundary. Their undo manager checkpoints the new local op span and its
 container ids, preserving remote group conflicts without constructing duplicate
 document diffs. Pending event queues, paused/excluded edits, fixups, imports and
 undo/redo retain ordinary event delivery. Suppression is opt-in and recording
-resumes at the committed frontiers even on native unwinding.
+resumes even on native unwinding. The next event keeps upstream's start
+version: a suspended commit that writes a change moves it to the committed
+version, as upstream's converted event would; an empty projection commit keeps
+the unreported start from before the suspension.
 
 Local undo patch (`src/undo.rs`): skip the group-disjoint container scan when
 the remote diff map is empty; retain the same merge and remote-conflict rules.
@@ -64,10 +69,29 @@ its cached shallow state plus a bounded retained prefix, avoiding reverse
 checkout of a large tail. Keep the existing frontier, retention/redaction,
 latest-state overlay and encoder; reproduce reverse checkout's empty future
 container headers. Reject oversized cached state or prefixes before copying,
-and retain ordinary checkout for ineligible or unreadable seeds. Compare exact
-snapshot bytes with the existing replay path, including rich/deleted containers,
-multiple peers and detached documents; validate retained snapshot/WAL controls
+and retain ordinary checkout for ineligible or unreadable seeds. The decoded
+snapshot equals reverse checkout's, including rich/deleted containers, multiple
+peers and detached documents; the bytes may differ in text fragmentation: when
+a tail insert split prefix text, reverse checkout encodes the root text in
+fragments and the replay in one span. Validate retained snapshot/WAL controls
 through a production-mode decoder as well as the library tests.
+
+Consumers of these shallow exports rely on decoded equality only. The one
+native producer is doc_sync_core's local snapshot save (`core/imports.rs`
+`export_shallow_snapshot(confirmed_base)`, through document_session's SyncDoc).
+Its bytes travel as `StorageOp::SnapshotSave` (document_session_wasm and the
+FFI types copy them opaquely) into the web host's IndexedDB snapshot row,
+keyed by document id (`packages/collaboration/src/session/storage.ts`), and are
+only imported again on load. WAL adoption's byte comparison covers update rows,
+not snapshots. Native uploads to the sync service are update exports and full
+snapshots, never shallow ones, and servers compact with this feature off. No
+consumer hashes, deduplicates or byte-compares a shallow snapshot. A new one
+must compare decoded state, or this path must change.
+
+`differential/` builds this crate with `native-editor` beside crates.io 1.17.1
+and compares seeded scripts step by step (values, versions, undo, events and
+export bytes in every mode, shallow exports by decoded state); see its
+AGENTS.md.
 
 The editor undo manager accepts an optional millisecond time source for hosts
 that supply their own clock. An unset source retains the upstream system

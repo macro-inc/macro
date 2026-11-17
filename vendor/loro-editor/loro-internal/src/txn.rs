@@ -575,6 +575,8 @@ impl Transaction {
             drop(oplog);
             return Err(err);
         }
+        #[cfg(feature = "native-editor")]
+        state.note_unrecorded_local_commit(oplog.frontiers());
 
         state.commit_txn(
             Frontiers::from_id(last_id),
