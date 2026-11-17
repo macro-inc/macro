@@ -125,12 +125,13 @@ pub const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-/// Whether `tools` list every one of [`CODE_MODE_MCP_TOOLS`].
+/// Whether `tools` list every one of [`CODE_MODE_MCP_TOOLS`] from the
+/// harness's internal server, told by the server each registered under: a
+/// custom server named to mangle like it doesn't count.
 pub fn has_code_mode_tools(tools: Option<&RemoteMcpToolSet>) -> bool {
     tools.is_some_and(|tools| {
-        let catalog = <RemoteMcpToolSet as ai_toolset::ToolSet<()>>::searchable_catalog(tools);
         CODE_MODE_MCP_TOOLS
             .iter()
-            .all(|name| catalog.iter().any(|tool| tool.name == *name))
+            .all(|name| tools.server_of(name) == Some(MACRO_INTERNAL_MCP_NAME))
     })
 }

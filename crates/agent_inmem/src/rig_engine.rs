@@ -871,7 +871,8 @@ async fn drive_turn(
         ));
     }
     // Native tools use the actor gate unless the installed finisher authorizes
-    // their final reviewed arguments. Remote MCP tools use the egress gate.
+    // their final reviewed arguments. Remote MCP tools are first put to the
+    // gate's `refuse_remote_mcp`, then to the egress proxy's.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let mcp_tools = mcp_tools.filter(|_| !summarizing);
