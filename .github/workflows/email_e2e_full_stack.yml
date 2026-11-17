@@ -280,10 +280,11 @@ jobs:
         // succeeded or none was needed. The newest such step among the stream's recent
         // runs, read through the jobs API, is what the channel shows; with none, it
         // shows the stream passing. A stream's alert jobs run one at a time (a
-        // concurrency group), so each reads what the one before it left. A failed post
-        // records nothing, so a re-run of this job, or the next run, posts again. A run
-        // posts nothing once a newer run has ended, since its result is not the
-        // branch's latest; the newer run's own alert job tells the channel.
+        // concurrency group), so each reads what the one before it left. A run posts
+        // nothing once a newer run has ended, since its result is not the branch's
+        // latest; the newer run's own alert job tells the channel, or, if that job
+        // never runs, the next run does. A failed post records nothing, so the next
+        // run posts again, as does a re-run of this job while no newer run has ended.
         //
         // A failure names the commit, each failed job with the step it failed at, and
         // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says

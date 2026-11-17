@@ -49,8 +49,9 @@ ended post nothing; the job's summary says why. In the last case the newer
 run's alert job tells the channel, or, if that job never runs (its run was
 cancelled), the next run does. A run is red when one of its jobs failed or ran
 out of time. A failed post records nothing, so the next run posts it again, as
-does re-running the alert job while no newer run has ended. A flaky failure
-that passes on a re-run posts that it passes again.
+does re-running the alert job while no newer run has ended. A re-run of a
+flaky failure that passes posts that it passes again only while no newer run
+has ended; otherwise the newer run's result stands.
 
 The alert names the commit and its pull request, the failed jobs with the
 step each failed at, the failed tests the coverage report names, the tests
