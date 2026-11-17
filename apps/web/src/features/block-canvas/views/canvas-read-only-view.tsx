@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
 import {
@@ -31,7 +29,6 @@ export function CanvasReadOnlyView(props: {
   const [tool, setTool] = createSignal<'select' | 'pan'>('select');
   const [activeArtifact, setActiveArtifact] = createSignal<string>();
   const [presenting, setPresenting] = createSignal<string>();
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const [scale, setScale] = createSignal(props.editor.getCamera().scale);
   const [hasSelection, setHasSelection] = createSignal(
     props.editor.getSession().selectedIds.length > 0
@@ -159,7 +156,7 @@ export function CanvasReadOnlyView(props: {
           />
         )}
       </Show>
-      <Show when={artifactsFlag().enabled ? presenting() : undefined} keyed>
+      <Show when={presenting()} keyed>
         {(startId) => (
           <ArtifactPresentation
             editor={props.editor}

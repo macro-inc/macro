@@ -1,8 +1,6 @@
 import { TutorialPill } from '@app/features/video-tutorials';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/ImageActions';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
@@ -122,7 +120,6 @@ export function CanvasView(props: {
     const item = selectedItem();
     return item?.type === 'artifact' ? item : undefined;
   };
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const artifacts = useArtifactLibrary();
   const [presenting, setPresenting] = createSignal<string>();
   const selectedImage = () => {
@@ -275,7 +272,7 @@ export function CanvasView(props: {
       data-canvas-next
     >
       <main class="relative size-full overflow-hidden">
-        <Show when={artifactsFlag().enabled ? presenting() : undefined} keyed>
+        <Show when={presenting()} keyed>
           {(startId) => (
             <ArtifactPresentation
               editor={editor}
@@ -293,14 +290,10 @@ export function CanvasView(props: {
               location={location}
               onClose={props.insert.close}
               onRestoreFocus={focus}
-              onArtifact={
-                artifactsFlag().enabled
-                  ? () => {
-                      props.assets.artifact(location.world);
-                      props.insert.close();
-                    }
-                  : undefined
-              }
+              onArtifact={() => {
+                props.assets.artifact(location.world);
+                props.insert.close();
+              }}
               onSelect={(asset, mode) => {
                 if (mode === 'media')
                   fireAndForget(
@@ -473,7 +466,7 @@ export function CanvasView(props: {
                       onScrub={() => state.text.scrubFontSize(state.inspector)}
                     />
                   </Show>
-                  <Show when={artifactsFlag().enabled && selectedArtifact()}>
+                  <Show when={selectedArtifact()}>
                     {(artifact) => (
                       <>
                         <ArtifactInspector
