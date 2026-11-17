@@ -171,6 +171,34 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// The tools that use nobody's access (the web, Macro's help) are outside
+/// every scope, `NoSend` included: a run that sends nothing could send data
+/// out in a URL. The engine asks this gate about them (`GatedToolSet`).
+#[tokio::test]
+async fn a_scoped_session_uses_no_web_or_help_tool() {
+    let gate = |scope| ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(scope)),
+    };
+    let session = AgentSessionId::new();
+    let args = serde_json::json!({});
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        for tool in ["WebSearch", "WebFetch", "SelfKnowledge"] {
+            assert!(
+                matches!(
+                    gate(Some(scope)).check(session, tool, &args).await,
+                    NativeToolVerdict::Refuse(_)
+                ),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    assert_eq!(
+        gate(None).check(session, "WebFetch", &args).await,
+        NativeToolVerdict::Run
+    );
+}
+
 /// An SDK operation's path with every parameter filled in.
 fn concrete(path: &str) -> String {
     path.split('/')
@@ -424,6 +452,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "agent-sessions",
             "harness",
             "/tool",
+            "/web/",
         ]
         .iter()
         .any(|word| text.contains(word))
