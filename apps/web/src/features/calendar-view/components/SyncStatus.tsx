@@ -1,5 +1,6 @@
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { UserProvider } from '@service-email/generated/schemas/userProvider';
 import { Show } from 'solid-js';
@@ -29,7 +30,9 @@ function importProvider(
 export function SyncStatus(props: { syncing: boolean }) {
   const linksQuery = useEmailLinksQuery();
   const provider = () =>
-    linksQuery.isSuccess ? importProvider(linksQuery.data.links) : undefined;
+    queryReadyGate(linksQuery)
+      ? importProvider(linksQuery.data.links)
+      : undefined;
 
   return (
     <Show when={props.syncing}>

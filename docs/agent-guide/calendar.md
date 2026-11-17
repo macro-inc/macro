@@ -84,8 +84,9 @@ Macro stays usable. The server reports only that some account is importing, so
 the banner names a provider (`from Google`, `from Outlook`) only when every
 inbox in the email links list, delegated ones included, is on it; mixed or
 unloaded links name none. It shows no progress: the client has no per-account
-or per-calendar import state. Outlook imports from a year back forward, so the
-current month can be empty while older events have already arrived. The banner
+or per-calendar import state. An Outlook import reads a window from a year back
+to two years ahead one event at a time, so the current month can stay empty
+while events on other dates have already arrived. The banner
 never suggests turning the calendar off, which deletes Macro's copy and starts
 the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.

@@ -8,14 +8,25 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const [links, setLinks] = createSignal<EmailLink[]>([]);
-const [linksLoaded, setLinksLoaded] = createSignal(true);
+const [linksStatus, setLinksStatus] = createSignal<
+  'pending' | 'success' | 'error'
+>('success');
 
+// A pending query's data read suspends in the app; here it throws, so an
+// unguarded read fails the test. A failed refetch keeps the cached links.
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({
+    get isPending() {
+      return linksStatus() === 'pending';
+    },
     get isSuccess() {
-      return linksLoaded();
+      return linksStatus() === 'success';
+    },
+    get isError() {
+      return linksStatus() === 'error';
     },
     get data() {
+      if (linksStatus() === 'pending') throw new Error('suspending read');
       return { links: links() };
     },
   }),
@@ -43,7 +54,7 @@ const status = () => screen.getByRole('status').textContent;
 
 beforeEach(() => {
   setLinks([]);
-  setLinksLoaded(true);
+  setLinksStatus('success');
 });
 
 afterEach(() => {
@@ -81,12 +92,20 @@ describe('SyncStatus', () => {
   });
 
   it('names no provider until the inboxes load, then names theirs', () => {
-    setLinksLoaded(false);
+    setLinksStatus('pending');
     setLinks([link('work', 'OUTLOOK')]);
     render(() => <SyncStatus syncing />);
 
     expect(status()).toContain('Events are still being imported. ');
-    setLinksLoaded(true);
+    setLinksStatus('success');
+    expect(status()).toContain('Events are still being imported from Outlook.');
+  });
+
+  it('keeps naming the provider when a links refetch fails', () => {
+    setLinks([link('work', 'OUTLOOK')]);
+    render(() => <SyncStatus syncing />);
+
+    setLinksStatus('error');
     expect(status()).toContain('Events are still being imported from Outlook.');
   });
 
