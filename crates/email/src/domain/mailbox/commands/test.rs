@@ -56,11 +56,21 @@ fn restoring_a_conversation_leaves_its_drafts_in_drafts() {
         is_sent: false,
     };
     assert_eq!(
-        provider_action(&MailboxAction::Archived(false), &organization(true), &folders).unwrap(),
+        provider_action(
+            &MailboxAction::Archived(false),
+            &organization(true),
+            &folders
+        )
+        .unwrap(),
         None
     );
     assert_eq!(
-        provider_action(&MailboxAction::Archived(false), &organization(false), &folders).unwrap(),
+        provider_action(
+            &MailboxAction::Archived(false),
+            &organization(false),
+            &folders
+        )
+        .unwrap(),
         Some(MessageAction::MoveToFolder(folders[0].id.clone()))
     );
 }

@@ -1157,7 +1157,11 @@ async fn restoring_a_conversation_leaves_a_reply_waiting_to_send_in_drafts(db: P
     .await
     .unwrap();
     sqlx::query!("INSERT INTO email_send_attempts (user_id,link_id,attempt_id,message_id,thread_id,send_time) VALUES ($1,$2,$3,$4,$5,now())",ACTOR,link,Uuid::now_v7(),input.db_id,input.thread_db_id).execute(&db).await.unwrap();
-    assert_eq!(restored().await, vec![received], "a send attempt still open");
+    assert_eq!(
+        restored().await,
+        vec![received],
+        "a send attempt still open"
+    );
 
     sqlx::query!(
         "UPDATE email_send_attempts SET sent=true WHERE message_id=$1",
