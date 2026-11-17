@@ -528,6 +528,7 @@ jobs:
             - 'tooling/scripts/check-loro-editor-vendor.sh'
             - 'tooling/xtask/crates/xtask_loro_vendor/**'
             - 'tooling/scripts/check-loro-native-editor-features.sh'
+            - 'tooling/scripts/test-loro-servers-upstream.sh'
             - 'crates/**/Cargo.toml'
             - 'services/**/Cargo.toml'
             - 'Cargo.toml'

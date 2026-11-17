@@ -199,6 +199,10 @@ check-loro-editor-vendor:
 check-loro-native-editor-features:
   bash tooling/scripts/check-loro-native-editor-features.sh
 
+# Build and test the server Loro consumers per package, with native-editor off as deployed.
+test-loro-servers-upstream:
+  bash tooling/scripts/test-loro-servers-upstream.sh
+
 # Generate or check traceability and list every uncovered P0 symbol.
 lexical-coverage *ARGS:
   bun packages/lexical-conformance/coverage/check.ts {{ARGS}}

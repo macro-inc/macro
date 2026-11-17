@@ -13,6 +13,7 @@ name: loro-pair
     - tooling/scripts/check-loro-editor-vendor.sh
     - tooling/xtask/crates/xtask_loro_vendor/**
     - tooling/scripts/check-loro-native-editor-features.sh
+    - tooling/scripts/test-loro-servers-upstream.sh
     - crates/**/Cargo.toml
     - services/**/Cargo.toml
     - Cargo.toml
@@ -27,7 +28,7 @@ jobs:
   loro-pair:
     name: loro-pair
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -85,6 +86,8 @@ jobs:
       run: just check-loro-editor-vendor
     - name: native-editor stays out of server dependency graphs
       run: just check-loro-native-editor-features
+    - name: Server Loro consumers pass with native-editor off
+      run: just test-loro-servers-upstream
     - name: Install catalog dependencies
       run: bun install --frozen-lockfile
     - name: Native projection and catalog Loro compatibility

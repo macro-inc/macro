@@ -12,6 +12,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/crates/xtask_loro_vendor/**"),
     // Any member manifest can enable the editor feature in a server graph.
     xtask_paths::repo_glob!("tooling/scripts/check-loro-native-editor-features.sh"),
+    xtask_paths::repo_glob!("tooling/scripts/test-loro-servers-upstream.sh"),
     xtask_paths::repo_glob!("crates/**/Cargo.toml"),
     xtask_paths::repo_glob!("services/**/Cargo.toml"),
     xtask_paths::repo_glob!("Cargo.toml"),
@@ -38,7 +39,7 @@ pub fn loro_pair() -> Workflow {
             "loro-pair",
             Job::default()
                 .name("loro-pair")
-                .timeout_minutes(30u32)
+                .timeout_minutes(45u32)
                 .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
                 .add_step(steps::checkout(false, false))
                 .add_step(steps::mount_cache_volume())
@@ -53,6 +54,11 @@ pub fn loro_pair() -> Workflow {
                 .add_step(
                     Step::new("native-editor stays out of server dependency graphs")
                         .run("just check-loro-native-editor-features"),
+                )
+                // Workspace test builds run servers on the editor runtime; test them as deployed.
+                .add_step(
+                    Step::new("Server Loro consumers pass with native-editor off")
+                        .run("just test-loro-servers-upstream"),
                 )
                 .add_step(
                     Step::new("Install catalog dependencies").run("bun install --frozen-lockfile"),
