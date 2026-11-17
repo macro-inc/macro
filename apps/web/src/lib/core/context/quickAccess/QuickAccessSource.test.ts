@@ -33,7 +33,6 @@ import {
   createRenderEffect,
   createRoot,
   createSignal,
-  untrack,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
@@ -75,7 +74,6 @@ const mocks = vi.hoisted(() => ({
   schedules: [] as ScheduledAction[],
   crmEnabled: (): boolean => true,
   projectsEnabled: (): boolean => true,
-  graphqlEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
     Record<
@@ -93,18 +91,15 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
   enableForms: {},
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
   enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key?: string }) => () => ({
     enabled:
-      flag.key === 'enable-graphql-soup'
-        ? mocks.graphqlEnabled()
-        : flag.key === 'enable-projects'
-          ? mocks.projectsEnabled()
-          : mocks.crmEnabled(),
+      flag.key === 'enable-projects'
+        ? mocks.projectsEnabled()
+        : mocks.crmEnabled(),
   }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -233,7 +228,7 @@ vi.mock('@service-storage/util/filename', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () =>
-    untrack(mocks.graphqlEnabled) && mocks.cacheEnabled
+    mocks.cacheEnabled
       ? {
           search: mocks.search,
           onCacheChanged: mocks.onCacheChanged,
@@ -287,7 +282,6 @@ beforeEach(() => {
   mocks.schedules = [];
   mocks.crmEnabled = () => true;
   mocks.projectsEnabled = () => true;
-  mocks.graphqlEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -465,9 +459,7 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
-  it('starts cached email search when the GraphQL flag arrives after mounting', async () => {
-    const [enabled, setEnabled] = createSignal(false);
-    mocks.graphqlEnabled = enabled;
+  it('searches cached email threads through the search projection', async () => {
     mocks.search.mockResolvedValue({
       documents: [
         {
@@ -515,11 +507,6 @@ describe('Quick Access source integration', () => {
         })
       ),
     }));
-    expect(source.usesSearchProjection()).toBe(false);
-    expect(list().items()).toEqual([]);
-    expect(mocks.search).not.toHaveBeenCalled();
-
-    setEnabled(true);
     await vi.waitFor(() => {
       expect(source.usesSearchProjection()).toBe(true);
       expect(
@@ -528,10 +515,6 @@ describe('Quick Access source integration', () => {
           .map((item) => item.id)
       ).toEqual(['thread-1']);
     });
-
-    setEnabled(false);
-    expect(source.usesSearchProjection()).toBe(false);
-    expect(list().items()).toEqual([]);
   });
 
   it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
@@ -1254,7 +1237,7 @@ describe('Quick Access source integration', () => {
     expect(restored.items().map((item) => item.id)).toEqual(['company-1']);
   });
 
-  it('preserves REST company mentions with GraphQL disabled', () => {
+  it('preserves REST company mentions with the cache disabled', () => {
     mocks.cacheEnabled = false;
     mocks.companies = [restCompany];
     const list = setup((source) =>

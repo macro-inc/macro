@@ -856,7 +856,7 @@ twice unfurls once, mentions of other document types, channels, and chats never
 unfurl, and inaccessible images show nothing. This applies to every channel
 message, not only bot replies, so a person sharing an image document by `@`
 mention sees the same card. The preview shows `Preparing preview` until storage
-has the bytes. With GraphQL enabled, document mentions and preview cards load
+has the bytes. Document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
 permission. Task badges can appear with the initial preview rather than waiting for
 separate properties/document-metadata requests; cached titles may appear first while
@@ -1470,7 +1470,7 @@ and people directly; the conversation list does not constrain results. Full-text
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.
-With `enable-graphql-soup` enabled, open an unread conversation from the mobile
+Open an unread conversation from the mobile
 list and return to the list: all notifications on top-level messages should be seen,
 including mentions and reactions older than the global feed's loaded page.
 Replies and mentions inside threads remain unread. Channel-view unread badges
@@ -1494,11 +1494,11 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+The app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
-excludes replies, thread mentions, and reactions, matching the channel-row badges
-in both GraphQL and REST modes. It shares the channel lists' refreshes after notification patches, mark-read, and
+excludes replies, thread mentions, and reactions, matching the channel-row badges.
+It shares the channel lists' refreshes after notification patches, mark-read, and
 reconnect. Merely rendering that badge, subscribing to realtime notifications,
 or applying local read/done overrides must not start the full `SoupNotifications`
 feed. Check this with document-mention notifications disabled too (the production
@@ -1510,7 +1510,7 @@ block the separate email read marker. Cold bulk actions wait for loading
 and report failures rather than treating pending data as an empty list. The
 Inbox badge still uses its own full Soup query for channel/thread membership.
 
-With GraphQL enabled, channel lists request at most one unread message notification
+Channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
