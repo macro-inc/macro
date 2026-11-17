@@ -550,11 +550,9 @@ the shimmer.
   session update.
   Sessions with a linked PR show
   **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the synced
-  GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
-  inline previews retain their legacy block host. Until GitHub has synced the
-  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  status word). Clicking it opens the pull request on GitHub (a new tab, or the
+  system browser in the desktop app), as the session header chip and Magic Chip
+  do. The click leaves the session unopened.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -1873,9 +1871,9 @@ an inline edit.
 
 When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
-to open the PR entity in a split; until GitHub has synced the entity the
-chip is a GitHub link instead. The icon and status word follow open /
-merged / closed. Merging happens from the PR entity's top bar or from a channel
+to open the pull request on GitHub; once GitHub has synced it, the chip
+previews it on hover. The icon and status word follow open / merged /
+closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
 Agent prose sets the documents, sessions, pull requests, and contacts it

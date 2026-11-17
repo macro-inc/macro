@@ -229,11 +229,14 @@ field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
 list controller: ArrowDown and Enter move to the first result, and Escape keeps
 the search in the field and clears it from the list after a selection.
 
-A project's Tasks header keeps search, filters, Add existing tasks and New task on
-screen at 320–430px phone widths, with search closed and open, by collapsing both
-actions to icons and narrowing the open search on phones only; tablet and desktop
-keep the labels. Its backend-free regression renders the real row with a stand-in
-for the task filters (the real phone filter trigger, one button on desktop):
+A project's Tasks header keeps search, filters and Add existing tasks on screen at
+320–430px phone widths, with search closed and open, by collapsing Add existing
+tasks to an icon and narrowing the open search on phones only; tablet and desktop
+keep the labels. On touch, New task is the project's own floating `+ Task`
+pill, which replaces the Tasks view's (that one creates outside any project), and
+read-only viewers get none. Its backend-free regression renders the real row and
+float host with a stand-in for the task filters (the real phone filter trigger,
+one button on desktop) and for the Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
@@ -555,6 +558,8 @@ People preview/pinning. Group company and contact records under
 Contacts & Companies, separate from People; keep contact selection as a CRM link
 even for a matching Macro user.
 Only Macro users and groups participate in mobile People pinning.
+Rank scoped mention people by exact full or first name, prefix, literal match,
+then subsequence before recency and mobile pinning; preserve native directory order.
 The channel browser suite below also checks project
 ranking and insertion on desktop and phone.
 
@@ -733,8 +738,10 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
-Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
+Project identity chips use cache-first reads and the shared `GraphqlUser.visibleInitiative`
 entity resolver to reuse complete authorized records from project lists or details.
+A missing or hidden project reads as `null`, and a cached null outranks a record
+that arrives later, so project reads ask the server once before showing it.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
@@ -1148,6 +1155,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   bridge without changing the route). Webview origins are not desktop
   callbacks. Settings → Integrations refetches connection status on window
   `focus`, because returning from the browser does not change page visibility.
+  A route the split router takes a navigation over for (a deep link, or any
+  in-app navigation into it) mounts before Solid Router's location shows it,
+  so `useSearchParams` first returns the previous route's query. Never act on
+  a missing parameter until the location shows the route, as
+  `EmailLinkCallback` does (`features/auth/tests/inbox-link-deep-link.test.tsx`).
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
@@ -1333,7 +1345,11 @@ ring-status requests, and keep caller names, tokens and URLs out of spans.
 Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep
 the native receipt pending until the destination route is applied; release the
-resume cover for auth/retry UI without consuming the receipt. Use the existing
+native cover for auth/retry UI without consuming the receipt. That cover exists
+only while a tap is pending: on a tap that arrives while the app is not active
+or its page has not booted, or a page load that boots into one. A tap on the
+active, booted app navigates in place, and backgrounding never covers the app.
+Use the existing
 pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in
