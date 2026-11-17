@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::AwsKms;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -12,11 +13,8 @@ use tokio_util::sync::CancellationToken;
 use whatsapp_session_service::config::{Config, SessionKmsKey};
 use whatsapp_session_service::inbound::health;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
-use whatsapp_store_pg::kms::AwsWhatsAppKms;
 use whatsmeow::{Dialer, WebSocketDialer};
 
-/// Test-only: point every client at a fake WhatsApp server.
-const WEBSOCKET_URL_OVERRIDE: &str = "OVERRIDE_WHATSAPP_WEBSOCKET_URL";
 /// Test-only: the fake server's media host, as `scheme://host[:port]`.
 const MEDIA_HOST_OVERRIDE: &str = "OVERRIDE_WHATSAPP_MEDIA_HOST";
 const PORT: u16 = 8080;
@@ -44,12 +42,10 @@ async fn run() -> Result<(), rootcause::Report> {
         .connect(config.database_url.as_ref())
         .await?;
     let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
-    let dialer: Arc<dyn Dialer> =
-        match macro_service_urls::read_override_env(WEBSOCKET_URL_OVERRIDE)? {
-            Some(url) => Arc::new(WebSocketDialer { url }),
-            None => Arc::new(WebSocketDialer::default()),
-        };
-    let kms = AwsWhatsAppKms::new(
+    let dialer: Arc<dyn Dialer> = Arc::new(WebSocketDialer {
+        url: macro_service_urls::WhatsappWebsocketUrl::new()?.to_string(),
+    });
+    let kms = AwsKms::new(
         aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await),
         SessionKmsKey::for_environment(environment).to_owned(),
     );

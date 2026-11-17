@@ -30,7 +30,7 @@ impl PgWhatsAppRepository {
                   AND (claimed_until IS NULL OR claimed_until < now())
                 ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)
             RETURNING a.chat_id, a.person_id, a.source_id, a.ordinal, a.mime AS "mime!", a.filename AS "filename!",
-                a.size AS "size!", a.sha256, a.locator AS "locator!""#,
+                a.size AS "size!", a.sha256 AS "sha256!", a.locator AS "locator!""#,
             account.id,
             limit
         )
@@ -70,7 +70,7 @@ impl PgWhatsAppRepository {
         let account = fence_in(&mut tx, scope).await?;
         lock_chat_in(&mut tx, attachment.chat_id).await?;
         let row = sqlx::query!(
-            r#"SELECT a.blob_id, a.sha256, a.state, a.mime AS "mime!", a.filename AS "filename!", b.id AS chat_id, b.user_id
+            r#"SELECT a.blob_id, a.sha256 AS "sha256!", a.state, a.mime AS "mime!", a.filename AS "filename!", b.id AS chat_id, b.user_id
             FROM external_chat_attachment a JOIN external_chat b ON b.id = a.chat_id
             WHERE a.chat_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.account_id = $5
             FOR UPDATE OF a"#,

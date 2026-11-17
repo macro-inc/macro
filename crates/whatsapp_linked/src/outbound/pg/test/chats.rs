@@ -110,7 +110,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
                 "Old group",
                 true,
                 false,
-                Some(CannotAdd::NotInGroup),
+                Some(CannotAdd::NotMember),
                 None
             ),
             (

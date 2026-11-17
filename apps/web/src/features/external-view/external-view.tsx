@@ -1,6 +1,10 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
-import { TutorialSidebarItem } from '@app/features/video-tutorials';
-import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
+import {
+  SplitRouter,
+  useNavigate,
+  useParams,
+  useRouteState,
+} from '@app/lib/split-router';
 import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -11,32 +15,38 @@ import { useExternalChatsQuery } from '@queries/external-chats';
 import { useExternalChatListsSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
 import { traceLoad } from '@queries/whatsapp-linked/operation';
-import { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { useSearchParams } from '@solidjs/router';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { z } from 'zod';
 import { providerIdentity } from '../external-chat/providers/identity';
 import { externalChatApi } from '../external-chat/queries/production-api';
 import { createOpenSections } from '../whatsapp-linked/primitives/open-sections';
-import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
 import { InMacroChats, UnreadCount } from './components/in-macro-section';
-
-const PROVIDERS = Object.values(ExternalChatProvider);
+import { ProviderSwitcher } from './components/provider-switcher';
+import { selectedProvider } from './core/selection';
+import { useEnabledProviders } from './provider-flags';
+import { handedOffProvider, PROVIDER_PAGES } from './provider-pages';
 
 /**
  * External: accounts on outside messaging apps that bring conversations into
- * Macro, one sidebar entry per provider. Chats in Macro open in the main pane
- * at `/external/chat/:chatId`; on touch the list drills into the chat.
- * WhatsApp is the only provider today, so its account page is the default.
+ * Macro, one sidebar entry per provider whose flag is on. The main pane shows
+ * the selected provider's account page (the first one until another is
+ * picked); chats in Macro open there at `/external/chat/:chatId`, and on
+ * touch the list drills into the chat.
  */
 export function ExternalView() {
   useSplitDisplayName(() => 'External');
-  // Read once: the pairing id is consumed, then dropped from the URL.
-  const [search, setSearch] = useSearchParams();
-  const handedOffPairing = z.uuid().safeParse(search.whatsappPairing).data;
-  if (search.whatsappPairing !== undefined)
-    setSearch({ whatsappPairing: undefined }, { replace: true });
+  const enabled = useEnabledProviders();
+  const providers = () => enabled().providers;
+  // The route names the provider to show (a sidebar click, Back from a
+  // chat, an account notification); the latest navigation wins. A desktop
+  // deep link names it by its param instead, read once as the page drops it.
+  const routed = useRouteState(externalRoute);
+  const [search] = useSearchParams();
+  const handedOff = handedOffProvider(search);
+  const selected = () =>
+    selectedProvider(routed()?.provider ?? handedOff, providers());
 
   useExternalChatListsSync();
   const userId = useUserId();
@@ -64,9 +74,9 @@ export function ExternalView() {
       navigate({ route: externalChatRoute, params: { chatId } }),
       'external-view'
     );
-  const openWhatsApp = () =>
+  const openProvider = (provider: ExternalChatProvider) =>
     fireAndForget(
-      navigate({ route: externalRoute, params: {} }),
+      navigate({ route: externalRoute, params: {} }, { state: { provider } }),
       'external-view'
     );
   const [folded, setFolded] = createSignal<ExternalChatProvider[]>([]);
@@ -83,6 +93,7 @@ export function ExternalView() {
   const inMacroChats = (provider: ExternalChatProvider) => (
     <InMacroChats
       label={providerIdentity(provider).label}
+      sectionLabels={providerIdentity(provider).sectionLabels}
       chats={providerChats(provider)}
       isPending={chats.isPending}
       isError={chats.isError}
@@ -99,41 +110,46 @@ export function ExternalView() {
       0
     );
 
-  const whatsappPage = () => (
-    <>
-      <ViewShell.TopBar>
-        <h1 class="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-[-0.03em] text-ink">
-          WhatsApp
-        </h1>
-      </ViewShell.TopBar>
-      <ViewShell.Header class="hidden touch:block touch:pb-2">
-        <h1 class="text-lg font-semibold text-ink">WhatsApp</h1>
-      </ViewShell.Header>
-      <ViewShell.Content
-        class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
-        style={{ '--mobile-content-inset-top': '0px' }}
-      >
-        {/* Above the chats, so people who haven't linked WhatsApp see it too.
-            Its rows are sidebar-style items, so the entry is one, inset to
-            line up with the chats below it. Touch devices show no tutorial. */}
-        <div class="px-4 pt-2 empty:hidden">
-          <TutorialSidebarItem tutorial="whatsapp" />
-        </div>
-        {/* Touch has no sidebar: the chats in Macro lead the page. */}
-        <Show when={isTouchDevice()}>
-          <section aria-labelledby="external-chats" class="px-2">
-            <h2
-              id="external-chats"
-              class="px-2 pt-4 pb-1 text-xs font-semibold tracking-tight text-ink-extra-muted"
-            >
-              In Macro
-            </h2>
-            <For each={PROVIDERS}>{(provider) => inMacroChats(provider)}</For>
-          </section>
+  // Touch has no sidebar: a switcher picks the provider, as the sidebar's
+  // entries do, and the provider's chats in Macro lead its page.
+  const touchHeading = (provider: ExternalChatProvider) => (
+    <Show when={isTouchDevice()}>
+      <ViewShell.Header class="flex flex-col gap-3 pb-2">
+        <h1 class="text-lg font-semibold text-ink">External</h1>
+        <Show when={providers().length > 1}>
+          <ProviderSwitcher
+            providers={providers()}
+            selected={provider}
+            unread={unread}
+            onSelect={openProvider}
+          />
         </Show>
-        <WhatsAppLinked resumePairingId={handedOffPairing} />
-      </ViewShell.Content>
-    </>
+      </ViewShell.Header>
+    </Show>
+  );
+  const touchInMacro = (provider: ExternalChatProvider) => (
+    <Show when={isTouchDevice()}>
+      <section aria-labelledby="external-chats" class="px-2">
+        <h2
+          id="external-chats"
+          class="px-2 pt-4 pb-1 text-xs font-semibold tracking-tight text-ink-extra-muted"
+        >
+          In Macro
+        </h2>
+        {inMacroChats(provider)}
+      </section>
+    </Show>
+  );
+  const providerPage = () => (
+    <Show when={selected()}>
+      {(provider) => (
+        <Dynamic
+          component={PROVIDER_PAGES[provider()]}
+          heading={touchHeading(provider())}
+          inMacro={touchInMacro(provider())}
+        />
+      )}
+    </Show>
   );
 
   return (
@@ -154,17 +170,17 @@ export function ExternalView() {
               </ViewSidebar.Header>
               <ViewSidebar.Content>
                 <ViewSidebar.Nav aria-label="External apps">
-                  <For each={PROVIDERS}>
+                  <For each={providers()}>
                     {(provider) => {
                       const open = () => !folded().includes(provider);
                       return (
                         <>
                           <ViewSidebar.TreeItem
-                            active={!params.chatId}
+                            active={!params.chatId && selected() === provider}
                             label={providerIdentity(provider).label}
                             expanded={open()}
                             onToggle={() => toggleFolded(provider)}
-                            onClick={openWhatsApp}
+                            onClick={() => openProvider(provider)}
                           >
                             <ViewSidebar.Icon>
                               <Dynamic
@@ -190,7 +206,7 @@ export function ExternalView() {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
-            <SplitRouter.Outlet fallback={whatsappPage} />
+            <SplitRouter.Outlet fallback={providerPage} />
           </ViewShell.Main>
         </ViewShell.Root>
       </SplitPanel.Body>

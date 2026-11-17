@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM external_chat_reaction WHERE message_id = $1 AND person_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "22974f4ae3d71ad206edb1f99ba1966aa05e234507bfd2d38aa5cc8ce6703a8d"
+}

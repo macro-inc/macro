@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_account SET catalogue_requested_at = now()\n            WHERE id = ANY($1) AND state IN ('connecting', 'connected')\n              AND (catalogue_requested_at IS NULL OR catalogue_requested_at < now() - make_interval(secs => $2))\n            RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7fa1eeb2872d5ca166493a07c50d7b8b65c7a6915a142538a12d70e77f2f8e95"
+}

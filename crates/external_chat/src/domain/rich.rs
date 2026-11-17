@@ -132,14 +132,14 @@ pub struct Event {
     pub canceled: bool,
 }
 
-/// Something that happened in the group. The message's sender is who did it,
-/// unless WhatsApp did not say (then the sender is the group itself).
+/// Something that happened in the chat. The message's sender is who did it,
+/// unless the provider did not say (then the sender is the chat itself).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemLine {
     /// What happened.
     pub action: SystemAction,
-    /// The people it happened to (added, removed, promoted…), as WhatsApp ids.
+    /// The people it happened to (added, removed, promoted…), as provider ids.
     #[serde(default)]
     pub participants: Vec<String>,
     /// The new subject or description, or the disappearing-messages timer in
@@ -149,9 +149,10 @@ pub struct SystemLine {
     /// For calls: what kind and how it went.
     #[serde(default)]
     pub call: Option<Call>,
-    /// WhatsApp did not say who did it; the message's sender is the group.
-    #[serde(default)]
-    pub by_whatsapp: bool,
+    /// The provider did not say who did it; the message's sender is the chat.
+    /// Rows stored before the rename carry `byWhatsapp`.
+    #[serde(default, alias = "byWhatsapp")]
+    pub by_provider: bool,
 }
 
 /// Kinds of system lines.

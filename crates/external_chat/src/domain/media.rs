@@ -23,7 +23,7 @@ impl MediaService {
     /// Import one batch; one failing file never blocks the others. Returns how
     /// many were imported.
     #[tracing::instrument(
-        name = "whatsapp.linked.import_media",
+        name = "external_chat.import_media",
         skip_all,
         err,
         fields(due, imported)
@@ -48,7 +48,7 @@ impl MediaService {
                         attempts = import.attempts,
                         code = error.current_context().code(),
                         error = %error,
-                        "WhatsApp attachment import will retry"
+                        "External chat attachment import will retry"
                     );
                     self.repository
                         .import_failed(import, import.attempts + 1 >= MAX_IMPORT_ATTEMPTS)
@@ -64,7 +64,7 @@ impl MediaService {
     /// file that fails stays queued and is retried later. Returns how many
     /// were deleted.
     #[tracing::instrument(
-        name = "whatsapp.linked.delete_files",
+        name = "external_chat.delete_files",
         skip_all,
         err,
         fields(due, deleted)
@@ -80,7 +80,7 @@ impl MediaService {
                     file_id = %file_id,
                     code = error.current_context().code(),
                     error = %error,
-                    "Deleting a WhatsApp attachment file will retry"
+                    "Deleting an external chat attachment file will retry"
                 ),
             }
         }

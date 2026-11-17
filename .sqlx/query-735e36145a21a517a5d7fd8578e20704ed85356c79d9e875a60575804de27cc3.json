@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat SET backfill_state = 'pending', backfill_imported = 0, backfill_requested_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "735e36145a21a517a5d7fd8578e20704ed85356c79d9e875a60575804de27cc3"
+}

@@ -41,7 +41,7 @@ pub fn helper_failure(error: impl std::fmt::Display) -> rootcause::Report<Extern
 
 /// Stored data that breaks an invariant this crate or a provider maintains.
 pub fn corrupt(what: impl std::fmt::Display) -> rootcause::Report<ExternalChatError> {
-    rootcause::report!("stored WhatsApp data is invalid: {what}")
+    rootcause::report!("stored external chat data is invalid: {what}")
         .context(ExternalChatError::Internal)
 }
 

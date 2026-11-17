@@ -65,9 +65,9 @@ export function decodeAddRefusal(error: unknown): AddRefusal {
     .with('not_found', 'NOT_FOUND', 'GONE', () => ({ reason: 'gone' }))
     .with('conflict', 'CONFLICT', () => ({ reason: 'already-added' }))
     .with('disconnected', () => ({ reason: 'disconnected' }))
-    .with('cannot_add_not_in_group', () => ({
+    .with('cannot_add_not_member', () => ({
       reason: 'cannot-add',
-      why: 'not_in_group',
+      why: 'not_member',
     }))
     .with('cannot_add_community', () => ({
       reason: 'cannot-add',
@@ -80,6 +80,14 @@ export function decodeAddRefusal(error: unknown): AddRefusal {
     .with('cannot_add_not_in_chat_list', () => ({
       reason: 'cannot-add',
       why: 'not_in_chat_list',
+    }))
+    .with('cannot_add_archived', () => ({
+      reason: 'cannot-add',
+      why: 'archived',
+    }))
+    .with('cannot_add_frozen', () => ({
+      reason: 'cannot-add',
+      why: 'frozen',
     }))
     .with('rate_limited', () => ({ reason: 'rate-limited' }))
     .with('backlogged', () => ({ reason: 'busy' }))

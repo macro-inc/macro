@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_login_attempt SET claimed_until = now() + make_interval(secs => $2), updated_at = now()\n        WHERE id = $1 AND step = 'working' AND expires_at > now()\n          AND (claimed_until IS NULL OR claimed_until < now())\n        RETURNING id, user_id, step_data, input, sealed_input, sealed_input_key, sealed_state, sealed_state_key,\n            kms_key_id, encryption_version, traceparent",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "step_data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "input",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "sealed_input",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 5,
+        "name": "sealed_input_key",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "sealed_state",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "sealed_state_key",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8bcb54da2eac9ecedb62f71711d2e51fe7a9db8962d7094c7426e0afd35b8ace"
+}

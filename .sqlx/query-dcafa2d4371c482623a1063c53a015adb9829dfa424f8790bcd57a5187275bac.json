@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_account (id, user_id, team_id, enterprise_id, team_name, team_domain, team_icon_url,\n            slack_user_id, state, credentials, data_key_ciphertext, kms_key_id, encryption_version)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'connecting', $9, $10, $11, $12)\n        ON CONFLICT (user_id, team_id) DO UPDATE SET\n            enterprise_id = excluded.enterprise_id, team_name = excluded.team_name,\n            team_domain = excluded.team_domain, team_icon_url = excluded.team_icon_url,\n            slack_user_id = excluded.slack_user_id, state = 'connecting', ended_reason = NULL,\n            generation = slack_account.generation + 1, sign_out_requested = false,\n            credentials = excluded.credentials, data_key_ciphertext = excluded.data_key_ciphertext,\n            kms_key_id = excluded.kms_key_id, encryption_version = excluded.encryption_version,\n            updated_at = now()\n        RETURNING id, generation, last_connected_at, display_name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bytea",
+        "Bytea",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "dcafa2d4371c482623a1063c53a015adb9829dfa424f8790bcd57a5187275bac"
+}

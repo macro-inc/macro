@@ -14,7 +14,7 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
 - `src/replica.rs`: `replica::start(ReplicaDeps, shutdown)` composes one
   replica; `main.rs` and end-to-end tests both use it (tests inject the fake
   server's dialer, `test_signal()`, a fake KMS and short `Timings`).
-- `domain/supervisor.rs`: which accounts this replica runs. Takes free accounts
+- `crates/session_fleet` (`Supervisor`, `PgAccountLocks`, `SignalListener`): which accounts this replica runs. Takes free accounts
   (`pg_try_advisory_lock(hashtextextended('whatsapp-account:' || id, 0))`) on rescan and
   on `NOTIFY`, up to `MAX_ACCOUNTS` (500, `main.rs`); on SIGTERM releases them
   in batches of `DRAIN_BATCH` (20) (finish sends, disconnect,
@@ -38,15 +38,16 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
 - `domain/media.rs`: per-account import loop (`claim_media_imports` →
   download → `complete_media_import` / `fail_media_import`). Media sends
   upload before `begin_dispatch`. Two transfers per account, 32 MiB cap.
-- `outbound/lease.rs`: the lock connection (one non-pooled `PgConnection`,
-  pinged every 5 s; if it dies every account stops and the process exits
-  non-zero so ECS replaces it), release announcements, and discovery through
-  `SessionService` (`discoverable_accounts`, `fleet_health`).
-- `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
+- `outbound/lease.rs`: the account directory over `SessionService`
+  (`discoverable_accounts`, pairing lookups, `fleet_health`, release
+  announcements); the lock connection is `session_fleet::locks` (one
+  non-pooled `PgConnection`, pinged every 5 s; if it dies every account stops
+  and the process exits non-zero so ECS replaces it).
+- `outbound/signals.rs`: the channels `session_fleet::listener` `LISTEN`s for `whatsapp_{account_released,
   pairing_requested, send_requested, roster_requested, lookup_requested,
   account_changed}`.
   Payloads are `external_chat::signals::Signal` JSON; each
-  one's `traceparent` parents a `whatsapp.signal.receive` span that travels
+  one's `traceparent` parents a `session_fleet.signal.receive` span (`fleet = whatsapp`) that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
   `whatsapp.account.signal` span run inside it, and a runner started by it
   links its `whatsapp.account.connect` span to it. By hand,
@@ -150,18 +151,20 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   `alias/whatsapp-session-service-<environment>` from `ENVIRONMENT`
   (GenerateDataKey + Decrypt); `xtask_local` creates the `-local` alias in
   LocalStack.
-- Tests only, process env: `OVERRIDE_WHATSAPP_WEBSOCKET_URL` (fake server)
-  and `OVERRIDE_WHATSAPP_MEDIA_HOST` (`scheme://host[:port]` of its media
-  host).
+- The websocket is `WhatsappWebsocketUrl` in `macro_service_urls`
+  (`OVERRIDE_WHATSAPP_WEBSOCKET_URL` points it at a fake server). Tests
+  only: `OVERRIDE_WHATSAPP_MEDIA_HOST` (`scheme://host[:port]` of the fake's
+  media host) replaces the media hosts WhatsApp hands out per connection,
+  so it has no fixed default.
 
 ## Telemetry
 
-Spans: `whatsapp.account.{lease,release,rescan,connect}`,
+Spans: `session_fleet.account.{lease,release,rescan}`, `session_fleet.drain`
+(`fleet = whatsapp`), `whatsapp.account.connect`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
 `whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
-(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
-`whatsapp.account.signal`, `whatsapp.drain`,
+(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.account.signal`,
 `whatsapp.history.{sync,page}`, `whatsapp.backfill.request`,
 `whatsapp.picture.check` (`kind` person/group, `offered_existing`,
 `outcome` `unchanged`/`stored`/`hidden`/`not_set`/`rate_limited`/`failed`,

@@ -23,7 +23,7 @@ impl EffectsService {
     /// Publish one batch of due revisions. A failed message is deferred and never
     /// holds up the others. Returns how many were published.
     #[tracing::instrument(
-        name = "whatsapp.linked.publish_effects",
+        name = "external_chat.publish_effects",
         skip_all,
         err,
         fields(due, published)

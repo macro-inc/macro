@@ -1,19 +1,13 @@
-//! Encrypting stored values under an account's data key.
-//!
-//! AES-256-GCM with a random 96-bit nonce per write, so the same data key can
-//! seal any number of values: at 2^32 writes per account the collision
-//! probability of random nonces is still below 2^-32. Each value is bound by
-//! its associated data to the account, the store and the key it was written
-//! under, so a ciphertext copied to another row, store or account fails to
-//! decrypt instead of being read as that row's value.
+//! Sealing stored values under an account's data key, with
+//! [`kms_envelope`]. Each value is bound to the account, its store and its key
+//! (labels `store | key…`), so a ciphertext copied to another row, store or
+//! account fails to decrypt instead of being read as that row's value.
 
 #[cfg(test)]
 mod test;
 
-use aes_gcm::aead::{Aead, Payload};
-use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use kms_envelope::cipher::{CipherError, DataKey};
 use uuid::Uuid;
-use zeroize::Zeroizing;
 
 use crate::error::WhatsAppStoreError;
 
@@ -21,29 +15,16 @@ use crate::error::WhatsAppStoreError;
 /// can be added without a migration.
 pub const ENCRYPTION_VERSION: i16 = 1;
 
-const NONCE_LENGTH: usize = 12;
-const DATA_KEY_LENGTH: usize = 32;
+/// An account's data key in plaintext (see [`DataKey`]).
+pub(crate) type WhatsAppDataKey = DataKey;
 
-/// An account's data key in plaintext.
-///
-/// Lives only in memory, from the KMS `Decrypt` (or `GenerateDataKey`) when a
-/// replica takes the account's lease until the store is dropped. Zeroizes on
-/// drop, redacts its `Debug`, and has no serialization.
-pub(crate) struct WhatsAppDataKey(Zeroizing<[u8; DATA_KEY_LENGTH]>);
-
-impl WhatsAppDataKey {
-    /// Accepts exactly 32 bytes of key material.
-    pub(crate) fn from_plaintext(plaintext: &[u8]) -> Result<Self, WhatsAppStoreError> {
-        let key: [u8; DATA_KEY_LENGTH] = plaintext
-            .try_into()
-            .map_err(|_| WhatsAppStoreError::Malformed)?;
-        Ok(Self(Zeroizing::new(key)))
-    }
-}
-
-impl std::fmt::Debug for WhatsAppDataKey {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("WhatsAppDataKey(redacted)")
+impl From<CipherError> for WhatsAppStoreError {
+    fn from(error: CipherError) -> Self {
+        match error {
+            CipherError::Malformed => Self::Malformed,
+            CipherError::Encrypt => Self::Encrypt,
+            CipherError::Decrypt => Self::Decrypt,
+        }
     }
 }
 
@@ -80,25 +61,14 @@ impl StoreName {
     }
 }
 
-/// A sealed value, ready for its `nonce` and `value` columns.
-pub(crate) struct Sealed {
-    pub(crate) nonce: Vec<u8>,
-    pub(crate) value: Vec<u8>,
-}
+pub(crate) use kms_envelope::cipher::Sealed;
 
 /// Seals and opens the values of one account.
-pub(crate) struct ValueCipher {
-    account_id: Uuid,
-    // `aes-gcm` is built with `zeroize`, so the key schedule is wiped on drop.
-    aead: Aes256Gcm,
-}
+pub(crate) struct ValueCipher(kms_envelope::cipher::ValueCipher);
 
 impl ValueCipher {
     pub(crate) fn new(account_id: Uuid, data_key: &WhatsAppDataKey) -> Self {
-        Self {
-            account_id,
-            aead: Aes256Gcm::new(data_key.0.as_ref().into()),
-        }
+        Self(kms_envelope::cipher::ValueCipher::new(account_id, data_key))
     }
 
     /// Encrypts a value stored under `key` in `store`. A composite key passes
@@ -109,22 +79,7 @@ impl ValueCipher {
         key: &[&[u8]],
         plaintext: &[u8],
     ) -> Result<Sealed, WhatsAppStoreError> {
-        let nonce: [u8; NONCE_LENGTH] = rand::random();
-        let associated_data = self.associated_data(store, key);
-        let value = self
-            .aead
-            .encrypt(
-                &Nonce::from(nonce),
-                Payload {
-                    msg: plaintext,
-                    aad: &associated_data,
-                },
-            )
-            .map_err(|_| WhatsAppStoreError::Encrypt)?;
-        Ok(Sealed {
-            nonce: nonce.to_vec(),
-            value,
-        })
+        Ok(self.0.seal(&labels(store, key), plaintext)?)
     }
 
     /// Decrypts a value read from under `key` in `store`. Fails if the
@@ -136,35 +91,32 @@ impl ValueCipher {
         nonce: &[u8],
         value: &[u8],
     ) -> Result<Vec<u8>, WhatsAppStoreError> {
-        let nonce: [u8; NONCE_LENGTH] =
-            nonce.try_into().map_err(|_| WhatsAppStoreError::Decrypt)?;
-        let associated_data = self.associated_data(store, key);
-        self.aead
-            .decrypt(
-                &Nonce::from(nonce),
-                Payload {
-                    msg: value,
-                    aad: &associated_data,
-                },
-            )
-            .map_err(|_| WhatsAppStoreError::Decrypt)
+        Ok(self.0.open(&labels(store, key), nonce, value)?)
     }
 
-    /// `account_id | store | key…`: the account's 16 bytes, then each other
-    /// part prefixed by its length as a big-endian u32, so no two different
-    /// (store, key) pairs encode to the same bytes.
-    fn associated_data(&self, store: StoreName, key: &[&[u8]]) -> Vec<u8> {
-        let store = store.as_str().as_bytes();
-        let mut associated_data = Vec::with_capacity(
-            16 + 4 + store.len() + key.iter().map(|part| 4 + part.len()).sum::<usize>(),
-        );
-        associated_data.extend_from_slice(self.account_id.as_bytes());
-        for part in std::iter::once(store).chain(key.iter().copied()) {
-            // Parts are keys and names, far below 4 GiB.
-            let length = u32::try_from(part.len()).unwrap_or(u32::MAX);
-            associated_data.extend_from_slice(&length.to_be_bytes());
-            associated_data.extend_from_slice(part);
-        }
-        associated_data
+    /// [`ValueCipher::seal`] into one column.
+    pub(crate) fn seal_blob(
+        &self,
+        store: StoreName,
+        key: &[&[u8]],
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, WhatsAppStoreError> {
+        Ok(self.0.seal_blob(&labels(store, key), plaintext)?)
     }
+
+    /// Opens a [`ValueCipher::seal_blob`] output.
+    pub(crate) fn open_blob(
+        &self,
+        store: StoreName,
+        key: &[&[u8]],
+        blob: &[u8],
+    ) -> Result<zeroize::Zeroizing<Vec<u8>>, WhatsAppStoreError> {
+        Ok(self.0.open_blob(&labels(store, key), blob)?)
+    }
+}
+
+fn labels<'a>(store: StoreName, key: &[&'a [u8]]) -> Vec<&'a [u8]> {
+    std::iter::once(store.as_str().as_bytes())
+        .chain(key.iter().copied())
+        .collect()
 }

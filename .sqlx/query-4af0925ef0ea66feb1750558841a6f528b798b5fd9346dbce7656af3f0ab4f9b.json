@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_read_mark (chat_id, account_id, thread_ts, ts, traceparent)\n            SELECT m.chat_id, m.account_id, COALESCE(r.source_id, ''), read.source_id, $4\n            FROM slack_chat_membership m\n            JOIN slack_account a ON a.id = m.account_id\n            JOIN external_chat_message read ON read.id = $2 AND read.chat_id = m.chat_id\n            LEFT JOIN external_chat_message r ON r.id = $3 AND r.chat_id = m.chat_id\n            WHERE m.chat_id = $1 AND a.user_id = $5 AND m.consent_ended_at IS NULL\n              AND m.generation = a.generation AND a.state IN ('connecting', 'connected')\n            ON CONFLICT (chat_id, account_id, thread_ts) DO UPDATE SET ts = excluded.ts,\n                traceparent = excluded.traceparent, requested_at = now()\n            WHERE slack_read_mark.ts < excluded.ts\n            RETURNING account_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4af0925ef0ea66feb1750558841a6f528b798b5fd9346dbce7656af3f0ab4f9b"
+}

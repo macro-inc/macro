@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_send SET state = 'failed', error_code = 'chat_detached', claimed_epoch = NULL, updated_at = now() WHERE chat_id = $1 AND dispatch_started_at IS NULL AND state IN ('pending', 'sending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "90e3a63f5e6d70360d1cb5c28e4c69ae6d16c8bf83fec5bf0360c58c416e2f4f"
+}

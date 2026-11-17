@@ -5,10 +5,12 @@ import { z } from 'zod';
 /** `LinkedError::code()` in `crates/whatsapp_linked`; DSS answers `{ code, message }`. */
 export const whatsappErrorCodes = [
   'invalid_input',
-  'cannot_add_not_in_group',
+  'cannot_add_not_member',
   'cannot_add_community',
   'cannot_add_own_chat',
   'cannot_add_not_in_chat_list',
+  'cannot_add_archived',
+  'cannot_add_frozen',
   'not_found',
   'forbidden',
   'conflict',

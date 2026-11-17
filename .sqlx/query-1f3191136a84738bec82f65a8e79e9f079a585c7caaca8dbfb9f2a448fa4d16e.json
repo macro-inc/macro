@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_person SET display_name = $2 WHERE id = $1 AND display_name IS DISTINCT FROM $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f3191136a84738bec82f65a8e79e9f079a585c7caaca8dbfb9f2a448fa4d16e"
+}

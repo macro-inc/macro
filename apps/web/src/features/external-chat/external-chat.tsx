@@ -58,7 +58,12 @@ export function ExternalChat(props: {
             />
           }
           onShare={share}
-          onConnect={() => navigate({ route: externalRoute, params: {} })}
+          onConnect={(provider) =>
+            navigate(
+              { route: externalRoute, params: {} },
+              { state: { provider } }
+            )
+          }
         />
       </SidePanel.Root>
     </ExternalChatContextProvider>

@@ -11,6 +11,8 @@ import type { ExternalChatMessageEditedAt } from './externalChatMessageEditedAt'
 import type { ExternalChatMessageKind } from './externalChatMessageKind';
 import type { ExternalChatMessageReplyTo } from './externalChatMessageReplyTo';
 import type { ExternalChatMessageRich } from './externalChatMessageRich';
+import type { ExternalChatMessageThread } from './externalChatMessageThread';
+import type { ExternalChatMessageThreadRoot } from './externalChatMessageThreadRoot';
 import type { ExternalChatReaction } from './externalChatReaction';
 import type { ExternalChatSender } from './externalChatSender';
 
@@ -46,6 +48,11 @@ export interface ExternalChatMessage {
   sender: ExternalChatSender;
   /** Timestamp assigned by the provider. */
   sentAt: string;
+  thread?: ExternalChatMessageThread;
+  /** A thread reply that was also sent to the chat. */
+  threadBroadcast: boolean;
+  /** The thread this message replies in. */
+  threadRoot?: ExternalChatMessageThreadRoot;
   /** Sent as view-once; Macro shows it like any media. */
   viewOnce: boolean;
 }

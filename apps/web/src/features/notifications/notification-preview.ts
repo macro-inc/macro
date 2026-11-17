@@ -33,6 +33,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   calendar_event_join_request: 'JOIN REQUEST',
   password_access_requested: 'ACCESS REQUEST',
   inbox_reauth_required: 'EMAIL',
+  external_chat_account_ended: 'EXTERNAL',
   agent_session_settled: 'AGENT',
   agent_session_waiting_for_input: 'ASKING',
   agent_session_mentioned: 'MENTION',

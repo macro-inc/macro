@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, team_name, ended_reason AS \"ended_reason!\", generation FROM slack_account\n            WHERE state = 'logged_out' AND ended_notified_generation IS DISTINCT FROM generation\n            ORDER BY updated_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_reason!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "53d9b8e4df36bdc3850be4539018ad5e0f90694ae3dcd6e856a9b7f7a9e97015"
+}

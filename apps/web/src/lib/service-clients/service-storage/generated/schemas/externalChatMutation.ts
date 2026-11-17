@@ -14,6 +14,7 @@ export type ExternalChatMutation =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ExternalChatMutation = {
   reaction: 'reaction',
+  remove_reaction: 'remove_reaction',
   edit: 'edit',
   delete: 'delete',
 } as const;

@@ -189,6 +189,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
                         mentions: vec![],
                     },
                     reply_to: None,
+                    thread: None,
                 },
                 SendAuthority::Human,
             )
@@ -199,6 +200,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
         .external
         .messages(
             &receipt::<ViewAccessLevel>(BOB, binding.id),
+            None,
             None,
             Some(100),
         )

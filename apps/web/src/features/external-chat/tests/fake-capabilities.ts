@@ -1,5 +1,5 @@
 import { ok, type Result } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import { vi } from 'vitest';
 import type { SourceRead } from '../../whatsapp-linked/context/whatsapp-linked-context';
 import type { ExternalChatCapabilities } from '../context/external-chat-context';
@@ -29,6 +29,7 @@ export const chat: ChatDetail = {
     attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
     editSeconds: 900,
     mutations: ['reaction', 'edit', 'delete'],
+    threads: false,
   },
 };
 export const messages: ChatMessage[] = [
@@ -75,6 +76,9 @@ export function createFakeChat(
   const [detail, setChat] = createSignal(initial.chat ?? chat);
   const [timeline, setMessages] = createSignal(initial.messages ?? messages);
   const [delivery, setDelivery] = createSignal<SendProgress[]>([]);
+  const [threadReplies, setThreadReplies] = createSignal<
+    Record<string, ChatMessage[]>
+  >({});
   const read = <T>(data: () => T): SourceRead<T> => ({
     get data() {
       return data();
@@ -103,10 +107,16 @@ export function createFakeChat(
       ): Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>> =>
         ok({ uploadId: 'upload-1', audio: false })
     ),
+    thread: (root: Accessor<string | undefined>) =>
+      read(() => {
+        const id = root();
+        return id ? (threadReplies()[id] ?? []) : [];
+      }),
+    markThreadRead: vi.fn(async (_messageId: string) => undefined),
     fileUrl: (fileId: string) => `https://files.example.test/${fileId}`,
     markRead: vi.fn(async (_messageId: string) => undefined),
     stopSync: vi.fn(async () => undefined),
     importHistory: vi.fn(async () => undefined),
   } satisfies ExternalChatCapabilities;
-  return { capabilities, setChat, setMessages, setDelivery };
+  return { capabilities, setChat, setMessages, setDelivery, setThreadReplies };
 }

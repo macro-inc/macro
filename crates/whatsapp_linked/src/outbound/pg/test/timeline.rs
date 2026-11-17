@@ -40,7 +40,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
     assert!(detail.sending_identity.is_none());
     let messages = linked
         .chats
-        .messages(&receipt, None, Some(50))
+        .messages(&receipt, None, None, Some(50))
         .await
         .unwrap();
     assert_eq!(messages.messages[0].body, "Shared history");
@@ -64,7 +64,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
     assert_eq!(
         linked
             .chats
-            .messages(&bot_access, None, Some(50))
+            .messages(&bot_access, None, None, Some(50))
             .await
             .unwrap()
             .messages[0]
@@ -102,6 +102,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     assert_eq!(
         *linked
@@ -164,13 +165,13 @@ async fn timeline_cursor_and_read_cursor_are_group_scoped_and_monotone(pool: PgP
     let receipt = receipt::<MessageView>(BOB, binding.id);
     let page = linked
         .chats
-        .messages(&receipt, None, Some(1))
+        .messages(&receipt, None, None, Some(1))
         .await
         .unwrap();
     assert_eq!(page.messages[0].body, "newer");
     let next = linked
         .chats
-        .messages(&receipt, page.next_cursor, Some(1))
+        .messages(&receipt, None, page.next_cursor, Some(1))
         .await
         .unwrap();
     assert_eq!(next.messages[0].body, "older");
@@ -372,7 +373,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         .unwrap();
     let page = linked
         .chats
-        .messages(&shared, None, Some(50))
+        .messages(&shared, None, None, Some(50))
         .await
         .unwrap();
     linked
@@ -461,6 +462,7 @@ async fn shared_sender_uses_own_roster_without_adopting_again(pool: PgPool) {
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::UserApiToken,
         )
@@ -639,7 +641,7 @@ async fn one_message_reads_like_its_timeline_entry(pool: PgPool) {
     let viewer = receipt::<MessageView>(BOB, binding.id);
     let page = linked
         .chats
-        .messages(&viewer, None, Some(50))
+        .messages(&viewer, None, None, Some(50))
         .await
         .unwrap();
     let older = page.messages.last().unwrap();
@@ -717,7 +719,12 @@ async fn people_read_by_contact_name_then_whatsapp_name_then_number(pool: PgPool
 
     let page = linked
         .chats
-        .messages(&receipt::<MessageView>(BOB, binding.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(BOB, binding.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap();
 

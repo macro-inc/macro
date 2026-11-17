@@ -51,6 +51,7 @@ it('decodes shared viewing separately from the callers own sending account and h
       mutations: ['reaction', 'edit', 'delete'],
       mutationWindowSeconds: 900,
       attachmentTypes: ['image/png', 'application/pdf'],
+      threads: false,
     },
   } satisfies ExternalChatDetail;
   client.detail.mockResolvedValue(ok(detail));
@@ -116,6 +117,7 @@ it('turns provider pictures into static file URLs and leaves hidden ones absent'
       mutations: ['reaction', 'edit', 'delete'],
       mutationWindowSeconds: 900,
       attachmentTypes: ['image/png'],
+      threads: false,
     },
   } satisfies ExternalChatDetail;
   client.detail.mockResolvedValue(ok(detail));
@@ -153,6 +155,9 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
         mentions: [],
         forwarded: false,
         viewOnce: false,
+        threadRoot: null,
+        threadBroadcast: false,
+        thread: null,
         rich: null,
         replyTo: null,
         sentAt: '2026-10-21T12:00:00Z',
@@ -185,7 +190,11 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
   } satisfies ExternalChatMessages;
   client.messages.mockResolvedValue(ok(page));
   const result = await externalChatApi.messages('chat-id', 'before-id');
-  expect(client.messages).toHaveBeenCalledWith('chat-id', 'before-id');
+  expect(client.messages).toHaveBeenCalledWith(
+    'chat-id',
+    'before-id',
+    undefined
+  );
   expect(result.before).toBe(page.nextCursor);
   expect(result.messages[0]).toMatchObject({
     deleted: true,
@@ -222,6 +231,9 @@ it('decodes mentions, forwarding, media presentation and every rich type, keepin
     mentions: [],
     forwarded: false,
     viewOnce: false,
+    threadRoot: null,
+    threadBroadcast: false,
+    thread: null,
     rich: null,
   };
   const page = {
@@ -425,6 +437,21 @@ it('preserves the deliberate send key and maps quotes and reactions without a ch
       messageId: 'message-id',
       operation: 'reaction',
       text: '',
+    },
+    replyTo: null,
+  });
+  await externalChatApi.send(
+    'chat-id',
+    { kind: 'unreact', messageId: 'message-id', emoji: '🎉' },
+    'unreact-key'
+  );
+  expect(client.send).toHaveBeenLastCalledWith('chat-id', {
+    idempotencyKey: 'unreact-key',
+    message: {
+      type: 'mutation',
+      messageId: 'message-id',
+      operation: 'remove_reaction',
+      text: '🎉',
     },
     replyTo: null,
   });

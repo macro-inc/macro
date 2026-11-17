@@ -21,13 +21,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::{EnvelopeKms, FakeKms, GeneratedDataKey, KmsError};
 use sqlx::postgres::{PgConnectOptions, PgListener, PgPool, PgPoolOptions};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use whatsapp_fake_server::{FakeWhatsApp, test_signal};
 use whatsapp_session_service::domain::pictures::PicturePacing;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
-use whatsapp_store_pg::kms::{FakeWhatsAppKms, GeneratedDataKey, WhatsAppKms, WhatsAppKmsError};
 use whatsmeow::{Dialer, WebSocketDialer};
 use zeroize::Zeroizing;
 
@@ -58,12 +58,12 @@ pub const TIMINGS: Timings = Timings {
 
 /// One fake KMS shared by every replica, as they share the real KMS key.
 #[derive(Clone)]
-pub struct SharedKms(pub Arc<FakeWhatsAppKms>);
+pub struct SharedKms(pub Arc<FakeKms>);
 
 impl SharedKms {
     /// A fresh fake KMS.
     pub fn new() -> SharedKms {
-        SharedKms(Arc::new(FakeWhatsAppKms::new("e2e-kms-key")))
+        SharedKms(Arc::new(FakeKms::new("e2e-kms-key")))
     }
 }
 
@@ -73,11 +73,11 @@ impl Default for SharedKms {
     }
 }
 
-impl WhatsAppKms for SharedKms {
+impl EnvelopeKms for SharedKms {
     async fn generate_data_key(
         &self,
         encryption_context: HashMap<String, String>,
-    ) -> Result<GeneratedDataKey, WhatsAppKmsError> {
+    ) -> Result<GeneratedDataKey, KmsError> {
         self.0.generate_data_key(encryption_context).await
     }
 
@@ -86,7 +86,7 @@ impl WhatsAppKms for SharedKms {
         kms_key_id: &str,
         ciphertext: &[u8],
         encryption_context: HashMap<String, String>,
-    ) -> Result<Zeroizing<Vec<u8>>, WhatsAppKmsError> {
+    ) -> Result<Zeroizing<Vec<u8>>, KmsError> {
         self.0
             .decrypt(kms_key_id, ciphertext, encryption_context)
             .await

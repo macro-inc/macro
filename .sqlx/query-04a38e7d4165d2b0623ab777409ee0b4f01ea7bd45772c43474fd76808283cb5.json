@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_send (id, account_id, chat_id, user_id, idempotency_key, request_sha256, payload,\n                    generation, chat_sequence, traceparent, created_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())\n                ON CONFLICT (chat_id, user_id, idempotency_key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bytea",
+        "Jsonb",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "04a38e7d4165d2b0623ab777409ee0b4f01ea7bd45772c43474fd76808283cb5"
+}

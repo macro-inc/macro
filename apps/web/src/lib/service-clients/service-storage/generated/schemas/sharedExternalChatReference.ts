@@ -11,7 +11,7 @@
 export interface SharedExternalChatReference {
   /** External chat entity id. */
   id: string;
-  /** Display name, following WhatsApp. */
+  /** Display name, following the provider. */
   name: string;
   /** Macro user who added the chat and shared it. */
   ownerId: string;

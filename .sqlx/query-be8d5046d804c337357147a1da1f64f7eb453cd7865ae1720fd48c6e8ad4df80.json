@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT slack_user_id FROM slack_user_alias WHERE chat_id = $1 ORDER BY slack_user_id LIMIT 500",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "be8d5046d804c337357147a1da1f64f7eb453cd7865ae1720fd48c6e8ad4df80"
+}

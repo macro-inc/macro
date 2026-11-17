@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, team_id, team_name, team_domain, team_icon_url, enterprise_id, slack_user_id,\n                display_name, state, ended_reason, generation, last_connected_at\n            FROM slack_account WHERE user_id = $1 ORDER BY created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_icon_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "enterprise_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "slack_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "ended_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "7b192de4f04c3c360987bf1adb4fdb5b26625923aeb6f15a546bbf3cb8461e51"
+}

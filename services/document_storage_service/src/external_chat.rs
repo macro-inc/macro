@@ -1,9 +1,9 @@
-//! External chats (WhatsApp is the one provider): composition of the
-//! `external_chat` crate, with `whatsapp_linked` as its provider, and DSS's
+//! External chats: composition of the `external_chat` crate, with its
+//! providers (`whatsapp_linked`, `slack_linked`) in one `ChatProviders`, and DSS's
 //! entity access, notification and static file clients; the notification
 //! outbox worker, and the `external_chat_changed` pushes to open pages. The
-//! session service runs the WhatsApp sockets; it reaches DSS only through
-//! MacroDB rows and `NOTIFY`.
+//! session services run the WhatsApp and Slack sockets; they reach DSS only
+//! through MacroDB rows and `NOTIFY`.
 
 use crate::api::context::{AuthorizationService, EntityAccessService, NotificationIngressType};
 use async_trait::async_trait;
@@ -15,8 +15,8 @@ use external_chat::{
         media::MediaService,
         models::ExternalChatError,
         ports::{
-            AudienceRepository, ChatEffect, ChatPublisher, ExternalChatResult, FileImport,
-            FileStore, Origin, SendRateLimiter,
+            AudienceRepository, ChatEffect, ChatProviders, ChatPublisher, ExternalChatResult,
+            FileImport, FileStore, Origin, SendRateLimiter,
         },
         service::ExternalChatService,
     },
@@ -27,6 +27,11 @@ use external_chat::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
+use slack_linked::{
+    domain::{provider::SlackProvider, service::SlackService},
+    inbound::router::SlackRouterState,
+    outbound::{kms::SlackLoginInputSealer, pg::PgSlackRepository},
+};
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -43,9 +48,11 @@ use whatsapp_linked::{
 #[derive(Clone)]
 pub(crate) struct State {
     /// Added chats of every provider.
-    pub chats: ExternalChatRouterState<WhatsAppProvider, EntityAccessService, AuthorizationService>,
+    pub chats: ExternalChatRouterState<EntityAccessService, AuthorizationService>,
     /// The caller's WhatsApp account, pairing and chat list.
     pub whatsapp: WhatsAppRouterState<AuthorizationService>,
+    /// The caller's Slack sign-in, accounts and Slack Connect catalogue.
+    pub slack: SlackRouterState<AuthorizationService>,
 }
 
 /// Clients the linked composition needs from DSS.
@@ -59,6 +66,9 @@ pub(crate) struct Dependencies {
     pub connection_gateway: Arc<ConnectionGatewayClient>,
     pub tracker: TaskTracker,
     pub cancellation: CancellationToken,
+    /// Seals pasted Slack sessions (`GenerateDataKey` for
+    /// `slack-login-input` only).
+    pub slack_kms: kms_envelope::kms::AwsKms,
 }
 
 /// Build the router state and start the publication worker.
@@ -73,9 +83,19 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         connection_gateway,
         tracker,
         cancellation,
+        slack_kms,
     } = dependencies;
+    let slack_repository = Arc::new(PgSlackRepository::new(pool.clone()));
+    let slack = Arc::new(SlackService::new(
+        slack_repository.clone(),
+        Arc::new(SlackLoginInputSealer::new(slack_kms)),
+    ));
     let whatsapp_repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
     let repository = Arc::new(PgExternalChatRepository::new(pool.clone()));
+    let ended = AccountEndedNotifier {
+        slack: slack.clone(),
+        notifications: notifications.clone(),
+    };
     let publisher = Arc::new(DssChatPublisher {
         audience: repository.clone(),
         access: access.clone(),
@@ -85,8 +105,12 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     let media = MediaService::new(repository.clone(), files.clone());
     let pictures = PictureImports::new(whatsapp_repository.clone(), files);
     let whatsapp = Arc::new(WhatsAppService::new(whatsapp_repository.clone()));
+    let providers = ChatProviders {
+        whatsapp: Arc::new(WhatsAppProvider::new(whatsapp_repository)),
+        slack: Arc::new(SlackProvider::new(slack_repository)),
+    };
     let service = ExternalChatService::new(
-        Arc::new(WhatsAppProvider::new(whatsapp_repository)),
+        providers.clone(),
         repository.clone(),
         Arc::new(SendRequestLimiter(rate_limit::RateLimitServiceImpl {
             repo: rate_limit::RedisRateLimitAdapter { redis },
@@ -96,7 +120,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         ChangePusher {
             pool: pool.clone(),
             audience: repository.clone(),
-            whatsapp: whatsapp.clone(),
+            providers,
             access: access.clone(),
             gateway: connection_gateway,
         },
@@ -107,6 +131,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         EffectsService::new(repository, publisher),
         Imports { media, pictures },
         whatsapp.clone(),
+        ended,
         cancellation,
     ));
     State {
@@ -117,6 +142,10 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         },
         whatsapp: WhatsAppRouterState {
             service: whatsapp,
+            authorization_state: authorization.clone(),
+        },
+        slack: SlackRouterState {
+            service: slack,
             authorization_state: authorization,
         },
     }
@@ -135,6 +164,7 @@ async fn publish(
     effects: EffectsService,
     imports: Imports,
     whatsapp: Arc<WhatsAppService>,
+    ended: AccountEndedNotifier,
     cancellation: CancellationToken,
 ) {
     let Some(mut listener) = listen(
@@ -142,6 +172,7 @@ async fn publish(
         &[
             signals::CHAT_EFFECTS,
             signals::MEDIA_READY,
+            slack_linked::signals::ACCOUNT_ENDED,
             whatsapp_linked::signals::PICTURE_STAGED,
         ],
         &cancellation,
@@ -162,14 +193,19 @@ async fn publish(
                     signals::Signal::parse(notification.payload()).and_then(|signal| signal.traceparent)
                 }
                 Err(error) => {
-                    tracing::warn!(error = ?error, "WhatsApp notification/import listener reconnecting");
+                    tracing::warn!(error = ?error, "External chat notification/import listener reconnecting");
                     None
                 }
             }
         };
         let span = tracing::info_span!("external_chat.drain");
         trace_context::adopt(&span, traceparent.as_deref());
-        drain(&effects, &imports, &whatsapp).instrument(span).await;
+        async {
+            drain(&effects, &imports, &whatsapp).await;
+            ended.drain().await;
+        }
+        .instrument(span)
+        .await;
     }
 }
 
@@ -190,7 +226,7 @@ async fn listen(
         match listening.await {
             Ok(listener) => return Some(listener),
             Err(error) => {
-                tracing::warn!(error = %error, channels = ?channels, "WhatsApp listener will retry");
+                tracing::warn!(error = %error, channels = ?channels, "External chat listener will retry");
                 tokio::select! {
                     _ = cancellation.cancelled() => return None,
                     _ = tokio::time::sleep(Duration::from_secs(5)) => {}
@@ -212,7 +248,7 @@ async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppS
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "WhatsApp attachment import will retry"
+                    "External chat attachment import will retry"
                 );
                 break;
             }
@@ -225,7 +261,7 @@ async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppS
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "Deleting WhatsApp attachment files will retry"
+                    "Deleting external chat attachment files will retry"
                 );
                 break;
             }
@@ -250,7 +286,7 @@ async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppS
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "WhatsApp notification/import will retry"
+                    "External chat notifications will retry"
                 );
                 break;
             }
@@ -275,7 +311,7 @@ const CHANGED_MESSAGE: &str = "external_chat_changed";
 struct ChangePusher {
     pool: PgPool,
     audience: Arc<PgExternalChatRepository>,
-    whatsapp: Arc<WhatsAppService>,
+    providers: ChatProviders,
     access: Arc<EntityAccessService>,
     gateway: Arc<ConnectionGatewayClient>,
 }
@@ -284,8 +320,12 @@ impl ChangePusher {
     /// Users who see this change.
     async fn recipients(&self, change: Change) -> ExternalChatResult<Vec<String>> {
         match change {
-            Change::Chats { account_id } => Ok(self
-                .whatsapp
+            Change::Chats {
+                provider,
+                account_id,
+            } => Ok(self
+                .providers
+                .get(provider)
                 .account_owner(account_id)
                 .await?
                 .into_iter()
@@ -312,13 +352,17 @@ impl ChangePusher {
         name = "external_chat.changed.push",
         skip_all,
         err,
-        fields(scope, chat_id, account_id, recipients)
+        fields(scope, provider, chat_id, account_id, recipients)
     )]
     async fn push(&self, change: Change) -> ExternalChatResult<()> {
         let span = tracing::Span::current();
         let message = match change {
-            Change::Chats { account_id } => {
+            Change::Chats {
+                provider,
+                account_id,
+            } => {
                 span.record("scope", "chats");
+                span.record("provider", provider.as_ref());
                 span.record("account_id", tracing::field::display(account_id));
                 serde_json::json!({ "scope": "chats" })
             }
@@ -362,7 +406,7 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
         let mut batch = match first {
             Ok(notification) => vec![notification],
             Err(error) => {
-                tracing::warn!(error = ?error, "WhatsApp change listener reconnecting");
+                tracing::warn!(error = ?error, "External chat change listener reconnecting");
                 continue;
             }
         };
@@ -372,7 +416,7 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
         let mut seen = HashSet::new();
         for notification in batch {
             let Some(signal) = ChangeSignal::parse(notification.payload()) else {
-                tracing::warn!("Ignoring a malformed WhatsApp change signal");
+                tracing::warn!("Ignoring a malformed external chat change signal");
                 continue;
             };
             if !seen.insert(signal.change) {
@@ -459,6 +503,75 @@ impl ChatPublisher for DssChatPublisher {
     }
 }
 
+/// Tells owners their Slack session ended, once per ended generation.
+struct AccountEndedNotifier {
+    slack: Arc<SlackService>,
+    notifications: Arc<NotificationIngressType>,
+}
+
+impl AccountEndedNotifier {
+    async fn drain(&self) {
+        let ended = match self.slack.ended_accounts(50).await {
+            Ok(ended) => ended,
+            Err(report) => {
+                tracing::warn!(error = %report, "Listing ended Slack accounts failed");
+                return;
+            }
+        };
+        for account in ended {
+            if let Err(report) = self.notify(&account).await {
+                tracing::warn!(error = %report, account_id = %account.account_id, "Telling an owner their Slack session ended failed");
+            }
+        }
+    }
+
+    #[tracing::instrument(name = "external_chat.account_ended.notify", skip_all, err, fields(account_id = %account.account_id))]
+    async fn notify(
+        &self,
+        account: &slack_linked::domain::ports::EndedAccount,
+    ) -> ExternalChatResult<()> {
+        use model_notifications::ExternalChatAccountEndedReason as Reason;
+        use slack_linked::domain::models::EndedReason;
+        let reason = match account.reason {
+            EndedReason::Revoked
+            | EndedReason::Expired
+            | EndedReason::AccountInactive
+            | EndedReason::TeamDisabled
+            | EndedReason::RemovedFromTeam => Reason::SessionEnded,
+            EndedReason::EnterpriseRestricted => Reason::Restricted,
+            EndedReason::Unreadable => Reason::Unreadable,
+        };
+        let owner = MacroUserIdStr::try_from(account.user_id.clone()).map_err(unavailable)?;
+        // One notice per ended generation: the id is stable for it.
+        let id = Uuid::new_v5(
+            &account.account_id,
+            account.generation.to_string().as_bytes(),
+        );
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::User.with_entity_string(account.user_id.clone()),
+            secondary_notification_entity: None,
+            notification: model_notifications::ExternalChatAccountEndedMetadata {
+                provider: model_entity::ExternalChatProvider::Slack,
+                account_id: account.account_id,
+                account_name: account.team_name.clone(),
+                reason,
+            },
+            sender_id: None,
+            recipient_ids: HashSet::from([owner]),
+        }
+        .into_request_with_id(id)
+        .with_apns()
+        .with_conn_gateway();
+        self.notifications
+            .send_notification(request)
+            .await
+            .map_err(unavailable)?;
+        self.slack
+            .ended_notified(account.account_id, account.generation)
+            .await
+    }
+}
+
 /// Stores imported and sent attachments as static files, like channel media,
 /// owned by the uploader or the chat's owner.
 struct StaticFiles(StaticFileServiceClient);
@@ -533,7 +646,7 @@ struct SendRequestLimiter<R>(R);
 impl<R: rate_limit::RateLimitService> SendRateLimiter for SendRequestLimiter<R> {
     #[tracing::instrument(name = "external_chat.send_rate_limit", skip_all, err)]
     async fn check(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<()> {
-        let key = rate_limit::RateLimitKey::builder(&"whatsapp-linked-send")
+        let key = rate_limit::RateLimitKey::builder(&"external-chat-send")
             .append(&user.as_ref())
             .finish();
         let result = self

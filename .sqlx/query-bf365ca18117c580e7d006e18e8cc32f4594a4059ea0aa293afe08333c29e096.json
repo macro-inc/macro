@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_conversation (account_id, conversation_id, kind, name, topic, is_private, is_archived,\n                    is_member, frozen_reason, connected_team_ids, direct_user_id, last_activity_at, unread_count,\n                    last_read_ts, observed_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())\n                ON CONFLICT (account_id, conversation_id) DO UPDATE SET kind = excluded.kind, name = excluded.name,\n                    topic = excluded.topic, is_private = excluded.is_private, is_archived = excluded.is_archived,\n                    is_member = excluded.is_member, frozen_reason = excluded.frozen_reason,\n                    connected_team_ids = excluded.connected_team_ids, direct_user_id = excluded.direct_user_id,\n                    last_activity_at = excluded.last_activity_at, unread_count = excluded.unread_count,\n                    last_read_ts = excluded.last_read_ts, observed_at = excluded.observed_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "TextArray",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bf365ca18117c580e7d006e18e8cc32f4594a4059ea0aa293afe08333c29e096"
+}

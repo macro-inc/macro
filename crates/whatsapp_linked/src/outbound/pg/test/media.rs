@@ -357,6 +357,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool:
             caption: caption.map(str::to_owned),
         },
         reply_to: None,
+        thread: None,
     };
     assert!(
         linked
@@ -555,6 +556,7 @@ async fn a_sent_image_keeps_the_size_read_from_its_file(pool: PgPool) {
                     caption: None,
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )

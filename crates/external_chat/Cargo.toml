@@ -17,6 +17,8 @@ ports = [
   "dep:sha2",
   "entity_access/ports",
 ]
+# UnconfiguredProvider, for tests that compose only some providers.
+test-support = ["ports"]
 # Postgres adapters.
 outbound = [
   "dep:entity_access",

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM slack_conversation WHERE account_id = $1 AND NOT (conversation_id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a08fd8384316529c0d203da3c887cb06dfd9308d35f9996b174f5b5130c1ef2"
+}

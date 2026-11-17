@@ -11,6 +11,9 @@ use external_chat::domain::timeline::{ExternalChatPersonRef, view::People};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// Name for someone WhatsApp only knows by a private id.
+pub const UNKNOWN_PERSON: &str = "WhatsApp participant";
+
 #[cfg(test)]
 mod test;
 
@@ -113,7 +116,7 @@ impl ChatNames {
 
     /// Names for the seen people and, through `roster`, everyone in the chat.
     pub fn people(&self, roster: Option<&GroupInfo>) -> People {
-        let mut people = People::new(phone_number);
+        let mut people = People::new(phone_number, UNKNOWN_PERSON);
         for person in &self.seen {
             let jids: Vec<&str> = person.jids.iter().map(String::as_str).collect();
             let Some(name) = self.name(&jids, person.whatsapp_name.as_deref()) else {

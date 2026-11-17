@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_login_attempt (id, user_id, step, step_data, input, sealed_input, sealed_input_key,\n                kms_key_id, encryption_version, traceparent, expires_at)\n            VALUES ($1, $2, 'working', $3, $4, $5, $6, $7, $8, $9, now() + make_interval(mins => $10))\n            RETURNING id, step, step_data, expires_at, false AS \"expired!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "step",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "step_data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "expired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Bytea",
+        "Bytea",
+        "Text",
+        "Int2",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6b4b1b3235e6774251966df37ec1c807e61a5998e3ddafa5755441433332e7a1"
+}

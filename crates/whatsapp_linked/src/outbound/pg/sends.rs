@@ -400,6 +400,14 @@ async fn content_in(
                     text: text.clone().unwrap_or_default(),
                 },
                 Mutation::Delete => OutgoingContent::Delete { target },
+                // WhatsApp never offers it: a person's one reaction is
+                // replaced, or removed with an empty emoji.
+                Mutation::RemoveReaction => {
+                    return Err(ExternalChatError::Invalid(
+                        "WhatsApp removes a reaction by reacting with nothing",
+                    )
+                    .into());
+                }
             })
         }
     })
@@ -666,6 +674,12 @@ impl PgWhatsAppRepository {
                             Mutation::Reaction => MessageKind::Reaction,
                             Mutation::Edit => MessageKind::Edit,
                             Mutation::Delete => MessageKind::Delete,
+                            Mutation::RemoveReaction => {
+                                return Err(ExternalChatError::Invalid(
+                                    "WhatsApp removes a reaction by reacting with nothing",
+                                )
+                                .into());
+                            }
                         },
                         text.clone().unwrap_or_default(),
                         target_in(&mut tx, binding.id, *message_id, Some(&identity)).await?,

@@ -82,6 +82,7 @@ export function getNotificationIcon(
     .with('calendar_event_join_request', () => UserPlusIcon)
     .with('password_access_requested', () => KeyIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
+    .with('external_chat_account_ended', () => ChatIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)

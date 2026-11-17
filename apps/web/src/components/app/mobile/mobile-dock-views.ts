@@ -1,4 +1,5 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useEnabledProviders } from '@app/features/external-view/provider-flags';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -7,7 +8,6 @@ import {
   enableCrm,
   enablePasswords,
   enableTasksReviews,
-  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import BellFillIcon from '@icon/system/fill/bell-fill.svg';
 import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
@@ -162,7 +162,7 @@ export function useMobileDockViews() {
   const team = useCurrentTeamQuery(() => passwords().enabled);
   const passwordsAvailable = () =>
     passwords().enabled && team.isSuccess && Boolean(team.data?.team);
-  const external = useFeatureFlag(enableWhatsappLinked);
+  const externalProviders = useEnabledProviders();
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
@@ -171,6 +171,9 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'reviews' || reviews().enabled)
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
-      .filter((view) => view.id !== 'external' || external().enabled)
+      .filter(
+        (view) =>
+          view.id !== 'external' || externalProviders().providers.length > 0
+      )
   );
 }

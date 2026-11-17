@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "session_fleet"
+publish = false
+version = "0.1.0"
+description = "Advisory-lock leases and the account supervisor shared by the session services."
+
+[dependencies]
+external_chat = { path = "../external_chat", features = ["outbound"] }
+rootcause = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

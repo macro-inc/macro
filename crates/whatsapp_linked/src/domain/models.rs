@@ -3,7 +3,9 @@
 //! [`super::events`]; added chats and sends are `external_chat` models.
 
 use chrono::{DateTime, Utc};
-use external_chat::domain::models::{CannotAdd, CommunityReference, ExternalChatKind};
+use external_chat::domain::models::{
+    CannotAdd, ChatReference, CommunityReference, ExternalChatKind, SharedChatReference,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -219,32 +221,6 @@ pub struct GroupInfo {
     pub community_announcements: bool,
     /// When the session service read this metadata.
     pub observed_at: DateTime<Utc>,
-}
-
-/// An external chat entity bound to a remote chat.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = ExternalChatReference))]
-pub struct ChatReference {
-    /// External chat entity id.
-    pub id: Uuid,
-    /// Display name, following WhatsApp.
-    pub name: String,
-}
-
-/// Another person's external chat entity the caller can view.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = SharedExternalChatReference))]
-pub struct SharedChatReference {
-    /// External chat entity id.
-    pub id: Uuid,
-    /// Display name, following WhatsApp.
-    pub name: String,
-    /// Macro user who added the chat and shared it.
-    pub owner_id: String,
 }
 
 impl GroupInfo {

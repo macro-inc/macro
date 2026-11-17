@@ -294,6 +294,7 @@ async fn a_contact_added_before_anyone_wrote_has_nothing_to_import(pool: PgPool)
         assert_eq!(
             ChangeSignal::parse(notification.payload()).unwrap().change,
             Change::Chats {
+                provider: ExternalChatProvider::WhatsApp,
                 account_id: alice.account_id
             }
         );

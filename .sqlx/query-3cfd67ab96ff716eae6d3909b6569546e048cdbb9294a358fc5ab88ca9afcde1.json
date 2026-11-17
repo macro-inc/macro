@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, e.remote_id, e.name, e.user_id, EXISTS (\n                SELECT 1 FROM slack_chat_membership m JOIN slack_account a ON a.id = m.account_id\n                WHERE m.chat_id = e.id AND m.consent_ended_at IS NULL AND m.generation = a.generation\n                  AND a.user_id = e.user_id AND a.state IN ('connecting', 'connected')) AS \"observed!\"\n            FROM external_chat e\n            WHERE e.provider = 'slack' AND e.remote_id = ANY($1) AND e.state = 'active'\n              AND external_chat_can_view(e.id, $2)\n            ORDER BY e.created_at DESC LIMIT 1000",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "remote_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "observed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "3cfd67ab96ff716eae6d3909b6569546e048cdbb9294a358fc5ab88ca9afcde1"
+}

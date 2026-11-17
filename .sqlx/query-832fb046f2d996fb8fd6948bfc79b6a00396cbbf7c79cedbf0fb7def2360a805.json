@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_id FROM slack_account WHERE user_id = $1 AND state IN ('connecting', 'connected')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "832fb046f2d996fb8fd6948bfc79b6a00396cbbf7c79cedbf0fb7def2360a805"
+}

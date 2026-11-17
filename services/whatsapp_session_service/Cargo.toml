@@ -38,9 +38,11 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+kms_envelope = { path = "../../crates/kms_envelope" }
 whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg" }
 whatsmeow = { path = "../../crates/whatsmeow" }
 whatsmeow_signal = { path = "../../crates/whatsmeow_signal" }
+session_fleet = { path = "../../crates/session_fleet" }
 whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["outbound"] }
 external_chat = { path = "../../crates/external_chat", features = ["outbound"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
@@ -48,6 +50,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 [dev-dependencies]
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 sha2 = { workspace = true }
-tracing-subscriber = { workspace = true }
 whatsapp_fake_server = { path = "../../crates/whatsapp_fake_server" }
-whatsapp_store_pg = { path = "../../crates/whatsapp_store_pg", features = ["fake-kms"] }
+kms_envelope = { path = "../../crates/kms_envelope", features = ["fake"] }

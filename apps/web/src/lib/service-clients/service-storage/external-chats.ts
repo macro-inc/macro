@@ -37,9 +37,11 @@ export const externalChatsClient = {
   add: (request: ExternalChatAdd) =>
     write<ExternalChatAdded>(root, JSON.stringify(request)),
   detail: (id: string) => dssFetch<ExternalChatDetail>(chat(id)),
-  messages: (id: string, before?: string) => {
+  /** The chat timeline, or with `thread` that thread's replies. */
+  messages: (id: string, before?: string, thread?: string) => {
     const params = new URLSearchParams({ limit: '50' });
     if (before) params.set('before', before);
+    if (thread) params.set('thread', thread);
     return dssFetch<ExternalChatMessages>(`${chat(id)}/messages?${params}`);
   },
   send: (id: string, request: ExternalChatSendReply) =>

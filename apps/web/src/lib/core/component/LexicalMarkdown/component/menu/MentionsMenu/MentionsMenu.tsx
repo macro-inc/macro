@@ -12,7 +12,7 @@ import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import {
   disableCrmContactSearch,
   enableCrm,
-  enableWhatsappLinked,
+  externalChatProviderFlags,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import {
@@ -321,13 +321,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           (!props.sources || props.sources.includes('emails')),
       });
 
-  // A WhatsApp chat mentioned in a channel is shared with its members; only
-  // its owner can do that, so only the viewer's own chats are offered.
+  // An external chat mentioned in a channel is shared with its members; only
+  // its owner can do that, so only the viewer's own chats are offered, from
+  // providers whose flag is on.
+  const providerEnabled = (provider: keyof typeof externalChatProviderFlags) =>
+    isFeatureEnabled(externalChatProviderFlags[provider]);
   const externalChatsEnabled = () =>
     !hasCustomEntities() &&
     props.block === 'channel' &&
     props.menu.isOpen() &&
-    isFeatureEnabled(enableWhatsappLinked) &&
+    Object.values(externalChatProviderFlags).some(isFeatureEnabled) &&
     (!props.sources || props.sources.includes('externalChats'));
   const userId = useUserId();
   const externalChatsQuery = useExternalChatsQuery(externalChatApi, () =>
@@ -341,6 +344,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       .filter(
         (chat) =>
           chat.ownerId === userId() &&
+          providerEnabled(chat.provider) &&
           chat.name.toLocaleLowerCase().includes(term)
       )
       .map((chat) => ({
@@ -557,7 +561,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'externalChats',
-        label: 'WhatsApp chats',
+        label: 'External chats',
         getData: externalChats,
         getFullCount: () => externalChats().length,
       },

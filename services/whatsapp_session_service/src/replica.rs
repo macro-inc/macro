@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::EnvelopeKms;
 use sqlx::PgPool;
 use sqlx::postgres::PgConnectOptions;
 use tokio::sync::mpsc;
@@ -13,7 +14,6 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
-use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsmeow::{Dialer, Signal};
 
 use crate::domain::account::{
@@ -21,10 +21,12 @@ use crate::domain::account::{
 };
 use crate::domain::pictures::{PICTURE_BACKOFF, PICTURE_SPACING, PICTURE_WARMUP, PicturePacing};
 use crate::domain::ports::LeaseError;
-use crate::domain::supervisor::{Supervisor, SupervisorConfig, SupervisorError};
-use crate::outbound::lease::{PgAccountDirectory, PgAccountLocks};
-use crate::outbound::signals::{ListenError, SIGNAL_CAPACITY, SignalListener};
+use crate::outbound::lease::PgAccountDirectory;
+use crate::outbound::signals;
 use crate::outbound::whatsapp::WhatsmeowConnector;
+use session_fleet::listener::{ListenError, SIGNAL_CAPACITY, SignalListener};
+use session_fleet::locks::{LockNamespace, PgAccountLocks};
+use session_fleet::supervisor::{FleetNames, Supervisor, SupervisorConfig, SupervisorError};
 
 /// Every timing a replica uses.
 #[derive(Debug, Clone, Copy)]
@@ -146,18 +148,23 @@ impl Replica {
 
 /// Connects the replica and starts supervising; drains when `shutdown` is
 /// cancelled.
-pub async fn start<Kms: WhatsAppKms + 'static>(
+pub async fn start<Kms: EnvelopeKms + 'static>(
     deps: ReplicaDeps<Kms>,
     shutdown: CancellationToken,
 ) -> Result<Replica, ReplicaError> {
     let timings = deps.timings;
     let tracker = TaskTracker::new();
     let listener_stop = CancellationToken::new();
-    let listener = SignalListener::connect(&deps.lock_options).await?;
+    let listener = SignalListener::connect(&deps.lock_options, signals::channels()).await?;
     let (signal_sender, mut signals) = mpsc::channel(SIGNAL_CAPACITY);
     tracker.spawn(listener.run(signal_sender, listener_stop.clone()));
-    let locks =
-        PgAccountLocks::connect(&deps.lock_options, timings.lock_keepalive, &tracker).await?;
+    let locks = PgAccountLocks::connect(
+        &deps.lock_options,
+        LockNamespace("whatsapp-account:"),
+        timings.lock_keepalive,
+        &tracker,
+    )
+    .await?;
     let lock_backend_pid = locks.backend_pid();
 
     let sessions = SessionService::new(Arc::new(PgWhatsAppRepository::new(deps.pool.clone())));
@@ -192,6 +199,11 @@ pub async fn start<Kms: WhatsAppKms + 'static>(
             stop_timeout: timings.stop_timeout,
             drain_deadline: timings.drain_deadline,
             health_every: timings.health_every,
+            names: FleetNames {
+                fleet: "whatsapp",
+                health_event: "whatsapp_session_health",
+                drain_event: "whatsapp_session_drain",
+            },
         },
     );
     let running = tokio::spawn(async move {

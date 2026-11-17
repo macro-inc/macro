@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_user (slack_user_id, team_id, display_name) VALUES ($1, $2, $3)\n            ON CONFLICT (slack_user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80f463627a3577b8acb99f0934c1fbe4d76513b8926b0f44d6a8e60d6e5d3545"
+}

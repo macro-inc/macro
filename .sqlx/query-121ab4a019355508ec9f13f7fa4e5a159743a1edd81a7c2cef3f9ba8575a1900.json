@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_chat_membership SET consent_ended_at = COALESCE(consent_ended_at, now()) WHERE account_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "121ab4a019355508ec9f13f7fa4e5a159743a1edd81a7c2cef3f9ba8575a1900"
+}

@@ -30,6 +30,7 @@ it('lists readable chats with unread counts and marks read-only ones', () => {
   render(() => (
     <InMacroChats
       label="WhatsApp"
+      sectionLabels={{ direct: 'Direct messages', groups: 'Groups' }}
       chats={[
         {
           id: 'group-design',
@@ -97,6 +98,7 @@ it('sorts chats into direct messages, groups and one section per community, like
   render(() => (
     <InMacroChats
       label="WhatsApp"
+      sectionLabels={{ direct: 'Direct messages', groups: 'Groups' }}
       chats={[
         {
           id: 'chat-ana',
@@ -164,4 +166,33 @@ it('sorts chats into direct messages, groups and one section per community, like
   fireEvent.click(screen.getByRole('button', { name: 'Communities' }));
   expect(sections.isOpen('communities')).toBe(false);
   expect(screen.getByLabelText('5 unread messages')).toBeTruthy();
+});
+
+it('titles Slack’s group chats as channels', () => {
+  render(() => (
+    <InMacroChats
+      label="Slack"
+      sectionLabels={{ direct: 'Direct messages', groups: 'Channels' }}
+      chats={[
+        {
+          id: 'chat-launch',
+          provider: 'slack',
+          kind: 'group',
+          name: '#shared-launch',
+          ownerId: 'macro|me@example.test',
+          unreadCount: 0,
+          canSend: true,
+        },
+      ]}
+      isPending={false}
+      isError={false}
+      activeChatId={undefined}
+      isOpen={() => true}
+      onOpenChange={() => {}}
+      onOpenChat={() => {}}
+      onRetry={() => {}}
+    />
+  ));
+  expect(screen.getByRole('navigation', { name: 'Channels' })).toBeTruthy();
+  expect(screen.queryByText('Groups')).toBeNull();
 });

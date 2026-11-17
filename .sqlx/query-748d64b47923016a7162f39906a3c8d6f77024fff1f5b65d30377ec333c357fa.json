@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM slack_login_attempt\n        WHERE step = 'working' AND (claimed_until IS NULL OR claimed_until < now())\n        ORDER BY updated_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "748d64b47923016a7162f39906a3c8d6f77024fff1f5b65d30377ec333c357fa"
+}

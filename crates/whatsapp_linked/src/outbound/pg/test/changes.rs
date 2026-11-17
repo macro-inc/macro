@@ -29,6 +29,7 @@ async fn rosters_signal_only_real_changes_and_rename_the_owners_group(pool: PgPo
     assert_eq!(
         next(&mut listener).await,
         Change::Chats {
+            provider: ExternalChatProvider::WhatsApp,
             account_id: alice.account_id
         },
         "an unchanged refresh signals nothing; the rename comes first"
@@ -51,6 +52,7 @@ async fn rosters_signal_only_real_changes_and_rename_the_owners_group(pool: PgPo
     assert_eq!(
         next(&mut listener).await,
         Change::Chats {
+            provider: ExternalChatProvider::WhatsApp,
             account_id: alice.account_id
         }
     );
@@ -103,6 +105,7 @@ async fn messages_and_send_outcomes_signal_their_group(pool: PgPool) {
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -141,6 +144,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     let access = receipt::<MessageWrite>(ALICE, binding.id);
     let original = linked
@@ -187,11 +191,11 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn change_audiences_come_from_the_store(pool: PgPool) {
-    use external_chat::domain::ports::{AudienceRepository, MessageNotice};
-    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
+    use crate::domain::provider::WhatsAppProvider;
+    use external_chat::domain::ports::{AudienceRepository, ChatProvider, MessageNotice};
+    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     assert_eq!(
-        linked
-            .whatsapp
+        WhatsAppProvider::new(repository)
             .account_owner(alice.account_id)
             .await
             .unwrap(),
@@ -203,7 +207,12 @@ async fn change_audiences_come_from_the_store(pool: PgPool) {
         .unwrap();
     let message = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(1))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(1),
+        )
         .await
         .unwrap()
         .messages[0]

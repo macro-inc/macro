@@ -11,9 +11,10 @@ The threat model is the crate doc comment in `src/lib.rs`.
 
 - `src/store.rs`: `PgWhatsAppStore::open`, fencing (`check_lease`) and the
   row helpers every store is built from.
-- `src/cipher.rs`: the data key and value sealing (associated data =
-  account | store | key).
-- `src/kms.rs`: the KMS seam, the AWS impl, and the encryption context.
+- `src/cipher.rs`: value sealing labels (`store | key`) over
+  `kms_envelope`'s cipher (associated data = account | store | key).
+- `src/kms.rs`: the account's encryption context; the KMS seam, AWS impl and
+  fake are in `crates/kms_envelope`.
 
 ## Scope
 
@@ -27,7 +28,7 @@ The threat model is the crate doc comment in `src/lib.rs`.
 
 ## Boundaries
 
-- Depends on: `whatsmeow` (store traits), AWS KMS.
+- Depends on: `whatsmeow` (store traits), `kms_envelope` (AWS KMS).
 - Used by: the WhatsApp session service.
 
 ## Recipes
@@ -42,7 +43,7 @@ The threat model is the crate doc comment in `src/lib.rs`.
 
 - `cargo test -p whatsapp_store_pg` with `SQLX_OFFLINE` unset and
   `DATABASE_URL` on a database with the MacroDB migrations applied.
-- `cargo clippy -p whatsapp_store_pg --all-targets --features fake-kms`
+- `cargo clippy -p whatsapp_store_pg --all-targets`
 
 ## Gotchas
 
@@ -58,8 +59,6 @@ The threat model is the crate doc comment in `src/lib.rs`.
   for another purpose or account.
 - whatsmeow errors come back as `StoreError::Internal`; use `is_fenced` to
   detect a lost lease.
-- `fake-kms` exposes `FakeWhatsAppKms` for other crates' tests; never enable
-  it in a binary.
 - Deleting the device row deletes the keys; it does not unlink the device at
   WhatsApp.
 

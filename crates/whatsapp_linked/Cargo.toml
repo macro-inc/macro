@@ -58,6 +58,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+external_chat = { path = "../external_chat", features = ["test-support"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "outbound", "ports"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 image = { workspace = true }

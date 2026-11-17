@@ -38,6 +38,7 @@ ignores:
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/slack-linked/slack-linked-page.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx

@@ -69,7 +69,7 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
   /** Whether adding it to Macro works now. */
   readonly canAdd = this.field('canAdd');
 
-  /** Why it can't be added (`not_in_group`, `community`, `own_chat`, `not_in_chat_list`), when it is neither added, shared nor addable. */
+  /** Why it can't be added (`not_member`, `community`, `own_chat`, `not_in_chat_list`, `archived`, `frozen`), when it is neither added, shared nor addable. */
   readonly cannotAddReason = this.field('cannotAddReason');
 
   /** The WhatsApp community a group belongs to, if any: the community's own chat, its name, and whether this is its announcement group. */

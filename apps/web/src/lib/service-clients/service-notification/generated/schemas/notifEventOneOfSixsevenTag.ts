@@ -10,5 +10,5 @@ export type NotifEventOneOfSixsevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixsevenTag = {
-  password_access_requested: 'password_access_requested',
+  channel_access_requested: 'channel_access_requested',
 } as const;

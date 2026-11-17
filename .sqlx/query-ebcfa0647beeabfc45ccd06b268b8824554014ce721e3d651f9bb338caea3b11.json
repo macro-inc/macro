@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_account SET lease_epoch = lease_epoch + 1 WHERE id = $1\n            RETURNING lease_epoch, user_id, team_id, team_domain, slack_user_id, state, generation,\n                credentials, data_key_ciphertext, kms_key_id, encryption_version, sign_out_requested",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lease_epoch",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "slack_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "credentials",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "data_key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 9,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
+        "name": "sign_out_requested",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "ebcfa0647beeabfc45ccd06b268b8824554014ce721e3d651f9bb338caea3b11"
+}

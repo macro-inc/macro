@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_account SET state = 'connected', slack_user_id = $2, display_name = $3, team_name = $4,\n                team_domain = $5, team_icon_url = $6, enterprise_id = $7, last_connected_at = now(), updated_at = now()\n            WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca7cb97330d7723e516689740288388ced832c4a5dd5bbe86f45bac29e84c0ef"
+}

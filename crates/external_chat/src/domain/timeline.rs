@@ -130,6 +130,19 @@ pub struct ExternalChatReaction {
     /// Caller has this reaction.
     pub mine: bool,
 }
+/// The replies in a thread, as its root message shows them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = ExternalChatThreadSummary))]
+pub struct ThreadSummary {
+    /// Replies in the thread, deleted ones excluded.
+    pub reply_count: u32,
+    /// When the newest reply was sent.
+    pub last_reply_at: DateTime<Utc>,
+    /// The viewer has replies they have not read.
+    pub unread: bool,
+}
 /// One message in an external chat.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -167,6 +180,12 @@ pub struct ExternalChatMessage {
     pub mentions: Vec<ExternalChatMention>,
     /// Poll, location, contact cards, event or system line.
     pub rich: Option<ExternalChatRichContent>,
+    /// The thread this message replies in.
+    pub thread_root: Option<Uuid>,
+    /// A thread reply that was also sent to the chat.
+    pub thread_broadcast: bool,
+    /// Replies to this message, when it starts a thread.
+    pub thread: Option<ThreadSummary>,
 }
 /// What a timeline entry is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -288,8 +307,18 @@ pub struct ExternalChatMessages {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MarkRead {
-    /// Message in the addressed group.
+    /// Message in the addressed chat; a thread reply marks its thread read.
     pub message_id: Uuid,
+}
+/// Where a viewer's read position moved to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadAdvance {
+    /// The newest message read.
+    pub message_id: Uuid,
+    /// Its source time.
+    pub read_at: DateTime<Utc>,
+    /// The thread read, or `None` for the chat.
+    pub thread_root: Option<Uuid>,
 }
 /// The added chat.
 #[derive(Debug, Serialize)]
@@ -414,6 +443,12 @@ pub struct StoredMessage {
     pub rich: Option<RichContent>,
     /// Current votes when it is a poll.
     pub votes: Vec<view::StoredVote>,
+    /// The thread this message replies in.
+    pub thread_root: Option<Uuid>,
+    /// A thread reply that was also sent to the chat.
+    pub thread_broadcast: bool,
+    /// Replies to this message, when it starts a thread.
+    pub thread: Option<ThreadSummary>,
 }
 
 /// Newest-first stored timeline page; `before` is the last returned message id.
@@ -437,11 +472,14 @@ pub trait TimelineRepository: Send + Sync {
     /// Facts for an authorized chat, for a viewer principal (a person or a
     /// bot, whose id is not a Macro user id).
     async fn chat_facts(&self, chat: Uuid, viewer: &str) -> ExternalChatResult<ChatFacts>;
-    /// Bounded, stable pagination for a viewer principal.
+    /// Bounded, stable pagination for a viewer principal: the chat timeline
+    /// (thread replies only when also sent to the chat), or one thread's
+    /// replies.
     async fn messages(
         &self,
         chat: &ChatRef,
         viewer: &str,
+        thread: Option<Uuid>,
         before: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage>;
@@ -452,13 +490,14 @@ pub trait TimelineRepository: Send + Sync {
         viewer: &str,
         message: Uuid,
     ) -> ExternalChatResult<Option<StoredMessage>>;
-    /// Monotone viewer read cursor, scoped to this chat.
+    /// Monotone viewer read cursor, scoped to this chat, or to the thread a
+    /// reply is in. Returns the new position when it moved.
     async fn mark_read(
         &self,
         chat: Uuid,
         user: &MacroUserIdStr<'_>,
         message: Uuid,
-    ) -> ExternalChatResult<()>;
+    ) -> ExternalChatResult<Option<ReadAdvance>>;
     /// Standard permission object.
     async fn permissions(&self, chat: Uuid) -> ExternalChatResult<SharePermissionV2>;
     /// Guarded canonical team-sharing facts for domain authorization.

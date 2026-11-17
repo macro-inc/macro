@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_account SET sign_out_requested = false, credentials = NULL, data_key_ciphertext = NULL,\n                kms_key_id = NULL, encryption_version = NULL, updated_at = now()\n            WHERE id = $1 AND state NOT IN ('connecting', 'connected')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da1407c581d6b5bb098a22f1d031804a427e2185db8ab16f5b557d4ee5c34523"
+}

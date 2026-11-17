@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.chat_id, e.remote_id, r.thread_ts, r.ts FROM slack_read_mark r\n            JOIN external_chat e ON e.id = r.chat_id\n            WHERE r.account_id = $1 ORDER BY r.requested_at LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "remote_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_ts",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ts",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6a1a2ebfce08108cb5c1a1558bc0140396181e2834f694566417a6ab56df69b8"
+}

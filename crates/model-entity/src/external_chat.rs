@@ -25,6 +25,10 @@ pub enum ExternalChatProvider {
     #[serde(rename = "whatsapp")]
     #[strum(serialize = "whatsapp")]
     WhatsApp,
+    /// A person's own Slack web session, for Slack Connect conversations.
+    #[serde(rename = "slack")]
+    #[strum(serialize = "slack")]
+    Slack,
 }
 
 impl ExternalChatProvider {
@@ -32,6 +36,7 @@ impl ExternalChatProvider {
     pub fn label(self) -> &'static str {
         match self {
             Self::WhatsApp => "WhatsApp",
+            Self::Slack => "Slack",
         }
     }
 }

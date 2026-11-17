@@ -750,6 +750,34 @@ export type ErrorResponse = {
 };
 
 /**
+ * A person's linked external chat account stopped syncing; they must sign
+ * in again. Sent once per consent generation, to the account's owner.
+ */
+export type ExternalChatAccountEndedMetadata = {
+    /**
+     * The provider account.
+     */
+    accountId: string;
+    /**
+     * What the account is called (a workspace or phone number).
+     */
+    accountName: string;
+    /**
+     * The messaging service the account is at.
+     */
+    provider: ExternalChatProvider;
+    /**
+     * Why it ended.
+     */
+    reason: ExternalChatAccountEndedReason;
+};
+
+/**
+ * Why a provider stopped a person's linked external chat account.
+ */
+export type ExternalChatAccountEndedReason = 'session_ended' | 'restricted' | 'unreadable';
+
+/**
  * A live message in an independently shared external chat.
  */
 export type ExternalChatMessageMetadata = {
@@ -770,7 +798,7 @@ export type ExternalChatMessageMetadata = {
 /**
  * The messaging service an external chat lives in.
  */
-export type ExternalChatProvider = 'whatsapp';
+export type ExternalChatProvider = 'whatsapp' | 'slack';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -1330,6 +1358,12 @@ export type NotifEvent = {
      */
     content: ExternalChatMessageMetadata;
     tag: 'external_chat_message';
+} | {
+    /**
+     * A linked external chat account stopped syncing.
+     */
+    content: ExternalChatAccountEndedMetadata;
+    tag: 'external_chat_account_ended';
 } | {
     /**
      * A calendar event alarm came due.

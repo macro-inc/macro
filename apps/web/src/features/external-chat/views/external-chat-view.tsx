@@ -25,6 +25,7 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareFatIcon from '@phosphor/share-fat.svg';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
@@ -66,6 +67,7 @@ import {
   type Draft,
 } from '../primitives/conversation';
 import { chatProvider } from '../providers';
+import { ExternalChatThread } from './external-chat-thread';
 
 /**
  * The chat's participants as the composer's `@` people, minus the sender.
@@ -118,19 +120,44 @@ export function ExternalChatView(props: {
   share: JSX.Element;
   /** Opens the host's share dialog from the details panel. */
   onShare: () => void;
-  onConnect: () => void;
+  /** Opens the provider's page in External to connect or sign in again. */
+  onConnect: (provider: ExternalChatProvider) => void;
 }) {
   const source = useExternalChat();
   const provider = () =>
     source.chat.data ? chatProvider(source.chat.data.provider) : undefined;
   let input: InputHandle | undefined;
+  // Each open thread's composer, by its root.
+  const threadInputs = new Map<string, InputHandle>();
+  // Threads open under their roots, and the one whose composer takes focus
+  // once it mounts (opened by a row's Reply).
+  const [openThreads, setOpenThreads] = createSignal<string[]>([]);
+  let focusThread: string | undefined;
+  const setThreadOpen = (root: string, open: boolean) =>
+    setOpenThreads((current) => {
+      if (!open) return current.filter((id) => id !== root);
+      return current.includes(root) ? current : [...current, root];
+    });
+  /** Where the provider has threads, Reply opens the message's thread. */
+  const replyInThread = (message: ChatMessage) => {
+    const root = message.threadRoot ?? message.id;
+    const open = threadInputs.get(root);
+    if (open) open.focus();
+    else focusThread = root;
+    setThreadOpen(root, true);
+  };
   const [inputSnapshot, setInputSnapshot] = createSignal<InputSnapshot>();
   // The composer's own attachment rows, to put back with a restored draft.
   const snapshots = new WeakMap<Draft, InputSnapshot>();
   const conversation = createConversation(source, () => props.userId, {
     notify: (message) => toast.failure(message),
-    restore: (draft, target) => {
+    restore: (draft, target, thread) => {
       const snapshot = snapshots.get(draft);
+      if (thread) {
+        // A thread's composer is cleared on send; put the draft back in it.
+        if (snapshot) threadInputs.get(thread)?.restoreSnapshot(snapshot);
+        return;
+      }
       const current = inputSnapshot();
       if (!input || !snapshot || (current && hasSendableInputContent(current)))
         return;
@@ -298,14 +325,19 @@ export function ExternalChatView(props: {
       source.chat.data?.accessLevel === 'owner'
     );
   /** The owner can start the import here; it is the one place it always is. */
-  const canImport = () =>
-    source.chat.data?.accessLevel === 'owner' &&
-    source.chat.data.backfill?.state === 'waiting_for_phone';
+  const canImport = () => {
+    const chat = source.chat.data;
+    if (chat?.accessLevel !== 'owner' || !chat.backfill) return false;
+    return chatProvider(chat.provider).historyImport.states.includes(
+      chat.backfill.state
+    );
+  };
   const [startingImport, setStartingImport] = createSignal(false);
   const startImport = async () => {
     setStartingImport(true);
     try {
-      await source.importHistory();
+      const chat = source.chat.data;
+      if (chat) await source.importHistory(chat.provider);
     } catch {
       toast.failure("Couldn't start importing earlier messages. Try again.");
     } finally {
@@ -368,9 +400,11 @@ export function ExternalChatView(props: {
     };
     return {
       get onReply() {
-        return writable()
-          ? () => setTarget({ kind: 'reply', message })
-          : undefined;
+        const group = writable();
+        if (!group) return undefined;
+        return group.limits.threads
+          ? () => replyInThread(message)
+          : () => setTarget({ kind: 'reply', message });
       },
       get onReact() {
         return writable()?.limits.mutations.includes('reaction')
@@ -415,7 +449,162 @@ export function ExternalChatView(props: {
     };
   };
 
-  const send = (snapshot: InputSnapshot) => {
+  const renderMessage = (message: ChatMessage): JSX.Element => {
+    const systemLine = () =>
+      message.kind === 'system' && message.rich?.type === 'system'
+        ? message.rich
+        : undefined;
+    const meta = () =>
+      listMeta()[
+        message.kind === 'system' ? `activity:${message.id}` : message.id
+      ];
+    const quoted = () =>
+      message.replyTo ? messagesById().get(message.replyTo) : undefined;
+    const actions = actionsFor(message);
+    // Everything that doesn't play inline: files
+    // to open, and files not stored (yet).
+    const placeholders = () =>
+      message.attachments.filter((attachment) => !inlineMediaKind(attachment));
+    return (
+      <Show
+        when={message.kind !== 'system'}
+        fallback={
+          <>
+            <DateDivider createdAt={message.sentAt} listMeta={meta()} />
+            <Show when={systemLine()}>
+              {(line) => (
+                <ExternalChatSystemLine
+                  id={message.id}
+                  line={line()}
+                  chat={source.chat.data?.kind ?? 'group'}
+                  occurredAt={message.sentAt}
+                />
+              )}
+            </Show>
+          </>
+        }
+      >
+        <NewDivider
+          createdAt={message.sentAt}
+          listMeta={meta()}
+          onDismiss={markRead}
+        />
+        <DateDivider createdAt={message.sentAt} listMeta={meta()} />
+        <ChannelMessage
+          timestampFormat="time"
+          message={messageData(message)}
+          actions={actions}
+          listMeta={meta()}
+          targeted={conversation.target()?.message.id === message.id}
+          renderContent={(content) => (
+            <>
+              <Show when={!message.deleted && message.forwarded}>
+                <ForwardedTag />
+              </Show>
+              <Show when={!message.deleted && message.replyTo}>
+                {(id) => (
+                  <button
+                    type="button"
+                    class="mb-1 block max-w-full truncate border-l-2 border-accent py-0.5 pl-3 text-left text-xs text-ink-muted"
+                    onClick={() =>
+                      fireAndForget(openQuoted(id()), 'external-chat.quote')
+                    }
+                  >
+                    <Show when={quoted()} fallback="View quoted message">
+                      {(reply) => (
+                        <>
+                          <SenderName message={messageData(reply())} />:{' '}
+                          {quotePreview(reply())}
+                        </>
+                      )}
+                    </Show>
+                  </button>
+                )}
+              </Show>
+              {content}
+              <Show when={!message.deleted && message.rich}>
+                {(rich) => <RichCard rich={rich()} />}
+              </Show>
+              <MessageMedia
+                attachments={message.attachments}
+                sent={conversation.sentFiles(message.id)}
+              />
+              <Show when={placeholders().length > 0}>
+                <div class="mt-1 flex flex-wrap gap-2">
+                  <For each={placeholders()}>
+                    {(attachment) => (
+                      <AttachmentChip
+                        attachment={attachment}
+                        url={source.fileUrl}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </>
+          )}
+        />
+        <Show when={!message.threadRoot && source.chat.data}>
+          {(chat) => (
+            <ExternalChatThread
+              root={message}
+              chat={chat()}
+              renderMessage={renderMessage}
+              pending={conversation.threadPending(message.id)}
+              expanded={openThreads().includes(message.id)}
+              onExpandedChange={(open) => setThreadOpen(message.id, open)}
+              onComposer={(handle) => {
+                if (!handle) {
+                  threadInputs.delete(message.id);
+                  return;
+                }
+                threadInputs.set(message.id, handle);
+                if (focusThread !== message.id) return;
+                focusThread = undefined;
+                handle.focus();
+              }}
+              composer={(thread) => (
+                <ChannelInput
+                  input={{
+                    mode: 'channel',
+                    id: thread.id,
+                    placeholder: 'Reply in thread',
+                  }}
+                  features={chatProvider(chat().provider).composerFeatures}
+                  participants={() => mentionable(chat())}
+                  fileAccept={chat().limits.attachmentTypes.join(',')}
+                  uploadAttachment={uploadAttachment}
+                  onReady={thread.onReady}
+                  onSend={(snapshot) => send(snapshot, message.id)}
+                  onSendError={sendError}
+                />
+              )}
+            />
+          )}
+        </Show>
+      </Show>
+    );
+  };
+
+  const uploadAttachment = async (file: File) => {
+    const result = await conversation.upload(file);
+    return result.isOk()
+      ? {
+          failed: false as const,
+          destination: 'staged' as const,
+          id: result.value.uploadId,
+        }
+      : { failed: true as const, reason: result.error };
+  };
+  const sendError = (error: unknown) =>
+    toast.failure(
+      error instanceof DraftRefusal
+        ? error.message
+        : `Couldn't send to ${provider()?.label}. Try again.`
+    );
+
+  /** Sends the composer's draft, in `thread` when it is a thread's composer. */
+  const send = (snapshot: InputSnapshot, thread?: string) => {
     const draft: Draft = {
       markdown: snapshot.value,
       attachments: snapshot.attachments.map((file) => ({
@@ -428,7 +617,7 @@ export function ExternalChatView(props: {
       })),
     };
     snapshots.set(draft, snapshot);
-    const delivery = conversation.submit(draft);
+    const delivery = conversation.submit(draft, thread);
     if (delivery.isErr()) throw new DraftRefusal(delivery.error);
     fireAndForget(delivery.value, 'external-chat.send');
   };
@@ -450,9 +639,7 @@ export function ExternalChatView(props: {
       {/* Always reachable, however far back the timeline is scrolled. */}
       <Show when={canImport()}>
         <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">
-          <span class="min-w-0 flex-1">
-            Open WhatsApp on your phone to import earlier messages.
-          </span>
+          <span class="min-w-0 flex-1">{provider()?.historyImport.prompt}</span>
           <Button
             type="button"
             variant="secondary"
@@ -616,147 +803,7 @@ export function ExternalChatView(props: {
                             </p>
                           </Show>
                           <For each={rows()}>
-                            {(message) => {
-                              const systemLine = () =>
-                                message.kind === 'system' &&
-                                message.rich?.type === 'system'
-                                  ? message.rich
-                                  : undefined;
-                              const meta = () =>
-                                listMeta()[
-                                  message.kind === 'system'
-                                    ? `activity:${message.id}`
-                                    : message.id
-                                ];
-                              const quoted = () =>
-                                message.replyTo
-                                  ? messagesById().get(message.replyTo)
-                                  : undefined;
-                              const actions = actionsFor(message);
-                              // Everything that doesn't play inline: files
-                              // to open, and files not stored (yet).
-                              const placeholders = () =>
-                                message.attachments.filter(
-                                  (attachment) => !inlineMediaKind(attachment)
-                                );
-                              return (
-                                <Show
-                                  when={message.kind !== 'system'}
-                                  fallback={
-                                    <>
-                                      <DateDivider
-                                        createdAt={message.sentAt}
-                                        listMeta={meta()}
-                                      />
-                                      <Show when={systemLine()}>
-                                        {(line) => (
-                                          <ExternalChatSystemLine
-                                            id={message.id}
-                                            line={line()}
-                                            chat={
-                                              source.chat.data?.kind ?? 'group'
-                                            }
-                                            occurredAt={message.sentAt}
-                                          />
-                                        )}
-                                      </Show>
-                                    </>
-                                  }
-                                >
-                                  <NewDivider
-                                    createdAt={message.sentAt}
-                                    listMeta={meta()}
-                                    onDismiss={markRead}
-                                  />
-                                  <DateDivider
-                                    createdAt={message.sentAt}
-                                    listMeta={meta()}
-                                  />
-                                  <ChannelMessage
-                                    timestampFormat="time"
-                                    message={messageData(message)}
-                                    actions={actions}
-                                    listMeta={meta()}
-                                    targeted={
-                                      conversation.target()?.message.id ===
-                                      message.id
-                                    }
-                                    renderContent={(content) => (
-                                      <>
-                                        <Show
-                                          when={
-                                            !message.deleted &&
-                                            message.forwarded
-                                          }
-                                        >
-                                          <ForwardedTag />
-                                        </Show>
-                                        <Show
-                                          when={
-                                            !message.deleted && message.replyTo
-                                          }
-                                        >
-                                          {(id) => (
-                                            <button
-                                              type="button"
-                                              class="mb-1 block max-w-full truncate border-l-2 border-accent py-0.5 pl-3 text-left text-xs text-ink-muted"
-                                              onClick={() =>
-                                                fireAndForget(
-                                                  openQuoted(id()),
-                                                  'external-chat.quote'
-                                                )
-                                              }
-                                            >
-                                              <Show
-                                                when={quoted()}
-                                                fallback="View quoted message"
-                                              >
-                                                {(reply) => (
-                                                  <>
-                                                    <SenderName
-                                                      message={messageData(
-                                                        reply()
-                                                      )}
-                                                    />
-                                                    : {quotePreview(reply())}
-                                                  </>
-                                                )}
-                                              </Show>
-                                            </button>
-                                          )}
-                                        </Show>
-                                        {content}
-                                        <Show
-                                          when={
-                                            !message.deleted && message.rich
-                                          }
-                                        >
-                                          {(rich) => <RichCard rich={rich()} />}
-                                        </Show>
-                                        <MessageMedia
-                                          attachments={message.attachments}
-                                          sent={conversation.sentFiles(
-                                            message.id
-                                          )}
-                                        />
-                                        <Show when={placeholders().length > 0}>
-                                          <div class="mt-1 flex flex-wrap gap-2">
-                                            <For each={placeholders()}>
-                                              {(attachment) => (
-                                                <AttachmentChip
-                                                  attachment={attachment}
-                                                  url={source.fileUrl}
-                                                />
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
-                                      </>
-                                    )}
-                                  />
-                                </Show>
-                              );
-                            }}
+                            {(message) => renderMessage(message)}
                           </For>
                         </div>
                       </div>
@@ -796,9 +843,14 @@ export function ExternalChatView(props: {
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={props.onConnect}
+                                onClick={() =>
+                                  props.onConnect(group().provider)
+                                }
                               >
-                                Connect {provider()?.label}
+                                {group().sendReason === 'disconnected'
+                                  ? chatProvider(group().provider).disconnected
+                                      .action
+                                  : `Connect ${chatProvider(group().provider).label}`}
                               </Button>
                             </Show>
                           </div>
@@ -853,28 +905,13 @@ export function ExternalChatView(props: {
                             fileAccept={group().limits.attachmentTypes.join(
                               ','
                             )}
-                            uploadAttachment={async (file) => {
-                              const result = await conversation.upload(file);
-                              return result.isOk()
-                                ? {
-                                    failed: false,
-                                    destination: 'staged',
-                                    id: result.value.uploadId,
-                                  }
-                                : { failed: true, reason: result.error };
-                            }}
+                            uploadAttachment={uploadAttachment}
                             onReady={(handle) => {
                               input = handle;
                             }}
                             onChange={setInputSnapshot}
-                            onSend={send}
-                            onSendError={(error) =>
-                              toast.failure(
-                                error instanceof DraftRefusal
-                                  ? error.message
-                                  : `Couldn't send to ${provider()?.label}. Try again.`
-                              )
-                            }
+                            onSend={(snapshot) => send(snapshot)}
+                            onSendError={sendError}
                             onEscape={
                               conversation.target()
                                 ? () => setTarget(undefined)

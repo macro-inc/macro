@@ -543,6 +543,11 @@
           packageName = "whatsapp_session_service";
           binaries = [ "whatsapp_session_service" ];
         }
+        {
+          serviceName = "slack-session-service";
+          packageName = "slack_session_service";
+          binaries = [ "slack_session_service" ];
+        }
       ];
 
       localStackBinaryDefinitions = [
@@ -697,6 +702,7 @@
         "static-file-service"
         "unfurl-service"
         "whatsapp-session-service"
+        "slack-session-service"
       ];
 
       localStackBinaries = pkgs.buildEnv {

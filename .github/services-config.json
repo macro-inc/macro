@@ -321,6 +321,20 @@
       "deploy_binaries": [
         "whatsapp_session_service"
       ]
+    },
+    "slack-session-service": {
+      "source_paths": [
+        "services/slack_session_service/**",
+        "crates/slack_linked/**",
+        "crates/slack_client/**",
+        "crates/session_fleet/**",
+        "crates/kms_envelope/**"
+      ],
+      "stack_path": "infra/stacks/slack-session-service/**",
+      "deploy_binaries": [
+        "slack_session_service"
+      ],
+      "bootstrap_pending": "the dev and prd Pulumi stacks are not created and the service has never been deployed"
     }
   }
 }

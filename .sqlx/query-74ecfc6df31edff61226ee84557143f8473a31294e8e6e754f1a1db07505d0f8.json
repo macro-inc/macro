@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(received_at)), 0)::bigint AS \"seconds!\" FROM slack_inbound",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seconds!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "74ecfc6df31edff61226ee84557143f8473a31294e8e6e754f1a1db07505d0f8"
+}

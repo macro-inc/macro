@@ -475,7 +475,7 @@ async fn receipts_revalidate_disclosure_without_hiding_selected_work_or_failing_
     );
     assert_eq!(
         svc.list(access(team()), None).await.unwrap().jobs,
-        [detail.clone()]
+        std::slice::from_ref(&detail)
     );
     assert_eq!(svc.create(access(team()), command).await.unwrap(), detail);
     // Another admin must be checked as the viewer, not the original requesting admin.

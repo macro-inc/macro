@@ -1,0 +1,3 @@
+name: slack-session-service
+runtime: nodejs
+description: Macro Slack linked-device session service

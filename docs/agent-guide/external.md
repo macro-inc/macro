@@ -2,10 +2,12 @@
 
 `/app/external` lists outside messaging accounts a person links into Macro and
 the chats added from them (entity type `external_chat`, one provider per
-chat). WhatsApp is the only provider today. The view, its rail button, its More-views entry on
-mobile and the `g x` shortcut exist only with the `enable-whatsapp-linked`
-flag; a deep link with the flag off goes to Home once the flag resolves. Turn
-it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
+chat). WhatsApp is the only provider today. Each provider has its own flag
+(WhatsApp: `enable-whatsapp-linked`, `features/external-view/provider-flags.ts`);
+the view, its rail button, its More-views entry on mobile and the `g x`
+shortcut exist while any provider's flag is on, and only those providers show.
+A deep link with every flag off goes to Home once the flags resolve. Turn
+WhatsApp on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
 The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/video-tutorials`, shaped like the page's chat rows) once that video is in its catalog, above the chats whether or not an account is linked.
 
 ## Where it is
@@ -16,14 +18,19 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
   External sidebar is hidden on touch. Like Channels, the account list omits the floating split
-  header; the WhatsApp title uses the shared collection header directly below
-  the safe area on phones and tablets, above the scrollable **In Macro** chats.
-  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
+  header; an **External** title uses the shared collection header directly below
+  the safe area on phones and tablets. With more than one provider enabled, an
+  **External apps** switcher (WhatsApp / Slack, each with its unread count)
+  sits under it and picks the page as the sidebar does (same route state).
+  The page's scrollable **In Macro** chats are that provider's only.
+  Opening a chat drills in full-screen; its **Back to <provider>** button
+  (**Back to WhatsApp**; **Back** until the chat's detail loads) returns.
 
 ## Sidebar
 
-Desktop's External sidebar has one entry per provider; **WhatsApp** (the page
-below) has every WhatsApp chat the viewer can read (their own and shared ones; a person icon for
+Desktop's External sidebar has one entry per enabled provider; clicking one
+shows that provider's page in the main pane (the first provider's until another
+is picked). **WhatsApp** (the page below) has every WhatsApp chat the viewer can read (their own and shared ones; a person icon for
 direct chats, a group icon for groups) nested under it in folding sections like
 Chat's rail: **Direct messages**, **Groups**, and **Communities** with one
 section per community (its groups by their own name, its announcement group as
@@ -32,7 +39,7 @@ section per community (its groups by their own name, its announcement group as
 shows its unread total, and folded sections are remembered per person. The
 caret on WhatsApp folds everything; folded, WhatsApp shows the total unread
 count. The open chat's row is highlighted. On phones the page starts with the
-same sections under **In Macro**.
+same sections, for its own provider, under **In Macro**.
 DSS's `external_chat_changed` gateway events (`{scope:"chats"}` for the
 account's chat list, `{scope:"chat", chatId}` for one chat) refresh the lists;
 without one, External re-fetches once ~3 s after opening.
@@ -65,6 +72,37 @@ reference mock: it answers `whatsapp/account`, `whatsapp/connect`,
 routes and `entities/external_chat/<id>/…`, and flips the pairing to `success`
 to simulate the phone scanning. Never link a real account from an
 automated run.
+
+## Slack page
+
+Behind `enable-slack-linked` (`VITE_ENABLE_SLACK_LINKED=true` locally); code in
+`features/slack-linked`, routes under DSS `/slack-linked/*`
+(`docs/architecture/slack-linked.md`). v1 lists only **Slack Connect**
+conversations: channels shared with another organization and DMs with people
+outside the workspace.
+
+| State | What shows |
+| --- | --- |
+| Nothing signed in | Outlined Slack row and **Sign in to Slack**; outside Macro desktop it adds that SSO workspaces connect from Macro desktop. |
+| Sign-in dialog | **Sign in to Slack**: an **Email** field and **Continue** first (works on web, desktop and phones). Under it, Macro desktop offers **Sign in with browser** (Slack's own page in a separate Macro window with its own cookies, for SSO); a computer's browser links **Sign in from Macro desktop** (`macro:///external?slackLogin=browser`); phones and tablets only say SSO workspaces sign in from Macro on a computer. **Advanced → Paste token and cookie** takes one `xoxc-` token per line, the `d` cookie and optionally `d-s`. The dialog carries `ph-no-capture`. |
+| Sign-in steps | Each answer returns the next step; `working` is polled every second. **Verify with Slack** (captcha: **Verify on slack.com** in desktop, **Continue on Macro desktop** with `macro:///external?slackLogin=<attempt id>` in a browser), **Check your email** (**Confirmation code** `ABC-123`; a wrong one says so), **Choose workspaces** (checkboxes, new workspaces checked, **Enterprise Grid** badge and an admins-can-see note, "SSO: finish in Macro desktop"; **Connect n workspaces**), **Two-factor code** (six digits), **Finish with SSO** (desktop window or handoff), **Slack connected** (lists connected and still-to-finish workspaces; **Done**), and failures with **Start again**. Request failures (rate limits, expiry, conflicts) show inline. Closing cancels an attempt waiting on the person (`DELETE /slack-linked/login/<id>`); a handoff doesn't. |
+| Signed in | **Search conversations and organizations** and **Add workspace** above one section per workspace: a strip (name, domain, Connected/Connecting…, a **<workspace> options** menu with **Sign in again** and **Disconnect**, which asks to confirm and whether to also sign the session out of Slack), then **Slack Connect channels** and **Direct messages** (rows `data-slack-conversation="<id>"` with the other organizations as badges, "Slack Connect · Channel", last activity; **Add to Macro**, or **Added** with **Open**, or "Shared with you by <owner>"), and **Can't be added (n)** (archived, disconnected from the other organization, not a member). A conversation several workspaces see shows once. Adding toasts **Added <name>** with **Open**; Macro imports its last 90 days. |
+| Session ended | A warning row per workspace Slack signed out, with the reason and **Sign in again**; its chats stay in Macro. |
+
+`apps/web/tests/functional/slack-linked.spec.ts` is the reference mock for
+`/slack-linked/*`. Never sign a real Slack account in from an automated run.
+External shows it under its **Slack** sidebar entry, whose added chats sit in
+**Direct messages** and **Channels** sections; `/external?slackLogin=<attempt
+id|browser>` opens External on it and resumes that sign-in (or opens Slack's own
+in Macro desktop), then drops the param.
+
+In a Slack chat, the owner's composer says *Your Slack session ended. Sign in
+again to reply* with **Sign in to Slack** (opens the Slack page) once the
+workspace's session ended or was disconnected. Adding imports the last 90 days
+(up to 1,000 messages); while the detail's `backfill` is `partial` the owner
+sees a bar under the header ("Earlier messages are still in Slack." with
+**Import**), which posts `/slack-linked/chats/<id>/history-import` for another
+1,000. Slack has no bottom-right import prompt.
 
 ## External chat view
 
@@ -134,6 +172,15 @@ bottom sheet on touch. Sections: **Members (n)** (groups only; list
 an **Admin** badge, a search box past 12), **Sharing** (**Share…** opens the
 same share dialog), **Syncing** (owner only: **Stop syncing** asks to confirm),
 and "Owned by <owner>". The layout supports phone-width panes.
+
+Where the provider has threads (`limits.threads` on the detail; WhatsApp has
+none), a message that starts a thread shows the channel thread's reply chip
+("N replies", with a dot while unread) under it, and a row's **Reply** opens
+that message's thread instead of quoting it. Either expands the thread inline
+under the message, like a channel thread: its replies, **Hide replies**, and a
+**Reply in thread** composer that sends in that thread. Opening a thread marks it read. Thread
+replies stay out of the chat timeline and its unread count unless they were
+also sent to the chat.
 
 The composer placeholder names the caller's own sending phone ("Message Test 11
 as +1…"); otherwise the reason replies are unavailable shows in its place. Sending requires view access, the caller's own connected account,

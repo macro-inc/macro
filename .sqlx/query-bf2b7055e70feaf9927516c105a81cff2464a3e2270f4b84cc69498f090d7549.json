@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.mime, b.filename, b.bytes, s.payload->'message'->>'caption' AS caption FROM slack_send s\n        JOIN external_chat_media_blob b ON b.id = (s.payload->'message'->>'uploadId')::uuid\n          AND b.user_id = s.user_id AND b.chat_id = s.chat_id\n        WHERE s.id = $1 AND s.account_id = $2 AND s.claimed_epoch = $3 AND s.state = 'sending'\n          AND s.payload->'message'->>'type' = 'media'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mime",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "bytes",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "caption",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "bf2b7055e70feaf9927516c105a81cff2464a3e2270f4b84cc69498f090d7549"
+}

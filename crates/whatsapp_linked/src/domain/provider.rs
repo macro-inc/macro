@@ -5,7 +5,7 @@
 use super::{
     jid::{Jid, is_group_jid},
     models::*,
-    people::ChatRoster,
+    people::{ChatRoster, UNKNOWN_PERSON},
     ports::*,
     service::{chat_fallback_name, connected},
 };
@@ -16,10 +16,7 @@ use external_chat::domain::{
         AccountRef, ChatProvider, ExternalChatResult, Members, MutationTarget, SendIntent,
         SendingFacts, StoredSend,
     },
-    timeline::{
-        ExternalChatMembers, ExternalChatParticipant,
-        view::{People, UNKNOWN_PERSON},
-    },
+    timeline::{ExternalChatMembers, ExternalChatParticipant, view::People},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -90,6 +87,10 @@ impl ChatProvider for WhatsAppProvider {
                 connected: account.state == AccountState::Connected,
                 generation: account.authorization_generation,
             }))
+    }
+
+    async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>> {
+        self.accounts.account_owner(account).await
     }
 
     async fn sending_facts(
@@ -168,6 +169,9 @@ impl ChatProvider for WhatsAppProvider {
     ) -> ExternalChatResult<ChatRef> {
         match request.provider {
             ExternalChatProvider::WhatsApp => {}
+            ExternalChatProvider::Slack => {
+                return Err(ExternalChatError::Invalid("not a WhatsApp chat").into());
+            }
         }
         let jid = request.remote_id.as_str();
         let kind = if is_group_jid(jid) {
@@ -184,12 +188,12 @@ impl ChatProvider for WhatsAppProvider {
                 .groups
                 .account_group(account.id, jid)
                 .await?
-                .ok_or(ExternalChatError::CannotAdd(CannotAdd::NotInGroup))?;
+                .ok_or(ExternalChatError::CannotAdd(CannotAdd::NotMember))?;
             if group.community_parent {
                 return Err(ExternalChatError::CannotAdd(CannotAdd::Community).into());
             }
             if group.participant(&identity).is_none() {
-                return Err(ExternalChatError::CannotAdd(CannotAdd::NotInGroup).into());
+                return Err(ExternalChatError::CannotAdd(CannotAdd::NotMember).into());
             }
             Adoption {
                 jid: group.jid.clone(),
