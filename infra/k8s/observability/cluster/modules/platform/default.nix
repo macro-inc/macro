@@ -9,5 +9,6 @@
     ./storage.nix
     ./observability-namespace.nix
     ./alloy-node.nix
+    ./reloader.nix
   ];
 }
