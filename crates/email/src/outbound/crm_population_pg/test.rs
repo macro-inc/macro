@@ -563,6 +563,92 @@ async fn a_failing_mailbox_pauses_then_takes_one_probe_at_a_time(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("crm_population"))
 )]
+async fn a_success_does_not_end_a_pause_written_after_its_claim(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let ledger = PgCrmPopulationLedger(pool.clone());
+    due(
+        &pool,
+        link(0),
+        &["a@acme.test", "b@acme.test", "c@acme.test"],
+    )
+    .await;
+    let failed = claim(&ledger, 4).await.unwrap();
+    ledger
+        .fail(&failed, &failure("lock timeout", Some(60), 1))
+        .await?;
+    end_pause(&pool, link(0)).await;
+
+    // The probe's request is settled first, which lets the next probe start
+    // and fail before the first one reaches the pause.
+    let first = claim(&ledger, 4).await.unwrap();
+    assert_eq!(first.mailbox_failures, 1);
+    sqlx::query!(
+        "DELETE FROM crm_population_requests WHERE link_id = $1 AND contact_email = $2",
+        first.link_id,
+        first.request.contact_email
+    )
+    .execute(&pool)
+    .await?;
+    let second = claim(&ledger, 4).await.unwrap();
+    assert_eq!(second.mailbox_failures, 1);
+    ledger
+        .fail(&second, &failure("still down", Some(60), 2))
+        .await?;
+
+    // The first probe lost its request to the delete above, as an attempt
+    // whose lease lapsed would: it leaves the pause alone.
+    assert_eq!(
+        ledger.complete(&first, Duration::from_secs(10)).await?,
+        Completion::Superseded
+    );
+    assert_eq!(paused(&pool, link(0)).await.map(|pause| pause.0), Some(2));
+
+    // A success that does settle its request ends only the pause it saw: not
+    // one that counts more failures, nor one still running.
+    end_pause(&pool, link(0)).await;
+    due(&pool, link(0), &["d@acme.test"]).await;
+    let third = claim(&ledger, 4).await.unwrap();
+    assert_eq!(third.mailbox_failures, 2);
+    let earlier = ClaimedPopulation {
+        mailbox_failures: 1,
+        ..third.clone()
+    };
+    assert_eq!(
+        ledger.complete(&earlier, Duration::from_secs(10)).await?,
+        Completion::Removed
+    );
+    assert_eq!(
+        paused(&pool, link(0)).await.map(|pause| pause.0),
+        Some(2),
+        "a later failure raised the count"
+    );
+
+    due(&pool, link(0), &["e@acme.test"]).await;
+    let fourth = claim(&ledger, 4).await.unwrap();
+    assert_eq!(fourth.mailbox_failures, 2);
+    sqlx::query!(
+        "UPDATE crm_population_pauses SET paused_until = now() + interval '30 seconds' WHERE link_id = $1",
+        link(0)
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        ledger.complete(&fourth, Duration::from_secs(10)).await?,
+        Completion::Removed
+    );
+    assert_eq!(
+        paused(&pool, link(0)).await.map(|pause| pause.0),
+        Some(2),
+        "a later failure restarted the pause"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("crm_population"))
+)]
 async fn spent_attempts_park_a_request_until_the_cooldown_passes(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {

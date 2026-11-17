@@ -96,7 +96,8 @@ pub trait CrmPopulationLedger: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Claim, Report>> + Send;
     /// Settle an attempt that needs no retry: remove the request, or make it
     /// due after `settle` when it was requested again meanwhile. Ends the
-    /// mailbox's pause.
+    /// mailbox's pause when the attempt was its probe, unless the attempt was
+    /// superseded or a failure has paused the mailbox again since the claim.
     fn complete(
         &self,
         claimed: &ClaimedPopulation,

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM crm_population_pauses\n                WHERE link_id = $1 AND failures <= $2 AND paused_until <= now()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14e07c8a43709af91e650c9d46c040248ccf74832980cded8372d259fb1a0c4e"
+}

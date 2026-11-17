@@ -326,10 +326,17 @@ impl CrmPopulationLedger for PgCrmPopulationLedger {
                 Completion::Superseded
             }
         };
-        if claimed.mailbox_failures > 0 {
+        if claimed.mailbox_failures > 0 && completion != Completion::Superseded {
+            // Ends only the pause this claim was the probe of: one that has
+            // lapsed and counts no more failures than the claim saw. A failure
+            // recorded since wrote a later pause with a higher count.
             sqlx::query!(
-                "DELETE FROM crm_population_pauses WHERE link_id = $1",
-                claimed.link_id
+                r#"
+                DELETE FROM crm_population_pauses
+                WHERE link_id = $1 AND failures <= $2 AND paused_until <= now()
+                "#,
+                claimed.link_id,
+                i32::try_from(claimed.mailbox_failures).unwrap_or(i32::MAX),
             )
             .execute(&self.0)
             .await?;
