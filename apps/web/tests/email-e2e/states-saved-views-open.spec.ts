@@ -15,6 +15,7 @@ import {
   onlyReadMail,
   refusal,
 } from './harness/states-saved-views';
+import { backfilled } from './harness/states-send2';
 import {
   changeStoredView,
   storeView,
@@ -141,7 +142,16 @@ for (const provider of PROVIDERS) {
 // account's settings.
 test.describe('saving the filters of an alias with people, with a Gmail inbox', () => {
   test.use({ provider: 'GMAIL' });
-  test.beforeEach(({ page }) => loadAppSteadily(page));
+  // "Inbox synced", raised when an inbox's first backfill is announced,
+  // stacks on the refusal's notice and covers its Close button. A page
+  // opened after both inboxes' backfills never hears of them; the second
+  // inbox is linked first, so that the two run at once.
+  test.beforeEach(async ({ page, mailbox }) => {
+    const alias = await linkAliasInbox(mailbox);
+    await backfilled(mailbox);
+    await backfilled(mailbox, alias);
+    await loadAppSteadily(page);
+  });
 
   // When this fails, Save view or Save changes on filters a view cannot
   // hold opens nothing and says nothing, or opens the builder on a view it
@@ -150,7 +160,6 @@ test.describe('saving the filters of an alias with people, with a Gmail inbox', 
     page,
     mailbox,
   }) => {
-    await linkAliasInbox(mailbox);
     await storeView(mailbox, 'Alpha mail', { subject: ['Alpha'] });
     const toast = page.getByRole('status').filter({ hasText: ALIAS_REFUSAL });
 

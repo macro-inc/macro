@@ -4,8 +4,10 @@
 
 import { body, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { backfilled } from './harness/states-send2';
 import {
   addContacts,
+  cacheFilled,
   chip,
   named,
   openComposer,
@@ -138,7 +140,13 @@ for (const provider of PROVIDERS) {
 // mailbox has a part in.
 test.describe('more suggestions than one window holds', () => {
   test.use({ provider: 'GMAIL' });
-  test.beforeEach(({ page }) => loadAppSteadily(page));
+  // The app reads the inbox list again when it hears of the inbox's first
+  // backfill, which mounts an open composer again and loses its windows of
+  // suggestions. A page opened after the backfill never hears of it.
+  test.beforeEach(async ({ page, mailbox }) => {
+    await backfilled(mailbox);
+    await loadAppSteadily(page);
+  });
 
   // When this fails, a person beyond the first fifty matches cannot be
   // reached from the recipient field: PageDown, ArrowDown past the last
@@ -153,6 +161,9 @@ test.describe('more suggestions than one window holds', () => {
     );
     await addContacts(mailbox, pals);
     const to = await openComposer(page, mailbox);
+    // The app's first pass over the account lands in its cache in the first
+    // seconds, and each page restarts the suggestions at their first window.
+    await cacheFilled(page);
     const options = suggestions(page).getByRole('option');
     const next = page.getByRole('button', { name: 'Next options' });
     const shown = async () => {
