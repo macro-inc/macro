@@ -100,7 +100,7 @@ export class ChannelNamespace {
    */
   async *list(): AsyncGenerator<Channel> {
     for await (const record of this.records()) {
-      yield Channel.byId(this.client, record.id);
+      yield Channel.fromListing(this.client, record);
     }
   }
 

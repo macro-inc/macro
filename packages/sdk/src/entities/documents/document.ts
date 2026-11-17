@@ -372,8 +372,8 @@ export class Document
       );
       const next = page.data?.next_offset;
       return {
-        items: (page.data?.documents ?? []).map(
-          (d) => new Document(client, d.documentId),
+        items: (page.data?.documents ?? []).map((d) =>
+          new Document(client, d.documentId).withListed(d),
         ),
         nextCursor: next != null ? String(next) : null,
       };
