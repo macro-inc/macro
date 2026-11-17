@@ -1,10 +1,13 @@
 // DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
-// Source: tooling/xtask/crates/xtask_workflows/actions.lock and actions/*.yml
+// Source: tooling/xtask/crates/xtask_workflows/actions.lock, actions/*.yml and src/workflows/composite
 
-//! Typed steps for the third-party actions in `actions.lock`.
+//! Typed steps for the third-party actions in `actions.lock` and our
+//! composite actions in `workflows/composite`, and typed calls of our
+//! reusable workflows.
 
 use gh_workflow::expr::typed::{StepOutput, Str};
-use gh_workflow::{Input, Step, Use};
+use gh_workflow::{CallJob, Input, Step, Use};
+use serde_json::Value;
 
 /// `actions/cache/restore` v5.0.5: Restore Cache artifacts like dependencies and build outputs to improve workflow execution time
 #[must_use]
@@ -2717,5 +2720,977 @@ impl TjActionsChangedFiles {
 impl From<TjActionsChangedFiles> for Step<Use> {
     fn from(action: TjActionsChangedFiles) -> Self {
         action.0
+    }
+}
+
+/// `./.github/actions/teardown-nix`, defined in `workflows/composite/teardown_nix.rs`: Stop the Nix daemon(s) so a /nix cache volume can be unmounted and committed. The Determinate Nix daemon runs out of /nix, which keeps the mount busy and can make the cache-volume commit fail with "target is busy". Run this as the final (always()) step of any job that mounts /nix as a cache volume.
+#[must_use]
+pub struct LocalTeardownNix(Step<Use>);
+
+impl LocalTeardownNix {
+    /// A step named `name` that runs `./.github/actions/teardown-nix`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/teardown-nix");
+        Self(step)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+}
+
+impl From<LocalTeardownNix> for Step<Use> {
+    fn from(action: LocalTeardownNix) -> Self {
+        action.0
+    }
+}
+
+/// Calls `./.github/workflows/observability_image.yml` (Observability image), defined in `workflows/observability_image.rs`.
+#[must_use]
+pub struct CallObservabilityImage(CallJob);
+
+impl CallObservabilityImage {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/observability_image.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallObservabilityImage> for CallJob {
+    fn from(call: CallObservabilityImage) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/test_macrod_update.yml` (Test macrod update), defined in `workflows/test_macrod_update.rs`.
+#[must_use]
+pub struct CallTestMacrodUpdate(CallJob);
+
+impl CallTestMacrodUpdate {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/test_macrod_update.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallTestMacrodUpdate> for CallJob {
+    fn from(call: CallTestMacrodUpdate) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/build_appimage_on_tag.yml` (Build AppImage), defined in `workflows/build_appimage_on_tag.rs`.
+#[must_use]
+pub struct CallBuildAppimageOnTag(CallJob);
+
+impl CallBuildAppimageOnTag {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(r#ref: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/build_appimage_on_tag.yml"))
+            .with("ref", r#ref)
+    }
+
+    /// Passes the secret `POSTHOG_API_KEY`: PostHog project API key inlined into the desktop bundle.
+    pub fn secret_posthog_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("POSTHOG_API_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallBuildAppimageOnTag> for CallJob {
+    fn from(call: CallBuildAppimageOnTag) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/build_dmg_on_tag.yml` (Build macOS DMG), defined in `workflows/build_dmg_on_tag.rs`.
+#[must_use]
+pub struct CallBuildDmgOnTag(CallJob);
+
+impl CallBuildDmgOnTag {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(r#ref: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/build_dmg_on_tag.yml"))
+            .with("ref", r#ref)
+    }
+
+    /// Passes the secret `POSTHOG_API_KEY`: PostHog project API key inlined into the desktop bundle.
+    pub fn secret_posthog_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("POSTHOG_API_KEY", value))
+    }
+
+    /// Passes the secret `MACOS_DEVELOPER_ID_CERTIFICATE_BASE64`: Developer ID certificate for signing the macOS app.
+    pub fn secret_macos_developer_id_certificate_base64(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("MACOS_DEVELOPER_ID_CERTIFICATE_BASE64", value))
+    }
+
+    /// Passes the secret `MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD`: Password for the Developer ID certificate.
+    pub fn secret_macos_developer_id_certificate_password(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD", value))
+    }
+
+    /// Passes the secret `MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64`: Developer ID provisioning profile for the notification entitlements.
+    pub fn secret_macos_developer_id_provisioning_profile_base64(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64", value))
+    }
+
+    /// Passes the secret `MACOS_RELEASE_DOPPLER_TOKEN`: Doppler token for notarizing the macOS DMG.
+    pub fn secret_macos_release_doppler_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("MACOS_RELEASE_DOPPLER_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallBuildDmgOnTag> for CallJob {
+    fn from(call: CallBuildDmgOnTag) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/code_check_infra.yml` (infra code check), defined in `workflows/code_check_infra.rs`.
+#[must_use]
+pub struct CallCodeCheckInfra(CallJob);
+
+impl CallCodeCheckInfra {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/code_check_infra.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCodeCheckInfra> for CallJob {
+    fn from(call: CallCodeCheckInfra) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/build_web_app.yml` (Build Web App), defined in `workflows/build_web_app.rs`.
+#[must_use]
+pub struct CallBuildWebApp(CallJob);
+
+impl CallBuildWebApp {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/build_web_app.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `SEGMENT_WRITE_KEY`.
+    pub fn secret_segment_write_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("SEGMENT_WRITE_KEY", value))
+    }
+
+    /// Passes the secret `POSTHOG_API_KEY`.
+    pub fn secret_posthog_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("POSTHOG_API_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallBuildWebApp> for CallJob {
+    fn from(call: CallBuildWebApp) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/cargo_deny.yml` (cargo deny check), defined in `workflows/cargo_deny.rs`.
+#[must_use]
+pub struct CallCargoDeny(CallJob);
+
+impl CallCargoDeny {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/cargo_deny.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCargoDeny> for CallJob {
+    fn from(call: CallCargoDeny) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/cargo_workspace_dependency_check.yml` (cargo workspace dependency check), defined in `workflows/cargo_workspace_dependency_check.rs`.
+#[must_use]
+pub struct CallCargoWorkspaceDependencyCheck(CallJob);
+
+impl CallCargoWorkspaceDependencyCheck {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/cargo_workspace_dependency_check.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCargoWorkspaceDependencyCheck> for CallJob {
+    fn from(call: CallCargoWorkspaceDependencyCheck) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/code_check_cloud_storage.yml` (cloud storage code check), defined in `workflows/code_check_cloud_storage.rs`.
+#[must_use]
+pub struct CallCodeCheckCloudStorage(CallJob);
+
+impl CallCodeCheckCloudStorage {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/code_check_cloud_storage.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCodeCheckCloudStorage> for CallJob {
+    fn from(call: CallCodeCheckCloudStorage) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/code_check_conventions.yml` (conventions code check), defined in `workflows/code_check_conventions.rs`.
+#[must_use]
+pub struct CallCodeCheckConventions(CallJob);
+
+impl CallCodeCheckConventions {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/code_check_conventions.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCodeCheckConventions> for CallJob {
+    fn from(call: CallCodeCheckConventions) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_ai_editing_worker.yml` (Deploy AI Editing Worker), defined in `workflows/deploy_ai_editing_worker.rs`.
+#[must_use]
+pub struct CallDeployAiEditingWorker(CallJob);
+
+impl CallDeployAiEditingWorker {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_ai_editing_worker.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `CLOUDFLARE_API_TOKEN`.
+    pub fn secret_cloudflare_api_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("CLOUDFLARE_API_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeployAiEditingWorker> for CallJob {
+    fn from(call: CallDeployAiEditingWorker) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_mcp_chatgpt_worker.yml` (Deploy MCP ChatGPT Worker), defined in `workflows/deploy_mcp_chatgpt_worker.rs`.
+#[must_use]
+pub struct CallDeployMcpChatgptWorker(CallJob);
+
+impl CallDeployMcpChatgptWorker {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `CLOUDFLARE_API_TOKEN`.
+    pub fn secret_cloudflare_api_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("CLOUDFLARE_API_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeployMcpChatgptWorker> for CallJob {
+    fn from(call: CallDeployMcpChatgptWorker) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_all_services.yml` (Deploy All Services), defined in `workflows/deploy_all_services.rs`.
+#[must_use]
+pub struct CallDeployAllServices(CallJob);
+
+impl CallDeployAllServices {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_all_services.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `AWS_ACCESS_KEY`.
+    pub fn secret_aws_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `AWS_SECRET_ACCESS_KEY`.
+    pub fn secret_aws_secret_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_SECRET_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `PULUMI_ACCESS_TOKEN`.
+    pub fn secret_pulumi_access_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("PULUMI_ACCESS_TOKEN", value))
+    }
+
+    /// Passes the secret `DD_APP_KEY`.
+    pub fn secret_dd_app_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_APP_KEY", value))
+    }
+
+    /// Passes the secret `DD_API_KEY`.
+    pub fn secret_dd_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_API_KEY", value))
+    }
+
+    /// Passes the secret `NIX_CACHE_SIGNING_KEY`.
+    pub fn secret_nix_cache_signing_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("NIX_CACHE_SIGNING_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeployAllServices> for CallJob {
+    fn from(call: CallDeployAllServices) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_sync_service.yml` (Deploy Sync Service), defined in `workflows/deploy_sync_service.rs`.
+#[must_use]
+pub struct CallDeploySyncService(CallJob);
+
+impl CallDeploySyncService {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_sync_service.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `CLOUDFLARE_API_TOKEN`.
+    pub fn secret_cloudflare_api_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("CLOUDFLARE_API_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeploySyncService> for CallJob {
+    fn from(call: CallDeploySyncService) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_web_app.yml` (Deploy Web App), defined in `workflows/deploy_web_app.rs`.
+#[must_use]
+pub struct CallDeployWebApp(CallJob);
+
+impl CallDeployWebApp {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_web_app.yml"))
+            .with("environment", environment)
+    }
+
+    pub fn notify(self, value: impl Into<Value>) -> Self {
+        self.with("notify", value)
+    }
+
+    /// The caller already ran build_web_app.yml in this run
+    ///
+    /// Default: `false`.
+    pub fn prebuilt(self, value: impl Into<Value>) -> Self {
+        self.with("prebuilt", value)
+    }
+
+    /// Passes the secret `AWS_ACCESS_KEY`.
+    pub fn secret_aws_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `AWS_SECRET_ACCESS_KEY`.
+    pub fn secret_aws_secret_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_SECRET_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `PULUMI_ACCESS_TOKEN`.
+    pub fn secret_pulumi_access_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("PULUMI_ACCESS_TOKEN", value))
+    }
+
+    /// Passes the secret `DD_APP_KEY`.
+    pub fn secret_dd_app_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_APP_KEY", value))
+    }
+
+    /// Passes the secret `DD_API_KEY`.
+    pub fn secret_dd_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_API_KEY", value))
+    }
+
+    /// Passes the secret `SEGMENT_WRITE_KEY`.
+    pub fn secret_segment_write_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("SEGMENT_WRITE_KEY", value))
+    }
+
+    /// Passes the secret `POSTHOG_API_KEY`.
+    pub fn secret_posthog_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("POSTHOG_API_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeployWebApp> for CallJob {
+    fn from(call: CallDeployWebApp) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/deploy_website.yml` (Deploy Website), defined in `workflows/deploy_website.rs`.
+#[must_use]
+pub struct CallDeployWebsite(CallJob);
+
+impl CallDeployWebsite {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/deploy_website.yml"))
+            .with("environment", environment)
+    }
+
+    /// Passes the secret `AWS_ACCESS_KEY`.
+    pub fn secret_aws_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `AWS_SECRET_ACCESS_KEY`.
+    pub fn secret_aws_secret_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_SECRET_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `PULUMI_ACCESS_TOKEN`.
+    pub fn secret_pulumi_access_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("PULUMI_ACCESS_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallDeployWebsite> for CallJob {
+    fn from(call: CallDeployWebsite) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/ios-app-store-publish.yml` (iOS App Store Publish), defined in `workflows/ios_app_store_publish.rs`.
+#[must_use]
+pub struct CallIosAppStorePublish(CallJob);
+
+impl CallIosAppStorePublish {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/ios-app-store-publish.yml"))
+    }
+
+    /// Passes the secret `IOS_RELEASE_DOPPLER_TOKEN`: Doppler service token for ios-release/prd.
+    pub fn secret_ios_release_doppler_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("IOS_RELEASE_DOPPLER_TOKEN", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallIosAppStorePublish> for CallJob {
+    fn from(call: CallIosAppStorePublish) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/reusable_deploy_service.yml` (Reusable Deploy Service), defined in `workflows/reusable_deploy_service.rs`.
+#[must_use]
+pub struct CallReusableDeployService(CallJob);
+
+impl CallReusableDeployService {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>, service_name: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/reusable_deploy_service.yml"))
+            .with("environment", environment)
+            .with("service-name", service_name)
+    }
+
+    /// Override pulumi stack name (defaults to service-name)
+    pub fn pulumi_stack_name(self, value: impl Into<Value>) -> Self {
+        self.with("pulumi-stack-name", value)
+    }
+
+    /// Whether to setup docker
+    ///
+    /// Default: `true`.
+    pub fn use_docker(self, value: impl Into<Value>) -> Self {
+        self.with("use-docker", value)
+    }
+
+    /// Whether to checkout LFS content
+    ///
+    /// Default: `false`.
+    pub fn use_lfs(self, value: impl Into<Value>) -> Self {
+        self.with("use-lfs", value)
+    }
+
+    /// Passes the secret `AWS_ACCESS_KEY`.
+    pub fn secret_aws_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `AWS_SECRET_ACCESS_KEY`.
+    pub fn secret_aws_secret_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_SECRET_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `PULUMI_ACCESS_TOKEN`.
+    pub fn secret_pulumi_access_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("PULUMI_ACCESS_TOKEN", value))
+    }
+
+    /// Passes the secret `DD_APP_KEY`.
+    pub fn secret_dd_app_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_APP_KEY", value))
+    }
+
+    /// Passes the secret `DD_API_KEY`.
+    pub fn secret_dd_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_API_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallReusableDeployService> for CallJob {
+    fn from(call: CallReusableDeployService) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/reusable_preview_service.yml` (Reusable Preview Service), defined in `workflows/reusable_preview_service.rs`.
+#[must_use]
+pub struct CallReusablePreviewService(CallJob);
+
+impl CallReusablePreviewService {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new(environment: impl Into<Value>, service_name: impl Into<Value>) -> Self {
+        Self(CallJob::new("./.github/workflows/reusable_preview_service.yml"))
+            .with("environment", environment)
+            .with("service-name", service_name)
+    }
+
+    /// Override pulumi stack name (defaults to service-name)
+    pub fn pulumi_stack_name(self, value: impl Into<Value>) -> Self {
+        self.with("pulumi-stack-name", value)
+    }
+
+    /// Whether to setup docker
+    ///
+    /// Default: `true`.
+    pub fn use_docker(self, value: impl Into<Value>) -> Self {
+        self.with("use-docker", value)
+    }
+
+    /// Whether to checkout LFS content
+    ///
+    /// Default: `false`.
+    pub fn use_lfs(self, value: impl Into<Value>) -> Self {
+        self.with("use-lfs", value)
+    }
+
+    /// GitHub token for PR comments
+    pub fn github_token(self, value: impl Into<Value>) -> Self {
+        self.with("github-token", value)
+    }
+
+    /// Passes the secret `AWS_ACCESS_KEY`.
+    pub fn secret_aws_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `AWS_SECRET_ACCESS_KEY`.
+    pub fn secret_aws_secret_access_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("AWS_SECRET_ACCESS_KEY", value))
+    }
+
+    /// Passes the secret `PULUMI_ACCESS_TOKEN`.
+    pub fn secret_pulumi_access_token(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("PULUMI_ACCESS_TOKEN", value))
+    }
+
+    /// Passes the secret `DD_APP_KEY`.
+    pub fn secret_dd_app_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_APP_KEY", value))
+    }
+
+    /// Passes the secret `DD_API_KEY`.
+    pub fn secret_dd_api_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("DD_API_KEY", value))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
+    }
+}
+
+impl From<CallReusablePreviewService> for CallJob {
+    fn from(call: CallReusablePreviewService) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/check_node_modules_nix.yml` (check node_modules nix), defined in `workflows/check_node_modules_nix.rs`.
+#[must_use]
+pub struct CallCheckNodeModulesNix(CallJob);
+
+impl CallCheckNodeModulesNix {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/check_node_modules_nix.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCheckNodeModulesNix> for CallJob {
+    fn from(call: CallCheckNodeModulesNix) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/check_tauri_lockfiles.yml` (check tauri lockfiles), defined in `workflows/check_tauri_lockfiles.rs`.
+#[must_use]
+pub struct CallCheckTauriLockfiles(CallJob);
+
+impl CallCheckTauriLockfiles {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/check_tauri_lockfiles.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCheckTauriLockfiles> for CallJob {
+    fn from(call: CallCheckTauriLockfiles) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/check_generated.yml` (check generated workflows), defined in `workflows/check_generated.rs`.
+#[must_use]
+pub struct CallCheckGenerated(CallJob);
+
+impl CallCheckGenerated {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/check_generated.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCheckGenerated> for CallJob {
+    fn from(call: CallCheckGenerated) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/web-app-check-main.yml` (Web App Pr Checks), defined in `workflows/web_app_check_main.rs`.
+#[must_use]
+pub struct CallWebAppCheckMain(CallJob);
+
+impl CallWebAppCheckMain {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/web-app-check-main.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallWebAppCheckMain> for CallJob {
+    fn from(call: CallWebAppCheckMain) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/sdk-check.yml` (SDK Check), defined in `workflows/sdk_check.rs`.
+#[must_use]
+pub struct CallSdkCheck(CallJob);
+
+impl CallSdkCheck {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/sdk-check.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallSdkCheck> for CallJob {
+    fn from(call: CallSdkCheck) -> Self {
+        call.0
     }
 }

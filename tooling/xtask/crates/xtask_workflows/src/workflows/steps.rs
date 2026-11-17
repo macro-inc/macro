@@ -12,8 +12,8 @@ use xtask_paths::{RepoDir, RuntimePath};
 
 use crate::workflows::actions::{
     ActionsCheckout, ActionsDownloadArtifact, ActionsUploadArtifact, GoogleGithubActionsAuth,
-    NamespacelabsNscloudCacheAction, NamespacelabsNscloudSetupBuildxAction, OvenShSetupBun,
-    SoftpropsActionGhRelease,
+    LocalTeardownNix, NamespacelabsNscloudCacheAction, NamespacelabsNscloudSetupBuildxAction,
+    OvenShSetupBun, SoftpropsActionGhRelease,
 };
 use crate::workflows::{runners, vars};
 
@@ -658,9 +658,7 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
 
 /// Teardown Nix (always runs).
 pub fn teardown_nix() -> Step<Use> {
-    uses_local(
-        "Teardown Nix",
-        xtask_paths::repo_dir!(".github/actions/teardown-nix"),
-    )
-    .if_condition(always())
+    LocalTeardownNix::new("Teardown Nix")
+        .step()
+        .if_condition(always())
 }

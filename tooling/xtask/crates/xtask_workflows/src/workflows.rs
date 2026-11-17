@@ -42,6 +42,7 @@ mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
+pub mod composite;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
@@ -95,12 +96,12 @@ use gh_workflow::Workflow;
 /// used in the generated header. `file_name` is explicit so generated workflows
 /// can replace existing hyphenated GitHub workflow filenames without changing
 /// their identity in GitHub Actions.
-struct WorkflowFile {
-    slug: &'static str,
+pub(crate) struct WorkflowFile {
+    pub(crate) slug: &'static str,
     /// Output filename under `.github/workflows/`.
-    file_name: &'static str,
+    pub(crate) file_name: &'static str,
     /// Produces the YAML body for this workflow.
-    render_yaml: fn() -> Result<String>,
+    pub(crate) render_yaml: fn() -> Result<String>,
 }
 
 /// Render a `gh_workflow::Workflow` to YAML. Used by most workflow modules.
@@ -109,7 +110,7 @@ fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
 }
 
 /// Every workflow we generate. Add new workflows here.
-const WORKFLOWS: &[WorkflowFile] = &[
+pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "observability_image",
         file_name: "observability_image.yml",
@@ -453,6 +454,13 @@ pub fn generate() -> Result<()> {
         .with_context(|| format!("writing {}", lock_path.display()))?;
     println!("generated {}", lock_path.display());
 
+    for action in composite::ACTIONS {
+        let path = action_path(action)?;
+        fs::write(&path, render_action(action)?)
+            .with_context(|| format!("writing {}", path.display()))?;
+        println!("generated {}", path.display());
+    }
+
     let bindings_path = xtask_paths::repo_root().join(crate::actions::BINDINGS);
     fs::write(&bindings_path, crate::actions::render_bindings()?)
         .with_context(|| format!("writing {}", bindings_path.display()))?;
@@ -478,6 +486,14 @@ pub fn check() -> Result<()> {
     let lock_on_disk = fs::read_to_string(&lock_path).unwrap_or_default();
     if lock_on_disk != render_checks_lock()? {
         stale.push(checks_lock::PATH.to_string());
+    }
+
+    for action in composite::ACTIONS {
+        let path = action_path(action)?;
+        let on_disk = fs::read_to_string(&path).unwrap_or_default();
+        if on_disk != render_action(action)? {
+            stale.push(format!(".github/actions/{}/action.yml", action.directory));
+        }
     }
 
     let bindings_path = xtask_paths::repo_root().join(crate::actions::BINDINGS);
@@ -526,6 +542,30 @@ fn render(workflow: &WorkflowFile) -> Result<String> {
         (workflow.render_yaml)().with_context(|| format!("serializing {}", workflow.file_name))?;
     path_validation::validate(workflow.file_name, &yaml, &xtask_paths::repo_root())?;
     Ok(format!("{}{yaml}", disclaimer(workflow.slug)))
+}
+
+/// `.github/actions/<directory>/action.yml`.
+fn action_path(action: &composite::ActionFile) -> Result<PathBuf> {
+    let directory = xtask_paths::repo_root()
+        .join(".github")
+        .join("actions")
+        .join(action.directory);
+    if !directory.is_dir() {
+        bail!("expected an action directory at {}", directory.display());
+    }
+    Ok(directory.join("action.yml"))
+}
+
+/// A composite action's YAML with the "do not edit" header.
+fn render_action(action: &composite::ActionFile) -> Result<String> {
+    let yaml = (action.build)().to_string().map_err(|error| {
+        anyhow::anyhow!("rendering .github/actions/{}: {error}", action.directory)
+    })?;
+    Ok(format!(
+        "# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n\
+         # Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/{}.rs\n{yaml}",
+        action.module
+    ))
 }
 
 /// The header every generated file starts with.
