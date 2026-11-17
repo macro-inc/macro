@@ -31,6 +31,9 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
+const applyOwnBotWrite = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../bots/own-bot-writes', () => ({ applyOwnBotWrite }));
+
 vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
 }));
@@ -153,6 +156,13 @@ describe('agent channel-bot cache invalidation', () => {
     expect(
       testQueryClient.getQueryData(botKeys.detail(updated.bot.id).queryKey)
     ).toEqual(updated.bot);
+    // Every view shows the new name without waiting for the push.
+    expect(applyOwnBotWrite).toHaveBeenCalledWith({
+      id: updated.bot.id,
+      name: updated.bot.name,
+      handle: updated.bot.handle,
+      avatarUrl: updated.bot.avatar_url ?? null,
+    });
   });
 
   it('refreshes cached channel and bot profiles when a global team agent changes its avatar', async () => {
@@ -219,6 +229,10 @@ describe('agent channel-bot cache invalidation', () => {
     expect(
       testQueryClient.getQueryData<Agent[]>(agentKeys.list.queryKey)
     ).toEqual([]);
+    expect(applyOwnBotWrite).toHaveBeenCalledWith({
+      id: existing.bot.id,
+      deleted: true,
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-old').queryKey,
     });

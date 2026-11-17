@@ -1,0 +1,8 @@
+# Local cache entrypoint only: writes a bot this device just changed into its
+# `GraphqlBot` record, as a `botUpdates` push would.
+subscription BotCacheWrite {
+	botUpdates {
+		__typename
+		...BotFields
+	}
+}

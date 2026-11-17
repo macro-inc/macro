@@ -35,7 +35,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import { createBotUpdatesHandler } from './bot-updates';
-import { createBotIdentity } from './graphql-bots';
+import { type BotIdentity, createBotIdentity } from './graphql-bots';
 
 const RELEASE_BOT = '5f0c8a4e-2d1b-4c3a-9e7f-6a5b4c3d2e1f';
 const REVIEW_BOT = '0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b';
