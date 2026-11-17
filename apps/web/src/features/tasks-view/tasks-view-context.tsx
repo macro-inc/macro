@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import type {
   SavedViewSource,
   SavedViewsSource,
@@ -169,6 +170,8 @@ export type TasksViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
+  /** Filters by one assignee the same way, from an assignee's hover card. */
+  filterByAssignee: (userId: string) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -179,6 +182,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useParams<{
     taskId?: string;
@@ -527,7 +531,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
@@ -666,6 +670,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     );
   };
 
+  const filterByAssignee = (userId: string) => {
+    closeTask();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ assignees: [userId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -705,6 +717,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setTab,
     setFacets,
     filterByTag,
+    filterByAssignee,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

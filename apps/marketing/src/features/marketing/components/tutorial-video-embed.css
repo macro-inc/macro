@@ -22,6 +22,7 @@
 
 @media (max-width: 599px) {
  .tutorial-video-embed { width: calc(100% - 32px); margin-bottom: 48px; border-radius: 28px; }
+ .product-page .tutorial-video-embed { width: 100%; }
  .tutorial-video-embed .tutorial-video-play { height: auto; min-height: 48px; width: max-content; max-width: calc(100% - 24px); gap: 8px; padding: 6px 12px 6px 6px; white-space: normal; }
  .tutorial-video-disc { width: 40px; height: 40px; }
  .tutorial-video-play img { width: 36px; height: 36px; }

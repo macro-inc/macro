@@ -1,18 +1,16 @@
-import MicrosoftIcon from '@assets/icons/logo-microsoft.svg';
-import GoogleIcon from '@icon/macro-google.svg';
+import GoogleIcon from '@icon/google-color.svg';
+import MicrosoftIcon from '@icon/microsoft-color.svg';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
 import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
+import { EmailChatSharingDemo } from '../../features/marketing/components/email/EmailChatSharingDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
 import { EmailDraftStory } from '../../features/marketing/components/email/EmailDraftStory';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
-import { EmailProvidersGraphic } from '../../features/marketing/components/email/EmailProvidersGraphic';
 import { EmailRoutineDemo } from '../../features/marketing/components/email/EmailRoutineDemo';
-import { EmailSharingDemo } from '../../features/marketing/components/email/EmailSharingDemo';
 import { EmailSignalNoiseDemo } from '../../features/marketing/components/email/EmailSignalNoiseDemo';
 import {
   FeaturePage,
-  FeaturePageCta,
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
@@ -23,6 +21,7 @@ import { ProductIntroduction } from '../../features/marketing/components/product
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
 import { EmailTaskDemo } from '../../features/marketing/components/tasks/EmailTaskDemo';
+import { ctaHref, handleCtaClick } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/email/email-hero.css';
@@ -128,27 +127,33 @@ export function RouteEmail() {
         <h1>Organized and prioritized email.</h1>
         <p class="email-page-hero-description">
           Macro Mail tags and prioritizes email from all your accounts, with
-          Superhuman shortcuts and Opus intelligence.
+          Superhuman shortcuts and frontier intelligence.
         </p>
-        <div class="feature-page-hero-actions">
-          <FeaturePageCta name="email_hero_get_started" />
-        </div>
-        <div class="email-page-hero-providers">
-          Works with
-          <span>
-            <GoogleIcon
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="none"
-              aria-hidden="true"
-            />
-            Google
-          </span>
-          and
-          <span>
+        <div class="email-page-provider-actions">
+          <a
+            class="email-page-provider-button email-page-provider-button--google"
+            href={ctaHref()}
+            onClick={(event) => handleCtaClick(event, 'email_hero_google')}
+            aria-label="Continue with Google"
+          >
+            <GoogleIcon aria-hidden="true" />
+            <span>
+              <span class="email-page-provider-prefix">Continue with </span>
+              Google
+            </span>
+          </a>
+          <a
+            class="email-page-provider-button email-page-provider-button--microsoft"
+            href={ctaHref()}
+            onClick={(event) => handleCtaClick(event, 'email_hero_microsoft')}
+            aria-label="Continue with Microsoft"
+          >
             <MicrosoftIcon aria-hidden="true" />
-            Microsoft
-          </span>
+            <span>
+              <span class="email-page-provider-prefix">Continue with </span>
+              Microsoft
+            </span>
+          </a>
         </div>
       </header>
       <TutorialVideoEmbed tutorial="mail" />
@@ -180,17 +185,6 @@ export function RouteEmail() {
         </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
-        id="email-providers"
-        demo={{
-          tone: 'email',
-          glassFrame: true,
-        }}
-        title="Works with your Google and Outlook."
-        description="Continue with Google or Microsoft and your inbox and calendar sync securely. Your password stays with your provider, agents ask for your approval before sending email, and you can disconnect anytime."
-      >
-        <EmailProvidersGraphic />
-      </FeaturePageSection>
-      <FeaturePageSection
         id="signal-noise"
         demo={{
           tone: 'email',
@@ -209,10 +203,7 @@ export function RouteEmail() {
         title="Share email in Macro Chat, no screenshots."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailSharingDemo />}
-        />
+        <EmailChatSharingDemo />
       </FeaturePageSection>
       <FeaturePageSection
         id="agentic-editing"

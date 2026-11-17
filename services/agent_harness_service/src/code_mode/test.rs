@@ -171,6 +171,34 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// The tools that use nobody's access (the web, Macro's help) are outside
+/// every scope, `NoSend` included: a run that sends nothing could send data
+/// out in a URL. The engine asks this gate about them (`GatedToolSet`).
+#[tokio::test]
+async fn a_scoped_session_uses_no_web_or_help_tool() {
+    let gate = |scope| ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(scope)),
+    };
+    let session = AgentSessionId::new();
+    let args = serde_json::json!({});
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        for tool in ["WebSearch", "WebFetch", "SelfKnowledge"] {
+            assert!(
+                matches!(
+                    gate(Some(scope)).check(session, tool, &args).await,
+                    NativeToolVerdict::Refuse(_)
+                ),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    assert_eq!(
+        gate(None).check(session, "WebFetch", &args).await,
+        NativeToolVerdict::Run
+    );
+}
+
 /// An SDK operation's path with every parameter filled in.
 fn concrete(path: &str) -> String {
     path.split('/')
@@ -424,6 +452,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "agent-sessions",
             "harness",
             "/tool",
+            "/web/",
         ]
         .iter()
         .any(|word| text.contains(word))
@@ -844,4 +873,31 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     failing.store(false, Ordering::SeqCst);
     assert_eq!(rollout.egress(&user).await, Egress::Proxied);
     assert_eq!(loads.load(Ordering::SeqCst), 4);
+}
+
+/// The egress cache drops expired users at most once a minute as it fills,
+/// and never holds more than its bound.
+#[tokio::test(start_paused = true)]
+async fn the_egress_cache_sweeps_expired_users_and_stays_bounded() {
+    use code_execution::domain::Egress;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    let rollout = EgressRollout::new(Some(FakeFeatureFlags::default()));
+    for index in 0..3 {
+        let id = format!("macro|user{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 3);
+    // Past their life, the next read drops them.
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    let late = MacroUserIdStr::parse_from_str("macro|late@example.com").unwrap();
+    assert_eq!(rollout.egress(&late).await, Egress::Direct);
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 1);
+    // However many users read it, it holds at most its bound.
+    for index in 0..=EGRESS_FLAG_USERS {
+        let id = format!("macro|many{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert!(rollout.cached.lock().unwrap().entries.len() <= EGRESS_FLAG_USERS);
 }

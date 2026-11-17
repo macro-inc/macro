@@ -219,6 +219,7 @@ model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
+models_email = { path = "../../crates/models_email" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_pagination = { path = "../../crates/models_pagination", features = [

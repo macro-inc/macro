@@ -5,7 +5,8 @@ use crate::{
     NoUserApiKeyAuthorizer, UserOnly, ValidatedCredential, ValidatedIdentity,
 };
 use crate::{is_agent_run, is_program_run};
-use ::axum::http::HeaderMap;
+use ::axum::extract::FromRequestParts;
+use ::axum::http::{HeaderMap, header};
 use std::sync::Arc;
 
 #[derive(Clone)]
