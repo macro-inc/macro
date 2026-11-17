@@ -16,7 +16,7 @@ where
     N: ConnectionIdentity,
 {
     let link_id = request.attempt;
-    tracing::info!(user_id = %request.actor_id, ?link_id, "Init called");
+    tracing::info!(fusionauth_user_id = %request.actor_fusion_id, ?link_id, "Init called");
     let mut completed_google_grant = None;
     let link = if let Some(link_id) = link_id {
         let attempt = service

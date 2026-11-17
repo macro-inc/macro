@@ -400,7 +400,7 @@ pub(crate) async fn get_draft_replying_to(
 /// mail, a mismatched thread, or someone else's row is never touched even
 /// when the caller's validation read was raced. No matching row is `None`,
 /// not an error — deletes are idempotent.
-#[tracing::instrument(skip(pool, link_ids), err)]
+#[tracing::instrument(skip(pool, link_ids, actor), err)]
 pub(crate) async fn delete_draft_message(
     pool: &PgPool,
     message_id: Uuid,

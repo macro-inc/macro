@@ -132,7 +132,6 @@ where
     type Output = UpdateThreadLabelsResponse;
 
     #[tracing::instrument(skip_all, fields(
-        user_id=?request_context.user_id,
         thread_id=%self.thread_id,
         label_id=?self.label_id,
         add=%self.add,

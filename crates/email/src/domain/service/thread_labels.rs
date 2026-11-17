@@ -189,7 +189,7 @@ where
             failed_ids: vec![],
         })
     }
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_seen_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -253,7 +253,7 @@ where
             .len())
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_unread_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -287,7 +287,7 @@ where
     }
 
     /// Resolve the owning inbox server-side, including delegated inboxes.
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, archived))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, archived))]
     pub(crate) async fn set_thread_archived_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -405,7 +405,7 @@ where
         Err(EmailErr::ThreadHasNoInboundMessages)
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -436,7 +436,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, link))]
+    #[tracing::instrument(err, skip(self, link, actor))]
     pub(super) async fn update_thread_labels_with_actor(
         &self,
         link: &Link,
@@ -495,8 +495,8 @@ where
     /// without failing the others.
     #[tracing::instrument(
         err,
-        skip(self, thread_ids),
-        fields(user_id = %macro_id, thread_count = thread_ids.len(), archived)
+        skip(self, macro_id, thread_ids),
+        fields(thread_count = thread_ids.len(), archived)
     )]
     pub(crate) async fn set_threads_archived_impl(
         &self,

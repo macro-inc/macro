@@ -8,7 +8,10 @@ use models_email::service::{
 /// this step is invoked by the UpdateMetadata step. it uploads the specified attachment as a
 /// Macro document for the user. first checks the attachment doesn't already exist by querying
 /// document_email table before fetching and uploading the attachment data.
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(
+    skip(ctx, p),
+    fields(attachment_id = %p.metadata.attachment_metadata.attachment_db_id)
+)]
 pub(super) async fn backfill_attachment<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
