@@ -75,7 +75,10 @@ fn the_web_app_builds_through_the_shared_build_workflow() {
     }
 
     // The release kept its build a week, so its jobs can be re-run later.
-    let upload = steps_using(&shared["jobs"]["build"], "actions/upload-artifact");
+    let upload: Vec<_> = steps_using(&shared["jobs"]["build"], "actions/upload-artifact")
+        .into_iter()
+        .filter(|step| step["name"].as_str() == Some("Upload dist"))
+        .collect();
     assert_eq!(
         upload[0]["with"]["retention-days"].as_str(),
         Some("${{ inputs.environment == 'prod' && 7 || 1 }}")
