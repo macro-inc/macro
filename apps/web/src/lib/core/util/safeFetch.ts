@@ -108,13 +108,15 @@ async function tracedFetch(
     }
 
     // The span still ends at the response headers, so its duration keeps its
-    // meaning; it is exported once the body settles, with `http.body_ms`.
+    // meaning; it is exported once the body settles, with `http.body_ms`. The
+    // end is a `performance.now()` value, which the SDK maps onto the span's
+    // own start clock: an epoch time would skew after the device slept.
     const endedAt = performance.now();
     const body = timeResponseBody(response, span, {
       prefix: 'http',
       headersAt,
       signal: init.signal,
-      onSettled: () => span.end(performance.timeOrigin + endedAt),
+      onSettled: () => span.end(endedAt),
     });
     return { response, releaseBody: body.release };
   });

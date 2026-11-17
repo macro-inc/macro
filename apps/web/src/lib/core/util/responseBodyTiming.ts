@@ -8,13 +8,13 @@ export type ResponseBodyOutcome =
   | 'error'
   /** The request's signal was aborted while the body was read. */
   | 'aborted'
-  /** Nothing read the body before it was released. */
+  /** Nothing read the body (or only a clone or `body` stream did). */
   | 'unread'
   /** A read was still running when the body was released. */
   | 'incomplete'
-  /** A streamed response (event stream, multipart); not timed. */
+  /** A streamed response (event stream, multipart, NDJSON); not timed. */
   | 'stream'
-  /** The response has no body. */
+  /** A status that never has a body (204, 304, ...). */
   | 'empty';
 
 export interface ResponseBodyTimingOptions {
@@ -24,8 +24,6 @@ export interface ResponseBodyTimingOptions {
   headersAt: number;
   /** The request's signal, to tell an abort from a failure. */
   signal?: AbortSignal | null;
-  /** Release the body this long after headers if it is still not settled. */
-  waitMs?: number;
   /** Called once, after the outcome is recorded on the span. */
   onSettled: () => void;
 }
@@ -34,6 +32,14 @@ export interface ResponseBodyTiming {
   /** Settle as `unread` (or `incomplete`) if the body has not settled yet. */
   release(): void;
 }
+
+/** Longest a span waits after the headers for its body to settle. */
+export const RESPONSE_BODY_WAIT_MS = 60_000;
+
+// Statuses fetch gives a null body. Decided from the status rather than by
+// reading `response.body`: WebKit makes the stream on first access, and later
+// reads then go through it chunk by chunk.
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
 const BODY_READS = [
   'arrayBuffer',
@@ -56,7 +62,8 @@ const STREAMING_CONTENT_TYPE =
  * ...) with ones that note when the first read settles and return its result
  * unchanged. Nothing touches the body stream, so there is no extra copy or
  * native read, and a clone's reads are not counted. A streamed response is
- * settled at once and never timed, so no span waits on a long-lived stream.
+ * settled at once and never timed, so no span waits on a long-lived stream;
+ * a body still unsettled `RESPONSE_BODY_WAIT_MS` after the headers is released.
  */
 export function timeResponseBody(
   response: Response,
@@ -79,7 +86,7 @@ export function timeResponseBody(
   };
   const release = () => settle(reading ? 'incomplete' : 'unread');
 
-  if (!response.body) {
+  if (NULL_BODY_STATUSES.has(response.status)) {
     settle('empty');
     return { release };
   }
@@ -100,10 +107,9 @@ export function timeResponseBody(
       value: async function timedRead(this: Response, ...args: unknown[]) {
         if (reading || settled) return Reflect.apply(read, this, args);
         reading = true;
+        let value: unknown;
         try {
-          const value: unknown = await Reflect.apply(read, this, args);
-          settle('complete', performance.now());
-          return value;
+          value = await Reflect.apply(read, this, args);
         } catch (error) {
           const aborted =
             signal?.aborted === true ||
@@ -111,13 +117,14 @@ export function timeResponseBody(
           settle(aborted ? 'aborted' : 'error', performance.now());
           throw error;
         }
+        // Outside the try, so a telemetry failure never fails a good read.
+        settle('complete', performance.now());
+        return value;
       },
     });
   }
 
-  if (options.waitMs !== undefined) {
-    const remaining = headersAt + options.waitMs - performance.now();
-    timer = setTimeout(release, Math.max(0, remaining));
-  }
+  const remaining = headersAt + RESPONSE_BODY_WAIT_MS - performance.now();
+  timer = setTimeout(release, Math.max(0, remaining));
   return { release };
 }

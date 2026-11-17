@@ -977,7 +977,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     const transport = mocks.spans.find(
       (span) => span.name === 'graphql.transport'
     );
-    const returnedBy = performance.timeOrigin + performance.now();
+    const returnedBy = performance.now();
 
     expect(transport?.end).not.toHaveBeenCalled();
     expect(transport?.attrs['graphql.body_outcome']).toBeUndefined();
@@ -1015,6 +1015,34 @@ describe('GraphQL Soup browser cache session gate', () => {
     await response.text();
     expect(transport?.attrs['graphql.body_outcome']).toBe('complete');
     expect(transport?.end).toHaveBeenCalledOnce();
+  });
+
+  it('ends the transport span as unread when nothing reads the body within a minute', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await soup.dssGraphqlFetch('http://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'query User { user { id } }' }),
+      });
+      const transport = mocks.spans.find(
+        (span) => span.name === 'graphql.transport'
+      );
+      expect(transport?.end).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(60_000);
+      expect(transport?.attrs['graphql.body_outcome']).toBe('unread');
+      expect(transport?.end).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never holds the transport span open for a streamed response', async () => {

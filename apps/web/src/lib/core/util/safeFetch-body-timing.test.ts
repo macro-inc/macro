@@ -28,6 +28,7 @@ beforeAll(() =>
   })
 );
 afterEach(() => {
+  vi.restoreAllMocks();
   mocks.fetch.mockReset();
   exporter.reset();
 });
@@ -131,4 +132,58 @@ it('records a body that breaks mid-read and is not retried', async () => {
   const spans = exporter.getFinishedSpans();
   expect(spans).toHaveLength(1);
   expect(spans[0]?.attributes['http.body_outcome']).toBe('error');
+});
+
+it('keeps the duration to the headers when the wall clock ran ahead of the monotonic one', async () => {
+  // After a device sleeps, `Date.now()` has moved on and `performance.now()`
+  // has not; the SDK starts spans from the wall clock.
+  const wallClock = Date.now;
+  vi.spyOn(Date, 'now').mockImplementation(() => wallClock() + 10_000);
+  mocks.fetch.mockResolvedValueOnce(
+    new Response('{}', { headers: { 'Content-Type': 'application/json' } })
+  );
+
+  await safeFetch('https://api.example/items');
+
+  const [span] = exporter.getFinishedSpans();
+  const startMs = hrTimeToMilliseconds(span.startTime);
+  const endMs = hrTimeToMilliseconds(span.endTime);
+  expect(endMs).toBeGreaterThan(startMs);
+  expect(endMs - startMs).toBeLessThan(1_000);
+  expect(span.attributes['http.body_outcome']).toBe('complete');
+});
+
+it('records one unread span per retried server error', async () => {
+  mocks.fetch.mockImplementation(async () => new Response('', { status: 500 }));
+
+  const result = await safeFetch('https://api.example/items', {
+    retry: { maxTries: 2, delay: 0 },
+  });
+
+  expect(result._unsafeUnwrapErr()[0]?.code).toBe('SERVER_ERROR');
+  const spans = exporter.getFinishedSpans();
+  expect(spans).toHaveLength(2);
+  expect(spans.map((span) => span.attributes['http.body_outcome'])).toEqual([
+    'unread',
+    'unread',
+  ]);
+});
+
+it('records a body the caller aborted mid-read', async () => {
+  const controller = new AbortController();
+  const body = new ReadableStream<Uint8Array>({
+    pull: (streamController) => {
+      streamController.enqueue(new TextEncoder().encode('{"items":'));
+      controller.abort();
+      streamController.error(new DOMException('aborted', 'AbortError'));
+    },
+  });
+  mocks.fetch.mockResolvedValueOnce(
+    new Response(body, { headers: { 'Content-Type': 'application/json' } })
+  );
+
+  await safeFetch('https://api.example/items', { signal: controller.signal });
+
+  const [span] = exporter.getFinishedSpans();
+  expect(span.attributes['http.body_outcome']).toBe('aborted');
 });

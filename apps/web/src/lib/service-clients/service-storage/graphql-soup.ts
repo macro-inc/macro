@@ -379,21 +379,18 @@ async function sendDssGraphqlRequest(
 
     // The span keeps ending where it always has, at the returned response's
     // headers or after the projection check; it is exported once urql has
-    // read the body, with `graphql.body_ms`.
+    // read the body, with `graphql.body_ms`. The end stays a
+    // `performance.now()` value so the SDK maps it onto the span's start clock.
     const endedAt = performance.now();
     timeResponseBody(sent.response, span, {
       prefix: 'graphql',
       headersAt: sent.headersAt,
       signal: init?.signal,
-      waitMs: GRAPHQL_BODY_WAIT_MS,
-      onSettled: () => span.end(performance.timeOrigin + endedAt),
+      onSettled: () => span.end(endedAt),
     });
     return sent.response;
   });
 }
-
-/** Longest a `graphql.transport` span waits for urql to read its body. */
-const GRAPHQL_BODY_WAIT_MS = 60_000;
 
 type GraphqlTransportResponse = {
   response: Response;

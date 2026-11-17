@@ -172,7 +172,6 @@ describe('timeResponseBody', () => {
     timeResponseBody(response, span, {
       prefix: 'graphql',
       headersAt: performance.now(),
-      waitMs: 60_000,
       onSettled,
     });
 
@@ -188,6 +187,18 @@ describe('timeResponseBody', () => {
     expect(onSettled).toHaveBeenCalledOnce();
   });
 
+  it('adds the timed reads without making them enumerable', () => {
+    const response = new Response('{}');
+    timeResponseBody(response, recordingSpan(), {
+      prefix: 'http',
+      headersAt: performance.now(),
+      onSettled: () => {},
+    }).release();
+
+    expect(Object.keys(response)).toEqual([]);
+    expect(Object.hasOwn(response, 'json')).toBe(true);
+  });
+
   it('cancels the wait once the body settles', async () => {
     vi.useFakeTimers({
       toFake: ['setTimeout', 'clearTimeout', 'performance'],
@@ -196,7 +207,6 @@ describe('timeResponseBody', () => {
     const timing = timeResponseBody(response, recordingSpan(), {
       prefix: 'graphql',
       headersAt: performance.now(),
-      waitMs: 60_000,
       onSettled: () => {},
     });
 
@@ -221,7 +231,6 @@ describe('timeResponseBody', () => {
     timeResponseBody(response, span, {
       prefix: 'graphql',
       headersAt: performance.now(),
-      waitMs: 60_000,
       onSettled,
     });
 
