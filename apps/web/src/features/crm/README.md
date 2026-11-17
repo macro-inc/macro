@@ -290,9 +290,11 @@ A record page's **Add to pipeline** menu (`add-to-pipeline.tsx`, the device
 entry; `views/add-to-pipeline.tsx` and `views/mobile/add-to-pipeline.tsx`)
 reads nothing until it first opens: `add-to-pipeline-adapter.tsx` then reads
 the team's pipelines and the record's rows through the Pipelines card's own
-`CrmRecordPipelineEntries` query (same document and variables, so Overview
-shares one request), and a pipeline's table and stage requirements only while
-its stages or add form are shown. Rows are created with `writeDatabaseRow`
+`CrmRecordPipelineEntries` query, cache-first (same document and variables, so
+on Overview the normalized cache answers from the card's request), and a
+pipeline's table and stage requirements once its stages or add form show; the
+menu's requirements read does not poll, and the Add deal form it opens reads no
+Quick Access list because its record is fixed. Rows are created with `writeDatabaseRow`
 through the pipeline write path the table uses, so the server's stage guard
 applies; `core/add-to-pipeline.ts` decides which pipelines a record can join and
 whether a stage needs the Add deal form. `ADD_TO_PIPELINE_FLOW` switches between

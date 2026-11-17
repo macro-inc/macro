@@ -88,10 +88,14 @@ export function AddPipelineRecordDialog(
   const company = props.pipeline.recordType === 'company';
   const createCompany = useCreateCompanyMutation();
   const createContact = useCreateContactMutation();
-  const companies = useQuickAccessCrmCompaniesQuery();
-  // A row added from the record's own page has no contact to pick.
+  // A row added from the record's own page has no record to pick or create,
+  // so it reads neither list.
+  const companies = props.record
+    ? undefined
+    : useQuickAccessCrmCompaniesQuery();
   const contacts =
     company || props.record ? undefined : useQuickAccessCrmContactsQuery();
+  const companyList = () => companies?.companies() ?? [];
   const options = (): RecordOption[] =>
     contacts
       ? contacts.contacts().map((contact) => ({
@@ -99,13 +103,13 @@ export function AddPipelineRecordDialog(
           name: contact.name || contact.email || '',
           detail: contact.email ?? '',
         }))
-      : companies.companies().map((entry) => ({
+      : companyList().map((entry) => ({
           id: entry.id,
           name: entry.name,
           detail: entry.domains[0]?.domain ?? '',
         }));
   const domainCompanies = () =>
-    companies.companies().flatMap<DomainCompany>((entry) =>
+    companyList().flatMap<DomainCompany>((entry) =>
       entry.domains.length
         ? entry.domains.map((domain) => ({
             id: entry.id,
@@ -114,7 +118,7 @@ export function AddPipelineRecordDialog(
         : [{ id: entry.id, domain: undefined }]
     );
   const companyOptions = createMemo(() =>
-    companies.companies().map((company) => ({
+    companyList().map((company) => ({
       id: company.id,
       name: company.name,
       domain: company.domains[0]?.domain,
@@ -225,9 +229,7 @@ export function AddPipelineRecordDialog(
     }
     const email = current.email.trim().toLowerCase();
     const joins = current.companyId
-      ? companies
-          .companies()
-          .find((company) => company.id === current.companyId)
+      ? companyList().find((company) => company.id === current.companyId)
       : undefined;
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
@@ -334,7 +336,7 @@ export function AddPipelineRecordDialog(
         <RecordSearch
           recordType={props.pipeline.recordType}
           options={options()}
-          loading={(contacts ?? companies).query.isLoading}
+          loading={(contacts ?? companies)?.query.isLoading ?? false}
           mount={dialog()}
           onPick={(record) => changeChoice({ kind: 'existing', record })}
           onCreate={(search) =>
@@ -427,7 +429,7 @@ export function AddPipelineRecordDialog(
               onChange={(company) =>
                 changeChoice({ ...draft(), companyId: company.id })
               }
-              loading={companies.query.isLoading}
+              loading={companies?.query.isLoading ?? false}
               disabled={pending()}
               mount={dialog()}
             />

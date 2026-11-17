@@ -135,6 +135,8 @@ for (const device of DEVICES) {
       await expect(
         form.getByRole('button', { name: 'Change company' })
       ).toHaveCount(0);
+      // The record is fixed, so the form reads no company list.
+      await expect(reads(page)).not.toContainText('companies');
       await expect(page.getByLabel('Pipeline writes')).toHaveText('0');
       await page.screenshot({
         path: test.info().outputPath('company-form.png'),

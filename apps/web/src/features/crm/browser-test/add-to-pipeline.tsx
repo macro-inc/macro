@@ -214,16 +214,19 @@ function Fixture() {
       showCompanies: () => {},
       openEntity: () => {},
     }),
-    createCompanySuggestions: () => ({
-      companies: () => [
-        {
-          id: COMPANY.id,
-          name: COMPANY.name,
-          domains: [{ domain: 'northwind.example' }],
-        },
-      ],
-      query: { isLoading: false },
-    }),
+    createCompanySuggestions: () => {
+      read('companies');
+      return {
+        companies: () => [
+          {
+            id: COMPANY.id,
+            name: COMPANY.name,
+            domains: [{ domain: 'northwind.example' }],
+          },
+        ],
+        query: { isLoading: false },
+      };
+    },
     createContactSuggestions: () => ({
       contacts: () => [],
       query: { isLoading: false },

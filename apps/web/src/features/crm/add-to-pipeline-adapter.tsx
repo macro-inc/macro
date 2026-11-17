@@ -29,7 +29,7 @@ import { useStageRequirements } from './queries/stage-requirements';
 /**
  * The record page's Add to pipeline menu over production reads: the team's
  * pipelines, the record's rows through the Pipelines card's own query, and a
- * pipeline's schema only while its stages or add form are shown.
+ * pipeline's schema and stage requirements once its stages or add form show.
  */
 export function createAddToPipelineSource(
   deps: CrmQueryDependencies & { graphql: () => Client },
@@ -38,9 +38,16 @@ export function createAddToPipelineSource(
   const team = useCurrentTeamQuery();
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
   const pipelines = createPipelinesSource(deps, teamId);
-  // The same document and variables as the Pipelines card, so on Overview
-  // urql answers both from one request.
-  const entries = createPipelineEntriesQuery(deps.graphql, record);
+  // The Pipelines card's document and variables, read cache-first: on
+  // Overview the card has answered before the menu opens, so the normalized
+  // cache serves the menu without a second request (a client without that
+  // cache sends it). Elsewhere the first open reads once. An add refetches
+  // network-only, which updates both.
+  const entries = createPipelineEntriesQuery(
+    deps.graphql,
+    record,
+    'cache-first'
+  );
   return {
     pipelines: pipelines.pipelines,
     loading: () =>
@@ -59,7 +66,11 @@ export function createAddToPipelineSource(
     entries: entries.entries,
     createSchema(pipeline) {
       const table = usePipelineTableQuery(deps, pipeline);
-      const requirements = useStageRequirements(deps, pipeline.id);
+      // Read once when the stages first show; a requirement added since is
+      // refused by the server's stage guard.
+      const requirements = useStageRequirements(deps, pipeline.id, {
+        poll: false,
+      });
       const columns = createMemo(() =>
         queryReadyGate(table)
           ? table.data.columns.map((column) =>

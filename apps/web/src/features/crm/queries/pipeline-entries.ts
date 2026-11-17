@@ -149,10 +149,16 @@ export function pipelineEntriesInput(
   };
 }
 
-/** The viewer's pipeline rows that reference one company or contact. */
+/**
+ * The viewer's pipeline rows that reference one company or contact. The
+ * Pipelines card reads `cache-and-network`; a later reader of the same record
+ * can pass `cache-first` to take the card's answer from the cache instead of
+ * sending the request again.
+ */
 export function createPipelineEntriesQuery(
   graphql: PipelineEntriesDependencies['graphql'],
-  record: Accessor<PipelineEntryRecord | undefined>
+  record: Accessor<PipelineEntryRecord | undefined>,
+  requestPolicy: 'cache-and-network' | 'cache-first' = 'cache-and-network'
 ) {
   const client = createMemo(graphql);
   const query = createLiveQuery(
@@ -164,7 +170,7 @@ export function createPipelineEntriesQuery(
     },
     () => ({
       client: client(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy,
       keepPreviousData: false,
       select: (data) =>
         data.user.soup.items.flatMap((item) =>
