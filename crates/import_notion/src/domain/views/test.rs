@@ -444,3 +444,41 @@ fn people_presence_cannot_assume_every_source_person_was_matched_to_macro() {
             .any(|loss| loss.kind == ViewLossKind::Filter && loss.path == "filter")
     );
 }
+
+#[test]
+fn approximating_an_and_keeps_supported_clauses_and_drops_an_incomplete_or() {
+    let view: NotionView = serde_json::from_value(json!({
+        "parent":{"database_id":"00000000-0000-4000-8000-000000000002"},
+        "id":"00000000-0000-4000-8000-000000000001", "name":"Filtered", "type":"table",
+        "data_source_id":"00000000-0000-4000-8000-000000000003",
+        "filter":{"and":[
+            {"property":"title", "title":{"contains":"release"}},
+            {"or":[{"property":"title", "title":{"contains":"fix"}},
+                     {"property":"missing", "date":{"this_week":{}}}]},
+            {"property":"unknown", "formula":{"number":{"equals":3}}}
+        ]}
+    }))
+    .unwrap();
+    let translated = translate(
+        &view,
+        &[ViewColumnBinding {
+            property_id: "title".into(),
+            property_name: "Name".into(),
+            column: ColumnId::from_uuid(Uuid::from_u128(1)),
+            kind: ColumnKind::Text,
+            options: BTreeMap::new(),
+            snapshot: false,
+        }],
+    );
+    let filter = translated.view.query.filter.unwrap();
+    assert_eq!(filter.conjunction, Conjunction::And);
+    assert_eq!(filter.conditions.len(), 1);
+    assert_eq!(
+        translated
+            .losses
+            .iter()
+            .filter(|loss| loss.kind == ViewLossKind::Filter)
+            .count(),
+        2
+    );
+}

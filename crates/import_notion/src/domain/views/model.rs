@@ -103,7 +103,7 @@ pub struct ViewColumnBinding {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewLossKind {
-    /// Predicate was not translated; the entire filter is omitted.
+    /// A predicate or incomplete OR group was omitted, broadening the result.
     Filter,
     /// A sort key was omitted.
     Sort,

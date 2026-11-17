@@ -65,9 +65,8 @@ pub fn bindings(
         .collect()
 }
 
-/// Translate a preset using the actual imported schema. Filters are atomic:
-/// if any branch is unsupported, omit the whole filter and report its losses.
-/// This preserves boolean meaning rather than narrowing/broadening a partial OR.
+/// Translate using the imported schema. Unsupported AND clauses and incomplete
+/// OR groups are omitted with losses, preserving a superset of the source rows.
 #[tracing::instrument(name = "notion.translate_view", skip_all, fields(view_id = %view.id, losses = tracing::field::Empty))]
 pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> TranslatedView {
     let mut losses = Vec::new();

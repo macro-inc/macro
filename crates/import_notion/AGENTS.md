@@ -22,8 +22,9 @@ maps a data source onto Macro database columns and cells
   each row's `CellWrite`s.
 - `src/domain/views/`: Views API models and pure saved-view translation;
   `bindings` uses the actual column plan, and `translate` returns a `NewView`
-  plus typed losses that the import report must surface. Unsupported filter
-  branches omit the entire filter, never a partial boolean expression.
+  plus typed losses that the import report must surface. Unsupported AND clauses are
+  omitted; an incomplete OR group is omitted in full. Approximations preserve
+  a superset of source rows and must be visibly labelled by the writer.
 - `src/outbound/rest.rs`: requests, retries, pacing; `rest/wire.rs` maps
   Notion's wire shapes to the model.
 - `src/outbound/pipedream.rs`: reaching Notion through Pipedream's Connect

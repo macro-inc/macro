@@ -1,4 +1,4 @@
-//! Atomic translation of Notion's recursive data-source filter syntax.
+//! Conservative translation: approximations can broaden, never narrow, rows.
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use models_databases::{ColumnKind, views::*};
 use serde_json::Value;
@@ -32,7 +32,7 @@ fn node(
             losses,
             ViewLossKind::Filter,
             path,
-            "Filter must be an object; entire filter omitted",
+            "Filter must be an object; predicate omitted; view may include additional rows",
         );
         return None;
     };
@@ -41,7 +41,7 @@ fn node(
             losses,
             ViewLossKind::Filter,
             path,
-            "Filter nesting exceeds translation limit; entire filter omitted",
+            "Filter nesting exceeds translation limit; predicate omitted; view may include additional rows",
         );
         return None;
     }
@@ -60,14 +60,16 @@ fn node(
                 losses,
                 ViewLossKind::Filter,
                 path,
-                "Malformed compound filter; entire filter omitted",
+                "Malformed compound filter; predicate omitted; view may include additional rows",
             );
             return None;
         };
-        // Inspect every branch to collect all losses, but retain no partial predicate.
+        // Dropping an AND clause broadens the result. An incomplete OR must
+        // be omitted in full, since keeping its other branches would narrow it.
         let mut valid = true;
         let mut conditions = Vec::new();
         for (index, child) in children.iter().enumerate() {
+            let before = losses.len();
             match node(
                 child,
                 columns,
@@ -78,20 +80,25 @@ fn node(
                 Some(condition) => conditions.push(condition),
                 None => valid = false,
             }
+            if losses.len() != before {
+                valid = false;
+            }
         }
         if children.is_empty() {
             loss(
                 losses,
                 ViewLossKind::Filter,
                 path,
-                "Empty compound filter has no portable meaning; entire filter omitted",
+                "Empty compound filter has no portable meaning; predicate omitted; view may include additional rows",
             );
             valid = false;
         }
-        return valid.then_some(FilterNode::Group(FilterGroup {
-            conjunction,
-            conditions,
-        }));
+        return (!conditions.is_empty() && (valid || conjunction == Conjunction::And)).then_some(
+            FilterNode::Group(FilterGroup {
+                conjunction,
+                conditions,
+            }),
+        );
     }
     let translated = condition(value, columns);
     if translated.is_none() {
@@ -99,7 +106,7 @@ fn node(
             losses,
             ViewLossKind::Filter,
             path,
-            "Unsupported predicate, value, or unmapped column/option; entire filter omitted",
+            "Unsupported predicate, value, or unmapped column/option; predicate omitted; view may include additional rows",
         );
     }
     translated
