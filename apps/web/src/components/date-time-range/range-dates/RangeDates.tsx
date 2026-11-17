@@ -10,8 +10,9 @@ import { createRangeDateSelection } from '../primitives/create-range-date-select
 import { RangeDateTrigger } from './RangeDateTrigger';
 
 /** Date pills for one range; both share a one-month, two-click range picker. */
-export function RangeDates() {
+export function RangeDates(props: { layout?: 'inline' | 'columns' }) {
   const range = useDateTimeRange();
+  const columns = () => props.layout === 'columns';
   const [anchor, setAnchor] = createSignal<HTMLElement>();
   let triggers: HTMLDivElement | undefined;
   let content: HTMLDivElement | undefined;
@@ -55,9 +56,17 @@ export function RangeDates() {
       placement="bottom-start"
       gutter={4}
     >
-      <div ref={triggers} class="flex shrink-0 items-center gap-1">
+      <div
+        ref={triggers}
+        class={
+          columns()
+            ? 'grid grid-cols-[110px_24px_110px] items-center'
+            : 'flex shrink-0 items-center gap-1'
+        }
+      >
         <RangeDateTrigger
           date={start()}
+          fullWidth={columns()}
           label={t('common.editStartDate', { subject: range.subject })}
           placeholder={t('common.startDate')}
           active={open() && !choosingEnd()}
@@ -68,11 +77,12 @@ export function RangeDates() {
         />
         <Show when={showEnd()}>
           <ArrowRightIcon
-            class="size-3 shrink-0 text-ink-extra-muted"
+            class="size-3 shrink-0 justify-self-center text-ink-extra-muted"
             aria-hidden="true"
           />
           <RangeDateTrigger
             date={end()}
+            fullWidth={columns()}
             label={t('common.editEndDate', { subject: range.subject })}
             placeholder={t('common.endDate')}
             active={choosingEnd()}

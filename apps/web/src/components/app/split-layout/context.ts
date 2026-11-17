@@ -104,13 +104,16 @@ export type SplitPanelContextType = {
    * for actions that stay in reach; absent outside a touch popover.
    */
   drawerHeader?: Accessor<HTMLElement | undefined>;
+  /** Pinned actions below the touch sheet's scroll body; absent outside a touch popover. */
+  drawerFooter?: Accessor<HTMLElement | undefined>;
+  /** The touch sheet's scroll viewport; absent outside a touch popover. */
+  drawerScrollBody?: Accessor<HTMLElement | undefined>;
   /**
-   * Opens the touch sheet at a fixed 70% height while the calling owner
-   * lives, for content that grows to fill it (a composer's body); other
-   * content keeps the sheet at its natural height. Absent outside a touch
-   * popover.
+   * Opens the touch sheet at a fixed height (70% by default) while the calling
+   * owner lives, for content that grows to fill it; other content keeps the
+   * sheet at its natural height. Absent outside a touch popover.
    */
-  fillDrawer?: () => void;
+  fillDrawer?: (requestedHeight?: number) => void;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

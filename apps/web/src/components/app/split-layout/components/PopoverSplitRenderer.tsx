@@ -66,10 +66,12 @@ function PopoverSplitModal(props: {
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
-  const [fillsDrawer, setFillsDrawer] = createSignal(false);
-  const fillDrawer = () => {
-    setFillsDrawer(true);
-    onCleanup(() => setFillsDrawer(false));
+  const [drawerFooter, setDrawerFooter] = createSignal<HTMLElement>();
+  const [drawerScrollBody, setDrawerScrollBody] = createSignal<HTMLElement>();
+  const [drawerTargetHeight, setDrawerTargetHeight] = createSignal<number>();
+  const fillDrawer = (requestedHeight = 70) => {
+    setDrawerTargetHeight(requestedHeight);
+    onCleanup(() => setDrawerTargetHeight(undefined));
   };
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
@@ -136,6 +138,8 @@ function PopoverSplitModal(props: {
     isPanelActive: () => true,
     panelRef,
     drawerHeader,
+    drawerFooter,
+    drawerScrollBody,
     ...(isTouchDevice() ? { fillDrawer } : {}),
     panelSize: { width: null, height: null },
     contentOffsetTop,
@@ -166,7 +170,11 @@ function PopoverSplitModal(props: {
     <SplitPanelContext.Provider value={stubPanelContext}>
       <SoupContextProvider>
         <Show when={props.popover.mount}>
-          <Panel.Body class={cn(fillsDrawer() && 'flex flex-auto flex-col')}>
+          <Panel.Body
+            class={cn(
+              drawerTargetHeight() != null && 'flex flex-auto flex-col'
+            )}
+          >
             <Suspense>
               <Dynamic component={props.popover.mount.element} />
             </Suspense>
@@ -207,24 +215,34 @@ function PopoverSplitModal(props: {
             ref={attachPanel}
             aria-label={displayName()}
             maxHeight={92}
+            class="[&:has(>[data-drawer-footer]:not(:empty))>[data-drawer-scroll-body]]:pb-0"
             // Room to write a few paragraphs without covering the page.
-            targetHeight={fillsDrawer() ? 70 : undefined}
+            targetHeight={drawerTargetHeight()}
           >
             <MobileDrawer.Handle />
             {/* Before the scroll body so it exists when the content mounts;
                 hidden unless the content portals its pinned actions here. */}
             <div ref={setDrawerHeader} class="shrink-0 empty:hidden" />
-            <MobileDrawer.ScrollBody>
+            <MobileDrawer.ScrollBody ref={setDrawerScrollBody}>
               {/* As in Dialog's drawer: at its natural height the body's
                   overflow-clip cannot clip the drawer's scroll body. Filling
                   content grows past it but never shrinks below it, so a
                   sheet the keyboard shortens still scrolls. */}
               <div
-                class={fillsDrawer() ? 'flex flex-auto flex-col' : 'shrink-0'}
+                class={
+                  drawerTargetHeight() != null
+                    ? 'flex flex-auto flex-col'
+                    : 'shrink-0'
+                }
               >
                 <Content />
               </div>
             </MobileDrawer.ScrollBody>
+            <div
+              ref={setDrawerFooter}
+              data-drawer-footer
+              class="shrink-0 empty:hidden"
+            />
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>

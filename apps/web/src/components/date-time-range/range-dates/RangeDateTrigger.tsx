@@ -14,6 +14,7 @@ export function RangeDateTrigger(props: {
   label: string;
   placeholder: string;
   active: boolean;
+  fullWidth?: boolean;
   disabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
@@ -27,6 +28,7 @@ export function RangeDateTrigger(props: {
     <Button
       variant="value"
       size="sm"
+      fullWidth={props.fullWidth}
       aria-label={props.label}
       aria-haspopup="dialog"
       aria-expanded={props.active}

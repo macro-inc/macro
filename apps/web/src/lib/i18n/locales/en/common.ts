@@ -53,4 +53,6 @@ export default {
   editEndDate: 'Edit {{subject}} end date',
   time: 'Time',
   chooseTime: 'Choose {{label}}',
+  startTimeField: '{{subject}} start time',
+  endTimeField: '{{subject}} end time',
 };

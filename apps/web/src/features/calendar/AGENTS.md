@@ -61,7 +61,9 @@ host lives in `../block-calendar/`.
   while the original per-end parts retain existing callers' behavior. Share typed
   and picked clock state through its `primitives/create-time-input.ts` in both layouts.
   Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
-  keep the old phone form wired until the full 2J layout passes conformance.
+  `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
+  `views/composer/mobile/MobileComposerWhen.tsx` composes its two-column date/time
+  grid; keep the old phone form wired until the full 2J layout passes conformance.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
