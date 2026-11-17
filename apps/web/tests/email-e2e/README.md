@@ -23,18 +23,26 @@ It needs what `just email-e2e` needs (`crates/email_e2e/AGENTS.md`: Postgres,
 Redis, an ElasticMQ and a Kafka broker in `EMAIL_E2E_*`), the repository's
 `bun install`, and Chromium (`bunx playwright install chromium`, or
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`). `EMAIL_E2E_BROWSER_WORKERS` sets how
-many tests run at once (4); each runs three services and a browser.
+many tests run at once (4); each runs three services and a browser, and half
+as many stacks again wait started for the next tests (about 0.5 GB and 40
+Postgres connections each).
 
 ## How it works
 
 - `global-setup.ts` starts `email_e2e_stacks` (`crates/email_e2e/src/stack_server.rs`),
   which starts and stops stacks over HTTP; `harness/stack.ts` is its client.
+  It keeps a stack for every two workers started ahead (`EMAIL_E2E_STACK_POOL`; `0`
+  starts each when asked): a test is handed a started stack, which no other
+  test gets, and the next one starts while the test runs. A test that sets
+  `stackEnv` waits for a stack started with that environment.
 - `harness/front.ts` gives each test one origin that serves the bundle
   (`apps/web/dist`, or `EMAIL_E2E_DIST`) and proxies `/email` and `/dss` to
   that test's services, signing each request as the test's user with the
   services' internal headers. There is no authentication service: the few
   `/auth` calls the app needs at startup are answered there, and `front.stub`
-  answers more.
+  answers more. The bundle's own files reach the page from the test process
+  (a route in the fixture answers with what the front would send), not over
+  the network.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the
   page's own origin, with the inbox re-sync control switched on
   (`VITE_ENABLE_INBOX_RESYNC`), which is off in a normal build.

@@ -105,7 +105,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - The web app against this stack: `apps/web/tests/email-e2e` (its README).
   `src/stack_server.rs` and the `email_e2e_stacks` binary serve stacks over
   HTTP for it, one per browser test; add a route there when a browser test
-  needs another of the harness's levers.
+  needs another of the harness's levers. With `EMAIL_E2E_STACK_POOL` set it
+  keeps that many stacks started ahead of the tests
+  (`src/stack_server/pool.rs`); a stack is still handed to one test only.
 - Not started yet: `calendar_service`, search, and the real notification and
   authentication services. `document_storage_service` is
   started only for its GraphQL API; its document, search and AI features

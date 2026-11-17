@@ -53,11 +53,14 @@ export default async function globalSetup(
   const server = spawn(binary, [], {
     stdio: ['ignore', 'pipe', 'inherit'],
     // The services it starts are built beside it.
-    // A started stack for each worker (the server's `pool`): a test takes
-    // one and the next is started while the test runs.
+    // Started stacks, one for every two workers (the server's `pool`): a
+    // test takes one and the next is started while the test runs. A stack
+    // starts in a fraction of the time a test takes, so half as many as
+    // the workers are enough, and each holds about 40 connections of a
+    // Postgres that CI gives 600.
     env: {
       EMAIL_E2E_BIN_DIR: dirname(binary),
-      EMAIL_E2E_STACK_POOL: String(config.workers),
+      EMAIL_E2E_STACK_POOL: String(Math.ceil(config.workers / 2)),
       ...process.env,
     },
   });
