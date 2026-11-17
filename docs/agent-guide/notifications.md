@@ -2,7 +2,7 @@
 
 ## Notifications view — `/app/notifications`
 
-Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+Behind `enable-unified-notifications`, the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
 `VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
@@ -169,7 +169,7 @@ marking it read. Local-only drafts must not issue a mailbox read.
 Channel/thread rows retain their scoped reads, and message readers still require
 actual visibility; opening another entity must not mark hidden replies seen.
 
-With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+Modern project **Mark read** and **Mark done** actions
 target all of the project's notifications, including notifications absent from
 the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
 separate `PROJECT` target.

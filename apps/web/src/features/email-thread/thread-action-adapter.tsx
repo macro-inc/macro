@@ -19,11 +19,8 @@ export function createThreadActionAdapter(
   threadSource: Accessor<EmailThread | undefined>
 ): EmailThreadCommands {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  const completion = createThreadCompletionAdapter(
-    threadSource,
-    toHeaderLinkId
-  );
-  const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
+  const completion = createThreadCompletionAdapter(threadSource);
+  const read = createThreadReadAdapter(threadId, threadSource);
   const viewerEmail = useInboxEmail(() => threadSource()?.link_id);
   const loginEmail = useEmail();
 

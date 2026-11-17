@@ -35,6 +35,7 @@ import { canEditCell, titleColumn } from '../../database/core/table';
 import type { RecordCreation } from '../../database/primitives/record-actions';
 import { CompanySelect } from '../components/company-select';
 import { RecordSearch } from '../components/record-search';
+import { startingValues } from '../core/add-to-pipeline';
 import type { PipelineRecordType, TrackedPipeline } from '../core/pipeline';
 import {
   contactCompany,
@@ -78,6 +79,8 @@ export function AddPipelineRecordDialog(
     requirementsError?: boolean;
     /** Values the row starts with, such as the stage of the board lane it was added in. */
     initialValues: Record<string, DatabaseCellValue>;
+    /** The company or contact the row is for, when it is added from that record's page. */
+    record?: RecordOption;
     onCreate: (creation: RecordCreation) => Promise<boolean>;
     onClose: () => void;
   }
@@ -85,8 +88,14 @@ export function AddPipelineRecordDialog(
   const company = props.pipeline.recordType === 'company';
   const createCompany = useCreateCompanyMutation();
   const createContact = useCreateContactMutation();
-  const companies = useQuickAccessCrmCompaniesQuery();
-  const contacts = company ? undefined : useQuickAccessCrmContactsQuery();
+  // A row added from the record's own page has no record to pick or create,
+  // so it reads neither list.
+  const companies = props.record
+    ? undefined
+    : useQuickAccessCrmCompaniesQuery();
+  const contacts =
+    company || props.record ? undefined : useQuickAccessCrmContactsQuery();
+  const companyList = () => companies?.companies() ?? [];
   const options = (): RecordOption[] =>
     contacts
       ? contacts.contacts().map((contact) => ({
@@ -94,13 +103,13 @@ export function AddPipelineRecordDialog(
           name: contact.name || contact.email || '',
           detail: contact.email ?? '',
         }))
-      : companies.companies().map((entry) => ({
+      : companyList().map((entry) => ({
           id: entry.id,
           name: entry.name,
           detail: entry.domains[0]?.domain ?? '',
         }));
   const domainCompanies = () =>
-    companies.companies().flatMap<DomainCompany>((entry) =>
+    companyList().flatMap<DomainCompany>((entry) =>
       entry.domains.length
         ? entry.domains.map((domain) => ({
             id: entry.id,
@@ -109,7 +118,7 @@ export function AddPipelineRecordDialog(
         : [{ id: entry.id, domain: undefined }]
     );
   const companyOptions = createMemo(() =>
-    companies.companies().map((company) => ({
+    companyList().map((company) => ({
       id: company.id,
       name: company.name,
       domain: company.domains[0]?.domain,
@@ -117,17 +126,12 @@ export function AddPipelineRecordDialog(
   );
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
-  const [choice, setChoice] = createSignal<RecordChoice>();
+  const [choice, setChoice] = createSignal<RecordChoice | undefined>(
+    props.record && { kind: 'existing', record: props.record }
+  );
   // System fields such as Outcome and currency start from their defaults.
-  const startingValues: Record<string, DatabaseCellValue> = {
-    ...Object.fromEntries(
-      props.columns
-        .filter((column) => column.defaultValue !== undefined)
-        .map((column) => [column.id, column.defaultValue ?? null])
-    ),
-    ...props.initialValues,
-  };
-  const [draftValues, setDraftValues] = createSignal(startingValues);
+  const initialValues = startingValues(props.columns, props.initialValues);
+  const [draftValues, setDraftValues] = createSignal(initialValues);
   const [selectedOptions, setSelectedOptions] = createSignal<
     Record<string, string>
   >(
@@ -136,7 +140,7 @@ export function AddPipelineRecordDialog(
         if (column.dataType !== 'SELECT_STRING' || column.isMultiSelect)
           return [];
         const option = column.options.find(
-          (option) => option.label === startingValues[column.id]
+          (option) => option.label === initialValues[column.id]
         );
         return option ? [[column.id, option.id]] : [];
       })
@@ -225,9 +229,7 @@ export function AddPipelineRecordDialog(
     }
     const email = current.email.trim().toLowerCase();
     const joins = current.companyId
-      ? companies
-          .companies()
-          .find((company) => company.id === current.companyId)
+      ? companyList().find((company) => company.id === current.companyId)
       : undefined;
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
@@ -334,7 +336,7 @@ export function AddPipelineRecordDialog(
         <RecordSearch
           recordType={props.pipeline.recordType}
           options={options()}
-          loading={(contacts ?? companies).query.isLoading}
+          loading={(contacts ?? companies)?.query.isLoading ?? false}
           mount={dialog()}
           onPick={(record) => changeChoice({ kind: 'existing', record })}
           onCreate={(search) =>
@@ -349,7 +351,7 @@ export function AddPipelineRecordDialog(
             recordType={props.pipeline.recordType}
             record={record()}
             disabled={pending()}
-            onChange={() => changeChoice(undefined)}
+            onChange={props.record ? undefined : () => changeChoice(undefined)}
           />
         )}
       </Match>
@@ -427,7 +429,7 @@ export function AddPipelineRecordDialog(
               onChange={(company) =>
                 changeChoice({ ...draft(), companyId: company.id })
               }
-              loading={companies.query.isLoading}
+              loading={companies?.query.isLoading ?? false}
               disabled={pending()}
               mount={dialog()}
             />
@@ -630,7 +632,8 @@ function PickedRecord(props: {
   recordType: PipelineRecordType;
   record: RecordOption;
   disabled: boolean;
-  onChange: () => void;
+  /** Absent when the row is added from the record's own page. */
+  onChange?: () => void;
 }) {
   return (
     <div class="flex min-w-0 items-center gap-2">
@@ -644,15 +647,19 @@ function PickedRecord(props: {
           </span>
         )}
       </Show>
-      <Button
-        variant="ghost"
-        size="xs"
-        class="ml-auto shrink-0"
-        disabled={props.disabled}
-        onClick={props.onChange}
-      >
-        Change {props.recordType}
-      </Button>
+      <Show when={props.onChange}>
+        {(change) => (
+          <Button
+            variant="ghost"
+            size="xs"
+            class="ml-auto shrink-0"
+            disabled={props.disabled}
+            onClick={change()}
+          >
+            Change {props.recordType}
+          </Button>
+        )}
+      </Show>
     </div>
   );
 }

@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { tryMacroId } from '@core/user/macroId';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
@@ -16,14 +14,10 @@ import { createContactResolution } from './lookup-query';
 /** Production account/cache composition, separate from the bounded window. */
 export function useContactDirectoryScope() {
   const account = useQueryAccount();
-  const flag = useFeatureFlag(enableGraphqlSoup);
-  return createMemo(() => {
-    flag();
-    return {
-      userId: account()?.userId,
-      host: getGraphqlSoupCacheHost(),
-    };
-  });
+  return createMemo(() => ({
+    userId: account()?.userId,
+    host: getGraphqlSoupCacheHost(),
+  }));
 }
 
 export const useContactFilterSource: ContactFilterSourceFactory = (
