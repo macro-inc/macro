@@ -312,6 +312,18 @@ impl IntoResponse for EgressError {
             Self::Internal(_) => "Egress failed.",
         };
 
+        if let Self::RateLimited {
+            retry_after: Some(wait),
+        } = &self
+        {
+            let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
+            return (
+                status,
+                [(http::header::RETRY_AFTER, seconds.max(1).to_string())],
+                body,
+            )
+                .into_response();
+        }
         (status, body).into_response()
     }
 }

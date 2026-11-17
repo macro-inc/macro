@@ -1,5 +1,4 @@
 use super::*;
-use agent_code_mode::domain::connected_apps::ConnectedAppKind;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time::Instant;
@@ -15,13 +14,14 @@ fn policy() -> BudgetPolicy {
 }
 
 fn lane(account: &str) -> BudgetLane {
-    BudgetLane {
-        account: MacroUserIdStr::try_from_email(account).unwrap(),
-        app: ConnectedAppRef {
-            kind: ConnectedAppKind::Custom,
-            key: "github".into(),
-        },
-    }
+    BudgetLane::of(
+        MacroUserIdStr::try_from_email(account).unwrap(),
+        &UpstreamCall::bearer(
+            url::Url::parse("https://api.githubcopilot.com/mcp/").unwrap(),
+            crate::domain::model::BearerToken::new("test-credential"),
+        )
+        .unwrap(),
+    )
 }
 
 /// A fake upstream: records when each attempt started and how many were
@@ -125,8 +125,9 @@ async fn a_429_cools_the_whole_lane_down_for_retry_after_and_the_call_is_retried
     let (first, second) = tokio::join!(
         budget.run(lane("owner@example.com"), || upstream.call()),
         async {
-            // Queued behind the first call's start, so it starts after the 429.
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            // Reserves the next slot before the first call's 429 lands, so it
+            // finds the cooldown only once it wakes for that slot.
+            tokio::time::sleep(Duration::from_millis(1)).await;
             budget
                 .run(lane("owner@example.com"), || upstream.call())
                 .await
@@ -169,7 +170,10 @@ async fn a_call_still_refused_at_its_deadline_fails_as_rate_limited() {
         (2..=5).contains(&attempts),
         "retried within the 5s deadline, made {attempts} attempts"
     );
-    assert!(start.elapsed() <= Duration::from_secs(5));
+    assert!(
+        start.elapsed() <= Duration::from_secs(5) + upstream.latency,
+        "no attempt starts after the deadline"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -184,4 +188,46 @@ async fn a_429_without_retry_after_waits_the_default() {
 
     assert!(result.is_ok());
     assert!(upstream.starts.lock().unwrap()[1] - start >= Duration::from_secs(1));
+}
+
+#[async_trait::async_trait]
+impl ActorMcpTransport for Upstream {
+    async fn exchange(
+        &self,
+        _: AgentSessionId,
+        _: MacroUserIdStr<'static>,
+        _: UpstreamCall,
+        _: Value,
+    ) -> Result<Value, EgressError> {
+        self.call()
+            .await
+            .map(|attempt| serde_json::json!({"attempt": attempt}))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_transport_retries_an_exchange_the_upstream_refused() {
+    let upstream = Arc::new(Upstream::new(
+        Duration::from_millis(10),
+        1,
+        Some(Duration::from_secs(1)),
+    ));
+    let transport = BudgetedMcpTransport::new(upstream.clone(), policy());
+
+    let result = transport
+        .exchange(
+            AgentSessionId::new(),
+            MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            UpstreamCall::bearer(
+                url::Url::parse("https://api.githubcopilot.com/mcp/").unwrap(),
+                crate::domain::model::BearerToken::new("test-credential"),
+            )
+            .unwrap(),
+            serde_json::json!({"method": "tools/call", "params": {"name": "search"}}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result["attempt"], 1);
+    assert_eq!(upstream.attempts.load(Ordering::SeqCst), 2);
 }

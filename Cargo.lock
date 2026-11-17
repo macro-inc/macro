@@ -784,7 +784,6 @@ dependencies = [
  "png",
  "prompt",
  "properties",
- "rand 0.9.4",
  "rate_limit",
  "rdkafka",
  "readonly_pool",

@@ -32,8 +32,6 @@ use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-pub mod budget;
-
 /// Most `tools/list` pages read for one app.
 const MAX_TOOL_PAGES: usize = 20;
 
@@ -46,8 +44,6 @@ pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
     pub gate: Arc<dyn NativeToolGate>,
     pub connectors: ai_tools::ToolConnectorToolContext,
     pub mcp_servers: ai_tools::ToolMcpServerToolContext,
-    /// Paces each account's calls to each app, across its executions.
-    pub budget: budget::CallBudget,
 }
 
 /// A use settled against the session: its grant, the account it spends and
@@ -225,20 +221,9 @@ where
             "method": "tools/call",
             "params": {"name": call.tool, "arguments": call.arguments},
         });
-        let lane = budget::BudgetLane {
-            account: settled.user.clone(),
-            app: app.clone(),
-        };
         let result = self
-            .budget
-            .run(lane, || {
-                self.egress.exchange_as(
-                    &settled.grant,
-                    &settled.user,
-                    &destination,
-                    request.clone(),
-                )
-            })
+            .egress
+            .exchange_as(&settled.grant, &settled.user, &destination, request)
             .await
             .map_err(egress_error)?;
         Ok(ConnectedToolResult {

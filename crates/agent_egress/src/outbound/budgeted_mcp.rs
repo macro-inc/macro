@@ -1,20 +1,29 @@
-//! One account's call budget for one connected app.
+//! One account's call budget for one MCP upstream.
 //!
 //! A program that `Promise.all`s a call per pull request sends hundreds of
 //! calls at once, and an owner's scheduled routines start together, so the
-//! upstream answers most of them with HTTP 429. Every call one account makes
-//! to one app shares a lane here, across all of that account's running
-//! programs: a few calls in flight, starts spaced apart, and a 429's
-//! `Retry-After` cools the whole lane down before anything in it is sent
-//! again. A refused call is retried until its deadline; one still refused
-//! then fails as rate limited, never as a result that looks like success.
+//! upstream answers most of them with HTTP 429. Every exchange one account
+//! makes with one upstream shares a lane here, across all of that account's
+//! sessions and executions: a few in flight, starts spaced apart, and a
+//! 429's `Retry-After` cools the whole lane down before anything in it is
+//! sent again. A refused exchange is retried while its deadline allows
+//! another start; one still refused then fails as
+//! [`EgressError::RateLimited`], never as a result that looks like success.
 //!
-//! Lanes live in this harness instance's memory: replicas each keep their
-//! own, so the budget an account gets grows with the replica count.
+//! It wraps only the HTTP send: credential resolution and owner approvals
+//! happen before a call reaches the transport, so nobody waiting on a person
+//! holds a lane's permit, and a retry never asks for approval twice.
+//!
+//! Lanes live in this process's memory: replicas each keep their own, so the
+//! budget an account gets grows with the replica count.
 
-use agent_code_mode::domain::connected_apps::ConnectedAppRef;
-use agent_egress::domain::error::EgressError;
+use crate::domain::{
+    error::EgressError,
+    model::{AgentSessionId, UpstreamCall},
+    ports::ActorMcpTransport,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -36,18 +45,19 @@ pub struct BudgetPolicy {
     pub concurrency: usize,
     /// Least time between two calls starting.
     pub interval: Duration,
-    /// Longest one call may wait, retries included.
+    /// After this long, a call gets no new attempt: it bounds when the last
+    /// attempt may start, not how long that attempt then runs.
     pub deadline: Duration,
     /// The wait after a 429 that named none.
     pub default_retry_after: Duration,
-    /// Most random time added to a cooldown, so waiting calls do not all
-    /// retry in the same instant.
+    /// Most random time added to a cooldown, so replicas that each saw the
+    /// 429 do not all resume in the same instant.
     pub max_jitter: Duration,
 }
 
 impl BudgetPolicy {
-    /// Four calls at once, ten starts a second, and 25 seconds to get one
-    /// through, inside an execution's 30-second lifetime.
+    /// Four calls at once, ten starts a second, and no new attempt after 25
+    /// seconds, inside a code execution's 30-second lifetime.
     pub const DEFAULT: Self = Self {
         concurrency: 4,
         interval: Duration::from_millis(100),
@@ -57,13 +67,34 @@ impl BudgetPolicy {
     };
 }
 
-/// The calls that share a budget: one account's calls to one app.
+/// The calls that share a budget: one account's calls to one upstream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BudgetLane {
     /// The account whose quota the calls spend.
     pub account: MacroUserIdStr<'static>,
-    /// The app they call.
-    pub app: ConnectedAppRef,
+    /// The upstream's URL and the scope headers that name the app behind a
+    /// shared endpoint (Pipedream's app slug), never its credential.
+    pub upstream: String,
+    /// The upstream's host, the only part recorded on spans.
+    pub host: String,
+}
+
+impl BudgetLane {
+    /// The lane `upstream`'s calls as `account` share.
+    pub fn of(account: MacroUserIdStr<'static>, upstream: &UpstreamCall) -> Self {
+        let mut key = upstream.url().to_string();
+        for (name, value) in upstream.scope_headers() {
+            key.push('\n');
+            key.push_str(name.as_str());
+            key.push(':');
+            key.push_str(&String::from_utf8_lossy(value.as_bytes()));
+        }
+        Self {
+            account,
+            upstream: key,
+            host: upstream.url().host_str().unwrap_or_default().to_owned(),
+        }
+    }
 }
 
 /// Paces connected-app calls per [`BudgetLane`].
@@ -110,13 +141,20 @@ impl Lane {
     }
 
     fn cooling(&self, now: Instant) -> bool {
+        self.remaining_cooldown(now).is_some()
+    }
+
+    /// How long until the lane's cooldown ends, if it is cooling.
+    fn remaining_cooldown(&self, now: Instant) -> Option<Duration> {
         self.schedule()
             .cooldown_until
-            .is_some_and(|until| until > now)
+            .filter(|until| *until > now)
+            .map(|until| until - now)
     }
 }
 
 impl CallBudget {
+    /// A budget with no lanes yet, every lane under `policy`.
     pub fn new(policy: BudgetPolicy) -> Self {
         Self {
             policy,
@@ -150,9 +188,8 @@ impl CallBudget {
         Attempt: Future<Output = Result<T, EgressError>>,
     {
         let span = tracing::info_span!(
-            "connected_app.budget",
-            app_kind = ?lane.app.kind,
-            app_key = %lane.app.key,
+            "mcp.call_budget",
+            upstream_host = %lane.host,
             wait_ms = tracing::field::Empty,
             attempts = tracing::field::Empty,
             rate_limited = tracing::field::Empty,
@@ -165,18 +202,17 @@ impl CallBudget {
             let mut waited = Duration::ZERO;
             let mut attempts = 0u32;
             let mut refusals = 0u32;
-            let mut retry_after = None;
             let result = loop {
                 let queued = Instant::now();
                 let Ok(Ok(permit)) =
                     tokio::time::timeout_at(deadline, lane.permits.acquire()).await
                 else {
                     waited += queued.elapsed();
-                    break Err(EgressError::RateLimited { retry_after });
+                    break Err(exhausted(&lane));
                 };
                 let Some(start) = lane.reserve(policy.interval, deadline) else {
                     waited += queued.elapsed();
-                    break Err(EgressError::RateLimited { retry_after });
+                    break Err(exhausted(&lane));
                 };
                 tokio::time::sleep_until(start).await;
                 waited += queued.elapsed();
@@ -190,7 +226,6 @@ impl CallBudget {
                 match outcome {
                     Err(EgressError::RateLimited { retry_after: asked }) => {
                         refusals += 1;
-                        retry_after = asked;
                         let jitter = Duration::from_millis(rand::random_range(
                             0..=u64::try_from(policy.max_jitter.as_millis()).unwrap_or(u64::MAX),
                         ));
@@ -220,12 +255,55 @@ impl CallBudget {
                 tracing::warn!(
                     attempts,
                     refusals,
-                    "connected app still rate limited at the deadline"
+                    "MCP upstream still rate limited at the deadline"
                 );
             }
             result
         }
         .instrument(span)
         .await
+    }
+}
+
+/// The failure of a call the lane could not get through by its deadline,
+/// telling the caller how much of the lane's cooldown is left.
+fn exhausted(lane: &Lane) -> EgressError {
+    EgressError::RateLimited {
+        retry_after: lane.remaining_cooldown(Instant::now()),
+    }
+}
+
+/// An [`ActorMcpTransport`] whose exchanges run within [`CallBudget`].
+pub struct BudgetedMcpTransport {
+    inner: Arc<dyn ActorMcpTransport>,
+    budget: CallBudget,
+}
+
+impl BudgetedMcpTransport {
+    /// Pace `inner`'s exchanges under `policy`.
+    pub fn new(inner: Arc<dyn ActorMcpTransport>, policy: BudgetPolicy) -> Self {
+        Self {
+            inner,
+            budget: CallBudget::new(policy),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ActorMcpTransport for BudgetedMcpTransport {
+    async fn exchange(
+        &self,
+        session: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        upstream: UpstreamCall,
+        request: Value,
+    ) -> Result<Value, EgressError> {
+        let lane = BudgetLane::of(actor.clone(), &upstream);
+        self.budget
+            .run(lane, || {
+                self.inner
+                    .exchange(session, actor.clone(), upstream.clone(), request.clone())
+            })
+            .await
     }
 }

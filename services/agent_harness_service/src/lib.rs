@@ -631,8 +631,17 @@ pub async fn run() -> anyhow::Result<()> {
             matches!(config.environment, Environment::Local),
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
+        // Each account's MCP exchanges are paced per upstream, after
+        // approvals, and a 429 is retried after its Retry-After.
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
+            agent_egress::outbound::budgeted_mcp::BudgetedMcpTransport::new(
+                Arc::new(
+                    agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(
+                        mcp_address_policy,
+                    )?,
+                ),
+                agent_egress::outbound::budgeted_mcp::BudgetPolicy::DEFAULT,
+            ),
         )),
     );
 
@@ -897,9 +906,6 @@ pub async fn run() -> anyhow::Result<()> {
             gate: owner_tool_gate.clone(),
             connectors: tool_context.connector_tool_context.clone(),
             mcp_servers: tool_context.mcp_server_tool_context.clone(),
-            budget: code_mode::connected_apps::budget::CallBudget::new(
-                code_mode::connected_apps::budget::BudgetPolicy::DEFAULT,
-            ),
         }),
     );
     // A running program's `macro.ui.open`: the prompting person's own tab,
