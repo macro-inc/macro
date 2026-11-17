@@ -18,6 +18,14 @@ vi.mock('@core/mobile/native-network-status', () => ({
   },
 }));
 
+const botRecoveries = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/bots/bot-updates', () => ({
+  createBotUpdatesHandler: () => ({
+    onResult: () => {},
+    reconnect: botRecoveries,
+  }),
+}));
+
 function setNativeStatus(status: string) {
   for (const listener of [...nativeStatus.listeners]) listener(status);
 }
@@ -420,8 +428,11 @@ describe('GraphQL Soup subscription lifecycle', () => {
     receive[2]?.({ error: new Error('session rejected'), hasNext: false });
     expect(client.subscription).toHaveBeenCalledTimes(3);
 
+    botRecoveries.mockClear();
     setVisibility('visible');
     expect(client.subscription).toHaveBeenCalledTimes(6);
+    // Bots pushed while the stream was down are read again.
+    expect(botRecoveries).toHaveBeenCalledOnce();
     for (const unsubscribe of unsubscribes.slice(0, 3))
       expect(unsubscribe).toHaveBeenCalledOnce();
 

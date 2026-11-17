@@ -320,9 +320,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   // timer cannot fix (a rejected session, a protocol error). Reattach the set
   // when the app returns to the foreground or regains connectivity instead.
   const reattachOnNextOpportunity = () => {
-    stopWatchingForReattach ??= onReconnectOpportunity(() =>
-      lifecycle.replace(currentClient, currentHost)
-    );
+    stopWatchingForReattach ??= onReconnectOpportunity(() => {
+      lifecycle.replace(currentClient, currentHost);
+      // An ended stream missed what was published since; reattaching on the
+      // same socket brings no reconnect to recover it.
+      bots?.reconnect();
+    });
   };
 
   const unsubscribeAll = () => {
