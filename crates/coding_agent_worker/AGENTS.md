@@ -59,6 +59,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   An enrollment carrying `agent` (an agent teammate's computer) also writes
   its environment to `/var/lib/macrod/agent.env` (0600, owned like the
   config) for the guest's `macro-agent.service`; one without removes it.
+  A warm pool computer gets its agent after boot instead: the relay stages a
+  `ToRuntimeMessage::ApplyAgent` environment at `AGENT_ENV_INBOX`
+  (`stage_agent_env`, validated, written whole), since macrod cannot write
+  `/var/lib/macrod`; the guest's `macro-agent-apply` unit installs it.
 - `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
   computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
   session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),

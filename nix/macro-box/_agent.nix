@@ -19,6 +19,11 @@ let
   user = config.users.users.macro;
   uid = toString user.uid;
   agentEnvironment = "/var/lib/macrod/agent.env";
+  # Where macrod (as macro) stages an agent environment it is handed after
+  # boot; macro-agent-apply installs it as agentEnvironment. Matches
+  # coding_agent_worker's AGENT_ENV_INBOX.
+  agentInbox = "/run/macro-agent-inbox";
+  stagedAgentEnvironment = "${agentInbox}/agent.env";
   # HOME for the agent: its Claude Code settings and git config are its own.
   home = "${user.home}/agent";
   workspace = "${home}/workspace";
@@ -347,6 +352,11 @@ in
     ];
 
     systemd.tmpfiles.settings."20-macro-agent" = {
+      ${agentInbox}.d = {
+        user = "macro";
+        group = "macro";
+        mode = "0700";
+      };
       ${home}.d = {
         user = "macro";
         group = "macro";
@@ -410,6 +420,33 @@ in
           restartFile
         ];
         Unit = "macro-agent-restart.service";
+      };
+    };
+    # A warm pool computer boots with no agent. When a team takes it for an
+    # agent teammate, macrod stages the agent's environment; this installs it
+    # where the agent's units read it, which starts the agent (above).
+    systemd.paths.macro-agent-apply = {
+      description = "Watch for an agent environment macrod was handed";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathExists = stagedAgentEnvironment;
+        Unit = "macro-agent-apply.service";
+      };
+    };
+    systemd.services.macro-agent-apply = {
+      description = "Install the agent environment macrod was handed";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "macro-agent-apply";
+            runtimeInputs = [ pkgs.coreutils ];
+            text = ''
+              install -m 0600 -o macro -g macro ${stagedAgentEnvironment} ${agentEnvironment}
+              rm -f ${stagedAgentEnvironment}
+            '';
+          }
+        );
       };
     };
     systemd.services.macro-agent-restart = {

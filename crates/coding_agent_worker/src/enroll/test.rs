@@ -426,3 +426,39 @@ fn a_computer_without_an_agent_has_no_brain_environment() {
     // Nothing to remove is fine too.
     write_agent_env(&env_path, None, &config, &FakeHost::default()).unwrap();
 }
+
+#[test]
+fn a_handed_agent_environment_is_staged_whole_for_the_guest_to_install() {
+    let dir = tempfile::tempdir().unwrap();
+    let inbox = dir.path().join("inbox").join("agent.env");
+    let environment = [
+        ("MACRO_API_KEY".to_owned(), "mak_\"ada\"".to_owned()),
+        ("MACRO_AGENT_NAME".to_owned(), "Ada".to_owned()),
+    ]
+    .into_iter()
+    .collect();
+
+    stage_agent_env(&inbox, &environment).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(&inbox).unwrap(),
+        "MACRO_AGENT_NAME=\"Ada\"\nMACRO_API_KEY=\"mak_\\\"ada\\\"\"\n"
+    );
+    assert_eq!(
+        std::fs::metadata(&inbox).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(!inbox.with_extension("partial").exists());
+}
+
+#[test]
+fn a_handed_agent_environment_with_an_unsafe_name_or_value_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let inbox = dir.path().join("agent.env");
+
+    for (key, value) in [("lowercase", "x"), ("MACRO_API_KEY", "two\nlines")] {
+        let environment = [(key.to_owned(), value.to_owned())].into_iter().collect();
+        assert!(stage_agent_env(&inbox, &environment).is_err(), "{key}");
+    }
+    assert!(!inbox.exists());
+}

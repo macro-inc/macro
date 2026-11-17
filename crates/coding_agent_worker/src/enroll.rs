@@ -422,12 +422,48 @@ fn write_agent_env(
 ///
 /// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
 fn agent_env_file(agent: &hosted_runtimes::domain::agent::AgentEnrollment) -> String {
+    env_file(&agent.env)
+}
+
+fn env_file(env: &hosted_runtimes::domain::agent::AgentEnv) -> String {
     let mut contents = String::new();
-    for (key, value) in agent.env.expose() {
+    for (key, value) in env.expose() {
         let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
         contents.push_str(&format!("{}=\"{escaped}\"\n", key.as_str()));
     }
     contents
+}
+
+/// Where macrod stages an agent environment the control plane hands it after
+/// boot (a warm pool computer a team took for an agent teammate). macrod runs
+/// as `macro` and cannot write [`AGENT_ENV_PATH`]'s directory; the guest's
+/// `macro-agent-apply` unit installs the staged file there, which starts the
+/// agent.
+pub const AGENT_ENV_INBOX: &str = "/run/macro-agent-inbox/agent.env";
+
+/// Validate an agent environment from the wire and stage it at `path`
+/// (mode 0600), written whole: it appears under its name only once complete,
+/// so the unit that watches for it never installs a partial file.
+pub fn stage_agent_env(
+    path: &Path,
+    environment: &std::collections::BTreeMap<String, String>,
+) -> rootcause::Result<()> {
+    use hosted_runtimes::domain::agent::{AgentEnv, AgentEnvKey};
+
+    let values =
+        environment
+            .iter()
+            .map(|(key, value)| Ok((AgentEnvKey::new(key.clone())?, value.clone())))
+            .collect::<Result<
+                std::collections::BTreeMap<_, _>,
+                hosted_runtimes::domain::agent::InvalidAgentEnvKey,
+            >>()
+            .map_err(|error| rootcause::report!("{error}"))?;
+    let env = AgentEnv::new(values).map_err(|error| rootcause::report!("{error}"))?;
+    let staging = path.with_extension("partial");
+    write_file(&staging, &env_file(&env), 0o600)?;
+    std::fs::rename(&staging, path).context(format!("could not stage {}", path.display()))?;
+    Ok(())
 }
 
 /// Give a file its directory's owner: enrollment runs as root, macrod as the
