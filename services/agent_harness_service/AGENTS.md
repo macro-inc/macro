@@ -244,7 +244,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Code runs (session, public MCP and routine steps) reach the SDK hosts
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
-  flag client, the flag off or the flags unreadable, they go directly.
+  flag client, the flag off or the flags unreadable, they go directly. The
+  forwarder refuses what it would refuse only where
+  `enable-code-execution-egress-enforce` is on too (fail-closed off).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

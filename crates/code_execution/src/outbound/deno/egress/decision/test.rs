@@ -6,10 +6,27 @@ fn catalog() -> Catalog {
         ("email.sendMessage", "POST", "/email/messages", true),
         ("search.unifiedSearch", "POST", "/search", false),
         ("cognition.searchWeb", "POST", "/web/search", true),
+        ("unfurl.getBulkUnfurl", "POST", "/unfurl/bulk", false),
         ("storage.getBot", "GET", "/bots/{bot_id}", false),
         ("storage.getMe", "GET", "/bots/me", false),
     ])
 }
+
+const PLAIN: RunPolicy = RunPolicy {
+    enforce: false,
+    dry_run: false,
+    scoped: false,
+};
+const DRY_RUN: RunPolicy = RunPolicy {
+    enforce: false,
+    dry_run: true,
+    scoped: false,
+};
+const SCOPED: RunPolicy = RunPolicy {
+    enforce: false,
+    dry_run: false,
+    scoped: true,
+};
 
 /// An SDK read with a credential goes through as it is.
 #[test]
@@ -21,7 +38,7 @@ fn a_credentialed_sdk_read_would_be_forwarded() {
             "/email",
             "GET",
             "/email/email/threads/t1",
-            false,
+            PLAIN,
             true
         ),
         Decision {
@@ -37,7 +54,7 @@ fn a_credentialed_sdk_read_would_be_forwarded() {
             "/email",
             "HEAD",
             "/email/email/threads/t1",
-            false,
+            PLAIN,
             true
         ),
         Decision {
@@ -53,11 +70,28 @@ fn a_credentialed_sdk_read_would_be_forwarded() {
             "/dss",
             "POST",
             "/dss/search",
-            true,
+            DRY_RUN,
             true
         ),
         Decision {
             operation: Some("search.unifiedSearch"),
+            refusal: None,
+            uncatalogued: false,
+        }
+    );
+    // Bulk unfurl is an SDK read for a run that isn't scoped or dry.
+    assert_eq!(
+        decide(
+            &catalog(),
+            "unfurl",
+            "/unfurl",
+            "POST",
+            "/unfurl/unfurl/bulk",
+            PLAIN,
+            true
+        ),
+        Decision {
+            operation: Some("unfurl.getBulkUnfurl"),
             refusal: None,
             uncatalogued: false,
         }
@@ -75,7 +109,7 @@ fn what_the_forwarder_would_refuse() {
             "/email",
             "GET",
             "/image-proxy/proxy",
-            false,
+            PLAIN,
             true
         )
         .refusal,
@@ -88,7 +122,7 @@ fn what_the_forwarder_would_refuse() {
             "/email",
             "GET",
             "/emailx/threads/t1",
-            false,
+            PLAIN,
             true
         )
         .refusal,
@@ -103,7 +137,7 @@ fn what_the_forwarder_would_refuse() {
         ("email", "/email", "GET", "/email//email/threads/t1"),
     ] {
         assert_eq!(
-            decide(&catalog(), service, base, method, path, false, true).refusal,
+            decide(&catalog(), service, base, method, path, PLAIN, true).refusal,
             Some(Refusal::UnknownOperation),
             "{method} {path}"
         );
@@ -115,7 +149,7 @@ fn what_the_forwarder_would_refuse() {
             "/email",
             "POST",
             "/email/email/messages",
-            true,
+            DRY_RUN,
             true
         ),
         Decision {
@@ -131,7 +165,7 @@ fn what_the_forwarder_would_refuse() {
             "/email",
             "GET",
             "/email/email/threads/t1",
-            false,
+            PLAIN,
             false
         ),
         Decision {
@@ -139,6 +173,69 @@ fn what_the_forwarder_would_refuse() {
             refusal: Some(Refusal::NoCredential),
             uncatalogued: false,
         }
+    );
+}
+
+/// A scoped or dry run is refused the routes anyone may call that reach
+/// someone else or an outside site, credential or not; another run isn't.
+#[test]
+fn scoped_and_dry_runs_are_refused_anonymous_outward_routes() {
+    for (service, base, method, path) in [
+        (
+            "calendar",
+            "/calendar",
+            "POST",
+            "/calendar/scheduling/public/wolf/intro/book",
+        ),
+        (
+            "calendar",
+            "/calendar",
+            "POST",
+            "/calendar/scheduling/public/bookings/b1/cancel",
+        ),
+        (
+            "calendar",
+            "/calendar",
+            "POST",
+            "/calendar/scheduling/public/bookings/b1/reschedule",
+        ),
+        ("unfurl", "/unfurl", "GET", "/unfurl/proxy"),
+        ("unfurl", "/unfurl", "POST", "/unfurl/unfurl/bulk"),
+        ("email", "/email", "GET", "/email/opens/token"),
+    ] {
+        for policy in [SCOPED, DRY_RUN] {
+            assert_eq!(
+                decide(&catalog(), service, base, method, path, policy, true).refusal,
+                Some(Refusal::AnonymousOutward),
+                "{policy:?} {method} {path}"
+            );
+        }
+        assert_ne!(
+            decide(&catalog(), service, base, method, path, PLAIN, true).refusal,
+            Some(Refusal::AnonymousOutward),
+            "{method} {path}"
+        );
+    }
+}
+
+/// Every refusal tells the program what to do instead.
+#[test]
+fn every_refusal_says_what_to_do_instead() {
+    assert_eq!(
+        Refusal::UnknownOperation.message("DELETE", "/email/threads/t1"),
+        "DELETE /email/threads/t1 isn't an operation of Macro's SDK, so this run can't send it. Use the macro SDK's methods instead of building requests by hand; DescribeCodeTools and ReadCodeDocs list them."
+    );
+    assert_eq!(
+        Refusal::DryRunWrite.message("POST", "/email/messages"),
+        "A dry run doesn't send changes. Return what the program would change instead of changing it."
+    );
+    assert_eq!(
+        Refusal::NoCredential.message("GET", "/email/threads/t1"),
+        "GET /email/threads/t1 was sent without the run's credential, so this run can't send it. Call the macro SDK, which adds it."
+    );
+    assert_eq!(
+        Refusal::AnonymousOutward.message("GET", "/unfurl/proxy"),
+        "GET /unfurl/proxy reaches someone else or an outside site without a credential, which this run may not do. Leave it out, or say what it would do in the result for a person to act on."
     );
 }
 
@@ -186,7 +283,7 @@ fn literal_routes_win_and_uncatalogued_services_go_unchecked() {
             "/dss",
             "GET",
             "/dss/bots/me",
-            false,
+            PLAIN,
             true
         )
         .operation,
@@ -199,7 +296,7 @@ fn literal_routes_win_and_uncatalogued_services_go_unchecked() {
             "/dss",
             "GET",
             "/dss/bots/b1",
-            false,
+            PLAIN,
             true
         )
         .operation,
@@ -212,7 +309,7 @@ fn literal_routes_win_and_uncatalogued_services_go_unchecked() {
             "",
             "GET",
             "/file/f1",
-            false,
+            PLAIN,
             false
         ),
         Decision {
@@ -228,7 +325,7 @@ fn literal_routes_win_and_uncatalogued_services_go_unchecked() {
             "",
             "PUT",
             "/file/f1",
-            true,
+            DRY_RUN,
             true
         )
         .refusal,
@@ -248,7 +345,7 @@ fn services_that_share_a_base_are_decided_together() {
             "/dss",
             "POST",
             "/dss/search",
-            false,
+            PLAIN,
             true
         )
         .operation,
@@ -261,7 +358,7 @@ fn services_that_share_a_base_are_decided_together() {
             "/dss",
             "GET",
             "/dss/bots/me",
-            false,
+            PLAIN,
             true
         )
         .operation,
@@ -274,7 +371,7 @@ fn services_that_share_a_base_are_decided_together() {
             "/dss",
             "GET",
             "/dss/nothing",
-            false,
+            PLAIN,
             true
         )
         .refusal,

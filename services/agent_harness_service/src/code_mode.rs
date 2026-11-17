@@ -14,9 +14,13 @@ use tokio_util::sync::CancellationToken;
 
 /// The flag that sends a user's runs through the host's forwarder.
 pub const EGRESS_PROXY_FLAG: &str = "enable-code-execution-egress-proxy";
+/// The flag that has the forwarder refuse what it would refuse, for runs
+/// the proxy flag already sends through it.
+pub const EGRESS_ENFORCE_FLAG: &str = "enable-code-execution-egress-enforce";
 
 /// How a user's runs reach the SDK hosts: through the host's forwarder when
-/// [`EGRESS_PROXY_FLAG`] is on for them, else directly. Fail-closed: with no
+/// [`EGRESS_PROXY_FLAG`] is on for them, which also enforces when
+/// [`EGRESS_ENFORCE_FLAG`] is on too, else directly. Fail-closed: with no
 /// flag client, or when their flags can't be read, runs go directly, as
 /// before.
 #[derive(Clone)]
@@ -31,7 +35,13 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
             return Egress::Direct;
         };
         match flags.load(user).await {
-            Ok(snapshot) if snapshot.is_enabled(EGRESS_PROXY_FLAG) => Egress::Proxied,
+            Ok(snapshot) if snapshot.is_enabled(EGRESS_PROXY_FLAG) => {
+                if snapshot.is_enabled(EGRESS_ENFORCE_FLAG) {
+                    Egress::Enforced
+                } else {
+                    Egress::Proxied
+                }
+            }
             Ok(_) => Egress::Direct,
             Err(error) => {
                 tracing::warn!(
@@ -195,6 +205,7 @@ impl ExecutionCredentials for RunCredentials {
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
                 egress: self.egress.egress(&actor).await,
+                scoped: scope.is_some(),
             },
             acting_user: actor,
         })
@@ -244,6 +255,9 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
+        let scoped = correlation
+            .as_ref()
+            .is_some_and(|correlation| correlation.scope.is_some());
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -268,6 +282,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
             egress: self.egress.egress(user).await,
+            scoped,
         })
     }
 }

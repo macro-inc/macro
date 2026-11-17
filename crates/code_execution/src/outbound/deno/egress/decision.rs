@@ -22,6 +22,10 @@ pub(crate) enum Refusal {
     /// It carries no credential: it reaches a route anyone may call, which
     /// no scope signed into the run's credential can hold.
     NoCredential,
+    /// A scoped or dry run calling a route anyone may call that reaches
+    /// someone else or fetches an outside URL: no signed scope holds it,
+    /// since it takes no credential.
+    AnonymousOutward,
 }
 
 impl Refusal {
@@ -29,6 +33,60 @@ impl Refusal {
     pub(crate) fn as_str(self) -> &'static str {
         self.into()
     }
+
+    /// What the program is told, so the model can do something else.
+    pub(crate) fn message(self, method: &str, path: &str) -> String {
+        match self {
+            Self::OutsideService | Self::UnknownOperation => format!(
+                "{method} {path} isn't an operation of Macro's SDK, so this run can't send it. Use the macro SDK's methods instead of building requests by hand; DescribeCodeTools and ReadCodeDocs list them."
+            ),
+            Self::DryRunWrite => "A dry run doesn't send changes. Return what the program would change instead of changing it.".to_owned(),
+            Self::NoCredential => format!(
+                "{method} {path} was sent without the run's credential, so this run can't send it. Call the macro SDK, which adds it."
+            ),
+            Self::AnonymousOutward => format!(
+                "{method} {path} reaches someone else or an outside site without a credential, which this run may not do. Leave it out, or say what it would do in the result for a person to act on."
+            ),
+        }
+    }
+}
+
+/// Routes anyone may call that reach someone else (public booking) or fetch
+/// an outside URL (unfurl's proxy and bulk unfurl, the read-receipt pixel),
+/// as `(service, method, path)` under the service's base. A scoped or dry
+/// run is refused them: they take no credential, so no signed scope holds
+/// them.
+const ANONYMOUS_OUTWARD: &[(&str, &str, &str)] = &[
+    (
+        "calendar",
+        "POST",
+        "/scheduling/public/{profile}/{event}/book",
+    ),
+    (
+        "calendar",
+        "POST",
+        "/scheduling/public/bookings/{id}/cancel",
+    ),
+    (
+        "calendar",
+        "POST",
+        "/scheduling/public/bookings/{id}/reschedule",
+    ),
+    ("unfurl", "GET", "/proxy"),
+    ("unfurl", "POST", "/bulk"),
+    ("unfurl", "POST", "/unfurl/bulk"),
+    ("email", "GET", "/opens/{token}"),
+];
+
+/// What a run's forwarder holds its requests to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RunPolicy {
+    /// Refuse what it would refuse, instead of only recording it.
+    pub(crate) enforce: bool,
+    /// The run is a dry run: it may not write.
+    pub(crate) dry_run: bool,
+    /// The run's credential is held to a narrower scope.
+    pub(crate) scoped: bool,
 }
 
 /// What the forwarder decided about one request.
@@ -134,9 +192,10 @@ pub(crate) fn decide(
     base: &str,
     method: &str,
     path: &str,
-    dry_run: bool,
+    policy: RunPolicy,
     credentialed: bool,
 ) -> Decision {
+    let dry_run = policy.dry_run;
     let refused = |refusal| Decision {
         operation: None,
         refusal: Some(refusal),
@@ -149,6 +208,20 @@ pub(crate) fn decide(
     else {
         return refused(Refusal::OutsideService);
     };
+    let read_method = if method == "HEAD" { "GET" } else { method };
+    if (policy.scoped || policy.dry_run)
+        && ANONYMOUS_OUTWARD
+            .iter()
+            .any(|(listed, listed_method, template)| {
+                *listed == service
+                    && *listed_method == read_method
+                    && path_segments(template)
+                        .zip(path_segments(relative))
+                        .is_some_and(|(template, segments)| fits(&template, &segments))
+            })
+    {
+        return refused(Refusal::AnonymousOutward);
+    }
     if !catalog.routes.contains_key(service) {
         // Unchecked paths, and no credential asked for: these hosts serve
         // some files without one. A dry run still sends only reads.
@@ -187,16 +260,21 @@ pub(crate) fn decide_across(
     base: &str,
     method: &str,
     path: &str,
-    dry_run: bool,
+    policy: RunPolicy,
     credentialed: bool,
 ) -> Decision {
     let decisions: Vec<Decision> = services
         .iter()
-        .map(|service| decide(catalog, service, base, method, path, dry_run, credentialed))
+        .map(|service| decide(catalog, service, base, method, path, policy, credentialed))
         .collect();
     decisions
         .iter()
-        .find(|decision| decision.operation.is_some())
+        .find(|decision| decision.refusal == Some(Refusal::AnonymousOutward))
+        .or_else(|| {
+            decisions
+                .iter()
+                .find(|decision| decision.operation.is_some())
+        })
         .or_else(|| {
             decisions
                 .iter()

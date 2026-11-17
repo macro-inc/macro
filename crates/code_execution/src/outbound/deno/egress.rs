@@ -37,7 +37,7 @@ impl RunEgress {
         client: reqwest::Client,
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
-        dry_run: bool,
+        policy: RunPolicy,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
@@ -55,7 +55,7 @@ impl RunEgress {
             client,
             upstreams,
             run,
-            dry_run,
+            policy,
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
@@ -105,8 +105,8 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
-    /// Whether the run is a dry run, which would refuse every write.
-    dry_run: bool,
+    /// What the run's requests are held to.
+    policy: RunPolicy,
 }
 
 /// The SDK's operations, read once for every run's decisions.
@@ -225,7 +225,7 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         base_url.path(),
         request.method().as_str(),
         url.path(),
-        routes.dry_run,
+        routes.policy,
         credentialed(request.headers(), &url),
     );
     if let Some(operation) = decided.operation {
@@ -239,9 +239,16 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
     if decided.uncatalogued {
         span.record("uncatalogued", true);
     }
-    // Shadow only: recorded, and forwarded all the same.
     if let Some(refusal) = decided.refusal {
         span.record("would_refuse", refusal.as_str());
+        // Recorded only, until the run is set to enforce.
+        if routes.policy.enforce {
+            span.record("outcome", "refused");
+            span.record("status", StatusCode::FORBIDDEN.as_u16());
+            // The path the host would have seen, not the forwarder's.
+            let message = refusal.message(request.method().as_str(), url.path());
+            return (StatusCode::FORBIDDEN, message).into_response();
+        }
     }
     let method = request.method().clone();
     let mut headers = end_to_end(request.headers());
@@ -287,6 +294,8 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
 }
 
 mod decision;
+
+pub(crate) use decision::RunPolicy;
 
 #[cfg(test)]
 mod test;

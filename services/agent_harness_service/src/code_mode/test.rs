@@ -667,10 +667,29 @@ async fn the_egress_flag_fails_closed_to_direct() {
         flags.set(user.clone(), result);
         EgressRollout(Some(flags))
     };
-    let flag =
-        |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
-    assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
-    assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
+    let flags_on = |proxy: bool, enforce: bool| {
+        FlagSnapshot::new([
+            (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(proxy)),
+            (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(enforce)),
+        ])
+    };
+    assert_eq!(
+        flags(Ok(flags_on(true, false))).egress(&user).await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flags_on(true, true))).egress(&user).await,
+        Egress::Enforced
+    );
+    // Enforcing needs the forwarder: alone it changes nothing.
+    assert_eq!(
+        flags(Ok(flags_on(false, true))).egress(&user).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        flags(Ok(flags_on(false, false))).egress(&user).await,
+        Egress::Direct
+    );
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,
         Egress::Direct
