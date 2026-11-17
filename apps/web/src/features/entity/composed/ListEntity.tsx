@@ -479,6 +479,18 @@ export function ListEntity(props: ListEntityProps) {
           </div>
         </div>
       </Show>
+
+      {/* A Classic row that opens its group (or the list) also gets the line
+          above it, so every row has one on each edge. Rows within a group
+          share the previous row's line instead, so none is doubled. It
+          comes last to paint over a touch row's opaque swipe surface. */}
+      <Show when={classic() && props.isFirstInGroup}>
+        <div
+          aria-hidden="true"
+          data-row-top-line
+          class="pointer-events-none absolute inset-x-0 top-0 h-px bg-edge-divider"
+        />
+      </Show>
     </Entity.Root>
   );
 }

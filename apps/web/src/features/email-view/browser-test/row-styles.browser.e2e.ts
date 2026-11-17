@@ -192,58 +192,103 @@ for (const size of SIZES) {
     }) => {
       test.skip(phone);
       await open(page, 'classic');
-      const ORDER = [
-        'unread-1',
-        'unread-2',
-        'read-1',
-        'unread-3',
-        'read-2',
-        'read-3',
-        'unread-4',
-        'read-4',
+      // Two date groups; each opens with the first row of its own.
+      const GROUPS = [
+        ['unread-1', 'unread-2', 'read-1', 'unread-3'],
+        ['read-2', 'read-3', 'unread-4', 'read-4'],
       ];
       const edges = async (id: string) =>
         rowSurface(page, id).evaluate((root) => {
           const style = getComputedStyle(root);
           const line = getComputedStyle(root, '::after');
           const box = root.getBoundingClientRect();
-          // Lines the row paints itself, besides the shared one.
-          const ownLines = [...root.querySelectorAll('*')].filter((node) => {
-            const own = getComputedStyle(node);
-            return (
-              own.visibility !== 'hidden' &&
-              own.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
-              node.getBoundingClientRect().height <= 1
-            );
-          }).length;
+          // Lines the row paints itself, besides the one under it.
+          const ownLines = [...root.querySelectorAll('*')]
+            .filter((node) => {
+              const own = getComputedStyle(node);
+              return (
+                own.visibility !== 'hidden' &&
+                own.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+                node.getBoundingClientRect().height <= 1
+              );
+            })
+            .map((node) => {
+              const rect = node.getBoundingClientRect();
+              return {
+                top: rect.top,
+                height: rect.height,
+                width: rect.width,
+                color: getComputedStyle(node).backgroundColor,
+              };
+            });
           return {
             top: box.top,
             bottom: box.bottom,
+            width: box.width,
             borders: `${style.borderTopWidth} ${style.borderBottomWidth}`,
             shadow: style.boxShadow,
             line: line.content === 'none' ? null : line.height,
             lineColor: line.backgroundColor,
             lineWidth: line.width,
-            rowWidth: `${box.width}px`,
             ownLines,
           };
         });
+      /** Lines a date header paints: none, so no pair of lines doubles up. */
+      const headerLines = (label: string) =>
+        page.getByText(label, { exact: true }).evaluate((text) => {
+          const header = text.closest('[role="row"]');
+          if (!header) return -1;
+          return [header, ...header.querySelectorAll('*')].filter((node) => {
+            const own = getComputedStyle(node);
+            const widths = [
+              own.borderTopWidth,
+              own.borderBottomWidth,
+              own.borderLeftWidth,
+              own.borderRightWidth,
+            ];
+            return (
+              widths.some((width) => width !== '0px') ||
+              own.boxShadow !== 'none' ||
+              getComputedStyle(node, '::before').content !== 'none' ||
+              getComputedStyle(node, '::after').content !== 'none'
+            );
+          }).length;
+        });
+      expect(await headerLines('Today')).toBe(0);
+      expect(await headerLines('Yesterday')).toBe(0);
 
-      const rows = [];
-      for (const id of ORDER) rows.push(await edges(id));
-      for (const [index, row] of rows.entries()) {
-        // No border or shadow of its own: only the line under it.
-        expect(row.borders).toBe('0px 0px');
-        expect(row.shadow).toBe('none');
-        expect(row.ownLines).toBe(0);
-        expect(row.line).toBe('1px');
-        expect(row.lineColor).toBe(rows[0].lineColor);
-        // Wall to wall.
-        expect(row.lineWidth).toBe(row.rowWidth);
-        // Each row starts where the one above ends, so the pair shares it.
-        const next = rows[index + 1];
-        if (next) expect(next.top).toBe(row.bottom);
+      const groups = [];
+      for (const ids of GROUPS) {
+        const rows = [];
+        for (const id of ids) rows.push(await edges(id));
+        groups.push(rows);
       }
+      const lineColor = groups[0][0].lineColor;
+      for (const rows of groups) {
+        for (const [index, row] of rows.entries()) {
+          // No border or shadow of its own: only the line under it.
+          expect(row.borders).toBe('0px 0px');
+          expect(row.shadow).toBe('none');
+          expect(row.line).toBe('1px');
+          expect(row.lineColor).toBe(lineColor);
+          // Wall to wall.
+          expect(row.lineWidth).toBe(`${row.width}px`);
+          if (index === 0) {
+            // The group's first row also has the same line on its top edge.
+            expect(row.ownLines).toEqual([
+              { top: row.top, height: 1, width: row.width, color: lineColor },
+            ]);
+          } else {
+            // Later rows share the line of the row above them.
+            expect(row.ownLines).toEqual([]);
+            expect(row.top).toBe(rows[index - 1].bottom);
+          }
+        }
+      }
+      // A date header sits between one group's last line and the next
+      // group's first, so they never touch.
+      const lastOfFirst = groups[0][groups[0].length - 1];
+      expect(groups[1][0].top).toBeGreaterThan(lastOfFirst.bottom);
     });
 
     test('Classic checkboxes select without opening; rows still open', async ({

@@ -82,6 +82,9 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   /** The row visually closes its group (or the list) — the next row is a
    * group header or absent. Layouts use it to drop a trailing divider. */
   isLastInGroup?: boolean;
+  /** The row opens its group (or the list): the row before it is a group
+   * header or absent. Classic email rows draw a line on its top edge. */
+  isFirstInGroup?: boolean;
   /** How email rows look; other entities ignore it. Defaults to `minimalist`. */
   rowStyle?: EmailRowStyle;
 }

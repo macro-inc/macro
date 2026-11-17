@@ -1,6 +1,7 @@
 // The real Mail row in each row style over synthetic threads; no network.
 // `?style=classic` picks the style, `?theme=light` the light theme.
 import '@app/index.css';
+import { createSoupGroupHeaderRow } from '@app/features/soup/collection/rows';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -21,6 +22,7 @@ import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
+import { EmailDateGroupHeader } from '../components/EmailDateGroupHeader';
 import {
   parseEmailRowStyle,
   rowStyleForDevice,
@@ -126,6 +128,16 @@ const ROWS = mapEmailFocus({
   },
 });
 
+// Two date groups, as Mail lists them: one opens on unread mail, one on read.
+const GROUPS = [
+  { id: 'today', label: 'Today', rows: ROWS.slice(0, 4) },
+  { id: 'yesterday', label: 'Yesterday', rows: ROWS.slice(4) },
+].map((group, index) => ({
+  header: createSoupGroupHeaderRow(group),
+  isFirst: index === 0,
+  rows: group.rows,
+}));
+
 function Fixture() {
   const [list, setList] = createSignal<HTMLElement>();
   const [selected, setSelected] = createSignal<string[]>([]);
@@ -144,24 +156,35 @@ function Fixture() {
       <div ref={setList} class="soup-list min-h-0 flex-1 overflow-y-auto">
         <ListLayoutProvider ref={list} narrowLayout="inbox">
           <SwipableRowProvider container={list}>
-            <For each={ROWS}>
-              {(entity) => (
-                <div data-testid={`row-${entity.id}`} role="row">
-                  {/* Mounted as EmailList mounts them. */}
-                  <div role="gridcell">
-                    <ListEntity
-                      entity={entity}
-                      rowStyle={rowStyleForDevice(chosenStyle)}
-                      checked={selected().includes(entity.id)}
-                      highlighted={
-                        !isTouchDevice() && highlighted() === entity.id
-                      }
-                      onMouseMove={() => setHighlighted(entity.id)}
-                      onChecked={(checked) => toggle(entity.id, checked)}
-                      onClick={() => setOpened(entity.id)}
-                    />
-                  </div>
-                </div>
+            <For each={GROUPS}>
+              {(group) => (
+                <>
+                  <EmailDateGroupHeader
+                    row={group.header}
+                    isFirst={group.isFirst}
+                  />
+                  <For each={group.rows}>
+                    {(entity, index) => (
+                      <div data-testid={`row-${entity.id}`} role="row">
+                        {/* Mounted as EmailList mounts them. */}
+                        <div role="gridcell">
+                          <ListEntity
+                            entity={entity}
+                            rowStyle={rowStyleForDevice(chosenStyle)}
+                            isFirstInGroup={index() === 0}
+                            checked={selected().includes(entity.id)}
+                            highlighted={
+                              !isTouchDevice() && highlighted() === entity.id
+                            }
+                            onMouseMove={() => setHighlighted(entity.id)}
+                            onChecked={(checked) => toggle(entity.id, checked)}
+                            onClick={() => setOpened(entity.id)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </>
               )}
             </For>
           </SwipableRowProvider>

@@ -852,7 +852,7 @@ export function EmailList(props: EmailListProps) {
                         checkNearEnd();
                       }}
                     >
-                      {(row) => (
+                      {(row, index) => (
                         <Switch>
                           <Match
                             when={row.kind === 'group-header' ? row : undefined}
@@ -888,6 +888,9 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       rowStyle={emailRowStyle()}
+                                      isFirstInGroup={
+                                        rows()[index() - 1]?.kind !== 'entity'
+                                      }
                                       onFilterByTag={filterByTag}
                                       meta={
                                         <EmailFocusReason
