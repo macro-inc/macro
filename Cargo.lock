@@ -6160,6 +6160,7 @@ name = "database_webhooks"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot_id",
  "chrono",
  "databases",
  "entity_access",
@@ -6170,6 +6171,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "models_databases",
  "rand 0.9.4",
  "rootcause",
@@ -6179,6 +6181,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
