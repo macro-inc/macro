@@ -13,8 +13,8 @@
 use clap::Parser;
 use documents::domain::released_attachments::QUEUE_DEPTH_CAP;
 use documents::domain::released_attachments::orphans::{
-    DEFAULT_MAX_QUEUE_DEPTH, DEFAULT_PAGE_SIZE, DEFAULT_PER_SECOND, OrphanedAttachmentScan,
-    ScanOptions, ScanProgress,
+    DEFAULT_MAX_QUEUE_DEPTH, DEFAULT_PAGE_SIZE, DEFAULT_PER_SECOND, MAX_PAGE_SIZE,
+    OrphanedAttachmentScan, ScanOptions, ScanProgress,
 };
 use documents::outbound::pg_released_attachments::PgReleasedAttachmentRepo;
 use documents::outbound::scan_state_file::ScanStateFile;
@@ -48,7 +48,7 @@ struct Args {
     #[arg(long)]
     after: Option<String>,
 
-    /// Property rows read per page.
+    /// Property rows read per page, at most 2,000.
     #[arg(long, default_value_t = DEFAULT_PAGE_SIZE)]
     page_size: NonZeroU32,
 
@@ -74,6 +74,9 @@ async fn run(args: Args) -> Result<(), Report> {
         rootcause::bail!(
             "--max-queue-depth must be under {QUEUE_DEPTH_CAP}, which the depth is counted up to"
         );
+    }
+    if args.page_size.get() > MAX_PAGE_SIZE {
+        rootcause::bail!("--page-size must be at most {MAX_PAGE_SIZE}");
     }
     let options = ScanOptions {
         page_size: args.page_size,

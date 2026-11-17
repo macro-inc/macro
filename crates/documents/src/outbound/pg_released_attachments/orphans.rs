@@ -146,8 +146,10 @@ impl OrphanedAttachmentRepo for PgReleasedAttachmentRepo {
             .execute(&mut *transaction)
             .await?;
         // A row the drain is deleting holds this insert until the drain
-        // commits; past this the scan stops rather than queue behind it.
-        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+        // commits, and while it waits the rows it already inserted hold back
+        // the release trigger of whoever deletes their mail. As in the drain,
+        // it gives up under the deadlock detector's 1 s and the scan stops.
+        sqlx::query!("SET LOCAL lock_timeout = '500ms'")
             .execute(&mut *transaction)
             .await?;
 

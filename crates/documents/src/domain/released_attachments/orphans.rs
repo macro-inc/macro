@@ -25,6 +25,11 @@ mod test;
 /// Property rows a page reads by default.
 pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(500).expect("500 is not zero");
 
+/// Most property rows a page may read. A page probes every entity in it
+/// within one statement timeout, so its size bounds that statement's reads
+/// when they come from disk.
+pub const MAX_PAGE_SIZE: u32 = 2_000;
+
 /// Orphans queued per second by default. One drain round takes 20 batches of
 /// 500, and the drain runs one round per notification and one a minute
 /// without any: 10,000 documents a minute, about 166 a second, even if every

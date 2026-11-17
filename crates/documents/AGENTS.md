@@ -228,7 +228,8 @@ one as they do a document released today.
   `document.orphaned_attachments.page` span with its cursor and counts, and a
   progress line is logged every 30 seconds. A page is about ten round trips
   to the database, which dominate from outside AWS; a larger `--page-size`
-  (5,000 rows measured at about 25 ms a page) shortens a dry run.
+  (at most 2,000, so a page read from disk stays well inside its 10 s
+  statement timeout) shortens a dry run.
 - A document whose owner set a thread Source by hand, without importing it,
   matches too; the dry run's counts are the check before applying.
 
