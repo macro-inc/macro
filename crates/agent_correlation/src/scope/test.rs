@@ -93,6 +93,16 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     for (method, path) in [
         ("POST", "/email/messages"),
         ("POST", "/cognition/email/send-confirmed"),
+        // Booking changes the guest or host hears of.
+        ("POST", "/calendar/scheduling/bookings/01a1/approve"),
+        ("POST", "/calendar/scheduling/bookings/01a1/attendance"),
+        ("POST", "/calendar/scheduling/bookings/01a1/cancel"),
+        ("POST", "/calendar/scheduling/public/someone/intro/book"),
+        ("POST", "/calendar/scheduling/public/bookings/01a1/cancel"),
+        (
+            "POST",
+            "/calendar/scheduling/public/bookings/01a1/reschedule",
+        ),
         // Work that runs with the person's full access.
         ("POST", "/agent-harness/agent-sessions"),
         ("POST", "/agent-sessions/01a1/control"),
