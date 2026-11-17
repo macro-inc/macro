@@ -8,7 +8,6 @@ const state = vi.hoisted(() => ({
   handleResponse: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableDatabases: { key: 'enable-databases', override: undefined },
   isFeatureEnabled: () => state.enabled,
 }));
 vi.mock('./DatabaseTools', () => {

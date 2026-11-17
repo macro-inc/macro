@@ -14,7 +14,6 @@ vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
   openDocument: mocks.openDocument,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => mocks.projectsEnabled,
 }));
 

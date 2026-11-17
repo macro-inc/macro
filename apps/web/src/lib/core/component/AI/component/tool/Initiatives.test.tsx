@@ -17,7 +17,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: projectsEnabled() }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => projectsEnabled(),
 }));
 vi.mock('@app/features/projects/queries/project-revalidation', () => ({

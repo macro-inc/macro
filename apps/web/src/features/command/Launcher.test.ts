@@ -23,10 +23,7 @@ vi.mock('@core/component/EntityIcon', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableAiEditor: 'ai',
-  enableDatabases: 'databases',
   enableFigViewer: 'fig',
-  enableForms: 'forms',
-  enableProjects: 'projects',
   enablePsdEditor: 'psd',
   enableReminders: 'reminders',
   isFeatureEnabled: () => true,

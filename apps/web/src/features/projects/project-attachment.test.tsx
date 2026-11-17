@@ -16,7 +16,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   ),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects', override: undefined },
   isFeatureEnabled: () => mocks.enabled(),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({

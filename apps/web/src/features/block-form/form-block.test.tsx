@@ -16,7 +16,6 @@ const state = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => state.flag,
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableForms: {} }));
 vi.mock('../entity-appearance/entity-appearance', () => ({
   EntityAppearanceTrigger: () => null,
 }));

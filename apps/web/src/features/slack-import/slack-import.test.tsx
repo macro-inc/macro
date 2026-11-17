@@ -27,9 +27,7 @@ const host = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: host.enabled }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableSlackArchiveImport: {},
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: host.openSettings }),
 }));

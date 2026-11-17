@@ -37,9 +37,7 @@ const control = vi.hoisted(() => ({
   clicks: 0,
   deferSaved: false,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableDatabases: { key: 'enable-databases' },
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('../../context/LexicalWrapperContext', async () => ({
   LexicalWrapperContext: (await import('solid-js')).createContext(),
 }));

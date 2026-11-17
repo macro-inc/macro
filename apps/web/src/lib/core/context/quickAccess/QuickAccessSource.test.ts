@@ -87,10 +87,6 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: {},
-  enableDatabases: {},
-  enableForms: {},
-  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
