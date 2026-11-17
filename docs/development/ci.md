@@ -32,6 +32,18 @@ workflow run email_e2e.yml --ref <branch>` (`-f known_bugs=true` adds the
 known bugs). The [suite's README](../../apps/web/tests/email-e2e/README.md)
 has the trigger table and the other commands.
 
+Each workflow's pushes to `main` queue as the dev deploys do: one run at a
+time, never cancelled, and of the pushes that come meanwhile only the newest
+waits; a newer push replaces (cancels) the one waiting. A replaced commit is
+not run on its own: the next run tests the newer tree, which holds its
+changes, so the commit is covered, and a failure points to the commits since
+the last pass rather than to one commit. A push the path filters skip starts
+no run, and the next run covers it the same way. The sweep queues apart, so a
+push never replaces it. A run by hand and a re-run neither wait for nor
+replace another run: a re-run in the queue would replace the push waiting
+and test an older commit in its place (`concurrency` in `xtask_workflows`'
+`email_e2e.rs`).
+
 ### When an email end-to-end alert fires
 
 The last job of each of the three workflows, `Tell Macro Alerts`

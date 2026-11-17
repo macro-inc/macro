@@ -814,5 +814,5 @@ jobs:
       if: steps.decide.outputs.shows == 'passing'
       run: echo 'Macro Alerts now shows this workflow passing on this branch.'
 concurrency:
-  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}
-  cancel-in-progress: true
+  group: email-e2e-full-stack-${{ (github.event_name == 'workflow_dispatch' || github.run_attempt != '1') && github.run_id || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: false
