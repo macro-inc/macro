@@ -24,11 +24,14 @@ items only; this convenience is never suitable for hosted dev or production.
 Hosted environments require an approved KMS auto-unseal, storage, backup, recovery,
 TLS, provisioning identity, and durable audit design.
 
-Environment generation creates a dedicated RSA signing key and verification key
-under `infra/local/generated/<instance>/passwords-jwt.{private,public}.pem`.
-It injects `OPENBAO_ADDRESS`, `PASSWORDS_JWT_SIGNING_KEY`, and
-`PASSWORDS_JWT_ISSUER` into the local service environment. Private keys and generated
-environment files are ignored by git. Applications receive no OpenBao root token.
+LocalStack provisioning creates the asymmetric P-256 KMS key
+`alias/macro-local-passwords-jwt` that the document storage service signs its
+ES256 JWTs with, and writes its public half to
+`infra/local/generated/<instance>/passwords-jwt.public.pem`. The local service
+environment gets `OPENBAO_ADDRESS`, `PASSWORDS_JWT_KMS_KEY_ID` (that alias), and
+`PASSWORDS_JWT_ISSUER`; no private key leaves LocalStack. Tearing LocalStack
+down replaces the key, so rerun the bootstrap below for each team afterwards.
+Generated environment files are ignored by git. Applications receive no OpenBao root token.
 
 After the local stack starts, copy the bootstrap credentials into the ignored
 instance directory without printing them. Substitute the instance's actual
@@ -43,7 +46,7 @@ python3 infra/local/openbao/bootstrap.py \
   --address http://127.0.0.1:8200 \
   --team-id <team-uuid> \
   --jwt-public-key infra/local/generated/<instance>/passwords-jwt.public.pem \
-  --jwt-issuer macro-local-passwords
+  --jwt-alg ES256 --jwt-issuer macro-local-passwords
 ```
 
 The provisioning logic lives in `infra/openbao/openbao_provisioning.py`, shared with the
