@@ -929,3 +929,21 @@ fn a_checked_page_truncated_by_the_merge_resumes_after_the_last_hit_shown() {
 
     assert_eq!(anchor(&next), Uuid::from_u128(20));
 }
+
+#[tokio::test]
+async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
+    // Two messages per thread: a page of 100 hits holds 50 threads.
+    let hits: Vec<SearchHit> = mailbox(400)
+        .into_iter()
+        .map(|mut hit| {
+            hit.entity_id = Uuid::from_u128((hit.entity_id.as_u128() + 1) / 2);
+            hit
+        })
+        .collect();
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, |_| true, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(content.hits.len(), 100);
+    assert_eq!(rounds.rounds, 1);
+}

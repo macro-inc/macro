@@ -299,7 +299,8 @@ struct StateCheckRounds {
 }
 
 /// Reads pages from `args.cursor`, keeping every hit but the email hits whose
-/// thread `matching` leaves out, until `args.page_size` entities are kept,
+/// thread `matching` leaves out, until `args.page_size` hits are kept (a page
+/// counts hits, one per email message, as an unfiltered page does),
 /// the results end, or [`MAX_EMAIL_STATE_ROUNDS`] pages have been read. The
 /// cursor returned is the last page's, past every hit read.
 async fn read_until_page_kept<Search, Page, Matching, Matched>(
@@ -336,17 +337,13 @@ where
         kept.extend(hits.into_iter().filter(|hit| {
             hit.entity_type != SearchEntityType::Emails || matching.contains(&hit.entity_id)
         }));
-        if cursor.is_done()
-            || distinct_entity_count(&kept) >= page_size
-            || stats.rounds >= MAX_EMAIL_STATE_ROUNDS
-        {
+        if cursor.is_done() || kept.len() >= page_size || stats.rounds >= MAX_EMAIL_STATE_ROUNDS {
             break cursor;
         }
         args.cursor = cursor;
     };
-    stats.bound_reached = stats.rounds >= MAX_EMAIL_STATE_ROUNDS
-        && cursor.has_more()
-        && distinct_entity_count(&kept) < page_size;
+    stats.bound_reached =
+        stats.rounds >= MAX_EMAIL_STATE_ROUNDS && cursor.has_more() && kept.len() < page_size;
     Ok((
         ContentHits {
             hits: kept,
