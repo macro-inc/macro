@@ -1,5 +1,7 @@
 use super::*;
 
+mod prompt_at_ready;
+
 #[test]
 fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
     let (connected, mut runtime) = watch::channel(false);
