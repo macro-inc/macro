@@ -60,6 +60,22 @@ async fn an_answer_stands_for_an_hour_then_is_read_again() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_owner_outside_the_rollout_is_read_again_after_ten_minutes() {
+    let enrollment = FlagEnrollment::new(ScriptedFlags::answering(vec![Ok(false), Ok(true)]));
+    let ada = owner("ada@acme.example");
+
+    assert!(!enrollment.is_enrolled(&ada).await.unwrap());
+    tokio::time::advance(Duration::from_secs(9 * 60)).await;
+    assert!(!enrollment.is_enrolled(&ada).await.unwrap());
+    assert_eq!(enrollment.flags.loads.load(Ordering::SeqCst), 1);
+
+    // The rollout stepped up: seen once ten minutes are up.
+    tokio::time::advance(Duration::from_secs(60)).await;
+    assert!(enrollment.is_enrolled(&ada).await.unwrap());
+    assert_eq!(enrollment.flags.loads.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test(start_paused = true)]
 async fn each_owner_has_their_own_answer() {
     let enrollment = FlagEnrollment::new(ScriptedFlags::answering(vec![Ok(true), Ok(false)]));
     let ada = owner("ada@acme.example");
@@ -89,12 +105,8 @@ mod with_posthog_and_the_database {
     //! The worker's own wiring: the PostHog adapter behind the cache, deciding
     //! which inboxes in the Focus fixtures the service classifies.
 
-    use chrono::NaiveDate;
     use email::{
-        domain::focus::{
-            ClassifyOutcome, DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError,
-            FocusNotifier, FocusService, ProfileSource,
-        },
+        domain::focus::{ClassifyOutcome, FocusService},
         outbound::FocusPgRepository,
     };
     use feature_flags::outbound::posthog::PostHogFeatureFlags;
@@ -102,80 +114,15 @@ mod with_posthog_and_the_database {
     use macro_env::Environment;
     use serde_json::{Value, json};
     use sqlx::{Pool, Postgres};
-    use uuid::Uuid;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{body_partial_json, method, path},
     };
 
     use super::*;
-
-    /// Thread f201 in link f01, held by owner@acme.example.
-    const OWNERS_THREAD: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f201");
-    /// Thread f207 in link f02, held by other@elsewhere.example.
-    const OTHERS_THREAD: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f207");
-
-    struct NoProfile;
-
-    impl ProfileSource for NoProfile {
-        async fn profile(
-            &self,
-            _owner: &MacroUserIdStr<'static>,
-        ) -> Result<Option<String>, Report> {
-            Ok(None)
-        }
-
-        async fn time_zone(
-            &self,
-            _owner: &MacroUserIdStr<'static>,
-        ) -> Result<Option<String>, Report> {
-            Ok(None)
-        }
-    }
-
-    /// Says yes to Focus, recording the threads it was asked about.
-    #[derive(Clone, Default)]
-    struct RecordingClassifier {
-        asked: std::sync::Arc<Mutex<Vec<Uuid>>>,
-    }
-
-    impl FocusClassifier for RecordingClassifier {
-        async fn answer(
-            &self,
-            _owner: &MacroUserIdStr<'static>,
-            thread_id: Uuid,
-            _input: &Value,
-            questions: &[&'static str],
-        ) -> Result<Vec<f32>, FocusClassifierError> {
-            self.asked.lock().unwrap().push(thread_id);
-            let mut answers = vec![0.0; questions.len()];
-            answers[0] = 0.9;
-            Ok(answers)
-        }
-
-        fn model(&self) -> &'static str {
-            "jev-test"
-        }
-    }
-
-    struct NoReaders;
-
-    impl FocusNotifier for NoReaders {
-        fn focus_changed(&self, _owner: &MacroUserIdStr<'static>, _link_id: Uuid) {}
-    }
-
-    struct NoDueDates;
-
-    impl DueDateExtractor for NoDueDates {
-        async fn due_on(
-            &self,
-            _owner: &MacroUserIdStr<'static>,
-            _thread_id: Uuid,
-            _input: &DueDateInput,
-        ) -> Result<Option<NaiveDate>, Report> {
-            Ok(None)
-        }
-    }
+    use crate::test_support::{
+        NoDueDates, NoProfile, NoReaders, OTHERS_THREAD, OWNERS_THREAD, RecordingClassifier,
+    };
 
     fn flags(enabled: bool) -> Value {
         json!({
@@ -209,13 +156,13 @@ mod with_posthog_and_the_database {
             .expect(1)
             .mount(&posthog)
             .await;
-        let classifier = RecordingClassifier::default();
+        let classifier = RecordingClassifier::new(Duration::ZERO);
         let service = FocusService::new(
             FocusPgRepository(pool),
             NoProfile,
             classifier.clone(),
             NoReaders,
-            NoDueDates,
+            NoDueDates::default(),
             FlagEnrollment::new(
                 PostHogFeatureFlags::new(
                     &posthog.uri(),

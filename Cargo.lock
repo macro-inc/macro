@@ -7590,6 +7590,7 @@ dependencies = [
  "doppler-config",
  "email",
  "feature_flags",
+ "futures",
  "jev",
  "kafka_util",
  "macro_auth",

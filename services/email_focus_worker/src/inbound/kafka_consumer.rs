@@ -9,8 +9,9 @@
 //!
 //! An event's offset is committed when it is handed off, in the order received,
 //! not when its classification ends. So an event is never replayed, and one in
-//! flight when the worker dies is lost like any failed classification. The sweep
-//! that runs when the worker starts picks those up, newest first.
+//! flight when the worker dies is lost like any failed classification. The
+//! backfill and the sweep that run when the worker starts pick those up, newest
+//! first.
 
 use std::{future::Future, sync::Arc};
 

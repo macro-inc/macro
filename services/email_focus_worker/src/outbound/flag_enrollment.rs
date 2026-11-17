@@ -20,13 +20,18 @@ mod test;
 /// Shows the Focus tab and puts the owner's inboxes in the rollout.
 const EMAIL_FOCUS_FLAG: &str = "enable-email-focus";
 
-/// How long an owner's answer stands. A rollout step, up or back, reaches the
-/// worker within this, and each owner costs at most one flag request per period.
-const ANSWER_LIFETIME: Duration = Duration::from_secs(60 * 60);
+/// How long an owner's place in the rollout stands. A step back reaches the
+/// worker within this.
+const ENROLLED_LIFETIME: Duration = Duration::from_secs(60 * 60);
+/// How long an owner's place outside the rollout stands: a step up reaches
+/// the worker within this, so a newly enrolled inbox starts filling soon after.
+/// Each owner costs at most one flag request per lifetime.
+const NOT_ENROLLED_LIFETIME: Duration = Duration::from_secs(10 * 60);
 
 type Answers = HashMap<MacroUserIdStr<'static>, (bool, Instant)>;
 
-/// Reads each owner's flag at most once per [`ANSWER_LIFETIME`].
+/// Reads each owner's flag at most once per [`ENROLLED_LIFETIME`] while they
+/// are in the rollout, and once per [`NOT_ENROLLED_LIFETIME`] while they aren't.
 pub struct FlagEnrollment<F> {
     flags: F,
     /// Each owner's last answer and when it was read: one entry per owner
@@ -65,11 +70,20 @@ impl<F: FeatureFlags + 'static> FocusEnrollment for FlagEnrollment<F> {
         let answer = self
             .answers()
             .get(owner)
-            .filter(|(_, read_at)| read_at.elapsed() < ANSWER_LIFETIME)
+            .filter(|(enrolled, read_at)| read_at.elapsed() < lifetime(*enrolled))
             .map(|(enrolled, _)| *enrolled);
         match answer {
             Some(enrolled) => Ok(enrolled),
             None => self.load(owner).await,
         }
+    }
+}
+
+/// How long an answer stands.
+fn lifetime(enrolled: bool) -> Duration {
+    if enrolled {
+        ENROLLED_LIFETIME
+    } else {
+        NOT_ENROLLED_LIFETIME
     }
 }

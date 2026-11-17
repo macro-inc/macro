@@ -6,10 +6,15 @@
 //! `enable-email-focus` flag) with the owner's stored memory as context, asks
 //! the agent harness for the day a thread that can be in Focus is due, stores
 //! both in `email_thread_focus`, and tells the inbox's readers through the
-//! connection gateway. An hourly sweep catches what the event stream missed.
+//! connection gateway. Every minute it looks for inboxes whose owner joined the
+//! rollout and fills them from the last window of mail; an hourly sweep catches
+//! what the event stream missed.
 
 mod config;
+#[cfg(test)]
+mod test_support;
 mod inbound {
+    pub mod backfill;
     pub mod kafka_consumer;
     pub mod sweep;
 }
@@ -37,7 +42,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::{
     config::Config,
-    inbound::{kafka_consumer::run_focus_consumer, sweep::run_sweeps},
+    inbound::{backfill::run_backfills, kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     outbound::{
         flag_enrollment::FlagEnrollment,
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
@@ -122,6 +127,11 @@ async fn main() -> Result<(), Report> {
     });
     let brokers = config.kafka_brokers.to_string();
     let consumer = run_focus_consumer(&brokers, Arc::clone(&service), shutdown.clone());
+    let backfills = run_backfills(
+        Arc::clone(&service),
+        config.focus_window_days,
+        shutdown.clone(),
+    );
     let sweeps = run_sweeps(
         service,
         // A zero interval would panic the timer.
@@ -129,8 +139,8 @@ async fn main() -> Result<(), Report> {
         config.focus_window_days,
         shutdown.clone(),
     );
-    // Either loop ending with an error stops the worker so it restarts fresh.
-    let result = tokio::try_join!(consumer, sweeps).map(|_| ());
+    // Any loop ending with an error stops the worker so it restarts fresh.
+    let result = tokio::try_join!(consumer, backfills, sweeps).map(|_| ());
     shutdown.cancel();
     notifications.close();
     notifications.wait().await;
