@@ -63,3 +63,28 @@ fn image_validation_preserves_strings_and_bounds_positive_dimensions() {
         assert!(wire::image_from_json(&input).is_ok());
     }
 }
+#[test]
+fn integral_float_confidence_renders_like_source() -> macro_document_model::Result<()> {
+    use macro_document_model::{DocumentContext, NodeClock, NodeHost, NodeRandom};
+    use std::sync::Arc;
+    let context = DocumentContext {
+        clock: NodeClock(Arc::new(|| 1794052800000)),
+        random: NodeRandom(Arc::new(|size| vec![0; size])),
+        host: NodeHost::default(),
+        keys: lexical_model::KeySource::default(),
+        editor_created: None,
+    };
+    let row = include_str!("corpus/composers.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("golden row"))
+        .find(|row| row["name"] == "follow-up:inferred:confidence")
+        .expect("confidence golden");
+    let mut input = row["input"].clone();
+    // Source prints String(85.0) as "85"; serde_json would print "85.0".
+    input["trigger"]["confidence"] = json!(85.0);
+    assert_eq!(
+        wire::compose_source_context(&input, &context)?,
+        row["expected"]["value"].as_str().expect("golden output")
+    );
+    Ok(())
+}
