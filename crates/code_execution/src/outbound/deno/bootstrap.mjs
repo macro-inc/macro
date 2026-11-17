@@ -12,6 +12,31 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+// The program runs in this realm and can rewrite any built-in, so the fetch
+// wrapper and the dry-run gate below use only these copies, taken before it
+// loads. This raises the bar for a program that tries to send an unmarked
+// request or a dry run's write; it is not a security boundary. The rest of the
+// bootstrap (frames, loop stops) still uses the live built-ins.
+const uncurry = (method) => Function.prototype.call.bind(method);
+const getter = (prototype, name) => uncurry(Object.getOwnPropertyDescriptor(prototype, name).get);
+const NativeRequest = Request;
+const NativeURL = URL;
+const NativeError = Error;
+const requestUrl = getter(Request.prototype, "url");
+const requestMethod = getter(Request.prototype, "method");
+const requestHeaders = getter(Request.prototype, "headers");
+const setHeader = uncurry(Headers.prototype.set);
+const urlProtocol = getter(URL.prototype, "protocol");
+const urlPathname = getter(URL.prototype, "pathname");
+const urlHostname = getter(URL.prototype, "hostname");
+const urlPort = getter(URL.prototype, "port");
+const setHas = uncurry(Set.prototype.has);
+const mapGet = uncurry(Map.prototype.get);
+const mapSet = uncurry(Map.prototype.set);
+const regExpExec = uncurry(RegExp.prototype.exec);
+const endsWith = uncurry(String.prototype.endsWith);
+const sliceString = uncurry(String.prototype.slice);
+const nativeFetch = globalThis.fetch.bind(globalThis);
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
 function emit(frame) {
@@ -87,10 +112,6 @@ try {
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
   const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
-  const routes = (operations ?? []).map(operation => ({
-    ...operation,
-    pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
-  }));
   // A program stuck in a loop (reading the same thread over and over, walking
   // every page of a search for a match that never comes) would call one API
   // until the deadline and end with only "timed out", which tells the agent
@@ -111,12 +132,12 @@ try {
   };
   gateRequests(({service, operation}) => {
     const key = `${service}.${operation}`;
-    const count = (calls.get(key) ?? 0) + 1;
+    const count = (mapGet(calls, key) ?? 0) + 1;
     if (count > maxCallsPerOperation) {
       stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. ${advice} A job that truly needs more calls of one operation must be split into smaller jobs.`);
     }
-    calls.set(key, count);
-    if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
+    mapSet(calls, key, count);
+    if (dryRun && mapGet(catalog, key)?.write !== false) return {skip: {data: {}}};
     return undefined;
   });
   if (remainingMs > 0) {
@@ -128,28 +149,67 @@ try {
     }, remainingMs - Math.min(1500, remainingMs / 4));
     Deno.unrefTimer(timer);
   }
-  const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
-  const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
-  globalThis.fetch = (input, init) => {
-    const request = new Request(input, init);
+  const defaultPort = (protocol) => {
+    if (protocol === "https:") return "443";
+    if (protocol === "http:") return "80";
+    return "";
+  };
+  // What `--allow-net` grants: host and port, whatever the scheme (a proxied
+  // client sends `http://host:443/...` over TLS), with `host.` read as `host`.
+  const destinationOf = (url) => {
+    const parsed = new NativeURL(url);
+    let hostname = urlHostname(parsed);
+    if (endsWith(hostname, ".")) hostname = sliceString(hostname, 0, -1);
+    return `${hostname}:${urlPort(parsed) || defaultPort(urlProtocol(parsed))}`;
+  };
+  const destinations = new Set(Object.values(context.hosts).map(destinationOf));
+  // Each route as the requests to its own service's host and whole path, so
+  // a write whose path merely ends like a read's (`/web/search`) isn't one.
+  const routes = (operations ?? []).flatMap(operation => {
+    const host = context.hosts[operation.key.slice(0, operation.key.indexOf("."))];
+    if (!host) return [];
+    const base = new URL(host).pathname.replace(/\/$/, "");
+    const path = `${base}${operation.path}`.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+");
+    return [{...operation, destination: destinationOf(host), pattern: new RegExp(`^${path}$`)}];
+  });
+  const traceHeaders = entries(context.traceHeaders ?? {})
+    .filter(([name]) => name === "traceparent" || name === "tracestate");
+  // Async, so a refusal or a throw in here rejects like a failed fetch.
+  globalThis.fetch = async (input, init) => {
+    const request = new NativeRequest(input, init);
     // Every request to an SDK origin, whatever credential it carries.
-    if (origins.has(new URL(request.url).origin)) {
-      for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
-        if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
+    if (setHas(destinations, destinationOf(requestUrl(request)))) {
+      const headers = requestHeaders(request);
+      for (let index = 0; index < traceHeaders.length; index++) {
+        setHeader(headers, traceHeaders[index][0], traceHeaders[index][1]);
       }
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
-      request.headers.set("x-macro-code-execution", "1");
+      setHeader(headers, "x-macro-code-execution", "1");
       // A dry run's backstop: a request to an SDK origin that didn't come
       // through the gate is sent only if a read matches its route.
-      if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
-        const path = new URL(request.url).pathname;
-        const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
-        if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      const method = requestMethod(request);
+      if (dryRun && method !== "GET" && method !== "HEAD") {
+        const destination = destinationOf(requestUrl(request));
+        const path = urlPathname(new NativeURL(requestUrl(request)));
+        let read = false;
+        for (let index = 0; index < routes.length; index++) {
+          const route = routes[index];
+          if (route.method === method && !route.write && route.destination === destination
+            && regExpExec(route.pattern, path) !== null) {
+            read = true;
+            break;
+          }
+        }
+        if (!read) throw new NativeError("A dry run doesn't send changes.");
+        // A redirect would resend the read's method and body somewhere else.
+        // No prototype, so the program can't add options through
+        // `Object.prototype` (a method, or headers without the mark).
+        return nativeFetch(new NativeRequest(request, {__proto__: null, redirect: "error"}));
       }
     }
-    return originalFetch(request);
+    return nativeFetch(request);
   };
   const activeRequests = new Set();
   let observedRequests = 0;
@@ -173,7 +233,9 @@ try {
   // program's and holds back a dry run's writes. Nothing else may reach the
   // network (raw sockets, listeners, websockets), start a realm with its own
   // fetch (workers), or reach Node's or Deno's internals past the import map.
-  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+  // A client from `createHttpClient` can proxy a request to an API under a
+  // URL the fetch above doesn't recognize.
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];
