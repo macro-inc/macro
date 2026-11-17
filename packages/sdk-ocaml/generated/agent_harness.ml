@@ -4813,6 +4813,27 @@ let make_recorded_tool_call ?error ~(id : string) ~(input : Yojson.Safe.t)
   ({ error; id; input; name; output; output_omitted; status }
     : recorded_tool_call)
 
+(** The language of a session program. OCaml is offered only to sessions
+whose owner has the OCaml rollout (\[[OcamlRollout]\](super::OcamlRollout)). *)
+type nonrec program_language =
+  | Javascript
+  | Ocaml
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let program_language_of_yojson : Yojson.Safe.t -> program_language =
+ fun json ->
+  match Json.string json with
+  | "javascript" -> Javascript
+  | "ocaml" -> Ocaml
+  | other -> Json.unknown "program_language" json (Unknown other)
+
+and yojson_of_program_language : program_language -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Javascript -> `String "javascript"
+  | Ocaml -> `String "ocaml"
+  | Unknown other -> `String other
+
 (** The recorded outcome of a program. *)
 type nonrec execution_status =
   | Running
@@ -4852,9 +4873,17 @@ type nonrec execution_record = {
       (** Historical bridge calls. Direct HTTP executions leave this empty. *)
   error : string option;  (** Safe execution failure text. *)
   execution_id : execution_id;  (** Execution identity. *)
+  language : program_language option;
+      (** The language [source] is written in; historical records are JavaScript.
+JavaScript, the default, is left out, so records of sessions without
+OCaml serialize as they did before languages. *)
   result : Yojson.Safe.t option;
       (** JSON returned by the program, if successful. *)
-  source : string;  (** The submitted JavaScript module. *)
+  sdk_fingerprint : string option;
+      (** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+against (SDK version plus a hash of its interfaces). *)
+  source : string;
+      (** The submitted program: a JavaScript module or an OCaml [main.ml]. *)
   status : execution_status;  (** Overall execution state. *)
   turn_id : string option;
       (** Original turn, preventing another requester from replaying a saved result. *)
@@ -4874,7 +4903,9 @@ let execution_record_of_yojson : Yojson.Safe.t -> execution_record =
       Json.required fields "calls" (Json.list recorded_tool_call_of_yojson);
     error = Json.optional fields "error" Json.string;
     execution_id = Json.required fields "executionId" execution_id_of_yojson;
+    language = Json.optional fields "language" program_language_of_yojson;
     result = Json.optional fields "result" Json.json;
+    sdk_fingerprint = Json.optional fields "sdkFingerprint" Json.string;
     source = Json.required fields "source" Json.string;
     status = Json.required fields "status" execution_status_of_yojson;
     turn_id = Json.optional fields "turnId" Json.string;
@@ -4891,7 +4922,9 @@ and yojson_of_execution_record : execution_record -> Yojson.Safe.t =
       ("calls", Some ((Json.of_list yojson_of_recorded_tool_call) value.calls));
       ("error", Option.map Json.of_string value.error);
       ("executionId", Some (yojson_of_execution_id value.execution_id));
+      ("language", Option.map yojson_of_program_language value.language);
       ("result", Option.map Json.of_json value.result);
+      ("sdkFingerprint", Option.map Json.of_string value.sdk_fingerprint);
       ("source", Some (Json.of_string value.source));
       ("status", Some (yojson_of_execution_status value.status));
       ("turnId", Option.map Json.of_string value.turn_id);
@@ -4899,7 +4932,8 @@ and yojson_of_execution_record : execution_record -> Yojson.Safe.t =
 
 let make_execution_record ?acting_as ?activity ?activity_truncated
     ~(calls : recorded_tool_call list) ?error ~(execution_id : execution_id)
-    ?result ~(source : string) ~(status : execution_status) ?turn_id () =
+    ?language ?result ?sdk_fingerprint ~(source : string)
+    ~(status : execution_status) ?turn_id () =
   ({
      acting_as;
      activity;
@@ -4907,7 +4941,9 @@ let make_execution_record ?acting_as ?activity ?activity_truncated
      calls;
      error;
      execution_id;
+     language;
      result;
+     sdk_fingerprint;
      source;
      status;
      turn_id;
