@@ -209,12 +209,5 @@ async function refreshTransferredThreads(
     parent.run(() => refreshEmailThreadCache(result.source_thread_id)),
     parent.run(() => refreshEmailThreadCache(result.thread_id)),
   ]);
-  for (const threadId of [result.source_thread_id, result.thread_id]) {
-    await parent.run(() =>
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      })
-    );
-  }
   invalidateAllSoup();
 }

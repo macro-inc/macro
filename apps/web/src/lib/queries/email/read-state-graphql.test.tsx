@@ -84,26 +84,16 @@ afterEach(() => client.clear());
 
 describe('external archive disposition', () => {
   it.each(['queued', 'committed', 'failed'] as const)(
-    'retains the optimistic thread until a %s archive can be reconciled',
+    'reads previews again only once a %s archive can be reconciled',
     async (disposition) => {
-      const key = emailKeys.threadMessages('thread').queryKey;
-      client.setQueryData(key, {
-        pages: [{ inbox_visible: true }],
-        pageParams: [0],
-      });
       const invalidate = vi.spyOn(client, 'invalidateQueries');
       await trackExternalThreadArchive(
-        'thread',
         disposition === 'failed'
           ? Promise.reject(new Error('archive failed'))
           : Promise.resolve(disposition)
       );
-      expect(
-        client.getQueryData<{ pages: { inbox_visible: boolean }[] }>(key)
-          ?.pages[0].inbox_visible
-      ).toBe(disposition === 'failed');
       expect(invalidate).toHaveBeenCalledTimes(
-        disposition === 'queued' ? 0 : 2
+        disposition === 'queued' ? 0 : 1
       );
     }
   );
