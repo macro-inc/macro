@@ -42,9 +42,11 @@ result changes: the first red run after a green one, and the first green run
 after red ones (`✅ Resolved`). Pushes and the sweep are counted apart, since
 only the sweep runs the tests kept for known bugs. A red run after a red
 one, a run that ends after a newer one has ended, and a cancelled run post
-nothing; the job's summary says why. A re-run is compared with its previous
-attempt, so a flaky failure that passes on a re-run posts that it passes
-again.
+nothing; the job's summary says why. A run is red when one of its jobs
+failed or ran out of time; the alert job's own result does not count, so a
+failed post fails that job without turning the stream red. A re-run is
+compared with its earlier attempts, so a flaky failure that passes on a re-run
+posts that it passes again.
 
 The alert names the commit and its pull request, the failed jobs with the
 step each failed at, the failed tests the coverage report names, the tests

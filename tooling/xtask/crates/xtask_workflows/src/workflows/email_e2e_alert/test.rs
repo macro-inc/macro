@@ -1,9 +1,12 @@
 use super::*;
 use crate::workflows::{email_e2e, email_e2e_browser, email_e2e_full_stack};
 
+/// A workflow's file name and its builder.
+type Build = (&'static str, fn() -> gh_workflow::Workflow);
+
 /// The three workflows, rendered as they are committed.
 fn workflows() -> Vec<(&'static str, serde_yaml::Value)> {
-    let builds: [(&str, fn() -> gh_workflow::Workflow); 3] = [
+    let builds: [Build; 3] = [
         ("email_e2e", email_e2e::email_e2e),
         ("email_e2e_browser", email_e2e_browser::email_e2e_browser),
         (
@@ -58,7 +61,7 @@ fn only_pushes_to_main_and_the_sweep_post() {
             .expect("steps");
         assert_eq!(
             post["if"].as_str(),
-            Some("steps.decide.outputs.post == 'true'"),
+            Some(posts_when_decided().as_str()),
             "{name}"
         );
     }

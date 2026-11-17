@@ -7,27 +7,81 @@ import {
   browserFindings,
   type Context,
   decide,
+  type Decision,
   failedJobs,
   failedSpecs,
   failureMessage,
+  type Job,
   jobsLine,
+  type Outcome,
+  outcome,
+  type Point,
   recoveryMessage,
   rustFindings,
   type StreamRun,
 } from './email_e2e_alert.ts';
 
+const ALERT = 'Tell Macro Alerts';
+
 const sha = (digit: string) => digit.repeat(40);
 
-const run = (run_number: number, conclusion: string | null, head = String(run_number)): StreamRun => ({
+/** The minute past ten a run's jobs ended at. */
+const at = (minute: number) => `2026-11-17T10:${String(minute).padStart(2, '0')}:00Z`;
+
+const streamRun = (run_number: number, status = 'completed', head = String(run_number % 10)): StreamRun => ({
   id: 1000 + run_number,
   run_number,
   head_sha: sha(head),
-  conclusion,
+  status,
+  conclusion: null,
 });
 
-const THIS = run(10, null, 'a');
+const point = (run_number: number, red: boolean, head = String(run_number % 10)): Point => ({
+  id: 1000 + run_number,
+  run_number,
+  head_sha: sha(head),
+  red,
+});
+
+/** This run: number 10, at commit `aaaa…`, its jobs ended at 10:30. */
+const THIS = streamRun(10, 'in_progress', 'a');
+
+type Other = { n: number; is: 'green' | 'red' | 'running' | 'cancelled'; at?: number };
+
+/** Decides this run, with everything known of the others up front. */
+function decideThis({
+  red,
+  others = [],
+  attempts = [],
+  endedAt = at(30),
+}: {
+  red: boolean;
+  others?: Other[];
+  attempts?: ('failure' | 'success')[];
+  endedAt?: string;
+}): Decision {
+  const outcomes = new Map<number, Outcome>(
+    others.map(({ n, is, at: minute }) => [
+      1000 + n,
+      is === 'running' || is === 'cancelled'
+        ? { ended: false, why: is }
+        : { ended: true, red: is === 'red', endedAt: at(minute ?? 0) },
+    ]),
+  );
+  const decision = decide({
+    run: THIS,
+    result: { red, endedAt },
+    // Newest first, two minutes apart, before this attempt.
+    attempts: attempts.map((is, index) => ({ ended: true, red: is === 'failure', endedAt: at(28 - 2 * index) })),
+    stream: others.map(({ n }) => streamRun(n)),
+    outcomes,
+  });
+  assert.ok(!('need' in decision), 'every outcome was given');
+  return decision as Decision;
+}
 
 const CONTEXT: Context = {
+  runId: THIS.id,
   workflow: 'Email end-to-end',
   event: 'push',
   branch: 'main',
@@ -37,31 +91,33 @@ const CONTEXT: Context = {
   runUrl: 'https://github.com/o/r/actions/runs/1010',
 };
 
+const job = (id: number, name: string, conclusion: string | null, minute = 20): Job => ({
+  id,
+  name,
+  status: conclusion === null ? 'in_progress' : 'completed',
+  conclusion,
+  completed_at: conclusion === null ? null : at(minute),
+});
+
 describe('failedJobs', () => {
   test('names each failed job and the step it failed at, in the order the run started them', () => {
     const jobs = failedJobs([
       {
-        id: 5,
-        name: 'Email end-to-end (coverage)',
-        status: 'completed',
-        conclusion: 'failure',
+        ...job(5, 'Email end-to-end (coverage)', 'failure'),
         steps: [{ name: 'report the coverage', conclusion: 'failure' }],
       },
       {
-        id: 2,
-        name: 'Email end-to-end (2/3)',
-        status: 'completed',
-        conclusion: 'failure',
+        ...job(2, 'Email end-to-end (2/3)', 'failure'),
         steps: [
           { name: 'build the services', conclusion: 'success' },
           { name: 'run the email end-to-end scenarios', conclusion: 'failure' },
           { name: 'show sccache stats', conclusion: 'success' },
         ],
       },
-      { id: 1, name: 'Email end-to-end (1/3)', status: 'completed', conclusion: 'cancelled', steps: [] },
-      { id: 3, name: 'Email end-to-end (3/3)', status: 'completed', conclusion: 'success' },
-      { id: 4, name: 'Email end-to-end (known bugs)', status: 'completed', conclusion: 'skipped' },
-      { id: 6, name: 'Tell Macro Alerts', status: 'in_progress', conclusion: null },
+      { ...job(1, 'Email end-to-end (1/3)', 'cancelled'), steps: [] },
+      job(3, 'Email end-to-end (3/3)', 'success'),
+      job(4, 'Email end-to-end (known bugs)', 'skipped'),
+      job(6, ALERT, null),
     ]);
 
     assert.deepEqual(jobs, [
@@ -69,6 +125,63 @@ describe('failedJobs', () => {
       { name: 'Email end-to-end (2/3)', step: 'run the email end-to-end scenarios' },
       { name: 'Email end-to-end (coverage)', step: 'report the coverage' },
     ]);
+  });
+});
+
+describe('outcome', () => {
+  const run = streamRun(9);
+
+  test('a run ends when its last job other than the alert ends, red when one failed', () => {
+    assert.deepEqual(
+      outcome(run, [job(1, 'a', 'success', 12), job(2, 'b', 'failure', 18), job(3, ALERT, 'success', 19)], ALERT),
+      { ended: true, red: true, endedAt: at(18) },
+    );
+  });
+
+  test('a failed alert job does not make the run red', () => {
+    assert.deepEqual(outcome(run, [job(1, 'a', 'success', 12), job(2, ALERT, 'failure', 13)], ALERT), {
+      ended: true,
+      red: false,
+      endedAt: at(12),
+    });
+  });
+
+  test('a run with a job still going has not ended', () => {
+    assert.deepEqual(
+      outcome(streamRun(9, 'in_progress'), [job(1, 'a', 'success'), job(2, 'b', null), job(3, ALERT, null)], ALERT),
+      { ended: false, why: 'running' },
+    );
+  });
+
+  test('a cancelled job in a run whose alert job ran timed out, and is red', () => {
+    for (const alert of [job(3, ALERT, 'success'), job(3, ALERT, null)]) {
+      assert.deepEqual(outcome(run, [job(1, 'a', 'success', 12), job(2, 'b', 'cancelled', 16), alert], ALERT), {
+        ended: true,
+        red: true,
+        endedAt: at(16),
+      });
+    }
+  });
+
+  test('a run that was cancelled does not count, and one being cancelled has not ended', () => {
+    const jobs = [job(1, 'a', 'success'), job(2, 'b', 'cancelled'), job(3, ALERT, 'skipped')];
+    assert.deepEqual(outcome(run, jobs, ALERT), { ended: false, why: 'cancelled' });
+    assert.deepEqual(
+      outcome(streamRun(9, 'in_progress'), [job(1, 'a', 'success'), job(2, 'b', 'cancelled'), { ...job(3, ALERT, null), status: 'queued' }], ALERT),
+      { ended: false, why: 'running' },
+    );
+  });
+
+  test('a run from before the alert job is judged by its jobs, and cancelled when one was', () => {
+    assert.deepEqual(outcome(run, [job(1, 'a', 'success', 12), job(2, 'b', 'failure', 14)], ALERT), {
+      ended: true,
+      red: true,
+      endedAt: at(14),
+    });
+    assert.deepEqual(outcome(run, [job(1, 'a', 'success'), job(2, 'b', 'cancelled')], ALERT), {
+      ended: false,
+      why: 'cancelled',
+    });
   });
 });
 
@@ -104,130 +217,199 @@ describe('jobsLine', () => {
 
 describe('decide', () => {
   test('the first red run after a green one posts the failure', () => {
-    const decision = decide({
-      red: true,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(9, 'success'), run(8, 'failure')],
-    });
-
-    assert.deepEqual(decision, { post: 'failure', lastGreen: run(9, 'success') });
+    assert.deepEqual(
+      decideThis({
+        red: true,
+        others: [
+          { n: 9, is: 'green', at: 20 },
+          { n: 8, is: 'red', at: 10 },
+        ],
+      }),
+      { post: 'failure', lastGreen: point(9, false) },
+    );
   });
 
   test('a red run after a red one posts nothing', () => {
-    const decision = decide({
-      red: true,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(9, 'failure'), run(8, 'success')],
-    });
-
-    assert.deepEqual(decision, {
-      post: null,
-      why: 'run #9 (at 9999999) failed too, and only the first red run of a streak posts',
-    });
+    assert.deepEqual(
+      decideThis({
+        red: true,
+        others: [
+          { n: 9, is: 'red', at: 20 },
+          { n: 8, is: 'green', at: 10 },
+        ],
+      }),
+      { post: null, why: 'run #9 (at 9999999) failed too, and only the first red run of a streak posts' },
+    );
   });
 
   test('the first green run after red ones posts that it passes again, since the first of them', () => {
-    const decision = decide({
-      red: false,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(9, 'failure'), run(7, 'timed_out'), run(6, 'success'), run(5, 'failure')],
-    });
-
-    assert.deepEqual(decision, { post: 'recovery', failingSince: sha('7'), redRuns: 2 });
+    assert.deepEqual(
+      decideThis({
+        red: false,
+        others: [
+          { n: 9, is: 'red', at: 25 },
+          { n: 8, is: 'red', at: 20 },
+          { n: 7, is: 'green', at: 10 },
+          { n: 6, is: 'red', at: 5 },
+        ],
+      }),
+      { post: 'recovery', failingSince: point(8, true), redRuns: 2, atLeast: false },
+    );
   });
 
   test('a green run after a green one posts nothing', () => {
-    const decision = decide({
-      red: false,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(9, 'success')],
-    });
-
-    assert.equal(decision.post, null);
+    assert.equal(decideThis({ red: false, others: [{ n: 9, is: 'green', at: 20 }] }).post, null);
   });
 
-  test('cancelled runs are passed over', () => {
-    const decision = decide({
-      red: true,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(9, 'cancelled'), run(8, 'success')],
-    });
-
-    assert.deepEqual(decision, { post: 'failure', lastGreen: run(8, 'success') });
-  });
-
-  test('a run that ends after a newer run has ended posts nothing', () => {
-    for (const red of [true, false]) {
-      const decision = decide({
-        red,
-        run: THIS,
-        previousAttempt: null,
-        history: [run(11, red ? 'failure' : 'success'), run(9, red ? 'success' : 'failure')],
-      });
-
-      assert.equal(decision.post, null);
-      assert.match(decision.post === null ? decision.why : '', /run #11/);
+  test('cancelled runs, and older runs still going, are passed over', () => {
+    for (const is of ['cancelled', 'running'] as const) {
+      assert.deepEqual(
+        decideThis({
+          red: true,
+          others: [
+            { n: 9, is },
+            { n: 8, is: 'green', at: 10 },
+          ],
+        }),
+        { post: 'failure', lastGreen: point(8, false) },
+      );
     }
   });
 
-  test('a newer run still going does not hold an older one back', () => {
-    const decision = decide({
-      red: true,
-      run: THIS,
-      previousAttempt: null,
-      history: [run(11, null), run(9, 'success')],
-    });
+  test('a run that ends after a newer run has ended posts nothing', () => {
+    for (const is of ['red', 'green'] as const) {
+      const decision = decideThis({
+        red: is === 'red',
+        others: [
+          { n: 11, is, at: 25 },
+          { n: 9, is: is === 'red' ? 'green' : 'red', at: 20 },
+        ],
+      });
+      assert.deepEqual(decision, {
+        post: null,
+        why: "run #11, which is newer, ended first, so this result is not the branch's latest",
+      });
+    }
+  });
 
-    assert.equal(decision.post, 'failure');
+  test('a newer run that is still going, or ended after this one, does not hold it back', () => {
+    for (const newer of [{ n: 11, is: 'running' }, { n: 11, is: 'green', at: 35 }] as Other[]) {
+      assert.equal(
+        decideThis({ red: true, others: [newer, { n: 9, is: 'green', at: 20 }] }).post,
+        'failure',
+      );
+    }
+  });
+
+  test('an older run that ended after a newer one is passed over', () => {
+    assert.deepEqual(
+      decideThis({
+        red: false,
+        others: [
+          { n: 9, is: 'red', at: 20 },
+          { n: 8, is: 'green', at: 25 },
+          { n: 7, is: 'green', at: 10 },
+        ],
+      }),
+      { post: 'recovery', failingSince: point(9, true), redRuns: 1, atLeast: false },
+    );
+  });
+
+  test('two runs that end close together: the older posts the failure and the newer that it passes', () => {
+    // Run 10 (red) ended at 10:30 and run 11 (green) at 10:31; each decides
+    // the same whichever runs first, with the other ended or not.
+    assert.deepEqual(
+      decideThis({
+        red: true,
+        others: [
+          { n: 11, is: 'green', at: 31 },
+          { n: 9, is: 'green', at: 20 },
+        ],
+      }),
+      { post: 'failure', lastGreen: point(9, false) },
+    );
+    const eleven = streamRun(11, 'in_progress', 'b');
+    const outcomes = new Map<number, Outcome>([
+      [THIS.id, { ended: true, red: true, endedAt: at(30) }],
+      [1009, { ended: true, red: false, endedAt: at(20) }],
+    ]);
+    assert.deepEqual(
+      decide({
+        run: eleven,
+        result: { red: false, endedAt: at(31) },
+        attempts: [],
+        stream: [streamRun(10), streamRun(9)],
+        outcomes,
+      }),
+      { post: 'recovery', failingSince: { ...point(10, true), head_sha: sha('0') }, redRuns: 1, atLeast: false },
+    );
   });
 
   test('a re-run that passes after a failed attempt posts that it passes again', () => {
-    const decision = decide({
-      red: false,
-      run: THIS,
-      previousAttempt: 'failure',
-      history: [run(9, 'success')],
-    });
-
-    assert.deepEqual(decision, { post: 'recovery', failingSince: sha('a'), redRuns: 1 });
+    assert.deepEqual(
+      decideThis({ red: false, attempts: ['failure'], others: [{ n: 9, is: 'green', at: 20 }] }),
+      { post: 'recovery', failingSince: point(10, true, 'a'), redRuns: 1, atLeast: false },
+    );
   });
 
   test('a re-run that fails after a failed attempt posts nothing', () => {
-    const decision = decide({
-      red: true,
-      run: THIS,
-      previousAttempt: 'failure',
-      history: [run(9, 'success')],
-    });
+    assert.deepEqual(
+      decideThis({ red: true, attempts: ['failure'], others: [{ n: 9, is: 'green', at: 20 }] }),
+      { post: null, why: 'its previous attempt failed too, and only the first red run of a streak posts' },
+    );
+  });
 
-    assert.deepEqual(decision, {
-      post: null,
-      why: 'its previous attempt failed too, and only the first red run of a streak posts',
+  test('a re-run that fails after a passing attempt posts, as flaky', () => {
+    assert.deepEqual(decideThis({ red: true, attempts: ['success'], others: [{ n: 9, is: 'red', at: 20 }] }), {
+      post: 'failure',
+      lastGreen: point(10, false, 'a'),
     });
   });
 
   test('a run that failed in two attempts counts once in the streak a pass ends', () => {
-    const decision = decide({
-      red: false,
-      run: THIS,
-      previousAttempt: 'failure',
-      history: [run(9, 'failure'), run(8, 'success')],
-    });
+    assert.deepEqual(
+      decideThis({
+        red: false,
+        attempts: ['failure'],
+        others: [
+          { n: 9, is: 'red', at: 20 },
+          { n: 8, is: 'green', at: 10 },
+        ],
+      }),
+      { post: 'recovery', failingSince: point(9, true), redRuns: 2, atLeast: false },
+    );
+  });
 
-    assert.deepEqual(decision, { post: 'recovery', failingSince: sha('9'), redRuns: 2 });
+  test('a streak ends at an earlier attempt that passed', () => {
+    assert.deepEqual(
+      decideThis({ red: false, attempts: ['failure', 'success'], others: [{ n: 9, is: 'red', at: 20 }] }),
+      { post: 'recovery', failingSince: point(10, true, 'a'), redRuns: 1, atLeast: false },
+    );
   });
 
   test('with no run before it, a red run posts and a green one does not', () => {
-    assert.deepEqual(decide({ red: true, run: THIS, previousAttempt: null, history: [] }), {
-      post: 'failure',
-      lastGreen: null,
+    assert.deepEqual(decideThis({ red: true }), { post: 'failure', lastGreen: null });
+    assert.deepEqual(decideThis({ red: false }), {
+      post: null,
+      why: 'it passed, and no run before it ended',
     });
-    assert.equal(decide({ red: false, run: THIS, previousAttempt: null, history: [] }).post, null);
+  });
+
+  test('a streak longer than it looks back is counted as at least that long', () => {
+    const others = Array.from({ length: 20 }, (_, index) => ({ n: 9 - index, is: 'red', at: 29 - index }) as Other);
+    const decision = decideThis({ red: false, others });
+    assert.equal(decision.post, 'recovery');
+    assert.deepEqual(decision.post === 'recovery' && [decision.redRuns, decision.atLeast], [15, true]);
+  });
+
+  test('it asks for the outcome of a run it needs, and not of one that has not started', () => {
+    const stream = [streamRun(11, 'in_progress'), streamRun(12, 'queued'), streamRun(9)];
+    const base = { run: THIS, result: { red: true, endedAt: at(30) }, attempts: [], stream };
+    assert.deepEqual(decide({ ...base, outcomes: new Map() }), { need: streamRun(11, 'in_progress') });
+    assert.deepEqual(
+      decide({ ...base, outcomes: new Map([[1011, { ended: false, why: 'running' }]]) }),
+      { need: streamRun(9) },
+    );
   });
 });
 
@@ -305,7 +487,7 @@ describe('findings', () => {
       CONTEXT,
       [{ name: 'Email end-to-end (2/3)', step: 'run the email end-to-end scenarios' }],
       rustFindings(coverage),
-      run(9, 'success', 'b'),
+      point(9, false, 'b'),
     );
 
     assert.equal(
@@ -326,13 +508,18 @@ describe('findings', () => {
       { ...CONTEXT, event: 'schedule' },
       [{ name: 'Email end-to-end (coverage)', step: 'report the coverage' }],
       { failedTests: [], knownBugsPassing: ['outlook outlook_reply_keeps_its_thread'], otherProblems: [] },
-      run(9, 'success', 'a'),
+      point(9, false, 'a'),
     );
 
     assert.match(message, /· daily sweep, at `aaaaaaa` fix\(email\): keep the ‹draft› of a reply\n/);
     assert.doesNotMatch(message, /pull\/123|Failed tests/);
     assert.match(message, /from the known-bug report rather than a gating test \(1\)/);
     assert.match(message, /This commit passed in an earlier run: the failure may be flaky\./);
+  });
+
+  test('a failure after an earlier attempt of the run passed says so', () => {
+    const message = failureMessage(CONTEXT, [], null, point(10, false, 'a'));
+    assert.match(message, /An earlier attempt of this run passed: the failure may be flaky\./);
   });
 
   test('a failure without failed tests names the first coverage problem, or none at all', () => {
@@ -352,24 +539,30 @@ describe('findings', () => {
 
   test('more than eight failed tests are counted, not named', () => {
     const failedTests = Array.from({ length: 11 }, (_, index) => `test ${index}`);
-    const message = failureMessage(
-      CONTEXT,
-      [],
-      { failedTests, knownBugsPassing: [], otherProblems: [] },
-      null,
-    );
+    const message = failureMessage(CONTEXT, [], { failedTests, knownBugsPassing: [], otherProblems: [] }, null);
 
     assert.match(message, /Failed tests \(11\): .*`test 7` and 3 more\n/);
   });
 
   test('a recovery says since when it had failed', () => {
     assert.equal(
-      recoveryMessage(CONTEXT, sha('7'), 2),
+      recoveryMessage(CONTEXT, point(7, true), 2, false),
       [
         '✅ Resolved · **Email end-to-end passes again on main** · push of `aaaaaaa` fix(email): keep the ‹draft› of a reply ([#123](https://github.com/o/r/pull/123))',
         'It had failed since `7777777`, in 2 runs. [Run](https://github.com/o/r/actions/runs/1010)',
       ].join('\n'),
     );
-    assert.match(recoveryMessage(CONTEXT, sha('a'), 1), /It failed on an earlier attempt of this run\./);
+    assert.match(
+      recoveryMessage(CONTEXT, point(10, true, 'a'), 1, false),
+      /It failed on an earlier attempt of this run\./,
+    );
+    assert.match(
+      recoveryMessage({ ...CONTEXT, event: 'schedule' }, point(9, true, 'a'), 1, false),
+      /It had failed since `aaaaaaa`, in 1 run\./,
+    );
+    assert.match(
+      recoveryMessage(CONTEXT, point(7, true), 15, true),
+      /It had failed for at least 15 runs, since `7777777` or earlier\./,
+    );
   });
 });

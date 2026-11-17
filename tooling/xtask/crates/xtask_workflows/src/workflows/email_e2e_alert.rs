@@ -15,6 +15,9 @@ mod test;
 /// The job's id in each workflow.
 pub(crate) const JOB: &str = "email-e2e-alert";
 
+/// The job's name, by which the script leaves it out of a run's result.
+const NAME: &str = "Tell Macro Alerts";
+
 /// The runs that can post: a push to `main` and the sweep, unless cancelled.
 const POSTS: &str = "!cancelled() && github.ref == 'refs/heads/main' && \
                      (github.event_name == 'push' || github.event_name == 'schedule')";
@@ -28,11 +31,16 @@ const MESSAGE: &str = "${{ runner.temp }}/email-e2e-alert.md";
 /// The step that decides, by its id.
 const DECIDE: &str = "decide";
 
+/// When the post step runs.
+fn posts_when_decided() -> String {
+    format!("steps.{DECIDE}.outputs.post == 'true'")
+}
+
 /// The job, after `needs`: every other job of the workflow. `report` is the
 /// artifact the workflow's coverage job uploads its report as.
 pub(crate) fn job(needs: &[&str], report: &str) -> Job {
     Job::default()
-        .name("Tell Macro Alerts")
+        .name(NAME)
         .needs(
             needs
                 .iter()
@@ -76,6 +84,7 @@ fn decide() -> Step<Run> {
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("EMAIL_E2E_REPORTS", REPORTS))
         .add_env(("EMAIL_E2E_ALERT_MESSAGE", MESSAGE))
+        .add_env(("EMAIL_E2E_ALERT_JOB", NAME))
 }
 
 fn post() -> Step<Run> {
@@ -84,7 +93,5 @@ fn post() -> Step<Run> {
         r#"message=$(cat "$EMAIL_E2E_ALERT_MESSAGE")"#,
     )
     .add_env(("EMAIL_E2E_ALERT_MESSAGE", MESSAGE))
-    .if_condition(Expression::new(format!(
-        "steps.{DECIDE}.outputs.post == 'true'"
-    )))
+    .if_condition(Expression::new(posts_when_decided()))
 }
