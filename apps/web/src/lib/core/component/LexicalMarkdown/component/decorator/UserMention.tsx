@@ -1,8 +1,7 @@
 import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
-import { useBotProfile } from '@queries/bots/profiles';
-import { queryReadyGate } from '@queries/gate';
+import { createBotIdentity } from '@queries/bots/graphql-bots';
 import { cn } from '@ui';
 import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
@@ -35,9 +34,8 @@ export function UserMention(props: UserMentionDecoratorProps) {
   // the mention is the one it had when it was written.
   const botId = () =>
     userId().startsWith('bot|') ? userId().slice('bot|'.length) : '';
-  const bot = useBotProfile(botId);
-  const botName = () =>
-    botId() && queryReadyGate(bot) ? bot.data?.name : undefined;
+  const bot = createBotIdentity(botId);
+  const botName = () => (botId() ? bot.data()?.name : undefined);
 
   const email = createMemo(() => {
     const id = macroId();

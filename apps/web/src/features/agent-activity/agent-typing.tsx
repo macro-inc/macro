@@ -11,7 +11,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
-import { useBotProfile } from '@queries/bots/profiles';
+import { createBotIdentity } from '@queries/bots/graphql-bots';
 import { queryReadyGate } from '@queries/gate';
 import { getTypingAgents, type TypingAgent } from '@queries/messages/typing';
 import type { MessagePart } from '@service-agent-fold/generated/types';
@@ -94,17 +94,17 @@ function AgentTypingEntry(props: {
 }) {
   const botId = () => props.botUserId.replace(/^bot\|/, '');
   const firstParty = () => firstPartyBotName(botId());
-  const profile = useBotProfile(() => (firstParty() ? '' : botId()));
+  const profile = createBotIdentity(() => (firstParty() ? '' : botId()));
   // Empty while the profile loads, rather than a placeholder name that
   // changes a moment later.
   const name = () => {
     const known = firstParty();
     if (known) return known;
-    if (queryReadyGate(profile)) return profile.data?.name ?? 'Agent';
-    return profile.isError ? 'Agent' : '';
+    const bot = profile.data();
+    if (bot !== undefined) return bot?.name ?? 'Agent';
+    return profile.isError() ? 'Agent' : '';
   };
-  const avatarUrl = () =>
-    queryReadyGate(profile) ? profile.data?.avatarUrl : undefined;
+  const avatarUrl = () => profile.data()?.avatarUrl;
 
   const live = createLiveSession(() => props.sessionId);
   const sessionQuery = useAgentSessionQuery(() => props.sessionId);

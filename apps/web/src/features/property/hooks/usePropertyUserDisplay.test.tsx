@@ -4,16 +4,54 @@
 
 import { storageServiceClient } from '@service-storage/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { createClient, type Operation } from '@urql/core';
+import { err } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { map, pipe } from 'wonka';
 
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {
-    getBot: vi.fn(),
-    getBotOwnerProfiles: vi.fn(),
-  },
+  storageServiceClient: { getBot: vi.fn() },
+}));
+
+const botRequests: string[][] = [];
+const graphqlClient = createClient({
+  url: '/graphql',
+  exchanges: [
+    () => (operations) =>
+      pipe(
+        operations,
+        map((operation: Operation) => {
+          const ids = (operation.variables as { ids: string[] }).ids;
+          if (operation.kind === 'query') botRequests.push(ids);
+          return {
+            operation,
+            data: {
+              user: {
+                id: 'viewer',
+                bots: [
+                  {
+                    id: BOT_ID,
+                    name: 'Research agent',
+                    handle: 'research-agent',
+                    avatarUrl: 'https://example.com/avatar.png',
+                    deletedAt: null,
+                    isSystem: false,
+                  },
+                ],
+              },
+            },
+            stale: false,
+            hasNext: false,
+          };
+        })
+      ),
+  ],
+});
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => graphqlClient,
+  graphqlSoupRealtimeActive: () => true,
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => 'Alice Example',
@@ -54,15 +92,7 @@ beforeEach(() => {
   vi.mocked(storageServiceClient.getBot).mockResolvedValue(
     err([{ code: 'HTTP_ERROR', message: 'Forbidden' }])
   );
-  vi.mocked(storageServiceClient.getBotOwnerProfiles).mockResolvedValue(
-    ok([
-      {
-        id: BOT_ID,
-        name: 'Research agent',
-        avatar_url: 'https://example.com/avatar.png',
-      },
-    ])
-  );
+  botRequests.length = 0;
 });
 
 afterEach(() => {
@@ -79,7 +109,7 @@ describe('property user identity', () => {
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(display.name()).toBe('Alice Example');
     expect(display.shortName()).toBe('Alice');
-    expect(storageServiceClient.getBotOwnerProfiles).not.toHaveBeenCalled();
+    expect(botRequests).toEqual([]);
     expect(storageServiceClient.getBot).not.toHaveBeenCalled();
   });
 
@@ -94,9 +124,7 @@ describe('property user identity', () => {
     });
     expect(display.shortName()).toBe('Research agent');
     expect(display.photoUrl()).toBe('https://example.com/avatar.png');
-    expect(storageServiceClient.getBotOwnerProfiles).toHaveBeenCalledWith({
-      ids: [BOT_ID],
-    });
+    expect(botRequests).toEqual([[BOT_ID]]);
     expect(storageServiceClient.getBot).not.toHaveBeenCalled();
 
     setId('macro|alice@example.com');

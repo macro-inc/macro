@@ -1,0 +1,26 @@
+# A bot's identity as every view shows it. Keyed `GraphqlBot:<id>`, so one
+# record serves messages, mentions, sessions and lists, and a `botUpdates`
+# push changes all of them at once.
+fragment BotFields on GraphqlBot {
+	id
+	name
+	handle
+	avatarUrl
+	deletedAt
+	isSystem
+}
+
+query BotIdentities($ids: [ID!]!) {
+	user {
+		id
+		bots(ids: $ids) {
+			...BotFields
+		}
+	}
+}
+
+subscription BotUpdates {
+	botUpdates {
+		...BotFields
+	}
+}

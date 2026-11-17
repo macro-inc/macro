@@ -6,13 +6,11 @@ query AgentSessionLog($sessionId: ID!) {
     id
     agentSession(sessionId: $sessionId) {
       id
+      botId
+      botProfile {
+        ...BotFields
+      }
       log {
-        bot {
-          id
-          name
-          handle
-          avatarUrl
-        }
         entries {
           id
           createdAt

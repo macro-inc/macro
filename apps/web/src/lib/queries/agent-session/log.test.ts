@@ -58,7 +58,14 @@ function row(n: number): AgentSessionLogEntryDto {
   return rest as unknown as AgentSessionLogEntryDto;
 }
 
-const bot = { id: 'bot-id', name: 'Agent', handle: 'agent', avatarUrl: null };
+const bot = {
+  id: 'bot-id',
+  name: 'Agent',
+  handle: 'agent',
+  avatarUrl: null,
+  deletedAt: null,
+  isSystem: false,
+};
 
 function logData(ids: number[]): AgentSessionLogQuery {
   return {
@@ -66,7 +73,9 @@ function logData(ids: number[]): AgentSessionLogQuery {
       id: 'user-1',
       agentSession: {
         id: SESSION,
-        log: { bot, entries: ids.map(entry) },
+        botId: bot.id,
+        botProfile: bot,
+        log: { entries: ids.map(entry) },
       },
     },
   };

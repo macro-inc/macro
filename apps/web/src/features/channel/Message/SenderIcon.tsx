@@ -7,7 +7,7 @@ import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useLiveBotSender } from '@queries/bots/profiles';
+import { useLiveBotSender } from '@queries/bots/live-bot-sender';
 import {
   getBotDisplayName,
   senderFromStorageId,

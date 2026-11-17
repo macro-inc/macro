@@ -76,8 +76,8 @@ vi.mock('@core/user', () => ({
   getDisplayNameParts: () => ({ fullName: '', firstName: '' }),
   tryMacroId: () => undefined,
 }));
-vi.mock('@queries/bots/profiles', () => ({
-  useBotProfile: () => ({ isPending: true }),
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: () => ({ isError: () => false, data: () => undefined }),
 }));
 vi.mock('@queries/preview', () => ({
   useItemPreview: () => {

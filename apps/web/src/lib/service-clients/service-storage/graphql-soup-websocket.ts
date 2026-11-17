@@ -5,6 +5,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
+import { createBotUpdatesHandler } from '../../queries/bots/bot-updates';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
@@ -13,6 +14,8 @@ import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/ca
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
+  BotUpdatesDocument,
+  type BotUpdatesSubscription,
   NotificationUpdatesDocument,
   type NotificationUpdatesSubscription,
   SoupUpdatesDocument,
@@ -285,6 +288,10 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
     document: NotificationUpdatesDocument,
     errorMessage: 'GraphQL notification updates subscription error',
   },
+  {
+    document: BotUpdatesDocument,
+    errorMessage: 'GraphQL bot updates subscription error',
+  },
 ] as const;
 
 /** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
@@ -304,6 +311,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
+  let bots: ReturnType<typeof createBotUpdatesHandler> | undefined;
   let generation = 0;
   let signaledFailure = false;
   let stopWatchingForReattach: (() => void) | undefined;
@@ -327,6 +335,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     activity = undefined;
     channels?.dispose();
     channels = undefined;
+    bots = undefined;
   };
 
   const onPagehide = () => {
@@ -357,8 +366,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
       channels = createChannelListUpdatesHandler(client, host);
+      bots = createBotUpdatesHandler(client);
       const activityHandler = activity;
       const channelHandler = channels;
+      const botHandler = bots;
 
       const subscriptions =
         host && !host.disabled
@@ -402,6 +413,11 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 'graphql-soup-subscriptions'
               );
             }
+            if (document === BotUpdatesDocument) {
+              botHandler.onResult(
+                result as OperationResult<BotUpdatesSubscription>
+              );
+            }
             if (result.error) {
               console.warn(errorMessage, result.error);
               if (!signaledFailure) {
@@ -423,6 +439,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       signaledFailure = false;
       activity?.reconnect();
       channels?.reconnect();
+      bots?.reconnect();
     },
     dispose() {
       if (options.suspendOnPagehide) {

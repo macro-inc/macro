@@ -102,12 +102,16 @@ export function createGraphqlAgentSessionMentionPreview(
     if (batch?.denied()) return undefined;
     if (result?.error?.graphQLErrors.length) return undefined;
     const item = result?.data?.user.soup.items.find((item) => item.id === id());
-    return item?.__typename === 'GraphqlSoupAgentSession'
-      ? {
-          access: 'access',
-          data: { ...item, status: normalizeAgentSessionStatus(item.status) },
-        }
-      : undefined;
+    if (item?.__typename !== 'GraphqlSoupAgentSession') return undefined;
+    const { botProfile, ...session } = item;
+    return {
+      access: 'access',
+      data: {
+        ...session,
+        bot: botProfile,
+        status: normalizeAgentSessionStatus(item.status),
+      },
+    };
   });
   return {
     data,

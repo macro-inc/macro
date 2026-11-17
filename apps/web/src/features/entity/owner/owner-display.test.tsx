@@ -23,20 +23,14 @@ vi.mock('@core/user', async () => ({
   getInitials: () => '',
   useIsConnectedSecondaryInbox: () => () => false,
 }));
-vi.mock('@queries/bots/profiles', () => ({
-  useBotProfile: (botId: () => string) => {
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: (botId: () => string) => {
     mocks.requestedBotIds.push(botId());
     const current = () => mocks.botProfiles.get(botId());
     return {
-      get isPending() {
-        return current()?.isPending ?? true;
-      },
-      get isError() {
-        return current()?.isError ?? false;
-      },
-      get data() {
-        return current()?.data;
-      },
+      isError: () => current()?.isError ?? false,
+      data: () =>
+        (current()?.isPending ?? true) ? undefined : current()?.data,
     };
   },
 }));

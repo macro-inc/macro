@@ -27,8 +27,8 @@ import {
 import {
   BOT_PROFILE_CHANGED_EVENT,
   handleBotProfileChanged,
-  invalidateBotProfiles,
-} from '@queries/bots/profile-sync';
+  recoverGatewayBotProfiles,
+} from '@queries/bots/gateway-profile-bridge';
 import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
@@ -86,9 +86,9 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
   );
-  ws.addEventListener(WebsocketEvent.Open, invalidateBotProfiles);
+  ws.addEventListener(WebsocketEvent.Open, recoverGatewayBotProfiles);
   onCleanup(() =>
-    ws.removeEventListener(WebsocketEvent.Open, invalidateBotProfiles)
+    ws.removeEventListener(WebsocketEvent.Open, recoverGatewayBotProfiles)
   );
   // Also cover the first connection: a lookup can finish before the socket opens.
   ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
