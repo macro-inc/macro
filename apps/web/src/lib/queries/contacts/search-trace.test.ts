@@ -152,8 +152,9 @@ it('records one span per search with its pages, empty run, source and end', asyn
   });
   expect(search.endTime! - search.startTime!).toBe(60);
 
-  // Reading the same input again, as a reopened picker or a re-read after a
-  // contact change does, is a new search marked as a repeat, scan included.
+  // A re-read after a contact change is a new search marked as a repeat. The
+  // list still shows the rows read before, so pages that list none of them
+  // anew are empty, scan included.
   await readPages(trace.read, 'rare', [0, 1, 2]);
   trace.close();
   expect(telemetry.spans).toHaveLength(2);
@@ -161,9 +162,20 @@ it('records one span per search with its pages, empty run, source and end', asyn
     'contacts.repeat': true,
     'contacts.outcome': 'closed',
     'contacts.pages': 3,
-    'contacts.max_empty_run': 2,
+    'contacts.max_empty_run': 3,
+    'contacts.listed': 2,
   });
   expect(telemetry.spans[1].children).toBe(3);
+
+  // Reopened after closing, the list starts over from page one.
+  await readPages(trace.read, 'rare', [0, 1]);
+  trace.close();
+  expect(telemetry.spans[2].attributes).toMatchObject({
+    'contacts.repeat': true,
+    'contacts.pages': 2,
+    'contacts.max_empty_run': 1,
+    'contacts.listed': 1,
+  });
 });
 
 it('ends a search when the query changes or the list closes, before its end', async () => {
@@ -247,5 +259,70 @@ it('lists pages as the list does when page one is read again', async () => {
     'contacts.pages': 3,
     'contacts.empty_pages': 0,
     'contacts.listed': 3,
+  });
+});
+
+it('ends a re-read at the bound when the list already holds it', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => ({
+      query: request.query,
+      source: 'cache',
+      sync: 'snapshot',
+      offline: false,
+      users: request.cursor ? [person(2), person(3)] : [person(0), person(1)],
+      nextCursor: cursor(request.query, 1),
+    }));
+  const trace = createContactSearchTrace(reader, 4, (users) => users);
+  await readPages(trace.read, '', [0, 1]);
+  // A contact change re-reads page one; the later rows stay listed.
+  await readPages(trace.read, '', [0]);
+  expect(telemetry.spans.map((span) => span.attributes)).toMatchObject([
+    { 'contacts.outcome': 'bound', 'contacts.listed': 4 },
+    {
+      'contacts.repeat': true,
+      'contacts.outcome': 'bound',
+      'contacts.pages': 1,
+      'contacts.listed': 4,
+    },
+  ]);
+});
+
+it('drops a continuation that lands after page one was read again', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      // The continuation is slow; page one answers at once.
+      await new Promise((resolve) =>
+        setTimeout(resolve, request.cursor ? 50 : 0)
+      );
+      return {
+        query: request.query,
+        source: 'server',
+        sync: 'unavailable',
+        offline: false,
+        users: request.cursor ? [person(9)] : [person(0)],
+        nextCursor: request.cursor ? null : cursor(request.query, 1),
+      };
+    });
+  const trace = createContactSearchTrace(reader, 500, (users) => users);
+  await readPages(trace.read, '', [0]);
+  const stale = trace.read(
+    VIEWER,
+    undefined,
+    { query: '', cursor: cursor('', 1) },
+    SIGNAL
+  );
+  await readPages(trace.read, '', [0]);
+  await vi.advanceTimersByTimeAsync(50);
+  await stale;
+  trace.close();
+  expect(telemetry.spans).toHaveLength(1);
+  expect(telemetry.spans[0].attributes).toMatchObject({
+    'contacts.outcome': 'closed',
+    'contacts.pages': 2,
+    'contacts.listed': 1,
   });
 });

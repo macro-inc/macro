@@ -15,6 +15,8 @@ type Search = {
   /** The listed ids, kept as the list keeps them: page one, then the rest. */
   first: Set<string>;
   later: Set<string>;
+  /** Advances with each read of page one; a read from an earlier round was superseded. */
+  round: number;
   pages: number;
   serverPages: number;
   serverMs: number;
@@ -45,12 +47,18 @@ export function createContactSearchTrace(
   let search: Search | undefined;
   /** The input of the last search that ended. */
   let previous: string | undefined;
+  /** Rows the list keeps after a search reached its end or bound, until it closes. */
+  let kept: { key: string; first: Set<string>; later: Set<string> } | undefined;
 
   const finish = (outcome: Outcome) => {
     const current = search;
     if (!current) return;
     search = undefined;
     previous = current.key;
+    kept =
+      outcome === 'end' || outcome === 'bound'
+        ? { key: current.key, first: current.first, later: current.later }
+        : undefined;
     const { span } = current;
     const end = current.landedAt ?? current.startedAt;
     span.setAttr('contacts.outcome', outcome);
@@ -73,6 +81,8 @@ export function createContactSearchTrace(
     request: Parameters<typeof readContactDirectory>[2]
   ): Search => {
     const startedAt = Date.now();
+    // A re-read after the end starts from the rows the list still shows.
+    const rows = kept?.key === key ? kept : undefined;
     const span = Telemetry.span('contacts.search', {
       startTime: startedAt,
       attributes: {
@@ -87,8 +97,9 @@ export function createContactSearchTrace(
       startedAt,
       landedAt: undefined,
       source: undefined,
-      first: new Set(),
-      later: new Set(),
+      first: new Set(rows?.first),
+      later: new Set(rows?.later),
+      round: 0,
       pages: 0,
       serverPages: 0,
       serverMs: 0,
@@ -174,18 +185,29 @@ export function createContactSearchTrace(
     if (search && search.key !== key) finish('changed');
     search ??= begin(key, request);
     const current = search;
+    if (!request.cursor) current.round += 1;
+    const { round } = current;
+    // A continuation still in flight when page one is read again belongs to
+    // the window that read replaced.
+    const live = () => search === current && current.round === round;
     const readAt = Date.now();
     try {
       const page = await current.span.run(() =>
         reader(viewer, host, request, signal, online)
       );
-      if (search === current) landed(current, !!request.cursor, page, readAt);
+      if (live()) landed(current, !!request.cursor, page, readAt);
       return page;
     } catch (error) {
-      if (search === current && !signal.aborted) current.failedPages += 1;
+      if (live() && !signal.aborted) current.failedPages += 1;
       throw error;
     }
   };
 
-  return { read, close: () => finish('closed') };
+  return {
+    read,
+    close: () => {
+      finish('closed');
+      kept = undefined;
+    },
+  };
 }
