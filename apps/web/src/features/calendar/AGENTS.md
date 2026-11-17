@@ -29,8 +29,10 @@ host lives in `../block-calendar/`.
   `../calendar-view/views/composer/` owns floating/pinned placement and navigation
   dismissal through `primitives/create-calendar-composer-session.ts`. Header dragging
   uses `primitives/create-composer-header-drag.ts`; its target matches the future
-  dock without resizing the calendar until drop. Keep the legacy form and split
-  components for touch until the phone replacement is ready.
+  dock without resizing the calendar until drop. Pinned occurrence changes use
+  `primitives/create-pinned-composer-selection.ts` and the session's guarded
+  `replacePinned`; resolve current selection again after discard approval.
+  Keep the legacy form and split components for touch until the phone replacement is ready.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
   Initialize the zone to the zone represented by the form's wall-clock fields.

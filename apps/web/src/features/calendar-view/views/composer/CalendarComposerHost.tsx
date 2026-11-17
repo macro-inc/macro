@@ -1,8 +1,11 @@
+import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarComposerHostContext } from '@app/features/calendar/context/calendar-composer-host-context';
 import { createCalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
+import { createPinnedComposerSelection } from '@app/features/calendar/primitives/create-pinned-composer-selection';
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { confirmDialog } from '@ui';
 import {
   createSignal,
@@ -32,6 +35,16 @@ export function CalendarComposerHost(props: ParentProps) {
         { owner }
       ),
   });
+  const calendarView = useCalendarView();
+  const selection = createPinnedComposerSelection({
+    event: calendarView.selectedEvent,
+    anchor: calendarView.selectedEventAnchor,
+    enabled: () => !isTouchDevice(),
+    pinnedSession: () =>
+      sessions.state.pinned ? sessions.state.session : undefined,
+    replacePinned: sessions.replacePinned,
+    open: sessions.open,
+  });
   useBeforeLeave(async ({ signal, onCommit }) => {
     const session = sessions.state.session;
     if (!session) return true;
@@ -58,7 +71,7 @@ export function CalendarComposerHost(props: ParentProps) {
         dock,
         setDock,
         open: (request) =>
-          sessions.open({
+          selection.open({
             ...request,
             returnFocus:
               request.returnFocus ??

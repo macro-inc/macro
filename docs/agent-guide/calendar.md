@@ -27,8 +27,12 @@ selection. **Pin event composer** reserves a right-side panel; unpinning keeps t
 same draft and field state. Drag the empty header area to move a floating composer;
 the right-side target lights up, and dropping there pins it. Escape, pointer
 cancellation, or losing window focus cancels the drag without discarding edits.
-Header menus and buttons retain their normal behavior. Pinned editors ignore
-outside clicks. Close, Cancel,
+Header menus and buttons retain their normal behavior. While pinned, selecting
+another editable occurrence replaces the editor without collapsing its panel;
+a dirty draft asks for discard first. Rejecting discard keeps that draft. Selecting
+the same occurrence never resets edits. Read-only occurrences keep their existing
+detail surface and do not replace the pinned draft. Pinned editors ignore outside
+clicks. Close, Cancel,
 Escape, and leaving the view ask before discarding edits; an open field menu
 handles Escape first. Touch continues to use its existing sheet.
 New-menu drafts start at the next half hour and last thirty minutes. Grid

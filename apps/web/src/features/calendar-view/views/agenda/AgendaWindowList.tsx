@@ -2,7 +2,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { createAgendaPaging } from '@app/features/calendar/primitives/create-agenda-paging';
 import { t } from '@app/lib/i18n';
 import { createSignal, For, onMount, Show } from 'solid-js';
-import { SelectedEventDetails } from '../../components/SelectedEventDetails';
+import { SelectedCalendarEvent } from '../selection/SelectedCalendarEvent';
 import { AgendaWindow } from './AgendaWindow';
 
 export function AgendaWindowList(props: { date: Date }) {
@@ -32,7 +32,7 @@ export function AgendaWindowList(props: { date: Date }) {
       </div>
       <Show when={viewport()}>
         {(boundary) => (
-          <SelectedEventDetails
+          <SelectedCalendarEvent
             boundary={boundary()}
             anchor={view.selectedEventAnchor}
             event={view.selectedEvent}

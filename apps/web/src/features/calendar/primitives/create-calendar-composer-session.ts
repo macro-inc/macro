@@ -24,6 +24,14 @@ export function createCalendarComposerSession(options: {
     disposed = true;
     state.session?.guard.dispose();
   });
+  const createSession = (request: ComposerOpenRequest): ComposerSession => ({
+    key: ++nextKey,
+    request,
+    guard: createEventComposerCloseGuard({
+      confirmDiscard: options.confirmDiscard,
+      onBeforeClose: request.onClose,
+    }),
+  });
 
   const finishClose = (session: ComposerSession) =>
     session.guard.completeClose(() => {
@@ -44,16 +52,46 @@ export function createCalendarComposerSession(options: {
         if (!finishClose(previous)) return undefined;
       }
       if (disposed) return undefined;
-      const session: ComposerSession = {
-        key: ++nextKey,
-        request,
-        guard: createEventComposerCloseGuard({
-          confirmDiscard: options.confirmDiscard,
-          onBeforeClose: request.onClose,
-        }),
-      };
+      const session = createSession(request);
       setState({ session, pinned: false });
       return session.key;
+    } finally {
+      if (!disposed) setState('transitioning', false);
+    }
+  };
+  /** Re-read selection after approval so a pending prompt never opens an obsolete occurrence. */
+  const replacePinned = async (
+    expectedKey: number,
+    resolveLatest: () => ComposerOpenRequest | undefined
+  ): Promise<number | undefined> => {
+    const previous = state.session;
+    if (
+      disposed ||
+      state.transitioning ||
+      !state.pinned ||
+      previous?.key !== expectedKey
+    )
+      return undefined;
+    const requested = resolveLatest();
+    if (!requested?.event) return undefined;
+    if (requested.event.id === previous.request.event?.id) return previous.key;
+
+    setState('transitioning', true);
+    try {
+      if (!(await previous.guard.confirmClose())) return undefined;
+      if (disposed || state.session?.key !== expectedKey || !state.pinned)
+        return undefined;
+      const current = resolveLatest();
+      if (!current?.event) return undefined;
+      if (current.event.id === previous.request.event?.id) return previous.key;
+
+      const next = createSession(current);
+      // Install the replacement directly: clearing the old session would collapse the dock.
+      const closed = previous.guard.completeClose(() => {
+        setState({ session: next, pinned: true });
+        previous.guard.dispose();
+      });
+      return closed ? next.key : undefined;
     } finally {
       if (!disposed) setState('transitioning', false);
     }
@@ -74,6 +112,7 @@ export function createCalendarComposerSession(options: {
   return {
     state,
     open,
+    replacePinned,
     close,
     completeClose: (key: number) => {
       const session = state.session;

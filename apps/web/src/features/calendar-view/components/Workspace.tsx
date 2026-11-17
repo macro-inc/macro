@@ -40,10 +40,10 @@ import { AgendaSetup } from '../views/agenda/AgendaSetup';
 import { CalendarComposerDock } from '../views/composer/CalendarComposerDock';
 import { CalendarComposerHost } from '../views/composer/CalendarComposerHost';
 import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
+import { SelectedCalendarEvent } from '../views/selection/SelectedCalendarEvent';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
-import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
@@ -169,7 +169,7 @@ function CalendarPages() {
           </Pager.Viewport>
           <Show when={viewport()}>
             {(boundary) => (
-              <SelectedEventDetails
+              <SelectedCalendarEvent
                 boundary={boundary()}
                 anchor={calendarView.selectedEventAnchor}
                 event={calendarView.selectedEvent}

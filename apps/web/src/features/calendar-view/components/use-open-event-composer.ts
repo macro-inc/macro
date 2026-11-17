@@ -1,5 +1,6 @@
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import type { ComposerOpenRequest } from '@app/features/calendar/core/composer-session';
+import { canEditCalendarEvent } from '@app/features/calendar/utils/event-interaction';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -13,6 +14,7 @@ export function useOpenEventComposer() {
   const host = useCalendarComposerHost();
 
   return (options: ComposerOpenRequest = {}) => {
+    if (options.event && !canEditCalendarEvent(options.event)) return;
     if (host && !isTouchDevice()) {
       fireAndForget(host.open(options), 'calendar-composer-open');
       return;
