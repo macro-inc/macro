@@ -232,6 +232,10 @@ fn storage_null_keys_json<'policy>(
 /// read then applies the policy's stored normalization (normalize_stored), as this
 /// crate's own Loro reads do. Present values the normalization does not own are
 /// kept exactly.
+///
+/// This is the JSON form of that read for comparing a creator's export with an
+/// importer (simulations, tests); product reads go through the projection, never
+/// through this.
 pub fn read_back_storage_nulls(node: &mut Value, policy: &dyn SyncPolicy) -> Result<()> {
     read_back_node(node, None, policy)
 }
