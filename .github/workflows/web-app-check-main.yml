@@ -939,7 +939,6 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack

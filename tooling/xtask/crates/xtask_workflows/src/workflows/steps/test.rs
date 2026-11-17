@@ -73,15 +73,24 @@ fn namespace_sccache_allows_a_slow_backend_check_at_startup() {
 }
 
 /// PR jobs write the `node_modules` kept on the volume, and `bun install` trusts
-/// whatever versions it finds there, so only PR checks may mount it.
+/// whatever versions it finds there, so only PR checks that hold no deploy
+/// credentials may mount it: never a deploy, nor the web Build, which deploys
+/// the preview.
 #[test]
 fn only_pr_checks_mount_the_node_modules_volume() {
     for workflow in crate::workflows::WORKFLOWS {
         let yaml = (workflow.render_yaml)().expect("workflow renders");
-        if yaml.contains(vars::NODE_MODULES_VOLUME_DIR) {
-            assert_eq!(
-                workflow.file_name, "web-app-check-main.yml",
-                "{} mounts the PR-written node_modules",
+        let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("workflow parses");
+        let jobs = root["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            let id = id.as_str().unwrap_or_default();
+            let mounts = serde_yaml::to_string(job)
+                .expect("job serializes")
+                .contains(vars::NODE_MODULES_VOLUME_DIR);
+            let allowed = workflow.file_name == "web-app-check-main.yml" && id != "build";
+            assert!(
+                !mounts || allowed,
+                "{} job {id} mounts the PR-written node_modules",
                 workflow.file_name
             );
         }

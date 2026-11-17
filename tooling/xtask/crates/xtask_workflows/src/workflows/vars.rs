@@ -112,7 +112,9 @@ pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 /// hardlink from its cache on the volume into the workspace disk, so a fresh
 /// install copied about 1.9 GB in every web job (about 25 s); with the tree in
 /// place, `bun install --frozen-lockfile` only checks it against `bun.lock` and
-/// fixes what differs. PR jobs write it, so deploy jobs never mount it.
+/// fixes what differs. Bun never removes a package the lockfile dropped, so
+/// `setup-reqs-web` empties a tree another lockfile installed. PR jobs write it, so no job that deploys, the web PR
+/// Build with its preview credentials included, mounts it.
 pub const NODE_MODULES_VOLUME_DIR: &str = "${{ github.workspace }}/node_modules";
 
 /// The deploy build's wasm packages, kept in a GitHub Actions cache rather than

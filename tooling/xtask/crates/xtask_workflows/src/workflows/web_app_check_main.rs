@@ -322,7 +322,7 @@ fn functional() -> Job {
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -379,7 +379,7 @@ fn build() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
