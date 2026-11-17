@@ -1,4 +1,4 @@
-reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 04:00–05:00 UTC) instead of every 7 days. |# Observability cluster: AWS layer
+# Observability cluster: AWS layer
 
 The AWS resources for the observability EKS cluster in Ohio (us-east-2), in
 OpenTofu written in Nix with [terranix](https://terranix.org). It is the first
@@ -19,7 +19,7 @@ approval, with the steps under [First apply](#first-apply).
 | `modules/eks.nix` | EKS cluster `observability` (API access entries only, public endpoint limited to given CIDRs, control-plane logs 30 days, standard support only), a managed node group of 3 × m7g.large on AL2023 across 2a/2b/2c, add-ons VPC CNI (network policy on), kube-proxy, Pod Identity agent, CoreDNS, EBS CSI, and cluster-admin access entries. |
 | `modules/pod-identity.nix` | One role per service account (below), bound with Pod Identity. |
 | `modules/buckets.nix` | Buckets `macro-observability-k8s-{loki,tempo,mimir}`, configured as the host's buckets. |
-| `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group. |
+| `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 05:00–06:00 UTC) instead of every 7 days. |
 | `modules/edge.nix` | IP target groups `obs-k8s-grafana` and `obs-k8s-otlp`, listener rules for `grafana-next.` / `otlp-next.macro-internal.com`, an ACM certificate for both added to the listener, their DNS records, and the security group rules ALB → pods on port 8080. |
 | `modules/alarms.nix` | Per target group: no healthy target, and target 5xx. To the stack's alarm topic, with notifications off until cutover (`settings.alarms.notify`). |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
