@@ -12,6 +12,7 @@ import type { LocalDraft } from '../core/local-draft';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 /** A save the durable queue accepted under the composer's own handles. */
 const queued = (input: SaveEmailDraft): DraftSaveResult => ({
@@ -31,7 +32,10 @@ const savedInputs = (context: ReturnType<typeof createComposeContext>) =>
   vi.mocked(context.drafts.saveDraft).mock.calls.map(([input]) => input);
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 describe('draft session: reply composer', () => {
   it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {

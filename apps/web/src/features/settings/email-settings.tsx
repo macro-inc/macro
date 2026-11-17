@@ -1,3 +1,9 @@
+import { EmailRowStylePreview } from '@app/features/email-view/components/EmailRowStylePreview';
+import {
+  chosenEmailRowStyle,
+  setEmailRowStyle,
+} from '@app/features/email-view/primitives/email-row-style';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
@@ -6,7 +12,7 @@ import { useEmailLinks } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -17,7 +23,11 @@ import {
 } from './primitives';
 import { SignatureSection } from './SignatureSection';
 
-export function EmailSettings() {
+/**
+ * `displayOptions` shows the Mail row style; the phone settings sheet leaves
+ * it out because phones always show Minimalist rows.
+ */
+export function EmailSettings(props: { displayOptions: boolean }) {
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -39,6 +49,15 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
+      <Show when={props.displayOptions}>
+        <SettingsSection
+          title={t('settingsEmail.displayOptions')}
+          target="Display options"
+          description={t('settingsEmail.displayOptionsDescription')}
+        >
+          <EmailDisplayOptions />
+        </SettingsSection>
+      </Show>
       <SettingsSection
         title="Signatures"
         description="Create a signature for each email account and preview it before sending."
@@ -104,6 +123,35 @@ export function EmailSettings() {
         </SettingsSection>
       </Show>
     </SettingsPage>
+  );
+}
+
+/** The Row style control and its live sample, as Display options shows them. */
+export function EmailDisplayOptions() {
+  return (
+    <SettingsCard>
+      {/* One card child, so the card draws no divider above the sample. */}
+      <div>
+        <SettingsRow stackOnNarrow label={t('settingsEmail.rowStyle')}>
+          <Tabs
+            aria-label={t('settingsEmail.rowStyle')}
+            touch="segmented"
+            size="sm"
+            options={[
+              { value: 'minimalist', label: t('settingsEmail.minimalist') },
+              { value: 'classic', label: t('settingsEmail.classic') },
+            ]}
+            value={chosenEmailRowStyle()}
+            onChange={setEmailRowStyle}
+          />
+        </SettingsRow>
+        <EmailRowStylePreview
+          rowStyle={chosenEmailRowStyle()}
+          class="mx-4 mb-4"
+        />
+        <p class="sr-only">{t('settingsEmail.rowStyleDescription')}</p>
+      </div>
+    </SettingsCard>
   );
 }
 

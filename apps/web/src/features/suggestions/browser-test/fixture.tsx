@@ -108,6 +108,8 @@ function Fixture() {
 
   // Dismissed here, to put back when the dismissal is undone.
   let dismissedHere: Suggestion[] = [];
+  // Reply suggestions opened here, which the person's reply makes done.
+  const openedReplies = new Set<string>();
   const source: SuggestionsSource = {
     feed: () => {
       const list = suggestions();
@@ -132,16 +134,22 @@ function Fixture() {
       }
 
       change(id, (suggestion) =>
-        suggestion.kind === 'prompt' && suggestion.runMode === 'background'
-          ? {
-              ...suggestion,
-              status: 'running',
-              run: {
-                sessionId: `session-${id}`,
-                startedAt: '2026-11-09T09:00:00Z',
-              },
-            }
-          : { ...suggestion, status: 'done' }
+        match(suggestion)
+          .returnType<Suggestion>()
+          .with({ kind: 'prompt', runMode: 'background' }, (prompt) => ({
+            ...prompt,
+            status: 'running',
+            run: {
+              sessionId: `session-${id}`,
+              startedAt: '2026-11-09T09:00:00Z',
+            },
+          }))
+          // Opening a reply suggestion takes it on; only the reply makes it done.
+          .with({ kind: 'entity', action: 'reply' }, (reply) => {
+            openedReplies.add(id);
+            return { ...reply, isNew: false };
+          })
+          .otherwise((other) => ({ ...other, status: 'done' }))
       );
 
       return 'accepted';
@@ -235,6 +243,16 @@ function Fixture() {
       )
     );
 
+  /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
+  const sendReplies = () =>
+    setSuggestions((list) =>
+      list?.map((suggestion) =>
+        openedReplies.has(suggestion.id)
+          ? { ...suggestion, status: 'done' }
+          : suggestion
+      )
+    );
+
   return (
     <main class="flex h-dvh bg-page p-1.5 font-sans text-ink">
       <div class="flex min-w-0 flex-1 flex-col rounded-xl border border-edge-muted bg-panel">
@@ -249,6 +267,9 @@ function Fixture() {
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={sendReplies}>
+            Send replies
           </button>
           <button type="button" onClick={finishGeneration}>
             Finish generation
