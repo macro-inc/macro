@@ -253,3 +253,32 @@ fn contains_field(value: &Value, field: &str) -> bool {
         _ => false,
     }
 }
+
+#[test]
+fn channel_changed_event_has_exact_wire_shape() {
+    let event = Event::with_event_id(
+        Uuid::parse_str("01998a30-4d5e-7f60-8162-8d9e0f1a2b3c").expect("valid event id"),
+        BotTopicEvent::ChannelChanged(BotChannelChangedMetadata {
+            bot_id: bot_id(),
+            channel_id: Uuid::parse_str("01998a30-5e6f-7071-8273-9e0f1a2b3c4d")
+                .expect("valid channel id"),
+            change: BotChannelChange::Left,
+            actor_user_id: user_id("macro|editor@example.com"),
+        }),
+    );
+
+    assert_eq!(
+        serde_json::to_value(event).expect("serializable event"),
+        json!({
+            "event_id": "01998a30-4d5e-7f60-8162-8d9e0f1a2b3c",
+            "schema_version": 1,
+            "event_type": "bot.channel_changed",
+            "metadata": {
+                "bot_id": BOT_ID,
+                "channel_id": "01998a30-5e6f-7071-8273-9e0f1a2b3c4d",
+                "change": "left",
+                "actor_user_id": "macro|editor@example.com",
+            },
+        })
+    );
+}
