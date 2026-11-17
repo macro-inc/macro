@@ -235,7 +235,10 @@ one as they do a document released today.
   statistics read every Source row through
   `idx_entity_properties_property_definition_id`. Each page is one
   `document.orphaned_attachments.page` span with its cursor and counts, and a
-  progress line is logged every 30 seconds. A page is about ten round trips
+  progress line is logged every 30 seconds; an applied scan's line also has
+  `queued_per_minute` since the previous line and the `queue.depth` it last
+  read, to tune `--per-second` between runs (stop it, rerun with the same
+  state file and a new rate). A page is about ten round trips
   to the database, which dominate from outside AWS; a larger `--page-size`
   (at most 2,000, so a page read from disk stays well inside its 10 s
   statement timeout) shortens a dry run.

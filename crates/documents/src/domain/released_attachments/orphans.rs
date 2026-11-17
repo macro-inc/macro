@@ -288,8 +288,8 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
         mut progress: ScanProgress,
     ) -> Result<ScanProgress, ScanStopped> {
         let mut pace = Pace::new(options.per_second);
-        let mut queue_checked: Option<Instant> = None;
-        let mut progress_logged = Instant::now();
+        let mut queue: Option<QueueReading> = None;
+        let mut logged = LoggedProgress::new(&progress);
         // The drain is woken once a full batch waits, so each round it runs
         // for the scan drains whole batches and publishes one event per 500
         // documents. Rows queued since then wait for the drain's own sweep.
@@ -297,7 +297,7 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
 
         while !progress.finished {
             if progress.apply {
-                self.hold_back(options.max_queue_depth, &mut queue_checked)
+                self.hold_back(options.max_queue_depth, &mut queue)
                     .await
                     .map_err(|error| stopped(&progress, error))?;
             }
@@ -330,9 +330,9 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
                 pace.wait_for(page.counts.enqueued).await;
             }
 
-            if progress.finished || progress_logged.elapsed() >= PROGRESS_LOG_INTERVAL {
-                log_progress(&progress);
-                progress_logged = Instant::now();
+            if progress.finished || logged.at.elapsed() >= PROGRESS_LOG_INTERVAL {
+                log_progress(&progress, &logged, queue.as_ref());
+                logged = LoggedProgress::new(&progress);
             }
         }
 
@@ -470,15 +470,18 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
     }
 
     /// Wait while more than `max_queue_depth` documents wait in the queue,
-    /// reading its depth at most every [`QUEUE_CHECK_INTERVAL`]. The queue has
-    /// no signal for having drained, so a deep one is read again after
-    /// [`HOLD_BACK_INTERVAL`].
+    /// reading its depth at most every [`QUEUE_CHECK_INTERVAL`] into `queue`.
+    /// The queue has no signal for having drained, so a deep one is read again
+    /// after [`HOLD_BACK_INTERVAL`].
     async fn hold_back(
         &self,
         max_queue_depth: u32,
-        checked: &mut Option<Instant>,
+        queue: &mut Option<QueueReading>,
     ) -> Result<(), rootcause::Report> {
-        if checked.is_some_and(|at| at.elapsed() < QUEUE_CHECK_INTERVAL) {
+        if queue
+            .as_ref()
+            .is_some_and(|reading| reading.at.elapsed() < QUEUE_CHECK_INTERVAL)
+        {
             return Ok(());
         }
 
@@ -488,7 +491,10 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
                 .queue_depth()
                 .await
                 .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
-            *checked = Some(Instant::now());
+            *queue = Some(QueueReading {
+                at: Instant::now(),
+                depth,
+            });
             if depth <= i64::from(max_queue_depth) {
                 return Ok(());
             }
@@ -510,6 +516,27 @@ struct PageResult {
     counts: ScanCounts,
 }
 
+/// The queue's depth as an applied scan last read it.
+struct QueueReading {
+    at: Instant,
+    depth: i64,
+}
+
+/// When progress was last logged, and how many orphans had been queued then.
+struct LoggedProgress {
+    at: Instant,
+    enqueued: usize,
+}
+
+impl LoggedProgress {
+    fn new(progress: &ScanProgress) -> Self {
+        Self {
+            at: Instant::now(),
+            enqueued: progress.counts.enqueued,
+        }
+    }
+}
+
 fn stopped(progress: &ScanProgress, error: rootcause::Report) -> ScanStopped {
     ScanStopped {
         progress: progress.clone(),
@@ -517,13 +544,24 @@ fn stopped(progress: &ScanProgress, error: rootcause::Report) -> ScanStopped {
     }
 }
 
-fn log_progress(progress: &ScanProgress) {
+/// Log the totals. An applied scan also logs the rate it queued at since the
+/// last line and the queue depth it last read, which together say whether
+/// `--per-second` keeps the drain ahead.
+fn log_progress(progress: &ScanProgress, last: &LoggedProgress, queue: Option<&QueueReading>) {
     let counts = &progress.counts;
+    let queued_per_minute = progress.apply.then(|| {
+        queued_per_minute(
+            counts.enqueued.saturating_sub(last.enqueued),
+            last.at.elapsed(),
+        )
+    });
     tracing::info!(
         apply = progress.apply,
         after = progress.after.as_deref().unwrap_or(""),
         pages = progress.pages,
         finished = progress.finished,
+        queued_per_minute,
+        queue.depth = queue.map(|reading| reading.depth),
         orphans = counts.orphans,
         skipped.source_not_from_import = counts.source_not_from_import,
         cause.mailbox_gone = counts.mailbox_gone,
@@ -539,6 +577,13 @@ fn log_progress(progress: &ScanProgress) {
         already_queued = counts.already_queued,
         "orphaned attachment scan progress"
     );
+}
+
+/// Documents queued per minute, from `queued` over `elapsed`.
+fn queued_per_minute(queued: usize, elapsed: Duration) -> u64 {
+    let queued = u128::try_from(queued).unwrap_or(u128::MAX);
+    let per_minute = queued.saturating_mul(60_000) / elapsed.as_millis().max(1);
+    u64::try_from(per_minute).unwrap_or(u64::MAX)
 }
 
 /// Spaces out queued orphans to a rate. Each wait starts when the previous
