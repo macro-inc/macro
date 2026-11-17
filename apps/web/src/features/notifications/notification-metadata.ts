@@ -1,7 +1,7 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
-import type { AgentTurnStopReason } from '@service-notification/generated/schemas/agentTurnStopReason';
 import { t } from '@app/lib/i18n';
 import type { AgentProvider } from '@service-notification/generated/schemas';
+import type { AgentTurnStopReason } from '@service-notification/generated/schemas/agentTurnStopReason';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
