@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)\n                   SELECT x.event_id,$1,$2,x.source_id,$5 FROM unnest($3::uuid[],$4::uuid[]) x(event_id,source_id)\n                   ON CONFLICT(event_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "UuidArray",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a2baae7f3f9d8958493c559a546fae4ec514b6d3ad4792b9ff9f52a0a464ab1"
+}

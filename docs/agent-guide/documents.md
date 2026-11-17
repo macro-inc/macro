@@ -392,9 +392,8 @@ picker, displays, and editing.
 
 ## Spreadsheets
 
-Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
-flag in every environment. Team targeting is configured in PostHog; ordinary
-document permissions continue to control access to each workbook.
+Spreadsheets are available to everyone. Ordinary document permissions control
+access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 From Files the new workbook opens inline in the open folder or tab
@@ -918,6 +917,9 @@ with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
+On phones and tablets the header has neither Ask Macro nor Comments: Ask Macro
+is the first row of the title menu, and it attaches the active sheet and
+selection as the button does.
 
 In the local spreadsheet demo, Ask Macro first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
@@ -2434,8 +2436,9 @@ and agent chat links also convert to their respective entity mentions.
 Pasting a bare GitHub pull request URL (`github.com/<owner>/<repo>/pull/<n>`,
 including subpages such as `/files`) inserts a link that becomes a PR mention
 once Macro finds the synced PR, usually within a moment. Hovering the mention
-shows its status, diff size, comments, and checks; clicking opens the PR in a
-split. A PR mention always stays on one line: a long title truncates with an
+shows its status, diff size, comments, and checks; clicking opens the PR on
+GitHub (a new tab, or the system browser in the desktop app). A PR mention
+always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced
@@ -2540,8 +2543,7 @@ exclude CRM records. On mobile, the single list includes both CRM record types, 
 Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
 kill switch removes contact results and disables their search while leaving
 companies and Macro users available; existing contact mentions still work.
-Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. With
-`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. Results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
 
@@ -2695,7 +2697,7 @@ detail reads answer non-owners 401/403 for a missing item too, so a deleted
 database or form reads `No Access` to anyone but its owner. A reference made in
 the last minute whose item hasn't reached the preview yet still opens it.
 
-With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+The popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
@@ -3142,7 +3144,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   During tag creation, the compact Back/title row shows the draft color beside
   the heading. Back and Escape return from sharing to color, then to the name
   search, preserving the name and chosen color.
-  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+  Applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.
   This must also work after background backfills populate more than 128 cached

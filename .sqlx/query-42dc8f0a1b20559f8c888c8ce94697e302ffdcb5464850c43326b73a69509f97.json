@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT locked.id AS \"id!\"\n            FROM (\n                SELECT DISTINCT released.id\n                FROM unnest($1::text[]) AS released(id)\n                ORDER BY released.id\n            ) released\n            CROSS JOIN LATERAL (\n                SELECT d.id\n                FROM \"Document\" d\n                WHERE d.id = released.id\n                FOR UPDATE\n            ) locked\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "42dc8f0a1b20559f8c888c8ce94697e302ffdcb5464850c43326b73a69509f97"
+}

@@ -990,11 +990,18 @@ async fn run_server() -> anyhow::Result<()> {
         passwords_agent_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
-    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
-        call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags.clone(),
-            call_root_poster.clone(),
+    consumer_tracker.spawn(crate::released_attachments::run(
+        documents_hex::domain::released_attachments::ReleasedAttachmentService::new(
+            documents_hex::outbound::pg_released_attachments::PgReleasedAttachmentRepo::new(
+                db.clone(),
+            ),
+            macro_event_broker.clone(),
         ),
+        db.clone(),
+        consumer_cancellation_token.clone(),
+    ));
+    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
+        call::outbound::channel_threads::MessageChannelThreads::new(call_root_poster.clone()),
     ));
     let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
         match config.environment {
@@ -1702,9 +1709,6 @@ async fn run_server() -> anyhow::Result<()> {
         worker: editing_worker.clone(),
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
-        // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
-            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.to_string(),

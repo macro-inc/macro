@@ -20,14 +20,12 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
 import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Spinner } from '@ui';
 import {
   type Accessor,
-  createMemo,
   createSignal,
   onCleanup,
   onMount,
@@ -81,26 +79,7 @@ type EventComposerSplitProps = {
 };
 
 export function EventComposerSplit(props: EventComposerSplitProps) {
-  const quickCalls = useQuickCallsFlag();
-  const ready = createMemo(
-    (resolved) => resolved || !quickCalls().loading,
-    false
-  );
-  return (
-    <Show
-      when={ready()}
-      fallback={
-        <p role="status" class="p-4">
-          Loading event…
-        </p>
-      }
-    >
-      <EventComposerContent
-        {...props}
-        macroCallsEnabled={() => quickCalls().enabled && !quickCalls().loading}
-      />
-    </Show>
-  );
+  return <EventComposerContent {...props} macroCallsEnabled={() => true} />;
 }
 
 function EventComposerContent(

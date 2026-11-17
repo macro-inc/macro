@@ -47,6 +47,7 @@ pub async fn handler(
             item_id: item.entity.entity_id.into_owned(),
             item_type: item.entity.entity_type.to_string(),
             snoozed_until: item.snoozed_until,
+            mentions_only: item.mentions_only,
         })
         .collect();
     Ok((StatusCode::OK, Json(items)).into_response())

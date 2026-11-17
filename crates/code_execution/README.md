@@ -58,8 +58,11 @@ A host can run a program with nobody watching (a routine step) by setting
   requests at `fetch` unless a read matches;
 - it has no workers: `Worker` is undefined and worker modules throw.
 
-A dry run is held back inside the process, not by the APIs: code written to
-get around it can still write with the owner's permissions.
+A dry run is held back inside the process; the APIs don't know about it. A
+host that must not write in a dry run also gives it a token that can't: the
+agent harness signs a routine dry run's token with the `dry_run` scope
+(`agent_correlation::scope`), so code written to get around the process's
+dry run is refused by every SDK host.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
@@ -128,6 +131,13 @@ starts processes nor loads other built-ins (`NODE_ALLOWED` in
 `src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
 map doesn't know. Like a dry run, this is held inside the process: the
 sandbox's `--allow-net` still reaches the API origins directly.
+
+A proxied run (`Egress::Proxied`) is the exception: `--allow-net` names only
+a loopback forwarder the runner starts for that run. The program keeps the
+real hosts for its links, its fetch sends their requests to the forwarder,
+and the forwarder, outside the realm, sets the mark and
+the trace context (a child of the run's span) on every request, dropping
+the ones the program set. It follows no redirects and stops with the run.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other

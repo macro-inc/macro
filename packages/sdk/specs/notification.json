@@ -113,7 +113,7 @@
     "/unsubscribe/item/{item_type}/{item_id}": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_item"],
-        "summary": "Unsubscribes a user from a given item for notifications.",
+        "summary": "Unsubscribes a user from a given item for notifications, or, with\n`mentions_only`, from everything on a channel but their direct mentions.",
         "operationId": "unsubscribe_item",
         "parameters": [
           {
@@ -140,6 +140,15 @@
             "schema": {
               "type": ["string", "null"],
               "format": "date-time"
+            }
+          },
+          {
+            "name": "mentions_only",
+            "in": "query",
+            "description": "Keep notifying for messages that @mention the user directly and silence\nthe rest. Channels only; cannot be combined with `snoozed_until`.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -3784,6 +3793,10 @@
           "item_type": {
             "type": "string",
             "description": "The item type"
+          },
+          "mentions_only": {
+            "type": "boolean",
+            "description": "The item still notifies the user when a message @mentions them directly."
           },
           "snoozed_until": {
             "type": ["string", "null"],

@@ -12,7 +12,9 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 On touch devices, check top bars with a nonzero safe area as well as at phone
 and tablet widths. Collection headers clear the pane's full top content inset:
 safe area only in composable CRM/Tasks/Drive, plus the floating split header in
-Reviews. Native project detail navigation also clears the safe area, with its
+Reviews. Floating entity split headers add the same 0.5rem top gutter as
+collection controls, with that gutter included in the measured content inset.
+Native project detail navigation also clears the safe area, with its
 content directly below it. Content nested below an in-flow header must not add
 the same inset again. See the [mobile layout rule](../../.agents/rules/web/mobile.md#layout-and-chrome).
 
@@ -39,7 +41,10 @@ belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one
 keeps what it had: a document's or task's also shows the access badge, the sync
-indicator, Ask Macro and, on tablets, Dispatch Agent. Other touch headers keep
+indicator, and Ask Macro; a task's dispatch actions are under Code Actions in
+its title menu at every touch width. A touch view that shows an item beside its list hosts that
+same header in the pane, so it does not change between a split of its own and
+a preview. Other touch headers keep
 their current controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
@@ -180,6 +185,10 @@ the Chat/Code switch; the open tray gives the input its multiline layout.
 
 ## Scrolling content
 
+On wide touch layouts, floating composers and page actions stay within the
+preview or detail pane that owns them. Their width follows sidebar collapse and
+resizing, while app navigation retains its global placement.
+
 Desktop Email, Drive, and Tasks lists, email threads, and the Channels thread feed
 and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll
@@ -207,18 +216,20 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Recipient suggestions
 
 New message/channel, main email, call, routine-template and sharing pickers search personal
-contacts through one bounded window. Type to find later contacts; **Next options**
-or PageDown replaces the window, and ArrowDown at its end advances it. An empty
-window can still have a next page. Touch Next preserves input focus. Closing and
-reopening starts at the first window, without clearing selected/custom chips.
+contacts through one bounded list. Type to find later contacts; scrolling to the
+end lists the next page below the earlier ones, up to 500 rows, and PageDown or
+ArrowDown at the end does the same from the keyboard. A page with no matching
+rows reads on until one matches or the directory ends; only a failed page shows a
+**Retry options** button. Closing and reopening starts at the first page, without
+clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
 are deduplicated while keeping the caller's selected representation. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
 
-Personal user rows and calendar guest pickers use replaceable windows with Next
-options/PageDown. Selections and scoped extras stay independent of the page; names
+Personal user rows and calendar guest pickers list each further page below the
+earlier ones as the list scrolls (PageDown on desktop). Selections and scoped extras stay independent of the page; names
 from a chosen row survive later searches. A returned person page is not capped a
 second time, and broader native/server matches are kept. Search changes immediately
 remove stale person results from keyboard selection while the source debounces its
@@ -252,10 +263,11 @@ Inbox selectors retain their explicit **Only**/**All** reset action.
 Query-driven filter groups keep the existing menu/drawer controls but load only
 while open. Their source keeps all selected IDs in the collection (including
 unavailable values), separately from the current visible window. Do not apply a
-second substring filter to already matched source rows. Next options replaces
-the window; scroll and virtual focus reset only when a replacement is committed,
-not when selection labels or highlights change. Checkbox toggles keep row order
-stable within a window. A zero-result page can still offer Next options.
+second substring filter to already matched source rows. Scrolling to the end
+lists the next page below; scroll and virtual focus reset only for a new search,
+not when a page is added or selection labels or highlights change. Checkbox
+toggles and added pages keep row order stable. A zero-result page reads on by
+itself; only a failed page offers Retry options.
 `ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
 static groups keep their existing behavior.
 

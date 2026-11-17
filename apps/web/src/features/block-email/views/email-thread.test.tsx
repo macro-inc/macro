@@ -81,6 +81,8 @@ vi.mock('../component/useEmailThreadTools', () => ({
     permissions: () => undefined,
     openShare: actions.share,
     controls: {
+      crmExclusion: <button>Exclude thread from CRM</button>,
+      reminder: <button>Remind me</button>,
       isOwnThread: true,
       isDone: false,
       isUnread: false,
@@ -100,12 +102,15 @@ it('keeps email actions, sharing, and details available in the desktop header', 
     title: 'A shared email',
     threadId: () => 'thread-1',
     source: {},
-    threadTransport: {},
     host: {},
   } as ComponentProps<typeof EmailThread>;
   render(() => <EmailThread {...props} />);
 
   expect(screen.getByRole('heading', { name: 'A shared email' })).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Exclude thread from CRM' })
+      .nextElementSibling
+  ).toBe(screen.getByRole('button', { name: 'Remind me' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mark as unread' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));
