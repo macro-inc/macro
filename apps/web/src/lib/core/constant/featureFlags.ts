@@ -660,14 +660,6 @@ export const enableGitBlame = defineFlag({
   default: onInDev,
 });
 
-// Inline AI editing: the floating document AI edit pill and the AI editing
-// tool in the selection formatting menu.
-export const enableInlineAiEditing = defineFlag({
-  key: 'inline-ai-editing',
-  env: 'INLINE_AI_EDITING',
-  default: onInDev,
-});
-
 // Continue with Microsoft on sign-up, sign-in and the onboarding work step,
 // including the Outlook connect that follows a Microsoft sign-up.
 export const enableMicrosoftSignup = defineFlag({
