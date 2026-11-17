@@ -15,7 +15,7 @@ import type { PasswordPatchItemUrl } from './passwordPatchItemUrl';
 export interface PasswordPatchItem {
   /** Version observed by the editor; absent only for creation. */
   expectedVersion: number;
-  /** Whether the item is marked as a favorite. */
+  /** Legacy accepted field, ignored; change private preferences through the favorite endpoint. */
   favorite: boolean;
   /** Optional folder belonging to this same team. */
   folderId?: PasswordPatchItemFolderId;

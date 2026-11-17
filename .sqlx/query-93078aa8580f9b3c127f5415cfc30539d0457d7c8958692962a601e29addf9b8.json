@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM password_item_favorites WHERE team_id=$1 AND item_id=$2 AND user_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93078aa8580f9b3c127f5415cfc30539d0457d7c8958692962a601e29addf9b8"
+}
