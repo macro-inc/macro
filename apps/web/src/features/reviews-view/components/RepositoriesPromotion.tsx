@@ -2,13 +2,10 @@ import { PULL_REQUEST_REPOSITORIES_PROMOTION as COPY } from '@app/features/sideb
 import { createLastKnown } from '@app/features/sidebar-promotion/primitives/last-known';
 import {
   allOf,
-  flagVerdict,
   SidebarPromotion,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
-import { enableSidebarPromotions } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -30,10 +27,7 @@ const GITHUB_APP_INSTALL_URL = `${SERVER_HOSTS['document-storage-service']}/gith
  * one exists the card links the account first, like Settings → GitHub.
  */
 export function RepositoriesPromotion(props: { class?: string }) {
-  const promotions = useFeatureFlag(enableSidebarPromotions);
-  const githubLink = useGithubLinkStatusQuery({
-    enabled: () => promotions().enabled,
-  });
+  const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
   const reauthenticateGithub = useReauthenticateGithubMutation();
   const userId = useUserId();
@@ -87,10 +81,7 @@ export function RepositoriesPromotion(props: { class?: string }) {
   return (
     <SidebarPromotion
       id={COPY.id}
-      applies={allOf(
-        flagVerdict(promotions()),
-        status() === undefined ? undefined : true
-      )}
+      applies={allOf(status() === undefined ? undefined : true)}
       logos={COPY.logos}
       headline={COPY.headline}
       pitch={COPY.pitch}

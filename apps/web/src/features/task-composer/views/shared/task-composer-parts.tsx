@@ -311,13 +311,11 @@ function Properties(props: { class?: string }) {
               />
             )}
           </For>
-          <Show when={composer.showCustomerContact}>
-            <CustomerContactPill
-              values={composer.propertyValues}
-              onChange={composer.setPropertyValues}
-              editor={pickers.propertyEditor}
-            />
-          </Show>
+          <CustomerContactPill
+            values={composer.propertyValues}
+            onChange={composer.setPropertyValues}
+            editor={pickers.propertyEditor}
+          />
           <Show when={composer.tagLayoutMode() === 'bottom'}>
             <Dynamic
               component={pickers.tagsPill}

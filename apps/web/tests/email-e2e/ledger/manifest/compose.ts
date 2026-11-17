@@ -634,7 +634,6 @@ export const compose = {
         'src/features/email-compose/components/create-event-button.tsx',
         'src/features/email-compose/email-event.ts',
       ],
-      flag: 'enableCalendarUi',
       note: 'text extraction for the event also needs enableUniversalInput',
     },
     {
@@ -650,7 +649,6 @@ export const compose = {
       ],
       registered: ['email.createEvent'],
       viewports: ['desktop'],
-      flag: 'enableCalendarUi',
     },
     {
       id: 'AC-049',
@@ -783,7 +781,6 @@ export const compose = {
       action: 'expand / collapse signature preview',
       trigger: 'button Signature',
       source: ['src/features/email-compose/components/signature-preview.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AC-069',
@@ -792,7 +789,6 @@ export const compose = {
       action: 'send without the signature',
       trigger: "Don't include signature button",
       source: ['src/features/email-compose/components/signature-preview.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AC-070',
@@ -1146,7 +1142,6 @@ export const compose = {
         'src/features/email-compose/components/create-event-button.tsx',
         'src/features/email-compose/email-event.ts',
       ],
-      flag: 'enableCalendarUi',
       viewports: ['desktop'],
       note: 'the B key for a reply is registered by the thread, not the composer',
     },
@@ -1177,7 +1172,6 @@ export const compose = {
         'src/features/email-compose/views/reply-input.tsx',
         'src/features/email-compose/components/signature-preview.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AC-321',
@@ -1529,7 +1523,6 @@ export const compose = {
         "Signature bar: button Signature, tooltip Edit your signature in Settings → Email., button Don't include signature",
       trigger: 'sending inbox has a signature',
       source: ['src/features/email-compose/components/signature-preview.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STC-311',
@@ -1539,7 +1532,6 @@ export const compose = {
         'signature preview collapsed (Signature button aria-expanded false)',
       trigger: 'composer opened',
       source: ['src/features/email-compose/components/signature-preview.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STC-093',
@@ -1646,7 +1638,6 @@ export const compose = {
         'src/features/email-compose/core/meeting-intent.ts',
       ],
       viewports: ['desktop'],
-      flag: 'enableCalendarUi',
     },
     {
       id: 'STC-932',
@@ -1806,7 +1797,6 @@ export const compose = {
         'src/features/email-compose/components/signature-preview.tsx',
         'src/features/email-compose/views/email-compose.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STC-973',

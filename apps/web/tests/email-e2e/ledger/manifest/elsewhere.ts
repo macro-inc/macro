@@ -276,7 +276,6 @@ export const elsewhere = {
       source: [
         'src/lib/core/component/AI/component/tool/email/DraftComposer.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-310',
@@ -422,7 +421,6 @@ export const elsewhere = {
         'src/features/crm/views/activity.tsx',
         'src/features/email-view/compose-email.ts',
       ],
-      flag: 'enable-crm',
     },
     {
       id: 'AX-320',
@@ -434,7 +432,6 @@ export const elsewhere = {
         'src/features/crm/views/contact-emails-section.tsx',
         'src/features/crm/views/company-emails-section.tsx',
       ],
-      flag: 'enable-crm',
     },
     {
       id: 'AX-321',
@@ -446,7 +443,6 @@ export const elsewhere = {
         'src/features/crm/views/contact-emails-section.tsx',
         'src/features/crm/views/company-emails-section.tsx',
       ],
-      flag: 'enable-crm',
     },
     {
       id: 'AX-322',
@@ -455,7 +451,6 @@ export const elsewhere = {
       action: 'CRM email privacy: add or remove an excluded domain',
       trigger: 'domain input; remove button on a domain row',
       source: ['src/features/crm/views/email-privacy.tsx'],
-      flag: 'enable-crm',
     },
     {
       id: 'AX-061',
@@ -466,7 +461,6 @@ export const elsewhere = {
       trigger:
         'button "Connect calendar" / "Grant access" / "Turn on" / "Reconnect"',
       source: ['src/features/calendar-view/components/SetupStatus.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-323',
@@ -475,7 +469,6 @@ export const elsewhere = {
       action: 'Email the guests of a calendar event (composer with To filled)',
       trigger: 'guest email / email-guests action on an event',
       source: ['src/features/calendar-view/components/use-open-event-email.ts'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-062',
@@ -758,7 +751,6 @@ export const elsewhere = {
         'src/features/crm/views/contact-emails-section.tsx',
         'src/features/crm/views/company-emails-section.tsx',
       ],
-      flag: 'enable-crm',
     },
     {
       id: 'STX-316',
@@ -769,7 +761,6 @@ export const elsewhere = {
       trigger:
         'no own inbox / calendar permission missing / calendar turned off / re-auth needed',
       source: ['src/features/calendar-view/components/SetupStatus.tsx'],
-      flag: 'enable-calendar-ui',
       note: 'tested: the overlay on an empty grid. The pill shown over events is not',
     },
     {
@@ -780,7 +771,6 @@ export const elsewhere = {
         'Calendar sync warning line "<address> — <calendar>: <error>" (role status)',
       trigger: 'a visible calendar reports a sync error and setup is complete',
       source: ['src/features/calendar-view/components/SetupStatus.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STX-317',

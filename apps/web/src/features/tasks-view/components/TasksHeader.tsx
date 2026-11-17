@@ -72,7 +72,7 @@ export function TaskViewBreadcrumbItem() {
 
 export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled } = useTasksView();
+  const { state, setState } = useTasksView();
   let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -99,10 +99,7 @@ export function TasksHeader(props: TasksHeaderProps) {
         <TaskSaveViewButton />
         <TaskSavedViewActions />
         <TasksControls />
-        <TasksCreateAction
-          presentation="toolbar"
-          projectsEnabled={projectsEnabled()}
-        />
+        <TasksCreateAction presentation="toolbar" />
         <ListHeaderSearch
           label="Search tasks"
           value={state.search}

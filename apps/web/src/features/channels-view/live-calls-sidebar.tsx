@@ -22,7 +22,6 @@ import {
   LiveCallsSidebar,
 } from '../meetings/components/live-calls-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
-import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 
 type ChatLiveCall = LiveCallRow &
   ({ kind: 'channel'; channelId: string } | { kind: 'quick'; url: string });
@@ -48,10 +47,7 @@ function ChatLiveCalls() {
   const channelsCtx = useChannelsContext();
   const channelCalls = useActiveCallsQuery();
   const incomingCalls = useVisibleIncomingCalls();
-  const flag = useQuickCallsFlag();
-  const quickCalls = useActiveQuickCallsSource(() =>
-    !flag().loading && flag().enabled ? userId() : undefined
-  );
+  const quickCalls = useActiveQuickCallsSource(() => userId());
 
   const joinedCallId = () =>
     callCtx?.isInCall() ? callCtx.activeCallId() : null;
