@@ -1,0 +1,19 @@
+services/mcp-chatgpt-worker/scripts/check-deploy-secrets.mjs
+  s_7d95e766d7bbc7::t_32549555f7e9e7 3-5,7,13-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3db36f5a1e11d00cd489e138931c651522f64362",
+  "prompts": {},
+  "sessions": {
+    "s_7d95e766d7bbc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66500b2d-8e2e-42d6-b652-2ad500eaadb9",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
