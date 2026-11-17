@@ -9,7 +9,7 @@
 //! (which drifted from the workspace toolchain) and gives the `cargo install`
 //! and xtask builds warm caches instead of compiling cold on every run.
 
-use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};

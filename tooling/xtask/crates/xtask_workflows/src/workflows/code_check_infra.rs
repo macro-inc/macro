@@ -6,11 +6,7 @@
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{
-    runners,
-    steps::{self, FluentBuilder},
-    vars,
-};
+use crate::workflows::{runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
