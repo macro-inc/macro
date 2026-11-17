@@ -1,12 +1,6 @@
 //! Rewrite what a program reads from a route, leaving people's responses alone.
 
-use ::axum::{
-    body::Body,
-    extract::Request,
-    http::header,
-    middleware::Next,
-    response::Response,
-};
+use ::axum::{body::Body, extract::Request, http::header, middleware::Next, response::Response};
 
 use super::MacroAuthorizationState;
 
