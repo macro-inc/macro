@@ -64,7 +64,7 @@ jobs:
   warm-binaries:
     needs:
       - setup
-    if: ${{ needs.setup.outputs.binaries != '[]' }}
+    if: needs.setup.outputs.binaries != '[]'
     name: Warm shared binary deps onto sticky disk
     runs-on: namespace-profile-linux-mid
     steps:
@@ -117,7 +117,7 @@ jobs:
   warm-lambdas:
     needs:
       - setup
-    if: ${{ needs.setup.outputs.lambdas != '[]' }}
+    if: needs.setup.outputs.lambdas != '[]'
     name: Warm shared lambda deps onto sticky disk
     runs-on: namespace-profile-linux-mid
     steps:
@@ -171,12 +171,12 @@ jobs:
     needs:
       - setup
       - warm-binaries
-    if: ${{ needs.setup.outputs.binaries != '[]' }}
+    if: needs.setup.outputs.binaries != '[]'
     name: Build ${{ matrix.service }} binaries
     runs-on: namespace-profile-linux-mid
     strategy:
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.binaries) }}
+        service: ${{ fromJSON(needs.setup.outputs.binaries) }}
       fail-fast: false
     steps:
       - name: Checkout Repo
@@ -253,12 +253,12 @@ jobs:
     needs:
       - setup
       - warm-lambdas
-    if: ${{ needs.setup.outputs.lambdas != '[]' }}
+    if: needs.setup.outputs.lambdas != '[]'
     name: Build ${{ matrix.service }} Lambda artifacts
     runs-on: namespace-profile-linux-mid
     strategy:
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.lambdas) }}
+        service: ${{ fromJSON(needs.setup.outputs.lambdas) }}
       fail-fast: false
     steps:
       - name: Checkout Repo
@@ -313,7 +313,7 @@ jobs:
       - warm-lambdas
       - build-service-binaries
       - build-lambda-artifacts
-    if: ${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: '!cancelled() && needs.setup.outputs.matrix != ''[]'' && !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'')'
     name: Run Database Migrations
     runs-on: db-migrator
     steps:
@@ -334,14 +334,14 @@ jobs:
       - build-service-binaries
       - build-lambda-artifacts
       - migrate-db
-    if: ${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: '!cancelled() && needs.setup.outputs.matrix != ''[]'' && needs.migrate-db.result == ''success'' && !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'')'
     name: Deploy ${{ matrix.service }}
     runs-on: namespace-profile-linux-small
     env:
       PULUMI_HOME: /pulumi
     strategy:
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.matrix) }}
+        service: ${{ fromJSON(needs.setup.outputs.matrix) }}
       fail-fast: false
     steps:
       - name: Checkout Repo
@@ -363,7 +363,7 @@ jobs:
         env:
           SERVICE: ${{ matrix.service }}
       - name: Download handoff artifacts
-        if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}
+        if: steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true'
         run: |
           set -euo pipefail
           if ! command -v nsc >/dev/null 2>&1; then
@@ -431,7 +431,7 @@ jobs:
         run: bun .github/scripts/check-service-deployment-results.ts
         shell: bash
         env:
-          DEPLOYMENT_NEEDS: ${{ toJson(needs) }}
+          DEPLOYMENT_NEEDS: ${{ toJSON(needs) }}
 concurrency:
   group: deploy-all-services-${{ inputs.environment }}
   cancel-in-progress: false

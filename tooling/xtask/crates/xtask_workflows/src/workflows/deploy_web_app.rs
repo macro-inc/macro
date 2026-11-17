@@ -6,11 +6,15 @@
 //! dispatch identity is the workflow *name*, so the rename doesn't affect
 //! anyone's dispatch habits).
 
+use std::fmt::Display;
+
+use gh_workflow::expr::typed::{Bool, cancelled, input, needs};
 use gh_workflow::{
-    CallJob, Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall,
+    CallJob, Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall,
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::build_web_app::environment;
 use crate::workflows::{build_web_app, runners, steps, vars};
 
 /// Build the workflow.
@@ -81,8 +85,7 @@ pub fn deploy_web_app() -> Workflow {
             // different groups and let them race the same pulumi stack (same
             // fix as deploy-all-services). Never cancel in-progress — that
             // could leave the stack half-applied.
-            Concurrency::new(Expression::new("deploy-web-app-${{ inputs.environment }}"))
-                .cancel_in_progress(false),
+            Concurrency::new(format!("deploy-web-app-{}", environment())).cancel_in_progress(false),
         )
         .add_job("build", build())
         .add_job("deploy", deploy())
@@ -92,10 +95,10 @@ pub fn deploy_web_app() -> Workflow {
 fn build() -> CallJob {
     CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build")
-        .cond(Expression::new("${{ !inputs.prebuilt }}"))
-        .add_with("environment", "${{ inputs.environment }}")
-        .add_secret("SEGMENT_WRITE_KEY", "${{ secrets.SEGMENT_WRITE_KEY }}")
-        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
+        .cond(!input::<Bool>("prebuilt"))
+        .add_with("environment", environment())
+        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY)
+        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// Runs after either this run's build or the caller's: a skipped build means
@@ -104,9 +107,14 @@ fn deploy() -> Job {
     Job::default()
         .name("Deploy")
         .needs(vec!["build".to_string()])
-        .cond(Expression::new(
-            "${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}",
-        ))
+        .cond(
+            (!cancelled()).and(
+                needs("build")
+                    .result()
+                    .eq("success")
+                    .or(needs("build").result().eq("skipped")),
+            ),
+        )
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
         .add_step(build_web_app::checkout())
@@ -114,19 +122,16 @@ fn deploy() -> Job {
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
-        .add_step(download_dist(build_web_app::ARTIFACT))
+        .add_step(download_dist(&build_web_app::artifact(environment())))
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
-        .add_step(pulumi_up(ENVIRONMENT))
-        .add_step(upload_sourcemaps(ENVIRONMENT))
+        .add_step(pulumi_up(environment()))
+        .add_step(upload_sourcemaps(environment()))
         .add_step(upload_production_build())
         .add_step(steps::teardown_nix())
 }
 
-/// The environment this workflow deploys, as its steps spell it.
-const ENVIRONMENT: &str = "${{ inputs.environment }}";
-
-/// `artifact` is a [`build_web_app::ARTIFACT`] name the same run uploaded.
+/// `artifact` is a [`build_web_app::artifact`] name the same run uploaded.
 pub fn download_dist(artifact: &str) -> Step<Use> {
     Step::new("Download dist")
         .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
@@ -152,7 +157,8 @@ pub fn configure_aws_credentials() -> Step<Use> {
         .add_with(("aws-region", "us-east-1"))
 }
 
-pub fn pulumi_up(environment: &str) -> Step<Use> {
+/// `environment` is a name or the [`environment`] input.
+pub fn pulumi_up(environment: impl Display) -> Step<Use> {
     Step::new("Deploy with Pulumi")
         .uses(
             "pulumi",
@@ -168,7 +174,7 @@ pub fn pulumi_up(environment: &str) -> Step<Use> {
         .add_env(Env::new("DD_HOST", "https://api.us5.datadoghq.com/"))
 }
 
-pub fn upload_sourcemaps(environment: &str) -> Step<Run> {
+pub fn upload_sourcemaps(environment: impl Display) -> Step<Run> {
     Step::new("Upload sourcemaps to Datadog")
         .run(format!("bun run ddupload:{environment}"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
@@ -184,7 +190,7 @@ fn upload_production_build() -> Step<Use> {
             "upload-artifact",
             "ea165f8d65b6e75b540449e92b4886f43607fa02",
         ) // v4
-        .if_condition(Expression::new("${{ inputs.environment == 'prod' }}"))
+        .if_condition(environment().eq("prod"))
         .add_with(("name", "web-app-build"))
         .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
         .add_with(("overwrite", true))

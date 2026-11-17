@@ -1,13 +1,15 @@
 //! `Build Web App` — builds apps/web for one environment and uploads `dist` as
-//! the [`ARTIFACT`] run artifact. Call-only: [`crate::workflows::deploy_web_app`]
+//! the [`artifact`] run artifact. Call-only: [`crate::workflows::deploy_web_app`]
 //! uses it for standalone deploys, and [`crate::workflows::deploy_on_push`] and
 //! [`crate::workflows::release_production`] call it directly so the build
 //! overlaps the backend deploy and only the upload waits for it. Generated into
 //! `build_web_app.yml`.
 
+use std::fmt::Display;
+
+use gh_workflow::expr::typed::{Expr, Num, Str, github, input, steps};
 use gh_workflow::{
-    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
-    WorkflowInput,
+    Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -15,14 +17,18 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-/// Artifacts are scoped to the workflow run, and a called workflow shares its
-/// caller's run, so the deploy job finds this regardless of which workflow
-/// called the build.
-pub const ARTIFACT: &str = "web-app-dist-${{ inputs.environment }}";
+/// The `dist` artifact for `environment`, a name or this workflow's
+/// [`environment`] input. Artifacts are scoped to the workflow run, and a
+/// called workflow shares its caller's run, so the deploy job finds this
+/// regardless of which workflow called the build.
+pub fn artifact(environment: impl Display) -> String {
+    format!("web-app-dist-{environment}")
+}
 
-/// [`ARTIFACT`] as a caller that names the environment itself downloads it.
-pub fn artifact(environment: &str) -> String {
-    ARTIFACT.replace("${{ inputs.environment }}", environment)
+/// The `environment` input of this workflow and of
+/// [`crate::workflows::deploy_web_app`].
+pub fn environment() -> Expr<Str> {
+    input("environment")
 }
 
 pub fn build_web_app() -> Workflow {
@@ -82,7 +88,7 @@ fn build_job() -> Job {
 pub fn checkout() -> Step<Use> {
     Step::new("Checkout Repo")
         .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", "${{ github.sha }}"))
+        .add_with(("ref", github().sha()))
 }
 
 /// Saved entries are named by the set of package keys they hold plus the run
@@ -110,7 +116,7 @@ fn restore_wasm_packages() -> Step<Use> {
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_with((
             "key",
-            format!("{WASM_PACKAGES_KEY_PREFIX}${{{{ github.sha }}}}"),
+            format!("{WASM_PACKAGES_KEY_PREFIX}{}", github().sha()),
         ))
         .add_with(("restore-keys", WASM_PACKAGES_KEY_PREFIX))
 }
@@ -126,18 +132,18 @@ fn build_wasm_packages() -> Step<Run> {
         .add_env(("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX))
         .add_env((
             "RESTORED_KEY",
-            "${{ steps.restore-wasm.outputs.cache-matched-key }}",
+            steps("restore-wasm").output("cache-matched-key"),
         ))
 }
 
 fn save_wasm_packages() -> Step<Use> {
     Step::new("Save wasm packages")
         .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
-        .if_condition(Expression::new("steps.wasm.outputs.key != ''"))
+        .if_condition(steps("wasm").output("key").ne(""))
         .continue_on_error(true)
         .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
-        .add_with(("key", "${{ steps.wasm.outputs.key }}"))
+        .add_with(("key", steps("wasm").output("key")))
 }
 
 /// Build identical across dev/prod up to `MODE` (`just build-<env>`). Its
@@ -150,11 +156,14 @@ fn build() -> Step<Run> {
         .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
         .add_env(Env::new(
             "VITE_OTEL_EXPORTER_URL",
-            "${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}",
+            environment().eq("prod").then_else(
+                "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces",
+                "https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces",
+            ),
         ))
         .add_env(Env::new(
             "VITE_OTEL_ENV",
-            "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
+            environment().eq("prod").then_else("prod", "development"),
         ))
 }
 
@@ -165,14 +174,14 @@ fn upload_dist() -> Step<Use> {
             "upload-artifact",
             "ea165f8d65b6e75b540449e92b4886f43607fa02",
         ) // v4
-        .add_with(("name", ARTIFACT))
+        .add_with(("name", artifact(environment())))
         .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
         .add_with(("if-no-files-found", "error"))
         // The production release kept its build a week, so a failed release
         // job can still be re-run days later.
         .add_with((
             "retention-days",
-            "${{ inputs.environment == 'prod' && 7 || 1 }}",
+            environment().eq("prod").then_else::<Num>(7_i64, 1_i64),
         ))
         // A full re-run of the same run uploads again under the same name.
         .add_with(("overwrite", true))

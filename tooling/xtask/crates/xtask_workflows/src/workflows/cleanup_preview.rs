@@ -2,9 +2,9 @@
 //! closes (companion to the web `Build` job's preview steps). Generated into
 //! `cleanup_preview.yml` (replaces the hand-written `cleanup-preview.yml`).
 
+use gh_workflow::expr::typed::{github, steps};
 use gh_workflow::{
-    Env, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
-    Workflow,
+    Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -69,7 +69,7 @@ fn get_preview_id() -> Step<Run> {
         "#})
         .id("preview-id")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
+        .add_env(Env::new("BRANCH", github().head_ref()))
 }
 
 fn cleanup_preview_files() -> Step<Run> {
@@ -79,6 +79,6 @@ fn cleanup_preview_files() -> Step<Run> {
               --preview-id ${{ steps.preview-id.outputs.id }} \
               --cleanup
         "#})
-        .if_condition(Expression::new("steps.preview-id.outputs.id != ''"))
+        .if_condition(steps("preview-id").output("id").ne(""))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

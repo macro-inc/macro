@@ -1,9 +1,8 @@
 //! `Publish SDK` — validates and publishes `@macro-inc/sdk` when an `sdk-v*` tag
 //! is pushed. Generated into `publish-sdk.yml`.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Use, Workflow,
-};
+use gh_workflow::expr::typed::github;
+use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
 use crate::workflows::steps;
 
@@ -17,7 +16,7 @@ pub fn publish_sdk() -> Workflow {
     Workflow::new("Publish SDK")
         .on(Event::default().push(Push::default().add_tag(SDK_TAG_PATTERN)))
         .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}-${{ github.ref }}"))
+            Concurrency::new(format!("{}-{}", github().workflow(), github().git_ref()))
                 .cancel_in_progress(false),
         )
         .add_job("publish", publish())

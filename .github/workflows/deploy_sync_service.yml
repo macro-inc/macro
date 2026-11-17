@@ -74,7 +74,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: services/sync-service
       - name: Apply D1 migrations
-        if: ${{ steps.worker-state.outputs.unchanged != 'true' }}
+        if: steps.worker-state.outputs.unchanged != 'true'
         run: npx wrangler d1 migrations apply USER_PEER_MAPPING --env ${{ inputs.environment || 'dev' }} --remote
         env:
           CI: 'true'
@@ -82,7 +82,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: services/sync-service
       - name: Deploy with wrangler
-        if: ${{ steps.worker-state.outputs.unchanged != 'true' }}
+        if: steps.worker-state.outputs.unchanged != 'true'
         run: npx wrangler deploy --env ${{ inputs.environment || 'dev' }} --message "inputs:$WORKER_KEY"
         env:
           WORKER_KEY: ${{ steps.worker-key.outputs.key }}

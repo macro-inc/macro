@@ -11,9 +11,10 @@
 //! Replaces the `deploy-dev.yml` / `deploy-prod.yml` workflows in the old
 //! `macro-inc/solid-site` repository.
 
+use gh_workflow::expr::typed::{Bool, Expr, Json, Str, format, from_json, input, matrix};
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Push, Run, Step, Strategy, Use, Workflow,
-    WorkflowCall, WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    Concurrency, Env, Event, Job, Push, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -23,10 +24,18 @@ mod test;
 
 /// The environments to deploy, as a JSON list. On push `inputs.environment` is
 /// empty, so push runs deploy `dev`; `both` deploys dev before prod.
-const ENVIRONMENTS: &str = r#"${{ fromJSON(inputs.environment == 'both' && '["dev","prod"]' || format('["{0}"]', inputs.environment || 'dev')) }}"#;
+fn environments() -> Expr<Json> {
+    let requested = input::<Str>("environment");
+    from_json(requested.clone().eq("both").then_else(
+        r#"["dev","prod"]"#,
+        format(r#"["{0}"]"#, [requested.or_else("dev").into_ast()]),
+    ))
+}
 
 /// The environment of the current matrix leg.
-const ENVIRONMENT: &str = "${{ matrix.environment }}";
+fn environment() -> Expr<Str> {
+    matrix("environment")
+}
 
 /// Build the workflow.
 pub fn deploy_website() -> Workflow {
@@ -91,7 +100,9 @@ fn build_deploy() -> Job {
         // One leg at a time, in list order: with fail-fast, a failed dev deploy
         // cancels the queued prod leg.
         .strategy(Strategy {
-            matrix: Some(serde_json::json!({ "environment": ENVIRONMENTS })),
+            matrix: Some(
+                serde_json::json!({ "environment": serde_json::Value::from(environments()) }),
+            ),
             fail_fast: Some(true),
             max_parallel: Some(1),
         })
@@ -101,8 +112,7 @@ fn build_deploy() -> Job {
         // workflow_call runs. Never cancel in-progress — that could leave the
         // stack half-applied.
         .concurrency(
-            Concurrency::new(Expression::new(format!("deploy-website-{ENVIRONMENT}")))
-                .cancel_in_progress(false),
+            Concurrency::new(format!("deploy-website-{}", environment())).cancel_in_progress(false),
         )
         .add_env(("CI", "true"))
         .add_step(checkout())
@@ -145,11 +155,16 @@ fn build() -> Step<Run> {
         // Canonical URLs, sitemap and robots are baked in at build time.
         .add_env(Env::new(
             "VITE_APP_BASE_URL",
-            "${{ matrix.environment == 'prod' && 'https://macro.com' || 'https://dev.macro.com' }}",
+            environment()
+                .eq("prod")
+                .then_else("https://macro.com", "https://dev.macro.com"),
         ))
         .add_env(Env::new(
             "VITE_GOOGLE_SSO_URL",
-            "${{ matrix.environment == 'prod' && 'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail' || 'https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail' }}",
+            environment().eq("prod").then_else(
+                "https://gateway.macro.com/auth/login/sso?idp_name=google_gmail",
+                "https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail",
+            ),
         ))
 }
 
@@ -179,8 +194,11 @@ fn pulumi_up() -> Step<Use> {
             "actions",
             "8e5e406f4007fca908480587cb9893c07090f58d",
         ) // v6
-        .add_with(("command", "${{ inputs.preview_only && 'preview' || 'up' }}"))
-        .add_with(("stack-name", format!("macro-inc/{ENVIRONMENT}")))
+        .add_with((
+            "command",
+            input::<Bool>("preview_only").then_else("preview", "up"),
+        ))
+        .add_with(("stack-name", format!("macro-inc/{}", environment())))
         .add_with(("work-dir", "./infra/stacks/website"))
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
 }

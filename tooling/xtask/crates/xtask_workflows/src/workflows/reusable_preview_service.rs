@@ -10,11 +10,12 @@
 //! too, which makes an unchanged handler a download. It holds no signing key, so
 //! it can't write to that cache.
 
+use gh_workflow::expr::typed::{Bool, Str, input, steps};
 use gh_workflow::{
     Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
-use crate::workflows::{runners, steps};
+use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
 pub fn reusable_preview_service() -> Workflow {
@@ -98,7 +99,7 @@ fn get_project_name() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
     .id("project-name")
-    .add_with(("service-name", "${{ inputs.service-name }}"))
+    .add_with(("service-name", input::<Str>("service-name")))
 }
 
 fn preview_pulumi() -> Step<Use> {
@@ -106,20 +107,20 @@ fn preview_pulumi() -> Step<Use> {
         "Preview pulumi stack",
         xtask_paths::repo_dir!(".github/actions/preview-cloud-storage-pulumi"),
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
-    .add_with(("aws-access-key", "${{ secrets.AWS_ACCESS_KEY }}"))
-    .add_with(("aws-secret-key", "${{ secrets.AWS_SECRET_ACCESS_KEY }}"))
-    .add_with(("pulumi-access-token", "${{ secrets.PULUMI_ACCESS_TOKEN }}"))
+    .add_with(("environment", input::<Str>("environment")))
+    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
+    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
+    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        "${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}",
+        input::<Str>("pulumi-stack-name").or_else(steps("project-name").output("project-name")),
     ))
-    .add_with(("dd-app-key", "${{ secrets.DD_APP_KEY }}"))
-    .add_with(("dd-api-key", "${{ secrets.DD_API_KEY }}"))
-    .add_with(("use-docker", "${{ inputs.use-docker }}"))
-    .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
-    .add_with(("github-token", "${{ inputs.github-token }}"))
-    .add_with(("cloud-storage-service-name", "${{ inputs.service-name }}"))
+    .add_with(("dd-app-key", vars::DD_APP_KEY))
+    .add_with(("dd-api-key", vars::DD_API_KEY))
+    .add_with(("use-docker", input::<Bool>("use-docker")))
+    .add_with(("use-lfs", input::<Bool>("use-lfs")))
+    .add_with(("github-token", input::<Str>("github-token")))
+    .add_with(("cloud-storage-service-name", input::<Str>("service-name")))
 }
 
 #[cfg(test)]

@@ -2,21 +2,28 @@
 //! folder under `infra/stacks`, to dev or prod. Generated into
 //! `deploy-pulumi-stack.yml`.
 
-use gh_workflow::expr::typed::needs;
+use gh_workflow::expr::typed::{Expr, Str, cancelled, failure, github, input, needs, steps};
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowDispatch,
-    WorkflowInput,
+    Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
+
+/// The `pulumi-service-name` input: the stack's folder under `infra/stacks`.
+fn stack() -> Expr<Str> {
+    input("pulumi-service-name")
+}
 
 /// Build the workflow.
 pub fn deploy_pulumi_stack() -> Workflow {
     Workflow::new("deploy pulumi service")
         .on(Event::default().workflow_dispatch(WorkflowDispatch::default().add_input("environment", WorkflowInput::choice(["dev", "prod"]).description("The environment we are deploying to.").required(true).default("dev")).add_input("pulumi-service-name", WorkflowInput::string().description("The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.").required(true)).add_input("cloud-storage-service-name", WorkflowInput::string().description("Optional service key from .github/services-config.json; set this for Lambda-backed stacks so CI can build Lambda zips before Pulumi runs.").required(false))))
         .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ inputs.pulumi-service-name }}-${{ inputs.environment }}",
+            Concurrency::new(format!(
+                "{}-{}-{}",
+                github().workflow(),
+                stack(),
+                input::<Str>("environment")
             ))
             .cancel_in_progress(false),
         )
@@ -30,9 +37,9 @@ pub fn deploy_pulumi_stack() -> Workflow {
 /// the migration check.
 fn setup() -> Job {
     Job::default()
-        .name("Check whether ${{ inputs.pulumi-service-name }} ships service code")
+        .name(format!("Check whether {} ships service code", stack()))
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("ships_code", "${{ steps.check.outputs.ships_code }}")
+        .add_output("ships_code", steps("check").output("ships_code"))
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(check_artifact_config())
 }
@@ -57,12 +64,12 @@ fn check_artifact_config() -> Step<Run> {
             echo "stack=$STACK ships_code=$ships_code"
         "#})
         .id("check")
-        .add_env(Env::new("STACK", "${{ inputs.pulumi-service-name }}"))
+        .add_env(Env::new("STACK", stack()))
 }
 
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
-        "Check ${{ inputs.pulumi-service-name }} migrations are applied",
+        &format!("Check {} migrations are applied", stack()),
         needs("setup").output("ships_code").is_true(),
     )
 }
@@ -72,7 +79,7 @@ fn check_migrations() -> Job {
 fn deploy() -> Job {
     Job::default()
         .needs(vec!["setup".to_string(), "check-migrations".to_string()])
-        .cond(Expression::new("${{ !failure() && !cancelled() }}"))
+        .cond((!failure()).and(!cancelled()))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
@@ -83,17 +90,17 @@ fn deploy() -> Job {
 
 fn deploy_stack() -> Step<Use> {
     steps::uses_local(
-        "Deploy ${{ inputs.pulumi-service-name }}",
+        &format!("Deploy {}", stack()),
         xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
+    .add_with(("environment", input::<Str>("environment")))
     .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
     .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with(("pulumi-service-name", "${{ inputs.pulumi-service-name }}"))
+    .add_with(("pulumi-service-name", stack()))
     .add_with((
         "cloud-storage-service-name",
-        "${{ inputs.cloud-storage-service-name }}",
+        input::<Str>("cloud-storage-service-name"),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))

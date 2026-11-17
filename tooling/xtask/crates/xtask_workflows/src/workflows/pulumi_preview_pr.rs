@@ -3,9 +3,10 @@
 //! Generated into `pulumi_preview_pr.yml` (replaces the hand-written
 //! `pulumi-preview-pr.yml`).
 
+use gh_workflow::expr::typed::{Json, Num, Str, always, from_json, github, matrix, needs, steps};
 use gh_workflow::{
-    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step,
-    Strategy, Use, Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
+    Workflow,
 };
 
 use xtask_paths::RepoGlob;
@@ -41,8 +42,10 @@ pub fn pulumi_preview_pr() -> Workflow {
             )),
         )
         .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ github.event.pull_request.number }}",
+            Concurrency::new(format!(
+                "{}-{}",
+                github().workflow(),
+                github().event::<Num>("pull_request.number")
             ))
             .cancel_in_progress(true),
         )
@@ -61,8 +64,8 @@ fn detect_changes() -> Job {
     Job::default()
         .name("Detect Changed Services")
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("services", "${{ steps.detect.outputs.services }}")
-        .add_output("has-changes", "${{ steps.detect.outputs.has-changes }}")
+        .add_output("services", steps("detect").output("services"))
+        .add_output("has-changes", steps("detect").output("has-changes"))
         .add_step(checkout())
         .add_step(changed_files())
         .add_step(detect_affected_services())
@@ -70,21 +73,21 @@ fn detect_changes() -> Job {
 
 fn preview_services() -> CallJob {
     CallJob::new("./.github/workflows/reusable_preview_service.yml")
-        .name("Preview ${{ matrix.service }}")
+        .name(format!("Preview {}", matrix::<Str>("service")))
         .needs(vec!["detect-changes".to_string()])
-        .cond(Expression::new(
-            "${{ needs.detect-changes.outputs.has-changes == 'true' }}",
-        ))
+        .cond(needs("detect-changes").output("has-changes").is_true())
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": "${{ fromJson(needs.detect-changes.outputs.services) }}",
+                "service": serde_json::Value::from(from_json::<Json>(
+                    needs("detect-changes").output("services")
+                )),
             })),
             max_parallel: None,
         })
         .add_with("environment", "dev")
-        .add_with("service-name", "${{ matrix.service }}")
-        .add_with("github-token", "${{ github.token }}")
+        .add_with("service-name", matrix::<Str>("service"))
+        .add_with("github-token", github().token())
         .inherit_secrets()
 }
 
@@ -95,7 +98,7 @@ fn preview_status() -> Job {
             "detect-changes".to_string(),
             "preview-services".to_string(),
         ])
-        .cond(Expression::new("always()"))
+        .cond(always())
         .runs_on(runners::Runner::Small.to_string())
         .add_step(summary())
 }

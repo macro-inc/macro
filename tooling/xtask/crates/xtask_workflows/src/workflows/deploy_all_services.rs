@@ -7,9 +7,12 @@
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
 
-use gh_workflow::expr::typed::matrix;
+use gh_workflow::expr::typed::{
+    Expr, Json, Str, all_needs_results, always, cancelled, format, from_json, github, input,
+    matrix, needs, raw, runner, steps, to_json,
+};
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    Concurrency, Env, Event, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
@@ -65,8 +68,9 @@ pub fn deploy_all_services() -> Workflow {
             // into separate groups and let them race the same Pulumi stacks.
             // Groups are repo-global strings, so the on-push caller shares
             // this group by using the same literal.
-            Concurrency::new(Expression::new(
-                "deploy-all-services-${{ inputs.environment }}",
+            Concurrency::new(format!(
+                "deploy-all-services-{}",
+                input::<Str>("environment")
             ))
             .cancel_in_progress(false),
         )
@@ -102,9 +106,9 @@ fn setup() -> Job {
     Job::default()
         .name("Setup Deployment Matrix")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("matrix", "${{ steps.set-matrix.outputs.matrix }}")
-        .add_output("binaries", "${{ steps.set-matrix.outputs.binaries }}")
-        .add_output("lambdas", "${{ steps.set-matrix.outputs.lambdas }}")
+        .add_output("matrix", steps("set-matrix").output("matrix"))
+        .add_output("binaries", steps("set-matrix").output("binaries"))
+        .add_output("lambdas", steps("set-matrix").output("lambdas"))
         .add_step(steps::checkout_v4())
         .add_step(set_matrix())
 }
@@ -151,9 +155,7 @@ fn warm_job(
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ needs.setup.outputs.{gate_output} != '[]' }}}}"
-        )))
+        .cond(needs("setup").output(gate_output).ne("[]"))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
@@ -171,14 +173,12 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string(), warm_job_id.to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ needs.setup.outputs.{gate_output} != '[]' }}}}"
-        )))
+        .cond(needs("setup").output(gate_output).ne("[]"))
         .runs_on(runners::Runner::Mid.to_string())
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": format!("${{{{ fromJson(needs.setup.outputs.{gate_output}) }}}}"),
+                "service": serde_json::Value::from(from_json::<Json>(needs("setup").output(gate_output))),
             })),
             max_parallel: None,
         })
@@ -190,16 +190,17 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
 
 fn build_service_binaries() -> Job {
     build_job(
-        "Build ${{ matrix.service }} binaries",
+        &format!("Build {} binaries", matrix::<Str>("service")),
         "warm-binaries",
         "binaries",
     )
     .add_step(build_prebuilt_binaries())
     // Pushing the built output is what makes this service a pure substitution
     // next run when it is unchanged, even on a cold volume.
-    .add_step(steps::push_nix_cache(
-        ".#deploy-service-binaries-${{ matrix.service }}",
-    ))
+    .add_step(steps::push_nix_cache(&format!(
+        ".#deploy-service-binaries-{}",
+        matrix::<Str>("service")
+    )))
     .add_step(steps::upload_handoff_artifact(
         "prebuilt-binaries.tar.gz",
         matrix("service"),
@@ -227,7 +228,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
+        .add_env(Env::new("SERVICE", matrix::<Str>("service")))
 }
 
 /// Each handler is a crane + cargo-zigbuild nix package. This job builds all
@@ -236,7 +237,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// pure cache hits from the Namespace Nix volume (no recompile).
 fn build_lambda_artifacts() -> Job {
     build_job(
-        "Build ${{ matrix.service }} Lambda artifacts",
+        &format!("Build {} Lambda artifacts", matrix::<Str>("service")),
         "warm-lambdas",
         "lambdas",
     )
@@ -255,7 +256,7 @@ fn build_lambdas() -> Step<Run> {
     // job's push step, minus a second flake evaluation.
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
+        .add_env(Env::new("SERVICE", matrix::<Str>("service")))
         .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
         .add_env(Env::new(
             "NIX_CACHE_SIGNING_KEY",
@@ -289,9 +290,12 @@ fn migrate_db() -> Job {
             "build-service-binaries".to_string(),
             "build-lambda-artifacts".to_string(),
         ])
-        .cond(Expression::new(
-            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
-        ))
+        .cond(
+            (!cancelled())
+                .and(needs("setup").output("matrix").ne("[]"))
+                .and(!all_needs_results().contains("failure"))
+                .and(!all_needs_results().contains("cancelled")),
+        )
         .runs_on(runners::DB_MIGRATOR)
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(run_migrations())
@@ -302,7 +306,7 @@ fn run_migrations() -> Step<Use> {
         "Run migrations",
         xtask_paths::repo_dir!(".github/actions/migrate-cloud-storage-db"),
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
+    .add_with(("environment", input::<Str>("environment")))
 }
 
 /// Deploys via Pulumi + Docker; AWS auth is via explicit static keys
@@ -312,7 +316,7 @@ fn run_migrations() -> Step<Use> {
 /// action's pulumi step via the job env.
 fn deploy_services() -> Job {
     Job::default()
-        .name("Deploy ${{ matrix.service }}")
+        .name(format!("Deploy {}", matrix::<Str>("service")))
         .needs(vec![
             "setup".to_string(),
             "warm-binaries".to_string(),
@@ -321,15 +325,19 @@ fn deploy_services() -> Job {
             "build-lambda-artifacts".to_string(),
             "migrate-db".to_string(),
         ])
-        .cond(Expression::new(
-            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
-        ))
+        .cond(
+            (!cancelled())
+                .and(needs("setup").output("matrix").ne("[]"))
+                .and(needs("migrate-db").result().eq("success"))
+                .and(!all_needs_results().contains("failure"))
+                .and(!all_needs_results().contains("cancelled")),
+        )
         .runs_on(runners::Runner::Small.to_string())
         .add_env(("PULUMI_HOME", "/pulumi"))
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": "${{ fromJson(needs.setup.outputs.matrix) }}",
+                "service": serde_json::Value::from(from_json::<Json>(needs("setup").output("matrix"))),
             })),
             max_parallel: None,
         })
@@ -348,7 +356,7 @@ fn get_project_name() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
     .id("project-name")
-    .add_with(("service-name", "${{ matrix.service }}"))
+    .add_with(("service-name", matrix::<Str>("service")))
 }
 
 fn check_artifact_config() -> Step<Run> {
@@ -360,7 +368,7 @@ fn check_artifact_config() -> Step<Run> {
             echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
         "#})
         .id("check-artifacts")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
+        .add_env(Env::new("SERVICE", matrix::<Str>("service")))
 }
 
 /// Pull the handoff tars from Namespace artifact storage into runner.temp
@@ -382,48 +390,70 @@ fn download_handoff_artifacts() -> Step<Run> {
               nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
             fi
         "#})
-        .if_condition(Expression::new(
-            "${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}",
-        ))
+        .if_condition(
+            steps("check-artifacts")
+                .output("has_binaries")
+                .is_true()
+                .or(steps("check-artifacts").output("has_lambdas").is_true()),
+        )
         .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
-            "${{ steps.check-artifacts.outputs.has_binaries }}",
+            steps("check-artifacts").output("has_binaries"),
         ))
         .add_env(Env::new(
             "HAS_LAMBDAS",
-            "${{ steps.check-artifacts.outputs.has_lambdas }}",
+            steps("check-artifacts").output("has_lambdas"),
         ))
         .add_env(Env::new(
             "BASE",
-            "handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}",
+            format!(
+                "handoff/{}-{}/{}",
+                github().run_id(),
+                github().run_attempt(),
+                matrix::<Str>("service")
+            ),
         ))
 }
 
 fn deploy_service() -> Step<Use> {
     steps::uses_local(
-        "Deploy ${{ matrix.service }}",
+        &format!("Deploy {}", matrix::<Str>("service")),
         xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
+    .add_with(("environment", input::<Str>("environment")))
     .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
     .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        "${{ steps.project-name.outputs.project-name }}",
+        steps("project-name").output("project-name"),
     ))
     .add_with(("use-namespace-builder", "true"))
     .add_with((
         "prebuilt-binaries-tar",
-        "${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}",
+        handoff_tar_path("has_binaries", "prebuilt-binaries.tar.gz"),
     ))
     .add_with((
         "lambda-artifacts-tar",
-        "${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}",
+        handoff_tar_path("has_lambdas", "lambda-artifacts.tar.gz"),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))
+}
+
+/// The downloaded handoff tar when the service has one, else empty.
+fn handoff_tar_path(has_output: &str, file: &str) -> Expr<Str> {
+    steps("check-artifacts")
+        .output(has_output)
+        .is_true()
+        .then_else(
+            format(
+                &format!("{{0}}/handoff/{file}"),
+                [runner().temp().into_ast()],
+            ),
+            "",
+        )
 }
 
 fn deployment_summary() -> Job {
@@ -439,7 +469,7 @@ fn deployment_summary() -> Job {
             "migrate-db".to_string(),
             "deploy-services".to_string(),
         ])
-        .cond(Expression::new("always()"))
+        .cond(always())
         .add_step(steps::checkout_v4())
         .add_step(steps::setup_bun_pinned())
         .add_step(check_deployment_results())
@@ -449,5 +479,6 @@ fn check_deployment_results() -> Step<Run> {
     Step::new("Check deployment results")
         .run("bun .github/scripts/check-service-deployment-results.ts")
         .shell("bash")
-        .add_env(("DEPLOYMENT_NEEDS", "${{ toJson(needs) }}"))
+        // The whole `needs` context has no builder.
+        .add_env(("DEPLOYMENT_NEEDS", to_json(raw::<Json>("needs"))))
 }

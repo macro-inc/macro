@@ -14,7 +14,7 @@ on:
   workflow_dispatch: {}
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: github.ref == 'refs/heads/main'
     name: Deploy SDK documentation
     runs-on: namespace-profile-linux-small
     permissions:

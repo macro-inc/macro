@@ -33,7 +33,10 @@
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
-use gh_workflow::{CallJob, Concurrency, Event, Expression, Push, Workflow};
+use gh_workflow::expr::typed::github;
+use gh_workflow::{CallJob, Concurrency, Event, Push, Workflow};
+
+use crate::workflows::vars;
 
 #[cfg(test)]
 mod test;
@@ -74,7 +77,7 @@ pub fn deploy_on_push() -> Workflow {
             // Never cancel an in-progress deployment — that could leave a
             // stack half-applied. Queued pushes coalesce to the newest, which
             // is only lossless because no stage is path-gated (see module docs).
-            Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
+            Concurrency::new(github().workflow().to_string()).cancel_in_progress(false),
         )
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
@@ -87,18 +90,12 @@ fn deploy_cloud_storage() -> CallJob {
     CallJob::new("./.github/workflows/deploy_all_services.yml")
         .name("Deploy Cloud Storage Services")
         .add_with("environment", "dev")
-        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
-        .add_secret(
-            "AWS_SECRET_ACCESS_KEY",
-            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-        )
-        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
-        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
-        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
-        .add_secret(
-            "NIX_CACHE_SIGNING_KEY",
-            "${{ secrets.NIX_CACHE_SIGNING_KEY }}",
-        )
+        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
+        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
+        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
+        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
+        .add_secret("DD_API_KEY", vars::DD_API_KEY)
+        .add_secret("NIX_CACHE_SIGNING_KEY", vars::NIX_CACHE_SIGNING_KEY)
 }
 
 /// The worker calls DSS/SPS, so don't ship it ahead of them — same ordering as
@@ -109,10 +106,7 @@ fn deploy_sync_service() -> CallJob {
         .name("Deploy Sync Service")
         .needs(vec!["deploy-cloud-storage".to_string()])
         .add_with("environment", "dev")
-        .add_secret(
-            "CLOUDFLARE_API_TOKEN",
-            "${{ secrets.CLOUDFLARE_API_TOKEN }}",
-        )
+        .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
 
 /// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
@@ -123,10 +117,7 @@ fn deploy_mcp_chatgpt_worker() -> CallJob {
         .name("Deploy MCP ChatGPT Worker")
         .needs(vec!["deploy-cloud-storage".to_string()])
         .add_with("environment", "dev")
-        .add_secret(
-            "CLOUDFLARE_API_TOKEN",
-            "${{ secrets.CLOUDFLARE_API_TOKEN }}",
-        )
+        .add_secret("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN)
 }
 
 /// No `needs`: the build only reads the commit, so it overlaps the backend's
@@ -135,11 +126,8 @@ fn build_web_app() -> CallJob {
     CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build Web App")
         .add_with("environment", "dev")
-        .add_secret(
-            "SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        )
-        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
+        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// Publish only after the worker supports the frontend's sync protocol. The
@@ -155,17 +143,11 @@ fn deploy_web_app() -> CallJob {
         .add_with("notify", false)
         .add_with("environment", "dev")
         .add_with("prebuilt", true)
-        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
-        .add_secret(
-            "AWS_SECRET_ACCESS_KEY",
-            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-        )
-        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
-        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
-        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
-        .add_secret(
-            "SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        )
-        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
+        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
+        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
+        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
+        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
+        .add_secret("DD_API_KEY", vars::DD_API_KEY)
+        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }

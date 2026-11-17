@@ -95,7 +95,7 @@ fn email_and_document_storage_deploy_in_the_shared_matrix() {
     assert_eq!(deploy_jobs, ["deploy-services"]);
     assert_eq!(
         jobs["deploy-services"]["strategy"]["matrix"]["service"],
-        "${{ fromJson(needs.setup.outputs.matrix) }}"
+        "${{ fromJSON(needs.setup.outputs.matrix) }}"
     );
     assert!(
         jobs["deploy-services"]["needs"]

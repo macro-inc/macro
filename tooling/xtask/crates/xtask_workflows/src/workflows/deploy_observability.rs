@@ -10,8 +10,9 @@
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
 //! stack's README ("Deploying") describes them.
 
+use gh_workflow::expr::typed::{Bool, Expr, Str, always, github, input, steps};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
     WorkflowInput,
 };
 
@@ -24,8 +25,15 @@ const STACK_DIR: &str = "infra/stacks/observability";
 /// Shared with the PR image build, so a deploy after a PR starts warm.
 pub(crate) const CACHE_TAG: &str = "observability-image";
 /// Every step's `if` after `find`: which stage this source's image has reached.
-const STAGE: &str = "steps.find.outputs.stage";
-const AMI: &str = "${{ steps.publish.outputs.ami || steps.find.outputs.ami }}";
+fn stage() -> Expr<Str> {
+    steps("find").output("stage")
+}
+
+fn ami() -> Expr<Str> {
+    steps("publish")
+        .output("ami")
+        .or_else(steps("find").output("ami"))
+}
 
 /// Build the workflow.
 pub fn deploy_observability() -> Workflow {
@@ -90,10 +98,7 @@ fn deploy_job() -> Job {
         .timeout_minutes(180u32)
         // One rollout at a time, and never cancel one: that could leave the
         // stack mid-replacement. A queued run waits for the running one.
-        .concurrency(
-            Concurrency::new(Expression::new("deploy-observability-prod"))
-                .cancel_in_progress(false),
-        )
+        .concurrency(Concurrency::new("deploy-observability-prod").cancel_in_progress(false))
         .add_env(("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
         .add_step(
             Step::new("Refuse branches other than main")
@@ -123,31 +128,30 @@ fn deploy_job() -> Job {
                 "Refuse a commit older than main's last stack change",
                 "latest",
             )
-            .add_env(("GITHUB_TOKEN", "${{ github.token }}")),
+            .add_env(("GITHUB_TOKEN", github().token())),
         )
         .add_step(aws_credentials())
         .add_step(release("Find this source's image", "find").id("find"))
-        .add_step(build_image().if_condition(Expression::new(format!("{STAGE} == 'build'"))))
+        .add_step(build_image().if_condition(stage().eq("build")))
         .add_step(
             release("Publish the AMI", "publish")
                 .id("publish")
-                .if_condition(Expression::new(format!("{STAGE} == 'build'")))
-                .add_env(("NIX_SYSTEM", "${{ steps.find.outputs.system }}")),
+                .if_condition(stage().eq("build"))
+                .add_env(("NIX_SYSTEM", steps("find").output("system"))),
         )
         .add_step(
             release("Smoke-boot the AMI on a throwaway host", "smoke")
-                .if_condition(Expression::new(format!("{STAGE} != 'deploy'")))
-                .add_env(("AMI", AMI)),
+                .if_condition(stage().ne("deploy"))
+                .add_env(("AMI", ami())),
         )
         .add_step(
             release("Check the plan and roll out", "deploy")
-                .add_env(("AMI", AMI))
-                .add_env(("DRY_RUN", "${{ inputs.dry_run }}")),
+                .add_env(("AMI", ami()))
+                .add_env(("DRY_RUN", input::<Bool>("dry_run"))),
         )
         .add_step(
-            release("Remove smoke resources a cancelled run left", "cleanup").if_condition(
-                Expression::new(format!("always() && {STAGE} != '' && {STAGE} != 'deploy'")),
-            ),
+            release("Remove smoke resources a cancelled run left", "cleanup")
+                .if_condition(always().and(stage().ne("")).and(stage().ne("deploy"))),
         )
         .add_step(steps::teardown_nix())
 }

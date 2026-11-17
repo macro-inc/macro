@@ -13,9 +13,10 @@
 //! `wrangler deploy` when a secret the worker needs outside local is missing,
 //! leaving the live version serving.
 
+use gh_workflow::expr::typed::{Expr, Str, input};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    Concurrency, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -23,7 +24,10 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
+/// Dispatches and calls both pass one; `dev` is the fallback.
+fn environment() -> Expr<Str> {
+    input::<Str>("environment").or_else("dev")
+}
 
 /// Build the workflow.
 pub fn deploy_mcp_chatgpt_worker() -> Workflow {
@@ -56,10 +60,8 @@ pub fn deploy_mcp_chatgpt_worker() -> Workflow {
         .concurrency(
             // Literal prefix rather than `github.workflow`: for workflow_call
             // runs that expression expands to the *caller's* name.
-            Concurrency::new(Expression::new(format!(
-                "deploy-mcp-chatgpt-worker-{ENVIRONMENT}"
-            )))
-            .cancel_in_progress(false),
+            Concurrency::new(format!("deploy-mcp-chatgpt-worker-{}", environment()))
+                .cancel_in_progress(false),
         )
         .add_job("deploy", deploy())
 }
@@ -94,7 +96,8 @@ fn install_deps() -> Step<Run> {
 fn check_secrets() -> Step<Run> {
     Step::new("Check required secrets")
         .run(format!(
-            "node scripts/check-deploy-secrets.mjs {ENVIRONMENT}"
+            "node scripts/check-deploy-secrets.mjs {}",
+            environment()
         ))
         .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
@@ -105,7 +108,7 @@ fn deploy_step() -> Step<Run> {
     // On a direct dispatch `inputs.environment` is set; callers pass it too.
     // wrangler's build command generates the SDK tool catalog first.
     Step::new("Deploy with wrangler")
-        .run(format!("bunx wrangler deploy --env {ENVIRONMENT}"))
+        .run(format!("bunx wrangler deploy --env {}", environment()))
         .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))

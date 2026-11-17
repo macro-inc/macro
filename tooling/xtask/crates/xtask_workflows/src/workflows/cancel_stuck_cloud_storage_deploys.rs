@@ -6,6 +6,7 @@
 //! Runs on the tiny no-cache profile: it's a single `gh api` + `jq` script
 //! (both ship in Namespace's runner base image), no checkout, no build.
 
+use gh_workflow::expr::typed::{Str, github, input};
 use gh_workflow::{
     Event, Job, Level, Permissions, Schedule, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
@@ -50,10 +51,14 @@ fn cancel_stuck() -> Job {
         // Keep in sync with the deploy trigger's generated filename
         // (see deploy_on_push.rs).
         .add_env(("WORKFLOW_FILE", "deploy_on_push.yml"))
-        .add_env(("MAX_AGE_MINUTES", "${{ inputs.max-age-minutes || '90' }}"))
-        .add_env(("DRY_RUN", "${{ inputs.dry-run || 'false' }}"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        // Both inputs are empty on the schedule, so each falls back to text.
+        .add_env((
+            "MAX_AGE_MINUTES",
+            input::<Str>("max-age-minutes").or_else("90"),
+        ))
+        .add_env(("DRY_RUN", input::<Str>("dry-run").or_else("false")))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(cancel_runs())
 }
 

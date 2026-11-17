@@ -1,7 +1,8 @@
 //! Publish the TypeDoc site to its Cloudflare Worker from reviewed main commits.
 
+use gh_workflow::expr::typed::github;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Step, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Push, Step, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -25,14 +26,12 @@ pub fn deploy_sdk_docs() -> Workflow {
                     .add_path(xtask_paths::repo_file!("package.json")),
             )
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
-        )
+        .concurrency(Concurrency::new(github().workflow().to_string()).cancel_in_progress(false))
         .add_job(
             "deploy",
             Job::default()
                 .name("Deploy SDK documentation")
-                .cond(Expression::new("${{ github.ref == 'refs/heads/main' }}"))
+                .cond(github().git_ref().eq("refs/heads/main"))
                 .runs_on(runners::Runner::Small.to_string())
                 .permissions(Permissions {
                     contents: Some(Level::Read),

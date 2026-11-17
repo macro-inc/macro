@@ -72,7 +72,7 @@ jobs:
     needs:
       - setup
       - check-migrations
-    if: ${{ !failure() && !cancelled() }}
+    if: '!failure() && !cancelled()'
     runs-on: namespace-profile-linux-mid
     steps:
       - name: Checkout Repo

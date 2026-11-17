@@ -11,9 +11,10 @@
 //! serving, not with the previous push, so runs that were cancelled in the
 //! queue can't make an undeployed change look deployed.
 
+use gh_workflow::expr::typed::{Bool, Expr, Str, input, steps};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    Concurrency, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -21,7 +22,10 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
+/// Dispatches and calls both pass one; `dev` is the fallback.
+fn environment() -> Expr<Str> {
+    input::<Str>("environment").or_else("dev")
+}
 
 pub fn deploy_sync_service() -> Workflow {
     Workflow::new("Deploy Sync Service")
@@ -53,9 +57,7 @@ pub fn deploy_sync_service() -> Workflow {
         .concurrency(
             // Literal prefix rather than `github.workflow`: for workflow_call
             // runs that expression expands to the *caller's* name.
-            Concurrency::new(Expression::new(format!(
-                "deploy-sync-service-{ENVIRONMENT}"
-            ))),
+            Concurrency::new(format!("deploy-sync-service-{}", environment())),
         )
         .add_job("deploy", deploy())
 }
@@ -102,14 +104,17 @@ fn install_deps() -> Step<Run> {
 fn check_secrets() -> Step<Run> {
     Step::new("Check required secrets")
         .run(format!(
-            "node scripts/check-deploy-secrets.mjs {ENVIRONMENT}"
+            "node scripts/check-deploy-secrets.mjs {}",
+            environment()
         ))
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
 
-const WORKER_CHANGED: &str = "${{ steps.worker-state.outputs.unchanged != 'true' }}";
+fn worker_changed() -> Expr<Bool> {
+    steps("worker-state").output("unchanged").ne("true")
+}
 
 /// A failure here leaves the key empty, which the next step treats as changed.
 fn compute_worker_key() -> Step<Run> {
@@ -124,8 +129,8 @@ fn read_worker_state() -> Step<Run> {
         .run("../../.github/scripts/sync-worker-state.sh")
         .id("worker-state")
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
-        .add_env(("ENVIRONMENT", ENVIRONMENT))
-        .add_env(("WORKER_KEY", "${{ steps.worker-key.outputs.key }}"))
+        .add_env(("ENVIRONMENT", environment()))
+        .add_env(("WORKER_KEY", steps("worker-key").output("key")))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -135,9 +140,10 @@ fn read_worker_state() -> Step<Run> {
 fn apply_d1_migrations() -> Step<Run> {
     Step::new("Apply D1 migrations")
         .run(format!(
-            "npx wrangler d1 migrations apply USER_PEER_MAPPING --env {ENVIRONMENT} --remote"
+            "npx wrangler d1 migrations apply USER_PEER_MAPPING --env {} --remote",
+            environment()
         ))
-        .if_condition(Expression::new(WORKER_CHANGED))
+        .if_condition(worker_changed())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("CI", "true"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
@@ -147,11 +153,12 @@ fn apply_d1_migrations() -> Step<Run> {
 fn deploy_step() -> Step<Run> {
     Step::new("Deploy with wrangler")
         .run(format!(
-            "npx wrangler deploy --env {ENVIRONMENT} --message \"inputs:$WORKER_KEY\""
+            "npx wrangler deploy --env {} --message \"inputs:$WORKER_KEY\"",
+            environment()
         ))
-        .if_condition(Expression::new(WORKER_CHANGED))
+        .if_condition(worker_changed())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
-        .add_env(("WORKER_KEY", "${{ steps.worker-key.outputs.key }}"))
+        .add_env(("WORKER_KEY", steps("worker-key").output("key")))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -164,8 +171,5 @@ fn deploy_step() -> Step<Run> {
 fn wait_for_active_objects() -> Step<Run> {
     Step::new("Wait for active Durable Objects to update")
         .run("sleep \"$WAIT_SECONDS\"")
-        .add_env((
-            "WAIT_SECONDS",
-            "${{ steps.worker-state.outputs.wait_seconds }}",
-        ))
+        .add_env(("WAIT_SECONDS", steps("worker-state").output("wait_seconds")))
 }

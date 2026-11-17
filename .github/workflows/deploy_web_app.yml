@@ -46,7 +46,7 @@ on:
         type: boolean
 jobs:
   build:
-    if: ${{ !inputs.prebuilt }}
+    if: '!inputs.prebuilt'
     name: Build
     uses: ./.github/workflows/build_web_app.yml
     with:
@@ -57,7 +57,7 @@ jobs:
   deploy:
     needs:
       - build
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    if: '!cancelled() && (needs.build.result == ''success'' || needs.build.result == ''skipped'')'
     name: Deploy
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
@@ -110,7 +110,7 @@ jobs:
           DATADOG_API_HOST: api.us5.datadoghq.com
         working-directory: apps/web
       - name: Upload production build
-        if: ${{ inputs.environment == 'prod' }}
+        if: inputs.environment == 'prod'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: web-app-build

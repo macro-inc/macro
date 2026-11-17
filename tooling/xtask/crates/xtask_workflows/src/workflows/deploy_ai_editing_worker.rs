@@ -12,14 +12,18 @@
 //! Prod used to be dispatch-only, and nothing ever dispatched it — the worker ran
 //! ten-day-old code while `release-production` shipped its Rust caller.
 
+use gh_workflow::expr::typed::{Expr, Str, input};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    Concurrency, Event, Job, Push, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
 
-const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
+/// Dispatches and calls both pass one; `dev` is the fallback.
+fn environment() -> Expr<Str> {
+    input::<Str>("environment").or_else("dev")
+}
 
 /// Build the workflow.
 pub fn deploy_ai_editing_worker() -> Workflow {
@@ -68,10 +72,8 @@ pub fn deploy_ai_editing_worker() -> Workflow {
         .concurrency(
             // Literal prefix rather than `github.workflow`: for workflow_call
             // runs that expression expands to the *caller's* name.
-            Concurrency::new(Expression::new(format!(
-                "deploy-ai-editing-worker-{ENVIRONMENT}"
-            )))
-            .cancel_in_progress(false),
+            Concurrency::new(format!("deploy-ai-editing-worker-{}", environment()))
+                .cancel_in_progress(false),
         )
         .add_job("deploy", deploy())
 }
@@ -103,7 +105,7 @@ fn deploy_step() -> Step<Run> {
     // sandbox before `wrangler deploy` (see
     // services/ai-editing-worker/package.json).
     Step::new("Deploy with wrangler")
-        .run(format!("bun run deploy-{ENVIRONMENT}"))
+        .run(format!("bun run deploy-{}", environment()))
         .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))

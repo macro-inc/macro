@@ -10,13 +10,18 @@
 //! amortise, so the per-service build realises its own closure directly (the
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
 
-use gh_workflow::expr::typed::{input, needs};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Str, cancelled, failure, format, github, input, needs, runner, steps,
+};
 use gh_workflow::{
-    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
-    WorkflowInput,
+    Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
+
+fn service_name() -> Expr<Str> {
+    input("service-name")
+}
 
 /// Build the workflow.
 pub fn reusable_deploy_service() -> Workflow {
@@ -82,10 +87,10 @@ pub fn reusable_deploy_service() -> Workflow {
 /// to build (mirrors deploy-all-services' matrix filtering, for one service).
 fn setup() -> Job {
     Job::default()
-        .name("Check ${{ inputs.service-name }} artifacts")
+        .name(format!("Check {} artifacts", service_name()))
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("has_binaries", "${{ steps.check.outputs.has_binaries }}")
-        .add_output("has_lambdas", "${{ steps.check.outputs.has_lambdas }}")
+        .add_output("has_binaries", steps("check").output("has_binaries"))
+        .add_output("has_lambdas", steps("check").output("has_lambdas"))
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(check_artifact_config())
 }
@@ -107,7 +112,7 @@ fn check_artifact_config() -> Step<Run> {
             echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
         "#})
         .id("check")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("SERVICE", service_name()))
 }
 
 /// Base for the two Nix build jobs using Namespace's warm `/nix` volume.
@@ -115,9 +120,7 @@ fn build_job(name: &str, gate_output: &str) -> Job {
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ needs.setup.outputs.{gate_output} == 'true' }}}}"
-        )))
+        .cond(needs("setup").output(gate_output).is_true())
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::setup_bun_pinned())
@@ -126,13 +129,16 @@ fn build_job(name: &str, gate_output: &str) -> Job {
 }
 
 fn build_service_binaries() -> Job {
-    build_job("Build ${{ inputs.service-name }} binaries", "has_binaries")
-        .add_step(build_prebuilt_binaries())
-        .add_step(steps::upload_handoff_artifact(
-            "prebuilt-binaries.tar.gz",
-            input("service-name"),
-        ))
-        .add_step(steps::teardown_nix())
+    build_job(
+        &format!("Build {} binaries", service_name()),
+        "has_binaries",
+    )
+    .add_step(build_prebuilt_binaries())
+    .add_step(steps::upload_handoff_artifact(
+        "prebuilt-binaries.tar.gz",
+        service_name(),
+    ))
+    .add_step(steps::teardown_nix())
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
@@ -155,7 +161,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("SERVICE", service_name()))
 }
 
 /// Each handler is a crane + cargo-zigbuild nix package; the build script
@@ -164,14 +170,14 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// the Namespace Nix cache volume).
 fn build_lambda_artifacts() -> Job {
     build_job(
-        "Build ${{ inputs.service-name }} Lambda artifacts",
+        &format!("Build {} Lambda artifacts", service_name()),
         "has_lambdas",
     )
     .add_step(build_lambdas())
     .add_step(log_lambda_receipt())
     .add_step(steps::upload_handoff_artifact(
         "lambda-artifacts.tar.gz",
-        input("service-name"),
+        service_name(),
     ))
     .add_step(steps::teardown_nix())
 }
@@ -179,7 +185,7 @@ fn build_lambda_artifacts() -> Job {
 fn build_lambdas() -> Step<Run> {
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("SERVICE", service_name()))
 }
 
 fn log_lambda_receipt() -> Step<Run> {
@@ -195,7 +201,7 @@ fn log_lambda_receipt() -> Step<Run> {
 
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
-        "Check ${{ inputs.service-name }} migrations are applied",
+        &format!("Check {} migrations are applied", service_name()),
         needs("setup")
             .output("has_binaries")
             .is_true()
@@ -210,14 +216,14 @@ fn check_migrations() -> Job {
 /// Deploys via Pulumi + Docker; AWS auth is via explicit static keys.
 fn deploy() -> Job {
     Job::default()
-        .name("Deploy ${{ inputs.service-name }}")
+        .name(format!("Deploy {}", service_name()))
         .needs(vec![
             "setup".to_string(),
             "build-service-binaries".to_string(),
             "build-lambda-artifacts".to_string(),
             "check-migrations".to_string(),
         ])
-        .cond(Expression::new("${{ !failure() && !cancelled() }}"))
+        .cond((!failure()).and(!cancelled()))
         .runs_on(runners::Runner::Small.to_string())
         .add_env(("PULUMI_HOME", "/pulumi"))
         .add_step(steps::checkout_v4())
@@ -234,8 +240,8 @@ fn get_project_name() -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/get-project-name"),
     )
     .id("project-name")
-    .if_condition(Expression::new("${{ inputs.pulumi-stack-name == '' }}"))
-    .add_with(("service-name", "${{ inputs.service-name }}"))
+    .if_condition(input::<Str>("pulumi-stack-name").eq(""))
+    .add_with(("service-name", service_name()))
 }
 
 /// Pull the handoff tars from Namespace artifact storage into runner.temp
@@ -257,48 +263,67 @@ fn download_handoff_artifacts() -> Step<Run> {
               nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
             fi
         "#})
-        .if_condition(Expression::new(
-            "${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}",
-        ))
+        .if_condition(
+            needs("setup")
+                .output("has_binaries")
+                .is_true()
+                .or(needs("setup").output("has_lambdas").is_true()),
+        )
         .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
-            "${{ needs.setup.outputs.has_binaries }}",
+            needs("setup").output("has_binaries"),
         ))
         .add_env(Env::new(
             "HAS_LAMBDAS",
-            "${{ needs.setup.outputs.has_lambdas }}",
+            needs("setup").output("has_lambdas"),
         ))
         .add_env(Env::new(
             "BASE",
-            "handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}",
+            format!(
+                "handoff/{}-{}/{}",
+                github().run_id(),
+                github().run_attempt(),
+                service_name()
+            ),
         ))
 }
 
 fn deploy_service() -> Step<Use> {
     steps::uses_local(
-        "Deploy ${{ inputs.service-name }}",
+        &format!("Deploy {}", service_name()),
         xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
+    .add_with(("environment", input::<Str>("environment")))
     .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
     .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
     .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
     .add_with((
         "pulumi-service-name",
-        "${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}",
+        input::<Str>("pulumi-stack-name").or_else(steps("project-name").output("project-name")),
     ))
     .add_with(("use-namespace-builder", "true"))
-    .add_with(("use-docker", "${{ inputs.use-docker }}"))
-    .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
+    .add_with(("use-docker", input::<Bool>("use-docker")))
+    .add_with(("use-lfs", input::<Bool>("use-lfs")))
     .add_with((
         "prebuilt-binaries-tar",
-        "${{ needs.setup.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}",
+        handoff_tar_path("has_binaries", "prebuilt-binaries.tar.gz"),
     ))
     .add_with((
         "lambda-artifacts-tar",
-        "${{ needs.setup.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}",
+        handoff_tar_path("has_lambdas", "lambda-artifacts.tar.gz"),
     ))
     .add_with(("dd-app-key", vars::DD_APP_KEY))
     .add_with(("dd-api-key", vars::DD_API_KEY))
+}
+
+/// The downloaded handoff tar when the service has one, else empty.
+fn handoff_tar_path(has_output: &str, file: &str) -> Expr<Str> {
+    needs("setup").output(has_output).is_true().then_else(
+        format(
+            &format!("{{0}}/handoff/{file}"),
+            [runner().temp().into_ast()],
+        ),
+        "",
+    )
 }

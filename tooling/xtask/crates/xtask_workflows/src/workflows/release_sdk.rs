@@ -16,9 +16,8 @@
 //! recovery path. A tag pushed from here uses `GITHUB_TOKEN`, which by design
 //! does not start another workflow run, so the two never double-publish.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Use, Workflow,
-};
+use gh_workflow::expr::typed::{always, github, steps};
+use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
 use crate::workflows::steps;
 
@@ -40,7 +39,7 @@ pub fn release_sdk() -> Workflow {
         .concurrency(
             // Serialize releases: two bumps landing back to back must publish in
             // order, and cancelling a run mid-publish could orphan the tag.
-            Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
+            Concurrency::new(github().workflow().to_string()).cancel_in_progress(false),
         )
         .add_job("release", release())
 }
@@ -70,7 +69,7 @@ fn release() -> Job {
 
 /// Every step after the resolver runs only for an actual release.
 fn guard(step: Step<Run>) -> Step<Run> {
-    step.if_condition(Expression::new("steps.resolve.outputs.release == 'true'"))
+    step.if_condition(steps("resolve").output("release").is_true())
 }
 
 fn setup_node() -> Step<Use> {
@@ -138,5 +137,5 @@ fn summarize() -> Step<Run> {
             esac
         "#}
         .replace("PACKAGE_NAME", PACKAGE_NAME))
-        .if_condition(Expression::new("always()"))
+        .if_condition(always())
 }

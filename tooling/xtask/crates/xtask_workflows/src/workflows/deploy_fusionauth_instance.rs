@@ -2,9 +2,8 @@
 //! configuration Pulumi stack to dev or prod through the shared single-service
 //! deployment workflow. Generated into `deploy_fusionauth_instance.yml`.
 
-use gh_workflow::{
-    CallJob, Concurrency, Event, Expression, Workflow, WorkflowDispatch, WorkflowInput,
-};
+use gh_workflow::expr::typed::{Str, input};
+use gh_workflow::{CallJob, Concurrency, Event, Workflow, WorkflowDispatch, WorkflowInput};
 
 /// Build the workflow.
 pub fn deploy_fusionauth_instance() -> Workflow {
@@ -19,8 +18,9 @@ pub fn deploy_fusionauth_instance() -> Workflow {
             ),
         ))
         .concurrency(
-            Concurrency::new(Expression::new(
-                "deploy-fusionauth-instance-${{ inputs.environment }}",
+            Concurrency::new(format!(
+                "deploy-fusionauth-instance-{}",
+                input::<Str>("environment")
             ))
             .cancel_in_progress(false),
         )
@@ -30,7 +30,7 @@ pub fn deploy_fusionauth_instance() -> Workflow {
 fn deploy() -> CallJob {
     CallJob::new("./.github/workflows/reusable_deploy_service.yml")
         .name("Deploy fusionauth-instance")
-        .add_with("environment", "${{ inputs.environment }}")
+        .add_with("environment", input::<Str>("environment"))
         .add_with("service-name", "fusionauth-instance")
         .add_with("pulumi-stack-name", "fusionauth-instance")
         .add_with("use-docker", false)

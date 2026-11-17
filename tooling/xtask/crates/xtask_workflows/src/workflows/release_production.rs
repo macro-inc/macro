@@ -6,9 +6,10 @@
 //! into `release-production.yml`, the name it had when it was hand-written,
 //! which is its identity in GitHub Actions.
 
+use gh_workflow::expr::typed::{Bool, Expr, github};
 use gh_workflow::{
-    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run,
-    Step, Use, Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
+    Workflow,
 };
 
 use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
@@ -21,7 +22,9 @@ const ENVIRONMENT: &str = "prod";
 
 /// Only a release triggers this workflow; the jobs that start it keep the
 /// guard the hand-written workflow had.
-const ON_RELEASE: &str = "github.event_name == 'release'";
+fn on_release() -> Expr<Bool> {
+    github().event_name().eq("release")
+}
 
 pub fn release_production() -> Workflow {
     Workflow::new("Deploy Production Release")
@@ -29,7 +32,7 @@ pub fn release_production() -> Workflow {
         .concurrency(
             // Never cancel an in-progress deployment: that could leave a stack
             // half-applied.
-            Concurrency::new(Expression::new("${{ github.workflow }}-production"))
+            Concurrency::new(format!("{}-production", github().workflow()))
                 .cancel_in_progress(false),
         )
         .add_env(("MODE", "production"))
@@ -47,20 +50,14 @@ pub fn release_production() -> Workflow {
 fn deploy_cloud_storage() -> CallJob {
     CallJob::new("./.github/workflows/deploy_all_services.yml")
         .name("Deploy Cloud Storage Services")
-        .cond(Expression::new(ON_RELEASE))
+        .cond(on_release())
         .add_with("environment", ENVIRONMENT)
-        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
-        .add_secret(
-            "AWS_SECRET_ACCESS_KEY",
-            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-        )
-        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
-        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
-        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
-        .add_secret(
-            "NIX_CACHE_SIGNING_KEY",
-            "${{ secrets.NIX_CACHE_SIGNING_KEY }}",
-        )
+        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
+        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
+        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
+        .add_secret("DD_APP_KEY", vars::DD_APP_KEY)
+        .add_secret("DD_API_KEY", vars::DD_API_KEY)
+        .add_secret("NIX_CACHE_SIGNING_KEY", vars::NIX_CACHE_SIGNING_KEY)
 }
 
 /// The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
@@ -100,14 +97,11 @@ fn deploy_mcp_chatgpt_worker() -> CallJob {
 fn deploy_website() -> CallJob {
     CallJob::new("./.github/workflows/deploy_website.yml")
         .name("Deploy Website")
-        .cond(Expression::new(ON_RELEASE))
+        .cond(on_release())
         .add_with("environment", ENVIRONMENT)
-        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
-        .add_secret(
-            "AWS_SECRET_ACCESS_KEY",
-            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-        )
-        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
+        .add_secret("AWS_ACCESS_KEY", vars::AWS_ACCESS_KEY)
+        .add_secret("AWS_SECRET_ACCESS_KEY", vars::AWS_SECRET_ACCESS_KEY)
+        .add_secret("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN)
 }
 
 /// Releases the iOS version Apple approved for the native changes in this
@@ -120,10 +114,7 @@ fn publish_ios() -> CallJob {
         .name("Publish iOS App Store Version")
         .needs(vec!["deploy".to_string()])
         .permissions(Permissions::default().contents(Level::Read))
-        .add_secret(
-            "IOS_RELEASE_DOPPLER_TOKEN",
-            "${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}",
-        )
+        .add_secret("IOS_RELEASE_DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN)
 }
 
 /// The same build as dev deploys and manual web deploys. It reuses unchanged
@@ -134,13 +125,10 @@ fn publish_ios() -> CallJob {
 fn build() -> CallJob {
     CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build Web App")
-        .cond(Expression::new(ON_RELEASE))
+        .cond(on_release())
         .add_with("environment", ENVIRONMENT)
-        .add_secret(
-            "SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        )
-        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
+        .add_secret("SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .add_secret("POSTHOG_API_KEY", vars::POSTHOG_API_KEY)
 }
 
 /// New clients require the worker's sync protocol support before publication,
@@ -183,11 +171,14 @@ fn upload() -> Job {
         .add_step(attach_to_release())
 }
 
-const RELEASE_ARCHIVE: &str = "web-app-${{ github.ref_name }}.tar.gz";
+fn release_archive() -> String {
+    format!("web-app-{}.tar.gz", github().ref_name())
+}
 
 fn archive_dist() -> Step<Run> {
     Step::new("Create Web App Artifact").run(format!(
-        "tar -czf {RELEASE_ARCHIVE} -C {} .",
+        "tar -czf {} -C {} .",
+        release_archive(),
         xtask_paths::runtime_path!("apps/web/dist").as_str()
     ))
 }
@@ -199,5 +190,5 @@ fn attach_to_release() -> Step<Use> {
             "action-gh-release",
             "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
         ) // v2
-        .add_with(("files", RELEASE_ARCHIVE))
+        .add_with(("files", release_archive()))
 }

@@ -132,11 +132,11 @@ jobs:
   preview-services:
     needs:
       - detect-changes
-    if: ${{ needs.detect-changes.outputs.has-changes == 'true' }}
+    if: needs.detect-changes.outputs.has-changes == 'true'
     name: Preview ${{ matrix.service }}
     strategy:
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
       fail-fast: false
     uses: ./.github/workflows/reusable_preview_service.yml
     with:

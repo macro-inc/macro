@@ -70,7 +70,7 @@ jobs:
   build-service-binaries:
     needs:
       - setup
-    if: ${{ needs.setup.outputs.has_binaries == 'true' }}
+    if: needs.setup.outputs.has_binaries == 'true'
     name: Build ${{ inputs.service-name }} binaries
     runs-on: namespace-profile-linux-mid
     steps:
@@ -121,7 +121,7 @@ jobs:
   build-lambda-artifacts:
     needs:
       - setup
-    if: ${{ needs.setup.outputs.has_lambdas == 'true' }}
+    if: needs.setup.outputs.has_lambdas == 'true'
     name: Build ${{ inputs.service-name }} Lambda artifacts
     runs-on: namespace-profile-linux-mid
     steps:
@@ -183,7 +183,7 @@ jobs:
       - build-service-binaries
       - build-lambda-artifacts
       - check-migrations
-    if: ${{ !failure() && !cancelled() }}
+    if: '!failure() && !cancelled()'
     name: Deploy ${{ inputs.service-name }}
     runs-on: namespace-profile-linux-small
     env:
@@ -195,12 +195,12 @@ jobs:
           persist-credentials: 'false'
       - id: project-name
         name: Get project name
-        if: ${{ inputs.pulumi-stack-name == '' }}
+        if: inputs.pulumi-stack-name == ''
         uses: ./.github/actions/get-project-name
         with:
           service-name: ${{ inputs.service-name }}
       - name: Download handoff artifacts
-        if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
+        if: needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'
         run: |
           set -euo pipefail
           if ! command -v nsc >/dev/null 2>&1; then
