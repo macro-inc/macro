@@ -1,0 +1,51 @@
+.github/workflows/deploy_mcp_chatgpt_worker.yml
+  s_1d4fb1de600364::t_53c4e8ec5e8e08 5-13,42-47,49,55
+.github/workflows/deploy_on_push.yml
+  s_1d4fb1de600364::t_95360e99876841 51-59
+.github/workflows/release-production.yml
+  s_1d4fb1de600364::t_ac9cb6cda836e7 41-48
+services/mcp-chatgpt-worker/AGENTS.md
+  s_b0a71015ffa882::t_caf9ecc8147494 45-49
+services/mcp-chatgpt-worker/scripts/check-deploy-secrets.mjs
+  s_b0a71015ffa882::t_353fb4854bb10e 1-27
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker.rs
+  s_31c5bd7e2374bb::t_5c60be790c3843 5-14,18,23-26,31-35,37-38,47-48,54-66,92,108-120,122
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker/test.rs
+  s_31c5bd7e2374bb::t_ed8d6679ebc18b 1-86
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_on_push.rs
+  s_31c5bd7e2374bb::t_cda0a48ece97b4 2-5,30-32,83,122-134,190-199
+tooling/xtask/crates/xtask_workflows/src/workflows/release_production.rs
+  s_31c5bd7e2374bb::t_74ad03ffa3b2a1 3,40,66,132-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "417265ac9330042bfd2be946e1330c0c0080af70",
+  "prompts": {},
+  "sessions": {
+    "s_1d4fb1de600364": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a823fe1e-b304-4501-b6ca-a4f9a75f30f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_31c5bd7e2374bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3786e29-aaad-4cc1-9940-979e9090998d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_b0a71015ffa882": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ce3913c-1698-4770-8743-fcbd631025c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
