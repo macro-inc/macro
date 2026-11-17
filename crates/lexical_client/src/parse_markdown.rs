@@ -520,7 +520,6 @@ impl LexicalClient {
     /// mentions, tables and other rich nodes as `<m-*>` tags, so the text can be
     /// written back (SDK `setContent`) without losing them. Use this for every
     /// read that reaches an agent; external markdown is for email and GitHub.
-    #[tracing::instrument(skip(self), err)]
     pub async fn get_agent_markdown(&self, document_id: &str) -> Result<String> {
         self.get_markdown(document_id, MarkdownTarget::Internal)
             .await
