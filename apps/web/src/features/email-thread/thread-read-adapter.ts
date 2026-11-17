@@ -12,8 +12,7 @@ import type { EmailThread } from './core/email-thread';
 
 export function createThreadReadAdapter(
   threadId: Accessor<string>,
-  threadSource: Accessor<EmailThread | undefined>,
-  toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
+  threadSource: Accessor<EmailThread | undefined>
 ): Pick<
   EmailThreadCommands,
   | 'markThreadUnread'
@@ -47,7 +46,7 @@ export function createThreadReadAdapter(
     setThreadMarkedUnread(true);
     setThreadMarkedRead(false);
     markUnreadMutation.mutate(
-      { threadId, linkId: thread.link_id },
+      { threadId },
       {
         onSuccess: () => {
           toast.success('Marked as unread', {
@@ -82,7 +81,7 @@ export function createThreadReadAdapter(
     setThreadMarkedUnread(false);
     setThreadMarkedRead(true);
     markSeenMutation.mutate(
-      { threadId, linkId: toHeaderLinkId(thread.link_id) },
+      { threadId },
       {
         onSuccess: () => {
           toast.success('Marked as read', {

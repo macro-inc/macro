@@ -612,10 +612,6 @@ export default {
       other: '{{accepted}} de {{count}} itens marcados como não concluídos',
     },
     toastMarkNotDoneFailed: 'Não foi possível marcar como não concluído',
-    toastThreadStaysDone:
-      'Esta conversa não tem mensagens recebidas, por isso continua concluída',
-    toastThreadsStayDone:
-      'Estas conversas não têm mensagens recebidas, por isso continuam concluídas',
     toastCountNotRestored: {
       one: 'Não foi possível restaurar {{count}} item.',
       many: 'Não foi possível restaurar {{count}} de itens.',

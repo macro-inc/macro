@@ -11,13 +11,6 @@ Access requests, grants and removals on a paired machine appear as rows about
 that machine; opening one goes to Settings → Machines with the machine pointed out.
 Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail; touch devices show none. It sits outside the virtualized rows, so list keyboard focus skips it.
 
-On a cold launch, notification transport follows the GraphQL Soup flag reactively:
-if the flag arrives after REST starts, the GraphQL notification query must actually
-start too. Verify a reload with delayed flags retains non-email notifications once
-loading settles, including when the list itself uses REST (notified-at sorting).
-Email alone is not sufficient verification: its inbox membership does not require
-the global notification feed.
-
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, including when
@@ -45,7 +38,7 @@ Noise-only email activity. Each entity appears once, ordered by its latest
 notification or own action. On desktop, the funnel button to the right of **Home**
 opens **Filter Home**.
 
-With the GraphQL Soup flag on, desktop Signal reads
+Desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise and touch devices keep
 the merged feed.
@@ -204,7 +197,8 @@ project row, switching tabs, returning Home, and reopening the same comment.
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch layouts show no inline previews: a tap opens the entity
+in its own view.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture

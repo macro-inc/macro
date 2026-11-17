@@ -67,7 +67,6 @@ it('mounts the mobile view on touch and the desktop view otherwise', () => {
     title: 'Email',
     threadId: () => 'thread',
     source: {},
-    threadTransport: {},
   } as ComponentProps<typeof EmailBlockAdapter>;
 
   const desktop = render(() => <EmailBlockAdapter {...props} />);
@@ -92,7 +91,6 @@ it('preserves a pending imperative target when Home clears route search', () => 
     title: 'Email',
     threadId: () => 'thread',
     source: {},
-    threadTransport: {},
   } as ComponentProps<typeof EmailBlockAdapter>;
   render(() => <EmailBlockAdapter {...props} />);
   expect(state.host?.targetMessageId?.()).toBe('route-message');
@@ -114,7 +112,6 @@ it('clears a route-owned target without replaying its previous message', () => {
     title: 'Email',
     threadId: () => 'thread',
     source: {},
-    threadTransport: {},
   } as ComponentProps<typeof EmailBlockAdapter>;
   render(() => <EmailBlockAdapter {...props} />);
   setSearch({ messageId: '', seek: '' });
@@ -133,7 +130,6 @@ it('leaves a delivered imperative target and its request unchanged when route se
     title: 'Email',
     threadId: () => 'thread',
     source: {},
-    threadTransport: {},
   } as ComponentProps<typeof EmailBlockAdapter>;
   render(() => <EmailBlockAdapter {...props} />);
   state.navigate({ email_message_id: 'legacy-message' });

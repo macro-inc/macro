@@ -1352,3 +1352,111 @@ export async function main({ macro }: { macro: any }) {
     );
     service.shutdown().await;
 }
+
+/// Every request to an SDK origin is marked, whatever credential it carries.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_credential_outside_the_authorization_header_is_still_marked() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        for path in [
+            "GET /query?macro-api-token=fixture-run-token ",
+            "GET /cookie ",
+        ] {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(request.starts_with(path), "{request}");
+            let lowercase = request.to_ascii_lowercase();
+            assert!(!lowercase.contains("authorization:"), "{request}");
+            assert!(
+                lowercase.contains("x-macro-code-execution: 1\r\n"),
+                "{request}"
+            );
+            respond(&mut stream, "{}").await;
+        }
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+export async function main({token, hosts}) {
+  await fetch(`${hosts.cognition}/query?macro-api-token=${token}`);
+  await fetch(`${hosts.cognition}/cookie`, {headers: {cookie: `macro-access-token=${token}`}});
+  return {data: null, reviews: []};
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    server.await.unwrap();
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+}
+
+/// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
+/// lose the mark either.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_trailing_dot_host_is_still_marked() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /dotted "), "{request}");
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-macro-code-execution: 1\r\n"),
+            "{request}"
+        );
+        respond(&mut stream, "{}").await;
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://localhost:{port}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main() {{
+  await fetch("http://localhost.:{port}/dotted");
+  return {{data: null, reviews: []}};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    // A fetch refused before connecting fails here rather than hanging below.
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
+}

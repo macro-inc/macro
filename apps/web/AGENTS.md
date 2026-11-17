@@ -225,9 +225,9 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 The same suite's `list-search.browser.e2e.ts` drives the list header's search
-field over the real hotkey engine and list controller: ArrowDown and Enter move
-to the first result, and Escape keeps the search in the field and clears it
-from the list after a selection.
+field, and the sidebar's (`?surface=sidebar`), over the real hotkey engine and
+list controller: ArrowDown and Enter move to the first result, and Escape keeps
+the search in the field and clears it from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -430,6 +430,14 @@ contact row) has a backend-free desktop/phone regression: one label column with
 every value on one edge, prose under its label on a narrow card, an email cut
 to one line with an ellipsis, the empty-fields row, and editing in place:
 `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts pipeline-card.browser.e2e.ts`.
+
+A record page's Add to pipeline menu (the real company and contact headers and
+Pipelines card over a local source) has a backend-free desktop/phone regression:
+nothing read before it opens, the in-pipeline check, view-only and
+already-in rows disabled, adding at a stage into the card, a second company
+deal, a required stage opening Add deal, the empty state, and a refused add
+(`ADD_TO_PIPELINE_VIDEO=1` records each test):
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts add-to-pipeline.browser.e2e.ts`.
 
 Collapsible document sections (the real heading-folds plugin and its gutter
 controls) have a backend-free desktop/tablet/phone regression: placement in
@@ -907,7 +915,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Label the notification permission toast **Enable notifications** on every
   platform, and keep the desktop and Android Enable actions on the native
   notification provider.
-- Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with icon-free mute and unmute actions, matching mobile drill-in choices, and no separate Snooze notifications row.
+- Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with icon-free mute and unmute actions, matching mobile drill-in choices, and no separate Snooze notifications row. Channels other than one-to-one DMs also get **Only @mentions** at the top of that menu (`mentionsOnly` on the menu props, from `makeMuteAction`); a mentions-only item is not muted (`isMutedItem` is false, `isMentionsOnlyItem` true), so give it the `@` indicator, never the muted bell.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
   Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
@@ -1003,7 +1011,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
-- Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
@@ -1022,6 +1030,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Keep flag-off mobile Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
+  Show all loaded channel favorites in saved order in the sectioned phone layout's horizontal scroller; apply the six-pin limit only to the legacy three-column grid.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
@@ -1039,15 +1048,29 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. `wide` lets the open field take the rest of
+  row with no code in the view; when that command finds no row (a search with
+  no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
   results; Email's wide search uses both. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
+  A sidebar that is its own list uses `ViewSidebar.Search` in the header's
+  search slot: the same keys (`list-search-keys.ts`), with `focusResults`
+  pointing at the sidebar's list, and an emptied field collapses through the
+  header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
+  A sidebar that leaves the open state to the header would hide a live query,
+  so pass `searchOpen` (open while a query is set) and clear the query in
+  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  another list shares the split (Chat's rail beside a conversation's calls):
+  the "go to first item" lookup answers for whichever list registered last.
+  Its search clears only on an Escape pressed inside the sidebar
+  (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
+  conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
+  a keyboard list. Covered by `ViewSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
-- Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
+- Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
@@ -1197,8 +1220,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Use checkbox items in Add to section to toggle explicit membership within each scope without changing the other scope; show rule-only matches checked and read-only.
   Carry team IDs into channel entities and require a matching team for new shared-section assignments; preserve server-authorized membership display while metadata hydrates.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
-  writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
-  never retry failed GraphQL writes through REST. Preserve non-owner history removal
+  writes through `queries/storage/entity-mutations`; never retry failed GraphQL writes through REST. Preserve non-owner history removal
   and version-specific markdown forks on their existing paths. Confirmed restores
   clear earlier deletion markers without clearing a newer delete's intent; key markers and restore confirmations by normalized entity type plus ID, never by bare ID.
 - Preserve loaded block content on initial access confirmation when its loader

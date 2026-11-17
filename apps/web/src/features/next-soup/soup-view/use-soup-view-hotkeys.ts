@@ -145,7 +145,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (next) {
         virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
       }
-      return true;
+      // A search field reads an empty list from this and keeps the keys.
+      return Boolean(next);
     },
     hide: true,
   }).withGroup(group);

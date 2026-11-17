@@ -100,7 +100,6 @@ it('keeps email actions, sharing, and details available in the desktop header', 
     title: 'A shared email',
     threadId: () => 'thread-1',
     source: {},
-    threadTransport: {},
     host: {},
   } as ComponentProps<typeof EmailThread>;
   render(() => <EmailThread {...props} />);
