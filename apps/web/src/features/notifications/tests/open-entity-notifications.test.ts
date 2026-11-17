@@ -5,18 +5,7 @@ import type { UnifiedNotification } from '../types';
 import { useOpenEntityNotifications } from '../use-open-entity-notifications';
 
 const mocks = vi.hoisted(() => ({
-  graphql: true,
-  loading: false,
   createDocumentQuery: vi.fn(),
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: mocks.graphql && !mocks.loading,
-    loading: mocks.loading,
-  }),
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@queries/notification/graphql/document-notifications', () => ({
   useDocumentNotificationsQuery: mocks.createDocumentQuery,
@@ -52,8 +41,6 @@ let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   dispose = undefined;
-  mocks.graphql = true;
-  mocks.loading = false;
   vi.clearAllMocks();
 });
 
@@ -71,7 +58,7 @@ function read(
 }
 
 describe('useOpenEntityNotifications', () => {
-  it('reads a document’s own edge with GraphQL Soup, never the feed', () => {
+  it('reads a document’s own edge , never the feed', () => {
     const [data, setData] = createSignal<UnifiedNotification[] | undefined>();
     mocks.createDocumentQuery.mockReturnValue({
       get data() {
@@ -88,14 +75,6 @@ describe('useOpenEntityNotifications', () => {
     expect(notifications()).toEqual([]);
     setData([notification('a'), notification('b', 'seen')]);
     expect(notifications().map(({ id }) => id)).toEqual(['a', 'b']);
-  });
-
-  it('reads nothing, and no feed, until the flags say which transport applies', () => {
-    mocks.loading = true;
-    const notifications = read(graphqlSource());
-
-    expect(notifications()).toEqual([]);
-    expect(mocks.createDocumentQuery).not.toHaveBeenCalled();
   });
 
   it('shows nothing from the edge while the session cannot read notifications', () => {
@@ -128,21 +107,6 @@ describe('useOpenEntityNotifications', () => {
       'seen',
       'unseen',
     ]);
-  });
-
-  it('reads the feed with the REST transport', () => {
-    mocks.graphql = false;
-    const feed = [notification('rest')];
-    const notificationsByEntity = vi.fn(() => ({
-      'document@doc': feed,
-      'document@other': [notification('other')],
-    }));
-    const notifications = read({
-      notificationsByEntity,
-    } as unknown as NotificationSource);
-
-    expect(notifications()).toBe(feed);
-    expect(mocks.createDocumentQuery).not.toHaveBeenCalled();
   });
 
   it('reads the feed for an entity without an edge of its own', () => {

@@ -236,6 +236,5 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - No session opens for a bot bound to an agent teammate's computer
   (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
   external create refuse it with `TeamAgentComputer` (409).
-- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.
-
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set, skipping archived sessions and flagging dormant ones; runtime wiring obtains assignments through the bots port.
 - Structured session activity additionally requires current access for CRM records, including acting-user bot credentials. Preserve the raw cursor when filtering denied rows; saved transcript text remains a received snapshot.

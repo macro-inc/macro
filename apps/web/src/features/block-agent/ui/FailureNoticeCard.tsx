@@ -11,7 +11,7 @@
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import type { FailureNotice } from '@service-agent-fold/generated/types';
-import { Button } from '@ui';
+import { Button, Card, Item } from '@ui';
 import { Show } from 'solid-js';
 
 export interface FailureNoticeCardProps {
@@ -22,37 +22,42 @@ export interface FailureNoticeCardProps {
 
 export function FailureNoticeCard(props: FailureNoticeCardProps) {
   return (
-    <section
+    <Card
+      variant="filled"
+      depth={3}
+      role="region"
       aria-label={props.notice.title}
-      class="min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
+      class="overflow-hidden text-ink"
     >
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-failure-bg text-failure">
-          <WarningCircle class="size-4" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium">{props.notice.title}</div>
-          <p class="mt-0.5 text-xs leading-5 text-ink-muted [overflow-wrap:anywhere]">
-            {props.notice.body}
-          </p>
-        </div>
-      </div>
-      <div class="p-3">
-        <Show when={props.notice.link}>
-          {(link) => (
+      <Card.Header class={props.notice.link ? 'pb-2' : undefined}>
+        <Item class="items-start gap-3 border-0 p-0">
+          <Item.Media class="text-failure">
+            <WarningCircle />
+          </Item.Media>
+          <Item.Content class="gap-0.5">
+            <Card.Title>{props.notice.title}</Card.Title>
+            <Card.Description class="leading-5 [overflow-wrap:anywhere]">
+              {props.notice.body}
+            </Card.Description>
+          </Item.Content>
+        </Item>
+      </Card.Header>
+      <Show when={props.notice.link}>
+        {(link) => (
+          <Card.Footer class="border-0 pt-0">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              class="gap-1.5"
+              class="ml-auto"
               onClick={() => props.onOpenLink(link().url)}
             >
-              <span>{link().label}</span>
-              <ArrowSquareOut class="size-3.5" />
+              {link().label}
+              <ArrowSquareOut class="size-4" />
             </Button>
-          )}
-        </Show>
-      </div>
-    </section>
+          </Card.Footer>
+        )}
+      </Show>
+    </Card>
   );
 }
