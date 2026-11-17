@@ -47,8 +47,10 @@ async fn peer() -> Peer {
             let registry = Arc::clone(&registry);
             Arc::new(move |harness| registry.is_connected(harness))
         },
-        Arc::new(|_| false),
-        Arc::new(|_| Box::pin(async {})),
+        crate::runtime_commands::RuntimeControls {
+            disconnect: Arc::new(|_| false),
+            apply_agent: Arc::new(|_| Box::pin(async {})),
+        },
         Arc::new(NoCommands),
         ready,
         models.clone(),

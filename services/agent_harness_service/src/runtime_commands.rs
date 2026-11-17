@@ -117,6 +117,14 @@ pub(crate) async fn hand_agent_to_runtime(
     send(request.apply_agent_harness, environment).await;
 }
 
+/// What the bus asks of this replica's runtime connections besides commands.
+pub(crate) struct RuntimeControls {
+    /// Drop a harness's connection; whether this replica held it.
+    pub(crate) disconnect: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    /// Hand a harness's runtime its agent.
+    pub(crate) apply_agent: ApplyAgent,
+}
+
 // Untagged: a disconnect's and an agent hand-off's required fields appear in
 // no other event, so they are tried first.
 #[derive(serde::Deserialize)]
@@ -132,8 +140,7 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,
     connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
-    disconnect: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
-    apply_agent: ApplyAgent,
+    controls: RuntimeControls,
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
@@ -175,13 +182,13 @@ where
         };
         let request = match event {
             RuntimeBusEvent::Disconnect(request) => {
-                disconnect(request.disconnect_harness);
+                (controls.disconnect)(request.disconnect_harness);
                 continue;
             }
             RuntimeBusEvent::ApplyAgent(request) => {
                 // Only the replica holding the connection sends it; the rest
                 // find nothing to hand it to.
-                probes.spawn(apply_agent(request));
+                probes.spawn((controls.apply_agent)(request));
                 continue;
             }
             RuntimeBusEvent::Command(request) => *request,

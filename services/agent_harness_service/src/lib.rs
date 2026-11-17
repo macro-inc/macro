@@ -1773,34 +1773,36 @@ pub async fn run() -> anyhow::Result<()> {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
                         Arc::new(move |harness| runtimes.is_connected(harness))
                     },
-                    {
-                        let runtimes = Arc::clone(&runtime_command_runtimes);
-                        Arc::new(move |harness| runtimes.disconnect(harness))
-                    },
-                    {
-                        let runtimes = Arc::clone(&runtime_command_runtimes);
-                        let agents = Arc::clone(&runtime_command_agents);
-                        Arc::new(move |request| {
-                            let connected = {
-                                let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness| runtimes.is_connected(harness))
-                            };
-                            let send: runtime_commands::SendAgent = {
-                                let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness, environment| {
+                    runtime_commands::RuntimeControls {
+                        disconnect: {
+                            let runtimes = Arc::clone(&runtime_command_runtimes);
+                            Arc::new(move |harness| runtimes.disconnect(harness))
+                        },
+                        apply_agent: {
+                            let runtimes = Arc::clone(&runtime_command_runtimes);
+                            let agents = Arc::clone(&runtime_command_agents);
+                            Arc::new(move |request| {
+                                let connected = {
                                     let runtimes = Arc::clone(&runtimes);
-                                    Box::pin(async move {
-                                        runtimes.apply_agent(harness, environment).await
+                                    Arc::new(move |harness| runtimes.is_connected(harness))
+                                };
+                                let send: runtime_commands::SendAgent = {
+                                    let runtimes = Arc::clone(&runtimes);
+                                    Arc::new(move |harness, environment| {
+                                        let runtimes = Arc::clone(&runtimes);
+                                        Box::pin(async move {
+                                            runtimes.apply_agent(harness, environment).await
+                                        })
                                     })
-                                })
-                            };
-                            Box::pin(runtime_commands::hand_agent_to_runtime(
-                                request,
-                                Arc::clone(&agents),
-                                connected,
-                                send,
-                            ))
-                        })
+                                };
+                                Box::pin(runtime_commands::hand_agent_to_runtime(
+                                    request,
+                                    Arc::clone(&agents),
+                                    connected,
+                                    send,
+                                ))
+                            })
+                        },
                     },
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),

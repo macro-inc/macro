@@ -76,8 +76,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         redis.clone(),
         origin,
         Arc::new(|_| false),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&origin_harness),
         origin_ready,
         empty_models(redis.clone()),
@@ -87,8 +86,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         redis.clone(),
         peer,
         Arc::new(|_| false),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&peer_harness),
         peer_ready,
         empty_models(redis.clone()),
@@ -122,8 +120,7 @@ async fn a_responsible_replicas_error_does_not_fail_the_publish() {
         redis.clone(),
         replica,
         Arc::new(|_| false),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -153,8 +150,7 @@ async fn publishing_without_an_owner_still_succeeds() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(|_| false),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -187,8 +183,7 @@ async fn overlapping_harness_connections_execute_once() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&first),
         first_ready,
         empty_models(redis.clone()),
@@ -198,8 +193,7 @@ async fn overlapping_harness_connections_execute_once() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
-        Arc::new(|_| false),
-        no_agent_handoff(),
+        controls(Arc::new(|_| false)),
         Arc::clone(&second),
         second_ready,
         empty_models(redis.clone()),
@@ -242,8 +236,7 @@ async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(|_| false),
-        Arc::new(move |harness| dropped_tx.send(harness).is_ok()),
-        no_agent_handoff(),
+        controls(Arc::new(move |harness| dropped_tx.send(harness).is_ok())),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -261,8 +254,11 @@ async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
     consumer.abort();
 }
 
-fn no_agent_handoff() -> super::ApplyAgent {
-    Arc::new(|_| Box::pin(async {}))
+fn controls(disconnect: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>) -> super::RuntimeControls {
+    super::RuntimeControls {
+        disconnect,
+        apply_agent: Arc::new(|_| Box::pin(async {})),
+    }
 }
 
 fn handoff_request() -> super::ApplyAgentRuntime {
@@ -287,13 +283,15 @@ async fn an_agent_handoff_reaches_every_replica_with_no_credential_and_runs_no_c
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(|_| false),
-        Arc::new(|_| false),
-        Arc::new(move |request| {
-            let handed_tx = handed_tx.clone();
-            Box::pin(async move {
-                let _ = handed_tx.send(request);
-            })
-        }),
+        super::RuntimeControls {
+            disconnect: Arc::new(|_| false),
+            apply_agent: Arc::new(move |request| {
+                let handed_tx = handed_tx.clone();
+                Box::pin(async move {
+                    let _ = handed_tx.send(request);
+                })
+            }),
+        },
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
