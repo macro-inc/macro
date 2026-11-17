@@ -10,10 +10,6 @@ const getGraphqlSoupClient = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-storage/graphql-soup', () => ({ getGraphqlSoupClient }));
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@core/component/Toast/Toast', () => ({

@@ -4,8 +4,8 @@
  * - A GraphQL document: `createLiveQuery` (this module). Cursor-paginated
  *   documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`.
  * - A Soup list: `createSoupLiveQuery` is the GraphQL source. Feature code
- *   reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag,
- *   REST fallback, grouping, and entity mapping.
+ *   reads it through `useSoupAstItemsQuery`, which adds REST fallback,
+ *   grouping, and entity mapping.
  *
  * `createLiveQuery` is a document-first wrapper over `createUrqlQuery`. Both
  * are live through the normalized-cache exchange, so existing `createUrqlQuery`

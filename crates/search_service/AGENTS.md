@@ -115,6 +115,19 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Email filters mean what the Email list query means by them, applied before
+  pagination (`domain/email_search.rs`). Shared threads are resolved from
+  `entity_access` grants to the caller's sources, leaving out their own
+  inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
+  narrow by id; Calendar only is an allowlist read from
+  `idx_email_threads_calendar_view` (at most `MAX_CALENDAR_ALLOWLIST`, past
+  which it is checked per hit). Read, done (`inbox_visible`) and notification
+  state can each cover most of a mailbox, so `read_until_page_kept` checks each
+  page's email threads in Postgres and reads further pages until the page is
+  full, the results end, or `MAX_EMAIL_STATE_ROUNDS`; the span records the
+  rounds and whether the bound was reached. Enrichment reads a shared hit
+  through its owner's inbox after `shared_among` confirms the grant.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

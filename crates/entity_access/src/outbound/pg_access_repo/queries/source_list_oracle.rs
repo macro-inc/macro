@@ -1580,3 +1580,57 @@ pub(super) async fn get_external_chat_access(
     .fetch_one(pool)
     .await
 }
+
+// ---- email_thread_shares
+
+/// `email_thread_shares::shared_email_threads` as main had it at cb8d7fa859.
+pub(super) async fn shared_email_threads(
+    pool: &PgPool,
+    source_ids: &SourceIds,
+    own_link_ids: &[Uuid],
+    requested_ids: &[Uuid],
+    limit: i64,
+) -> Result<Vec<super::email_thread_shares::SharedEmailThread>, sqlx::Error> {
+    if source_ids.0.is_empty() || limit <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    let threads = sqlx::query_as!(
+        super::email_thread_shares::SharedEmailThread,
+        r#"
+        WITH granted AS MATERIALIZED (
+            SELECT DISTINCT ea.entity_id
+            FROM unnest($1::text[]) AS sources(source_id)
+            CROSS JOIN LATERAL (
+                SELECT ea.entity_id
+                FROM entity_access ea
+                WHERE ea.source_id = sources.source_id
+                  AND ea.entity_type = 'email_thread'
+                  AND (cardinality($3::uuid[]) = 0 OR ea.entity_id = ANY($3))
+                OFFSET 0
+            ) ea
+        )
+        SELECT t.id AS "thread_id!", t.link_id AS "link_id!"
+        FROM granted g
+        CROSS JOIN LATERAL (
+            SELECT t.id, t.link_id
+            FROM email_threads t
+            WHERE t.id = g.entity_id
+            OFFSET 0
+        ) t
+        WHERE t.link_id <> ALL($2)
+        LIMIT $4
+        "#,
+        &source_ids.0,
+        own_link_ids,
+        requested_ids,
+        limit,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(threads)
+}

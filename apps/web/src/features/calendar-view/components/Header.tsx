@@ -287,16 +287,6 @@ export function Header(props: {
             </Show>
             <MonthDrawer month={currentDate()} />
             {todayButton(isTouchDevice())}
-            <Show when={props.presentation === 'preview'}>
-              <CalendarCreateMenu
-                size="icon-lg"
-                class="shrink-0 rounded-full border-transparent bg-transparent"
-                label="New"
-                trigger={<PlusIcon class="size-5" />}
-              >
-                {createItems()}
-              </CalendarCreateMenu>
-            </Show>
           </HeaderIsland>
         </SplitHeaderLeft>
 
@@ -313,7 +303,7 @@ export function Header(props: {
                   {next()}
                 </div>
               </Show>
-              <Show when={isMobile() && props.presentation === 'workspace'}>
+              <Show when={isMobile()}>
                 <CopyAvailabilityButton size="icon-lg" />
               </Show>
               <Show when={!isMobile()}>
@@ -322,7 +312,7 @@ export function Header(props: {
               <Show when={showBookingLinks()}>
                 <CalendarSchedulingActions />
               </Show>
-              <Show when={props.presentation === 'preview' || isMobile()}>
+              <Show when={isMobile()}>
                 <CalendarSettingsDropdown />
               </Show>
             </div>

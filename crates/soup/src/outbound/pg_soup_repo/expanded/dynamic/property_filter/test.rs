@@ -48,7 +48,7 @@ fn options_of_one_definition_share_one_exists() {
         exists(
             "",
             STATUS,
-            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']::text[]")
+            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']::text[] OFFSET 0")
         )
     );
 }
@@ -87,12 +87,12 @@ fn options_group_by_definition_and_entity_type() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']::text[]")
+                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']::text[] OFFSET 0")
             ),
             exists(
                 "AND ep_prop.entity_type = 'TASK'",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']::text[]")
+                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']::text[] OFFSET 0")
             ),
             exists("", PRIORITY, &format!("? '{LOW}'")),
         )
@@ -109,7 +109,7 @@ fn negation_and_conjunction_close_the_or_region() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']::text[]")
+                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']::text[] OFFSET 0")
             )
         )
     );
@@ -136,8 +136,13 @@ fn per_candidate_probes_fence_every_exists() {
     );
     let planned = squash(&predicate(&expr, "d.id", PropertyProbe::Planned));
     let fenced = squash(&predicate(&expr, "d.id", PropertyProbe::PerCandidate));
-    assert!(!planned.contains("OFFSET"));
+    // The `?|` test is fenced on every arm; per candidate also fences the
+    // lone option.
+    assert_eq!(planned.matches("OFFSET 0 )").count(), 1);
     assert_eq!(fenced.matches("EXISTS").count(), 2);
     assert_eq!(fenced.matches("OFFSET 0 )").count(), 2);
-    assert_eq!(fenced.replace(" OFFSET 0 )", " )"), planned);
+    assert_eq!(
+        fenced.replace(&format!("'{LOW}' OFFSET 0 )"), &format!("'{LOW}' )")),
+        planned
+    );
 }

@@ -36,6 +36,10 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import {
+  enableEmailWideSearch,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -419,6 +423,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         return 'scope' in filters ? filters.scope : undefined;
       },
       enabled: savedViewQueryReady,
+      keepRowsWhileSearching: () => isFeatureEnabled(enableEmailWideSearch),
     })
   );
   withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>

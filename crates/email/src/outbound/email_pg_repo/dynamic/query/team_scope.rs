@@ -87,7 +87,8 @@ enum Stream {
 /// `crm_email_thread_allowed` for thread `t`, set-based: the
 /// `contributing`, `team_blocked` and `personal_blocked` CTEs hold its
 /// mailbox conditions and blocklists once per page instead of once per
-/// participant of every thread. A participant
+/// participant of every thread. The separate thread-exclusion veto is an
+/// indexed lookup for each candidate or competing copy. A participant
 /// domain is blocked when it, or what follows any of its dots, equals a
 /// blocked domain, which is the function's `right(…) = '.' || domain` test.
 /// `IS TRUE` keeps the membership test a hashed subplan.
@@ -95,6 +96,7 @@ const ALLOWED: &str = r#"
                   AND EXISTS (
                       SELECT 1 FROM contributing cb
                       WHERE cb.link_id = t.link_id
+                        AND NOT crm_email_thread_excluded(cb.team_id, cb.macro_id, cb.link_id, t.id)
                         AND EXISTS (
                             SELECT 1 FROM email_messages pm
                             WHERE pm.thread_id = t.id AND NOT pm.is_draft
@@ -343,6 +345,9 @@ impl<'a> TeamRead<'a> {
         // inbox's contacts; a message naming another inbox's contact would
         // let a copy the superset misses hide this one
         // (docs/CRM_EMAIL_PRIVACY.md).
+        // Fetch each copy by primary key before dedupe or privacy checks.
+        // Stale statistics can otherwise rescan the mailbox and repeat
+        // root-message lookups for each returned row.
         builder.push(
             r#"
                     OFFSET 0
@@ -363,7 +368,9 @@ impl<'a> TeamRead<'a> {
                     SELECT CASE WHEN ranked.dedupe_key ~ {UUID_TEXT}
                                 THEN ranked.dedupe_key::uuid END
                 ) AS copy
-                JOIN email_threads t ON t.id = copy.id
+                CROSS JOIN LATERAL (
+                    SELECT * FROM email_threads WHERE id = copy.id OFFSET 0
+                ) AS t
                 WHERE t.id <> ranked.id AND t.link_id = ANY("#
         ));
         builder.push_bind(self.inboxes.clone());
@@ -404,7 +411,7 @@ impl<'a> TeamRead<'a> {
         builder.push(
             r#"
         WITH contributing AS MATERIALIZED (
-            SELECT l.id AS link_id, l.macro_id
+            SELECT consent.team_id, l.id AS link_id, l.macro_id
             FROM email_links l
             JOIN crm_email_consent consent
               ON consent.team_id = "#,

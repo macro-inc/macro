@@ -6,6 +6,8 @@ mod pg_access_repo;
 #[cfg(feature = "explain_binary")]
 mod pg_explain_access_repo;
 
-pub use pg_access_repo::{PgAccessRepository, accessible_session_ids};
+pub use pg_access_repo::{
+    PgAccessRepository, SharedEmailThread, accessible_session_ids, shared_email_threads,
+};
 #[cfg(feature = "explain_binary")]
 pub use pg_explain_access_repo::PgExplainAccessRepository;

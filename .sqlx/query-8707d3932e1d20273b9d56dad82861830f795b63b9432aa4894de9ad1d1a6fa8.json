@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE memory_refresh_job SET lease_token = NULL, lease_until = NOW() + $3::bigint * INTERVAL '1 second' WHERE user_id = $1 AND lease_token = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8707d3932e1d20273b9d56dad82861830f795b63b9432aa4894de9ad1d1a6fa8"
+}

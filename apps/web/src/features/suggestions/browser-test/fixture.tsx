@@ -289,6 +289,36 @@ const EVENTS = [
   },
 ];
 
+// `?day=evening`: a day seen at 18:15, with an event just before now and one
+// that starts too close to 20:00 for a chip's full width.
+const EVENING = new Date('2026-11-09T18:15:00');
+const EVENING_EVENTS = [
+  {
+    id: 'walkthrough',
+    title: 'Routines walkthrough',
+    start: at('10:00'),
+    end: at('13:00'),
+  },
+  { id: 'standup', title: 'Standup', start: at('10:15'), end: at('10:45') },
+  { id: 'crm', title: 'CRM sync', start: at('10:30'), end: at('11:00') },
+  { id: 'one-on-one', title: '1:1', start: at('13:30'), end: at('14:00') },
+  { id: 'deploy', title: 'Prod deploy', start: at('18:00'), end: at('18:30') },
+  {
+    id: 'release',
+    title: 'Release check',
+    start: at('19:30'),
+    end: at('20:00'),
+  },
+];
+
+function homeToday() {
+  if (PARAMS.get('calendar') === 'none') return undefined;
+  if (PARAMS.get('day') === 'evening') {
+    return { date: EVENING, strip: layoutDay(EVENING_EVENTS, EVENING) };
+  }
+  return { date: NOON, strip: layoutDay(EVENTS, NOON) };
+}
+
 /** Home's section over fixed events and the same suggestions. */
 function HomeFixture() {
   const [opened, setOpened] = createSignal('');
@@ -297,11 +327,7 @@ function HomeFixture() {
     <main class="h-dvh overflow-y-auto bg-panel p-8 font-sans text-ink">
       <div class="mx-auto max-w-180">
         <HomePrioritiesView
-          today={
-            PARAMS.get('calendar') === 'none'
-              ? undefined
-              : { date: NOON, strip: layoutDay(EVENTS, NOON) }
-          }
+          today={homeToday()}
           priorities={served(ALL).suggestions.slice(0, 5)}
           onOpenEvent={(event) => setOpened(`event ${event.id}`)}
           onOpenSuggestion={(suggestion) =>

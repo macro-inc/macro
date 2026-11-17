@@ -3,7 +3,6 @@ import {
   NIL_UUID,
   type SoupSearchRequest,
 } from '@app/features/soup';
-import { notificationStatesForFilter } from '@notifications/notification-state';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
 import type {
   EmailFilters,
@@ -27,8 +26,7 @@ const nonEmailFilters: EntityFilters = {
 };
 
 // Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had. It cannot
-// filter archive state either, so `emailMatchesTab` trims Archived hits.
+// user's own threads — the same reach the legacy mail search had.
 function tabFilters(tab: EmailTab): EmailFilters {
   // Focus filters its own list on the client; this search stays dormant there.
   return (
@@ -45,7 +43,7 @@ function tabFilters(tab: EmailTab): EmailFilters {
       .with('shared', () => ({ shared: 'only' as const }))
       // These views disable service search; fail closed if called independently.
       .with('spam', 'trash', () => ({ email_thread_ids: [NIL_UUID] }))
-      .with('archived', () => ({ shared: 'exclude' as const }))
+      .with('archived', () => ({ shared: 'exclude' as const, done: true }))
       .with(
         'favorites',
         'drafts',
@@ -64,8 +62,9 @@ const soleSelection = (selection: string[] | undefined) =>
 
 /**
  * The read and done facets are single-select, so at most one option of each
- * reaches the service. Attachment facets have no service counterpart; those
- * refine the results client-side like the list page.
+ * reaches the service. Done is the thread being out of the inbox, as in the
+ * list, not its notification state. Attachment facets have no service
+ * counterpart; those refine the results client-side like the list page.
  */
 function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   const filters: Partial<EmailFilters> = {};
@@ -74,11 +73,8 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   if (read === 'read') filters.is_read = true;
 
   const done = soleSelection(facets.done);
-  if (done === 'not-done' || done === 'done') {
-    filters.notification_filters = {
-      states: notificationStatesForFilter('done', done === 'done'),
-    };
-  }
+  if (done === 'done') filters.done = true;
+  if (done === 'not-done') filters.done = false;
 
   if ((facets.calendar ?? []).includes('has-calendar-invite')) {
     filters.calendar_only = true;
@@ -101,14 +97,24 @@ export function buildEmailSearchRequest(
           (id) => admittedIds === undefined || admittedIds.includes(id)
         )
       : admittedIds;
+  const tab = tabFilters(context.tab);
+  const facets = facetFilters(
+    admittedIds ? { ...context.facets, read: [] } : context.facets
+  );
+  // The tab and a facet are ANDed, as in the list: Archived with Not done
+  // matches nothing.
+  const contradicts =
+    tab.done !== undefined &&
+    facets.done !== undefined &&
+    tab.done !== facets.done;
   const emailFilters: EmailFilters = {
-    ...tabFilters(context.tab),
-    ...facetFilters(
-      admittedIds ? { ...context.facets, read: [] } : context.facets
-    ),
-    ...(threadIds
-      ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
-      : {}),
+    ...tab,
+    ...facets,
+    ...(contradicts
+      ? { email_thread_ids: [NIL_UUID] }
+      : threadIds
+        ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
+        : {}),
   };
 
   if (context.inboxIds !== undefined) {
