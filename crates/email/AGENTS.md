@@ -179,11 +179,17 @@ tools — hexagonal, heavily feature-gated.
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
 - Address supersets keep joined and indexed recipient branches. Use the
-  indexed branches only for the initial capped probe and the sparse page it
-  selects, in both Team and Owned reads. Dense underfill fallbacks and larger
-  Owned round probes keep the joined SQL; per-message probes can make those
-  large sets slower. Checked General branches also keep their original joins
-  so mailbox-fact checks are planned with the messages.
+  indexed branches only for all-recipient-role groups in the initial capped
+  probe and the sparse page it selects, in both Team and Owned reads. A rare
+  requested role can scan a dense domain before the cap finds a match, so
+  role-restricted groups keep joined SQL. Dense underfill fallbacks and larger
+  Owned round probes also keep joined SQL; per-message probes can make those
+  large sets slower. Checked General branches keep their original joins so
+  mailbox-fact checks are planned with the messages. Optimized Team probes
+  and pages share a read-only repeatable-read snapshot, as Owned reads do,
+  so imports cannot outgrow the probe's cap between statements; privacy changes
+  committed mid-request apply to the next request. General reads keep their
+  existing transaction.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.

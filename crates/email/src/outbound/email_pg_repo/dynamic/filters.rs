@@ -844,13 +844,14 @@ fn text_recipient_branch(
     facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
-    // Fence the capped probe and sparse page: overestimated contact matches
-    // otherwise scan either whole table. Dense supersets and checked branches
-    // retain their joins; per-message probes are expensive for large sets.
+    // Fence all-role branches of the capped probe and sparse page: overestimated
+    // contact matches otherwise scan either whole table. Keep joined SQL for
+    // dense, checked, and role-restricted branches; a rare role can still read
+    // every recipient of a dense domain before the cap finds a matching row.
     let joins = match facts {
         BranchFacts::Skipped {
             indexed_recipients: true,
-        } => {
+        } if kinds.to && kinds.cc && kinds.bcc => {
             "CROSS JOIN LATERAL ( \
                  SELECT message_id, recipient_type FROM email_message_recipients \
                  WHERE contact_id = c.id OFFSET 0 \
@@ -860,10 +861,7 @@ fn text_recipient_branch(
                  WHERE id = mr.message_id OFFSET 0 \
              ) m "
         }
-        BranchFacts::Checked(_)
-        | BranchFacts::Skipped {
-            indexed_recipients: false,
-        } => {
+        BranchFacts::Checked(_) | BranchFacts::Skipped { .. } => {
             "JOIN email_message_recipients mr ON mr.contact_id = c.id \
              JOIN email_messages m ON m.id = mr.message_id "
         }

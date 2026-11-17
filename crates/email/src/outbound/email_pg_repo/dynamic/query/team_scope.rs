@@ -230,6 +230,8 @@ impl<'a> TeamRead<'a> {
                 .fetch_one(&mut *connection)
                 .await?;
             span.record("superset_rows", superset_rows);
+            #[cfg(test)]
+            test::pause_after_probe(superset_rows).await;
             self.read(connection, deadline, superset_rows).await?
         };
         span.record("stream", stream);
