@@ -132,3 +132,23 @@ fn the_web_deploy_mounts_only_nix_and_bun() {
             .all(|step| step["with"]["seed-cache"].is_null())
     );
 }
+
+/// A release re-checks its bundle against the live one right before publishing,
+/// with no way to skip it: a deploy-only re-run of an older release must fail.
+#[test]
+fn the_release_checks_the_live_bundle_right_before_publishing() {
+    let release = release();
+    let steps = release["jobs"]["deploy"]["steps"]
+        .as_sequence()
+        .expect("steps");
+    let guard = steps
+        .iter()
+        .position(|step| step["name"].as_str() == Some("Check bundle against live"))
+        .expect("guard step");
+    assert_eq!(
+        steps[guard + 1]["name"].as_str(),
+        Some("Deploy with Pulumi")
+    );
+    assert_eq!(steps[guard]["env"]["ENVIRONMENT"].as_str(), Some("prod"));
+    assert_eq!(steps[guard]["env"]["ROLLBACK"].as_str(), Some("false"));
+}

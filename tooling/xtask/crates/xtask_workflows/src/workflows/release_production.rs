@@ -192,6 +192,8 @@ fn deploy() -> Job {
         )))
         .add_step(deploy_web_app::install_infra_dependencies())
         .add_step(deploy_web_app::configure_aws_credentials())
+        // A release event has no rollback input.
+        .add_step(deploy_web_app::guard_live_bundle(ENVIRONMENT, "false"))
         .add_step(deploy_web_app::pulumi_up(ENVIRONMENT))
         .add_step(deploy_web_app::upload_sourcemaps(ENVIRONMENT))
         .add_step(steps::teardown_nix())

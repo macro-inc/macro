@@ -62,7 +62,9 @@ deploy workflow checks the built bundle is stamped from the commit it deploys
 
 Because the identity follows the commit, redeploying the same commit (say with
 a fixed build secret) reaches web users but no native app that already took the
-first build of it; ship the fix as a new commit instead.
+first build of it; ship the fix as a new commit and release instead. Apps
+already stuck on the broken build can be moved off it with a `revoke` rule (see
+below).
 
 Retained-build pruning names each record after `builtAt`, when that build ran:
 re-running the deploy of one commit publishes new chunks under the same
@@ -74,10 +76,14 @@ Roll back forward: revert the bad commit on `main` and cut a release. Native
 apps refuse a bundle from an older commit than the one they run, so redeploying
 an older commit reaches web users but not apps that already took the bad bundle.
 
-A production deploy whose bundle is older than the live one fails at the
-`Verify bundle identity` step. To redeploy an older commit anyway, dispatch
-**Deploy Web App** with `environment: prod` and `rollback: true`; a release
-event cannot skip the check. To move native apps back as well, add a `revoke`
+A production deploy whose bundle is older than the live one fails: the build
+job's `Verify bundle identity` step checks it, and the deploy job's `Check
+bundle against live` step checks it again right before Pulumi publishes, so a
+deploy-only re-run of an older release fails too. Two deploys publishing at the
+same moment can still both pass; the check narrows that window, it does not
+lock it. To redeploy an older commit anyway, dispatch **Deploy Web App** with
+`environment: prod` and `rollback: true`; a release event cannot skip either
+check. To move native apps back as well, add a `revoke`
 rule to the authentication service's bundle update policy
 (`BUNDLE_UPDATE_POLICY_JSON`, see `crates/native_app_service`) covering the bad
 range, with bounds from `cargo run -p bundle_stamp -- number <sha>`. Revoked

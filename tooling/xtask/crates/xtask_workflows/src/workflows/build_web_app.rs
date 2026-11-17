@@ -174,7 +174,7 @@ fn build() -> Step<Run> {
 }
 
 /// The production manifest the rollback guard compares against.
-const LIVE_PROD_MANIFEST_URL: &str = "https://macro.com/app/bundle-manifest.json";
+pub const LIVE_PROD_MANIFEST_URL: &str = "https://macro.com/app/bundle-manifest.json";
 
 /// `bundle-stamp verify`: the bundle is stamped from the deployed commit and,
 /// in production, is not older than the live one (see the script).
