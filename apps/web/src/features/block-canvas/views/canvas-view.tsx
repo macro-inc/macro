@@ -98,7 +98,7 @@ function CanvasInsert() {
           onSelect={insert.select}
           onFiles={(files) => insert.files(files, location)}
           onUpload={insert.upload}
-          onArtifact={insert.artifact()}
+          onArtifact={insert.artifact}
           onClose={insert.close}
           onRestoreFocus={focus}
         />

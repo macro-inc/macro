@@ -16,7 +16,9 @@
 //! of `PR CI`: a pull request branch is run by hand (`workflow_dispatch`,
 //! `crates/email_e2e/AGENTS.md`).
 //! A failure on `main` is a red run on the merge commit; nothing is reverted
-//! or blocked by it.
+//! or blocked by it. Its last job tells the Macro Alerts channel when the
+//! pushes or the sweep turn red, and when they pass again
+//! ([`email_e2e_alert`]).
 
 use gh_workflow::{
     Concurrency, Container, Env, Event, Expression, Job, Port, Push, Run, Schedule, Step, Strategy,
@@ -27,7 +29,7 @@ use std::collections::HashMap;
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{
-    code_check_cloud_storage, runners,
+    code_check_cloud_storage, email_e2e_alert, runners,
     steps::{self, FluentBuilder},
     vars,
 };
@@ -94,6 +96,12 @@ const COVERAGE: xtask_paths::RuntimePath<'static> =
 /// The jobs the coverage job reads the results of, by id.
 const REPORTED_JOBS: [&str; 3] = ["email-e2e", "email-e2e-search", "email-e2e-known-bugs"];
 
+/// The coverage job, by id.
+const COVERAGE_JOB: &str = "email-e2e-coverage";
+
+/// The artifact the coverage job uploads its report as.
+const COVERAGE_REPORT: &str = "email-e2e-coverage";
+
 /// Build the workflow.
 pub fn email_e2e() -> Workflow {
     let push = MAIN_PATHS
@@ -112,7 +120,14 @@ pub fn email_e2e() -> Workflow {
         .add_job("email-e2e", scenarios())
         .add_job("email-e2e-search", search())
         .add_job("email-e2e-known-bugs", known_bug_scenarios())
-        .add_job("email-e2e-coverage", coverage())
+        .add_job(COVERAGE_JOB, coverage())
+        .add_job(
+            email_e2e_alert::JOB,
+            email_e2e_alert::job(
+                &[REPORTED_JOBS.as_slice(), &[COVERAGE_JOB]].concat(),
+                COVERAGE_REPORT,
+            ),
+        )
 }
 
 /// A run by hand, of any branch. It runs what a push to `main` runs; with
@@ -320,7 +335,7 @@ fn coverage() -> Job {
             Step::new("report the coverage").run(include_str!("scripts/email_e2e_coverage.sh")),
         )
         .add_step(
-            steps::upload_artifact("email-e2e-coverage", COVERAGE)
+            steps::upload_artifact(COVERAGE_REPORT, COVERAGE)
                 .add_with(("if-no-files-found", "ignore"))
                 .if_condition(Expression::new("always()")),
         )

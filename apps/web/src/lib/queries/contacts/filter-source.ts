@@ -2,10 +2,8 @@ import { tryMacroId } from '@core/user/macroId';
 import { validate as isEmail } from 'email-validator';
 import type { Accessor } from 'solid-js';
 import { readContactDirectory } from './directory';
-import {
-  type ContactWindowHost,
-  createContactDirectoryWindow,
-} from './directory-query';
+import { createContactDirectoryList } from './directory-list';
+import type { ContactWindowHost } from './directory-query';
 import { MAX_CONTACT_LOOKUP, resolveContactDirectory } from './lookup';
 import { createContactResolution } from './lookup-query';
 
@@ -18,7 +16,7 @@ export function createContactFilterSource(
   resolve = resolveContactDirectory
 ) {
   return {
-    suggestions: createContactDirectoryWindow(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled),
     selection: createContactResolution(
       scope,
       () => ({
@@ -41,7 +39,7 @@ export function createContactIdFilterSource(
 ) {
   return {
     viewer: () => scope().userId,
-    suggestions: createContactDirectoryWindow(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled),
     selection: createContactResolution(
       scope,
       () => {

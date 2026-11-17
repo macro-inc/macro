@@ -87,13 +87,21 @@ async fn past_near_window(
     assert!(!whole.near_window);
     whole
 }
+/// Page members, as (provider id, master id), with no listed time.
+fn untimed(members: &[(&str, &str)]) -> Vec<OutlookPageMember> {
+    members
+        .iter()
+        .map(|(id, master)| OutlookPageMember {
+            provider_id: (*id).into(),
+            master_id: (*master).into(),
+            occurs: None,
+        })
+        .collect()
+}
 /// The last page of a near-window listing, which is a snapshot with no delta link.
 fn near_page(members: Vec<(&str, &str)>) -> OutlookCalendarProgress {
     OutlookCalendarProgress::Page(OutlookCalendarPage {
-        members: members
-            .into_iter()
-            .map(|(id, master)| (id.into(), master.into()))
-            .collect(),
+        members: untimed(&members),
         removed: vec![],
         next: None,
         delta: None,
@@ -555,10 +563,10 @@ async fn crash_after_echo_replays_one_event_without_advancing_the_page_cursor(po
     repo.checkpoint_outlook_calendar(
         &lease,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![
-                ("provider-one".into(), "provider-one".into()),
-                ("provider-two".into(), "provider-two".into()),
-            ],
+            members: untimed(&[
+                ("provider-one", "provider-one"),
+                ("provider-two", "provider-two"),
+            ]),
             removed: vec![],
             next: Some("next-page".into()),
             delta: None,
@@ -735,10 +743,10 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
     repo.checkpoint_outlook_calendar(
         &whole,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![
-                ("near-occurrence".into(), "provider-near".into()),
-                ("old-occurrence".into(), "provider-old".into()),
-            ],
+            members: untimed(&[
+                ("near-occurrence", "provider-near"),
+                ("old-occurrence", "provider-old"),
+            ]),
             removed: vec![],
             next: None,
             delta: Some("terminal".into()),
@@ -815,6 +823,91 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
     assert!(!rebuilt.near_window);
 }
 
+/// A page member listed `days` from now, an hour long.
+fn timed(id: &str, master: &str, days: i64) -> OutlookPageMember {
+    let starts_at = Utc::now() + chrono::Duration::days(days);
+    OutlookPageMember {
+        provider_id: id.into(),
+        master_id: master.into(),
+        occurs: Some((starts_at, starts_at + chrono::Duration::hours(1))),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_first_imports_near_window_reads_the_events_closest_to_today_first(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    assert!(lease.near_window);
+    let listed = || {
+        vec![
+            OutlookPageMember {
+                occurs: None,
+                ..timed("0-untimed", "0-untimed", 0)
+            },
+            timed("a-next-month", "a-next-month", 25),
+            timed("b-tomorrow", "b-tomorrow", 1),
+            timed("c-later", "c-series", 40),
+            timed("c-two-days-ago", "c-series", -2),
+        ]
+    };
+    repo.checkpoint_outlook_calendar(
+        &lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: listed(),
+            removed: vec![],
+            next: None,
+            delta: None,
+        }),
+    )
+    .await
+    .unwrap();
+
+    let nearest = ["b-tomorrow", "c-series", "a-next-month", "0-untimed"];
+    for (read, id) in nearest.iter().enumerate() {
+        let event = claim(&repo).await.unwrap();
+        assert_eq!(
+            event.pending_ids,
+            nearest[read..],
+            "tomorrow first, then a series by its nearest occurrence, next month, and an untimed event last"
+        );
+        repo.checkpoint_outlook_calendar(
+            &event,
+            OutlookCalendarProgress::Event {
+                id: (*id).into(),
+                exists: true,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let finish = claim(&repo).await.unwrap();
+    assert_eq!(
+        repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
+            .await
+            .unwrap(),
+        OutlookCheckpoint::NearWindowImported
+    );
+
+    let whole = claim(&repo).await.unwrap();
+    assert!(!whole.near_window);
+    repo.checkpoint_outlook_calendar(
+        &whole,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: listed(),
+            removed: vec![],
+            next: None,
+            delta: Some("terminal".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        claim(&repo).await.unwrap().pending_ids,
+        ["0-untimed", "a-next-month", "b-tomorrow", "c-series"],
+        "the whole window reads in ID order, as every round after a first import's near window does"
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_event_gone_before_the_whole_window_is_listed_leaves_the_first_import(pool: PgPool) {
     let (repo, _, owner) = mailbox(&pool).await;
@@ -863,7 +956,7 @@ async fn tombstones_refresh_known_series_and_reset_unknown_history(pool: PgPool)
     repo.checkpoint_outlook_calendar(
         &lease,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![("occurrence".into(), "provider-series".into())],
+            members: untimed(&[("occurrence", "provider-series")]),
             removed: vec![],
             next: None,
             delta: Some("baseline".into()),
@@ -976,11 +1069,11 @@ async fn a_delta_round_reads_again_only_events_an_older_reader_skipped(pool: PgP
     repo.checkpoint_outlook_calendar(
         &lease,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![
-                ("kept".into(), "provider-kept".into()),
-                ("skipped-occurrence".into(), "provider-skipped".into()),
-                ("unstamped-occurrence".into(), "provider-unstamped".into()),
-            ],
+            members: untimed(&[
+                ("kept", "provider-kept"),
+                ("skipped-occurrence", "provider-skipped"),
+                ("unstamped-occurrence", "provider-unstamped"),
+            ]),
             removed: vec![],
             next: None,
             delta: Some("baseline".into()),
@@ -1982,7 +2075,7 @@ async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(p
     repo.checkpoint_outlook_calendar(
         &lease,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![("provider-removed".into(), "provider-removed".into())],
+            members: untimed(&[("provider-removed", "provider-removed")]),
             removed: vec![],
             next: None,
             delta: Some("baseline".into()),

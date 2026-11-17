@@ -11,14 +11,12 @@ import type { UpcomingCalendarEvent } from '../meetings/core/upcoming-calendar-e
 import { createCallSidebarClock } from '../meetings/primitives/call-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
 import { useUpcomingCalendarEventsSource } from '../meetings/queries/upcoming-calendar-events';
-import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 import { CallSidebar } from '../meetings/views/call-sidebar';
 
 /** Production wiring, mounted within the section's Suspense boundary. */
 export function CalendarCallSidebar() {
   const calendar = useCalendarView();
   const userId = useUserId();
-  const quickCalls = useQuickCallsFlag();
   const now = createCallSidebarClock();
   const renderedHiddenSourceIds = createDeferred(calendar.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
@@ -30,9 +28,7 @@ export function CalendarCallSidebar() {
     isSourceVisible: isRenderedSourceVisible,
     now,
   });
-  const active = useActiveQuickCallsSource(() =>
-    quickCalls().enabled ? userId() : undefined
-  );
+  const active = useActiveQuickCallsSource(() => userId());
   const navigate = useNavigate();
 
   function when(call: UpcomingCalendarEvent) {

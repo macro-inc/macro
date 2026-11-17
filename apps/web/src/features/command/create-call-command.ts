@@ -7,7 +7,6 @@ import type { CreatableBlock } from './types';
 export function createCallCommand(actions: {
   navigate: (path: string) => void;
   close: () => void;
-  enabled: () => boolean;
 }): CreatableBlock {
   return {
     id: 'Call',
@@ -20,11 +19,9 @@ export function createCallCommand(actions: {
     blockName: 'call',
     hotkeyToken: TOKENS.create.call,
     hotkey: 'c',
-    enabled: actions.enabled,
     registrationType: 'add',
     runWithInputFocused: false,
     keyDownHandler: () => {
-      if (!actions.enabled()) return false;
       actions.close();
       actions.navigate('/meet/new');
       return true;

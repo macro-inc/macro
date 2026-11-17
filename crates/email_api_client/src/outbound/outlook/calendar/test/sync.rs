@@ -463,3 +463,49 @@ async fn a_first_import_brings_this_month_and_next_in_before_last_year(pool: PgP
         "the first listing is this month and next"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_first_import_reads_the_events_closest_to_today_first(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    // In ID order the near window would read next month's meeting first and
+    // tomorrow's last.
+    let near = [
+        meeting_in("AAMkEndOfNextMonth", chrono::Duration::days(25)),
+        meeting_in("AAMkLastWeek", -chrono::Duration::days(6)),
+        meeting_in("AAMkTomorrow", chrono::Duration::days(1)),
+    ];
+    serve_near_window(&server, &near).await;
+    serve_delta(
+        &server,
+        None,
+        &[
+            single("AAMkEndOfNextMonth"),
+            single("AAMkLastWeek"),
+            single("AAMkTomorrow"),
+        ],
+        "complete",
+    )
+    .await;
+    for event in near {
+        serve_event(&server, event).await;
+    }
+
+    let mut arrivals: Vec<String> = vec![];
+    for _ in 0..16 {
+        if !matches!(sync.run_once().await, Ok(true)) {
+            break;
+        }
+        for id in imported(&pool).await {
+            if !arrivals.contains(&id) {
+                arrivals.push(id);
+            }
+        }
+    }
+
+    assert_eq!(
+        arrivals,
+        ["AAMkTomorrow", "AAMkLastWeek", "AAMkEndOfNextMonth"],
+        "the near window reads tomorrow, then last week, then next month"
+    );
+    assert_synced(&pool).await;
+}

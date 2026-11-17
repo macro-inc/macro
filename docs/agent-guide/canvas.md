@@ -28,8 +28,8 @@ beside the hex field still opens the full picker. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
 under the finger first, and lifting the finger leaves the sheet open without
-pressing the row under it. **Attach** opens a sheet with Media, Upload media and
-Reference (and Artifact where artifacts are enabled): Media and Reference open a
+pressing the row under it. **Attach** opens a sheet with Media, Upload media,
+Reference and Artifact: Media and Reference open a
 searchable picker in a second
 sheet, and Upload media opens the device's photo library or file picker and
 places what is chosen at the middle of the view. Check that nothing sits under
@@ -49,13 +49,16 @@ the view in the middle.
 
 Handles are drawn small but a finger takes them from further away: a drag that
 starts within 16px of a corner or of the rotation knob, or within 12px outside
-an edge, resizes or rotates; a drag from the middle of the shape moves it. A tap
+an edge, resizes or rotates; a drag from the middle of the shape moves it, a
+thin shape (a line of text, a divider) included. A tap
 in those places changes nothing: beside the shape it selects what is there or
-clears the selection. A tap on empty canvas within 10px of an unfilled shape's
+clears the selection. A selected connector's ends are taken from 16px away too,
+by any pointer in the touch view: a drag moves the end by as much as the pointer
+moves, and a tap leaves it and its attachment as they were. A tap on empty canvas within 10px of an unfilled shape's
 stroke selects it, but a shape under the finger always wins. A press on another
 shape is for that shape even right beside the selection. On touch there are no
-corner-radius handles; use Corner radius in the inspector. The wider reach is
-for fingers only: a mouse on the same canvas hits what is drawn.
+corner-radius handles; use Corner radius in the inspector. The handles' wider
+reach is for fingers only: a mouse on the same canvas hits what is drawn.
 
 ## Canvas colors
 
@@ -84,7 +87,7 @@ for multiple selections, groups, videos, and non-image shapes.
 
 ## Artifacts
 
-Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
+**Insert** offers
 **Artifact**, which places a node with starter HTML. The Canvas inspector edits its
 title and HTML. The document runs in a sandboxed frame; **Interact** or a
 double-click passes pointer input to it, and **Done** or a click elsewhere returns
