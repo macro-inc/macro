@@ -9,9 +9,8 @@ jobs:
     timeout-minutes: 15
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
         persist-credentials: 'false'
     - name: Setup Rust
       uses: './.github/actions/setup-rust'

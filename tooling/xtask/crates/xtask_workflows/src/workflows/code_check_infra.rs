@@ -66,13 +66,12 @@ fn check() -> Job {
 }
 
 fn checkout(full_history: bool) -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    let history = if full_history {
+        steps::History::Full
+    } else {
+        steps::History::Commit
+    };
+    steps::mirror_checkout("Checkout Repo", history, true)
 }
 
 fn run_biome() -> Step<Run> {

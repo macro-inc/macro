@@ -76,6 +76,47 @@ pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
         })
 }
 
+/// How much history [`mirror_checkout`] fetches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum History {
+    /// The commit alone (`fetch-depth: 1`).
+    Commit,
+    /// The commit and its parents (`fetch-depth: 2`): the merge commit's
+    /// first parent is the base it was merged onto.
+    WithParents,
+    /// Every branch and tag (`fetch-depth: 0`).
+    Full,
+}
+
+/// Namespace's checkout, pinned: `actions/checkout`'s inputs, fetched through
+/// the git mirror every Linux runner profile keeps on its cache (`Git
+/// repository checkouts` in the profile's cache settings). The checkout
+/// borrows the mirror's objects, so fetching the PR's merge commit moves only
+/// what the mirror lacks: `actions/checkout` took 8 to 26 s for one commit,
+/// and about 50 s for full history. Only for jobs on those profiles, never on
+/// a plain machine label (macOS, Windows, `ubuntu-latest`), where the action
+/// fails for want of a mirror. `persist_credentials` leaves the token in the
+/// repository's git config for later `git fetch` steps.
+///
+/// PR jobs update the mirror, so like the other PR-writable caches it is for
+/// PR check jobs, never a job that deploys or holds deploy secrets.
+pub fn mirror_checkout(name: &str, history: History, persist_credentials: bool) -> Step<Use> {
+    Step::new(name)
+        .uses(
+            "namespacelabs",
+            "nscloud-checkout-action",
+            "66f2dc6f6c42a8ac6c4e53473c4840006822831e",
+        ) // v9.0.1
+        .map(|step| match history {
+            History::Commit => step,
+            History::WithParents => step.add_with(("fetch-depth", 2)),
+            History::Full => step.add_with(("fetch-depth", 0)),
+        })
+        .when(!persist_credentials, |step| {
+            step.add_with(("persist-credentials", false))
+        })
+}
+
 /// `oven-sh/setup-bun` — installs Bun on the runner. Version-tagged (not
 /// SHA-pinned) to match the JS deploy/publish workflows.
 pub fn setup_bun() -> Step<Use> {

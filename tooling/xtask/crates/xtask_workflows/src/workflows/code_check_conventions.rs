@@ -50,7 +50,11 @@ fn ast_grep() -> Job {
         .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::Commit,
+            false,
+        ))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())

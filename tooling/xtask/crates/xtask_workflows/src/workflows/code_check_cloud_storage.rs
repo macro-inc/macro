@@ -73,7 +73,11 @@ fn path_check() -> Job {
         )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::WithParents,
+            false,
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(
@@ -95,7 +99,11 @@ fn check() -> Job {
         .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::Commit,
+            false,
+        ))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
@@ -130,7 +138,7 @@ fn doppler_config() -> Job {
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::mirror_checkout("Checkout", steps::History::WithParents, false))
         // Before the dev shell: its LD_LIBRARY_PATH points the runner's
         // git-remote-https at Nix's glibc, which aborts `git fetch`.
         .add_step(compute_changed_files())
@@ -155,7 +163,7 @@ fn graphql_schema_compat() -> Job {
             "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'",
         ))
         .runs_on(runners::Runner::Small.to_string())
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::mirror_checkout("Checkout", steps::History::WithParents, false))
         .add_step(steps::setup_rust_light())
         .add_step(
             Step::new("Check GraphQL schema compatibility").run(
@@ -186,7 +194,7 @@ fn test() -> Job {
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout("Checkout", steps::History::Commit, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
@@ -226,7 +234,11 @@ fn build_service_bins() -> Job {
         ))
         .map(with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::Commit,
+            false,
+        ))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))

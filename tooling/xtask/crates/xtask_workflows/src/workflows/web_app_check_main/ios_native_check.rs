@@ -71,7 +71,7 @@ pub(super) fn job() -> Job {
         )
         // Shallow: the path filter uses the API, and the bump check fetches
         // the base branch itself, only when it runs.
-        .add_step(super::checkout("Checkout Repo", false).id("checkout"))
+        .add_step(super::actions_checkout("Checkout Repo").id("checkout"))
         .add_step(paths_filter())
         .add_step(cache_wasm_version_bump())
         .add_step(read_labels())

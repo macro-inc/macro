@@ -378,7 +378,7 @@ fn build() -> Job {
                 .contents(Level::Read)
                 .pull_requests(Level::Write),
         )
-        .add_step(checkout("Checkout Repo", false))
+        .add_step(actions_checkout("Checkout Repo"))
         .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
@@ -403,21 +403,34 @@ fn gated_web_job(name: &str) -> Job {
         .runs_on(web_runner())
 }
 
+/// Through the runner's git mirror ([`steps::mirror_checkout`]). Later steps
+/// fetch from `origin`, so the token stays in the repository's config, as
+/// `actions/checkout` left it.
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
-    Step::new(name)
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    let history = if full_history {
+        steps::History::Full
+    } else {
+        steps::History::Commit
+    };
+    steps::mirror_checkout(name, history, true)
+}
+
+/// `actions/checkout`, for jobs on the tiny profile, which keeps no cache and
+/// so no git mirror, and for [`build`]: it holds the preview deploy's AWS
+/// credentials, so it skips the PR-written mirror as it skips the Nix seed.
+fn actions_checkout(name: &str) -> Step<Use> {
+    Step::new(name).uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    ) // v6
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]
 /// reads trees and a few blobs, so path-check fetches no blobs up front and
 /// writes almost no work tree: 18 s became 6 s on the tiny runner.
 fn path_check_checkout() -> Step<Use> {
-    checkout("Checkout Repo", false)
+    actions_checkout("Checkout Repo")
         .add_with(("filter", "blob:none"))
         .add_with(("sparse-checkout", ".github"))
 }

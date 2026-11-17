@@ -22,11 +22,10 @@ jobs:
     timeout-minutes: 10
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
-        persist-credentials: 'false'
         fetch-depth: '2'
+        persist-credentials: 'false'
     - name: Setup Rust
       uses: './.github/actions/setup-rust'
       with:
@@ -324,9 +323,8 @@ jobs:
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
         persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -526,11 +524,10 @@ jobs:
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
-        persist-credentials: 'false'
         fetch-depth: '2'
+        persist-credentials: 'false'
     - name: compute changed files
       run: |
         set -euo pipefail
@@ -776,9 +773,8 @@ jobs:
         options: '--health-cmd "redis-cli ping" --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5'
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
         persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -1059,9 +1055,8 @@ jobs:
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
         persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -1227,11 +1222,10 @@ jobs:
     timeout-minutes: 15
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e
       with:
-        clean: 'false'
-        persist-credentials: 'false'
         fetch-depth: '2'
+        persist-credentials: 'false'
     - name: Setup Rust
       uses: './.github/actions/setup-rust'
       with:

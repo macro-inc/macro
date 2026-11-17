@@ -54,7 +54,7 @@ pub(super) fn job() -> Job {
                 .pull_requests(Level::Read)
                 .statuses(Level::Read),
         )
-        .add_step(super::checkout("Checkout PR merge commit", false))
+        .add_step(super::actions_checkout("Checkout PR merge commit"))
         .add_step(setup_bun())
         .add_step(read_labels())
         .add_step(version_check())

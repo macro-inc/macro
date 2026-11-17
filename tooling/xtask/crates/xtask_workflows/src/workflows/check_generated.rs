@@ -29,7 +29,11 @@ fn check_workflows() -> Job {
     Job::default()
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::Commit,
+            false,
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(
             Step::new("verify workflows are up to date")

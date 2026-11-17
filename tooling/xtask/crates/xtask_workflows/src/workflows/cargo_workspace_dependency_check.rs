@@ -43,7 +43,11 @@ fn rust_ci_job() -> Job {
     Job::default()
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_step(checkout())
+        .add_step(steps::mirror_checkout(
+            "Checkout Repo",
+            steps::History::Commit,
+            true,
+        ))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -69,14 +73,6 @@ fn hakari_and_dep_closures() -> Job {
     rust_ci_job()
         .add_step(deps_check())
         .add_step(steps::teardown_nix())
-}
-
-fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
 }
 
 /// `cargo install` skips the build when the same version is already present

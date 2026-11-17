@@ -48,7 +48,11 @@ fn cargo_deny_job() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         // `PR CI` checks out the PR's merge commit, whose first parent is the
         // base: the advisories step reads the base's `Cargo.lock` from it.
-        .add_step(checkout().add_with(("fetch-depth", 2)))
+        .add_step(steps::mirror_checkout(
+            "Checkout Repo",
+            steps::History::WithParents,
+            true,
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(install_cargo_deny())
         .add_step(deny("bans licenses sources").id("bans"))

@@ -88,7 +88,11 @@ fn check_tauri_vendoring_job() -> Job {
             "needs.check-tauri-lockfiles.outputs.vendoring_inputs == 'true'",
         ))
         .runs_on(runners::Runner::Small.with_cache_tag(vars::NIX_CHECKS_CACHE_TAG))
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::mirror_checkout(
+            "Checkout",
+            steps::History::Commit,
+            false,
+        ))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(
