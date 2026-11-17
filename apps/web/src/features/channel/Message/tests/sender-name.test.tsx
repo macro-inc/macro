@@ -5,8 +5,13 @@
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import type { MessageData } from '@core/messages/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SenderName } from '../SenderName';
+
+// Live team-bot profiles need a query client; client posts never look one up.
+vi.mock('@queries/bots/profiles', () => ({
+  useLiveBotSender: (sender: () => unknown) => sender,
+}));
 
 afterEach(cleanup);
 

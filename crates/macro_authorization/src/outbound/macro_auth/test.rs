@@ -272,6 +272,7 @@ fn maps_a_signed_routine_with_no_agent() {
         agent_scope: None,
         agent_id: None,
         agent_via: None,
+        agent_via_kind: None,
         exp: unix_timestamp() + 60,
         iss: String::new(),
         fusion_user_id: FUSION_USER_ID.into(),
