@@ -376,10 +376,12 @@ sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
-pills. Unlike other views, it cannot be hidden at
-desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
-nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
-navigation** (or `Cmd .`), which starts closed. Escape closes a
+pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
+**Show navigation** restores it. Wide touch panes always dock the sidebar left
+of the page, with no collapse control and no section pills. Below 720px the
+sidebar becomes an overlay that starts closed; narrow touch panes switch
+sections from pills at the top, led by **Show navigation**. `Cmd .` also
+toggles navigation. Escape closes a
 settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
@@ -436,7 +438,7 @@ Left nav (feature and platform gates still apply):
   **Team · Members**. The team Slack export import and the GitHub App live in
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
-  sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
+  sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.

@@ -127,6 +127,8 @@ class Step:
         self.arguments = None
         self.result = None
         self.span = None
+        # Its number among the turn's tool calls, the viewer's `#n`.
+        self.tool_number = None
 
     @property
     def duration(self):
@@ -179,6 +181,7 @@ def parse(frames, tool_spans=None):
             started = span["start_ms"] / 1000 if span else t
             step = Step(len(turn.steps) + 1, "tool", started, started - previous, tool_name(update))
             step.span = span
+            step.tool_number = sum(1 for each in turn.steps if each.kind == "tool") + 1
             raw = dict(update.get("rawInput") or {})
             step.code = raw.pop("source", None)
             step.arguments = raw
@@ -242,8 +245,9 @@ class Totals:
         self.wall = sum(turn.bound - turn.started for turn in turns)
 
 
-def render(export):
-    """The main markdown and the side file of uncut code and results."""
+def render(export, contexts=()):
+    """The main markdown and the side file of uncut code and results.
+    `contexts` is `turn_context.for_session(export, ...)`, one per turn."""
     session = export["session"]
     spans = export.get("spans")
     turns = parse(export["frames"], (spans or {}).get("tools"))
@@ -273,6 +277,10 @@ def render(export):
     )[:SLOWEST_GAPS]
     for turn, step in ranked:
         out.append(f"| {turn.number} | {step.number} | {step.gap:.1f}s | {step.kind} {step.name} |")
+    flagged = [(context["turn"], found) for context in contexts for found in context["flags"]]
+    if flagged:
+        out += ["", "## Flags", ""]
+        out += [f"- turn {number} `{found['id']}` ({found['level']}): {flag_text(found)}" for number, found in flagged]
     if totals.failed:
         out += ["", "## Failures", ""]
         for turn in turns:
@@ -290,6 +298,7 @@ def render(export):
             "Prompt:",
             "",
             "> " + cut(turn.prompt, TEXT_BUDGET).replace("\n", "\n> "),
+            *(context_lines(contexts[turn.number - 1]) if contexts else []),
             "",
             "| # | at | gap | kind | tool | size | took | status | error |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -343,6 +352,56 @@ def render(export):
     return "\n".join(out) + "\n", "\n".join(full) + "\n"
 
 
+def context_lines(context):
+    """The turn's context (docs, tools, prompt parts) and flags, as a list."""
+    lines = ["", "Context:", ""]
+    docs = context["documentation"]
+    if docs:
+        entities = ", ".join(docs["entities"]) or "none"
+        lines.append(
+            f"- SDK docs: {docs['status']}, {count_text(docs['selected'])} selected ({entities}), "
+            f"<macro_sdk> {count_text(docs['bytes'])} bytes, guidance {docs['guidance']}, trace `{docs['trace_id']}`"
+        )
+    else:
+        lines.append("- SDK docs: no select_documentation span")
+    tools = context["tools"]
+    eager = tools["eager"]
+    names = "unknown (the eager lists in the source could not be read)" if eager["names"] is None \
+        else ", ".join(eager["names"]) or "none named"
+    lines.append(
+        f"- eager tools: {count_text(eager['count'])} per span, {kilobytes(eager['bytes'])}; "
+        f"named from source: {names}"
+    )
+    loaded = ", ".join(f"{entry['name']} ({entry['via']} step {entry['step']})" for entry in tools["loaded"])
+    lines.append(
+        f"- loaded tools: {count_text(tools['loaded_count'])} per span, {kilobytes(tools['loaded_bytes'])}; "
+        f"{loaded or 'none loaded this turn'}"
+    )
+    lines.append(
+        f"- deferred MCP tools offered: "
+        f"{'unknown' if tools['deferred'] is None else len(tools['deferred'])} of {tools['offered']} listed"
+        + (" (listing cut short)" if tools["offered_cut"] else "")
+    )
+    if context["prompt"]["largest"]:
+        parts = [
+            f"{name} {kilobytes(size)}"
+            for group in context["prompt"]["largest"] for name, size in group["parts"].items()
+        ]
+        lines.append(f"- largest prompt of {context['prompt']['calls']} model calls: {', '.join(parts)}")
+    for found in context["flags"]:
+        lines.append(f"- **flag** `{found['id']}` ({found['level']}): {flag_text(found)}")
+    return lines
+
+
+def flag_text(found):
+    steps = found.get("steps")
+    return found["text"] + (f" (steps {', '.join(str(step) for step in steps)})" if steps else "")
+
+
+def kilobytes(size):
+    return "? KB" if size is None else f"{size / 1000:.1f} KB"
+
+
 def model_calls(spans, turn):
     """The model calls that started within the turn (up to its last frame
     when it never ended)."""
@@ -360,14 +419,20 @@ def count_text(value):
     return "" if value is None else f"{value:.0f}"
 
 
-def index_row(export):
+def index_row(export, contexts=()):
     session = export["session"]
     totals = Totals(parse(export["frames"], (export.get("spans") or {}).get("tools")))
+    flags = sorted({
+        found["id"]
+        for context in contexts
+        for found in context["flags"] if found["level"] == "warn"
+    })
     name = (session.get("name") or "").replace("|", "/")
     return (
         f"| [{session['id']}]({session['id']}.md) | {name} | {session.get('model')} "
         f"| {str(session.get('created_at'))[:16]} | {totals.turns} | {totals.tool_calls} "
-        f"| {totals.failed} | {totals.wall:.0f}s | {totals.model_time:.0f}s | {totals.tool_time:.0f}s |"
+        f"| {totals.failed} | {totals.wall:.0f}s | {totals.model_time:.0f}s | {totals.tool_time:.0f}s "
+        f"| {', '.join(flags)} |"
     )
 
 
@@ -383,7 +448,7 @@ def index(rows, filters):
         "",
         "Each session has `<id>.md` (summary) and `<id>.full.md` (uncut code and results).",
         "",
-        "| session | name | model | created | turns | tools | failed | wall | model gaps | tool time |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| session | name | model | created | turns | tools | failed | wall | model gaps | tool time | flags |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         *rows,
     ]) + "\n"

@@ -271,3 +271,31 @@ async fn an_uninvited_guest_and_a_cancelled_meeting_leave_the_guests_calendar() 
         .unwrap();
     assert_eq!(stored(&emulator, CAROL, "planning1")["status"], "cancelled");
 }
+
+#[tokio::test]
+async fn a_held_change_reaches_the_other_copies_on_release() {
+    let emulator = meeting().await;
+    let title = |email: &str| {
+        emulator
+            .events(email, "primary")
+            .unwrap()
+            .into_iter()
+            .find(|event| event["id"] == "planning1")
+            .map(|event| event["summary"].clone())
+    };
+
+    emulator.hold_event_copies();
+    emulator
+        .change_event(
+            ADA,
+            "primary",
+            "planning1",
+            NewEvent::from_json(json!({ "summary": "Planning, moved" })),
+        )
+        .unwrap();
+    assert_eq!(title(ADA), Some(json!("Planning, moved")));
+    assert_eq!(title(BOB), Some(json!("Planning")));
+
+    emulator.release_event_copies();
+    assert_eq!(title(BOB), Some(json!("Planning, moved")));
+}
