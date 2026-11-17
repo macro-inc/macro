@@ -107,9 +107,9 @@ test('DM-02 writing to the same person again from “New direct message” conti
     `[data-key="channel:${id}"]`
   );
   // Known defect: the first conversation these two ever have is missing
-  // from the other person's open list until a reload, so this shows once
-  // for each cast in the life of a stack with the flag, and on some machines
-  // without it.
+  // from the other person's open list until a reload, so with channel local
+  // sync this shows once for each cast in the life of a stack; elsewhere it
+  // has shown on some machines.
   await failsSometimes(async () => {
     await expect(cyRow).toContainText('Ada Owner');
   });

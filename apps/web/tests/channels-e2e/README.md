@@ -42,7 +42,7 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. The seed scenario has people for six. |
 | `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
-| `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built with it, as CI does for both the build and the run: only that build keeps channels on the device, and some known defects exist only with the flag, others only without. |
+| `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built with it, as CI does for both the build and the run: only that build keeps channels on the device, and a known defect can be marked for one build alone. |
 
 The people sign in through the passwordless code flow of a local stack, so
 the suite needs a stack that offers it; it does not run against a deployed

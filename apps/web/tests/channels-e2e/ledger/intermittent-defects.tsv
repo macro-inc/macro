@@ -12,6 +12,6 @@ OFF-04	With VITE_ENABLE_CHANNEL_LOCAL_SYNC a long channel read back to its start
 CHN-02	A team channel someone else makes is sometimes missing from a teammate's open list, or goes when opened, until reload: the list is read again before the new channel is in it (on one machine in every run, in CI in none)
 CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on another branch)
 DM-01	A new direct message is sometimes missing from the other person's open list until reload (on one machine in about half the runs, in CI in none)
-DM-03	A new direct message is sometimes missing from the other person's open list until reload
-MEM-03	A person removed from a channel sometimes keeps it open, with its composer, until reload (with the flag 5 of 10 whole-suite runs and 1 of 30 repeats on da4308dd82; on one machine in every run without it, in CI in none)
-DM-02	The first conversation two people ever have, started from "New direct message", is missing from the other person's open list until reload (with the flag each cast's first run on a new stack, 4 of 4; without it on one machine in some runs)
+DM-03	A new direct message is sometimes missing from the other person's open list until reload (seen on one machine on the base suite; not in 8 whole-suite runs here)
+MEM-03	A person removed from a channel sometimes keeps it open, with its composer, until reload (with channel local sync on, 5 of 10 whole-suite runs and 1 of 30 repeats on da4308dd82; on the base suite, every run on one machine and none in CI)
+DM-02	The first conversation two people ever have, started from "New direct message", is missing from the other person's open list until reload (with channel local sync on, each cast's first run on a new stack, 4 of 4; on the base suite, some runs on one machine)

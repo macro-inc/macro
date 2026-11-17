@@ -51,7 +51,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   busy page (KEY-05): a test about something else reaches the message list
   with Escape.
 - A defect that shows on one machine in every run and on another in none
-  (a list read again before a write is in it: CHN-02, ACC-06, CHN-08) is
+  (a list read again before a write is in it: CHN-02, ACC-06, CHN-08, DM-01,
+  DM-03, MEM-03) is
   intermittent, not known: CI and a developer's stack disagree about it.
 - Global setup empties each cast's favorite channels: the sidebar draws only
   the rows near its window, so leftovers push a new row out of the page.
@@ -113,8 +114,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   what a lost page left behind from what the next page fetched anyway.
   Nothing on screen says when the next page has kept it: OFF-14 relies on
   the pause `goOffline` makes, which held 30 of 30 at a load of 30 to 50.
-- Two people's first conversation exists once for the life of a stack, so
   what happens the first time (DM-02) shows once for each cast on a new
+  stack and seldom on an old one: watch such a thing on a new stack.
   stack and never on an old one: prove such a thing on a new stack.
 - Channels are kept on the device only by a build with
   `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`, which has no default; without it

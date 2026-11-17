@@ -1,7 +1,7 @@
 // Checks the suite's ledger against its tests, and with `--report <file>`
 // against a run: every test is listed against something channels do, every
-// listed thing has a test or a reason it has none,
-// and every test did what the ledger says in the run.
+// listed thing has a test or a reason it has none, and every test did what
+// the ledger says in the run.
 //
 //   bun tests/channels-e2e/ledger/check.ts [--report <playwright-report.json>]
 
