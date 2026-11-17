@@ -107,6 +107,7 @@ impl CompaniesRepositoryImpl {
         normalized_domain: &str,
         normalized_email: &str,
         name: Option<&str>,
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
     ) -> Result<(), CrmError> {
         let normalized_domain = normalized_domain.to_owned();
         let normalized_email = normalized_email.to_owned();
@@ -127,11 +128,18 @@ impl CompaniesRepositoryImpl {
         // queued job's participants, dates, direction, or former consent.
         // The mailbox scan is the slow step, so it runs before the domain
         // lock: populations of other addresses on the domain don't wait on it.
-        let Some(interaction) =
-            Self::eligible_interactions(&mut tx, *team_id, *link_id, &normalized_email).await?
+        let Some(interaction) = Self::eligible_interactions_with_authority(
+            &mut tx,
+            *team_id,
+            *link_id,
+            &normalized_email,
+            authority,
+        )
+        .await?
         else {
             return Ok(());
         };
+
         #[cfg(test)]
         if let Some(gate) = &self.after_eligible_scan {
             gate.entered.notify_one();
@@ -393,6 +401,7 @@ impl CompaniesRepositoryImpl {
         normalized_domain: &str,
         normalized_email: &str,
         name: Option<&str>,
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
     ) -> Result<(), CrmError> {
         let mut tx = self.begin_population().await?;
 
@@ -404,11 +413,18 @@ impl CompaniesRepositoryImpl {
         if !Self::team_exists(&mut tx, team_id).await? {
             return Ok(());
         }
-        let Some(interaction) =
-            Self::eligible_interactions(&mut tx, *team_id, *link_id, normalized_email).await?
+        let Some(interaction) = Self::eligible_interactions_with_authority(
+            &mut tx,
+            *team_id,
+            *link_id,
+            normalized_email,
+            authority,
+        )
+        .await?
         else {
             return Ok(());
         };
+
         Self::lock_team_domain(&mut tx, team_id, normalized_domain).await?;
         let first_at = interaction.first_at;
         let last_at = interaction.last_at;
@@ -814,16 +830,7 @@ impl CompaniesRepositoryImpl {
         }
 
         if !blocked {
-            sqlx::query!(
-                r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
-                   ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
-                team_id,
-                Self::current_traceparent()
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::schedule_contribution_history(&mut tx, *team_id, None).await?;
         }
 
         tx.commit()
@@ -1152,6 +1159,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             &normalized_domain,
             &normalized_email,
             name,
+            None,
         )
         .await
         .map_err(lock_timeout_as_contended)
@@ -1179,6 +1187,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             &domain.to_ascii_lowercase(),
             &email.to_ascii_lowercase(),
             name,
+            None,
         )
         .await
         .map_err(lock_timeout_as_contended)
@@ -1589,6 +1598,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.contact_deleted = contact_result.rows_affected() > 0;
+        if outcome.contact_deleted {
+            Self::record_contact_matching_change(&mut tx, *team_id, row.contact_id).await?;
+        }
 
         // 3. Company-less contacts have nothing more to tear down. Keep
         //    killswitched companies — dropping would erase the
@@ -1631,6 +1643,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.company_deleted = company_result.rows_affected() > 0;
+        if outcome.company_deleted {
+            Self::record_company_matching_change(&mut tx, *team_id, company_id).await?;
+        }
 
         tx.commit()
             .await
@@ -1713,6 +1728,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '60s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // Match explicit edits' company-before-contact order. Lock before the
         // orphan check so a company cannot be deleted from a stale snapshot
@@ -1744,8 +1763,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // 2. Drop every contact in this team that no longer has any
         //    source. Manually created or edited contacts are user data
         //    and survive teardown even after their last source is removed.
-        sqlx::query!(
-            r#"
+        if Self::has_contact_rule_references(&mut tx, *team_id).await? {
+            Self::delete_referenced_orphan_contacts(&mut tx, *team_id).await?;
+        } else {
+            sqlx::query!(
+                r#"
             DELETE FROM crm_contacts ct
             WHERE ct.team_id = $1
               AND ct.manually_created = FALSE
@@ -1753,18 +1775,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                   SELECT 1 FROM crm_contact_sources WHERE contact_id = ct.id
               )
             "#,
-            team_id,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                team_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
 
         // 3. Drop orphan non-killswitched companies. Manually created
         //    companies survive even when empty — they're user data,
         //    not derived from the departing link. crm_domains cascades
         //    via FK.
-        sqlx::query!(
-            r#"
+        if Self::has_company_rule_references(&mut tx, *team_id).await? {
+            Self::delete_referenced_orphan_companies(&mut tx, *team_id).await?;
+        } else {
+            sqlx::query!(
+                r#"
             DELETE FROM crm_companies co
             WHERE co.team_id = $1
               AND co.email_sync = TRUE
@@ -1773,11 +1799,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                   SELECT 1 FROM crm_contacts WHERE company_id = co.id
               )
             "#,
-            team_id,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                team_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
 
         tx.commit()
             .await
@@ -2073,16 +2100,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                    AND EXISTS (SELECT 1 FROM crm_domains d WHERE d.company_id = $2 AND lower(d.domain) = b.domain)"#,
                 team_id, company_id
             ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            sqlx::query!(
-                r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
-                   ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
-                team_id,
-                Self::current_traceparent()
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::schedule_contribution_history(&mut tx, *team_id, None).await?;
         }
 
         tx.commit()
@@ -2102,6 +2120,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let mut tx = self
             .pool
             .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
@@ -2180,6 +2202,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         }
 
+        Self::record_company_matching_change(&mut tx, *team_id, *company_id).await?;
+        Self::record_company_contacts_matching_change(&mut tx, *team_id, *company_id).await?;
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -2230,6 +2254,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         contact_id: &uuid::Uuid,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Self::lock_email_privacy(&mut tx, *team_id, true).await?;
         // Scope via the contact's team; cross-team = NotFound.
         let updated = sqlx::query_scalar!(
             r#"
@@ -2243,7 +2277,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             team_id,
             hidden,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
@@ -2251,6 +2285,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::ContactNotFoundForTeam);
         }
 
+        Self::record_contact_matching_change(&mut tx, *team_id, *contact_id).await?;
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(())
     }
 

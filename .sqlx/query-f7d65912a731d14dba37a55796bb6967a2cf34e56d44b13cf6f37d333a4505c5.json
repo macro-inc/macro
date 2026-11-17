@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ct.id FROM (\n                   SELECT id,team_id FROM crm_contacts WHERE company_id=$2 OFFSET 0\n               ) ct WHERE ct.team_id=$1\n                 AND EXISTS (SELECT 1 FROM crm_email_rule_contacts r WHERE r.contact_id=ct.id AND r.team_id=$1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f7d65912a731d14dba37a55796bb6967a2cf34e56d44b13cf6f37d333a4505c5"
+}
