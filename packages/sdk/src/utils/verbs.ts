@@ -148,17 +148,15 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     searched: 'searchWeb',
     queried: 'decisions structuredCompletion',
-    created: 'createConfirmedCalendarEvent createChat',
+    created: 'createConfirmedCalendarEvent',
     deleted: 'deleteChat permanentlyDeleteChat',
     edited: `
       patchChat
       editExplicitMemory
     `,
-    copied: 'copyChat',
     restored: 'revertDeleteChat',
-    sent: 'sendConfirmedEmail sendChatMessage',
+    sent: 'sendConfirmedEmail',
     generated: 'generateImage',
-    stopped: 'stopChatStream',
   },
   contacts: { searched: 'searchPeople' },
   email: {
