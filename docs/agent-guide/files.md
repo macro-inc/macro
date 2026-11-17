@@ -67,6 +67,16 @@ again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
+An email attachment's Drive copy goes to the Trash within about a minute once
+its email is gone (the message deleted at the provider, a draft sent or
+discarded, or the inbox disconnected or removed), unless its owner moved it
+into a folder, shared it, edited it or commented on it. It never shows up in
+**My Files** on its own, and it expires from the Trash like any other file.
+The app has no Trash view, so the document simply leaves **Email
+attachments**. Verify by deleting a test message whose attachment was opened,
+then checking that the document is in neither **Email attachments** nor
+**My Files**, and that its `"deletedAt"` is set.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock
@@ -120,7 +130,8 @@ approves the review itself (a `DecideReview` submit, the card's own approve with
 card's choices), and the card's run state adds **Started by the agent at your
 request** ("at the owner's request" for other viewers). A message from anyone
 but the owner never approves, and a plan still being made cannot be approved
-yet. Filter
+yet. On desktop the run also shows in the corner's
+[import tray](setup-cards.md#import-tray) from planning to done. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.

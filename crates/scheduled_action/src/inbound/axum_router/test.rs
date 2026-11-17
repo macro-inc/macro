@@ -163,6 +163,7 @@ impl MacroAuthorizationService for FakeAuth {
                     MacroUserAuthentication {
                         agent_id: None,
                         agent_via: None,
+                        routine_id: None,
                         origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),

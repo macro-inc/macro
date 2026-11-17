@@ -16,6 +16,7 @@ import { useHomeUnreadQuery } from './use-home-unread-query';
 
 const mocks = vi.hoisted(() => ({
   client: vi.fn(),
+  feed: vi.fn(),
   legacy: vi.fn(),
   legacyUnread: vi.fn(),
   notifiedSort: vi.fn(),
@@ -82,13 +83,14 @@ function setup(initialNotifiedSort = false) {
         },
         get data() {
           if (pending()) throw new Error('Read paused initial Soup query');
-          if (enabled() && !notifiedSort())
-            throw new Error('Read inactive full Soup query');
+          if (enabled()) throw new Error('Read inactive full Soup query');
           return { entities: [] };
         },
       },
       hasUnreadEntity: mocks.legacyUnread,
       notificationSource: {
+        notifications: mocks.feed,
+        notificationsByEntity: mocks.feed,
         withLocalState: (notification: { state: string }) =>
           state() ?? notification.state,
       },
@@ -231,22 +233,48 @@ describe('Home unread presence query', () => {
     );
   });
 
-  it('keeps notified-at sorting on REST, including while GraphQL is disabled', async () => {
+  it('reads the updated-at GraphQL witness under notified-at sorting, and REST only without GraphQL', async () => {
     const f = setup(true);
     expect(f.unread()).toBe(true);
-    expect(f.queries()).toHaveLength(0);
-    f.setEnabled(true);
-    expect(f.unread()).toBe(true);
+    expect(mocks.legacyUnread).toHaveBeenCalledOnce();
     expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(true);
     expect(f.queries()).toHaveLength(0);
     expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([]);
-    f.setNotifiedSort(false);
+
+    mocks.legacyUnread.mockClear();
+    f.setEnabled(true);
     expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(false);
+    expect(f.unread()).toBe(false);
     await vi.waitFor(() => expect(f.queries()).toHaveLength(1));
+    const op = f.queries()[0];
+    expect(op.query).toEqual(HomeUnreadPresenceDocument);
+    expect(op.variables?.input.initial).toMatchObject({
+      limit: 100,
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      emailView: 'INBOX',
+    });
     f.respond('UNSEEN');
     expect(f.unread()).toBe(true);
+    f.respond('SEEN');
+    expect(f.unread()).toBe(false);
+    expect(mocks.legacyUnread).not.toHaveBeenCalled();
+    expect(mocks.feed).not.toHaveBeenCalled();
+
+    f.setNotifiedSort(false);
+    expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([
+      { document: HomeUnreadPresenceDocument, variables: op.variables },
+    ]);
     f.setNotifiedSort(true);
+    expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([
+      { document: HomeUnreadPresenceDocument, variables: op.variables },
+    ]);
+    expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(false);
+
+    f.setEnabled(false);
+    expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(true);
     expect(f.unread()).toBe(true);
+    expect(mocks.legacyUnread).toHaveBeenCalledOnce();
     expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([]);
   });
 
