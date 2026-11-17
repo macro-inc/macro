@@ -1,8 +1,8 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 import { isSpreadsheetEnabledForCurrentUser } from './queries/spreadsheet-access';
 
 export const definition = defineBlock({

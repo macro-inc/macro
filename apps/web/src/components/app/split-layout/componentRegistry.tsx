@@ -19,11 +19,11 @@ import {
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
   type ComponentProps,
   type JSXElement,
-  lazy,
   onMount,
   type ParentProps,
   Show,

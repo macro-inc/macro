@@ -25,6 +25,7 @@ import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import type { DatabaseEntity } from '@entity';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -32,7 +33,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,

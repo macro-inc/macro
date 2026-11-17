@@ -32,10 +32,11 @@ import {
 } from '@components/app/split-layout/split-router/legacy-route';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { type JSX, lazy } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {

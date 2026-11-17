@@ -1,6 +1,7 @@
 import { QuestionCardSkeleton } from '@app/features/database-query/components/answer-skeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import {
   $createDatabaseQueryNode,
   $isDatabaseQueryNode,
@@ -19,7 +20,6 @@ import {
 } from 'lexical';
 import {
   createSignal,
-  lazy,
   onCleanup,
   Show,
   Suspense,

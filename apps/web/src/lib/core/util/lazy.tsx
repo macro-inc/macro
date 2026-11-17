@@ -1,9 +1,4 @@
-import {
-  type Component,
-  type ComponentProps,
-  createResource,
-  Show,
-} from 'solid-js';
+import { createResource, type JSX, Show } from 'solid-js';
 
 /**
  * Solid's `lazy()`, with each rendered instance waiting on the module itself.
@@ -21,34 +16,38 @@ import {
  * instance mounted after the load renders at once, and one mounted during it
  * owns its own wait.
  */
-export function lazy<T extends Component<any>>(
-  load: () => Promise<{ default: T }>
+export function lazy<Props extends unknown[]>(
+  load: () => Promise<{ default: (...props: Props) => JSX.Element }>
 ) {
-  let loading: Promise<{ default: T }> | undefined;
-  let loaded: T | undefined;
+  let loading:
+    | Promise<{ default: (...props: Props) => JSX.Element }>
+    | undefined;
+  let loaded: ((...props: Props) => JSX.Element) | undefined;
 
-  // A failed load is forgotten, so the next mount or preload tries again.
+  const loadComponent = async () => {
+    try {
+      const module = await load();
+      loaded = module.default;
+      return module;
+    } catch (error) {
+      // Forget the failed load, so the next mount or preload tries again.
+      loading = undefined;
+      throw error;
+    }
+  };
+
   const preload = () => {
-    loading ??= load().then(
-      (module) => {
-        loaded = module.default;
-        return module;
-      },
-      (error: unknown) => {
-        loading = undefined;
-        throw error;
-      }
-    );
+    loading ??= loadComponent();
     return loading;
   };
 
-  const LazyComponent = (props: ComponentProps<T>) => {
-    if (loaded) return loaded(props);
+  const LazyComponent = (...props: Props) => {
+    if (loaded) return loaded(...props);
 
     const [module] = createResource(preload);
     return (
       <Show when={module()}>
-        {(loadedModule) => loadedModule().default(props)}
+        {(loadedModule) => loadedModule().default(...props)}
       </Show>
     );
   };

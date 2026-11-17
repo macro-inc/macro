@@ -1,7 +1,8 @@
 /** Forms UI loads only when an enabled Forms tool appears in the transcript. */
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableForms, isFeatureEnabled } from '@core/constant/featureFlags';
-import { lazy, Show, Suspense } from 'solid-js';
+import { lazy } from '@core/util/lazy';
+import { Show, Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,

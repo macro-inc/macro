@@ -1,6 +1,6 @@
 import { defineBlock, LoadErrors, loadResult } from '@core/block';
 import NotFound from '@core/component/AccessErrorViews/NotFound';
-import { lazy } from 'solid-js';
+import { lazy } from '@core/util/lazy';
 import { waitForDatabaseRollout } from './queries/database-rollout';
 
 export const definition = defineBlock({

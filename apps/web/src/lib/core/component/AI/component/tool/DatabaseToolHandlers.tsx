@@ -3,8 +3,9 @@
  * carries the databases UI or SQL engine; inert while databases are off.
  */
 import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import type { ToolName } from '@service-cognition/generated/tools/tool';
-import { lazy, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,
