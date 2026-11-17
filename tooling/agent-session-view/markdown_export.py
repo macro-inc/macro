@@ -18,6 +18,8 @@ SLOWEST_GAPS = 8
 
 AGENT_CONTEXT = re.compile(r"<m-agent-context>.*?</m-agent-context>", re.S)
 CODE_TOOLS = {"ExecuteCode", "mcp__macro_internal__ExecuteCode"}
+# Tools whose program is in `rawInput.input` rather than `rawInput.source`.
+SHELL_TOOLS = {"BashCodeExecution", "TextEditorCodeExecution"}
 # Code-mode statuses of a program that did not succeed.
 FAILED_PROGRAM = ("failed", "timed_out", "cancelled")
 
@@ -182,9 +184,8 @@ def parse(frames, tool_spans=None):
             step = Step(len(turn.steps) + 1, "tool", started, started - previous, tool_name(update))
             step.span = span
             step.tool_number = sum(1 for each in turn.steps if each.kind == "tool") + 1
-            raw = dict(update.get("rawInput") or {})
-            step.code = raw.pop("source", None)
-            step.arguments = raw
+            step.arguments = {}
+            take_input(step, update.get("rawInput"))
             step.status = update.get("status") or "pending"
             calls[update.get("toolCallId")] = step
             turn.steps.append(step)
@@ -192,8 +193,14 @@ def parse(frames, tool_spans=None):
                 finish(step, update, t)
             previous = step.ended
             continue
-        elif kind == "tool_call_update" and update.get("status") in ("completed", "failed"):
+        elif kind == "tool_call_update":
             called = calls.get(update.get("toolCallId"))
+            # A streamed call announces itself first and sends its arguments,
+            # code included, in a later update.
+            if called is not None:
+                take_input(called, update.get("rawInput"))
+            if update.get("status") not in ("completed", "failed"):
+                continue
             step = None
             if called is not None:
                 finish(called, update, t)
@@ -209,6 +216,19 @@ def parse(frames, tool_spans=None):
             continue
         previous = t
     return turns
+
+
+def take_input(step, raw):
+    """Fold a call's arguments into its step, its program apart as `code`."""
+    if not raw:
+        return
+    raw = dict(raw)
+    code = raw.pop("source", None)
+    if code is None and step.name in SHELL_TOOLS:
+        code = raw.pop("input", None)
+    if code is not None:
+        step.code = code
+    step.arguments.update(raw)
 
 
 def nth_span(spans, n):

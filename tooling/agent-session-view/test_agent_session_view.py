@@ -85,6 +85,23 @@ class Exporter(unittest.TestCase):
         )
         self.assertEqual([step.duration for step in turns[0].steps], [1, 3])
 
+    def test_code_sent_after_the_call_starts_is_kept(self):
+        turns = markdown_export.parse([
+            prompt(0),
+            call(1, "a", "mcp__macro_internal__ExecuteCode"),
+            update(1.2, sessionUpdate="tool_call_update", toolCallId="a", status="in_progress",
+                   rawInput={"source": "export async function main() {}", "acting_as": "requester"}),
+            done(2, "a", {"status": "succeeded"}),
+            call(3, "b", "BashCodeExecution"),
+            update(3.1, sessionUpdate="tool_call_update", toolCallId="b", rawInput={"input": "ls -la"}),
+            done(4, "b", {}),
+            end(5),
+        ])
+        first, second = turns[0].steps
+        self.assertEqual(first.code, "export async function main() {}")
+        self.assertEqual(first.arguments, {"acting_as": "requester"})
+        self.assertEqual(second.code, "ls -la")
+
     def test_a_fence_outlasts_backticks_in_its_content(self):
         self.assertEqual(markdown_export.fence("a\n```\nb"), "````\na\n```\nb\n````")
 
