@@ -49,10 +49,7 @@ import {
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
-import {
-  CUSTOMER_CONTACT_PROPERTY_IDS,
-  customerContactEnabled,
-} from '../customer-contact';
+import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../customer-contact';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
@@ -224,7 +221,6 @@ export function createTaskComposer(
   };
 
   // Read once per opening, so a flag change leaves an open draft's row alone.
-  const showCustomerContact = customerContactEnabled();
 
   const {
     propertyValues,
@@ -241,9 +237,7 @@ export function createTaskComposer(
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
-    hiddenPropertyIds: showCustomerContact
-      ? CUSTOMER_CONTACT_PROPERTY_IDS
-      : undefined,
+    hiddenPropertyIds: CUSTOMER_CONTACT_PROPERTY_IDS,
     allDefinitions: true,
   });
   let baselinePropertyValues = JSON.stringify(initialState.propertyValues);
@@ -641,7 +635,6 @@ export function createTaskComposer(
     handleTitleTagPickerActive,
     deleteTitleTagsAtStart,
     properties,
-    showCustomerContact,
     propertyValues,
     setPropertyValues,
     availableProperties,

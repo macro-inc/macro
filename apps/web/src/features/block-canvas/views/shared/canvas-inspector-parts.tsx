@@ -198,7 +198,7 @@ export function CanvasInspectorSections() {
           onScrub={() => state.text.scrubFontSize(state.inspector)}
         />
       </Show>
-      <Show when={view.artifactsEnabled() && selectedArtifact()}>
+      <Show when={selectedArtifact()}>
         {(artifact) => (
           <>
             <ArtifactInspector

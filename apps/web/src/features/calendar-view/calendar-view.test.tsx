@@ -25,9 +25,6 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
     return props.children;
   },
 }));
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => true,
-}));
 vi.mock('@app/features/calendar/utils/calendar-supported-range', () => ({
   isCalendarRangeSupported: () => true,
 }));
