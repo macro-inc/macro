@@ -62,8 +62,9 @@ attribution) instead of sniffing request headers. A Macro API token's signed
 `agent_id` and `routine_id` reach `MacroUserAuthentication`;
 `attribution()` reads them as `CredentialAttribution`. Routes where only a
 person may decide, answer or approve (review decisions, elicitation and
-permission answers, held tool-call approvals) refuse anything but `Person`
-through `is_program_run(attribution, headers)`. Routes that only ask a program
+permission answers, held tool-call approvals, the email sign-in) refuse
+anything but `Person` through `is_program_run(attribution, headers)`; sign-in
+routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a program
 to confirm (email send, calendar create, call tokens) use `is_agent_run`,
 which leaves owner routine steps (`Routine`) alone so scheduled sends keep
 working. A routine step running as its owner signs only `routine_id`, so
