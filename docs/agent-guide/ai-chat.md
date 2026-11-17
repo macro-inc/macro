@@ -1468,7 +1468,8 @@ account the review uses answers yes, it submits the review with
 request”. The HTTP review decision endpoint requires direct user authentication;
 agent runs receive 403 for edits, submissions, and dismissals before their
 request body is decoded. The separate **DecideReview** chat tool keeps its
-existing user-prompted-turn checks. SDK operation
+existing user-prompted-turn checks, and refuses in a turn a program or a
+routine started. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
