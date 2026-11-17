@@ -11,9 +11,6 @@ vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryPage: vi.fn(),
   fetchContactDirectoryByIds: fetchIds,
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
-}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => undefined,
 }));

@@ -15,8 +15,9 @@
  * A session opened before is folded twice: first from the raw log the
  * GraphQL cache holds from its last open, so the surface has a transcript
  * while the fetch is on the wire, then from the fetched log, which the
- * machine reconciles by row id. The exchange writes the fetched log back;
- * rows the socket delivers after it are appended to the cached copy here.
+ * machine reconciles by row id. Live rows come from the GraphQL log
+ * subscription. The exchange writes the fetched log back; rows the
+ * subscription delivers after it are appended to the cached copy.
  */
 
 import { analytics } from '@app/lib/analytics';
@@ -31,13 +32,11 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   AgentSessionLogUnavailable,
-  canFollowAgentSessionLog,
   forgetAgentSessionLog,
   type SessionLogWatch,
   watchAgentSessionLog,
 } from '@queries/agent-session/log';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
-import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedStreamEvent,
@@ -199,25 +198,6 @@ export class AgentSession {
     return AgentSession.open.get(id);
   }
 
-  /**
-   * Realtime ingress over the connection gateway: a run of persisted rows
-   * in log order, addressed by session. The socket dispatch and the replay
-   * driver both call this; a session nobody has open ignores it, and so
-   * does one following its log over GraphQL, which hears the same rows
-   * there. The run reaches the machine as one push, so a flush of many
-   * frames costs one worker round trip.
-   */
-  static ingest(event: AgentSessionLogEvent): void {
-    const session = AgentSession.open.get(event.agentSessionId);
-    if (!session || session.followed) return;
-    fireAndForget(
-      session.enqueueAll(
-        event.entries.map((row) => ({ kind: 'confirmed', row }))
-      ),
-      'agent-session'
-    );
-  }
-
   readonly id: string;
 
   private references = 0;
@@ -231,14 +211,8 @@ export class AgentSession {
    */
   private settled = false;
   /**
-   * Live rows come from the GraphQL log subscription rather than the
-   * gateway. Decided once, when the session opens: the client either
-   * carries subscriptions or it does not.
-   */
-  private readonly followed = canFollowAgentSessionLog();
-  /**
    * The log query in flight for the current load: cached copy, then
-   * fetched; and, when followed, the subscription delivering live rows.
+   * fetched, and the subscription delivering live rows.
    */
   private watch: SessionLogWatch;
   /** The session row, fetched alongside the log and shared by warm and load. */
@@ -299,11 +273,9 @@ export class AgentSession {
     });
     // The subscription survives a reconnect, but not the rows published
     // while the socket was down.
-    this.unsubscribeReconnected = this.followed
-      ? subscribeGraphqlSoupReconnected(() =>
-          fireAndForget(this.resync(), 'agent-session')
-        )
-      : () => undefined;
+    this.unsubscribeReconnected = subscribeGraphqlSoupReconnected(() =>
+      fireAndForget(this.resync(), 'agent-session')
+    );
     this.trace = new SessionLoadTrace(id);
     this.watch = this.openWatch();
     this.sessionRow = agentHarnessServiceClient.get(id);
@@ -316,28 +288,21 @@ export class AgentSession {
   }
 
   /**
-   * The log query for a load, following the session when the client can:
-   * each run the subscription delivers folds like a gateway run would, and
-   * a gap in it is a reason to refetch.
+   * The log query for a load, following the session: each run the
+   * subscription delivers reaches the machine as one push, so a flush of
+   * many frames costs one worker round trip, and a gap in it is a reason to
+   * refetch.
    */
   private openWatch(): SessionLogWatch {
-    return watchAgentSessionLog(
-      this.id,
-      'cache-and-network',
-      this.followed
-        ? {
-            rows: (rows) => {
-              fireAndForget(
-                this.enqueueAll(
-                  rows.map((row) => ({ kind: 'confirmed', row }))
-                ),
-                'agent-session'
-              );
-            },
-            gap: () => fireAndForget(this.resync(), 'agent-session'),
-          }
-        : undefined
-    );
+    return watchAgentSessionLog(this.id, 'cache-and-network', {
+      rows: (rows) => {
+        fireAndForget(
+          this.enqueueAll(rows.map((row) => ({ kind: 'confirmed', row }))),
+          'agent-session'
+        );
+      },
+      gap: () => fireAndForget(this.resync(), 'agent-session'),
+    });
   }
 
   /**
