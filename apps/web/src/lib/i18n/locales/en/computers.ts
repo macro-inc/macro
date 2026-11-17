@@ -70,6 +70,8 @@ export default {
   retry: 'Retry',
   retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
+  paymentDeclined: 'Payment declined',
+  paymentDeclinedFor: 'for {{name}}',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   priceMonthly: '{{amount}}/month',

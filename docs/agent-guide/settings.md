@@ -925,7 +925,10 @@ Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 converted yet (`purchasing`, or the API's billing setup step) reads `Setting
 up · Updating billing… · 0:12`; a bought computer shows its setup progress at
 once while its charge settles (billing `purchasing`), and a refused charge
-releases it and sends the buyer the setup-failed notice. Buying a fourth
+releases it and sends the buyer the setup-failed notice. The released row
+stays for seven days as **Payment declined** (red dot, no actions), plus
+**· for <name>** when it was bought for an agent teammate. That agent's row
+reads **Payment declined** until it is taken off the team seconds later. Buying a fourth
 computer while three are still being paid for shows **Your team has three
 computers still being paid for. Try again in a minute.** Then the billing state: `Payment past due` while the team
 subscription is past due, `Cancels <date>` while a cancellation is pending

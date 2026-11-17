@@ -67,6 +67,7 @@ export default {
   statusPaused: 'Paused',
   statusFailed: 'Needs attention',
   statusReleased: 'Released',
+  statusPaymentDeclined: 'Payment declined',
   statusSetupFailed: 'Setup failed',
   statusOffline: 'Offline',
   statusNotRunning: 'Not running',

@@ -12,6 +12,7 @@ function statusLabel(status: TeamAgentStatus): string {
     .with('paused', () => t('teamAgents.statusPaused'))
     .with('failed', () => t('teamAgents.statusFailed'))
     .with('released', () => t('teamAgents.statusReleased'))
+    .with('payment_declined', () => t('teamAgents.statusPaymentDeclined'))
     .exhaustive();
 }
 
@@ -20,7 +21,7 @@ function dotState(
 ): 'connected' | 'attention' | 'disconnected' {
   return match(status)
     .with('running', () => 'connected' as const)
-    .with('failed', () => 'attention' as const)
+    .with('failed', 'payment_declined', () => 'attention' as const)
     .with('provisioning', 'paused', 'released', () => 'disconnected' as const)
     .exhaustive();
 }
@@ -39,7 +40,12 @@ export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
       >
         <Spinner size="sm" decorative />
       </Show>
-      <span classList={{ 'text-failure': props.status === 'failed' }}>
+      <span
+        classList={{
+          'text-failure':
+            props.status === 'failed' || props.status === 'payment_declined',
+        }}
+      >
         {statusLabel(props.status)}
       </span>
     </span>

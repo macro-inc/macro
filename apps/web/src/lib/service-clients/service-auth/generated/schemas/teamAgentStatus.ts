@@ -18,4 +18,5 @@ export const TeamAgentStatus = {
   paused: 'paused',
   failed: 'failed',
   released: 'released',
+  payment_declined: 'payment_declined',
 } as const;

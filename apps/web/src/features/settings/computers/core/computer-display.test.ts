@@ -161,3 +161,30 @@ describe('offersFailure', () => {
     expect(offersFailure(new Error('boom')).remedy).toBe('retry');
   });
 });
+
+describe('payment declined', () => {
+  const declined: ComputerStatus = {
+    ...waiting,
+    name: 'Ada',
+    status: 'payment_declined',
+    billing: 'ended',
+    poweredOn: false,
+  };
+
+  it('names the agent a declined computer was bought for', () => {
+    expect(computerStatusLabel({ ...declined, forAgent: true })).toEqual({
+      label: 'Payment declined',
+      detail: 'for Ada',
+      tone: 'failure',
+    });
+    expect(computerStatusLabel(declined)).toEqual({
+      label: 'Payment declined',
+      detail: undefined,
+      tone: 'failure',
+    });
+  });
+
+  it('offers no power control', () => {
+    expect(canTogglePower(declined)).toBe(false);
+  });
+});

@@ -85,6 +85,12 @@ describe('teamAgentsPollInterval', () => {
     expect(teamAgentsPollInterval([grace])).toBe(false);
     expect(teamAgentsPollInterval(undefined)).toBe(false);
   });
+
+  it('polls a declined agent until it is taken off the team', () => {
+    expect(
+      teamAgentsPollInterval([grace, { ...ada, status: 'payment_declined' }])
+    ).toBe(3000);
+  });
 });
 
 describe('team agent mutations', () => {

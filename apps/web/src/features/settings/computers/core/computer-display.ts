@@ -95,66 +95,76 @@ export function computerStatusLabel(computer: ComputerStatus): {
   detail?: string;
   tone: StatusTone;
 } {
-  return match(computer.status)
-    .returnType<{ label: string; detail?: string; tone: StatusTone }>()
-    .with('setting_up', 'purchasing', () => {
-      const setup = computer.setup;
-      // Billing comes first; the API's step is a string it may widen before
-      // this client's generated type does.
-      const reportedStep: string | undefined = setup?.step;
-      if (computer.status === 'purchasing' || reportedStep === 'billing') {
+  return (
+    match(computer.status)
+      .returnType<{ label: string; detail?: string; tone: StatusTone }>()
+      .with('setting_up', 'purchasing', () => {
+        const setup = computer.setup;
+        // Billing comes first; the API's step is a string it may widen before
+        // this client's generated type does.
+        const reportedStep: string | undefined = setup?.step;
+        if (computer.status === 'purchasing' || reportedStep === 'billing') {
+          return {
+            label: t('computers.settingUp'),
+            detail: t('computers.stageBilling'),
+            tone: 'progress',
+          };
+        }
+        const step = setup && setupStepLabel(setup.step);
+        // The same three phases guided setup shows; the server's final "ready"
+        // step is the Ready status itself.
+        const phase = SETUP_PHASES.indexOf(setup?.step ?? 'ready');
         return {
           label: t('computers.settingUp'),
-          detail: t('computers.stageBilling'),
+          detail:
+            step && phase !== -1
+              ? t('computers.setupProgress', {
+                  step,
+                  position: phase + 1,
+                  total: SETUP_PHASES.length,
+                })
+              : undefined,
           tone: 'progress',
         };
-      }
-      const step = setup && setupStepLabel(setup.step);
-      // The same three phases guided setup shows; the server's final "ready"
-      // step is the Ready status itself.
-      const phase = SETUP_PHASES.indexOf(setup?.step ?? 'ready');
-      return {
-        label: t('computers.settingUp'),
-        detail:
-          step && phase !== -1
-            ? t('computers.setupProgress', {
-                step,
-                position: phase + 1,
-                total: SETUP_PHASES.length,
-              })
-            : undefined,
+      })
+      .with('waiting_for_capacity', () => ({
+        label: t('computers.waitingForCapacity'),
+        detail: t('computers.waitingForCapacityHint'),
+        tone: 'muted',
+      }))
+      .with('needs_attention', () => ({
+        label: t('computers.needsAttention'),
+        tone: 'failure',
+      }))
+      .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
+      .with('starting', () => ({
+        label: t('computers.starting'),
         tone: 'progress',
-      };
-    })
-    .with('waiting_for_capacity', () => ({
-      label: t('computers.waitingForCapacity'),
-      detail: t('computers.waitingForCapacityHint'),
-      tone: 'muted',
-    }))
-    .with('needs_attention', () => ({
-      label: t('computers.needsAttention'),
-      tone: 'failure',
-    }))
-    .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
-    .with('starting', () => ({
-      label: t('computers.starting'),
-      tone: 'progress',
-    }))
-    .with('stopping', () => ({
-      label: t('computers.stopping'),
-      tone: 'progress',
-    }))
-    .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
-    .with('failed', () => ({
-      label: t('computers.failed'),
-      detail: t('computers.failedHint'),
-      tone: 'failure',
-    }))
-    .with('released', () => ({
-      label: t('computers.releasedStatus'),
-      tone: 'muted',
-    }))
-    .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }));
+      }))
+      .with('stopping', () => ({
+        label: t('computers.stopping'),
+        tone: 'progress',
+      }))
+      .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
+      .with('failed', () => ({
+        label: t('computers.failed'),
+        detail: t('computers.failedHint'),
+        tone: 'failure',
+      }))
+      .with('released', () => ({
+        label: t('computers.releasedStatus'),
+        tone: 'muted',
+      }))
+      // A computer bought for an agent is named after it.
+      .with('payment_declined', () => ({
+        label: t('computers.paymentDeclined'),
+        detail: computer.forAgent
+          ? t('computers.paymentDeclinedFor', { name: computer.name })
+          : undefined,
+        tone: 'failure',
+      }))
+      .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }))
+  );
 }
 
 /** The status dot every machine row uses, for this computer's state. */
@@ -189,6 +199,7 @@ export function canTogglePower(computer: ComputerStatus): boolean {
       'purchasing',
       'needs_attention',
       'released',
+      'payment_declined',
       () => false
     )
     .exhaustive(() => false);

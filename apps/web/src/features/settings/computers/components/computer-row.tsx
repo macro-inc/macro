@@ -61,6 +61,8 @@ function ComputerSubtitle(props: {
       return [status().label, status().detail, elapsed()]
         .filter(Boolean)
         .join(' · ');
+    if (props.computer.status === 'payment_declined')
+      return [status().label, status().detail].filter(Boolean).join(' · ');
     // A failed setup says why, in the server's words when it sends them.
     if (props.computer.status === 'failed') {
       const reason = setupFailureReason(props.computer);

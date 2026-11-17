@@ -23,4 +23,5 @@ export const ComputerStatusKind = {
   failed: 'failed',
   purchasing: 'purchasing',
   released: 'released',
+  payment_declined: 'payment_declined',
 } as const;

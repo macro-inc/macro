@@ -169,7 +169,10 @@ function ManagedComputerRow(props: {
   };
 
   const failed = () => props.computer.status === 'failed';
+  // Released by the decline: there is nothing left to act on.
+  const declined = () => props.computer.status === 'payment_declined';
   const primary = (): ComputerPrimaryAction | undefined => {
+    if (declined()) return undefined;
     // A failed setup only moves again once it is retried.
     if (failed() && props.canManage)
       return {
@@ -323,6 +326,7 @@ function ManagedComputerRow(props: {
 
   const menu = (): ComputerMenuItem[] => {
     const items: ComputerMenuItem[] = [];
+    if (declined()) return items;
     const computer = props.computer;
     // Once billing has ended it only turns back on after a Restore.
     const canPower =

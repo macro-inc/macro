@@ -50,6 +50,9 @@ first connects. It can name an agent the team since deleted. */
   /** Why the computer failed, as a short sentence safe to show; present
 when it failed and the cause is known. The full error is only in the logs. */
   failureReason?: ComputerStatusFailureReason;
+  /** Bought for an agent teammate. Set on a declined computer, whose
+agent the decline took back; omitted when false. */
+  forAgent?: boolean;
   /** Harness claimed by this guest. */
   harnessId?: ComputerStatusHarnessId;
   /** Stable resource identity. */

@@ -351,6 +351,11 @@ export type ComputerStatus = {
      */
     failureReason?: string | null;
     /**
+     * Bought for an agent teammate. Set on a declined computer, whose
+     * agent the decline took back; omitted when false.
+     */
+    forAgent?: boolean;
+    /**
      * Harness claimed by this guest.
      */
     harnessId?: string | null;
@@ -405,7 +410,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released' | 'payment_declined';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -2384,7 +2389,7 @@ export type TeamAgent = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released' | 'payment_declined';
 
 /**
  * A team's agents.

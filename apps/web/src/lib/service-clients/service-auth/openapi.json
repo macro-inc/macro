@@ -7831,6 +7831,10 @@
             "type": ["string", "null"],
             "description": "Why the computer failed, as a short sentence safe to show; present\nwhen it failed and the cause is known. The full error is only in the logs."
           },
+          "forAgent": {
+            "type": "boolean",
+            "description": "Bought for an agent teammate. Set on a declined computer, whose\nagent the decline took back; omitted when false."
+          },
           "harnessId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -7912,7 +7916,8 @@
           "stopped",
           "failed",
           "purchasing",
-          "released"
+          "released",
+          "payment_declined"
         ]
       },
       "CreateAccountMergeRequest": {
@@ -10555,7 +10560,14 @@
       "TeamAgentStatus": {
         "type": "string",
         "description": "Where an agent teammate is, from its computer.",
-        "enum": ["provisioning", "running", "paused", "failed", "released"]
+        "enum": [
+          "provisioning",
+          "running",
+          "paused",
+          "failed",
+          "released",
+          "payment_declined"
+        ]
       },
       "TeamAgents": {
         "type": "object",

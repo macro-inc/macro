@@ -19,12 +19,18 @@ const PROVISIONING_POLL_MS = 3_000;
 type CreateTeamAgentArgs = { teamId: string; request: CreateTeamAgent };
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
 
-/** Polls only while an agent's computer is still being set up. */
+/**
+ * Polls only while an agent's computer is still being set up, or its charge
+ * was declined and the agent is about to be taken off the team.
+ */
 export function teamAgentsPollInterval(
   agents: readonly TeamAgent[] | undefined
 ): number | false {
-  const provisioning = agents?.some((agent) => agent.status === 'provisioning');
-  return provisioning ? PROVISIONING_POLL_MS : false;
+  const moving = agents?.some(
+    (agent) =>
+      agent.status === 'provisioning' || agent.status === 'payment_declined'
+  );
+  return moving ? PROVISIONING_POLL_MS : false;
 }
 
 // Cached callbacks outlive the hooks; keep hook scope out of these closures.

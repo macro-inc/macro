@@ -30,7 +30,7 @@ export function teamAgentRunState(
     .with('provisioning', () => 'setting_up')
     .with('failed', () => 'setup_failed')
     .with('paused', () => 'offline')
-    .with('released', () => 'not_running')
+    .with('released', 'payment_declined', () => 'not_running')
     .with('running', () =>
       harness && !harness.connected ? 'offline' : 'running'
     )

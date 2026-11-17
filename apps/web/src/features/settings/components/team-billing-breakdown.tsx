@@ -27,6 +27,7 @@ function computerStatus(status: ComputerStatusKind | null | undefined): string {
     .with('stopping', () => t('settingsBilling.stopping'))
     .with('stopped', () => t('settingsBilling.stopped'))
     .with('released', () => t('settingsBilling.released'))
+    .with('payment_declined', () => t('computers.paymentDeclined'))
     .with(null, undefined, () => t('settingsBilling.statusUnavailable'))
     .exhaustive(() => t('settingsBilling.statusUnavailable'));
 }
