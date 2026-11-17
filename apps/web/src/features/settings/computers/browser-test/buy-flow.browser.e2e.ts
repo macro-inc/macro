@@ -601,6 +601,30 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
   ).toBeVisible();
 });
 
+test('a declined computer reads Payment declined, for its agent, with nothing to act on', async ({
+  page,
+}) => {
+  const declined: ComputerStatus = {
+    ...computer,
+    status: 'payment_declined',
+    billing: 'ended',
+    setup: undefined,
+    forAgent: true,
+  };
+  await page.route('**/auth/team/computers', (route) =>
+    json(route, 200, [declined])
+  );
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+
+  await page.goto('/');
+  const row = page.locator('[data-runtime-row="Maya\'s Agent Box"]');
+  await expect(row).toContainText("Payment declined · for Maya's Agent Box");
+  await expect(row.getByRole('button')).toHaveCount(0);
+  await shoot(page, 'payment-declined');
+});
+
 test('a team without a paid plan is told so and sent to Billing', async ({
   page,
 }) => {

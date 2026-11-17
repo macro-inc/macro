@@ -8,7 +8,13 @@ type Agent = {
   personality: string;
   createdBy: string | null;
   computerId: string | null;
-  status: 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+  status:
+    | 'provisioning'
+    | 'running'
+    | 'paused'
+    | 'failed'
+    | 'released'
+    | 'payment_declined';
   createdAt: string;
 };
 
@@ -173,6 +179,7 @@ async function scriptAuthService(
       paused: 'stopped',
       failed: 'failed',
       released: 'released',
+      payment_declined: 'payment_declined',
     }[agent.status],
     billing: 'active',
     setup:
@@ -671,6 +678,23 @@ test('a member hears the agent is ready, without Bring your AI', async ({
     0
   );
   await screenshot(page, testInfo, 'ready-notification-member');
+});
+
+test('a declined agent reads Payment declined, offers no Retry, and leaves once taken back', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 50, {
+    agents: [ada('payment_declined')],
+  });
+  await page.goto('/');
+  const agentRow = page.locator('[data-member-kind="agent"]');
+  await expect(agentRow.getByRole('status')).toHaveText('Payment declined');
+  await expect(agentRow.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+  await screenshot(page, testInfo, 'members-payment-declined');
+
+  // The roster keeps polling until the agent is taken off the team.
+  backend.agents = [];
+  await expect(agentRow).toHaveCount(0, { timeout: 15_000 });
 });
 
 test('a failed setup notifies with Retry, which sets the same computer up again', async ({
