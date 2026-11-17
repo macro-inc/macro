@@ -40,6 +40,7 @@ pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
 pub mod microsoft_emulator;
+pub mod model_emulator;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;

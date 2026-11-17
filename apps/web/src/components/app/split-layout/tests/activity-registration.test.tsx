@@ -231,12 +231,26 @@ async function renderActivity() {
   return result;
 }
 describe('calendar layout registration', () => {
-  it('owns desktop chrome but keeps the floating split header on touch', () => {
+  it('owns its pane chrome on touch as well as desktop', () => {
     expect(resolveComponent('calendar').initialMeta).toMatchObject({
       splitPanelLayout: 'composable',
     });
     state.touch = () => true;
-    expect(resolveComponent('calendar').initialMeta).toBeUndefined();
+    expect(resolveComponent('calendar').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+  });
+});
+
+describe('Chat layout registration', () => {
+  it('owns its pane chrome on touch as well as desktop', () => {
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
   });
 });
 

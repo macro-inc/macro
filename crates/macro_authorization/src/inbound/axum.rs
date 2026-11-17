@@ -50,7 +50,7 @@ pub use policy::{
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
-pub use program::{CODE_EXECUTION_HEADER, is_agent_run};
+pub use program::{CODE_EXECUTION_HEADER, PROGRAM_SIGN_IN_REFUSAL, is_agent_run, is_program_run};
 pub use user_api_key::USER_API_KEY_HEADER;
 
 /// The authenticated entity responsible for a request.
@@ -151,6 +151,7 @@ pub(super) fn authenticated_user(
         origin,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id,
         user_context,
     })

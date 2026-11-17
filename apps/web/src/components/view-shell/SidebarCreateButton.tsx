@@ -14,21 +14,23 @@ export function SidebarCreateHeader(props: {
   createAction?: JSX.Element;
   search?: () => JSX.Element;
   searchLabel?: string;
+  searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
 }) {
   return (
     <header class="flex shrink-0 flex-col">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          search={props.search}
-          searchLabel={props.searchLabel}
-          actions={props.actions}
-        >
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header
+        search={props.search}
+        searchLabel={props.searchLabel}
+        searchOpen={props.searchOpen}
+        onSearchOpenChange={props.onSearchOpenChange}
+        actions={props.actions}
+      >
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
       <ViewSidebar.Primary>
         {props.createAction ?? (
           <SidebarCreateButton label={props.label} onCreate={props.onCreate} />

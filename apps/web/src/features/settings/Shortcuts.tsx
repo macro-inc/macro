@@ -1022,7 +1022,6 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Email',
     items: [
-      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
       { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
       {
         keys: ['shift+m'],

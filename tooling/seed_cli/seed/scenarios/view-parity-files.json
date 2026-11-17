@@ -1,0 +1,108 @@
+{
+  "scenario": "view-parity-files",
+  "description": "One person with a file of each type the file block headers split covers, for the view parity harness.",
+  "users": {
+    "pat": {
+      "email": "pat@seed.macro.local",
+      "first_name": "Pat",
+      "roles": [
+        "professional_subscriber"
+      ]
+    }
+  },
+  "documents": {
+    "image": {
+      "owner": "pat",
+      "name": "Parity image",
+      "file": "parity-image.png"
+    },
+    "video": {
+      "owner": "pat",
+      "name": "Parity video",
+      "file": "parity-video.mp4"
+    },
+    "code": {
+      "owner": "pat",
+      "name": "Parity code",
+      "file": "parity-code.ts"
+    },
+    "archive": {
+      "owner": "pat",
+      "name": "Parity archive",
+      "file": "parity-archive.zip"
+    },
+    "pdf": {
+      "owner": "pat",
+      "name": "Parity PDF",
+      "file": "pdf.pdf"
+    },
+    "canvas": {
+      "owner": "pat",
+      "name": "Parity canvas",
+      "file": "canvas.canvas"
+    },
+    "fig": {
+      "owner": "pat",
+      "name": "Parity design",
+      "file": "parity-design.fig"
+    },
+    "psd": {
+      "owner": "pat",
+      "name": "Parity layers",
+      "file": "parity-layers.psd"
+    },
+    "ai": {
+      "owner": "pat",
+      "name": "Parity vector",
+      "file": "parity-vector.ai"
+    },
+    "pptx": {
+      "owner": "pat",
+      "name": "Parity slides",
+      "file": "parity-slides.pptx"
+    },
+    "docx": {
+      "owner": "pat",
+      "name": "Parity words",
+      "file": "parity-words.docx"
+    }
+  },
+  "chats": {
+    "chat": {
+      "owner": "pat",
+      "name": "Parity chat"
+    }
+  },
+  "channels": {
+    "parity-room": {
+      "type": "private",
+      "name": "Parity room",
+      "owner": "pat",
+      "members": []
+    }
+  },
+  "projects": {
+    "folder": {
+      "owner": "pat",
+      "name": "Parity folder"
+    }
+  },
+  "calls": {
+    "call": {
+      "channel": "parity-room",
+      "created_by": "pat",
+      "share_with_team": false,
+      "participants": [
+        "pat"
+      ],
+      "duration_minutes": 5,
+      "name": "Parity call",
+      "transcript": [
+        {
+          "speaker": "pat",
+          "text": "A short parity call."
+        }
+      ]
+    }
+  }
+}

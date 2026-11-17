@@ -31,8 +31,8 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro searches emails, messages, documents, tasks, and calls together. People and agents search the same workspace, with timestamps and links back to the original work. Find the customer’s request, follow the discussion, and see what happened next.',
     ],
     Email: [
-      'There have been a million email clients, each doing something well, but none felt like the complete package to us. We wanted superhuman speed, all our accounts in one inbox, and agents that could help without us copying everything into ChatGPT.',
-      'Macro Mail brings those pieces together. Your emails are connected to your team’s conversations, tasks, and customer records. Share a thread in chat, turn a request into a task, or ask an agent to draft a reply using the context already in your workspace.',
+      'There have been a million email clients, each doing something well, but none that had everything we wanted: superhuman speed, all our accounts in one inbox, auto-organized, and [[Macro Agents]] with frontier intelligence.',
+      'Macro Mail does all of that, and makes email collaborative inside [[Macro Chat]], deeply linked to [[Macro Tasks]] and automatically updates your [[Macro CRM]] from emails.',
     ],
     Tasks: [
       'The problem with traditional task managers is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
@@ -47,8 +47,7 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       "Macro Docs gives people and agents the same live document to work on. It uses CRDTs, which merge edits from multiple collaborators, and routes editing through a nearby server so edits feel like you're on the same computer. Documents are @linked to the rest of your work, and agents can edit alongside you or update them in the background. And when you just want to write, it's a clean, responsive editor. You don't need to use AI to get a good writing tool.",
     ],
     Calls: [
-      'A lot of the important context in a company is spoken, not written. Somebody explains what the customer actually needs on a call, but the rest of the team gets a few bullet points, and the agent gets nothing. We wanted more than a recording to look up later: we wanted what happened on the call to inform the next piece of work.',
-      "Macro Calls feed into team memory. Start a call from your channel, and the recording, transcript, and summary stay in your workspace. Calls shared with the team become context your agents can use when drafting a follow-up, updating a document, or working through a task. You don't have to explain the meeting again to get useful work out of it.",
+      `A lot of the important context in a company is spoken, and at least until we have robots in the room with us, this context doesn't fully make it to our agents. Macro Calls fix this by injecting everything your team says into team-level memory. Your coding agents know about what was said at standup. Your marketing agents know about the idea kicked around on a call. All of this "just works" without sharing calls and worrying about permissions.`,
     ],
     CRM: [
       'The problem we had with standalone CRM was that the important conversations about a deal happened outside it, usually in Slack.',
