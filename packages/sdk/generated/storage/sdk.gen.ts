@@ -4850,7 +4850,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Gets the users recently deleted items.
+     * Gets one page of the user's trashed documents, chats and folders, most
+     * recently trashed first.
      */
     public recentlyDeleted<ThrowOnError extends boolean = false>(options?: Options<RecentlyDeletedData, ThrowOnError>): RequestResult<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<RecentlyDeletedResponses, RecentlyDeletedErrors, ThrowOnError>({ url: '/recents/deleted', ...options });

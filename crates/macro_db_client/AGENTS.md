@@ -87,6 +87,15 @@ data checks and explicit vault purge. It does not depend on a successful item.
 
 ## Gotchas
 
+- `document_email` has a statement-level `AFTER DELETE` trigger
+  (`document_email_release`, migration `20261116200143`) that queues each
+  document a statement unlinks in `released_email_attachment_documents`, even
+  one still linked elsewhere or already in the Trash, and notifies
+  `email_attachment_documents_released`;
+  document storage drains it. A document already queued is updated, not
+  skipped, so its row stays locked until the deleting transaction commits. It
+  fires once per outer statement, cascades included. Write a moved link before
+  deleting the old one. `tests/released_email_attachment_documents.rs` covers it.
 - `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
   policy history. Selected consent uses its own grant bit and exact revision FK;
   legacy-write/version triggers and mailbox revocation must survive rollbacks.
@@ -107,6 +116,10 @@ data checks and explicit vault purge. It does not depend on a successful item.
   caller with many small sources, because it estimates each at the table's
   average grant count. Keep the fences, and re-measure both paths on a
   production-size seed before changing the limit.
+- `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
+  partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
+  batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must
+  stay in those indexes, and the list must not read without a page limit.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
