@@ -49,6 +49,6 @@ impl RetryDelays {
 
 /// Spread `delay` over three quarters to five quarters of itself; `unit` is
 /// uniform in `[0, 1)`.
-fn jitter(delay: Duration, _unit: f64) -> Duration {
-    delay
+fn jitter(delay: Duration, unit: f64) -> Duration {
+    delay.mul_f64(0.75 + unit / 2.0)
 }

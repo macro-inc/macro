@@ -29,8 +29,9 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// A connection that lasted this long was healthy: its loss is redialed at
 /// once rather than after a backoff step.
 const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
-/// The first redial after a failure; later ones double up to the cap.
-const FIRST_RECONNECT_DELAY: Duration = Duration::from_secs(1);
+/// The first redial after a failure; later ones double up to the cap. Short:
+/// a booting computer's first dial often races its network.
+const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(250);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.

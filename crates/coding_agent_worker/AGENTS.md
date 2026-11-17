@@ -31,6 +31,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+  A failed runtime dial and a dropped event stream retry after 250 ms,
+  doubling to 30 s, each delay jittered (`src/retry_delay.rs`); a runtime
+  connection that held 10 s is redialed at once.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
   embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
@@ -45,8 +48,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   computer-reachable egress URLs; macrod.toml stays the one URL source at runtime).
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
-  retries are safe; a failed claim retries every 250 ms for up to five
-  minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
+  retries are safe; a failed claim retries every 250 ms (jittered a quarter
+  either way, `src/retry_delay.rs`) for up to five minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
   writes only the config, the credential and its markers: no systemd units,
   users or anything under `/etc`, which is read-only on the NixOS guest (the
   image declares every unit). The marker (`<computer id>\n<generation>`)

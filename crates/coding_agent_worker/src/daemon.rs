@@ -308,9 +308,9 @@ fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<
     }
 }
 
-/// The event stream's reconnect delays: doubling from the first to the cap.
+/// The event stream's reconnect delays: 250 ms, doubling to 30 s.
 fn reconnect_delays() -> RetryDelays {
-    RetryDelays::new(Duration::from_secs(2), Duration::from_secs(30))
+    RetryDelays::new(Duration::from_millis(250), Duration::from_secs(30))
 }
 
 enum ServeOutcome {
