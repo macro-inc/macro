@@ -94,7 +94,7 @@ pub struct UpsertScheduledResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, headers, link), err)]
+#[tracing::instrument(skip(ctx, authorization, headers, link, request), err)]
 pub async fn handler(
     Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
