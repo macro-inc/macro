@@ -83,9 +83,8 @@ export function MobileMarkdownHeader(props: {
                 />
               </MobileHeader.Island>
             </Show>
-            {/* No Dispatch Agent here: a phone has no room for it, and the
-                header is the same at every width. Code Actions is in the
-                title menu. */}
+            {/* No Dispatch Agent here: a phone has no room for it. Code
+                Actions is in the title menu. */}
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
               <MobileHeader.Island>
                 <div class="flex shrink-0 items-center gap-1">
