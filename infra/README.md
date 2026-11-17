@@ -5,7 +5,8 @@ Pulumi (TypeScript, Bun) for all of Macro's AWS infrastructure. Production is in
 independently in `us-east-2`.
 
 Each directory under `stacks/` is one Pulumi project with `dev` and `prod` stacks;
-shared components live in `packages/`.
+shared components live in `packages/`. The observability EKS cluster's AWS layer is
+the one exception: OpenTofu in Nix under [`k8s/observability/aws`](k8s/observability/aws/README.md).
 
 Read the [infrastructure guide](../docs/development/infrastructure.md) before
 changing anything here, and the [new service guide](../docs/guides/new-service.md)
