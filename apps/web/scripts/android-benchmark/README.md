@@ -110,6 +110,10 @@ outside the repository because they name account content:
 }
 ```
 
+List rows carry no ids in the page, so the harness finds them by title and
+then checks that the route contains the configured id, failing the step if
+not: pick items whose titles are unique in their list.
+
 Pick a channel with no unread messages (the harness refuses a row that shows
 unread items, because opening it would mark them read) and documents without
 unread comments (the guard sees only unread markers on list rows, which
