@@ -468,6 +468,10 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
 Create scheduled or event-triggered routines through `macro.routines`. A
