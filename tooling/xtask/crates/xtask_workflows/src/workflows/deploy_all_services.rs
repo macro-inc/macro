@@ -9,7 +9,7 @@
 
 use gh_workflow::expr::typed::{
     Expr, Json, Str, all_needs_results, always, cancelled, format, from_json, github, input,
-    matrix, needs, raw, runner, steps, to_json,
+    matrix, needs, runner, steps, to_json, whole_needs,
 };
 use gh_workflow::{
     Concurrency, Env, Event, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
@@ -480,5 +480,5 @@ fn check_deployment_results() -> Step<Run> {
         .run("bun .github/scripts/check-service-deployment-results.ts")
         .shell("bash")
         // The whole `needs` context has no builder.
-        .add_env(("DEPLOYMENT_NEEDS", to_json(raw::<Json>("needs"))))
+        .add_env(("DEPLOYMENT_NEEDS", to_json(whole_needs())))
 }

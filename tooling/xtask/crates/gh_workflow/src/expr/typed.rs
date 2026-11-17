@@ -148,6 +148,11 @@ impl Expr<Str> {
         call("endsWith", [self.ast, suffix.into().ast])
     }
 
+    /// The string as a condition: true unless it is empty.
+    pub fn truthy(self) -> Expr<Bool> {
+        Expr::from_ast(self.ast)
+    }
+
     /// The `'true'`/`'false'` string a step output carries, as a boolean.
     pub fn is_true(self) -> Expr<Bool> {
         self.binary(Op::Eq, Expr::from("true"))
@@ -510,6 +515,17 @@ impl Needs {
     pub fn result(&self) -> Expr<Str> {
         path("needs", &[&self.0, "result"])
     }
+}
+
+/// The whole `needs` context (every needed job's result and outputs), for
+/// `toJSON(needs)`.
+pub fn whole_needs() -> Expr<Json> {
+    Expr::from_ast(Ast::Context("needs".to_string()))
+}
+
+/// The whole `steps` context of this job, for `toJSON(steps)`.
+pub fn whole_steps() -> Expr<Json> {
+    Expr::from_ast(Ast::Context("steps".to_string()))
 }
 
 /// `needs.*.result`: every needed job's result, for `contains(...)`.

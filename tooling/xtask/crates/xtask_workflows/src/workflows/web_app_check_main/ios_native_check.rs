@@ -39,7 +39,7 @@
 //! stale by then. The job name must stay stable: the release workflow, the
 //! watcher and that label workflow find the job by it.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Json, Str, cancelled, github, raw, to_json};
+use gh_workflow::expr::typed::{self, Bool, Expr, Str, cancelled, github, to_json, whole_steps};
 use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
 use crate::workflows::{runners, steps, vars};
@@ -270,7 +270,7 @@ fn pr_comment() -> Step<Use> {
                     .eq(github().repository()),
             ),
         )
-        .add_env(("IOS_GATE_STEPS", to_json(raw::<Json>("steps"))))
+        .add_env(("IOS_GATE_STEPS", to_json(whole_steps())))
         .add_with((
             "script",
             include_str!("../scripts/ios_native_check_comment.js"),

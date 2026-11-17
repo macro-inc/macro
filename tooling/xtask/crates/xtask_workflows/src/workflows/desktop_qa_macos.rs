@@ -10,7 +10,7 @@
 //! WebKit. The harness is `apps/web/tests/macos/qa.mjs`.
 //! Generated into `desktop_qa_macos.yml`.
 
-use gh_workflow::expr::typed::{Bool, Str, cancelled, format, github, input, raw, runner};
+use gh_workflow::expr::typed::{Str, cancelled, format, github, input, runner};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
@@ -68,7 +68,8 @@ pub fn desktop_qa_macos() -> Workflow {
 
 fn run_name() -> String {
     // `inputs.report` is a string; only its truthiness picks the suffix.
-    let report_suffix = raw::<Bool>("inputs.report")
+    let report_suffix = input::<Str>("report")
+        .truthy()
         .then_else(format(" [{0}]", [input::<Str>("report").into_ast()]), "");
     format!(
         "macOS QA {} {}{report_suffix}",

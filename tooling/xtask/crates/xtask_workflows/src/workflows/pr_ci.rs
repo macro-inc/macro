@@ -23,7 +23,7 @@
 //! their label and sets their status.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Json, Str, cancelled, github, needs, raw, steps, to_json,
+    Bool, Expr, Str, cancelled, github, needs, steps, to_json, whole_needs,
 };
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step,
@@ -296,6 +296,6 @@ fn gate() -> Job {
         })
         .add_step(
             with_pull_request(gate_step("Set the CI gate status", "finish"))
-                .add_env(("NEEDS", to_json(raw::<Json>("needs")))),
+                .add_env(("NEEDS", to_json(whole_needs()))),
         )
 }
