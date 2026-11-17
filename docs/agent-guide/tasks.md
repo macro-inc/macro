@@ -913,19 +913,17 @@ Without a preset, the standard property row and draft are used. The shared
 composer's only flag gate is the Customer / Contact pill below. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
-With PostHog `enable-crm-activity` on, every opening of the
+Every opening of the
 composer, and Universal Input's task mode, shows one **Customer / Contact** pill, a single-choice picker of companies
 and contacts that writes the Companies and Contacts properties. Picking a company
 leaves the contact unset; picking a contact also sets its company, and the pill
 shows the contact with both named on hover. A team with no CRM records sees the
 pill with "No customers or contacts found". Neither property is offered separately
-under **Add property** while the pill shows. With either flag off, there is no pill
-and both stay under **Add property**.
+under **Add property**.
 
-Customers supplies its preset when `enable-crm-activity` is on. Record-level task
+Customers supplies its preset. Record-level task
 creation prefills the company or contact, including the contact's company when
-already loaded. With the CRM flag off or loading, record-level creation uses the
-standard property row while retaining its record-scoped draft and associations. **Add property** opens the same property
+already loaded. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -986,12 +984,6 @@ check the selected value survives. Repeat on touch with the stacked picker sheet
 Disable the flag and confirm the original task-button behavior remains unchanged.
 
 ## Projects
-
-Projects are enabled by default in development. Production rollout is gated by
-PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
-When off, Tasks hides the Projects section and mobile picker, project column,
-and assignment actions. A saved project view temporarily shows My tasks without
-overwriting the saved selection.
 
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks

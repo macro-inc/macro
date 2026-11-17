@@ -20,12 +20,9 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and to show the
-Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. CRM supplies its task-composer preset, and creating any task shows the
+Customer / Contact pill. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,

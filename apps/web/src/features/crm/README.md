@@ -167,12 +167,9 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
-Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and the Customer / Contact pill in the task composer and
-Universal Input's task mode, which read it through `customerContactEnabled`. It defaults off everywhere and can be overridden locally with
-`VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
-queries; saved activity links wait for flag loading, then fall back to Companies.
+The workspace activity tabs are labelled Sales Tasks, Sales Email, Sales Notes and
+Sales Calls. CRM supplies its composer context, and the task composer and Universal
+Input's task mode show the Customer / Contact pill.
 The standard record task action still associates the task with its record.
 The registry and launcher never read this flag. With no supplied context, the
 standard composer opens immediately. Each opening snapshots its

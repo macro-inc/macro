@@ -7,11 +7,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableCrmActivity,
-  enableCrmLists,
-  enableCrmPipelines,
-} from '@core/constant/featureFlags';
+import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { emailToMacroId, getInitialsFromName } from '@core/user';
@@ -203,7 +199,6 @@ export function createAppCrmContext(): CrmContext {
   const layout = useSplitLayout();
   const panel = useSplitPanel();
   const createContext = useCreateContext();
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const navigate = useNavigate();
   const openCreateItem = async (kind: 'notes' | 'calls') => {
     if (kind === 'calls') {
@@ -226,7 +221,7 @@ export function createAppCrmContext(): CrmContext {
     registerTaskComposerRecord(source) {
       if (!panel) return () => {};
       return createContext.register(panel.handle.id, () => ({
-        task: activityFlag().enabled ? crmTaskComposerContext(source()) : null,
+        task: crmTaskComposerContext(source()),
       }));
     },
     createPipelines: (teamId) => createPipelinesSource(deps, teamId),
@@ -255,10 +250,6 @@ export function createAppCrmContext(): CrmContext {
     copyPipelineLink: copyCrmPipelineLink,
     listsEnabled() {
       const flag = useFeatureFlag(enableCrmLists);
-      return () => flag().enabled;
-    },
-    pipelinesEnabled() {
-      const flag = useFeatureFlag(enableCrmPipelines);
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>

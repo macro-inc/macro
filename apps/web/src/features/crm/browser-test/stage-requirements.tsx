@@ -33,7 +33,6 @@ const context: CrmContext = {
   copyRecordLink: unused,
   createNavigation: unused,
   listsEnabled: unused,
-  pipelinesEnabled: unused,
   createAddToPipeline: unused,
   createCompanyEmails: unused,
   createContactEmails: unused,
