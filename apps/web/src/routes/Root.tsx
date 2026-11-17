@@ -7,6 +7,7 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
+import { flagStore } from '@app/lib/analytics/flag-store';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
@@ -40,6 +41,7 @@ import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
 import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
+import { fetchWebFeatureFlags } from '@queries/auth/web-feature-flags';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -127,6 +129,23 @@ function useUserInfoSideEffects() {
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
+
+  // The backend evaluates the signed-in account's flags when PostHog can't
+  // (`flag-store.ts`); the store is the external system here.
+  createEffect(
+    on(
+      () => {
+        const user = userInfo();
+        return user?.authenticated ? user.id : undefined;
+      },
+      (userId) =>
+        flagStore.setAccount(
+          userId
+            ? { userId, fetchFlags: () => fetchWebFeatureFlags(userId) }
+            : undefined
+        )
+    )
+  );
 
   let identified = false;
   let syncedPlanKey: string | undefined;

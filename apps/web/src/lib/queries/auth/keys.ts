@@ -24,4 +24,5 @@ export const authKeys = createQueryKeys('auth', {
   }),
   userNameSelf: (viewerId: string, session: number) => [viewerId, session],
   userQuota: null,
+  webFeatureFlags: (userId: string) => [userId],
 });

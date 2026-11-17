@@ -2,7 +2,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { Telemetry } from '@macro-inc/observability';
-import type { JsonType } from 'posthog-js';
+import type { JsonType, PostHog } from 'posthog-js';
 import {
   type Accessor,
   createMemo,
@@ -12,6 +12,7 @@ import {
   Show,
   startTransition,
 } from 'solid-js';
+import { flagStore } from './flag-store';
 
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   'PosthogProvider',
@@ -27,38 +28,40 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
       cachedFlags,
       { equals: false }
     );
-    // Distinguishes "flags not fetched yet" from "no flags enabled": both
-    // leave featureFlags empty, but destructive flag-off fallbacks (e.g.
-    // RedirectSplit) must not fire before the answer arrives. Set even on
-    // errorsLoading so a PostHog outage degrades to flags-off, not a hang.
-    const [flagsLoaded, setFlagsLoaded] = createSignal(cachedFlags.length > 0);
-    // Whether the last fetch got no answer at all (blocked, offline, PostHog
-    // down), as opposed to an answer that says a flag is off.
-    const [flagsUnreachable, setFlagsUnreachable] = createSignal(false);
+    const disconnect = flagStore.connect(analytics.posthog);
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
       // Flags usually arrive after first paint and swap flagged subtrees,
       // often to lazy views. A transition keeps the painted UI until the new
       // one is ready instead of flashing Suspense fallbacks in between.
       startTransition(() => {
-        // Order matters: signals propagate synchronously, so flagsLoaded must
-        // only flip after the flag values are in place — the other way around,
-        // flag-off fallbacks fire against the still-empty flag list.
+        // Order matters: signals propagate synchronously, so the store must
+        // settle only after the flag values are in place — the other way
+        // around, flag-off fallbacks fire against the still-empty flag list.
         if (!ctx?.errorsLoading) {
           setFeatureFlags(flags);
         }
-        setFlagsUnreachable(ctx?.errorsLoading === true);
-        setFlagsLoaded(true);
+        flagStore.receiveRemote(ctx?.errorsLoading === true);
       }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
     });
 
-    onCleanup(unsub);
+    onCleanup(() => {
+      unsub();
+      disconnect();
+    });
 
     return {
       instance: analytics.posthog,
       featureFlags,
-      flagsLoaded,
-      flagsUnreachable,
+      // Distinguishes "flags not known yet" from "no flags enabled", so
+      // destructive flag-off fallbacks (e.g. RedirectSplit) wait for an answer
+      // from PostHog, the backend, or a cache. Settles when PostHog fails and
+      // no backend read is pending, so an outage degrades to flags-off, not a
+      // hang.
+      flagsLoaded: flagStore.settled,
+      // Whether the last fetch got no answer at all (blocked, offline, PostHog
+      // down), as opposed to an answer that says a flag is off.
+      flagsUnreachable: flagStore.unreachable,
     };
   }
 );
@@ -101,16 +104,22 @@ function readFeatureFlag<T extends JsonType>(
         return { enabled: false, payload: fallbackPayload, loading: true };
       }
 
-      // The SDK is not reactive. Re-read on each successful refresh, including
-      // payload changes that leave the enabled flag list unchanged.
-      posthog.featureFlags();
-      const result = posthog.instance.getFeatureFlagResult(key);
+      let result: ReturnType<PostHog['getFeatureFlagResult']> | undefined;
+      const resolved = flagStore.resolve(key, () => {
+        result = posthog.instance.getFeatureFlagResult(key);
+        return result?.enabled;
+      });
       const unreachableDefault =
         opts?.enabledWhenUnreachable === true && posthog.flagsUnreachable();
+      // Payloads only come from PostHog; backend flags carry none.
+      const payload =
+        resolved?.source === 'remote' || resolved?.source === 'cache'
+          ? (result?.payload as T | undefined)
+          : undefined;
 
       return {
-        enabled: result?.enabled ?? unreachableDefault,
-        payload: (result?.payload as T) ?? fallbackPayload,
+        enabled: resolved?.enabled ?? unreachableDefault,
+        payload: payload ?? fallbackPayload,
         loading: false,
       };
     },

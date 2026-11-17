@@ -3,10 +3,13 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { FeatureFlagResult, PostHog } from 'posthog-js';
 import { type JSX, lazy, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createFlagStore, type FlagStore } from './flag-store';
 import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 
 const posthog = vi.hoisted(() => ({
   onFeatureFlags: vi.fn<PostHog['onFeatureFlags']>(),
+  reloadFeatureFlags: vi.fn(),
+  get_property: vi.fn(),
   getFeatureFlagResult: vi.fn<PostHog['getFeatureFlagResult']>(),
   featureFlags: { getFlags: vi.fn<() => string[]>() },
   unsubscribe: vi.fn(),
@@ -15,6 +18,18 @@ const posthog = vi.hoisted(() => ({
 vi.mock('./analytics-context', () => ({
   useAnalytics: () => ({ posthog }),
 }));
+
+// A fresh flag store per test; the app shares one module-level store.
+const store = vi.hoisted(() => ({ current: undefined as unknown }));
+vi.mock('./flag-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./flag-store')>();
+  return {
+    ...actual,
+    get flagStore() {
+      return store.current;
+    },
+  };
+});
 
 const channelTags: RemoteFlag = {
   key: 'enable-channel-tags',
@@ -71,7 +86,13 @@ function renderFlag(
   return { result, mount, ...view };
 }
 
+function flagStore() {
+  return store.current as FlagStore;
+}
+
 beforeEach(() => {
+  store.current = createFlagStore();
+  localStorage.clear();
   vi.clearAllMocks();
   posthog.getFeatureFlagResult.mockReset();
   posthog.featureFlags.getFlags.mockReturnValue([]);
@@ -228,4 +249,70 @@ describe('reactive PostHog flags', () => {
       expect(posthog.getFeatureFlagResult).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('backend flags when PostHog fails', () => {
+  const account = (flags: Record<string, boolean | string>) => ({
+    userId: 'macro|flags@example.com',
+    fetchFlags: vi.fn(async () => flags),
+  });
+
+  it('shows a flag released to the user after PostHog times out', async () => {
+    const view = renderFlag();
+    flagStore().setAccount(account({ [channelTags.key]: true }));
+    await new Promise((resolve) => setTimeout(resolve));
+
+    expect(view.result()).toEqual({
+      enabled: true,
+      payload: 'fallback',
+      loading: false,
+    });
+    expect(screen.getByRole('button', { name: 'New label' })).toBeTruthy();
+
+    await failToReachPostHog();
+    expect(view.result().enabled).toBe(true);
+    expect(view.mount).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a flag the user was not given off after PostHog fails', async () => {
+    const view = renderFlag();
+    flagStore().setAccount(account({ [channelTags.key]: false }));
+
+    await failToReachPostHog();
+    expect(view.result().enabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
+  });
+
+  it("lets PostHog's own answer win once it arrives", async () => {
+    const view = renderFlag();
+    flagStore().setAccount(account({ [channelTags.key]: true }));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(view.result().enabled).toBe(true);
+
+    await receiveFlags(flagResult(false, 'remote'));
+    expect(view.result()).toEqual({
+      enabled: false,
+      payload: 'remote',
+      loading: false,
+    });
+  });
+
+  it("prefers the backend over an earlier visit's cache", async () => {
+    posthog.featureFlags.getFlags.mockReturnValue([channelTags.key]);
+    posthog.getFeatureFlagResult.mockReturnValue(flagResult(true, 'cached'));
+    const view = renderFlag();
+    expect(view.result().enabled).toBe(true);
+    const backend = account({ [channelTags.key]: false });
+    flagStore().setAccount(backend);
+    // A returning user reads the backend only once PostHog fails.
+    expect(backend.fetchFlags).not.toHaveBeenCalled();
+
+    await failToReachPostHog(flagResult(true, 'cached'));
+    expect(backend.fetchFlags).toHaveBeenCalledOnce();
+    expect(view.result()).toEqual({
+      enabled: false,
+      payload: 'fallback',
+      loading: false,
+    });
+  });
 });

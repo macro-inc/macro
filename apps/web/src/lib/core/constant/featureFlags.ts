@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import { flagStore } from '@app/lib/analytics/flag-store';
 
 /**
  * This constant reflects whether the app is running locally: under the Vite
@@ -103,15 +104,21 @@ export const enableCarouselCreateMenu = defineFlag({
 });
 
 /**
- * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
- * or `false` if flags have not loaded or the key is unknown.
+ * Env/`default` override wins. Otherwise PostHog's answer this session, the
+ * backend's evaluation, the last one this browser saw, or PostHog's cache, in
+ * that order (`flag-store.ts`); `false` if none has answered or the key is
+ * unknown. Reactive: read in a reactive scope, it updates when flags arrive.
  */
 export function isFeatureEnabled(flag: Flag): boolean {
   if ('key' in flag) {
     if (flag.override !== undefined) {
       return flag.override;
     }
-    return analytics.posthog.isFeatureEnabled(flag.key) ?? false;
+    return (
+      flagStore.resolve(flag.key, () =>
+        analytics.posthog.isFeatureEnabled(flag.key)
+      )?.enabled ?? false
+    );
   }
   return flag.enabled;
 }

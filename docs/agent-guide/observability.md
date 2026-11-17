@@ -508,6 +508,26 @@ Phases you will see:
 - Cold-start and warm-cache methodology is in
   [navigation](navigation.md#cold-start-admission).
 
+## Feature flag loading
+
+Unclassed spans, so every user whose telemetry gate opens exports them
+(`apps/web/src/lib/analytics/flag-store.ts`):
+
+- `feature_flags.load`: one PostHog `/flags` attempt, from its request to the
+  answer. `flags.outcome` is `ok`, `timeout`, `blocked` (no response while
+  online, or a retry PostHog never sent: `flags.errors=not_sent`) or `error`;
+  `flags.errors` is PostHog's error list, `flags.attempt` counts the first
+  request and the two retries (5 s, then 30 s), `flags.had_cache` whether an
+  earlier visit's flags were there.
+- `feature_flags.resolve`: from the first request until flags can be read.
+  `flags.source` is `remote`, `bootstrap`, `persisted_bootstrap`, `cache` or
+  `none`; `flags.remote` and `flags.bootstrap` give each source's state then.
+- `feature_flags.bootstrap`: the backend read (`flags.trigger` `cold` or
+  `fallback`, `flags.outcome`, `flags.count`), with the HTTP request and the
+  auth service's `/user/feature_flags` span under it.
+- `feature_flags.recovered`: from the first failure until PostHog answered
+  later in the session.
+
 ## Runtime CPU and memory samples
 
 `app.runtime.sample` is a perf-class point sample per ~60 s of visible-tab time

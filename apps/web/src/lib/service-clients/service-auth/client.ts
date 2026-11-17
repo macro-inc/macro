@@ -94,6 +94,7 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
+import type { WebFeatureFlags } from './generated/schemas/webFeatureFlags';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -377,6 +378,15 @@ export const authServiceClient = {
       userId: data.user_id,
       organizationId: data.organization_id ?? undefined,
     }));
+  },
+  /**
+   * The caller's web feature flags, evaluated by the backend: the fallback
+   * when PostHog's own flag request fails or times out.
+   */
+  async getWebFeatureFlags() {
+    return fetchWithAuth<WebFeatureFlags>(`${authHost}/user/feature_flags`, {
+      method: 'GET',
+    });
   },
   async sessionLogin(args: { session_code: string }) {
     // A session code redeems once. A server error leaves it redeemable (the

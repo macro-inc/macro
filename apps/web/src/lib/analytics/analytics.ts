@@ -26,6 +26,7 @@ import type { Team } from '@service-auth/generated/schemas/team';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
+import { FEATURE_FLAG_REQUEST_TIMEOUT_MS, flagStore } from './flag-store';
 import { normalizeAnalyticsEmail } from './mobileCaptureIdentity';
 import { getPlanAnalyticsProperties } from './planProperties';
 import {
@@ -198,7 +199,13 @@ const initializePosthog = (instance: PostHog) => {
     // on the mobile-email desktop link so that path is its own campaign field.
     custom_campaign_params: ['signup_flow'],
     // Runs before the first `/flags` request.
-    loaded: setFlagEnvironment,
+    loaded: (posthog) => {
+      setFlagEnvironment(posthog);
+      flagStore.markRequestStart();
+    },
+    // The default 3 s times out on slow boots, and a timed-out answer is
+    // discarded. Cached and backend flags (`flag-store.ts`) cover the wait.
+    feature_flag_request_timeout_ms: FEATURE_FLAG_REQUEST_TIMEOUT_MS,
     prepare_external_dependency_script: (script) => {
       const url = new URL(script.src);
 

@@ -83,10 +83,14 @@ flag is a type error.
 
 These are the mistakes past flagged launches had to fix:
 
-- **Loading is not off.** Until PostHog answers, `isFeatureEnabled` returns
+- **Loading is not off.** Until a source answers, `isFeatureEnabled` returns
   `false` and `useFeatureFlag` returns `{ loading: true }`. A cold deep link
   must wait for `loading` to clear rather than fall back to the off path (see
-  `block-database`'s `load`), or the page flashes or degrades.
+  `block-database`'s `load`), or the page flashes or degrades. Sources, first
+  that answered wins (`lib/analytics/flag-store.ts`): PostHog this session,
+  the backend's `/user/feature_flags` (read on a cold load and whenever
+  PostHog fails), the last backend answer this browser saw, then PostHog's
+  cache from an earlier visit. A late answer reaches every reactive reader.
 - **Read reactively** (FE-52): call `isFeatureEnabled` / `useFeatureFlag` inside
   a reactive scope, never snapshot it at mount or module load.
 - **Gate every entry point**: routes, deep links, previews, copy-link,

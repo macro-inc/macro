@@ -37,32 +37,21 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
   if (!import.meta.env.VITE_POSTHOG_API_KEY) return false;
 
-  const { analytics } = await import('@app/lib/analytics');
+  const [{ analytics }, { FEATURE_FLAG_REQUEST_TIMEOUT_MS, flagStore }] =
+    await Promise.all([
+      import('@app/lib/analytics'),
+      import('@app/lib/analytics/flag-store'),
+    ]);
   const flag = 'enable-browser-otel';
-  const current = analytics.posthog.isFeatureEnabled(flag);
-  if (current !== undefined) return current;
-
-  return new Promise((resolve) => {
-    let unsubscribe: (() => void) | undefined;
-    let settled = false;
-    const timeout = window.setTimeout(() => finish(false), 3_000);
-
-    const finish = (enabled: boolean) => {
-      settled = true;
-      window.clearTimeout(timeout);
-      unsubscribe?.();
-      resolve(enabled);
-    };
-
-    unsubscribe = analytics.posthog.onFeatureFlags((_flags, _variants, ctx) => {
-      finish(
-        !ctx?.errorsLoading &&
-          (analytics.posthog.isFeatureEnabled(flag) ?? false)
-      );
-    });
-
-    if (settled) unsubscribe();
-  });
+  // Spans buffer until this resolves, so wait for a fresh answer from PostHog
+  // or the backend before falling back to the last backend answer or
+  // PostHog's cache. Otherwise a user whose flags fail exports nothing,
+  // including the spans that say why.
+  await flagStore.whenAnswered(FEATURE_FLAG_REQUEST_TIMEOUT_MS + 5_000);
+  return (
+    flagStore.resolve(flag, () => analytics.posthog.isFeatureEnabled(flag))
+      ?.enabled ?? false
+  );
 }
 
 /**

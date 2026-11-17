@@ -151,7 +151,9 @@ lists every root and attribute.
 Four layers decide whether a span reaches Datadog:
 
 1. **The global gate.** Built apps (browser and desktop) export only where
-   the `enable-browser-otel` PostHog flag is on; the Vite dev server exports
+   the `enable-browser-otel` PostHog flag is on, resolved like any remote flag
+   (`flag-store.ts`), so a user whose PostHog request fails still exports
+   through the backend's answer; the Vite dev server exports
    whenever a collector is configured, and `VITE_ENABLE_BROWSER_OTEL`
    overrides both (`observability/browser.ts`). Spans are buffered from boot
    and exported once enablement resolves; nothing is sent before it.
