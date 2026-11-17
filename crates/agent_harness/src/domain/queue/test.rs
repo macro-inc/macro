@@ -463,6 +463,24 @@ fn an_entry_stored_without_a_prompter_reads_as_a_persons() {
     );
 }
 
+/// An entry stored with a prompter this build doesn't know is a program's,
+/// never a person's.
+#[test]
+fn an_entry_stored_with_an_unknown_prompter_reads_as_a_programs() {
+    let stored: StoredQueuedAction = serde_json::from_value(serde_json::json!({
+        "actionId": AgentActionId::mint(),
+        "action": AgentAction::prompt("approve the review"),
+        "createdAt": "2026-11-01T00:00:00Z",
+        "prompter": "bogus",
+    }))
+    .unwrap();
+    assert_eq!(stored.prompter, PrompterKind::Program);
+    assert_eq!(
+        QueuedEntry::from_stored(stored).unwrap().prompter_kind(),
+        PrompterKind::Program
+    );
+}
+
 /// A program's turn spends the owner's access as their own turn does; only
 /// the checks for a person's decision tell the two apart.
 #[test]
@@ -477,12 +495,13 @@ fn a_programs_turn_acts_with_the_owners_access() {
     assert_eq!(prompter.acting_user(), Some(&owner));
 }
 
-/// `turn_prompter_kind` rows from before `program` existed read as they did.
+/// An unknown `turn_prompter_kind` reads as the least-trusted kind, never as
+/// a person's.
 #[test]
 fn stored_prompter_kinds_read_back() {
     assert_eq!(PrompterKind::from_stored("user"), PrompterKind::User);
     assert_eq!(PrompterKind::from_stored("system"), PrompterKind::System);
     assert_eq!(PrompterKind::from_stored("program"), PrompterKind::Program);
-    assert_eq!(PrompterKind::from_stored("unknown"), PrompterKind::User);
+    assert_eq!(PrompterKind::from_stored("bogus"), PrompterKind::Program);
     assert_eq!(PrompterKind::Program.as_ref(), "program");
 }
