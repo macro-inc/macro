@@ -31,6 +31,7 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         &self,
         _: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
+        _: agent_code_mode::domain::ProgramLanguage,
         _: tokio_util::sync::CancellationToken,
     ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
     {

@@ -69,6 +69,13 @@ pub enum ProgramLanguage {
     Ocaml,
 }
 
+impl ProgramLanguage {
+    /// Whether this is the default, JavaScript.
+    pub fn is_javascript(&self) -> bool {
+        *self == Self::Javascript
+    }
+}
+
 impl From<ProgramLanguage> for code_execution::domain::Language {
     fn from(language: ProgramLanguage) -> Self {
         match language {
@@ -153,7 +160,9 @@ pub struct ExecutionRecord {
     /// The submitted program: a JavaScript module or an OCaml `main.ml`.
     pub source: String,
     /// The language `source` is written in; historical records are JavaScript.
-    #[serde(default)]
+    /// JavaScript, the default, is left out, so records of sessions without
+    /// OCaml serialize as they did before languages.
+    #[serde(default, skip_serializing_if = "ProgramLanguage::is_javascript")]
     pub language: ProgramLanguage,
     /// For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
     /// against (SDK version plus a hash of its interfaces).

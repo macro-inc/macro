@@ -153,7 +153,7 @@ impl CodeModeService {
         let environment = match self
             .0
             .credentials
-            .issue(&identity, &request.source, cancel.clone())
+            .issue(&identity, &request.source, record.language, cancel.clone())
             .await
         {
             Ok(environment) => environment,

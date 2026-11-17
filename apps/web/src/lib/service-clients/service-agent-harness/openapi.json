@@ -6797,7 +6797,7 @@
           },
           "language": {
             "$ref": "#/components/schemas/ProgramLanguage",
-            "description": "The language `source` is written in; historical records are JavaScript."
+            "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of sessions without\nOCaml serialize as they did before languages."
           },
           "result": {
             "description": "JSON returned by the program, if successful."
