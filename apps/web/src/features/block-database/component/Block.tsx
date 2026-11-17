@@ -1,7 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -15,7 +14,6 @@ import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -597,20 +595,6 @@ function DatabaseSkeleton() {
   );
 }
 
-const DatabaseBlock: Component = () => {
-  const flag = useFeatureFlag(enableDatabases);
-  return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <div class="grid size-full place-items-center p-6 text-sm text-ink-muted">
-          Databases are not enabled for this account.
-        </div>
-      }
-    >
-      <Block />
-    </Show>
-  );
-};
+const DatabaseBlock: Component = () => <Block />;
 
 export default DatabaseBlock;

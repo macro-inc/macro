@@ -962,8 +962,8 @@ input, personal suggestions are recent-first rather than domain/brevity-weighted
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
-Partial synchronization remains visibly incomplete. Each field owns its query; use
-**Next options** or PageDown for another window. Scoped thread addresses remain
+Partial synchronization remains visibly incomplete. Each field owns its query;
+scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also
 finds it. Paging, closing, changing sender and searching must preserve selected
 custom/off-page chips. After selecting a custom address, search for a different
@@ -1138,7 +1138,7 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts on for an inbox, which
+With read receipts on for an inbox, which
 is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
@@ -1691,7 +1691,7 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
-Behind `enable-email-saved-views` (on in dev). A saved view is a named
+A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 

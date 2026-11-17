@@ -688,7 +688,8 @@ for the first three:
 `tsx-no-device-composition` ignores two lists of files: the entries, which hold
 each view's one switch, and "Not yet split", a baseline of files that predate
 the rule. When you split a view, delete its files from the baseline and add its
-entry. Never add a file to the baseline.
+entry. Add a file to the baseline only when its view's split is already a
+task, named in a comment on the file's line.
 
 The four feature-layer rules have warning severity and cover only the feature
 paths registered in their `files` lists. They do not automatically enforce every

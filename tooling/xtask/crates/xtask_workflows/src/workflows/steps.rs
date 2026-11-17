@@ -454,6 +454,33 @@ pub fn node_script(source: &str) -> String {
     )
 }
 
+/// Post to the Macro Alerts channel through its webhook
+/// ([`vars::MACRO_BUILD_ALERT_WEBHOOK_URL`], with
+/// [`vars::MACRO_BUILD_ALERT_BOT_TOKEN`]). `set_message` is bash that sets
+/// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
+/// which [`runners::Runner::Small`] has.
+pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
+    let post = indoc::indoc! {r#"
+        if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          exit 1
+        fi
+        jq -n --arg content "$message" '{content: $content}' |
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --header 'Content-Type: application/json' \
+            --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
+            --data-binary @- "$MACRO_WEBHOOK_URL"
+    "#};
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\n{}\n{post}",
+            set_message.trim_end()
+        ))
+        .shell("bash")
+        .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
+        .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
+}
+
 /// `sccache --show-stats` at the end of a job (never fails the job).
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")

@@ -252,7 +252,7 @@ state cannot disagree because they retained separate snapshots.
 
 Production compose and thread composition no longer fetch the complete personal
 contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
-To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+To/Cc/Bcc input; the input owns its open/query lifetime and one growing, bounded list of pages.
 The field is required at composition boundaries, with explicit `undefined` for
 hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
 `recipients` and reply-session options contain scoped extras and thread addresses,
@@ -550,7 +550,6 @@ provider MIME or parses ICS.
 When an already-loaded thread's saved invitations change, that thread's calendar
 resolution is revalidated in the background; its first load or a switch between threads
 does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
-Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
@@ -742,13 +741,25 @@ general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
 
+## Agent program reads of sign-in mail
+
+A program (`macro_authorization::is_program_run`) never reads one of Macro's
+own sign-in emails: a sign-in code or verification link would let it sign in
+as the user. Every email-service response, and the storage service's REST
+`/items` and `/search` responses, pass `rewrite_program_json` with
+`models_email::sign_in_email::hide_sign_in_emails`, which replaces the
+subject, snippet, body, headers and search highlights of any message or
+thread from a sign-in sender. `GET /email/messages/{id}/eml` refuses such a
+message, and GraphQL refuses programs. A person reads the email whole.
+
 ## Agent program sends
 
 An agent's program (a token with agent attribution, or a code-mode request
 marked by `x-macro-code-execution` whose token signs no program;
 `macro_authorization::is_agent_run`) never sends
-an email the user has not seen. The REST send (`POST /email/messages`) answers
-it 403. It sends through a session review (`execution.reviews.create({kind:
+an email the user has not seen. The REST send (`POST /email/messages`) and the
+calendar invite forward (`POST /email/calendar-events/{event_id}/forward`)
+answer it 403. It sends through a session review (`execution.reviews.create({kind:
 'email'})`), whose card the user submits, or, for a prompt from a channel or
 document thread, on the user's quoted approval:
 

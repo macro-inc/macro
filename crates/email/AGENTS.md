@@ -213,7 +213,8 @@ tools — hexagonal, heavily feature-gated.
   display name is stored on the draft row (`from_name`), not only on the
   shared sender contact, which keeps an existing name and drops names for
   role addresses such as `support@`.
-- The send route refuses an agent's program (`refuse_program_send`, 403), and
+- The send route and `email_service`'s calendar invite forward refuse an
+  agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
   (`SendEmail`/`SendConfirmedEmail`), or a confirmed draft schedule. Keep any

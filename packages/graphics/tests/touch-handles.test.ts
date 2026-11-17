@@ -147,6 +147,42 @@ it('takes the corner when the finger also covers the strip drawn along an edge',
   expect(editor.getSession().transform?.handle).toBe('se');
 });
 
+it('moves a thin shape from its middle, under the strips drawn along its edges', () => {
+  // 8px tall: the strip drawn along each long edge covers the whole shape.
+  const { editor, pointer, size, drawnHandle } = setup([
+    rectangle({ id: 'thin', x: 100, y: 250 }, 200, 8, 'a2'),
+  ]);
+  editor.select('thin');
+
+  const strip = drawnHandle('n');
+  pointer('touch', 'pointerdown', 200, 254, strip);
+  pointer('touch', 'pointermove', 230, 274);
+  expect(editor.getSession().transform?.kind).toBe('move');
+  pointer('touch', 'pointerup', 230, 274);
+  expect(size('thin')).toMatchObject({ width: 200, height: 8 });
+
+  // A cursor on the same strip resizes, as it always has.
+  pointer('mouse', 'pointerdown', 200, 254, strip);
+  pointer('mouse', 'pointermove', 200, 244);
+  expect(editor.getSession().transform?.handle).toBe('n');
+  pointer('mouse', 'pointerup', 200, 244);
+});
+
+it('gives a finger the handle it lands on, even over a neighbour', () => {
+  // A shape painted where the rotation knob stands, 32px above the top edge.
+  const { editor, pointer, drawnHandle } = setup([
+    rectangle({ id: 'neighbour', x: 170, y: 40 }, 60, 50, 'a2'),
+  ]);
+  editor.select('filled');
+
+  const knob = drawnHandle('rotate');
+  pointer('touch', 'pointerdown', 200, 68, knob);
+  pointer('touch', 'pointermove', 230, 78);
+
+  expect(editor.getSession().transform?.kind).toBe('rotate');
+  expect(editor.getSession().selectedIds).toEqual(['filled']);
+});
+
 it('changes nothing when a finger only taps beside the selection, and deselects', () => {
   const { editor, pointer, size } = setup();
   editor.select('filled');

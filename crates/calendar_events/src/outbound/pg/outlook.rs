@@ -135,9 +135,15 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     // cannot safely identify what to retire. Reconcile the view.
                     reset_cursor(&mut tx, lease.id).await?;
                 } else {
+                    let mut pending = if lease.near_window {
+                        nearest_first(&page.members, chrono::Utc::now())
+                    } else {
+                        vec![]
+                    };
                     let (ids, masters): (Vec<_>, Vec<_>) = page
                         .members
                         .into_iter()
+                        .map(|member| (member.provider_id, member.master_id))
                         .collect::<std::collections::BTreeMap<_, _>>()
                         .into_iter()
                         .unzip();
@@ -170,13 +176,16 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                         .await
                         .map_err(report)?
                     };
-                    let pending: Vec<_> = masters
-                        .into_iter()
-                        .chain(removed.into_iter().filter_map(|r| r.master_id))
-                        .chain(skipped_before)
-                        .collect::<std::collections::BTreeSet<_>>()
-                        .into_iter()
-                        .collect();
+                    let ordered: std::collections::BTreeSet<_> = pending.iter().cloned().collect();
+                    pending.extend(
+                        masters
+                            .into_iter()
+                            .chain(removed.into_iter().filter_map(|r| r.master_id))
+                            .chain(skipped_before)
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .filter(|id| !ordered.contains(id)),
+                    );
                     sqlx::query!(r#"UPDATE calendar_outlook_work SET page_loaded=true,pending_ids=$2,next_page=$3,terminal_cursor=$4,
                         visited_pages=array_append(visited_pages,COALESCE(page_cursor,'initial')) WHERE id=$1"#,lease.id,&pending,page.next,page.delta).execute(&mut *tx).await.map_err(report)?;
                 }

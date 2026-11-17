@@ -100,8 +100,7 @@ export function MobileCanvasInsertMenu(props: {
   location: CanvasInsertLocation | undefined;
   onSelect: (asset: CanvasAsset, mode: CanvasInsertMode) => void;
   onUpload: () => void;
-  /** Absent while artifacts are off for this user. */
-  onArtifact?: () => void;
+  onArtifact: () => void;
   onClose: () => void;
 }) {
   // The picker chosen for one opening of the menu. Remembering which opening

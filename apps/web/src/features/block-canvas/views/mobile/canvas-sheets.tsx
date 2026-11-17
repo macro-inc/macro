@@ -344,8 +344,7 @@ export function MobileCanvasInsertSheet(props: {
   onMedia: () => void;
   onUpload: () => void;
   onReference: () => void;
-  /** Absent while artifacts are off for this user. */
-  onArtifact?: () => void;
+  onArtifact: () => void;
 }) {
   return (
     <CanvasSheet title="Attach" open={props.open} onClose={props.onClose}>
@@ -357,11 +356,7 @@ export function MobileCanvasInsertSheet(props: {
           onClick={props.onUpload}
         />
         <SheetRow icon={Link} label="Reference" onClick={props.onReference} />
-        <Show when={props.onArtifact}>
-          {(onArtifact) => (
-            <SheetRow icon={Code} label="Artifact" onClick={onArtifact()} />
-          )}
-        </Show>
+        <SheetRow icon={Code} label="Artifact" onClick={props.onArtifact} />
       </div>
     </CanvasSheet>
   );
