@@ -20,9 +20,26 @@ class TestPointerEvent extends MouseEvent {
 }
 vi.stubGlobal('PointerEvent', TestPointerEvent);
 
+// Two fingers move the camera once per animation frame. A test runs the frame
+// itself, after each move, so the next line sees where the camera went. (Tests
+// that fake the timers get theirs instead; a lift applies what is pending.)
+const frames = new Map<number, FrameRequestCallback>();
+let nextFrame = 0;
+vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+  frames.set(++nextFrame, callback);
+  return nextFrame;
+});
+vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+const runFrame = () => {
+  const due = [...frames.values()];
+  frames.clear();
+  for (const callback of due) callback(performance.now());
+};
+
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   cleanups.splice(0).forEach((cleanup) => cleanup());
+  frames.clear();
   vi.useRealTimers();
 });
 
@@ -79,6 +96,10 @@ function setup(options: GraphicsInputOptions) {
     });
     Object.defineProperty(event, 'timeStamp', { value: now });
     viewport.dispatchEvent(event);
+    runFrame();
+    // With the timers faked, the frame after a move is theirs to run.
+    if (type === 'pointermove' && vi.isFakeTimers())
+      vi.advanceTimersToNextFrame();
   };
   /** One finger's event; the first finger down is the primary pointer. */
   const finger = (
@@ -405,4 +426,37 @@ it('leaves a single finger to the tool', () => {
   finger(1, 'pointerup', 140, 130);
 
   expect(editor.getCamera()).toEqual({ x: 40, y: 30, scale: 1 });
+});
+
+it('moves the camera once a frame however often the fingers report', () => {
+  const { editor, viewport } = setup({ tool: () => 'pan' });
+  const moves = vi.fn();
+  cleanups.push(editor.subscribeCamera(moves));
+  // Raw events: the helper above runs a frame after each one.
+  const raw = (id: number, type: string, x: number, y: number) =>
+    viewport.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: id,
+        pointerType: 'touch',
+        isPrimary: id === 1,
+        buttons: 1,
+        clientX: x,
+        clientY: y,
+      })
+    );
+  raw(1, 'pointerdown', 200, 200);
+  raw(2, 'pointerdown', 300, 200);
+  moves.mockClear();
+
+  raw(1, 'pointermove', 180, 200);
+  raw(2, 'pointermove', 320, 200);
+  raw(1, 'pointermove', 150, 200);
+  raw(2, 'pointermove', 350, 200);
+  expect(moves).not.toHaveBeenCalled();
+  runFrame();
+
+  expect(moves).toHaveBeenCalledOnce();
+  expect(editor.getCamera().scale).toBe(2);
 });

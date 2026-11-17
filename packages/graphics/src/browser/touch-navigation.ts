@@ -155,6 +155,24 @@ export function attachTouchNavigation(
     editor.panZoomBy(step.pan, step.center, step.zoom);
   };
 
+  // Each finger reports its own moves, so two fingers ask twice a frame. The
+  // camera moves once per frame, to where both fingers are by then: every move
+  // of it re-lays out the whole scene.
+  let frame: number | undefined;
+  let frameTime = 0;
+  const navigateNextFrame = (time: number) => {
+    frameTime = time;
+    frame ??= requestAnimationFrame(() => {
+      frame = undefined;
+      navigate(frameTime);
+    });
+  };
+  const dropFrame = () => {
+    if (frame === undefined) return;
+    cancelAnimationFrame(frame);
+    frame = undefined;
+  };
+
   /**
    * A pinch does not fling. With one finger still and the other spreading, the
    * midpoint travels too, at half the speed the spread changes; two fingers
@@ -248,7 +266,7 @@ export function attachTouchNavigation(
     if (!navigating) return;
 
     swallow(event);
-    if (pair?.ids.includes(event.pointerId)) navigate(event.timeStamp);
+    if (pair?.ids.includes(event.pointerId)) navigateNextFrame(event.timeStamp);
   };
 
   const pointerEnd = (event: PointerEvent) => {
@@ -261,6 +279,8 @@ export function attachTouchNavigation(
     }
 
     swallow(event);
+    // The step below takes the fingers as they are now.
+    dropFrame();
     if (event.type === 'pointercancel') cancelled = true;
     if (pair?.ids.includes(event.pointerId)) {
       // Take the lifting finger's last position (a cancelled touch reports
@@ -310,6 +330,7 @@ export function attachTouchNavigation(
     tracking: () => touches.size > 0,
     detach() {
       glide.cancel();
+      dropFrame();
       cancelLongPress();
       window.removeEventListener('pointerdown', pointerDown, true);
       window.removeEventListener('pointermove', pointerMove, true);

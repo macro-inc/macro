@@ -16,6 +16,22 @@ class TestPointerEvent extends MouseEvent {
 }
 vi.stubGlobal('PointerEvent', TestPointerEvent);
 
+// Two fingers move the camera once per animation frame. A test runs the frame
+// itself, after each move, so the next line sees where the camera went. (Tests
+// that fake the timers get theirs instead; a lift applies what is pending.)
+const frames = new Map<number, FrameRequestCallback>();
+let nextFrame = 0;
+vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+  frames.set(++nextFrame, callback);
+  return nextFrame;
+});
+vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+const runFrame = () => {
+  const due = [...frames.values()];
+  frames.clear();
+  for (const callback of due) callback(performance.now());
+};
+
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()));
 
@@ -47,7 +63,7 @@ function setup() {
     editor.dispose();
     surface.remove();
   });
-  const finger = (id: number, type: string, x: number, y: number) =>
+  const finger = (id: number, type: string, x: number, y: number) => {
     surface.dispatchEvent(
       new PointerEvent(type, {
         bubbles: true,
@@ -61,6 +77,8 @@ function setup() {
         clientY: y,
       })
     );
+    runFrame();
+  };
   const wheel = (init: WheelEventInit) => {
     const event = new WheelEvent('wheel', {
       bubbles: true,

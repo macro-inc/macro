@@ -182,6 +182,8 @@ already pressed keeps its gesture, and fingers landing meanwhile (a resting palm
 are ignored. A flick glides only when the fingers were travelling together as
 they lifted: a pinch, whose midpoint also drifts, does not, and neither does a
 gesture the system cancelled.
+Each finger reports its own moves, so the camera is moved once per animation
+frame, to where both fingers are by then, rather than once per event.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.
