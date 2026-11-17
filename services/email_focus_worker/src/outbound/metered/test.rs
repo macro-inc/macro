@@ -1,6 +1,7 @@
 use std::{future::pending, time::Duration};
 
 use ai_usage::{AiFeature, UsageContext};
+use tokio_util::sync::CancellationToken;
 
 use super::*;
 use crate::metrics::Batch;
@@ -32,7 +33,13 @@ fn owner() -> MacroUserIdStr<'static> {
 }
 
 async fn ask(answer: Option<Result<Vec<f32>, FocusClassifierError>>) -> Batch {
-    let metrics = FocusMetrics::default();
+    ask_while(answer, FocusMetrics::default()).await
+}
+
+async fn ask_while(
+    answer: Option<Result<Vec<f32>, FocusClassifierError>>,
+    metrics: FocusMetrics,
+) -> Batch {
     let classifier = MeteredClassifier::new(Answering(answer), metrics.clone());
     let owner = owner();
     let call = classifier.answer(&owner, Uuid::nil(), &Value::Null, &[]);
@@ -47,17 +54,27 @@ async fn ask(answer: Option<Result<Vec<f32>, FocusClassifierError>>) -> Batch {
 async fn every_call_counts_and_each_failure_by_its_kind() {
     let answered = ask(Some(Ok(vec![0.5]))).await;
     assert_eq!(answered.sums[&Metric::ClassifierCalls], 1.0);
-    assert_eq!(answered.sums.len(), 1);
+    assert_eq!(answered.sums[&Metric::ClassifierUnavailable], 0.0);
+    assert_eq!(answered.sums[&Metric::ClassifierRejected], 0.0);
 
     let down = ask(Some(Err(FocusClassifierError::Unavailable))).await;
     assert_eq!(down.sums[&Metric::ClassifierUnavailable], 1.0);
     let refused = ask(Some(Err(FocusClassifierError::Rejected))).await;
     assert_eq!(refused.sums[&Metric::ClassifierRejected], 1.0);
-    assert!(!refused.sums.contains_key(&Metric::ClassifierUnavailable));
+    assert_eq!(refused.sums[&Metric::ClassifierUnavailable], 0.0);
 
     let abandoned = ask(None).await;
     assert_eq!(abandoned.sums[&Metric::ClassifierCalls], 1.0);
     assert_eq!(abandoned.sums[&Metric::ClassifierUnavailable], 1.0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_call_dropped_because_the_worker_stops_is_no_failure() {
+    let stopping = CancellationToken::new();
+    stopping.cancel();
+    let dropped = ask_while(None, FocusMetrics::new(stopping)).await;
+    assert_eq!(dropped.sums[&Metric::ClassifierCalls], 1.0);
+    assert_eq!(dropped.sums[&Metric::ClassifierUnavailable], 0.0);
 }
 
 #[derive(Default)]

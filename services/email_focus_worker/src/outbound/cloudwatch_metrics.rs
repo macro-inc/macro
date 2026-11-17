@@ -4,6 +4,8 @@
 //! Every metric is in [`NAMESPACE`] with one dimension, `Environment` (`dev` or
 //! `prod`). A local worker only logs its numbers.
 
+use std::time::Duration;
+
 use aws_sdk_cloudwatch::{
     Client,
     types::{Dimension, MetricDatum, StandardUnit},
@@ -24,6 +26,9 @@ const ENVIRONMENT_DIMENSION: &str = "Environment";
 const MAX_VALUES_PER_DATUM: usize = 150;
 /// Most datums one request carries (CloudWatch allows 1,000).
 const MAX_DATUMS_PER_REQUEST: usize = 500;
+/// Longest one request may take, so the publish at shutdown ends before the
+/// task is killed.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Publishes to CloudWatch, or only logs on a local machine.
 pub enum CloudWatchMetrics {
@@ -60,16 +65,29 @@ impl MetricSink for CloudWatchMetrics {
             return Ok(());
         };
         let data = datums(batch, environment);
+        // Each request goes out even if one before it failed.
+        let mut failed = Vec::new();
         for chunk in data.chunks(MAX_DATUMS_PER_REQUEST) {
-            client
+            let request = client
                 .put_metric_data()
                 .namespace(NAMESPACE)
                 .set_metric_data(Some(chunk.to_vec()))
-                .send()
-                .await
-                .map_err(|error| rootcause::report!("put_metric_data failed: {error}"))?;
+                .send();
+            match tokio::time::timeout(REQUEST_TIMEOUT, request).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => failed.push(error.to_string()),
+                Err(_) => failed.push("timed out".to_owned()),
+            }
         }
-        Ok(())
+        if failed.is_empty() {
+            Ok(())
+        } else {
+            Err(rootcause::report!(
+                "put_metric_data failed for {} of its requests: {}",
+                failed.len(),
+                failed.join("; ")
+            ))
+        }
     }
 }
 

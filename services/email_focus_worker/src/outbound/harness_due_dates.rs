@@ -69,8 +69,8 @@ impl HarnessDueDates {
         })
     }
 
-    /// Count what one read reports it took.
-    async fn count_usage(&self, usage: &DueDateUsage) {
+    /// Count what one read reports it took, without waiting on anything.
+    fn count_usage(&self, usage: &DueDateUsage) {
         let amount = ai_usage::UsageAmount::Tokens {
             input: usage.input_tokens,
             output: usage.output_tokens,
@@ -81,7 +81,6 @@ impl HarnessDueDates {
             self.metrics.add(Metric::DueDateInputTokens, input);
             self.metrics.add(Metric::DueDateOutputTokens, output);
         }
-        self.prices.load(&usage.model).await;
         if let Some(cost) = self.prices.cost(&usage.model, amount) {
             self.metrics.add(Metric::DueDateCostUsd, cost);
         }
@@ -135,7 +134,7 @@ impl DueDateExtractor for HarnessDueDates {
         let answer: ThreadDueDateResponse = response.json().await.map_err(request_failed)?;
         outcome.finish(None);
         if let Some(usage) = &answer.usage {
-            self.count_usage(usage).await;
+            self.count_usage(usage);
         }
         Ok(answer.due_on)
     }

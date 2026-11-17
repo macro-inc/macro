@@ -14,7 +14,25 @@ fn counts_sum_and_samples_keep_every_value_until_taken() {
     let batch = metrics.take();
     assert_eq!(batch.sums[&Metric::ClassifierCalls], 5.0);
     assert_eq!(batch.samples[&Metric::SweepSeconds], vec![1.5, 0.5]);
-    assert!(other.take().is_empty());
+
+    // Taken: every count starts again at 0, and no samples are left.
+    let next = other.take();
+    assert_eq!(next.sums[&Metric::ClassifierCalls], 0.0);
+    assert!(next.samples.is_empty());
+}
+
+#[test]
+fn every_count_goes_out_even_at_zero_and_samples_only_when_seen() {
+    use strum::IntoEnumIterator as _;
+    let batch = FocusMetrics::default().take();
+    for metric in Metric::iter() {
+        assert_eq!(
+            batch.sums.contains_key(&metric),
+            !metric.is_sample(),
+            "{metric:?}"
+        );
+    }
+    assert!(batch.samples.is_empty());
 }
 
 #[test]
@@ -63,11 +81,15 @@ async fn a_batch_goes_out_each_minute_and_the_last_one_at_shutdown() {
     let first = published.recv().await.unwrap();
     assert_eq!(first.sums[&Metric::WorkerStarts], 1.0);
 
-    // An empty minute publishes nothing; what is left goes out at shutdown.
+    // A quiet minute still publishes its zeros; what is left goes out at
+    // shutdown.
     tokio::time::advance(PUBLISH_INTERVAL).await;
+    let quiet = published.recv().await.unwrap();
+    assert_eq!(quiet.sums[&Metric::WorkerStarts], 0.0);
+    assert!(quiet.samples.is_empty());
     metrics.observe(Metric::SweepSeconds, 12.0);
     shutdown.cancel();
-    publisher.await.unwrap().unwrap();
+    publisher.await.unwrap();
     let last = published.recv().await.unwrap();
     assert_eq!(last.samples[&Metric::SweepSeconds], vec![12.0]);
     assert!(published.recv().await.is_none());

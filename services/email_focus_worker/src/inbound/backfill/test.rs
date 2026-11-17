@@ -118,6 +118,31 @@ type TestService = FocusService<
     Enrolled,
 >;
 
+#[test]
+fn only_inboxes_found_after_the_first_look_are_new_and_a_retry_keeps_its_find() {
+    let mut backfills = Backfills::default();
+    let start_up = Instant::now();
+    backfills.found(vec![inbox(1)], start_up);
+    let later = start_up + Duration::from_secs(60);
+    backfills.found(vec![inbox(1), inbox(2)], later);
+
+    let (mut passes, _) = start(&mut backfills);
+    let news: Vec<_> = passes.iter().map(|(waiting, _)| waiting.new).collect();
+    assert_eq!(news, vec![false, true], "inbox 1 was there at the start");
+
+    // Inbox 2's pass stops; found again, it is still timed from its find.
+    let (second, pass) = passes.remove(1);
+    backfills.done(second, pass, false, false);
+    backfills.found(vec![inbox(1), inbox(2)], later + Duration::from_secs(60));
+    let (passes, _) = start(&mut backfills);
+    let (retried, _) = passes
+        .iter()
+        .find(|(waiting, _)| waiting.inbox.link_id == inbox(2).link_id)
+        .unwrap();
+    assert!(retried.new);
+    assert_eq!(retried.found, later);
+}
+
 fn service(
     pool: Pool<Postgres>,
     classifier: RecordingClassifier,
@@ -177,7 +202,12 @@ async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
     );
     let batch = metrics.take();
     assert_eq!(batch.samples[&Metric::EnrolledInboxes], vec![1.0]);
-    assert_eq!(batch.samples[&Metric::BackfillTopFilledSeconds].len(), 1);
+    assert!(
+        !batch
+            .samples
+            .contains_key(&Metric::BackfillTopFilledSeconds),
+        "an inbox the first look finds is not timed: it may have joined long before"
+    );
 }
 
 /// How fast inboxes fill with the classifier and due date latencies measured

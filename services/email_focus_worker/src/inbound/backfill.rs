@@ -16,7 +16,7 @@
 //! filled reads only its few stale threads.
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -85,6 +85,10 @@ impl Pass {
 struct Waiting {
     inbox: FocusInboxOwner,
     found: Instant,
+    /// Found after the worker's first look, so its owner joined while the
+    /// worker ran: only these time how long a new inbox takes to fill. The
+    /// first look finds every enrolled inbox again after each restart.
+    new: bool,
 }
 
 /// The inboxes found, waiting, being filled and filled.
@@ -98,6 +102,11 @@ struct Backfills {
     running: HashSet<Uuid>,
     /// Inboxes filled since the worker started.
     filled: HashSet<Uuid>,
+    /// Inboxes whose pass stopped or failed, with when they were found and
+    /// whether they were new, so their fill is timed from the first find.
+    dropped: HashMap<Uuid, (Instant, bool)>,
+    /// Whether a look has found the enrolled inboxes since the worker started.
+    looked: bool,
     /// Whether the classifier said stop: nothing new starts until the next look.
     paused: bool,
 }
@@ -107,6 +116,7 @@ impl Backfills {
     fn found(&mut self, enrolled: Vec<FocusInboxOwner>, now: Instant) {
         let ids: HashSet<_> = enrolled.iter().map(|inbox| inbox.link_id).collect();
         self.filled.retain(|link_id| ids.contains(link_id));
+        self.dropped.retain(|link_id, _| ids.contains(link_id));
         self.first
             .retain(|waiting| ids.contains(&waiting.inbox.link_id));
         self.rest
@@ -120,9 +130,14 @@ impl Backfills {
                     .chain(&self.rest)
                     .any(|waiting| waiting.inbox.link_id == inbox.link_id);
             if !known {
-                self.first.push_back(Waiting { inbox, found: now });
+                let (found, new) = self
+                    .dropped
+                    .remove(&inbox.link_id)
+                    .unwrap_or((now, self.looked));
+                self.first.push_back(Waiting { inbox, found, new });
             }
         }
+        self.looked = true;
         self.paused = false;
     }
 
@@ -140,7 +155,8 @@ impl Backfills {
     }
 
     /// Record how a pass ended. A first pass done queues the rest; a pass the
-    /// classifier stopped is dropped, so the next look queues the inbox again.
+    /// classifier stopped or that failed is dropped, so the next look queues
+    /// the inbox again.
     fn done(&mut self, waiting: Waiting, pass: Pass, completed: bool, stop: bool) {
         self.running.remove(&waiting.inbox.link_id);
         match (pass, completed) {
@@ -148,7 +164,10 @@ impl Backfills {
             (Pass::Rest, true) => {
                 self.filled.insert(waiting.inbox.link_id);
             }
-            (_, false) => {}
+            (_, false) => {
+                self.dropped
+                    .insert(waiting.inbox.link_id, (waiting.found, waiting.new));
+            }
         }
         if stop {
             self.paused = true;
@@ -285,7 +304,7 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
-            if !report.stopped_early {
+            if waiting.new && !report.stopped_early {
                 let filled = match pass {
                     Pass::First => Metric::BackfillTopFilledSeconds,
                     Pass::Rest => Metric::BackfillFilledSeconds,

@@ -1,17 +1,18 @@
 use aws_sdk_cloudwatch::types::StandardUnit;
 
 use super::*;
-use crate::metrics::{FocusMetrics, Metric};
+use std::collections::BTreeMap;
+
+use crate::metrics::Metric;
 
 #[test]
 fn counts_go_out_as_one_value_and_samples_as_values_with_counts() {
-    let metrics = FocusMetrics::default();
-    metrics.add(Metric::JevCostUsd, 0.25);
-    metrics.observe(Metric::SweepSeconds, 3.0);
-    metrics.observe(Metric::SweepSeconds, 3.0);
-    metrics.observe(Metric::SweepSeconds, 9.5);
+    let batch = Batch {
+        sums: [(Metric::JevCostUsd, 0.25)].into(),
+        samples: [(Metric::SweepSeconds, vec![3.0, 3.0, 9.5])].into(),
+    };
 
-    let data = datums(&metrics.take(), "prod");
+    let data = datums(&batch, "prod");
     assert_eq!(data.len(), 2);
     let cost = &data[0];
     assert_eq!(cost.metric_name(), Some("JevCostUsd"));
@@ -31,12 +32,16 @@ fn counts_go_out_as_one_value_and_samples_as_values_with_counts() {
 
 #[test]
 fn many_distinct_samples_split_across_datums() {
-    let metrics = FocusMetrics::default();
-    for n in 0..400_u32 {
-        metrics.observe(Metric::StaleThreadsSeconds, f64::from(n) / 100.0);
-    }
+    let batch = Batch {
+        sums: BTreeMap::new(),
+        samples: [(
+            Metric::StaleThreadsSeconds,
+            (0..400_u32).map(|n| f64::from(n) / 100.0).collect(),
+        )]
+        .into(),
+    };
 
-    let data = datums(&metrics.take(), "dev");
+    let data = datums(&batch, "dev");
     let sizes: Vec<_> = data.iter().map(|datum| datum.values().len()).collect();
     assert_eq!(sizes, vec![150, 150, 100]);
     assert!(

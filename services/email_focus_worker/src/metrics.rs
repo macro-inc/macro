@@ -6,6 +6,10 @@
 //! be classified, how long a sweep runs and a new inbox takes to fill, and how
 //! long the stale-thread read takes. A publish that fails is logged and dropped:
 //! the numbers never hold up or stop the worker.
+//!
+//! Every counted metric goes out each minute, as 0 when nothing happened, so
+//! a rule can always divide one by another and a missing value means the
+//! worker isn't publishing.
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -93,6 +97,20 @@ impl Metric {
         self.into()
     }
 
+    /// Whether each value is kept (for percentiles and maxima) rather than
+    /// summed.
+    pub fn is_sample(self) -> bool {
+        matches!(
+            self,
+            Self::EnrolledInboxes
+                | Self::EventToClassifiedSeconds
+                | Self::SweepSeconds
+                | Self::BackfillTopFilledSeconds
+                | Self::BackfillFilledSeconds
+                | Self::StaleThreadsSeconds
+        )
+    }
+
     /// What the metric measures.
     pub fn unit(self) -> Unit {
         match self {
@@ -117,10 +135,6 @@ pub struct Batch {
 }
 
 impl Batch {
-    pub fn is_empty(&self) -> bool {
-        self.sums.is_empty() && self.samples.is_empty()
-    }
-
     fn sum(&self, metric: Metric) -> f64 {
         self.sums.get(&metric).copied().unwrap_or_default()
     }
@@ -131,9 +145,26 @@ impl Batch {
 #[derive(Clone, Default)]
 pub struct FocusMetrics {
     batch: Arc<Mutex<Batch>>,
+    /// Cancelled when the worker stops, and work dropped after that is not
+    /// counted as failed.
+    stopping: CancellationToken,
 }
 
 impl FocusMetrics {
+    /// Metrics for a worker that stops at `stopping`.
+    pub fn new(stopping: CancellationToken) -> Self {
+        Self {
+            batch: Arc::default(),
+            stopping,
+        }
+    }
+
+    /// Whether the worker is stopping: work it drops then was cancelled, not
+    /// failed.
+    pub fn stopping(&self) -> bool {
+        self.stopping.is_cancelled()
+    }
+
     /// Add `amount` to a counted metric.
     pub fn add(&self, metric: Metric, amount: f64) {
         if let Ok(mut batch) = self.batch.lock() {
@@ -148,12 +179,19 @@ impl FocusMetrics {
         }
     }
 
-    /// Everything recorded since the last take.
+    /// Everything recorded since the last take, with every counted metric,
+    /// 0 if nothing was counted.
     pub fn take(&self) -> Batch {
-        self.batch
+        use strum::IntoEnumIterator as _;
+        let mut batch = self
+            .batch
             .lock()
             .map(|mut batch| std::mem::take(&mut *batch))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        for metric in Metric::iter().filter(|metric| !metric.is_sample()) {
+            batch.sums.entry(metric).or_insert(0.0);
+        }
+        batch
     }
 }
 
@@ -169,7 +207,7 @@ pub async fn run_publisher<K: MetricSink>(
     metrics: FocusMetrics,
     sink: K,
     shutdown: CancellationToken,
-) -> Result<(), Report> {
+) {
     let mut ticker = tokio::time::interval(PUBLISH_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     // The first tick is immediate; nothing has been recorded yet.
@@ -182,7 +220,7 @@ pub async fn run_publisher<K: MetricSink>(
         };
         publish(&metrics.take(), &sink).await;
         if stopping {
-            return Ok(());
+            return;
         }
     }
 }
@@ -190,9 +228,6 @@ pub async fn run_publisher<K: MetricSink>(
 /// Publish one batch in its own trace, and log what it cost: the usage log of
 /// record for the rollout's cost.
 async fn publish<K: MetricSink>(batch: &Batch, sink: &K) {
-    if batch.is_empty() {
-        return;
-    }
     let values: usize = batch.samples.values().map(Vec::len).sum();
     let span = tracing::info_span!(
         "email_focus.metrics_publish",

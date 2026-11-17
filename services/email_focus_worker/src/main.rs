@@ -105,12 +105,21 @@ async fn main() -> Result<(), Report> {
         .max_connections(5)
         .connect(config.macro_db_url.as_ref())
         .await?;
-    let metrics = FocusMetrics::default();
-    metrics.add(Metric::WorkerStarts, 1.0);
-    let prices = Arc::new(Prices::from_db(db.clone()));
-    // Read before the first classification: the usage recorder can't wait.
-    prices.load(jev_classifier::MODEL).await;
     let shutdown = CancellationToken::new();
+    let metrics = FocusMetrics::new(shutdown.clone());
+    metrics.add(Metric::WorkerStarts, 1.0);
+    // Publishing runs apart from the loops below, so a loop's error still
+    // ends with the last batch published: a crash loop shows in the restarts.
+    let publishing = TaskTracker::new();
+    publishing.spawn(run_publisher(
+        metrics.clone(),
+        CloudWatchMetrics::new(config.environment).await,
+        shutdown.clone(),
+    ));
+    let prices = Arc::new(Prices::from_db(db.clone()));
+    // Read before the first classification, so its cost is counted from the
+    // start; a failed read is tried again with the next.
+    prices.load(jev_classifier::MODEL).await;
     let notifications = TaskTracker::new();
     let gateway = ConnectionGatewayClient::new(
         config.internal_api_key.to_string(),
@@ -176,18 +185,15 @@ async fn main() -> Result<(), Report> {
         // A zero interval would panic the timer.
         Duration::from_secs(config.focus_sweep_interval_secs.max(60)),
         window_days,
-        metrics.clone(),
-        shutdown.clone(),
-    );
-    let publisher = run_publisher(
         metrics,
-        CloudWatchMetrics::new(config.environment).await,
         shutdown.clone(),
     );
     // Any loop ending with an error stops the worker so it restarts fresh.
-    let result = tokio::try_join!(consumer, backfills, sweeps, publisher).map(|_| ());
+    let result = tokio::try_join!(consumer, backfills, sweeps).map(|_| ());
     shutdown.cancel();
     notifications.close();
     notifications.wait().await;
+    publishing.close();
+    publishing.wait().await;
     result
 }

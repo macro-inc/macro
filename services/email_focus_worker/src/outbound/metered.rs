@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 
 use ai_usage::{
@@ -19,6 +19,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde_json::Value;
 use tokio::time::Instant;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 use crate::metrics::{FocusMetrics, Metric};
@@ -27,7 +28,8 @@ use crate::metrics::{FocusMetrics, Metric};
 mod test;
 
 /// Counts `metric` once when dropped, unless disarmed: a call its caller gave
-/// up on (a timeout dropping it) still counts as failed.
+/// up on (a timeout dropping it) still counts as failed. A call dropped because
+/// the worker is stopping counts as nothing.
 pub struct UnlessDone<'a> {
     metrics: &'a FocusMetrics,
     metric: Option<Metric>,
@@ -49,17 +51,28 @@ impl<'a> UnlessDone<'a> {
 
 impl Drop for UnlessDone<'_> {
     fn drop(&mut self) {
-        if let Some(metric) = self.metric {
+        if let Some(metric) = self.metric
+            && !self.metrics.stopping()
+        {
             self.metrics.add(metric, 1.0);
         }
     }
+}
+
+/// A model's price as far as the worker knows it.
+#[derive(Clone, Copy)]
+enum Known {
+    /// Being read; its cost is not counted meanwhile.
+    Reading,
+    /// Read: the stored price, or none.
+    Read(Option<ModelPricing>),
 }
 
 /// Model prices from the usage journal's pricing table, read once per model:
 /// a changed price is picked up when the worker restarts.
 pub struct Prices {
     repo: Option<PgUsageRepo>,
-    known: Mutex<HashMap<String, Option<ModelPricing>>>,
+    known: Mutex<HashMap<String, Known>>,
 }
 
 impl Prices {
@@ -78,47 +91,58 @@ impl Prices {
             known: Mutex::new(
                 prices
                     .into_iter()
-                    .map(|(model, pricing)| (model.to_owned(), Some(pricing)))
+                    .map(|(model, pricing)| (model.to_owned(), Known::Read(Some(pricing))))
                     .collect(),
             ),
         }
     }
 
-    fn known(&self, model: &str) -> Option<Option<ModelPricing>> {
-        self.known
-            .lock()
-            .ok()
-            .and_then(|known| known.get(normalize_model_id(model)).copied())
+    fn known(&self) -> MutexGuard<'_, HashMap<String, Known>> {
+        self.known.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Read `model`'s price, once. A model with no stored price is remembered
-    /// as unpriced; a failed read is tried again next time.
-    pub async fn load(&self, model: &str) -> Option<ModelPricing> {
-        if let Some(pricing) = self.known(model) {
-            return pricing;
-        }
+    /// Read `model`'s price now. A model with no stored price is remembered as
+    /// unpriced; after a failed read the next cost asked of it reads again.
+    pub async fn load(&self, model: &str) {
         let model = normalize_model_id(model);
-        let repo = self.repo.as_ref()?;
+        let Some(repo) = &self.repo else {
+            return;
+        };
         match repo.get_pricing(model).await {
             Ok(pricing) => {
                 if pricing.is_none() {
                     tracing::warn!(model, "no stored price; its focus cost is not counted");
                 }
-                if let Ok(mut known) = self.known.lock() {
-                    known.insert(model.to_owned(), pricing);
-                }
-                pricing
+                self.known().insert(model.to_owned(), Known::Read(pricing));
             }
             Err(error) => {
                 tracing::warn!(error = ?error, model, "reading a model price failed");
-                None
+                self.known().remove(model);
             }
         }
     }
 
-    /// What `amount` of `model` cost, from prices already read.
-    pub fn cost(&self, model: &str, amount: UsageAmount) -> Option<f64> {
-        let pricing = self.known(model).flatten()?;
+    /// What `amount` of `model` cost, from prices already read. Never waits:
+    /// a model not read yet is read in the background, and costs nothing
+    /// until it is.
+    pub fn cost(self: &Arc<Self>, model: &str, amount: UsageAmount) -> Option<f64> {
+        let model = normalize_model_id(model);
+        let pricing = {
+            let mut known = self.known();
+            match known.get(model) {
+                Some(Known::Read(pricing)) => *pricing,
+                Some(Known::Reading) => None,
+                None => {
+                    if self.repo.is_some() {
+                        known.insert(model.to_owned(), Known::Reading);
+                        let prices = Arc::clone(self);
+                        let model = model.to_owned();
+                        tokio::spawn(async move { prices.load(&model).await }.in_current_span());
+                    }
+                    None
+                }
+            }
+        }?;
         Price::compute(pricing, amount).map(|price| f64::from(price.total))
     }
 }

@@ -136,7 +136,7 @@ async fn each_ask_counts_with_the_tokens_and_cost_the_harness_reports() {
 
     let batch = metrics.take();
     assert_eq!(batch.sums[&Metric::DueDateCalls], 1.0);
-    assert!(!batch.sums.contains_key(&Metric::DueDateFailures));
+    assert_eq!(batch.sums[&Metric::DueDateFailures], 0.0);
     assert_eq!(batch.sums[&Metric::DueDateInputTokens], 3_000_000.0);
     assert_eq!(batch.sums[&Metric::DueDateOutputTokens], 1_000_000.0);
     // 2M input at $0.05, 1M output at $0.20 and 1M cached at $0.01 a million.
