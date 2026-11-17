@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT provider_calendar_id,access_role,is_primary FROM calendars WHERE id=$1",
+  "query": "SELECT provider_calendar_id,access_role,is_primary,synced_at IS NULL AS \"unsynced!\" FROM calendars WHERE id=$1",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "is_primary",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "unsynced!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       true,
-      false
+      false,
+      null
     ]
   },
-  "hash": "83c72493e3437c104e7747bb3ef3e8414e2336d4e6931ec3160ea6ecca0ed077"
+  "hash": "1da1583d4debe9a83558e89472605bd8f5f01cdc5a78e4eca146693f8bfe53db"
 }
