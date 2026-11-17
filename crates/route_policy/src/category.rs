@@ -10,6 +10,7 @@
     Eq,
     Hash,
     serde::Serialize,
+    utoipa::ToSchema,
     strum::Display,
     strum::EnumIter,
     strum::IntoStaticStr,
