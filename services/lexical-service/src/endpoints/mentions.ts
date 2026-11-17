@@ -7,8 +7,9 @@ import { standardErrorResponses } from '../lib/schemas';
 
 const mentionsRequest = z.object({
   markdown: z.string(),
-  // Count links to Macro entities as mentions, as document creation does.
-  appLinks: z.boolean().optional(),
+  // The environment's web app origin: links to Macro entities on it count as
+  // mentions, as they do when a document is created. Channel messages omit it.
+  appOrigin: z.string().optional(),
 });
 
 const mentionsResponse = z.object({
@@ -51,7 +52,7 @@ export class MentionsEndpoint extends OpenAPIRoute {
     try {
       const { body } = await this.getValidatedData<typeof this.schema>();
       const mentions = extractChannelMentionsFromMarkdown(body.markdown, {
-        appLinks: body.appLinks,
+        appOrigin: body.appOrigin,
       });
       return c.json({ mentions });
     } catch (error) {

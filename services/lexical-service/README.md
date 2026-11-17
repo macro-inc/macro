@@ -24,7 +24,12 @@ Returns the pre-processed document to be uses in the search processing service.
 Returns the pre-processed document to be uses in the cognition service.
 
 ## POST /snapshot/markdown
-Accepts `{ "markdown": "..." }` and returns an `application/octet-stream` Loro snapshot equivalent to the markdown block migration path.
+Accepts `{ "markdown": "...", "appOrigin"?: "https://macro.com" }` and returns an `application/octet-stream` Loro snapshot equivalent to the markdown block migration path.
+With `appOrigin`, links to one Macro entity on that web app (`/app/<type>/<uuid>`) become mention chips.
+
+## POST /mentions
+Accepts `{ "markdown": "...", "appOrigin"?: "..." }` and returns `{ "mentions": [{ "entityType", "entityId" }] }` in the shape channel messages track them.
+With `appOrigin` (document mention tracking), links to Macro entities on it count as mentions; channel messages omit it, since a message reference shares its target with the channel.
 
 ## POST /snapshot/notion
 Accepts `{ "markdown": "...", "links": { "pages": { "<notion id>": { "documentId", "name" } }, "users": { "<notion id>": { "userId", "email" } } } }`

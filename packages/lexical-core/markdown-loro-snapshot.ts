@@ -43,10 +43,12 @@ export async function rawMarkdownStateToLoroSnapshot(
 }
 
 export function markdownToSerializedEditorState(
-  markdown: string
+  markdown: string,
+  options: { appOrigin?: string } = {}
 ): SerializedEditorState {
   return markdownToSerializedEditorStateWithIds(
-    markdown
+    markdown,
+    options
   ) as SerializedEditorState;
 }
 
@@ -57,13 +59,18 @@ export function serializedEditorStateToLoroSnapshot(
   return rawMarkdownStateToLoroSnapshot(state as any, MARKDOWN_GOLDEN);
 }
 
+/**
+ * A new document's snapshot of `markdown`. With `appOrigin`, links to Macro
+ * entities on that web app become mention chips.
+ */
 export async function markdownToLoroSnapshot(
-  markdown: string
+  markdown: string,
+  options: { appOrigin?: string } = {}
 ): Promise<Uint8Array | undefined> {
   // Blank markdown is exactly the golden — return it verbatim so all empty docs
   // share identical bytes and skip the mirror round-trip.
   if (markdown === '') return MARKDOWN_GOLDEN;
   return serializedEditorStateToLoroSnapshot(
-    markdownToSerializedEditorState(markdown)
+    markdownToSerializedEditorState(markdown, options)
   );
 }
