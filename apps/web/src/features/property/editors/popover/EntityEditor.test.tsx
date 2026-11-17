@@ -417,6 +417,8 @@ describe('team-first assignees', () => {
   it.each([EntityEditor, EntitySheetEditor])(
     'lists you, then team members, then agents, and agents only on a real match',
     async (Editor) => {
+      // The roster lists the viewer after a teammate; the picker still leads with them.
+      team.members = ['macro|teammate@example.com', 'macro|alice@example.com'];
       setup(undefined, { ...property, value: null }, Editor);
       const row = (name: string) =>
         Number(
