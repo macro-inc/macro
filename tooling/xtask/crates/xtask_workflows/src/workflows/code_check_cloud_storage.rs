@@ -10,7 +10,9 @@
 //! `test`. `check` (fmt + clippy), `build-service-bins`, `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Str, always, env, needs};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, env,
+};
 use gh_workflow::{Container, Env, Event, Job, Port, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RuntimePath;
 
@@ -23,17 +25,92 @@ use crate::workflows::{
 #[cfg(test)]
 mod test;
 
+struct PathCheckOutputs {
+    /// Whether the cloud storage checks should run at all.
+    should_run: JobOutput<Flag>,
+    /// Whether a change could affect a service's Doppler config contract.
+    doppler_candidates: JobOutput<Flag>,
+    /// Whether the GraphQL schema or its compat check changed.
+    graphql_schema: JobOutput<Flag>,
+    /// The nextest package set: `all`, `none`, or package names.
+    rust_packages: JobOutput<Str>,
+    /// Whether the change needs no tests run.
+    skip_tests: JobOutput<Flag>,
+}
+
+const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+    "path-check",
+    PathCheckOutputs {
+        should_run: JobOutput::new("path-check", "should_run"),
+        doppler_candidates: JobOutput::new("path-check", "doppler_candidates"),
+        graphql_schema: JobOutput::new("path-check", "graphql_schema"),
+        rust_packages: JobOutput::new("path-check", "rust_packages"),
+        skip_tests: JobOutput::new("path-check", "skip_tests"),
+    },
+);
+
+const CHECK: JobHandle<()> = JobHandle::new("check", ());
+const DOPPLER_CONFIG: JobHandle<()> = JobHandle::new("doppler-config", ());
+const TEST: JobHandle<()> = JobHandle::new("test", ());
+const BUILD_SERVICE_BINS: JobHandle<()> = JobHandle::new("build-service-bins", ());
+const GRAPHQL_SCHEMA_COMPAT: JobHandle<()> = JobHandle::new("graphql-schema-compat", ());
+
+struct FilterOutputs {
+    /// The `should_run` filter's match.
+    should_run: StepOutput<Flag>,
+    /// The `doppler_candidates` filter's match.
+    doppler_candidates: StepOutput<Flag>,
+    /// The `graphql_schema` filter's match.
+    graphql_schema: StepOutput<Flag>,
+}
+
+const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+    "filter",
+    FilterOutputs {
+        should_run: StepOutput::new("filter", "should_run"),
+        doppler_candidates: StepOutput::new("filter", "doppler_candidates"),
+        graphql_schema: StepOutput::new("filter", "graphql_schema"),
+    },
+);
+
+struct NextestFilterOutputs {
+    /// The package set nextest and clippy run on.
+    rust_packages: StepOutput<Str>,
+    /// Whether no tests need to run.
+    skip_tests: StepOutput<Flag>,
+}
+
+const NEXTEST_FILTER: StepHandle<NextestFilterOutputs> = StepHandle::new(
+    "nextest-filter",
+    NextestFilterOutputs {
+        rust_packages: StepOutput::new("nextest-filter", "rust_packages"),
+        skip_tests: StepOutput::new("nextest-filter", "skip_tests"),
+    },
+);
+
+struct DopplerBinsOutputs {
+    /// The Doppler config binaries the change affects.
+    doppler_config_bins: StepOutput<Str>,
+}
+
+const DOPPLER_BINS: StepHandle<DopplerBinsOutputs> = StepHandle::new(
+    "doppler-bins",
+    DopplerBinsOutputs {
+        doppler_config_bins: StepOutput::new("doppler-bins", "doppler_config_bins"),
+    },
+);
+
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
         .on(Event::default().workflow_call(WorkflowCall::default()))
         .map(vars::with_global_env)
-        .add_job("path-check", path_check())
-        .add_job("check", check())
-        .add_job("doppler-config", doppler_config())
-        .add_job("test", test())
-        .add_job("build-service-bins", build_service_bins())
-        .add_job("graphql-schema-compat", graphql_schema_compat())
+        .add_job(PATH_CHECK, path_check())
+        .add_job(CHECK, check())
+        .add_job(DOPPLER_CONFIG, doppler_config())
+        .add_job(TEST, test())
+        .add_job(BUILD_SERVICE_BINS, build_service_bins())
+        .add_job(GRAPHQL_SCHEMA_COMPAT, graphql_schema_compat())
         .add_job("status-check", status_check())
 }
 
@@ -50,37 +127,39 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_output("should_run", typed::steps("filter").output("should_run"))
         .add_output(
-            "doppler_candidates",
-            typed::steps("filter").output("doppler_candidates"),
+            PATH_CHECK.outputs.should_run.name(),
+            FILTER.outputs.should_run.read(),
         )
         .add_output(
-            "graphql_schema",
-            typed::steps("filter").output("graphql_schema"),
+            PATH_CHECK.outputs.doppler_candidates.name(),
+            FILTER.outputs.doppler_candidates.read(),
         )
         .add_output(
-            "rust_packages",
-            typed::steps("nextest-filter").output("rust_packages"),
+            PATH_CHECK.outputs.graphql_schema.name(),
+            FILTER.outputs.graphql_schema.read(),
         )
         .add_output(
-            "skip_tests",
-            typed::steps("nextest-filter").output("skip_tests"),
+            PATH_CHECK.outputs.rust_packages.name(),
+            NEXTEST_FILTER.outputs.rust_packages.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.skip_tests.name(),
+            NEXTEST_FILTER.outputs.skip_tests.read(),
         )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
-        .add_step(
-            compute_changed_files()
-                .if_condition(typed::steps("filter").output("should_run").is_true()),
-        )
+        .add_step(compute_changed_files().if_condition(FILTER.outputs.should_run.read().is_set()))
         .add_step(
             steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(
-                typed::steps("filter")
-                    .output("should_run")
-                    .is_true()
+                FILTER
+                    .outputs
+                    .should_run
+                    .read()
+                    .is_set()
                     .and(steps::trusted_namespace_sccache_context()),
             ),
         )
@@ -125,9 +204,12 @@ fn doppler_config() -> Job {
     steps::gated_job()
         .timeout_minutes(20u32)
         .cond(
-            path_check_output("should_run")
-                .is_true()
-                .and(path_check_output("doppler_candidates").is_true()),
+            PATH_CHECK
+                .outputs
+                .should_run
+                .read()
+                .is_set()
+                .and(PATH_CHECK.outputs.doppler_candidates.read().is_set()),
         )
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
@@ -153,9 +235,9 @@ fn graphql_schema_compat() -> Job {
     steps::gated_job()
         .timeout_minutes(15u32)
         .cond(
-            path_check_output("should_run")
-                .is_true()
-                .and(path_check_output("graphql_schema").is_true()),
+            PATH_CHECK.outputs.should_run.read()
+                .is_set()
+                .and(PATH_CHECK.outputs.graphql_schema.read().is_set()),
         )
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
@@ -174,13 +256,16 @@ fn test() -> Job {
     steps::gated_job()
         .timeout_minutes(20u32)
         .cond(
-            path_check_output("should_run")
-                .is_true()
-                .and(path_check_output("rust_packages").ne("none"))
-                .and(path_check_output("skip_tests").ne("true")),
+            PATH_CHECK
+                .outputs
+                .should_run
+                .read()
+                .is_set()
+                .and(PATH_CHECK.outputs.rust_packages.read().ne("none"))
+                .and(PATH_CHECK.outputs.skip_tests.read().is_unset()),
         )
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
+        .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
         .map(with_test_compile_env)
@@ -223,7 +308,7 @@ fn build_service_bins() -> Job {
         .timeout_minutes(20u32)
         .cond(build_service_bins_condition())
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
+        .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .map(with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
         .add_step(steps::checkout(false, false))
@@ -240,10 +325,13 @@ fn build_service_bins() -> Job {
 }
 
 fn build_service_bins_condition() -> Expr<Bool> {
-    let rust_packages = || path_check_output("rust_packages");
-    path_check_output("should_run")
-        .is_true()
-        .and(path_check_output("skip_tests").ne("true"))
+    let rust_packages = || PATH_CHECK.outputs.rust_packages.read();
+    PATH_CHECK
+        .outputs
+        .should_run
+        .read()
+        .is_set()
+        .and(PATH_CHECK.outputs.skip_tests.read().is_unset())
         .and(
             rust_packages()
                 .eq("all")
@@ -251,11 +339,6 @@ fn build_service_bins_condition() -> Expr<Bool> {
                 .or(rust_packages().contains("email_service"))
                 .or(rust_packages().contains("authentication_service")),
         )
-}
-
-/// An output of the `path-check` job.
-fn path_check_output(name: &str) -> Expr<Str> {
-    needs("path-check").output(name)
 }
 
 /// Whether the selected packages run code through the pinned Deno runtime.
@@ -299,12 +382,12 @@ fn status_check() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         .cond(always())
         .needs(vec![
-            "path-check".to_string(),
-            "check".to_string(),
-            "doppler-config".to_string(),
-            "test".to_string(),
-            "build-service-bins".to_string(),
-            "graphql-schema-compat".to_string(),
+            PATH_CHECK.to_string(),
+            CHECK.to_string(),
+            DOPPLER_CONFIG.to_string(),
+            TEST.to_string(),
+            BUILD_SERVICE_BINS.to_string(),
+            GRAPHQL_SCHEMA_COMPAT.to_string(),
         ])
         .add_step(check_job_results())
 }
@@ -321,7 +404,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("filter")
+        .id(FILTER.id())
         .add_with((
             "filters",
             indoc::indoc! {r#"
@@ -384,7 +467,7 @@ fn compute_changed_files() -> Step<Run> {
 fn compute_doppler_bins() -> Step<Run> {
     Step::new("compute affected Doppler config bins")
         .run(include_str!("scripts/compute_doppler_bins.sh"))
-        .id("doppler-bins")
+        .id(DOPPLER_BINS.id())
         .shell("bash")
 }
 
@@ -397,8 +480,8 @@ fn compute_doppler_bins() -> Step<Run> {
 fn compute_nextest_filter() -> Step<Run> {
     Step::new("compute nextest package filter")
         .run(include_str!("scripts/compute_nextest_filter.sh"))
-        .id("nextest-filter")
-        .if_condition(typed::steps("filter").output("should_run").is_true())
+        .id(NEXTEST_FILTER.id())
+        .if_condition(FILTER.outputs.should_run.read().is_set())
         .add_env(("FILTER_CACHE_DIR", FILTER_CACHE_DIR.as_str()))
         .shell("bash")
 }
@@ -409,14 +492,10 @@ fn compute_nextest_filter() -> Step<Run> {
 fn validate_doppler_configs() -> Step<Run> {
     Step::new("validate Doppler configs")
         .run(include_str!("scripts/validate_doppler_configs.sh"))
-        .if_condition(
-            typed::steps("doppler-bins")
-                .output("doppler_config_bins")
-                .ne(""),
-        )
+        .if_condition(DOPPLER_BINS.outputs.doppler_config_bins.read().ne(""))
         .add_env((
             "DOPPLER_CONFIG_BINS",
-            typed::steps("doppler-bins").output("doppler_config_bins"),
+            DOPPLER_BINS.outputs.doppler_config_bins.read(),
         ))
         .add_env(("DOPPLER_TOKEN", vars::DOPPLER_TOKEN))
 }
@@ -437,7 +516,7 @@ fn cargo_shear() -> Step<Run> {
 fn cargo_clippy() -> Step<Run> {
     Step::new("clippy")
         .run(include_str!("scripts/cargo_clippy.sh"))
-        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
+        .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.

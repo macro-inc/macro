@@ -39,29 +39,67 @@
 //! stale by then. The job name must stay stable: the release workflow, the
 //! watcher and that label workflow find the job by it.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Str, cancelled, github, to_json, whole_steps};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, JobHandle, StepHandle, StepOutput, Str, cancelled, github, to_json,
+    whole_steps,
+};
 use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
 use crate::workflows::{runners, steps, vars};
 
-/// The job's id in the web app check workflow.
-pub(super) const JOB_ID: &str = "ios-native-check";
+/// The job in the web app check workflow.
+pub(super) const JOB: JobHandle<()> = JobHandle::new("ios-native-check", ());
 /// The job's display name (a check run name).
 pub(super) const JOB_NAME: &str = "iOS Native Check";
+
+struct NativeFilterOutputs {
+    /// Whether the path filter matched native iOS code.
+    ios_native: StepOutput<Flag>,
+}
+
+const NATIVE_FILTER: StepHandle<NativeFilterOutputs> = StepHandle::new(
+    "native-filter",
+    NativeFilterOutputs {
+        ios_native: StepOutput::new("native-filter", "ios_native"),
+    },
+);
+
+struct CacheWasmOutputs {
+    /// Whether the client cache wasm version moved against the base.
+    bumped: StepOutput<Flag>,
+    /// The base commit the merge result was built on.
+    base_sha: StepOutput<Str>,
+}
+
+const CACHE_WASM: StepHandle<CacheWasmOutputs> = StepHandle::new(
+    "cache-wasm",
+    CacheWasmOutputs {
+        bumped: StepOutput::new("cache-wasm", "bumped"),
+        base_sha: StepOutput::new("cache-wasm", "base_sha"),
+    },
+);
+
+struct LabelsOutputs {
+    /// Whether the PR carries the `skip-ios-update` label.
+    skip: StepOutput<Flag>,
+}
+
+const LABELS: StepHandle<LabelsOutputs> = StepHandle::new(
+    "labels",
+    LabelsOutputs {
+        skip: StepOutput::new("labels", "skip"),
+    },
+);
 
 /// Native iOS code changed: the path filter matched, or the cache wasm
 /// version moved against the base branch.
 fn native_changed() -> Expr<Bool> {
-    typed::steps("native-filter")
-        .output("ios_native")
-        .is_true()
-        .or(typed::steps("cache-wasm").output("bumped").is_true())
-}
-
-/// The PR opted out of the gate via the `skip-ios-update` label (as read at
-/// run time, see [`read_labels`]).
-fn skip_label() -> Expr<Str> {
-    typed::steps("labels").output("skip")
+    NATIVE_FILTER
+        .outputs
+        .ios_native
+        .read()
+        .is_set()
+        .or(CACHE_WASM.outputs.bumped.read().is_set())
 }
 
 pub(super) fn job() -> Job {
@@ -90,7 +128,7 @@ pub(super) fn job() -> Job {
 }
 
 fn gated() -> Expr<Bool> {
-    native_changed().and(skip_label().ne("true"))
+    native_changed().and(LABELS.outputs.skip.read().is_unset())
 }
 
 fn paths_filter() -> Step<Use> {
@@ -100,7 +138,7 @@ fn paths_filter() -> Step<Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("native-filter")
+        .id(NATIVE_FILTER.id())
         .add_with(("predicate-quantifier", "every"))
         .add_with((
             "filters",
@@ -163,7 +201,7 @@ fn cache_wasm_version_bump() -> Step<Run> {
               echo "bumped=false" >> "$GITHUB_OUTPUT"
             fi
         "#})
-        .id("cache-wasm")
+        .id(CACHE_WASM.id())
         .shell("bash")
 }
 
@@ -182,7 +220,7 @@ fn read_labels() -> Step<Run> {
               echo "skip=false" >> "$GITHUB_OUTPUT"
             fi
         "#})
-        .id("labels")
+        .id(LABELS.id())
         .if_condition(native_changed())
         .shell("bash")
         .add_env(("GH_TOKEN", github().token()))
@@ -208,7 +246,7 @@ fn verify_bump() -> Step<Run> {
         .id("bump")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         // The base the merge result was built on (fetched by the cache-wasm step).
-        .add_env(("BASE_REF", typed::steps("cache-wasm").output("base_sha")))
+        .add_env(("BASE_REF", CACHE_WASM.outputs.base_sha.read()))
 }
 
 /// Exports `APPLE_API_KEY` / `APPLE_API_ISSUER` via `GITHUB_ENV` and writes
@@ -252,7 +290,7 @@ fn skip_notice() -> Step<Run> {
             "echo \"Native iOS changes detected, but the skip-ios-update label says they \
              don't break the native/web contract — skipping the App Store release gate.\"",
         )
-        .if_condition(native_changed().and(skip_label().is_true()))
+        .if_condition(native_changed().and(LABELS.outputs.skip.read().is_set()))
 }
 
 /// Keep release instructions visible on the PR even when an earlier step fails.

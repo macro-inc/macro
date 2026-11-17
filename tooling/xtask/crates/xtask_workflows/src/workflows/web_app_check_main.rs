@@ -1,7 +1,9 @@
 //! `Web App Pr Checks` — frontend and mobile PR checks.
 //! Generated into `web-app-check-main.yml`.
 
-use gh_workflow::expr::typed::{self, Expr, Num, Str, always, github, matrix, needs};
+use gh_workflow::expr::typed::{
+    Flag, JobHandle, JobOutput, Num, StepHandle, StepOutput, always, github, matrix,
+};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
 };
@@ -33,21 +35,96 @@ fn mid_web_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
+struct PathCheckOutputs {
+    /// Whether the web checks should run at all.
+    should_run: JobOutput<Flag>,
+    /// Whether the change can alter generated code.
+    codegen_changed: JobOutput<Flag>,
+    /// Whether the change can alter the web bundle.
+    web_artifact_changed: JobOutput<Flag>,
+    /// Whether the interface language browser tests' surfaces changed.
+    i18n_changed: JobOutput<Flag>,
+    /// Whether the database grid browser tests' surfaces changed.
+    database_grid_changed: JobOutput<Flag>,
+    /// Whether the event details browser tests' surfaces changed.
+    calendar_details_changed: JobOutput<Flag>,
+}
+
+const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+    "path-check",
+    PathCheckOutputs {
+        should_run: JobOutput::new("path-check", "should_run"),
+        codegen_changed: JobOutput::new("path-check", "codegen_changed"),
+        web_artifact_changed: JobOutput::new("path-check", "web_artifact_changed"),
+        i18n_changed: JobOutput::new("path-check", "i18n_changed"),
+        database_grid_changed: JobOutput::new("path-check", "database_grid_changed"),
+        calendar_details_changed: JobOutput::new("path-check", "calendar_details_changed"),
+    },
+);
+
+const TYPESCRIPT: JobHandle<()> = JobHandle::new("typescript", ());
+const GENERATED_CODE: JobHandle<()> = JobHandle::new("generated-code", ());
+const BIOME_CHECK: JobHandle<()> = JobHandle::new("biome-check", ());
+const TEST: JobHandle<()> = JobHandle::new("test", ());
+const FUNCTIONAL: JobHandle<()> = JobHandle::new("functional", ());
+const BROWSER: JobHandle<()> = JobHandle::new("browser", ());
+const CYCLES: JobHandle<()> = JobHandle::new("cycles", ());
+const BUILD: JobHandle<()> = JobHandle::new("build", ());
+
+struct FilterOutputs {
+    /// The `should_run` filter's match.
+    should_run: StepOutput<Flag>,
+    /// The `web_artifact_changed` filter's match.
+    web_artifact_changed: StepOutput<Flag>,
+    /// The `codegen_inputs` filter's match.
+    codegen_inputs: StepOutput<Flag>,
+    /// The `i18n_changed` filter's match.
+    i18n_changed: StepOutput<Flag>,
+    /// The `database_grid_changed` filter's match.
+    database_grid_changed: StepOutput<Flag>,
+    /// The `calendar_details_changed` filter's match.
+    calendar_details_changed: StepOutput<Flag>,
+}
+
+const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+    "filter",
+    FilterOutputs {
+        should_run: StepOutput::new("filter", "should_run"),
+        web_artifact_changed: StepOutput::new("filter", "web_artifact_changed"),
+        codegen_inputs: StepOutput::new("filter", "codegen_inputs"),
+        i18n_changed: StepOutput::new("filter", "i18n_changed"),
+        database_grid_changed: StepOutput::new("filter", "database_grid_changed"),
+        calendar_details_changed: StepOutput::new("filter", "calendar_details_changed"),
+    },
+);
+
+struct CodegenOutputs {
+    /// [`detect_schema_changes`]'s verdict.
+    codegen_changed: StepOutput<Flag>,
+}
+
+const CODEGEN: StepHandle<CodegenOutputs> = StepHandle::new(
+    "codegen",
+    CodegenOutputs {
+        codegen_changed: StepOutput::new("codegen", "codegen_changed"),
+    },
+);
+
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
     Workflow::new("Web App Pr Checks")
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("path-check", path_check())
-        .add_job(android_native_check::JOB_ID, android_native_check())
-        .add_job("typescript", typescript())
-        .add_job("generated-code", generated_code())
-        .add_job("biome-check", biome_check())
-        .add_job("test", test())
-        .add_job("functional", functional())
-        .add_job("browser", browser())
-        .add_job("cycles", cycles())
-        .add_job("build", build())
-        .add_job(ios_native_check::JOB_ID, ios_native_check::job())
+        .add_job(PATH_CHECK, path_check())
+        .add_job(android_native_check::JOB, android_native_check())
+        .add_job(TYPESCRIPT, typescript())
+        .add_job(GENERATED_CODE, generated_code())
+        .add_job(BIOME_CHECK, biome_check())
+        .add_job(TEST, test())
+        .add_job(FUNCTIONAL, functional())
+        .add_job(BROWSER, browser())
+        .add_job(CYCLES, cycles())
+        .add_job(BUILD, build())
+        .add_job(ios_native_check::JOB, ios_native_check::job())
         .add_job("status-check", status_check())
 }
 
@@ -61,26 +138,29 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("should_run", typed::steps("filter").output("should_run"))
         .add_output(
-            "codegen_changed",
-            typed::steps("codegen").output("codegen_changed"),
+            PATH_CHECK.outputs.should_run.name(),
+            FILTER.outputs.should_run.read(),
         )
         .add_output(
-            "web_artifact_changed",
-            typed::steps("filter").output("web_artifact_changed"),
+            PATH_CHECK.outputs.codegen_changed.name(),
+            CODEGEN.outputs.codegen_changed.read(),
         )
         .add_output(
-            "i18n_changed",
-            typed::steps("filter").output("i18n_changed"),
+            PATH_CHECK.outputs.web_artifact_changed.name(),
+            FILTER.outputs.web_artifact_changed.read(),
         )
         .add_output(
-            "database_grid_changed",
-            typed::steps("filter").output("database_grid_changed"),
+            PATH_CHECK.outputs.i18n_changed.name(),
+            FILTER.outputs.i18n_changed.read(),
         )
         .add_output(
-            "calendar_details_changed",
-            typed::steps("filter").output("calendar_details_changed"),
+            PATH_CHECK.outputs.database_grid_changed.name(),
+            FILTER.outputs.database_grid_changed.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.calendar_details_changed.name(),
+            FILTER.outputs.calendar_details_changed.read(),
         )
         .add_step(path_check_checkout())
         .add_step(paths_filter())
@@ -92,8 +172,8 @@ fn path_check() -> Job {
 /// this one.
 fn typescript() -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(path_check_output("should_run").is_true())
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.should_run.read().is_set())
         .name("Typecheck")
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
@@ -244,8 +324,8 @@ fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
 /// specs `gen-api` just wrote rather than rerunning it.
 fn generated_code() -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(path_check_output("codegen_changed").is_true())
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.codegen_changed.read().is_set())
         .name("Generated Code Check")
         .timeout_minutes(25u32)
         .runs_on(mid_web_runner())
@@ -404,31 +484,26 @@ fn status_check() -> Job {
         .timeout_minutes(5u32)
         .cond(always())
         .needs(vec![
-            "path-check".to_string(),
-            android_native_check::JOB_ID.to_string(),
-            "typescript".to_string(),
-            "generated-code".to_string(),
-            "biome-check".to_string(),
-            "test".to_string(),
-            "functional".to_string(),
-            "browser".to_string(),
-            "cycles".to_string(),
-            "build".to_string(),
-            ios_native_check::JOB_ID.to_string(),
+            PATH_CHECK.to_string(),
+            android_native_check::JOB.to_string(),
+            TYPESCRIPT.to_string(),
+            GENERATED_CODE.to_string(),
+            BIOME_CHECK.to_string(),
+            TEST.to_string(),
+            FUNCTIONAL.to_string(),
+            BROWSER.to_string(),
+            CYCLES.to_string(),
+            BUILD.to_string(),
+            ios_native_check::JOB.to_string(),
         ])
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_step(check_job_results())
 }
 
-/// An output of the `path-check` job.
-fn path_check_output(name: &str) -> Expr<Str> {
-    needs("path-check").output(name)
-}
-
 fn gated_web_job(name: &str) -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(path_check_output("should_run").is_true())
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.should_run.read().is_set())
         .name(name)
         .runs_on(web_runner())
 }
@@ -457,11 +532,8 @@ fn path_check_checkout() -> Step<Use> {
 fn detect_schema_changes() -> Step<Run> {
     Step::new("Detect schema changes")
         .run(DETECT_SCHEMA_CHANGES)
-        .id("codegen")
-        .add_env((
-            "CODEGEN_INPUTS",
-            typed::steps("filter").output("codegen_inputs"),
-        ))
+        .id(CODEGEN.id())
+        .add_env(("CODEGEN_INPUTS", FILTER.outputs.codegen_inputs.read()))
 }
 
 /// The checkout is blobless, so `git diff` and `git show` fetch blobs as they
@@ -522,7 +594,7 @@ fn paths_filter() -> Step<Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("filter")
+        .id(FILTER.id())
         .add_with((
             "filters",
             format!(
@@ -693,7 +765,7 @@ fn run_signup_browser_tests() -> Step<Run> {
 fn run_i18n_browser_tests() -> Step<Run> {
     Step::new("Interface Language Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-i18n-browser")
-        .if_condition(path_check_output("i18n_changed").is_true())
+        .if_condition(PATH_CHECK.outputs.i18n_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -702,7 +774,7 @@ fn run_i18n_browser_tests() -> Step<Run> {
 fn run_database_browser_tests() -> Step<Run> {
     Step::new("Database Grid Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-database-browser")
-        .if_condition(path_check_output("database_grid_changed").is_true())
+        .if_condition(PATH_CHECK.outputs.database_grid_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -712,7 +784,7 @@ fn run_database_browser_tests() -> Step<Run> {
 fn run_calendar_details_browser_tests() -> Step<Run> {
     Step::new("Calendar Event Details Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
-        .if_condition(path_check_output("calendar_details_changed").is_true())
+        .if_condition(PATH_CHECK.outputs.calendar_details_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

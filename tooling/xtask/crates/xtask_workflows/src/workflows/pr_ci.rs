@@ -23,7 +23,7 @@
 //! their label and sets their status.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Str, cancelled, github, needs, steps, to_json, whole_needs,
+    Bool, Expr, JobHandle, StepHandle, Str, cancelled, github, needs, steps, to_json, whole_needs,
 };
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step,
@@ -60,6 +60,12 @@ fn pr_number() -> Expr<Str> {
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
 pub const START_JOB: &str = "Start";
 pub const GATE_JOB: &str = "CI gate";
+
+/// Takes the request and path-filters the calls; its outputs are one flag
+/// per path-filtered call, named by [`output_name`] at run time.
+const START: JobHandle<()> = JobHandle::new("start", ());
+/// The path filter in [`START`]; one output per path-filtered call.
+const FILTER: StepHandle<()> = StepHandle::new("filter", ());
 
 /// A check workflow `PR CI` calls.
 struct Call {
@@ -164,7 +170,7 @@ pub fn pr_ci() -> Workflow {
             ))
             .cancel_in_progress(true),
         )
-        .add_job("start", start());
+        .add_job(START, start());
 
     CALLS
         .iter()
@@ -235,7 +241,7 @@ fn start() -> Job {
         .filter(|call| call.paths.is_some())
         .fold(job, |job, call| {
             let output = output_name(call);
-            job.add_output(output.clone(), steps("filter").output(&output))
+            job.add_output(output.clone(), steps(FILTER.id()).output(&output))
         })
 }
 
@@ -260,18 +266,18 @@ fn paths_filter() -> Step<Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("filter")
+        .id(FILTER.id())
         .add_with(("filters", filters))
 }
 
 fn call_job(call: &Call) -> CallJob {
     let job = CallJob::new(format!("./.github/workflows/{}", call.file))
         .name(call.name)
-        .needs(vec!["start".to_string()])
+        .add_needs(START)
         .inherit_secrets();
 
     match call.paths {
-        Some(_) => job.cond(needs("start").output(&output_name(call)).is_true()),
+        Some(_) => job.cond(needs(START.id()).output(&output_name(call)).is_true()),
         None => job,
     }
 }
@@ -279,7 +285,7 @@ fn call_job(call: &Call) -> CallJob {
 /// Runs unless the run was cancelled (a newer request superseded it) or was
 /// never a request. A skipped call is a path filter that didn't match.
 fn gate() -> Job {
-    let needed = std::iter::once("start")
+    let needed = std::iter::once(START.id())
         .chain(CALLS.iter().map(|call| call.id))
         .map(str::to_string)
         .collect::<Vec<_>>();
@@ -287,7 +293,7 @@ fn gate() -> Job {
     Job::default()
         .name(GATE_JOB)
         .needs(needed)
-        .cond((!cancelled()).and(needs("start").result().ne("skipped")))
+        .cond((!cancelled()).and(START.result().ne("skipped")))
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {

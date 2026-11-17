@@ -8,7 +8,7 @@
 //! packages it adds to `Cargo.lock` (`scripts/cargo_deny_new_advisories.ts`);
 //! [`super::cargo_deny_advisories`] fails on the rest, daily on `main`.
 
-use gh_workflow::expr::typed::{self, cancelled};
+use gh_workflow::expr::typed::{StepHandle, cancelled};
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
@@ -36,6 +36,9 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!(".github/workflows/cargo_deny.yml"),
 ];
 
+/// The bans/licenses/sources check; later steps read its outcome.
+const BANS: StepHandle<()> = StepHandle::new("bans", ());
+
 /// Build the workflow.
 pub fn cargo_deny() -> Workflow {
     Workflow::new("cargo deny check")
@@ -52,7 +55,7 @@ fn cargo_deny_job() -> Job {
         .add_step(checkout().add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
         .add_step(install_cargo_deny())
-        .add_step(deny("bans licenses sources").id("bans"))
+        .add_step(deny("bans licenses sources").id(BANS.id()))
         .add_step(
             Step::new("cargo deny check advisories, for packages this PR adds")
                 .run(steps::node_script(include_str!(
@@ -61,7 +64,7 @@ fn cargo_deny_job() -> Job {
                 .shell("bash")
                 // Report advisories even when bans, licenses or sources fail,
                 // as one `cargo deny check` did, but not when setup failed.
-                .if_condition((!cancelled()).and(typed::steps("bans").outcome().ne("skipped")))
+                .if_condition((!cancelled()).and(BANS.outcome().ne("skipped")))
                 .add_env(("DENY_ARGS", DENY_ARGS))
                 .add_env(("BASE_REV", "HEAD^1")),
         )

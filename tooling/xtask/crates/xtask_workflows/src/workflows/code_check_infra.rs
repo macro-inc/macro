@@ -4,7 +4,7 @@
 //! `Infra Status Check`, which is unchanged, so branch protection is
 //! unaffected by the file rename).
 
-use gh_workflow::expr::typed::{always, steps};
+use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{
@@ -22,13 +22,40 @@ fn infra_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
+struct PathCheckOutputs {
+    /// Whether the checks should run at all; read by [`steps::gated_job`].
+    should_run: JobOutput<Flag>,
+}
+
+const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+    "path-check",
+    PathCheckOutputs {
+        should_run: JobOutput::new("path-check", "should_run"),
+    },
+);
+
+const BIOME_CHECK: JobHandle<()> = JobHandle::new("biome-check", ());
+const CHECK: JobHandle<()> = JobHandle::new("check", ());
+
+struct FilterOutputs {
+    /// The `should_run` filter's match.
+    should_run: StepOutput<Flag>,
+}
+
+const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+    "filter",
+    FilterOutputs {
+        should_run: StepOutput::new("filter", "should_run"),
+    },
+);
+
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("path-check", path_check())
-        .add_job("biome-check", biome_check())
-        .add_job("check", check())
+        .add_job(PATH_CHECK, path_check())
+        .add_job(BIOME_CHECK, biome_check())
+        .add_job(CHECK, check())
         .add_job("status-check", status_check())
 }
 
@@ -36,7 +63,10 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("should_run", steps("filter").output("should_run"))
+        .add_output(
+            PATH_CHECK.outputs.should_run.name(),
+            FILTER.outputs.should_run.read(),
+        )
         .add_step(checkout(false))
         .add_step(paths_filter())
 }
@@ -75,9 +105,9 @@ fn status_check() -> Job {
         .name("Infra Status Check")
         .cond(always())
         .needs(vec![
-            "path-check".to_string(),
-            "biome-check".to_string(),
-            "check".to_string(),
+            PATH_CHECK.to_string(),
+            BIOME_CHECK.to_string(),
+            CHECK.to_string(),
         ])
         .runs_on(runners::Runner::Small.to_string())
         .add_step(check_job_results())
@@ -96,7 +126,7 @@ fn paths_filter() -> Step<Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("filter")
+        .id(FILTER.id())
         .add_with((
             "filters",
             indoc::indoc! {r#"

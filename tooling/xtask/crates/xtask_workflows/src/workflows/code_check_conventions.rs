@@ -7,7 +7,7 @@
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
 //! conventions from `docs/development/style-guide.md` at the repo root.
 
-use gh_workflow::expr::typed::{always, steps};
+use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{runners, steps, vars};
@@ -18,6 +18,32 @@ fn conventions_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
+struct PathCheckOutputs {
+    /// Whether the checks should run at all; read by [`steps::gated_job`].
+    should_run: JobOutput<Flag>,
+}
+
+const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+    "path-check",
+    PathCheckOutputs {
+        should_run: JobOutput::new("path-check", "should_run"),
+    },
+);
+
+const AST_GREP: JobHandle<()> = JobHandle::new("ast-grep", ());
+
+struct FilterOutputs {
+    /// The `should_run` filter's match.
+    should_run: StepOutput<Flag>,
+}
+
+const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+    "filter",
+    FilterOutputs {
+        should_run: StepOutput::new("filter", "should_run"),
+    },
+);
+
 /// Build the workflow.
 pub fn code_check_conventions() -> Workflow {
     Workflow::new("conventions code check")
@@ -27,8 +53,8 @@ pub fn code_check_conventions() -> Workflow {
             ..Default::default()
         })
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("path-check", path_check())
-        .add_job("ast-grep", ast_grep())
+        .add_job(PATH_CHECK, path_check())
+        .add_job(AST_GREP, ast_grep())
         .add_job("status-check", status_check())
 }
 
@@ -36,7 +62,10 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("should_run", steps("filter").output("should_run"))
+        .add_output(
+            PATH_CHECK.outputs.should_run.name(),
+            FILTER.outputs.should_run.read(),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(paths_filter())
 }
@@ -61,7 +90,7 @@ fn status_check() -> Job {
         .timeout_minutes(5u32)
         .name("Conventions Status Check")
         .cond(always())
-        .needs(vec!["path-check".to_string(), "ast-grep".to_string()])
+        .needs(vec![PATH_CHECK.to_string(), AST_GREP.to_string()])
         .runs_on(runners::Runner::Small.to_string())
         .add_step(check_job_results())
 }
@@ -73,7 +102,7 @@ fn paths_filter() -> Step<Use> {
             "paths-filter",
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
-        .id("filter")
+        .id(FILTER.id())
         .add_with((
             "filters",
             indoc::indoc! {r#"

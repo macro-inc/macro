@@ -32,21 +32,40 @@
 //! stable: the release preconditions, the watcher and the label workflow
 //! find it by name.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Str, github};
+use gh_workflow::expr::typed::{Bool, Expr, Flag, JobHandle, StepHandle, StepOutput, Str, github};
 use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
 use crate::workflows::{runners, steps};
 
-/// The job's id in the web app check workflow.
-pub(super) const JOB_ID: &str = "android-native-check";
+/// The job in the web app check workflow.
+pub(super) const JOB: JobHandle<()> = JobHandle::new("android-native-check", ());
 
-fn native_changed() -> Expr<Bool> {
-    typed::steps("android-version").output("changed").is_true()
+struct AndroidVersionOutputs {
+    /// Whether the Android native code changed against the base.
+    changed: StepOutput<Flag>,
+    /// The committed Android version code.
+    version_code: StepOutput<Str>,
 }
 
-fn skip_label() -> Expr<Str> {
-    typed::steps("labels").output("skip")
+const ANDROID_VERSION: StepHandle<AndroidVersionOutputs> = StepHandle::new(
+    "android-version",
+    AndroidVersionOutputs {
+        changed: StepOutput::new("android-version", "changed"),
+        version_code: StepOutput::new("android-version", "version_code"),
+    },
+);
+
+struct LabelsOutputs {
+    /// Whether the PR carries the `skip-android-update` label.
+    skip: StepOutput<Flag>,
 }
+
+const LABELS: StepHandle<LabelsOutputs> = StepHandle::new(
+    "labels",
+    LabelsOutputs {
+        skip: StepOutput::new("labels", "skip"),
+    },
+);
 
 pub(super) fn job() -> Job {
     Job::default()
@@ -69,7 +88,12 @@ pub(super) fn job() -> Job {
 }
 
 fn gated() -> Expr<Bool> {
-    native_changed().and(skip_label().ne("true"))
+    ANDROID_VERSION
+        .outputs
+        .changed
+        .read()
+        .is_set()
+        .and(LABELS.outputs.skip.read().is_unset())
 }
 
 fn setup_bun() -> Step<Use> {
@@ -94,8 +118,8 @@ fn version_check() -> Step<Run> {
             git fetch -q --depth=1 origin "$base"
             bun scripts/android-version-check.mjs "$base"
         "#})
-        .id("android-version")
-        .if_condition(skip_label().ne("true"))
+        .id(ANDROID_VERSION.id())
+        .if_condition(LABELS.outputs.skip.read().is_unset())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -110,7 +134,7 @@ fn floor_check() -> Step<Run> {
             git fetch -q --depth=1 origin "$base"
             bun scripts/android-version-check.mjs --skip-release "$base"
         "#})
-        .if_condition(skip_label().is_true())
+        .if_condition(LABELS.outputs.skip.read().is_set())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -127,7 +151,7 @@ fn read_labels() -> Step<Run> {
               echo "skip=false" >> "$GITHUB_OUTPUT"
             fi
         "#})
-        .id("labels")
+        .id(LABELS.id())
         .shell("bash")
         .add_env(("GH_TOKEN", github().token()))
         .add_env(("GH_REPO", github().repository()))
@@ -154,10 +178,7 @@ fn require_live() -> Step<Run> {
         .add_env(("GH_TOKEN", github().token()))
         .add_env(("GH_REPO", github().repository()))
         .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
-        .add_env((
-            "VERSION_CODE",
-            typed::steps("android-version").output("version_code"),
-        ))
+        .add_env(("VERSION_CODE", ANDROID_VERSION.outputs.version_code.read()))
 }
 
 fn skip_notice() -> Step<Run> {
@@ -166,5 +187,5 @@ fn skip_notice() -> Step<Run> {
             "echo \"The skip-android-update label says this PR's Android native changes don't \
              break the native/web contract — skipping the version bump and Play release gate.\"",
         )
-        .if_condition(skip_label().is_true())
+        .if_condition(LABELS.outputs.skip.read().is_set())
 }

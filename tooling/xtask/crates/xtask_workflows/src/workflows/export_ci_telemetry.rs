@@ -1,7 +1,9 @@
 //! Export completed GitHub Actions attempts as workflow/job/step traces, and as
 //! push, job and step events for percentiles over days.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Str, always, github, runner};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, StepHandle, StepOutput, Str, always, github, runner,
+};
 use gh_workflow::{Event, Job, Level, Permissions, Step, Workflow, WorkflowRun, WorkflowRunType};
 
 use crate::workflows::steps;
@@ -85,9 +87,29 @@ const UNOBSERVED_PR_WORKFLOWS: &[&str] = &[
     "PR Privacy Check",
     "Pull Request",
 ];
-fn export_trace() -> Expr<Bool> {
-    typed::steps("preflight").output("export").is_true()
+struct PreflightOutputs {
+    /// Whether the preflight cleared the run for the trace exporter.
+    export: StepOutput<Flag>,
 }
+
+const PREFLIGHT: StepHandle<PreflightOutputs> = StepHandle::new(
+    "preflight",
+    PreflightOutputs {
+        export: StepOutput::new("preflight", "export"),
+    },
+);
+
+struct IngestOutputs {
+    /// The OTLP `Authorization` header for the ingestion endpoint.
+    headers: StepOutput<Str>,
+}
+
+const INGEST: StepHandle<IngestOutputs> = StepHandle::new(
+    "ingest",
+    IngestOutputs {
+        headers: StepOutput::new("ingest", "headers"),
+    },
+);
 
 fn events_file() -> String {
     format!("{}/ci-telemetry-events.json", runner().temp())
@@ -102,10 +124,6 @@ fn ran() -> Expr<Bool> {
     github()
         .event::<Str>("workflow_run.conclusion")
         .ne("skipped")
-}
-
-fn ingestion_headers() -> Expr<Str> {
-    typed::steps("ingest").output("headers")
 }
 
 /// Build the CI telemetry observer without checking out code or downloading artifacts.
@@ -145,7 +163,7 @@ fn export() -> Job {
                     "github-script",
                     "f28e40c7f34bde8b3046d885e986cb6290c5673b",
                 )
-                .id("preflight")
+                .id(PREFLIGHT.id())
                 .add_env(("CI_TELEMETRY_JOBS", jobs_file()))
                 .add_with(("script", include_str!("scripts/ci_telemetry_preflight.js"))),
         )
@@ -181,7 +199,7 @@ fn export() -> Job {
         .add_step(
             Step::new("Read ingestion credential")
                 .run(include_str!("scripts/read_ci_ingestion_credential.sh"))
-                .id("ingest")
+                .id(INGEST.id())
                 .if_condition(always())
                 .shell("bash"),
         )
@@ -198,7 +216,7 @@ fn export() -> Job {
                 .timeout_minutes(1u32)
                 .add_env(("CI_TELEMETRY_EVENTS", events_file()))
                 .add_env(("OTLP_LOGS_URL", "https://otlp.macro-internal.com/v1/logs"))
-                .add_env(("OTLP_HEADERS", ingestion_headers())),
+                .add_env(("OTLP_HEADERS", INGEST.outputs.headers.read())),
         )
         .add_step(
             Step::new("Export workflow, job and step traces")
@@ -208,7 +226,7 @@ fn export() -> Job {
                     "b1c422726cc4ff4adb0838ebca67586f24babb42",
                 )
                 .id("traces")
-                .if_condition(export_trace())
+                .if_condition(PREFLIGHT.outputs.export.read().is_set())
                 .add_with(("github-token", github().token()))
                 .add_env(("OTEL_SERVICE_NAME", "github-actions"))
                 .add_env(("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=ci"))
@@ -217,6 +235,6 @@ fn export() -> Job {
                     "OTEL_EXPORTER_OTLP_ENDPOINT",
                     "https://otlp.macro-internal.com",
                 ))
-                .add_env(("OTEL_EXPORTER_OTLP_HEADERS", ingestion_headers())),
+                .add_env(("OTEL_EXPORTER_OTLP_HEADERS", INGEST.outputs.headers.read())),
         )
 }

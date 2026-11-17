@@ -7,19 +7,27 @@
 //! status check doesn't read them. A `[no preview]` marker in the PR title opts
 //! out without skipping CI.
 
-use gh_workflow::expr::typed::{self, Bool, Expr, Str, github, needs};
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, Str, github};
 use gh_workflow::{Env, Run, Step, Use};
 
 use crate::workflows::vars;
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
+const CREDENTIALS: StepHandle<()> = StepHandle::new("preview-credentials", ());
+/// Outputs `id`, read by the later steps' scripts.
+const PREVIEW_ID: StepHandle<()> = StepHandle::new("preview-id", ());
+const BUCKET_CHECK: StepHandle<()> = StepHandle::new("preview-bucket", ());
+const DEPLOY: StepHandle<()> = StepHandle::new("preview-deploy", ());
+
 /// A fork has no credentials to deploy with, and a change that can't alter the
 /// bundle has nothing new to show.
 fn wanted() -> Expr<Bool> {
-    needs("path-check")
-        .output("web_artifact_changed")
-        .is_true()
+    super::PATH_CHECK
+        .outputs
+        .web_artifact_changed
+        .read()
+        .is_set()
         .and(
             !github()
                 .event::<Str>("pull_request.title")
@@ -43,19 +51,19 @@ pub fn build_env() -> [Env; 2] {
 /// Every deploy step with its gate, in order. A step that continues on error
 /// still leaves `success()` true, so later steps check the steps they need.
 pub fn steps() -> (Step<Use>, Vec<Step<Run>>) {
-    let gate = |after: &str| wanted().and(typed::steps(after).outcome().eq("success"));
+    let gate = |after: StepHandle<()>| wanted().and(after.outcome().eq("success"));
     let credentials = configure_aws_credentials()
-        .id("preview-credentials")
+        .id(CREDENTIALS.id())
         .if_condition(wanted())
         .continue_on_error(true);
     let rest = vec![
-        (get_or_create_preview_id(), gate("preview-credentials")),
+        (get_or_create_preview_id(), gate(CREDENTIALS)),
         (
-            validate_bucket_name().id("preview-bucket"),
-            gate("preview-id"),
+            validate_bucket_name().id(BUCKET_CHECK.id()),
+            gate(PREVIEW_ID),
         ),
-        (deploy_to_s3().id("preview-deploy"), gate("preview-bucket")),
-        (comment_on_pr(), gate("preview-deploy")),
+        (deploy_to_s3().id(DEPLOY.id()), gate(BUCKET_CHECK)),
+        (comment_on_pr(), gate(DEPLOY)),
     ]
     .into_iter()
     .map(|(step, condition)| {
@@ -91,7 +99,7 @@ fn get_or_create_preview_id() -> Step<Run> {
             echo "Preview ID: $PREVIEW_ID"
         "#})
         .add_env(Env::new("BRANCH", github().head_ref()))
-        .id("preview-id")
+        .id(PREVIEW_ID.id())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
