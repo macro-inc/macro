@@ -338,7 +338,7 @@ describe('lists inside table cells', () => {
     );
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
-    expect(markdown).toBe('| - one\\n- two | plain |');
+    expect(markdown).toBe('| - one\\n- two | plain |\n| --- | --- |');
 
     await buildEditorState(editor, () => {
       $getRoot().clear();
@@ -548,7 +548,9 @@ describe('images inside table cells', () => {
     );
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
-    expect(markdown).toBe('| ![cat](https://example.com/cat.png) | plain |');
+    expect(markdown).toBe(
+      '| ![cat](https://example.com/cat.png) | plain |\n| --- | --- |'
+    );
 
     await buildEditorState(editor, () => {
       $getRoot().clear();
@@ -671,8 +673,11 @@ describe('pipe table external transformer', () => {
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
     const lines = markdown.split('\n');
-    expect(lines[0]).toBe('| wide |  | c |');
-    expect(lines[1]).toBe('| x | y | z |');
+    expect(lines).toEqual([
+      '| wide |  | c |',
+      '| --- | --- | --- |',
+      '| x | y | z |',
+    ]);
   });
 });
 
@@ -851,12 +856,33 @@ describe('pipe characters inside pipe-table cells', () => {
     });
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
-    expect(markdown).toBe('| a\\|b | c |');
+    expect(markdown).toBe('| a\\|b | c |\n| --- | --- |');
 
     await importWith(editor, markdown);
     editor.getEditorState().read(() => {
       expect($cellTexts()).toEqual([['a|b', 'c']]);
     });
+  });
+
+  it('writes the GFM delimiter row after the first row only', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Bug Reports |',
+        '| :--- | :---: |',
+        `| ${GAB_MENTION} | 206 |`,
+        '| Plain row | 117 |',
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+
+    expect(exportMarkdown(editor, EXTERNAL_TRANSFORMERS).split('\n')).toEqual([
+      '| Person | Bug Reports |',
+      '| --- | --- |',
+      '| @gab | 206 |',
+      '| Plain row | 117 |',
+    ]);
   });
 
   it('round-trips markdown -> lexical -> markdown stably', async () => {
