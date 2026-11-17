@@ -43,6 +43,7 @@ import type {
   GetUserActivityParams,
   HttpSendChatMessageRequest,
   ImportEntitiesResponse,
+  ImportErrorBody,
   ImportNotionPageRequest,
   ImportNotionPageResponse,
   ImportSource,
@@ -63,6 +64,7 @@ import type {
   PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
+  PlanWorkspaceImportRequest,
   ReadActivityResponse,
   ReadMyActivityParams,
   RejectToolCallRequest,
@@ -2245,6 +2247,76 @@ export const cancelWorkspaceHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelWorkspaceHandlerResponse;
+};
+
+/**
+ * @summary Plan a reviewed workspace import, replacing any earlier plan for this
+source. Planning goes on in the background; this answers within seconds
+with where it got. Nothing is written until the plan's import review is
+approved.
+ */
+export type planWorkspaceHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type planWorkspaceHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type planWorkspaceHandlerResponse409 = {
+  data: ImportErrorBody;
+  status: 409;
+};
+
+export type planWorkspaceHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type planWorkspaceHandlerResponseSuccess =
+  planWorkspaceHandlerResponse200 & {
+    headers: Headers;
+  };
+export type planWorkspaceHandlerResponseError = (
+  | planWorkspaceHandlerResponse400
+  | planWorkspaceHandlerResponse409
+  | planWorkspaceHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type planWorkspaceHandlerResponse =
+  | planWorkspaceHandlerResponseSuccess
+  | planWorkspaceHandlerResponseError;
+
+export const getPlanWorkspaceHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}/plan`;
+};
+
+export const planWorkspaceHandler = async (
+  source: ImportSource,
+  planWorkspaceImportRequest: PlanWorkspaceImportRequest,
+  options?: RequestInit
+): Promise<planWorkspaceHandlerResponse> => {
+  const res = await fetch(getPlanWorkspaceHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(planWorkspaceImportRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: planWorkspaceHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as planWorkspaceHandlerResponse;
 };
 
 /**
