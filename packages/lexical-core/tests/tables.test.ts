@@ -39,6 +39,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   INTERNAL_TRANSFORMERS,
 } from '../transformers';
+import { E_TABLE_NODE } from '../transformers/tables';
 
 function createTestEditor() {
   return createEditor({
@@ -813,14 +814,14 @@ describe('pipe characters inside pipe-table cells', () => {
     });
   });
 
-  it('keeps inline formatting, code with a pipe, escaped pipes and inline math in their cells', async () => {
+  it('keeps inline formatting, code with an escaped pipe, escaped pipes and inline math in their cells', async () => {
     const editor = createTestEditor();
     await importWith(
       editor,
       [
         '| Bold | Code | Escaped | Math |',
         '| --- | --- | --- | --- |',
-        '| **strong** | `a|b` | x \\| y | $$27.4\\%$$ |',
+        '| **strong** | `a\\|b` | x \\| y | $$27.4\\%$$ |',
       ].join('\n')
     );
 
@@ -1029,11 +1030,212 @@ describe('pipe characters inside pipe-table cells', () => {
     });
   });
 
+  it('splits on an unescaped pipe inside backticks, as GFM does', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| a | b | c |',
+        '| --- | --- | --- |',
+        '| press ` key | b | then ` again |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellGrid().map((row) => row.length)).toEqual([3, 3]);
+    });
+  });
+
+  it('round-trips literal backslash-pipe text typed in a cell', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('x \\| y'), $createCell('z'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(editor, exportMarkdown(editor, EXTERNAL_TRANSFORMERS));
+    editor.getEditorState().read(() => {
+      expect($cellTexts()[0]).toEqual(['x \\| y', 'z']);
+    });
+  });
+
+  it('protects pipes only inside a complete <m-…>{json}</m-…> tag in one cell', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| a | b | c |',
+        '| --- | --- | --- |',
+        '| <m-user-mention>broken | b | x</m-user-mention> |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellGrid().map((row) => row.length)).toEqual([3, 3]);
+    });
+  });
+
+  it('imports every inline chip a paragraph imports, unknown tags included', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-tag-mention>{"tagId":"t1","name":"urgent"}</m-tag-mention>',
+      '<m-not-a-real-tag>{"x":1}</m-not-a-real-tag>',
+    ];
+    await importWith(editor, chips.join(' '), ALL_TRANSFORMERS);
+    const paragraphTypes = editor.getEditorState().read(() =>
+      $getRoot()
+        .getChildren()
+        .flatMap((child) => ($isElementNode(child) ? child.getChildren() : []))
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text')
+    );
+
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${chips.join(' ')} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      const cellTypes = $inlineNodes($cellGrid()[1][0])
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text');
+      expect(paragraphTypes.length).toBe(2);
+      expect(cellTypes).toEqual(paragraphTypes);
+    });
+  });
+
+  it('keeps justify alignment through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createCell('a');
+      cell.setFormat('justify');
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      expect($cellGrid()[0][0].getFormatType()).toBe('justify');
+    });
+  });
+
+  it('keeps a delimiter-looking row after the second row as a text row', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      ['| a | b |', '| c | d |', '| --- | :---: |', '| e | f |'].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+        ['---', ':---:'],
+        ['e', 'f'],
+      ]);
+    });
+  });
+
+  it('never overwrites the alignment of a cell that already has one', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const header = $createTableRowNode();
+      const kept = $createCell('kept');
+      kept.setFormat('right');
+      header.append(kept, $createCell('set'));
+      table.append(header);
+      $getRoot().append(table);
+    });
+
+    // Lines typed under the table go through the markdown shortcut one by one.
+    for (const line of ['| :---: | :---: |', '| x | y |']) {
+      editor.update(
+        () => {
+          const paragraph = $createParagraphNode().append(
+            $createTextNode(line)
+          );
+          $getRoot().append(paragraph);
+          const match = line.match(E_TABLE_NODE.regExp);
+          if (match) E_TABLE_NODE.replace(paragraph, [], match, true);
+        },
+        { discrete: true }
+      );
+    }
+
+    editor.getEditorState().read(() => {
+      expect(
+        $cellGrid().map((row) => row.map((cell) => cell.getFormatType()))
+      ).toEqual([
+        ['right', 'center'],
+        ['right', 'center'],
+      ]);
+    });
+  });
+
+  it('turns $x$ into math in a cell exactly when a paragraph does', async () => {
+    const editor = createTestEditor();
+    const samples = ['$x+1$', '$5 and $10', 'costs $3'];
+    for (const sample of samples) {
+      await importWith(editor, sample);
+      const inParagraph = editor.getEditorState().read(() =>
+        $getRoot()
+          .getChildren()
+          .flatMap((child) =>
+            $isElementNode(child) ? child.getChildren() : []
+          )
+          .some($isEquationNode)
+      );
+      await importWith(
+        editor,
+        ['| a |', '| --- |', `| ${sample} |`].join('\n')
+      );
+      const inCell = editor
+        .getEditorState()
+        .read(() => $inlineNodes($cellGrid()[1][0]).some($isEquationNode));
+      expect([sample, inCell]).toEqual([sample, inParagraph]);
+    }
+  });
+
+  it('keeps a headerless table headerless through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('a'), $createCell('b'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      expect(
+        $cellGrid()
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
   it('round-trips markdown -> lexical -> markdown stably', async () => {
     const source = [
       '| Person | Code | Note |',
       '| --- | --- | --- |',
-      `| ${GAB_MENTION} | \`a|b\` | x \\| y |`,
+      `| ${GAB_MENTION} | \`a\\|b\` | x \\| y |`,
     ].join('\n');
 
     const editor = createTestEditor();
