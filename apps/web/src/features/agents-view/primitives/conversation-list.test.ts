@@ -198,4 +198,44 @@ describe('createConversationList', () => {
     expect(calls()).toBe(2);
     dispose();
   });
+  it('fills the active list when loaded archive rows hide older conversations', () => {
+    const state = createRoot((dispose) => {
+      let calls = 0;
+      const archived: AgentSessionEntity[] = Array.from(
+        { length: 20 },
+        (_, index) => ({
+          type: 'agent_session',
+          id: `archived-${index}`,
+          botId: 'bot',
+          name: 'Archived',
+          ownerId: 'owner',
+          status: 'ready',
+          archivedBy: 'user',
+        })
+      );
+      createConversationList({
+        conversations: () => [],
+        archived: () => archived,
+        filters: () => EMPTY_CONVERSATION_FILTERS,
+        sort: () => 'updated',
+        factsOf: () => ({
+          mode: 'code',
+          state: 'dormant',
+          unread: false,
+          pullRequest: null,
+        }),
+        hasNextPage: () => true,
+        loading: () => false,
+        loadingNextPage: () => false,
+        error: () => false,
+        fill: () => 'conversations',
+        onLoadMore: () => {
+          calls++;
+        },
+      });
+      return { dispose, calls: () => calls };
+    });
+    expect(state.calls()).toBe(1);
+    state.dispose();
+  });
 });

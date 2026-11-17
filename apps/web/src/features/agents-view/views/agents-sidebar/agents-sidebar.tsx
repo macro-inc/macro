@@ -86,6 +86,7 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
     loadingNextPage: () => props.loadingNextPage,
     error: () => props.error,
     onLoadMore: props.onLoadMore,
+    fill: () => 'conversations',
   });
   const visibleCount = () =>
     listState.waiting().length + listState.conversations().length;

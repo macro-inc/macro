@@ -22,8 +22,8 @@ export type ConversationListSource<Item extends AgentConversationEntity> = {
   loadingNextPage: Accessor<boolean>;
   error: Accessor<boolean>;
   onLoadMore: () => void;
-  /** Archive pages fill their own list; active lists count both query partitions. */
-  fill?: Accessor<'all' | 'archived'>;
+  /** Fill the displayed partition rather than counting rows hidden on another page. */
+  fill?: Accessor<'all' | 'conversations' | 'archived'>;
 };
 
 /** Shared list projection and pagination decisions, independent of scroll rendering. */
@@ -61,10 +61,10 @@ export function createConversationList<Item extends AgentConversationEntity>(
 
   // A filtered query can have more pages without enough visible rows to scroll.
   createEffect(() => {
-    const count =
-      source.fill?.() === 'archived'
-        ? archived().length
-        : active().length + archived().length;
+    const partition = source.fill?.() ?? 'all';
+    let count = active().length;
+    if (partition === 'archived') count = archived().length;
+    else if (partition === 'all') count += archived().length;
     if (count < 20 && canLoadMore()) source.onLoadMore();
   });
 
