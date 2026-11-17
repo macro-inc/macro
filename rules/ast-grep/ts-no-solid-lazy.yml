@@ -5,15 +5,26 @@ message: Import lazy from '@core/util/lazy'. Solid's lazy() shares one load acro
 files:
   - apps/web/src/**
 ignores:
-  - apps/web/src/lib/core/util/lazy.ts
+  - apps/web/src/lib/core/util/lazy.tsx
 rule:
-  kind: import_specifier
-  has:
-    field: name
-    regex: ^lazy$
-  inside:
-    kind: import_statement
-    stopBy: end
-    has:
-      field: source
-      regex: ^['"]solid-js['"]$
+  any:
+    - kind: import_specifier
+      has:
+        field: name
+        regex: ^lazy$
+      inside:
+        kind: import_statement
+        stopBy: end
+        has:
+          field: source
+          regex: ^['"]solid-js['"]$
+    - kind: export_specifier
+      has:
+        field: name
+        regex: ^lazy$
+      inside:
+        kind: export_statement
+        stopBy: end
+        has:
+          field: source
+          regex: ^['"]solid-js['"]$

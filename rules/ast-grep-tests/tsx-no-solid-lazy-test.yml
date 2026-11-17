@@ -6,6 +6,8 @@ valid:
     import { createSignal, Show } from 'solid-js';
   - |
     import { lazy } from 'other-library';
+  - |
+    export { lazy } from '@core/util/lazy';
 invalid:
   - |
     import { lazy } from 'solid-js';
@@ -13,3 +15,7 @@ invalid:
     import { createSignal, lazy } from 'solid-js';
   - |
     import type { Component, lazy } from 'solid-js';
+  - |
+    import { lazy as load } from 'solid-js';
+  - |
+    export { lazy } from 'solid-js';
