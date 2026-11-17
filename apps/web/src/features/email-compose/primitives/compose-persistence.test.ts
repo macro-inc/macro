@@ -12,6 +12,7 @@ import type { LocalDraft } from '../core/local-draft';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 const response: PersistedEmailIdentity = {
   draftId: 'saved-id',
@@ -27,7 +28,10 @@ function providerContext(provider: (typeof providers)[number]) {
   return composeContext;
 }
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 it('flushes the latest pending body and envelope exactly once on disposal', async () => {
   const composeContext = createComposeContext();
@@ -751,7 +755,7 @@ it('reads the draft afresh once the scheduled notice has closed', async () => {
 it('reads the draft afresh long after a notice that never reported closing', async () => {
   const composeContext = createComposeContext();
   // A notice dismissed before it was shown never reports closing.
-  const { host, options } = await scheduleAndShowThread(
+  const { host } = await scheduleAndShowThread(
     composeContext,
     new Date('2026-12-01T12:00:00Z')
   );
@@ -765,11 +769,13 @@ it('reads the draft afresh long after a notice that never reported closing', asy
     intent: { type: 'immediate' },
   });
   later.dispose();
-  options?.onDismiss?.();
 });
 
-it('starts a composer mounted while the thread is marked done from the schedule', async () => {
-  const composeContext = createComposeContext();
+/** Schedules a new message whose thread is marked done only on `markDone`. */
+async function scheduleWhileMarkingDone(
+  composeContext: ReturnType<typeof createComposeContext>,
+  sendTime: Date
+) {
   let markDone: (() => void) | undefined;
   vi.mocked(composeContext.delivery.archive).mockImplementationOnce(
     () =>
@@ -779,23 +785,123 @@ it('starts a composer mounted while the thread is marked done from the schedule'
   );
   const root = mountEmailComposer(composeContext);
   root.edit('Schedule and mark done');
-  const sendTime = new Date('2026-12-01T12:00:00Z');
   root.state.context.schedule.onSelect(sendTime);
   root.state.context.onSend();
   await vi.advanceTimersByTimeAsync(1);
   expect(composeContext.delivery.archive).toHaveBeenCalledOnce();
+  return { root, markDone: () => markDone?.() };
+}
+
+it('starts a composer mounted while the thread is marked done from the schedule', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    sendTime
+  );
 
   // The thread open in another split mounts its composer meanwhile.
   const beside = mountEmailComposer(composeContext, undefined, {
     draft: message('draft', { is_draft: true }),
   });
   expect(beside.state.context.schedule.confirmedTime()).toEqual(sendTime);
-  markDone?.();
+  markDone();
   await vi.advanceTimersByTimeAsync(1);
-  vi.mocked(composeContext.notices.feedback.success)
-    .mock.calls.find(([text]) => text === 'Email scheduled')?.[1]
-    ?.onDismiss?.();
   beside.dispose();
+  root.dispose();
+});
+
+it('announces no schedule that another view cancelled while the thread was marked done', async () => {
+  const composeContext = createComposeContext();
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(await beside.state.context.schedule.onCancel()).toBe(true);
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).not.toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.anything()
+  );
+  beside.dispose();
+  root.dispose();
+});
+
+it('starts composers from the schedule while its notice shows, however long marking done took', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    sendTime
+  );
+  await vi.advanceTimersByTimeAsync(40_000);
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.anything()
+  );
+  root.dispose();
+
+  const threadView = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  threadView.dispose();
+});
+
+it('starts a composer from the reschedule this tab just made, not an older read', async () => {
+  const composeContext = createComposeContext();
+  const original = new Date('2026-12-01T12:00:00Z');
+  const replacement = new Date('2026-12-02T14:30:00Z');
+  const root = mountEmailComposer(composeContext);
+  root.edit('Reschedule this');
+  await vi.advanceTimersByTimeAsync(600);
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: original.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(root.state.context.schedule.onSelect(replacement)).toBe(true);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email rescheduled',
+    expect.anything()
+  );
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: replacement.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  vi.mocked(composeContext.notices.feedback.alert).mockClear();
+
+  // View message opens the thread, whose read still holds the old time.
+  const threadView = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: original.toISOString(),
+    }),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(
+    replacement
+  );
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+  threadView.dispose();
   root.dispose();
 });
 

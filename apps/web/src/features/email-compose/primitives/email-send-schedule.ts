@@ -82,6 +82,11 @@ const scheduledNotices = new Map<string, ScheduledNotice>();
 // cancelled elsewhere.
 const SCHEDULED_SEED_MS = 30_000;
 
+/** Forgets every notice's schedule, so one test's schedule seeds no other. */
+export function resetScheduledNoticesForTests(): void {
+  scheduledNotices.clear();
+}
+
 export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
   notices: EmailComposeFeedback;
@@ -125,9 +130,10 @@ export function createEmailSendSchedule(options: {
   const seed = initialDraftId
     ? scheduledNotices.get(initialDraftId)
     : undefined;
+  // This tab's own schedule is newer than a read of the draft made before it.
   const initialScheduledTime =
-    options.initialScheduledTime ??
-    (seed && Date.now() < seed.seedUntil ? seed.sendTime : undefined);
+    (seed && Date.now() < seed.seedUntil ? seed.sendTime : undefined) ??
+    options.initialScheduledTime;
   const [state, setState] = createSignal<EmailScheduleState>(
     initialScheduledTime
       ? {
@@ -438,6 +444,12 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
+      ignoredLifecycleObservation =
+        deferredLifecycleObservation ?? options.lifecycleState?.();
+      const result = action === 'update' ? 'updated' : 'scheduled';
+      // Meanwhile a composer for the draft in another view may have cancelled
+      // or moved the schedule; a notice would then announce one that is gone.
+      if (scheduledNotices.get(draftId) !== notice) return result;
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
@@ -509,14 +521,15 @@ export function createEmailSendSchedule(options: {
           }
         );
         notice.toastId = toastId;
+        // However long marking the thread done took, composers mounted while
+        // the notice shows start from its schedule.
+        notice.seedUntil = Date.now() + SCHEDULED_SEED_MS;
       } catch (error) {
         // Toast rendering is post-commit UI and cannot make a successful
         // schedule retryable.
         notices.reportError(error);
       }
-      ignoredLifecycleObservation =
-        deferredLifecycleObservation ?? options.lifecycleState?.();
-      return action === 'update' ? 'updated' : 'scheduled';
+      return result;
     } finally {
       setOperation('idle');
     }

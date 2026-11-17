@@ -12,6 +12,9 @@ import { emailDraftLifecycleSource } from '../queries/draft-lifecycle';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
+
+afterEach(resetScheduledNoticesForTests);
 
 const fetchLifecycleThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
