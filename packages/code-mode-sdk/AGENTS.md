@@ -26,6 +26,10 @@ HTML worker belong to `packages/sdk-docs`.
 - `src/index.ts`: public SDK exports used by programs.
 - The bundled SDK adds its hand-assigned display verb to each generated call
   when code mode enables the verb header in the bootstrap.
+- Keep `generate.ts`'s `postReads` in step with
+  `agent_correlation::scope::POST_READS`; the harness tests compare both catalogs,
+  including rule validation and count previews. Policy activation remains a
+  sharing write.
 
 ## Tool contracts
 

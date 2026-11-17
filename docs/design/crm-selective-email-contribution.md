@@ -528,9 +528,14 @@ Test real legacy upserts, no-op withdrawal and membership/mailbox cascades.
 Deploy schema/guards and all three compatible eligibility paths before any
 selected activation. Older readers may temporarily show no selected mail; old
 workers may acknowledge without population, so **every worker must be upgraded**
-before enablement. Once active, an old-binary rollback is fail-closed only and
-requires a later backfill repair; never roll back schema/guards or widen consent
-to preserve old-binary visibility. Keep stored restrictions enforced indefinitely.
+before enablement. PR 3c teardown hooks can produce coarse `team` source events
+that pre-3c workers cannot deserialize. The initial rollout is safe while saved
+rule tables are empty. After activation, disabling the flag does not stop these
+producers or make an old worker compatible: stop the new event producers and
+drain their events with compatible workers before an old-binary rollback.
+Older eligibility readers fail closed and need a later backfill repair; never
+roll back schema/guards or widen consent to preserve old-binary visibility.
+Keep stored restrictions enforced indefinitely.
 Initial rollout also requires private-thread mutations to be available to the
 same cohort, after both ingestion and the optimized Team reader are upgraded.
 
@@ -612,7 +617,8 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
 5. **Rollout hardening and readiness.** Integration/parity/performance tests,
    mixed-version drills, mixed sparse/dense policies across contributors,
    concurrent source edits/backfill recovery, flag-off and
-   rollback checks, operational counters and rollout runbook. Measure the
+   rollback checks, connected runtime traces, operational counters and rollout
+   runbook. Measure the
    **1m-thread mailbox tier before activation**, including sparse selections,
    large live targets and fresh/stale custom/generic plans; the eligibility
    phase does not establish that tier's budget. Bound work examining unmatched

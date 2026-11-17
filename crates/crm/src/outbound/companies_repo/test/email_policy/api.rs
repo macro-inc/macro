@@ -358,17 +358,23 @@ async fn invalid_rules_and_scoped_credentials_never_initialize_or_share(
         assert_eq!(metadata(&pool, team).await?, before);
     }
     let command = json!({"if_policy":token,"request_id":Uuid::now_v7(),"change":{"action":"replace_rules","rules":{"schema_version":1,"include":[]}}});
-    let attribution = agent_correlation::context::Attribution {
-        scope: Some(agent_correlation::scope::SessionScope::NoSend),
-        ..Default::default()
-    };
-    let (status, result) = agent_correlation::context::scope_attribution(
-        attribution,
-        request(&app, "agent", "/policy", Some(command.clone())),
-    )
-    .await;
-    assert_eq!(status, StatusCode::FORBIDDEN, "{result}");
-    assert_eq!(metadata(&pool, team).await?, before);
+    for scope in [
+        agent_correlation::scope::SessionScope::NoSend,
+        agent_correlation::scope::SessionScope::DryRun,
+        agent_correlation::scope::SessionScope::Generation,
+    ] {
+        let attribution = agent_correlation::context::Attribution {
+            scope: Some(scope),
+            ..Default::default()
+        };
+        let (status, result) = agent_correlation::context::scope_attribution(
+            attribution,
+            request(&app, "agent", "/policy", Some(command.clone())),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{scope:?}: {result}");
+        assert_eq!(metadata(&pool, team).await?, before);
+    }
     rollout.store(false, Ordering::SeqCst);
     assert_eq!(
         request(&app, "agent", "/policy", Some(command)).await.0,

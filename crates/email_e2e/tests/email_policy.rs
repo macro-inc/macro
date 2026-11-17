@@ -46,23 +46,18 @@ async fn replaced_policy_history_is_generation_bound(provider: Provider) -> Resu
         .await?;
     sqlx::query("INSERT INTO crm_companies(id,team_id,email_sync,first_interaction,last_interaction) VALUES($1,$2,TRUE,now(),now())")
         .bind(company).bind(team).execute(stack.db()).await?;
-    sqlx::query(
-        "INSERT INTO crm_domains(company_id,team_id,domain) VALUES($1,$2,'example.org')",
-    )
-    .bind(company)
-    .bind(team)
-    .execute(stack.db())
-    .await?;
+    sqlx::query("INSERT INTO crm_domains(company_id,team_id,domain) VALUES($1,$2,'example.org')")
+        .bind(company)
+        .bind(team)
+        .execute(stack.db())
+        .await?;
     sqlx::query("INSERT INTO crm_email_consent(team_id,user_id,link_id,consent_incarnation) VALUES($1,$2,$3,$4)")
         .bind(team).bind(member.macro_id()).bind(inbox.link_id()).bind(incarnation)
         .execute(stack.db()).await?;
 
     let repository = CompaniesRepositoryImpl::new(stack.db().clone());
     let mut deliveries = Vec::new();
-    for (revision, address) in [
-        (1_i64, "first@example.org"),
-        (2_i64, "second@example.org"),
-    ] {
+    for (revision, address) in [(1_i64, "first@example.org"), (2_i64, "second@example.org")] {
         let definition = json!({
             "schema_version": 1,
             "include": [{"kind": "address", "address": address}]

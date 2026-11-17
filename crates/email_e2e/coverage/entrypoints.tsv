@@ -149,6 +149,7 @@ lambda	user_link_cleanup_handler	both		services/user_link_cleanup_handler/src/ma
 loop	backfill_outbox::run	both		services/email_service/src/backfill_outbox.rs:7
 loop	crm_enrichment_worker::run	both		services/email_service/src/crm_enrichment_worker.rs:13
 loop	email_policy_worker::run	both		services/email_service/src/email_policy_worker.rs:5
+loop	email_policy_worker::run_previews	both		services/email_service/src/email_policy_worker.rs:25
 loop	mailbox_sync_worker::run	both		services/email_service/src/mailbox_sync_worker.rs:19
 loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:227
 loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:211

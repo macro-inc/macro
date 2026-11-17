@@ -303,6 +303,13 @@ late writes. Previewing never initializes consent or schedules contribution.
 Ordinary mail imports preserve its as-of result; matching/privacy changes mark it
 stale. The only new due index is on preview metadata, not email tables.
 
+Deploy compatible source-event and preview workers before enabling authoring.
+The initial default-off rollout has no saved rule references and emits no coarse
+`team` events. After activation, teardown can emit those events even with the
+flag off; pre-3c workers cannot deserialize them. Stop the new event producers
+and drain their events with compatible workers before rolling workers back.
+Disabling the flag alone is not a compatible worker rollback.
+
 Modern history pages at most 100 raw mailbox contacts through the existing
 mailbox/address index, with sent-capable contacts before the received pass.
 Each contact reauthorizes before enrichment and in the population transaction;

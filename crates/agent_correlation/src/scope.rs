@@ -191,6 +191,7 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/channels/{id}/profile_picture"),
     ("POST", "/databases/webhooks/{id}"),
     ("PUT", "/crm/email-privacy"),
+    ("PUT", "/crm/email-privacy/policy"),
     ("POST", "/team/auto-join-domain/toggle"),
     ("PUT", "/scheduling/links/{id}"),
     ("PUT", "/scheduling/settings"),
