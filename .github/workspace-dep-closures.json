@@ -194,6 +194,7 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_service_urls",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model-entity",
@@ -202,6 +203,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "agent_api_keys": [
@@ -573,10 +575,12 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/user_api_key",
       "crates/workspace-hack"
     ],
@@ -2305,11 +2309,13 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "analytics_client": [
@@ -5780,12 +5786,14 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model-error-response",
       "crates/model_user",
       "crates/rate_limit",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "document_storage_service": [
@@ -7679,12 +7687,14 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_owner",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "entity_registry_db_utils": [
@@ -8587,6 +8597,7 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model-error-response",
@@ -8597,6 +8608,7 @@
       "crates/non_empty",
       "crates/notification_state",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "graphql_contacts": [
@@ -10343,6 +10355,7 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model-error-response",
@@ -10353,6 +10366,7 @@
       "crates/non_empty",
       "crates/notification_state",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "graphql_work_feed": [
@@ -10531,12 +10545,14 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/model-error-response",
       "crates/model_user",
       "crates/rate_limit",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "harness_id": [
@@ -10961,6 +10977,7 @@
       "crates/model_user",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "import_linear": [
@@ -10985,6 +11002,7 @@
       "crates/model_user",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "import_notion": [
@@ -11010,6 +11028,7 @@
       "crates/models_databases",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "import_tracker": [
@@ -11033,6 +11052,7 @@
       "crates/model_user",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "incus_client": [
@@ -11542,10 +11562,12 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "macro_aws_config": [
@@ -13383,6 +13405,7 @@
       "crates/model_user",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/workspace-hack"
     ],
     "pptx_engine": [
@@ -16277,10 +16300,12 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/sync_service",
       "crates/workspace-hack"
     ],
@@ -16403,6 +16428,7 @@
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/system_status",
       "crates/workspace-hack"
     ],
@@ -16906,10 +16932,12 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/user_api_key",
       "crates/workspace-hack"
     ],
@@ -16939,10 +16967,12 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
       "crates/remote_env_var",
+      "crates/route_policy",
       "crates/user_language",
       "crates/workspace-hack"
     ],
