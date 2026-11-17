@@ -10,6 +10,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { Key } from '@solid-primitives/keyed';
@@ -24,6 +25,12 @@ interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   list: EntityActionListState;
   viewContext: EntityActionViewContext;
+  /**
+   * Closes the host menu when an embedded picker (`menuItem`) is done with
+   * it. Plain and mute items close the menu on select themselves, so this is
+   * not called after them: it would land on the dialog or picker the item
+   * opened, or on the menu opened again while the item was still saving.
+   */
   onActionComplete?: () => void;
   onEditTags?: () => void;
   onSetProject?: () => void;
@@ -64,11 +71,6 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     });
   });
 
-  const handleAction = async (onClick: () => void | Promise<unknown>) => {
-    await onClick();
-    props.onActionComplete?.();
-  };
-
   return (
     <>
       <Key each={groups()} by="id">
@@ -95,7 +97,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                                 hotkeyToken={action().hotkeyToken}
                                 shortcut={action().shortcut}
                                 disabled={action().disabled}
-                                onClick={() => handleAction(action().onClick)}
+                                onClick={() =>
+                                  fireAndForget(
+                                    action().onClick(),
+                                    'entity-actions'
+                                  )
+                                }
                                 class={
                                   action().destructive
                                     ? 'text-failure-ink'
@@ -117,10 +124,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                           </Show>
                         }
                       >
-                        <NotificationMuteMenu
-                          {...action().muteMenu!}
-                          onActionComplete={props.onActionComplete}
-                        />
+                        <NotificationMuteMenu {...action().muteMenu!} />
                       </Show>
                     }
                   >
