@@ -1,3 +1,4 @@
+import { EmailRowStylePreview } from '@app/features/email-view/components/EmailRowStylePreview';
 import {
   chosenEmailRowStyle,
   setEmailRowStyle,
@@ -136,26 +137,30 @@ export function EmailSettings(props: { displayOptions: boolean }) {
   );
 }
 
-function EmailDisplayOptions() {
+/** The Row style control and its live sample, as Display options shows them. */
+export function EmailDisplayOptions() {
   return (
     <SettingsCard>
-      <SettingsRow
-        stackOnNarrow
-        label={t('settingsEmail.rowStyle')}
-        description={t('settingsEmail.rowStyleDescription')}
-      >
-        <Tabs
-          aria-label={t('settingsEmail.rowStyle')}
-          touch="segmented"
-          size="sm"
-          options={[
-            { value: 'minimalist', label: t('settingsEmail.minimalist') },
-            { value: 'classic', label: t('settingsEmail.classic') },
-          ]}
-          value={chosenEmailRowStyle()}
-          onChange={setEmailRowStyle}
+      {/* One card child, so the card draws no divider above the sample. */}
+      <div>
+        <SettingsRow stackOnNarrow label={t('settingsEmail.rowStyle')}>
+          <Tabs
+            aria-label={t('settingsEmail.rowStyle')}
+            touch="segmented"
+            size="sm"
+            options={[
+              { value: 'minimalist', label: t('settingsEmail.minimalist') },
+              { value: 'classic', label: t('settingsEmail.classic') },
+            ]}
+            value={chosenEmailRowStyle()}
+            onChange={setEmailRowStyle}
+          />
+        </SettingsRow>
+        <EmailRowStylePreview
+          rowStyle={chosenEmailRowStyle()}
+          class="mx-4 mb-4"
         />
-      </SettingsRow>
+      </div>
     </SettingsCard>
   );
 }

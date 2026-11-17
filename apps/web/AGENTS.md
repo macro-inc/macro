@@ -355,9 +355,10 @@ importance moves, and a preview cut short ending in an ellipsis (its box must
 not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
-real row: Minimalist unchanged, and Classic's shared line between rows, lifted
-unread fill, weights and always-visible checkbox on desktop and tablet, with
-phones kept on Minimalist.
+real row: Minimalist unchanged, and Classic's shared line between rows (plus
+the one above each date group's first row), lifted unread fill, weights and
+always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
+and the Settings → Email sample following the Row style tabs.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the

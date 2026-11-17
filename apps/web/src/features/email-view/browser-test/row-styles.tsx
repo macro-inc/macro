@@ -1,10 +1,14 @@
 // The real Mail row in each row style over synthetic threads; no network.
-// `?style=classic` picks the style, `?theme=light` the light theme.
+// `?style=classic` picks the style, `?theme=light` the light theme, and
+// `?view=settings` shows Settings → Email's Display options instead.
 import '@app/index.css';
+import { EmailDisplayOptions } from '@app/features/settings/email-settings';
+import { SettingsSection } from '@app/features/settings/primitives';
 import { createSoupGroupHeaderRow } from '@app/features/soup/collection/rows';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -20,12 +24,13 @@ import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { EmailDateGroupHeader } from '../components/EmailDateGroupHeader';
 import {
   parseEmailRowStyle,
   rowStyleForDevice,
+  setEmailRowStyle,
 } from '../primitives/email-row-style';
 
 const VIEWER_ID = 'macro|row-styles@example.test';
@@ -40,6 +45,8 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const search = new URLSearchParams(window.location.search);
 applyTheme(search.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 const chosenStyle = parseEmailRowStyle(search.get('style'));
+const showsSettings = search.get('view') === 'settings';
+if (showsSettings) setEmailRowStyle(chosenStyle);
 
 type Thread = Extract<
   EmailFocusQuery['user']['emailFocus'][number],
@@ -194,6 +201,21 @@ function Fixture() {
   );
 }
 
+function SettingsFixture() {
+  return (
+    <main class="@container h-dvh bg-panel p-6 text-ink">
+      <div class="mx-auto max-w-2xl">
+        <SettingsSection
+          title={t('settingsEmail.displayOptions')}
+          description={t('settingsEmail.displayOptionsDescription')}
+        >
+          <EmailDisplayOptions />
+        </SettingsSection>
+      </div>
+    </main>
+  );
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 render(
@@ -205,7 +227,9 @@ render(
             <EmailLinksContextProvider>
               <ItemDndProvider>
                 <ListEntityMetadataQueryProvider>
-                  <Fixture />
+                  <Show when={showsSettings} fallback={<Fixture />}>
+                    <SettingsFixture />
+                  </Show>
                 </ListEntityMetadataQueryProvider>
               </ItemDndProvider>
             </EmailLinksContextProvider>

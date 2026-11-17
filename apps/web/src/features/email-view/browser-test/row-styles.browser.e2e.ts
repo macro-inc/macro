@@ -8,7 +8,7 @@ const SIZES = [
   { name: 'phone', width: 390, height: 844, touch: true, wide: false },
 ];
 
-async function open(page: Page, style: string, theme = 'dark') {
+async function open(page: Page, style: string, theme = 'dark', view = 'list') {
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -23,11 +23,13 @@ async function open(page: Page, style: string, theme = 'dark') {
     await route.fulfill({ response: await route.fetch() });
   });
   await page.goto(
-    `/src/features/email-view/browser-test/row-styles.html?style=${style}&theme=${theme}`
+    `/src/features/email-view/browser-test/row-styles.html?style=${style}&theme=${theme}&view=${view}`
   );
-  await expect(page.getByTestId('row-read-4')).toBeVisible({
-    timeout: 180_000,
-  });
+  await expect(
+    view === 'settings'
+      ? page.locator('[data-email-row-style-preview]')
+      : page.getByTestId('row-read-4')
+  ).toBeVisible({ timeout: 180_000 });
 }
 
 const fontWeight = (locator: Locator) =>
@@ -46,6 +48,12 @@ const showsCheckbox = (row: Locator) =>
 /** The row's own surface: the entity root inside the test row. */
 const rowSurface = (page: Page, id: string) =>
   page.getByTestId(`row-${id}`).locator('.soup-list-entity');
+
+/** A Row style tab in Settings; its label takes the click for the radio. */
+const rowStyleTab = (page: Page, name: string) =>
+  page
+    .getByRole('radiogroup', { name: 'Row style' })
+    .getByText(name, { exact: true });
 
 async function weights(
   page: Page,
@@ -290,6 +298,59 @@ for (const size of SIZES) {
       const lastOfFirst = groups[0][groups[0].length - 1];
       expect(groups[1][0].top).toBeGreaterThan(lastOfFirst.bottom);
     });
+
+    for (const theme of ['dark', 'light']) {
+      test(`Settings sample follows the Row style tabs (${theme})`, async ({
+        page,
+      }) => {
+        // Phones hide Display options; they always show Minimalist.
+        test.skip(phone);
+        // Mail's own Classic colors, to compare the sample against.
+        await open(page, 'classic', theme);
+        const mailFill = await rowSurface(page, 'unread-1').evaluate(
+          (node) => getComputedStyle(node).backgroundColor
+        );
+        const mailLine = await rowSurface(page, 'unread-1').evaluate(
+          (node) => getComputedStyle(node, '::after').backgroundColor
+        );
+
+        await open(page, 'minimalist', theme, 'settings');
+        const sample = page.locator('[data-email-row-style-preview]');
+        const [unread, read] = await sample.locator('.soup-list-entity').all();
+        // A picture of the list: nothing in it takes focus or clicks.
+        expect(
+          await sample.evaluate((node) => (node as HTMLElement).inert)
+        ).toBe(true);
+        await expect(sample).toHaveAttribute('aria-hidden', 'true');
+        await expect(unread.locator('.bg-accent.rounded-full')).toBeVisible();
+        expect(await showsCheckbox(unread)).toBe(false);
+
+        await rowStyleTab(page, 'Classic').click();
+        await expect(sample).toHaveAttribute(
+          'data-email-row-style-preview',
+          'classic'
+        );
+        await expect(sample.locator('.bg-accent.rounded-full')).toHaveCount(0);
+        expect(await showsCheckbox(unread)).toBe(true);
+        expect(await showsCheckbox(read)).toBe(true);
+        expect(
+          await fontWeight(unread.getByText('Avery Stone', { exact: true }))
+        ).toBe('600');
+        expect(
+          await fontWeight(read.getByText('Casey Moore', { exact: true }))
+        ).toBe('400');
+        // The sample draws Mail's own fill and line, not the card's.
+        await expect(unread).toHaveCSS('background-color', mailFill);
+        expect(
+          await read.evaluate(
+            (node) => getComputedStyle(node, '::after').backgroundColor
+          )
+        ).toBe(mailLine);
+
+        await rowStyleTab(page, 'Minimalist').click();
+        await expect(unread.locator('.bg-accent.rounded-full')).toBeVisible();
+      });
+    }
 
     test('Classic checkboxes select without opening; rows still open', async ({
       page,
