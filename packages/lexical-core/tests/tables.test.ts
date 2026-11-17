@@ -30,6 +30,7 @@ import {
   $isDateMentionNode,
 } from '../nodes/DateMentionNode';
 import { $isEquationNode } from '../nodes/EquationNode';
+import { $isGroupMentionNode } from '../nodes/GroupMentionNode';
 import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
 import { $isUserMentionNode } from '../nodes/UserMentionNode';
 import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
@@ -740,6 +741,35 @@ describe('pipe characters inside pipe-table cells', () => {
       });
     });
   }
+
+  it('imports in-app chip tags written inside cells (agent chat replies)', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Share | Notify |',
+        '| --- | --- | --- |',
+        `| ${GAB_MENTION} | <m-katex-equation>{"equation":"26.8\\\\%","inline":true}</m-katex-equation> | <m-group-mention>{"groupAlias":"here"}</m-group-mention> |`,
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([3, 3]);
+      const [person, share, notify] = grid[1];
+
+      const [mention] = $inlineNodes(person).filter($isUserMentionNode);
+      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+
+      const [equation] = $inlineNodes(share).filter($isEquationNode);
+      expect(equation?.getEquation()).toBe('26.8\\%');
+      expect(equation?.getInline()).toBe(true);
+
+      const [group] = $inlineNodes(notify).filter($isGroupMentionNode);
+      expect(group?.getGroupAlias()).toBe('here');
+    });
+  });
 
   it('imports a header row with alignment markers and an empty first cell', async () => {
     const editor = createTestEditor();
