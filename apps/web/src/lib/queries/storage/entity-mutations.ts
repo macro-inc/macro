@@ -1,7 +1,3 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -98,10 +94,7 @@ function shareEntityType(itemType: string) {
 }
 
 export function usesGraphqlSharePolicy(itemType: string): boolean {
-  return (
-    isFeatureEnabled(enableGraphqlSoup) &&
-    shareEntityType(itemType) !== undefined
-  );
+  return shareEntityType(itemType) !== undefined;
 }
 
 const ACCESS_LEVELS: Record<AccessLevel, GraphqlEntityAccessLevel> = {

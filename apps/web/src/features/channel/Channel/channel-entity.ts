@@ -1,31 +1,7 @@
-import {
-  compileToAst,
-  defineQueryFilters,
-  queryStateFrom,
-} from '@app/features/next-soup/filters/filter-store';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import type { ChannelEntity } from '@entity';
 import { createChannelDetailQuery } from '@queries/channel/detail';
 import { queryReadyGate } from '@queries/gate';
-import {
-  type SoupAstItemsQueryArgs,
-  useSoupAstItemsQuery,
-} from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
-
-function channelByIdQueryArgs(channelId: string): SoupAstItemsQueryArgs {
-  return {
-    params: { limit: 1, sort_method: 'created_at' },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [channelId] },
-        })
-      )
-    ),
-  };
-}
 
 export function useChannelByIdQuery(
   channelId: Accessor<string | undefined>,
@@ -34,41 +10,11 @@ export function useChannelByIdQuery(
 ) {
   // Every activation needs a fresh complete unread edge for marking read.
   // Menu observers reuse that result; activation observers still revalidate.
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
-  const graphql = createChannelDetailQuery(
+  return createChannelDetailQuery(
     channelId,
-    () => enabled() && graphqlSoup().enabled,
+    enabled,
     options.revalidateOnMount === false ? 'cache-first' : 'cache-and-network'
   );
-  const rest = useSoupAstItemsQuery(
-    () => ({ ...channelByIdQueryArgs(channelId() ?? ''), transport: 'rest' }),
-    () => ({
-      enabled: enabled() && !graphqlSoup().enabled,
-      staleTime: options.revalidateOnMount === false ? Infinity : 0,
-    })
-  );
-  const query = () => (graphqlSoup().enabled ? graphql : rest);
-  return {
-    get isEnabled() {
-      return query().isEnabled;
-    },
-    get isPending() {
-      return query().isPending;
-    },
-    get isLoading() {
-      return query().isLoading;
-    },
-    get isFetching() {
-      return query().isFetching;
-    },
-    get error() {
-      return query().error;
-    },
-    get data() {
-      return query().data;
-    },
-    refresh: () => query().refresh(),
-  };
 }
 
 /**
