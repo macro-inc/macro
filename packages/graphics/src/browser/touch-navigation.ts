@@ -286,6 +286,12 @@ export function attachTouchNavigation(
     else glide.reset();
   };
 
+  // A surface that leaves one finger to the page lets the browser pan it
+  // (`touch-action: pan-x pan-y`), with any number of fingers. Two fingers
+  // are for the canvas: say so before the browser starts scrolling with them.
+  const touchMove = (event: TouchEvent) => {
+    if (navigating && event.cancelable) event.preventDefault();
+  };
   const wheel = () => glide.cancel();
   // A press released in another window never reports its release here. Forget
   // it, or a mouse that went away pressed would keep fingers from navigating.
@@ -296,6 +302,7 @@ export function attachTouchNavigation(
   window.addEventListener('pointerup', pointerEnd, true);
   window.addEventListener('pointercancel', pointerEnd, true);
   element.addEventListener('wheel', wheel, { passive: true });
+  element.addEventListener('touchmove', touchMove, { passive: false });
   window.addEventListener('blur', blur);
 
   return {
@@ -309,6 +316,7 @@ export function attachTouchNavigation(
       window.removeEventListener('pointerup', pointerEnd, true);
       window.removeEventListener('pointercancel', pointerEnd, true);
       element.removeEventListener('wheel', wheel);
+      element.removeEventListener('touchmove', touchMove);
       window.removeEventListener('blur', blur);
     },
   };

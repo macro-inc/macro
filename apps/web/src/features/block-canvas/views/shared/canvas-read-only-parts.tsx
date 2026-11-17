@@ -161,7 +161,13 @@ function Root(props: ParentProps<CanvasReadOnlyViewProps>) {
 }
 
 /** The scene and other people's presence. */
-function Surface() {
+function Surface(surfaceProps: {
+  /**
+   * Leave one finger and the plain wheel to the page while this says so: for
+   * a canvas inside a scrolling document.
+   */
+  yieldToPage?: () => boolean;
+}) {
   const view = useCanvasReadOnlyView();
   const { props } = view;
   return (
@@ -171,6 +177,7 @@ function Surface() {
         input={{
           editing: false,
           tool: view.tool,
+          yieldToPage: () => surfaceProps.yieldToPage?.() ?? false,
           ignoreTarget: (target) =>
             target instanceof Element &&
             !!target.closest('[data-graphics-item]') &&

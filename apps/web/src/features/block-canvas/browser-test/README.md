@@ -20,6 +20,13 @@ rectangle and pencil tools after the first finger has started its gesture,
 two-finger pan, and the glide after a flick. `window.canvasFixture.setTool`
 switches the fixture's tool.
 
+`embedded.html` puts the touch embed (`views/mobile/canvas-embedded-view.tsx`)
+between the paragraphs of a page long enough to scroll.
+`embedded.browser.e2e.ts` checks in the touch project that a swipe over the
+canvas scrolls the document and leaves the camera alone, that two fingers zoom
+the canvas and leave the document alone, and that Interact gives one finger to
+the canvas until Done or a press elsewhere.
+
 `touch.html` mounts the editable canvas as a phone shows it: the real touch
 view (`views/mobile/canvas-view.tsx`) and the real float-region host, over a
 stand-in dock and a stand-in for the page's New button, with no session or

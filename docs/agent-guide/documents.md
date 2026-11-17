@@ -138,6 +138,11 @@ embeds and check that their preview bodies load; also check that a code or canva
 mention offers **Convert to Embed** in its preview menu.
 Drag an embed's bottom-right resize grip, then release and select the card. Its
 height should stay at the dragged size and persist after reopening the document.
+On a phone or tablet a canvas embed does not trap scrolling: swipe over it with
+one finger and the document scrolls; pinch or drag it with two fingers and the
+canvas zooms and pans. Tap **Interact** in its corner to move it with one finger
+(the document then stays put), and **Done**, or a tap elsewhere in the document,
+to hand scrolling back.
 Zoom to fit and menu/keyboard zoom use the full canvas viewport center; floating
 inspectors and details overlays do not reserve centering space. Verify with content
 on both sides of the canvas and the inspector visible. Press **.** to fit the
