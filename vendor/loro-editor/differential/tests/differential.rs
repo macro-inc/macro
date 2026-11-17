@@ -4,7 +4,8 @@
 //! LORO_DIFF_BULK_CASES and LORO_DIFF_FIRST_SEED size the run.
 //! LORO_DIFF_PROGRESS=1 prints each seed before it runs: an upstream panic
 //! whose unwinding panics again aborts the process, and the last seed printed
-//! names it.
+//! names it. LORO_DIFF_UPSTREAM_FIRST=1 steps upstream first, to show such an
+//! abort happens on upstream too.
 
 use loro_editor_differential::{check, generate, generate_bulk, knob, Stats};
 

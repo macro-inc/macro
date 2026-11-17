@@ -612,8 +612,16 @@ pub fn run(config: &Config, ops: &[Op], stats: &mut Stats) -> Option<Divergence>
     // the same state with different text fragmentation.
     let mut fragmented = [false; PEERS];
     for (step, op) in ops.iter().enumerate() {
-        let p = patched.step(op);
-        let u = upstream.step(op);
+        // An upstream panic whose unwinding panics again aborts the process
+        // before the other side runs the step; LORO_DIFF_UPSTREAM_FIRST=1
+        // shows whether upstream aborts at the same place.
+        let (p, u) = if knob("LORO_DIFF_UPSTREAM_FIRST").is_some_and(|v| v == "1") {
+            let u = upstream.step(op);
+            (patched.step(op), u)
+        } else {
+            let p = patched.step(op);
+            (p, upstream.step(op))
+        };
         stats.steps += 1;
         let (p, u) = match (p, u) {
             (Ok(p), Ok(u)) => (p, u),
