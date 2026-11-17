@@ -15,4 +15,8 @@ mod policy;
 
 pub use caller::Caller;
 pub use category::Category;
-pub use policy::{Enforcement, Refusal, RefusalCode, decide};
+pub use policy::{
+    CategorySet, Enforcement, Refusal, RefusalCode, ResolvedCaller, RouteDecision, Verdict, decide,
+};
+
+pub mod inbound;

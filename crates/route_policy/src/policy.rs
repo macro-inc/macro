@@ -37,7 +37,15 @@ pub enum Enforcement {
 /// Why a request was refused, as the answer's `code` names it: what has to
 /// happen instead.
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, strum::Display, strum::IntoStaticStr,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    utoipa::ToSchema,
+    strum::Display,
+    strum::IntoStaticStr,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -149,4 +157,104 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
         caller,
         enforcement,
     })
+}
+
+/// The caller a service resolved for a request, put in its extensions
+/// before routing, with the categories whose observed refusals the rollout
+/// enforces for this request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResolvedCaller {
+    /// Who called.
+    pub caller: Caller,
+    /// Categories whose [`Enforcement::Observed`] refusals are enforced.
+    pub enforced: CategorySet,
+}
+
+/// A set of categories.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CategorySet(u16);
+
+impl CategorySet {
+    /// The set with `category` added.
+    #[must_use]
+    pub fn with(self, category: Category) -> Self {
+        Self(self.0 | Self::bit(category))
+    }
+
+    /// Whether the set holds `category`.
+    pub fn contains(self, category: Category) -> bool {
+        self.0 & Self::bit(category) != 0
+    }
+
+    fn bit(category: Category) -> u16 {
+        1 << category as u16
+    }
+}
+
+/// What the route policy did with one request: kept in its extensions for
+/// the authorization extractors, and in the response's for the request span.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RouteDecision {
+    /// The route's declared category.
+    pub category: Category,
+    /// What was decided.
+    pub verdict: Verdict,
+}
+
+/// What the route policy decided for a request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// The service resolved no caller, so nothing was decided.
+    Unresolved,
+    /// The caller may make the request.
+    Allowed(Caller),
+    /// Refused; the handler doesn't run.
+    Refused(Refusal),
+    /// Would be refused; the request goes on while the refusal is observed.
+    Observed(Refusal),
+}
+
+impl RouteDecision {
+    /// The decision for a request to a route of `category` from `resolved`,
+    /// with the rollout's enforced categories applied.
+    pub fn new(resolved: Option<ResolvedCaller>, category: Category) -> Self {
+        let verdict = match resolved {
+            None => Verdict::Unresolved,
+            Some(resolved) => match decide(resolved.caller, category) {
+                Ok(()) => Verdict::Allowed(resolved.caller),
+                Err(refusal)
+                    if refusal.enforcement == Enforcement::Enforced
+                        || resolved.enforced.contains(category) =>
+                {
+                    Verdict::Refused(Refusal {
+                        enforcement: Enforcement::Enforced,
+                        ..refusal
+                    })
+                }
+                Err(refusal) => Verdict::Observed(refusal),
+            },
+        };
+        Self { category, verdict }
+    }
+}
+
+impl Verdict {
+    /// Who called, when resolved.
+    pub fn caller(self) -> Option<Caller> {
+        match self {
+            Self::Unresolved => None,
+            Self::Allowed(caller) => Some(caller),
+            Self::Refused(refusal) | Self::Observed(refusal) => Some(refusal.caller),
+        }
+    }
+
+    /// Its name in span fields.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Unresolved => "unresolved",
+            Self::Allowed(_) => "allowed",
+            Self::Refused(_) => "refused",
+            Self::Observed(_) => "observed",
+        }
+    }
 }

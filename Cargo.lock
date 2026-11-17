@@ -17711,8 +17711,16 @@ dependencies = [
 name = "route_policy"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "http-body-util",
+ "macro_tower_layers",
  "serde",
+ "serde_json",
  "strum 0.27.2",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 
