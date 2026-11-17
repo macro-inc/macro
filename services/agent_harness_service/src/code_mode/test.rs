@@ -340,9 +340,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.putAgentAutoArchivePreferences",
         "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
-        // Rejecting a pending tool call runs nothing; running or rewriting
-        // one is refused.
-        "cognition.rejectToolCall",
         // Withdrawing the person's own request, like a channel's.
         "storage.accessRequestsCancel",
         // Unauthenticated: a credential adds nothing.
@@ -425,8 +422,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
 
 /// A run that sends nothing starts no work that runs with the person's full
 /// access: no agent session, session control or queued prompt, tool
-/// approval, review decision, session share, chat tool call, or agent or
-/// bot, which acts later.
+/// approval, review decision, session share, or agent or bot, which acts
+/// later.
 #[test]
 fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
     let operations = code_execution::domain::operations();
@@ -442,7 +439,6 @@ fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
         "agent-harness.retryAgentConversationTurn",
         "agent-harness.warmAgentSessionHandler",
         "agent-harness.reportAgentSessionAppConnected",
-        "cognition.callTool",
         "storage.createAgent",
         "storage.updateAgent",
         "storage.patchAgent",
