@@ -122,7 +122,10 @@ describe('decide', () => {
       history: [run(9, 'failure'), run(8, 'success')],
     });
 
-    assert.equal(decision.post, null);
+    assert.deepEqual(decision, {
+      post: null,
+      why: 'run #9 (at 9999999) failed too, and only the first red run of a streak posts',
+    });
   });
 
   test('the first green run after red ones posts that it passes again, since the first of them', () => {
@@ -202,7 +205,21 @@ describe('decide', () => {
       history: [run(9, 'success')],
     });
 
-    assert.equal(decision.post, null);
+    assert.deepEqual(decision, {
+      post: null,
+      why: 'its previous attempt failed too, and only the first red run of a streak posts',
+    });
+  });
+
+  test('a run that failed in two attempts counts once in the streak a pass ends', () => {
+    const decision = decide({
+      red: false,
+      run: THIS,
+      previousAttempt: 'failure',
+      history: [run(9, 'failure'), run(8, 'success')],
+    });
+
+    assert.deepEqual(decision, { post: 'recovery', failingSince: sha('9'), redRuns: 2 });
   });
 
   test('with no run before it, a red run posts and a green one does not', () => {

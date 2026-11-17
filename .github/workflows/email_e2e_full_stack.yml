@@ -414,18 +414,24 @@ jobs:
               .sort((a, b) => b.run_number - a.run_number),
           ];
           const wasRed = before.length > 0 && RED.has(before[0].conclusion ?? '');
+          const previous =
+            before.length === 0
+              ? 'no run before it ended'
+              : before[0].id === run.id
+                ? 'its previous attempt'
+                : `run #${before[0].run_number} (at ${before[0].head_sha.slice(0, 7)})`;
           if (red) {
             return wasRed
               ? {
                   post: null,
-                  why: `the run before it, at ${before[0].head_sha.slice(0, 7)}, failed too: the first red run of a streak posts, the rest do not`,
+                  why: `${previous} failed too, and only the first red run of a streak posts`,
                 }
               : { post: 'failure', lastGreen: before[0] ?? null };
           }
           if (!wasRed) {
             return {
               post: null,
-              why: before.length > 0 ? 'it passed, as the run before it did' : 'it passed, and no run before it ended',
+              why: before.length > 0 ? `it passed, as ${previous} did` : `it passed, and ${previous}`,
             };
           }
           const end = before.findIndex((each) => !RED.has(each.conclusion ?? ''));
@@ -433,7 +439,8 @@ jobs:
           return {
             post: 'recovery',
             failingSince: streak[streak.length - 1].head_sha,
-            redRuns: streak.length,
+            // A run that failed in two attempts is one run.
+            redRuns: new Set(streak.map((each) => each.id)).size,
           };
         }
 
