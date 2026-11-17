@@ -93,6 +93,8 @@ async fn store_routine(locations: &TestLocations, owner: &str, trigger: Value) -
         template_id: None,
         suggestion_id: None,
         description: String::new(),
+        appearance: model_entity::EntityAppearance::default(),
+        sub_routine: None,
     };
     locations
         .repo
