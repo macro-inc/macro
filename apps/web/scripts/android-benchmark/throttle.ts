@@ -6,25 +6,26 @@
  * against the same loop unthrottled.
  */
 
-/** Chrome's "mid-tier mobile" preset; 4 is Android-phone-like for this app. */
+/**
+ * Rates from 2 up: below that the check cannot tell a throttle in force from
+ * one that lapsed. 4 is Chrome's "mid-tier mobile" preset.
+ */
+const MIN_RATE = 2;
 const MAX_RATE = 20;
 
-/**
- * How far the measured slowdown may stray from the rate before a step fails.
- * Host load moves the loop's time by up to about a quarter; a rate lost on the
- * way (measured 1× instead of 4×) is far outside.
- */
-const TOLERANCE = 1.5;
-
-/** Parses `--cpu-throttle`: one rate or a comma-separated list, each 1–20. */
+/** Parses `--cpu-throttle`: one rate or a comma-separated list. */
 export function parseCpuThrottle(value: string): number[] {
-  const rates = value.split(',').map((part) => Number(part.trim()));
-  const valid = rates.every(
-    (rate) => Number.isFinite(rate) && rate >= 1 && rate <= MAX_RATE
+  const parts = value.split(',').map((part) => part.trim());
+  const rates = parts.map(Number);
+  const valid = parts.every(
+    (part, index) =>
+      /^\d+(\.\d+)?$/.test(part) &&
+      (rates[index] === 1 ||
+        (rates[index] >= MIN_RATE && rates[index] <= MAX_RATE))
   );
-  if (value.trim() === '' || !valid)
+  if (!valid)
     throw new Error(
-      `--cpu-throttle takes rates from 1 to ${MAX_RATE}, such as 4 or 1,4`
+      `--cpu-throttle takes 1 or rates from ${MIN_RATE} to ${MAX_RATE}, such as 4 or 1,4`
     );
   if (new Set(rates).size !== rates.length)
     throw new Error('--cpu-throttle lists a rate twice');
@@ -46,7 +47,13 @@ export const cpuProbe = (runs: number) => `(() => {
   return times;
 })()`;
 
-/** Whether a measured slowdown shows that `rate` is in force. */
+/**
+ * Whether a measured slowdown shows that `rate` is in force. A throttle that
+ * lapsed measures about 1×, so the slowdown must be nearer the rate than 1×
+ * (on a log scale). Host load only makes the probe slower, so there is no
+ * upper bound, and at 1× nothing can have lapsed: a fresh connection starts
+ * unthrottled.
+ */
 export function throttleInForce(rate: number, measured: number): boolean {
-  return measured >= rate / TOLERANCE && measured <= rate * TOLERANCE;
+  return rate === 1 || measured >= Math.sqrt(rate);
 }

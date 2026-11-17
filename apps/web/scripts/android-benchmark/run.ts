@@ -110,7 +110,7 @@ async function iteration(index: number, cpuThrottle: number) {
             const sample = await measureStep(session, step, targets, variant, index);
             samples.push({ ...sample, hostLoad: loadavg()[0] });
             console.log(
-              `  ${index} ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
+              `  ${index} ${cpuThrottle}× ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
             );
           } catch (error) {
             failures.push({
@@ -119,7 +119,7 @@ async function iteration(index: number, cpuThrottle: number) {
               cpuThrottle,
               error: (error as Error).message,
             });
-            console.warn(`  ${index} ${variant} ${step.id}: ${(error as Error).message}`);
+            console.warn(`  ${index} ${cpuThrottle}× ${variant} ${step.id}: ${(error as Error).message}`);
           }
           await sleep(settleMs);
         }
@@ -226,7 +226,9 @@ function print(rows: ReturnType<typeof table>) {
       if (row.cpuThrottle === rate) console.log(render(lines[index]));
     });
   }
-  console.log('Cold start is never throttled, so its rows are under 1×. cpu is the slowdown measured around each step.');
+  if (selected.includes('cold-start'))
+    console.log('Cold start is never throttled, so its rows are under 1×.');
+  console.log('cpu is the WebView slowdown measured around each step.');
   console.log('Times in ms. sd~ is the MAD-based spread; detect is the smallest change between two runs this spread lets the harness detect.');
 }
 
@@ -243,7 +245,7 @@ for (let index = 0; index < iterations; index++) {
     console.log(`iteration ${index + 1}/${iterations}, CPU throttle ${cpuThrottle}×`);
     await iteration(index, cpuThrottle).catch((error: Error) => {
       failures.push({ scenario: 'iteration', iteration: index, cpuThrottle, error: error.message });
-      console.warn(`  iteration ${index} failed: ${error.message}`);
+      console.warn(`  iteration ${index} at ${cpuThrottle}× failed: ${error.message}`);
     });
   }
 }
@@ -251,11 +253,18 @@ for (let index = 0; index < iterations; index++) {
 const summary = table(samples);
 const outDir = resolve(options.out);
 await mkdir(outDir, { recursive: true });
-const profileName = cpuThrottles.map((rate) => `${rate}x`).join('-');
+const profileName = [...cpuThrottles].sort((a, b) => a - b).map((rate) => `${rate}x`).join('-');
 const file = join(outDir, `android-benchmark-${started.toISOString().replace(/[:.]/g, '-')}-cpu${profileName}.json`);
 await writeFile(file, `${JSON.stringify({ meta, summary, failures, samples }, null, 2)}\n`);
 print(summary);
 if (failures.length) console.warn(`${failures.length} failed steps; see ${file}`);
 console.log(`Results: ${file}`);
-// A run that measured nothing (signed out, wrong build) is a failure.
-process.exit(samples.length > 0 ? 0 : 1);
+// A run that measured nothing (signed out, wrong build), or nothing at one of
+// its rates (the throttle never took), is a failure.
+const timedSteps = selected.some((id) => SCENARIOS[id].steps);
+const unmeasured = cpuThrottles.filter(
+  (rate) => !samples.some((sample) => sample.cpuThrottle === rate)
+);
+if (timedSteps && unmeasured.length)
+  console.warn(`No steps measured at CPU throttle ${unmeasured.map((rate) => `${rate}×`).join(', ')}`);
+process.exit(samples.length > 0 && !(timedSteps && unmeasured.length) ? 0 : 1);

@@ -42,8 +42,15 @@ if (!options.serial) {
   process.exit(2);
 }
 
-const [cpuThrottle, ...extraRates] = parseCpuThrottle(options['cpu-throttle']);
-if (extraRates.length) throw new Error('--cpu-throttle takes one rate here');
+let cpuThrottle: number;
+try {
+  const rates = parseCpuThrottle(options['cpu-throttle']);
+  if (rates.length > 1) throw new Error('--cpu-throttle takes one rate here');
+  cpuThrottle = rates[0];
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(2);
+}
 
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 /** Frames are compared at 1/8 of the screen's resolution, in grey. */
@@ -235,7 +242,7 @@ console.log(
   `${options.step} (${options.variant}, CPU throttle ${cpuThrottle}×), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
 );
 await mkdir(resolve(options.out), { recursive: true });
-const file = resolve(options.out, `visual-${options.step}-${Date.now()}.json`);
+const file = resolve(options.out, `visual-${options.step}-${Date.now()}-cpu${cpuThrottle}x.json`);
 await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, cpuThrottle, rows }, null, 2)}\n`);
 console.log(`Results: ${file}`);
 process.exit(0);

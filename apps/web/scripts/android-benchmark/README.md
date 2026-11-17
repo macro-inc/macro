@@ -135,7 +135,7 @@ finds rows by title, so the order does not matter.
 | `--out` | `android-benchmark-results` | Results directory (git-ignored). |
 | `--label` | | Stored in the results. |
 | `--port` | 9333 | Host port for the DevTools forward. |
-| `--cpu-throttle` | 1 | WebView CPU slowdown, or a list such as `1,4` that alternates within each iteration; see [CPU profile](#cpu-profile). |
+| `--cpu-throttle` | 1 | WebView CPU slowdown: 1, or 2 to 20; a list such as `1,4` alternates within each iteration. See [CPU profile](#cpu-profile). |
 
 ## CPU profile
 
@@ -150,7 +150,7 @@ lab view switches read like an iPhone's, not an Android phone's.
 | --- | --- |
 | `--cpu-throttle 1` (default) | Comparing with earlier runs; flows bound by IPC, the network or native code (cold channel open, cold start), which throttling does not make phone-like. |
 | `--cpu-throttle 4` | Work on the WebView's main thread: view switches, document opens, rendering. Judge view-switch changes here. |
-| `--cpu-throttle 1,4` | Both in one run, alternating within each iteration so both see the same host load. It launches the app twice per iteration and takes twice as long. |
+| `--cpu-throttle 1,4` | Both in one run, alternating within each iteration so both see the same host load. It launches the app twice per iteration and takes more than twice as long, as the 4× steps are slower. Its cold-start rows have twice the samples. |
 
 The default stays one profile because most runs compare two builds at one
 profile, and running both would double every run.
@@ -159,17 +159,22 @@ How the harness applies it:
 
 - DevTools attaches only once the WebView is up, and the rate is set after the
   `app.boot` span has arrived, so `cold-start` and `cold-start.boot-span` are
-  never throttled. Their rows sit under 1× in every run.
+  never throttled. Their rows sit under 1× in every run. The work the app does
+  after boot (`--boot-settle`) runs throttled, as on a phone, so it takes
+  longer and can overlap the first cold steps more.
 - The rate lasts as long as the DevTools connection that set it: a relaunch or
   a new attach resets it to 1×. The harness sets it after every launch and
   checks it before and after every timed step by timing a fixed loop in the
-  page against the same loop before throttling. A step whose measured slowdown
-  is not within 1.5× of the rate fails. The `cpu` column is that measured
-  slowdown.
-- Each sample records `cpuThrottle` and `cpuThrottleMeasured` (before, after),
-  each summary row its `cpuThrottle`, `meta.cpuThrottle` the rates of the run,
-  and the file name ends in `-cpu4x` or `-cpu1x-4x`. Compare rows only at the
-  same rate.
+  page against the same loop before throttling. A step fails when the measured
+  slowdown is nearer 1× than the rate (below its square root), which a lapsed
+  throttle would show; host load only makes the loop slower. This is why rates
+  between 1 and 2 are refused: the check could not tell them from 1×. The `cpu`
+  column is the median measured slowdown.
+- Each timed sample records `cpuThrottle` and `cpuThrottleMeasured` (before,
+  after; cold-start samples only `cpuThrottle`), each summary row its
+  `cpuThrottle`, `meta.cpuThrottle` the rates of the run, and the file name
+  ends in `-cpu4x` or `-cpu1x-4x`. Compare rows only at the same rate. A run
+  that measured no step at one of its rates exits with an error.
 
 Caveats:
 
@@ -194,7 +199,8 @@ AVD, alternating the builds (ABAB), and treat differences below the larger of
 emulators or heavy jobs on the host widen the spread; note the host load.
 
 A step fails rather than producing a number when its spans never arrive, the
-route afterwards is not the expected one, or the target is missing. Failures
+route afterwards is not the expected one, the target is missing, or the CPU
+throttle is not in force. Failures
 are listed in the JSON. A cold start fails when the app exported its first
 spans before DevTools attached (the exporter batches for five seconds, so this
 is rare).
@@ -213,6 +219,7 @@ before recording stops counts as unsettled and gets no screen time.
 bun scripts/android-benchmark/visual.ts --serial emulator-5580 --step document.large.open --iterations 5
 ```
 
+`--cpu-throttle` takes one rate here, and the results file name ends in it.
 `--keep` keeps the recordings for inspection. They show real account content: keep them
 out of the repository and pull requests.
 
@@ -223,9 +230,10 @@ out of the repository and pull requests.
 | `run.ts` | The benchmark CLI. |
 | `scenarios.ts` | Scenarios, their tap targets and the spans that finish them. |
 | `harness.ts` | Launching, preparing and timing one step. |
-| `session.ts` | DevTools connection: span capture, tap times, element lookup. |
+| `session.ts` | DevTools connection: span capture, tap times, element lookup, CPU throttle. |
 | `measure.ts` | Turns a step's spans into a sample. |
 | `device.ts` | `adb` calls, always with `-s <serial>`. |
 | `otlp.ts`, `stats.ts` | OTLP JSON parsing and summary statistics (tested in `analysis.test.ts`). |
+| `throttle.ts` | `--cpu-throttle` parsing and the check that the rate is in force (tested in `throttle.test.ts`). |
 | `visual.ts` | Screen-recording check of one step. |
 | `build.sh`, `posthog-key.ts` | Benchmark APK build. |
