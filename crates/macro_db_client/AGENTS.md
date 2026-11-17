@@ -125,6 +125,12 @@ data checks and explicit vault purge. It does not depend on a successful item.
   partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
   batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must
   stay in those indexes, and the list must not read without a page limit.
+- `get_accessible_call_ids` (`call_record/get/accessible_call_ids.sql`) reads
+  the caller's call grants by source and looks each granted call up by id;
+  link shares cost one `SharePermission` probe per channel call, since a public
+  call has no grant to start from. Never check a call's grants against the
+  caller's sources row by row: that compares every grant with every source
+  and took seconds for callers in thousands of channels.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;

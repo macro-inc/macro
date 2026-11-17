@@ -4,9 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AttachmentKind } from './attachmentKind';
 import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
+import type { EmailFiltersDone } from './emailFiltersDone';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
 import type { EmailFiltersIsRead } from './emailFiltersIsRead';
+import type { EmailFiltersView } from './emailFiltersView';
 import type { NotificationFilters } from './notificationFilters';
 import type { SharedEmailFilter } from './sharedEmailFilter';
 
@@ -14,6 +17,9 @@ import type { SharedEmailFilter } from './sharedEmailFilter';
  * The email filters used to filter down what emails you search over.
  */
 export interface EmailFilters {
+  /** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. */
+  attachments?: AttachmentKind[];
   /** Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC. */
   bcc?: string[];
   /** When `Some(true)`, only include threads that have at least one message
@@ -36,6 +42,10 @@ against `crm_domains` + `crm_companies` (must exist for the caller's
 team, company must not be hidden, `email_sync` must be true).
 Mutually exclusive with `crm_addresses`. */
   crm_domains?: string[];
+  /** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. */
+  done?: EmailFiltersDone;
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
   email_thread_ids?: string[];
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
@@ -64,4 +74,5 @@ caller can access" (soup expands to the full set at the router edge). */
   /** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). */
   shared?: SharedEmailFilter;
+  view?: EmailFiltersView;
 }
