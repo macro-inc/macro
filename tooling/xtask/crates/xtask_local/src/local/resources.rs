@@ -237,10 +237,6 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("SEARCH_EVENT_QUEUE", Name)],
     },
     Queue {
-        name: macro_queues::AiProjectionQueue::LOCAL,
-        bindings: &[("AI_PROJECTION_QUEUE", Url)],
-    },
-    Queue {
         name: macro_queues::SfsDeleteQueue::LOCAL,
         bindings: &[("SFS_DELETE_QUEUE", Name)],
     },

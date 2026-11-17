@@ -74,6 +74,28 @@ describe('agent context', () => {
     expect(markdown).toContain(`once at=\\"2026-10-08T09:00:02Z\\"`);
   });
 
+  it('names the agent and the confidence of an inferred follow-up', async () => {
+    const response = await request({
+      promptMarkdown: 'pickle, can you take this?',
+      agent: { id: 'bot|b-1', name: 'pickle', handle: 'pickle' },
+      trigger: {
+        kind: 'follow_up',
+        addressed_by: 'inferred',
+        confidence: 72,
+        discussion: {
+          surface: { type: 'channel', id: 'c-1', channel_type: 'public' },
+          prompt_message_id: 'm-1',
+          sender: { id: 'macro|ada@example.com', name: 'Ada' },
+          reply_target: { kind: 'none' },
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toContain(`you name=\\"pickle\\"`);
+    expect(markdown).toContain(`confidence=\\"72\\"`);
+  });
+
   it('states the current time the harness sends', async () => {
     const response = await request({
       promptMarkdown: 'what is due today?',

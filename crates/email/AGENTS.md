@@ -153,9 +153,19 @@ tools — hexagonal, heavily feature-gated.
   hydration by id with an address template) is read in page order by `OwnedRead`
   (`dynamic/query/owned_scope.rs`): a capped probe counts the address
   superset, then either the sorted superset or each inbox's newest threads
-  stream into the preview pick until LIMIT, the superset stream finishing a
-  page the inbox window left short unless the window reached the inboxes'
-  end. A filter with any other top-level message term (a subject, an address
+  stream into the preview pick until LIMIT. A page that the inbox stream's
+  first window (10 threads per row, at most 1,000) leaves short goes on below
+  the last walked thread in rounds: the next, four times larger window (at
+  most 16,000) while the last window found rows fast enough to fill the page
+  in it, else (and always after a window without rows) first a probe capped
+  by the walk the page still needs at that rate (`round_cap`, at most
+  800,000 rows) and the superset below once it fits. Judge by the last
+  window, not the page: a page that found most of its rows early would walk
+  on far below the last of them. Keep every statement
+  capped: a walked thread the addresses miss costs a read of each of its
+  messages, so a cold window of addresses gone quiet costs several times
+  their superset.
+  A filter with any other top-level message term (a subject, an address
   under `NOT`) goes to the general builder: the pick could drop most of the
   window and the read would end up slower. A domain or partial address lists
   a thread only through the queried inboxes' own contacts, as
@@ -163,8 +173,8 @@ tools — hexagonal, heavily feature-gated.
   contact (`ContactScope`). Keep the `OFFSET 0`
   fence and the stream's `ORDER BY`, or the planner joins the whole stream to
   its facts. The read runs in one repeatable-read, read-only transaction (a
-  short page and its window count see one snapshot) and, like the general
-  builder's owned requests, has no `statement_timeout`.
+  page's rounds see one snapshot, so their rows concatenate) and, like the
+  general builder's owned requests, has no `statement_timeout`.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
@@ -228,11 +238,15 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT. `ALLOWED` restates `crm_email_thread_allowed`
+  whole stream before the LIMIT, and keep the superset stream's lookup by id
+  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
+  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
-  them together. A copy stays only when no better copy passes the same checks,
+  them together. Apply `crm_email_thread_excluded` to both the candidate and
+  competing copies; a copy stays only when no better copy passes the same checks,
   so the representative never depends on the cursor; `test/crm_team_read.rs`
   compares every stream with the general builder page by page. The superset
   keeps only the read inboxes' own contacts, because a message lists only its
@@ -294,6 +308,15 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- Deleting mail sends the Drive documents imported from it to the Trash: when
+  a statement removes a live document's `document_email` rows (a message,
+  thread or inbox delete, a purge batch, a replaced attachment, all through
+  cascades), the `document_email_release` trigger queues it in
+  `released_email_attachment_documents` (migration `20261116200143`), and
+  document storage trashes it if no link is left and its owner did not adopt
+  it. Moving a link (sent-identity adoption) inserts the new row before
+  deleting the old one, so the document is never without a link; keep that
+  order in any new path.
 - An attachment links to its document before the bytes reach storage, and a link
   stops sync from offering it again. `AttachmentReadService::document` stores the
   bytes again when a linked document is still awaiting its upload, and DSS signs a

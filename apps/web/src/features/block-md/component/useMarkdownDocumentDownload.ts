@@ -27,21 +27,23 @@ export function useDownloadDocumentAsMarkdownText() {
   });
 }
 
-export function useCopyDocumentAsMarkdown() {
+export function useCopyDocumentAsMarkdown(options: { silent?: boolean } = {}) {
   const { state } = useMarkdownDocument();
 
   return createCallback(async () => {
     const editor = state.editor.md.editor;
-    if (!editor) return;
+    if (!editor) return false;
 
     try {
       await navigator.clipboard.writeText(
         editorStateAsMarkdown(editor, 'external')
       );
-      toast.success('Markdown copied to clipboard');
+      if (!options.silent) toast.success('Markdown copied to clipboard');
+      return true;
     } catch (error) {
       console.error('Failed to copy markdown', error);
       toast.failure('Failed to copy markdown');
+      return false;
     }
   });
 }

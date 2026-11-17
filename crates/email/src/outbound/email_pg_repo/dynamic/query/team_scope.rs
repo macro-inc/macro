@@ -87,7 +87,8 @@ enum Stream {
 /// `crm_email_thread_allowed` for thread `t`, set-based: the
 /// `contributing`, `team_blocked` and `personal_blocked` CTEs hold its
 /// mailbox conditions and blocklists once per page instead of once per
-/// participant of every thread. A participant
+/// participant of every thread. The separate thread-exclusion veto is an
+/// indexed lookup for each candidate or competing copy. A participant
 /// domain is blocked when it, or what follows any of its dots, equals a
 /// blocked domain, which is the function's `right(…) = '.' || domain` test.
 /// `IS TRUE` keeps the membership test a hashed subplan.
@@ -95,6 +96,7 @@ const ALLOWED: &str = r#"
                   AND EXISTS (
                       SELECT 1 FROM contributing cb
                       WHERE cb.link_id = t.link_id
+                        AND NOT crm_email_thread_excluded(cb.team_id, cb.macro_id, cb.link_id, t.id)
                         AND EXISTS (
                             SELECT 1 FROM email_messages pm
                             WHERE pm.thread_id = t.id AND NOT pm.is_draft
@@ -326,13 +328,15 @@ impl<'a> TeamRead<'a> {
         self.push_stream(&mut builder, stream, sort_ts_field);
         // The checks run per streamed thread, in order: `OFFSET 0` keeps the
         // planner from turning them into a join over the whole stream, and
-        // the ORDER BY, already the stream's, keeps it from sorting.
+        // the ORDER BY, already the stream's, keeps it from sorting. They
+        // read only the thread's id and inbox, which the stream already
+        // holds, so no thread is fetched again.
         builder.push(
             r#"
                 ) AS stream
                 WHERE EXISTS (
-                    SELECT 1 FROM email_threads t
-                    WHERE t.id = stream.id"#,
+                    SELECT 1 FROM (SELECT stream.id, stream.link_id) AS t
+                    WHERE TRUE"#,
         );
         self.push_checks(&mut builder);
         // A better copy is any copy in the inboxes that passes the same
@@ -402,7 +406,7 @@ impl<'a> TeamRead<'a> {
         builder.push(
             r#"
         WITH contributing AS MATERIALIZED (
-            SELECT l.id AS link_id, l.macro_id
+            SELECT consent.team_id, l.id AS link_id, l.macro_id
             FROM email_links l
             JOIN crm_email_consent consent
               ON consent.team_id = "#,
@@ -471,10 +475,16 @@ impl<'a> TeamRead<'a> {
     ) {
         match stream {
             Stream::Superset => {
+                // Each superset thread by its id: as a semi-join the planner
+                // hashes the superset against every thread of the inboxes,
+                // which reads all of them before the sort.
                 self.push_stream_select(builder, sort_ts_field);
-                builder.push("t.link_id = ANY(");
+                builder.push(
+                    "t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads)) \
+                     AND t.link_id = ANY(",
+                );
                 builder.push_bind(self.inboxes.clone());
-                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                builder.push(")");
                 self.push_stream_filters(builder, sort_ts_field);
                 builder.push(
                     r#"

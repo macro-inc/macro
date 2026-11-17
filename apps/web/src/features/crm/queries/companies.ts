@@ -9,7 +9,6 @@ import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
-import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import {
   type Query,
   type QueryClient,
@@ -39,22 +38,21 @@ function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
       if (!companyId) {
         throw new Error('company id is required to fetch company');
       }
-      return throwOnErr(() => deps.storage.getCompany({ companyId }));
+      return throwOnErr(() =>
+        deps.storage.getCompany({ companyId, includeContacts: false })
+      );
     },
     staleTime: COMPANY_STALE_TIME,
     enabled: !!companyId && companyId !== NIL_UUID,
   });
 }
 
-/** A contact row as embedded in the company response. */
-export type CompanyContact = CrmContactResponse;
-
 /**
  * Fetches a single CRM company by id via `GET /crm/companies/{id}`.
  * The endpoint is role-aware via [`CrmCompanyAccessLevelExtractor`]:
  * non-admin viewers 404 on hidden rows, admin/owner reach hidden rows
- * for unhide UI. Contacts arrive embedded in the response so the
- * company panel hydrates in a single round trip.
+ * for unhide UI. It asks for no contacts: the Team list pages them through
+ * `useCompanyContactsQuery`.
  *
  * Disabled until a non-NIL companyId is available so callers can pass
  * a sentinel placeholder before their own data loads without firing a
@@ -75,11 +73,7 @@ export function useCompanyQuery(
     return responseToEntity(data);
   });
 
-  const contacts = createMemo<CompanyContact[]>(() =>
-    query.isSuccess ? (query.data?.contacts ?? []) : []
-  );
-
-  return { query, company, contacts };
+  return { query, company };
 }
 
 function responseToEntity(response: CrmCompanyResponse): CrmCompanyEntity {
@@ -211,10 +205,10 @@ export function createCompanyImporter(
 /**
  * Manually creates a contact via `POST /crm/companies/{id}/contacts`, or
  * `POST /crm/contacts` for a contact without a company (a display name +
- * optional email). Invalidates the company detail query (contacts arrive
- * embedded there) and soup so contact listings refresh. Server-side
- * failures worth surfacing: 409 when the email is already tracked, 404 when
- * the company isn't visible to the caller, 403 without team membership.
+ * optional email). Invalidates the company's Team list and soup so contact
+ * listings refresh. Server-side failures worth surfacing: 409 when the email
+ * is already tracked, 404 when the company isn't visible to the caller, 403
+ * without team membership.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -246,7 +240,7 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         return Promise.all([
           companyId &&
             deps.client.invalidateQueries({
-              queryKey: crmKeys.company(companyId).queryKey,
+              queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);

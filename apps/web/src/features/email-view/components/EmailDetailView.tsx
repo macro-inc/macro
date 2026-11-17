@@ -286,7 +286,6 @@ export function EmailDetailView(props: {
             result={loadResult}
             notificationSource={notificationSource}
             threadId={props.thread.id}
-            linkId={threadData()?.link_id}
             onRetry={() => fireAndForget(threadQuery.refetch(), 'email-view')}
           >
             <EmailThreadHostView
@@ -294,7 +293,6 @@ export function EmailDetailView(props: {
               titleTrailing={<TitleMenuMount ref={setSubjectMenuMount} />}
               threadId={threadId}
               source={source}
-              threadTransport={() => threadQuery.transport}
               host={host}
               chrome={({ createTask, createEvent, canCreateEvent }) => (
                 <EmailDetailHeader

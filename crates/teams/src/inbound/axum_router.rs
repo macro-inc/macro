@@ -227,6 +227,12 @@ impl IntoResponse for TeamError {
                     message: self.to_string().into(),
                 }),
             ),
+            TeamError::CrmAccessChangesUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

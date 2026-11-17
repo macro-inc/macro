@@ -9,8 +9,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SCHEDULED_SEND,
   enableEmailSignatures,
-  enableGraphqlSoup,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
@@ -85,14 +83,11 @@ import { serverEmailSends } from '@queries/email/server-sends';
 import {
   fetchAndCacheThread,
   fetchFreshEmailThread,
-  type ThreadQueryTransport,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
-import type { ApiThread } from '@service-email/generated/schemas';
-import type { InfiniteData } from '@tanstack/solid-query';
 import { confirmDialog } from '@ui';
-import { type Accessor, getOwner } from 'solid-js';
+import { getOwner } from 'solid-js';
 import { createMessageOperationSource } from '../email-message/queries/message-operation';
 import { toEmailThread } from '../email-thread/queries/thread-source';
 import {
@@ -121,11 +116,6 @@ import {
 } from './undo-send';
 import { uploadAttachmentDocuments } from './upload-documents';
 
-export type EmailComposeContextOptions = {
-  /** Transport of the thread read this surface sits under; a compose surface has none. */
-  threadTransport?: Accessor<ThreadQueryTransport | undefined>;
-};
-
 async function refreshEmailLists(
   threadId: string,
   completingThread: boolean
@@ -143,16 +133,8 @@ async function refreshEmailLists(
 }
 
 /** Construct under the composing surface's Solid owner to scope request progress. */
-export function createEmailComposeContext(
-  options: EmailComposeContextOptions = {}
-): EmailComposeContext {
+export function createEmailComposeContext(): EmailComposeContext {
   const accounts = useMailAccountsQuery();
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const queueActive = () =>
-    draftQueueActive(
-      options.threadTransport?.() ??
-        (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
-    );
   const sends = useQueuedEmailSends();
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
@@ -199,7 +181,7 @@ export function createEmailComposeContext(
   const requireSavedDraftForDelivery = async (
     draftId: string | null | undefined
   ) => {
-    if (!queueActive() || !draftId) return;
+    if (!draftQueueActive() || !draftId) return;
     const local = await readLocalDraft(draftId);
     if (local && !localDraftReadyForDelivery(local))
       throw new Error(
@@ -210,25 +192,17 @@ export function createEmailComposeContext(
   // is read again, so every delivery change refetches it.
   const refreshThread = (threadId: string | undefined) => {
     if (!threadId) return;
-    if (isFeatureEnabled(enableGraphqlSoup)) {
-      void (async () => {
-        const result = await fetchAndCacheThread(threadId);
-        if (result.isErr())
-          reportError(
-            new Error(
-              `Failed to refresh email thread ${threadId}: ${result.error
-                .map((error) => `${error.code}: ${error.message}`)
-                .join(', ')}`
-            )
-          );
-      })().catch(reportError);
-      return;
-    }
-    void queryClient
-      .invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      })
-      .catch(reportError);
+    void (async () => {
+      const result = await fetchAndCacheThread(threadId);
+      if (result.isErr())
+        reportError(
+          new Error(
+            `Failed to refresh email thread ${threadId}: ${result.error
+              .map((error) => `${error.code}: ${error.message}`)
+              .join(', ')}`
+          )
+        );
+    })().catch(reportError);
   };
 
   // Queued writes address a draft by handles: the composer's minted ones, or a
@@ -239,7 +213,7 @@ export function createEmailComposeContext(
   }: SaveEmailDraft):
     | (DraftClientHandles & { threadId: string })
     | undefined => {
-    if (!queueActive()) return undefined;
+    if (!draftQueueActive()) return undefined;
     if (clientHandles?.threadId) {
       return { ...clientHandles, threadId: clientHandles.threadId };
     }
@@ -378,7 +352,7 @@ export function createEmailComposeContext(
             viewerEmail(),
         }),
       get retryDraft() {
-        return queueActive() ? retryEmailDraftSynchronization : undefined;
+        return draftQueueActive() ? retryEmailDraftSynchronization : undefined;
       },
       forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
@@ -478,7 +452,7 @@ export function createEmailComposeContext(
       },
       async deleteDraft({ completingThread, inboxId, ...input }) {
         assertEmailDraftQueueAvailable();
-        if (input.threadId && queueActive()) {
+        if (input.threadId && draftQueueActive()) {
           const outcome = await deleteEmailDraftQueued({
             draftId: input.draftId,
             draftGeneration: input.draftGeneration,
@@ -503,28 +477,10 @@ export function createEmailComposeContext(
         }
       },
       async restoreDraft({ threadId, draftId, draft, html, inboxId }) {
-        if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
-          queryClient.setQueryData<InfiniteData<ApiThread>>(
-            emailKeys.threadMessages(threadId).queryKey,
-            (old) =>
-              old
-                ? {
-                    ...old,
-                    pages: old.pages.map((page) => ({
-                      ...page,
-                      messages: page.messages.filter(
-                        (message) => message.db_id !== draftId
-                      ),
-                    })),
-                  }
-                : old
-          );
-          markThreadDraftSaved(threadId);
-        }
         if (draft && html !== undefined)
           await restoreDraftBodyAfterUndo(draft, html, inboxId ?? primaryId());
-        if (queueActive()) await reviveLocalDraft(draftId);
-        if (threadId && isFeatureEnabled(enableGraphqlSoup))
+        if (draftQueueActive()) await reviveLocalDraft(draftId);
+        if (threadId)
           fireAndForget(fetchAndCacheThread(threadId), 'email-compose');
       },
     },
@@ -709,8 +665,8 @@ export function createEmailComposeContext(
           reportError(error);
         }
       },
-      archive: async ({ threadId, value }, inboxId) => {
-        await archiveEmailThread({ id: threadId, value }, headerId(inboxId));
+      archive: async ({ threadId, value }) => {
+        await archiveEmailThread({ id: threadId, value });
       },
       undoSend: async (input) => {
         if (input.sendAttemptId) {

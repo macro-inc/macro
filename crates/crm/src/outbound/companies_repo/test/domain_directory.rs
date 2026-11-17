@@ -173,12 +173,12 @@ async fn manual_company_is_enriched_later_and_keeps_team_names(pool: PgPool) -> 
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let team_a_company = repo
-        .get_company_for_team(&team_a, &renamed.company.id, false)
+        .get_company_for_team(&team_a, &renamed.company.id, false, true)
         .await?
         .unwrap();
     assert_eq!(team_a_company.name.as_deref(), Some("Acme (ours)"));
     let team_b_company = repo
-        .get_company_for_team(&team_b, &unnamed, false)
+        .get_company_for_team(&team_b, &unnamed, false, true)
         .await?
         .unwrap();
     assert_eq!(team_b_company.name.as_deref(), Some("Acme Inc."));
