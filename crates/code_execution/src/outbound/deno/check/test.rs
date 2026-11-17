@@ -254,7 +254,8 @@ async fn reports_problems_in_the_declarations() {
     let source = "export async function main({ macro }: StepContext) { return 1; }\n";
     let diagnostics = checker
         .check(source, &declarations, ProgramImports::Sdk)
-        .await.unwrap();
+        .await
+        .unwrap();
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
     assert!(
         diagnostics[0]
