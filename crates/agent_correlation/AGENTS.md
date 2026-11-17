@@ -16,7 +16,7 @@ code, not in its prompt. The harness also signs the scope into the credential
 ## Start here
 
 - `src/domain.rs`: repository contract and agent-binding validation.
-- `src/scope.rs`: session scopes and the requests each allows. `generation`:
+- `agent_attribution`'s `src/scope.rs` (re-exported as `scope`): session scopes and the requests each allows. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with
@@ -41,7 +41,7 @@ code, not in its prompt. The harness also signs the scope into the credential
   allows only reads. `ANY_WRITE` lists paths that run any write whatever the
   method (DSS GraphQL, by POST or its WebSocket); every scope, and an unknown
   one, is refused them. No scope may share (`allows_sharing`).
-- `src/context.rs`: async context (`Attribution`: correlation, routine, the
+- `agent_attribution`'s `src/context.rs` (re-exported as `context`): async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, the validated session
   (`current_session`), and the scope stored with it, else the one the
   credential signs (`current_scope`)); capture before spawning,
@@ -58,7 +58,8 @@ code, not in its prompt. The harness also signs the scope into the credential
   also belongs in `SENDS`, so `no_send` refuses it before the handler. A new such
   field or edit route joins that check.
   Both record the refusal for `propagate`.
-- `src/verb.rs`: closed SDK display-verb vocabulary.
+- `agent_attribution`'s `src/verb.rs` (re-exported as `verb`): closed SDK
+  display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation.
   It reads `macro_auth::credential::request_credential`, as authentication
   does, and verifies every user token the request carries: the request is
@@ -79,7 +80,8 @@ code, not in its prompt. The harness also signs the scope into the credential
 ## Boundaries
 
 - Owns `agent_correlations`; reads the session's bound agent for validation.
-- Depends on `macro_auth` only for the HTTP adapter.
+- Depends on `agent_attribution` (the task-local context it sets) and on
+  `macro_auth` only for the HTTP adapter.
 - Used by code-mode credential minting, HTTP services, and the event broker.
 
 ## Checks

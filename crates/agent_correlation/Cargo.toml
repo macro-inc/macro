@@ -6,26 +6,24 @@ publish = false
 
 [features]
 default = []
-http = ["dep:axum", "dep:macro_auth"]
+http = ["dep:axum", "dep:macro_auth", "dep:serde"]
 postgres = ["dep:sqlx"]
 
 [dependencies]
+agent_attribution = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, optional = true }
-lazy-regex = { workspace = true }
 macro_auth = { workspace = true, optional = true }
 rootcause = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros"] }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
 macro_auth = { workspace = true, features = ["testing"] }
 macro_db_migrator = { workspace = true }
 serde_json = { workspace = true }

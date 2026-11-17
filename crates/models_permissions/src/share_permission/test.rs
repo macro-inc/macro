@@ -326,8 +326,8 @@ fn update_request_distinguishes_omitted_null_and_present_values() {
 
 #[tokio::test]
 async fn a_session_that_may_not_share_creates_private_items() {
-    use agent_correlation::context::{Attribution, scope_attribution};
-    use agent_correlation::scope::SessionScope;
+    use agent_attribution::context::{Attribution, scope_attribution};
+    use agent_attribution::scope::SessionScope;
 
     for scope in [SessionScope::Generation, SessionScope::NoSend] {
         let attribution = Attribution {

@@ -181,6 +181,7 @@ members = [
   "crates/task_dedup",
   "crates/team_agents",
   "crates/trigger_context",
+  "crates/types/agent_attribution",
   "crates/unfurl",
   "crates/universal_input",
   "crates/upstream_error",
@@ -603,6 +604,7 @@ account_manager = { path = "crates/account_manager" }
 activity = { path = "crates/activity", default-features = false }
 agent = { path = "crates/agent" }
 agent_api_keys = { path = "crates/agent_api_keys" }
+agent_attribution = { path = "crates/types/agent_attribution" }
 agent_changes = { path = "crates/agent_changes", default-features = false }
 agent_code_mode = { path = "crates/agent_code_mode" }
 agent_correlation = { path = "crates/agent_correlation" }
