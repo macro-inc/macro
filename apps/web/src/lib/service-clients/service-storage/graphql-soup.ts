@@ -965,7 +965,7 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
-                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                visibleInitiative: entityFromArgument('GraphqlSoupInitiative', [
                   'initiativeId',
                 ]),
               },

@@ -27,7 +27,9 @@ export class ApiKeyNamespace {
   }
 
   /**
-   * Create a key. Save the secret now; it cannot be retrieved later.
+   * Create a key; refused to an agent's program (ExecuteCode, a routine), so
+   * there have the user create one in Macro's settings. Save the secret now;
+   * it cannot be retrieved later.
    *
    * @write
    */

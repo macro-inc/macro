@@ -1,0 +1,2 @@
+id	limit
+F-003	The Outlook stand-in keeps no approval state. The test shows the dialog that asks for approval, the approval link, the approval page, the notice, and that the account then connects; it does not show that an account is refused until an administrator approves.
