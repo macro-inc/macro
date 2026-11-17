@@ -1,0 +1,43 @@
+.github/workflows/release-production.yml
+  s_358a0656ff17a9::t_abdf52c1c4aae7 115-137
+.github/workflows/deploy_web_app.yml
+  s_358a0656ff17a9::t_abdf52c1c4aae7 105-127
+infra/stacks/web-app/README.md
+  s_358a0656ff17a9::t_abdf52c1c4aae7 65-67,79-86
+tooling/xtask/crates/xtask_workflows/src/workflows/build_web_app.rs
+  s_1ed68b4f177b4b::t_3e97512cf61982 177
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
+  s_1ed68b4f177b4b::t_91a980094bfa1d 17-19,156,196-206
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app/test.rs
+  s_1ed68b4f177b4b::t_f0ef6d92e37938 1-39
+tooling/xtask/crates/xtask_workflows/src/workflows/release_production.rs
+  s_1ed68b4f177b4b::t_55a6eabb9a9e94 195-196
+tooling/xtask/crates/xtask_workflows/src/workflows/release_production/test.rs
+  s_1ed68b4f177b4b::t_90e649cb1ff2b3 135-154
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/guard_live_bundle.sh
+  s_1ed68b4f177b4b::t_d39eb16f114457 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "40d37a3eb6bbea18043b0ca876dda578958b320b",
+  "prompts": {},
+  "sessions": {
+    "s_1ed68b4f177b4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "939d077b-4e0c-43ab-90e7-a9c7d15e7081",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
