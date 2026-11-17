@@ -41,9 +41,15 @@ CREATE INDEX crm_population_requests_due_idx
     ON crm_population_requests (link_id, due_at)
     WHERE parked_at IS NULL;
 
--- Counts the attempts in flight, for one mailbox and across all of them.
+-- Counts one mailbox's attempts in flight, and finds an attempt by its lease.
 CREATE INDEX crm_population_requests_claimed_idx
     ON crm_population_requests (link_id, claimed_until)
+    WHERE claimed_until IS NOT NULL;
+
+-- Counts the attempts in flight across all mailboxes: it reads the leases
+-- that end after now, not every lease left in the index.
+CREATE INDEX crm_population_requests_claimed_until_idx
+    ON crm_population_requests (claimed_until)
     WHERE claimed_until IS NOT NULL;
 
 -- A mailbox whose populations are failing. The row exists only while they
