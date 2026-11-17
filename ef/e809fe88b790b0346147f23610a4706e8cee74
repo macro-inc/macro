@@ -1,0 +1,35 @@
+crates/native_app_service/src/inbound.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 71,88-89
+crates/native_app_service/src/tests.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 148,817-822,829-831,837-872
+  s_358a0656ff17a9::t_3c8b74229c2ba4 823-828,832-836
+crates/native_app_service/src/domain/models.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 275-277
+infra/stacks/web-app/README.md
+  s_358a0656ff17a9::t_3c8b74229c2ba4 63-66,87-95
+  s_358a0656ff17a9::t_d36ed591d82dec 96
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client/test.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 34,48,64,80
+crates/native_app_service/src/domain/service.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 40,57-60
+  s_358a0656ff17a9::t_3c8b74229c2ba4 4-5
+  s_358a0656ff17a9::t_7bc00f28115375 61-62
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client.rs
+  s_358a0656ff17a9::t_aa480cd3b68be2 64-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "efe809fe88b790b0346147f23610a4706e8cee74",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
