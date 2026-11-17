@@ -26,6 +26,7 @@ use gh_workflow::{
     WorkflowDispatch,
 };
 
+use crate::workflows::actions::{ActionsDownloadArtifact, ActionsUploadArtifact};
 use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{runners, steps, vars};
 
@@ -160,23 +161,18 @@ fn verify_and_collect() -> Step<Run> {
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
-    Step::new("Upload verified APK")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", APK_ARTIFACT))
-        .add_with(("path", "android-artifacts/"))
-        .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 7))
+    ActionsUploadArtifact::new("Upload verified APK", "android-artifacts/")
+        .name(APK_ARTIFACT)
+        .if_no_files_found("error")
+        .retention_days(7)
+        .step()
 }
 
 fn download_workflow_artifact() -> Step<Use> {
-    Step::new("Download verified APK")
-        .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
-        .add_with(("name", APK_ARTIFACT))
-        .add_with(("path", "android-artifacts"))
+    ActionsDownloadArtifact::new("Download verified APK")
+        .name(APK_ARTIFACT)
+        .path("android-artifacts")
+        .step()
 }
 
 /// `--clobber` lets a re-run replace this release's own APK; nothing else on

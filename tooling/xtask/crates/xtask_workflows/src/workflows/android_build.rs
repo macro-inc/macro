@@ -6,6 +6,7 @@
 use gh_workflow::expr::typed::{always, runner};
 use gh_workflow::{Run, Step, Use};
 
+use crate::workflows::actions::ActionsUploadArtifact;
 use crate::workflows::vars;
 
 /// The package format a release build produces.
@@ -83,17 +84,15 @@ pub fn build(artifact: Artifact) -> Step<Run> {
 }
 
 pub fn preserve_build_log() -> Step<Use> {
-    Step::new("Preserve Android build log")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .if_condition(always())
-        .add_with(("name", "android-build-log"))
-        .add_with(("path", format!("{}/android-build.log", runner().temp())))
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
+    ActionsUploadArtifact::new(
+        "Preserve Android build log",
+        format!("{}/android-build.log", runner().temp()),
+    )
+    .name("android-build-log")
+    .if_no_files_found("ignore")
+    .retention_days(7)
+    .step()
+    .if_condition(always())
 }
 
 pub fn remove_signing_material() -> Step<Run> {

@@ -337,8 +337,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-build-log
           path: ${{ runner.temp }}/android-build.log
+          name: android-build-log
           if-no-files-found: ignore
           retention-days: '7'
       - id: artifact
@@ -552,8 +552,8 @@ jobs:
       - name: Upload verified Android artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-release
           path: android-artifacts/
+          name: android-release
           if-no-files-found: error
           retention-days: '90'
       - name: Remove signing material
@@ -567,7 +567,6 @@ jobs:
         if: failure()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const path = require('path');
@@ -615,5 +614,6 @@ jobs:
               issue_number: context.issue.number,
               body,
             });
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 concurrency:
   group: android-play-release-${{ github.event.pull_request.number }}

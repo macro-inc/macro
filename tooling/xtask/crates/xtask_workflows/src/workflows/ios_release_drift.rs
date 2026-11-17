@@ -29,6 +29,7 @@ use gh_workflow::{
     Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
+use crate::workflows::actions::OvenShSetupBun;
 use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
@@ -152,10 +153,10 @@ fn cancel_release_runs() -> Step<Run> {
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .if_condition(changed())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn fetch_credentials() -> Step<Run> {

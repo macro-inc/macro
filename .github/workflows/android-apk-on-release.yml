@@ -100,8 +100,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-build-log
           path: ${{ runner.temp }}/android-build.log
+          name: android-build-log
           if-no-files-found: ignore
           retention-days: '7'
       - name: Verify and collect APK
@@ -125,8 +125,8 @@ jobs:
       - name: Upload verified APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-apk
           path: android-artifacts/
+          name: android-apk
           if-no-files-found: error
           retention-days: '7'
       - name: Remove signing material

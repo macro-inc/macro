@@ -11,6 +11,11 @@ use gh_workflow::expr::typed::{
 use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
+use crate::workflows::actions::{
+    ActionsCheckout, ActionsDownloadArtifact, ActionsUploadArtifact, GoogleGithubActionsAuth,
+    NamespacelabsNscloudCacheAction, NamespacelabsNscloudSetupBuildxAction, OvenShSetupBun,
+    SoftpropsActionGhRelease,
+};
 use crate::workflows::{runners, vars};
 
 #[cfg(test)]
@@ -61,6 +66,8 @@ pub trait FluentBuilder: Sized {
 impl FluentBuilder for gh_workflow::Workflow {}
 impl FluentBuilder for Job {}
 impl<T> FluentBuilder for Step<T> {}
+impl FluentBuilder for ActionsCheckout {}
+impl FluentBuilder for GoogleGithubActionsAuth {}
 
 /// Reference a repo-local composite action (`uses: ./path`).
 pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
@@ -71,37 +78,33 @@ pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
 /// through it so nix-in-Docker work does not land on a Small runner's local
 /// daemon.
 pub fn setup_namespace_buildx() -> Step<Use> {
-    Step::new("Set up Namespace Docker builder").uses(
-        "namespacelabs",
-        "nscloud-setup-buildx-action",
-        "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
-    ) // v0.0.23
+    NamespacelabsNscloudSetupBuildxAction::new("Set up Namespace Docker builder").step()
 }
 
 /// `actions/checkout`, pinned. `full_history` fetches the full history, which
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.
 pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
-    Step::new("Checkout")
-        .uses("actions", "checkout", CHECKOUT_SHA)
-        .add_with(("clean", false))
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
-        .when(!persist_credentials, |step| {
-            step.add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout")
+        .clean(false)
+        .when(full_history, |checkout| checkout.fetch_depth(0))
+        .when(!persist_credentials, |checkout| {
+            checkout.persist_credentials(false)
         })
+        .step()
 }
 
 /// `oven-sh/setup-bun` — installs the Bun version the action picks.
 pub fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses("oven-sh", "setup-bun", SETUP_BUN_SHA)
+    OvenShSetupBun::new("Setup Bun").step()
 }
 
 /// `oven-sh/setup-bun` with an exact Bun version, for the native
 /// release workflows that run the `apps/web/scripts` release helpers.
 pub fn setup_bun_pinned() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses("oven-sh", "setup-bun", SETUP_BUN_SHA)
-        .add_with(("bun-version", "1.3.13"))
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
 }
 
 /// The outputs of [`google_play_auth`].
@@ -131,27 +134,17 @@ pub(crate) const GOOGLE_PLAY_AUTH: StepHandle<GooglePlayAuthOutputs> = StepHandl
 /// it would run the PR's code with the publishing identity, and the provider
 /// rejects it anyway.
 pub fn google_play_auth(credentials_file: bool) -> Step<Use> {
-    Step::new("Authenticate to Google Play")
-        .uses(
-            "google-github-actions",
-            "auth",
-            "7c6bc770dae815cd3e89ee6cdf493a5fab2cc093",
-        ) // v3
-        .id(GOOGLE_PLAY_AUTH.id())
-        .add_with((
-            "workload_identity_provider",
-            vars::GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER,
-        ))
-        .add_with(("service_account", vars::GOOGLE_PLAY_SERVICE_ACCOUNT))
-        .add_with(("token_format", "access_token"))
-        .add_with((
-            "access_token_scopes",
-            "https://www.googleapis.com/auth/androidpublisher",
-        ))
-        .when(!credentials_file, |step| {
-            step.add_with(("create_credentials_file", false))
+    GoogleGithubActionsAuth::new("Authenticate to Google Play")
+        .workload_identity_provider(vars::GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER)
+        .service_account(vars::GOOGLE_PLAY_SERVICE_ACCOUNT)
+        .token_format("access_token")
+        .access_token_scopes("https://www.googleapis.com/auth/androidpublisher")
+        .when(!credentials_file, |auth| {
+            auth.create_credentials_file(false)
         })
-        .add_with(("export_environment_variables", false))
+        .export_environment_variables(false)
+        .step()
+        .id(GOOGLE_PLAY_AUTH.id())
 }
 
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
@@ -288,10 +281,11 @@ pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume").add_with((
-        "path",
-        "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
-    ))
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.path(
+            "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
+        )
+    })
 }
 
 /// Mount a scratch directory for building the nextest filter, plus cargo's registry
@@ -305,19 +299,20 @@ pub fn mount_nextest_filter_cache(filter_cache_dir: RuntimePath<'_>) -> Step<Use
         xtask_paths::runtime_path!("/home/runner/.cargo/git").as_str(),
     );
 
-    nscloud_cache_action("Mount nextest-filter and cargo registry cache").add_with(("path", paths))
+    nscloud_cache_action("Mount nextest-filter and cargo registry cache", |cache| {
+        cache.path(paths)
+    })
 }
 
-/// The pinned `nscloud-cache-action`, shared by every mount helper below.
-/// `continue-on-error` because a cache volume is always a pure optimization — a
-/// failure just means cold state, never a wrong build.
-fn nscloud_cache_action(name: &str) -> Step<Use> {
-    Step::new(name)
-        .uses(
-            "namespacelabs",
-            "nscloud-cache-action",
-            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
-        )
+/// The pinned `nscloud-cache-action`, configured by `mounts`, shared by every
+/// mount helper. `continue-on-error` because a cache volume is always a pure
+/// optimization — a failure just means cold state, never a wrong build.
+fn nscloud_cache_action(
+    name: &str,
+    mounts: impl FnOnce(NamespacelabsNscloudCacheAction) -> NamespacelabsNscloudCacheAction,
+) -> Step<Use> {
+    mounts(NamespacelabsNscloudCacheAction::new(name))
+        .step()
         .continue_on_error(true)
 }
 
@@ -326,17 +321,14 @@ fn nscloud_cache_action(name: &str) -> Step<Use> {
 /// are what wrangler's `[build]` line otherwise redoes every run: the pinned
 /// `worker-build` binary and wasm-pack's downloaded `wasm-opt`.
 pub fn mount_wasm_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "rust"))
-        .add_with((
-            "path",
-            format!(
-                "{}/target\n{}\n{}",
-                github().workspace(),
-                xtask_paths::runtime_path!("/home/runner/.cargo/bin").as_str(),
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-            ),
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.cache("rust").path(format!(
+            "{}/target\n{}\n{}",
+            github().workspace(),
+            xtask_paths::runtime_path!("/home/runner/.cargo/bin").as_str(),
+            xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
         ))
+    })
 }
 
 /// Configure Namespace's official artifact-backed remote sccache. Call this
@@ -391,38 +383,31 @@ fi"#
 /// OpenAPI-binary build; compiled objects live in Namespace's remote sccache.
 /// `continue-on-error` for the same reason as [`mount_cache_volume`].
 pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .map(|step| {
-            if with_rust {
-                step.add_with((
-                    "path",
-                    format!(
-                        "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git",
-                        vars::BUN_CACHE_VOLUME_DIR,
-                    ),
-                ))
-            } else {
-                step.add_with(("path", vars::BUN_CACHE_VOLUME_DIR))
-            }
-        })
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        let cache = cache.cache("nix");
+        if with_rust {
+            cache.path(format!(
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git",
+                vars::BUN_CACHE_VOLUME_DIR,
+            ))
+        } else {
+            cache.path(vars::BUN_CACHE_VOLUME_DIR)
+        }
+    })
 }
 
 /// [`mount_web_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-                vars::VITEST_MODULE_CACHE_VOLUME_DIR,
-                vars::WASM_PKG_CACHE_DIR,
-            ),
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.cache("nix").path(format!(
+            "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
+            vars::BUN_CACHE_VOLUME_DIR,
+            xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+            vars::WASM_PKG_CACHE_DIR,
         ))
+    })
 }
 
 /// [`mount_web_cache_volume`] for the PR build, which compiles the browser wasm
@@ -432,17 +417,14 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
 /// packages it reuses. Deploy builds keep theirs in an Actions cache instead
 /// (`build_web_app`) and mount none of these, since PR jobs write this volume.
 pub fn mount_web_build_check_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-                vars::WASM_PKG_CACHE_DIR,
-            ),
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.cache("nix").path(format!(
+            "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
+            vars::BUN_CACHE_VOLUME_DIR,
+            xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            vars::WASM_PKG_CACHE_DIR,
         ))
+    })
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
@@ -504,9 +486,12 @@ pub fn gated_job(should_run: &JobOutput<Flag>) -> Job {
 /// options at the call site (`clean: false` on jobs reusing a mounted /nix
 /// volume, `sparse-checkout` for action-only jobs).
 pub fn checkout_v4() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses("actions", "checkout", CHECKOUT_SHA)
-        .add_with(("persist-credentials", false))
+    checkout_v4_action().step()
+}
+
+/// [`checkout_v4`] before it becomes a step, for call sites that add inputs.
+fn checkout_v4_action() -> ActionsCheckout {
+    ActionsCheckout::new("Checkout Repo").persist_credentials(false)
 }
 
 /// A deploy that ships code built from this commit is blocked until every
@@ -525,7 +510,7 @@ pub fn check_macro_db_migrations_job<SetupOutputs>(
         .needs(vec![setup.to_string()])
         .cond(ships_code)
         .runs_on(runners::DB_MIGRATOR)
-        .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(checkout_v4_action().sparse_checkout(".github/").step())
         .add_step(
             uses_local(
                 "Check migrations",
@@ -569,7 +554,9 @@ pub fn upload_handoff_artifact(file: &str, service: Expr<Str>) -> Step<Run> {
 /// version-pinned by infra/ and identical across services; a cold volume just
 /// re-downloads (~45s). Requires the job to pin `PULUMI_HOME: /pulumi`.
 pub fn cache_pulumi_plugins() -> Step<Use> {
-    nscloud_cache_action("Cache Pulumi plugins").add_with(("path", "/pulumi/plugins"))
+    nscloud_cache_action("Cache Pulumi plugins", |cache| {
+        cache.path("/pulumi/plugins")
+    })
 }
 
 /// Make PULUMI_HOME (/pulumi) and its mounted plugins subdir writable so
@@ -593,23 +580,24 @@ pub fn ensure_pulumi_home_writable() -> Step<Run> {
 
 /// `actions/checkout` with a dynamic ref (for tag-triggered builds).
 pub fn checkout_ref(git_ref: Expr<Str>) -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses("actions", "checkout", CHECKOUT_SHA)
-        .add_with(("ref", git_ref))
-        .add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout Repo")
+        .r#ref(git_ref)
+        .persist_credentials(false)
+        .step()
 }
 
 /// Mount only the `/nix` store cache volume (no cargo/sccache). Used by the
 /// desktop builds that delegate entirely to Nix.
 pub fn mount_nix_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
+    nscloud_cache_action("Mount /nix cache volume", |cache| cache.cache("nix"))
 }
 
 /// macOS cache mounts are symlinks, which Nix does not support for `/nix`.
 /// Persist a file binary cache instead, leaving the live store to the installer.
 pub fn mount_macos_nix_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount macOS Nix binary cache")
-        .add_with(("path", "~/.cache/macro-desktop-nix"))
+    nscloud_cache_action("Mount macOS Nix binary cache", |cache| {
+        cache.path("~/.cache/macro-desktop-nix")
+    })
 }
 
 /// The outputs of [`derive_artifact_metadata`].
@@ -649,38 +637,34 @@ pub fn derive_artifact_metadata(raw_ref: Expr<Str>) -> Step<Run> {
 
 /// Upload build artifacts within the workflow run for a later publish job.
 pub fn upload_artifact(name: &str, path: RuntimePath<'_>) -> Step<Use> {
-    Step::new(format!("Upload {name} artifact"))
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", name))
-        .add_with(("path", path.as_str()))
-        .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 30))
+    upload_artifact_action(name, path).step()
+}
+
+/// [`upload_artifact`] before it becomes a step, for call sites that override
+/// an input.
+pub(crate) fn upload_artifact_action(name: &str, path: RuntimePath<'_>) -> ActionsUploadArtifact {
+    ActionsUploadArtifact::new(&format!("Upload {name} artifact"), path.as_str())
+        .name(name)
+        .if_no_files_found("error")
+        .retention_days(30)
 }
 
 /// Download all build artifacts into one directory for release publishing.
 pub fn download_artifacts(path: RuntimePath<'_>) -> Step<Use> {
-    Step::new("Download Build Artifacts")
-        .uses("actions", "download-artifact", DOWNLOAD_ARTIFACT_SHA)
-        .add_with(("path", path.as_str()))
-        .add_with(("merge-multiple", true))
+    ActionsDownloadArtifact::new("Download Build Artifacts")
+        .path(path.as_str())
+        .merge_multiple(true)
+        .step()
 }
 
 /// Attach build artifacts to the GitHub release for the resolved release tag.
 pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
-    Step::new("Upload Release Artifacts")
-        .uses(
-            "softprops",
-            "action-gh-release",
-            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
-        ) // v2
+    SoftpropsActionGhRelease::new("Upload Release Artifacts")
+        .tag_name(ARTIFACT_METADATA.outputs.tag.read())
+        .files(path.as_str())
+        .fail_on_unmatched_files(true)
+        .step()
         .if_condition(ARTIFACT_METADATA.outputs.tag.read().starts_with("v"))
-        .add_with(("tag_name", ARTIFACT_METADATA.outputs.tag.read()))
-        .add_with(("files", path.as_str()))
-        .add_with(("fail_on_unmatched_files", true))
 }
 
 /// Teardown Nix (always runs).

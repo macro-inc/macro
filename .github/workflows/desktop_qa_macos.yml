@@ -189,7 +189,7 @@ jobs:
         if: '!cancelled()'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macos-qa-${{ github.run_id }}
           path: ${{ runner.temp }}/qa-out
+          name: macos-qa-${{ github.run_id }}
           if-no-files-found: warn
           retention-days: '14'

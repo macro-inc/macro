@@ -19,6 +19,7 @@ use gh_workflow::{
     WorkflowDispatch,
 };
 
+use crate::workflows::actions::OvenShSetupBun;
 use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
@@ -66,9 +67,9 @@ fn require_release_tag() -> Step<Run> {
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
-        .add_with(("bun-version", "1.3.13"))
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
 }
 
 fn fetch_credentials() -> Step<Run> {

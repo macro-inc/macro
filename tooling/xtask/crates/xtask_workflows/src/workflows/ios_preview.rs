@@ -108,11 +108,12 @@ fn build_simulator_app() -> Step<Run> {
 /// screenshot and log archive come along on failures too — `if: always()` —
 /// since a build that dies at the smoke test is exactly when they are wanted.
 fn upload_app_artifact() -> Step<Use> {
-    steps::upload_artifact(
+    steps::upload_artifact_action(
         "macro-ios-simulator-app",
         xtask_paths::runtime_path!("artifacts/*"),
     )
-    .add_with(("if-no-files-found", "warn"))
+    .if_no_files_found("warn")
+    .step()
 }
 
 /// Uploads the archive and posts the comment. The PR number, branch and SHA

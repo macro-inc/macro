@@ -35,6 +35,7 @@ use gh_workflow::{
     Workflow,
 };
 
+use crate::workflows::actions::{ActionsCheckout, ActionsGithubScript};
 use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
@@ -160,12 +161,12 @@ fn head_guard() -> Step<Run> {
 }
 
 fn checkout_pr_head() -> Step<Use> {
-    Step::new("Checkout PR head")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", head_sha()))
+    ActionsCheckout::new("Checkout PR head")
+        .r#ref(head_sha())
         // Full history so the bump check can diff against the base branch.
-        .add_with(("fetch-depth", 0))
-        .add_with(("persist-credentials", false))
+        .fetch_depth(0)
+        .persist_credentials(false)
+        .step()
 }
 
 /// Run a command in `apps/web` inside the Nix dev shell, with its output
@@ -258,19 +259,9 @@ fn submit_for_review() -> Step<Run> {
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        // Not `always()`: a run the drift workflow cancelled must not post
-        // "failed, re-add the label" next to drift's own comment.
-        .if_condition(success().or(failure()))
-        .add_with(("github-token", vars::GITHUB_TOKEN))
-        .add_with((
-            "script",
-            indoc::indoc! {r#"
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        indoc::indoc! {r#"
                 const fs = require('fs');
                 const path = require('path');
                 const confPath = 'apps/web/tauri/src-tauri/tauri.ios.conf.json';
@@ -340,5 +331,10 @@ fn pr_comment() -> Step<Use> {
                   body,
                 });
             "#},
-        ))
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    // Not `always()`: a run the drift workflow cancelled must not post
+    // "failed, re-add the label" next to drift's own comment.
+    .if_condition(success().or(failure()))
 }

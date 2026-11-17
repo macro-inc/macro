@@ -440,8 +440,8 @@ jobs:
         name: Upload to internal testing
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5
         with:
-          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
           packageName: com.macro.workspace.mobile
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
           releaseFiles: ${{ steps.artifact.outputs.bundle }}
           mappingFile: ${{ steps.artifact.outputs.mapping }}
           releaseName: ${{ needs.check.outputs.release_name }}
@@ -773,7 +773,6 @@ jobs:
         if: success() || failure()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             // Android Play Publish's closing comment on the PR (actions/github-script).
             // A failure names the step that failed and, when it is one that logs its
@@ -846,6 +845,7 @@ jobs:
               issue_number: Number(env.PR_NUMBER),
               body,
             });
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
           JOB_NAME: Android Play Publish
           BUILD_URL: ${{ github.event.workflow_run.html_url }}

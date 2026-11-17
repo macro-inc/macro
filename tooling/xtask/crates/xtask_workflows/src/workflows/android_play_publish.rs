@@ -38,6 +38,9 @@ use gh_workflow::{
     WorkflowRunType,
 };
 
+use crate::workflows::actions::{
+    ActionsDownloadArtifact, ActionsGithubScript, R0adkllUploadGooglePlay,
+};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -326,12 +329,12 @@ fn provenance_stamp() -> Step<Run> {
 }
 
 fn download_artifact() -> Step<Use> {
-    Step::new("Download the built App Bundle")
-        .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
-        .add_with(("name", "android-release"))
-        .add_with(("run-id", github().event::<Str>("workflow_run.id")))
-        .add_with(("github-token", github().token()))
-        .add_with(("path", format!("{}/android-release", runner().temp())))
+    ActionsDownloadArtifact::new("Download the built App Bundle")
+        .name("android-release")
+        .run_id(github().event::<Str>("workflow_run.id"))
+        .github_token(github().token())
+        .path(format!("{}/android-release", runner().temp()))
+        .step()
 }
 
 /// The artifact was written by PR code: take exactly one bundle and one
@@ -363,24 +366,16 @@ fn pick_files() -> Step<Run> {
 }
 
 fn upload_internal() -> Step<Use> {
-    Step::new("Upload to internal testing")
-        .uses(
-            "r0adkll",
-            "upload-google-play",
-            "e738b9dd8f2476ea806d921b64aacd24f34515a5",
-        ) // v1
+    R0adkllUploadGooglePlay::new("Upload to internal testing", "com.macro.workspace.mobile")
+        .service_account_json(steps::GOOGLE_PLAY_AUTH.outputs.credentials_file_path.read())
+        .release_files(PICK_FILES.outputs.bundle.read())
+        .mapping_file(PICK_FILES.outputs.mapping.read())
+        .release_name(CHECK.outputs.release_name.read())
+        .track("internal")
+        .status("completed")
+        .whats_new_directory(format!("{}/whatsnew", runner().temp()))
+        .step()
         .id(UPLOAD.id())
-        .add_with((
-            "serviceAccountJson",
-            steps::GOOGLE_PLAY_AUTH.outputs.credentials_file_path.read(),
-        ))
-        .add_with(("packageName", "com.macro.workspace.mobile"))
-        .add_with(("releaseFiles", PICK_FILES.outputs.bundle.read()))
-        .add_with(("mappingFile", PICK_FILES.outputs.mapping.read()))
-        .add_with(("releaseName", CHECK.outputs.release_name.read()))
-        .add_with(("track", "internal"))
-        .add_with(("status", "completed"))
-        .add_with(("whatsNewDirectory", format!("{}/whatsnew", runner().temp())))
 }
 
 /// Set before the promotion starts, so a drift check running meanwhile
@@ -447,21 +442,16 @@ fn mark_promotion_result() -> Step<Run> {
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        .if_condition(success().or(failure()))
-        .add_with(("github-token", vars::GITHUB_TOKEN))
-        .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
-        .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
-        .add_env(("RELEASE_NAME", CHECK.outputs.release_name.read()))
-        .add_env(("JOB_STATUS", job_status()))
-        .add_env(("UPLOAD_OUTCOME", UPLOAD.outcome()))
-        .add_with((
-            "script",
-            include_str!("scripts/android_play_publish_comment.js"),
-        ))
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        include_str!("scripts/android_play_publish_comment.js"),
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    .if_condition(success().or(failure()))
+    .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
+    .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
+    .add_env(("RELEASE_NAME", CHECK.outputs.release_name.read()))
+    .add_env(("JOB_STATUS", job_status()))
+    .add_env(("UPLOAD_OUTCOME", UPLOAD.outcome()))
 }

@@ -300,8 +300,8 @@ jobs:
       - name: Upload macrod-linux-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macrod-linux-x86_64-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macrod-linux-x86_64-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
       - name: Teardown Nix
@@ -538,8 +538,8 @@ jobs:
       - name: Upload macrod-linux-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macrod-linux-aarch64-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macrod-linux-aarch64-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
       - name: Teardown Nix
@@ -727,8 +727,8 @@ jobs:
       - name: Upload macrod-macos-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macrod-macos-aarch64-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macrod-macos-aarch64-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
   build-daemon-macos-x86-64:
@@ -913,8 +913,8 @@ jobs:
       - name: Upload macrod-macos-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macrod-macos-x86_64-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macrod-macos-x86_64-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
   build-daemon-windows-x86-64:
@@ -1105,8 +1105,8 @@ jobs:
       - name: Upload macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
   publish-daemon:

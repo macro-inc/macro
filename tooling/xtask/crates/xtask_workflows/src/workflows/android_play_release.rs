@@ -30,6 +30,7 @@ use gh_workflow::{
     Workflow,
 };
 
+use crate::workflows::actions::{ActionsCheckout, ActionsGithubScript, ActionsUploadArtifact};
 use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{steps, vars};
 
@@ -136,10 +137,10 @@ fn version_code() -> Expr<Str> {
 }
 
 fn checkout_pr_head() -> Step<Use> {
-    Step::new("Checkout PR head")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", head_sha()))
-        .add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout PR head")
+        .r#ref(head_sha())
+        .persist_credentials(false)
+        .step()
 }
 
 /// Bun before Nix: the preconditions run the Android scripts before the
@@ -255,34 +256,17 @@ fn head_guard() -> Step<Run> {
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
-    Step::new("Upload verified Android artifact")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", "android-release"))
-        .add_with(("path", "android-artifacts/"))
-        .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 90))
+    ActionsUploadArtifact::new("Upload verified Android artifact", "android-artifacts/")
+        .name("android-release")
+        .if_no_files_found("error")
+        .retention_days(90)
+        .step()
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        // Failures only: Android Play Publish comments the outcome of a
-        // successful build. Not `always()` either: a run the drift workflow
-        // cancelled must not post "failed, re-add the label" next to drift's
-        // own comment.
-        .if_condition(failure())
-        .add_with(("github-token", vars::GITHUB_TOKEN))
-        .add_with((
-            "script",
-            indoc::indoc! {r#"
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        indoc::indoc! {r#"
                 const fs = require('fs');
                 const path = require('path');
                 const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
@@ -330,7 +314,14 @@ fn pr_comment() -> Step<Use> {
                   body,
                 });
             "#},
-        ))
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    // Failures only: Android Play Publish comments the outcome of a
+    // successful build. Not `always()` either: a run the drift workflow
+    // cancelled must not post "failed, re-add the label" next to drift's
+    // own comment.
+    .if_condition(failure())
 }
 
 #[cfg(test)]

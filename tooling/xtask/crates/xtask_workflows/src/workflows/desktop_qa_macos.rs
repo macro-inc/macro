@@ -15,6 +15,7 @@ use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::{ActionsCheckout, ActionsUploadArtifact};
 use crate::workflows::{build_dmg_on_tag, runners, steps};
 
 const NIX_CACHE_SIZE_GB: u16 = 100;
@@ -109,12 +110,12 @@ fn qa_macos_job() -> Job {
 /// The harness comes from the commit that holds this workflow, not from the
 /// ref under test, so any ref can be tested with the current checks.
 fn harness_checkout() -> Step<Use> {
-    Step::new("Checkout QA harness")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", github().sha()))
-        .add_with(("path", ".qa-harness"))
-        .add_with(("sparse-checkout", "apps/web/tests/macos"))
-        .add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout QA harness")
+        .r#ref(github().sha())
+        .path(".qa-harness")
+        .sparse_checkout("apps/web/tests/macos")
+        .persist_credentials(false)
+        .step()
 }
 
 fn record_sha() -> Step<Run> {
@@ -144,15 +145,10 @@ fn run_harness() -> Step<Run> {
 }
 
 fn upload_results() -> Step<Use> {
-    Step::new("Upload QA results")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", format!("macos-qa-{}", github().run_id())))
-        .add_with(("path", out()))
-        .add_with(("if-no-files-found", "warn"))
-        .add_with(("retention-days", 14))
+    ActionsUploadArtifact::new("Upload QA results", out())
+        .name(format!("macos-qa-{}", github().run_id()))
+        .if_no_files_found("warn")
+        .retention_days(14)
+        .step()
         .if_condition(!cancelled())
 }

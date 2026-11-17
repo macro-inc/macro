@@ -25,6 +25,7 @@ use gh_workflow::{
     Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
+use crate::workflows::actions::OvenShSetupBun;
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -97,10 +98,10 @@ fn find_prs() -> Step<Run> {
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .if_condition(gated())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn fetch_credentials() -> Step<Run> {

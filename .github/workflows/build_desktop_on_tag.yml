@@ -191,8 +191,8 @@ jobs:
       - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
       - name: Teardown Nix
@@ -847,8 +847,8 @@ jobs:
       - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*
+          name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
   publish-installers:
