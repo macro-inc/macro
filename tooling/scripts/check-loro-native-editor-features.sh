@@ -44,11 +44,10 @@ if ! enabled -p document_session --target all; then
   exit 1
 fi
 
-mapfile -t packages < <(
-  cargo tree --locked --workspace -e normal,build -i "$internal" --prefix none \
-    --format '{p}' --target all |
-    awk '$3 ~ /^\(\// { print $1 }' | sort -u
-)
+# Capture first: a failure inside a process substitution would not stop the script.
+dependents=$(cargo tree --locked --workspace -e normal,build -i "$internal" --prefix none \
+  --format '{p}' --target all)
+mapfile -t packages < <(awk '$3 ~ /^\(\// { print $1 }' <<<"$dependents" | sort -u)
 if [ "${#packages[@]}" -lt 10 ]; then
   echo "only ${#packages[@]} packages reach $internal; the dependent scan is broken" >&2
   exit 1
