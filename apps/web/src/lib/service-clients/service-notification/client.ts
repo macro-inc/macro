@@ -305,12 +305,12 @@ export const notificationServiceClient = {
   async unsubscribeItem(
     args: WithItem & { snoozed_until?: string | null; mentions_only?: boolean }
   ) {
-    let query = '';
-    if (args.mentions_only) {
-      query = '?mentions_only=true';
-    } else if (args.snoozed_until) {
-      query = `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`;
-    }
+    // Both are sent when both are given, so the server refuses the pair
+    // instead of this client choosing one.
+    const params = new URLSearchParams();
+    if (args.mentions_only) params.set('mentions_only', 'true');
+    if (args.snoozed_until) params.set('snoozed_until', args.snoozed_until);
+    const query = params.size > 0 ? `?${params}` : '';
     return notificationFetch<{}>(
       `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {

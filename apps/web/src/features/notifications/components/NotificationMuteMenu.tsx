@@ -142,7 +142,12 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
                   class={MENU_ITEM_CLASS}
                   disabled={props.disabled}
                   data-mute-option={option.id}
-                  aria-checked={option.checked || undefined}
+                  {...(option.checked === undefined
+                    ? {}
+                    : {
+                        role: 'menuitemcheckbox' as const,
+                        'aria-checked': option.checked,
+                      })}
                   onSelect={option.select}
                 >
                   <span class="min-w-0 flex-1 truncate">{option.label}</span>
