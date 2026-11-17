@@ -5,7 +5,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import type { useSearchSoupQuery } from '@queries/soup/search';
-import { batch, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
@@ -712,6 +712,54 @@ describe('Email list query transitions', () => {
     });
     await vi.waitFor(() => expect(ids(source)).toEqual(['archived']));
     expect(searchNext).toHaveBeenCalledOnce();
+  });
+
+  it('pages past a search page the server filtered to nothing instead of reading as empty', async () => {
+    const root = mount('invoice');
+    const match = email('unread-match');
+    root.setRetainedEntities([]);
+    let seenEmptyAndIdle = false;
+    const stopWatching = createRoot((stop) => {
+      createEffect(() => {
+        if (ids(root.source).length === 0 && !root.source.isLoading())
+          seenEmptyAndIdle = true;
+      });
+      return stop;
+    });
+    let deliverNextPage = () => {};
+    root.searchNext.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          deliverNextPage = () => {
+            batch(() => {
+              root.setSearchEntities([match]);
+              root.setRetainedEntities([match]);
+              root.setSearchHasMore(false);
+            });
+            resolve();
+          };
+        })
+    );
+    try {
+      batch(() => {
+        root.setState('tab', 'all');
+        root.setState('facets', { read: ['unread'] });
+        root.setSearchEntities([]);
+      });
+      await vi.waitFor(() => expect(root.searchNext).toHaveBeenCalledOnce());
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+
+      deliverNextPage();
+      await vi.waitFor(() =>
+        expect(ids(root.source)).toEqual(['unread-match'])
+      );
+    } finally {
+      stopWatching();
+    }
+    expect(seenEmptyAndIdle).toBe(false);
+    expect(root.source.isLoading()).toBe(false);
+    expect(root.source.hasMore()).toBe(false);
   });
 
   it('trims archived search results to done threads', async () => {

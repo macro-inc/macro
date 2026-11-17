@@ -161,6 +161,7 @@ export * from './documentSearchResultScore';
 export * from './documentSubType';
 export * from './emailFilters';
 export * from './emailFiltersCalendarOnly';
+export * from './emailFiltersDone';
 export * from './emailFiltersImportance';
 export * from './emailFiltersIsRead';
 export * from './emailSearchParticipant';

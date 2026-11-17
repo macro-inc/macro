@@ -266,6 +266,46 @@ fn it_expands_email_thread_ids() {
 }
 
 #[test]
+fn it_expands_email_done_to_inbox_visibility() {
+    for (done, inbox_visible) in [(true, false), (false, true)] {
+        let f = EntityFilters {
+            email_filters: crate::EmailFilters {
+                done: Some(done),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let ast = Arc::into_inner(
+            EntityFilterAst::new_from_filters(f)
+                .unwrap()
+                .unwrap()
+                .email_filter
+                .tree
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            serde_json::to_value(ast).unwrap(),
+            json!({ "l": { "InboxVisible": inbox_visible } })
+        );
+    }
+}
+
+#[test]
+fn email_filters_without_done_are_empty() {
+    assert!(crate::EmailFilters::default().is_empty());
+    assert!(
+        !crate::EmailFilters {
+            done: Some(false),
+            ..Default::default()
+        }
+        .is_empty()
+    );
+}
+
+#[test]
 fn it_expands_email_thread_ids_with_sender() {
     let thread_id = Uuid::new_v4();
     let f = EntityFilters {
