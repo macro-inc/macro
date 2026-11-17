@@ -199,7 +199,7 @@ pub struct BundleBuild(u64);
 impl BundleBuild {
     /// A number received across a boundary (a client query, policy config, an
     /// update response, a build-script env var). Never used to stamp a bundle.
-    pub fn reported(value: u64) -> Self {
+    pub const fn reported(value: u64) -> Self {
         Self(value)
     }
 

@@ -1,10 +1,11 @@
 use crate::domain::{
     models::{
-        BUNDLE_ARCHIVE_NAME, BUNDLE_MANIFEST_FILE_NAME, BundleManifest, BundleUpdatePolicy,
+        BUNDLE_ARCHIVE_NAME, BUNDLE_MANIFEST_FILE_NAME, BundleUpdatePolicy, DeployedManifest,
         UpdateErr,
     },
     ports::GetJsBundleManifest,
 };
+use bundle_identity::{BuiltAt, BundleBuild};
 use futures::StreamExt;
 use macro_env_var::env_vars;
 use rootcause::{Report, prelude::ResultExt};
@@ -17,8 +18,12 @@ env_vars! {
     pub struct BundleUpdatePolicyFile;
 }
 
+/// Which archive a checksum belongs to. Rebuilds of one commit share a
+/// bundle build but upload a new archive, so the build time is part of the key.
+type ArchiveKey = (BundleBuild, Option<BuiltAt>);
+
 struct BundleChecksumCache {
-    inner: RwLock<Option<(u64, String)>>,
+    inner: RwLock<Option<(ArchiveKey, String)>>,
 }
 
 impl BundleChecksumCache {
@@ -28,13 +33,13 @@ impl BundleChecksumCache {
         }
     }
 
-    async fn get(&self, bundle_build: u64) -> Option<String> {
-        let (cached_build, cached_checksum) = self.inner.read().await.as_ref()?.clone();
-        (cached_build == bundle_build).then_some(cached_checksum)
+    async fn get(&self, key: ArchiveKey) -> Option<String> {
+        let (cached_key, cached_checksum) = self.inner.read().await.as_ref()?.clone();
+        (cached_key == key).then_some(cached_checksum)
     }
 
-    async fn set(&self, bundle_build: u64, checksum: String) {
-        *self.inner.write().await = Some((bundle_build, checksum));
+    async fn set(&self, key: ArchiveKey, checksum: String) {
+        *self.inner.write().await = Some((key, checksum));
     }
 }
 
@@ -47,7 +52,7 @@ pub struct DefaultBundleFetcher {
     pub manifest_file_name: &'static str,
     /// the name of the bundle archive on the s3 bucket
     pub bundle_archive_name: &'static str,
-    /// cached (bundle build, checksum) to avoid re-downloading the bundle
+    /// cached (archive key, checksum) to avoid re-downloading the bundle
     checksum_cache: BundleChecksumCache,
 }
 
@@ -81,7 +86,7 @@ impl DefaultBundleFetcher {
 
 impl GetJsBundleManifest for DefaultBundleFetcher {
     #[tracing::instrument(skip(self), ret, err)]
-    async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
+    async fn get_app_bundle_manifest(&self) -> Result<DeployedManifest, Report<UpdateErr>> {
         let url = self.base_url.join(self.manifest_file_name).unwrap();
         let res = reqwest::get(url)
             .await
@@ -91,7 +96,7 @@ impl GetJsBundleManifest for DefaultBundleFetcher {
             .text()
             .await
             .context(UpdateErr::Network)?;
-        serde_json::from_str(&res).context(UpdateErr::Manifest)
+        DeployedManifest::from_json(&res).context(UpdateErr::Manifest)
     }
 
     fn get_app_bundle_path(&self) -> Url {
@@ -101,17 +106,15 @@ impl GetJsBundleManifest for DefaultBundleFetcher {
     #[tracing::instrument(skip(self), ret, err)]
     async fn get_app_bundle_checksum(
         &self,
-        bundle_build: u64,
+        manifest: &DeployedManifest,
     ) -> Result<String, Report<UpdateErr>> {
-        // return cached checksum if bundle build matches
-        if let Some(cached_checksum) = self.checksum_cache.get(bundle_build).await {
+        let key = (manifest.bundle_build(), manifest.built_at());
+        if let Some(cached_checksum) = self.checksum_cache.get(key).await {
             return Ok(cached_checksum);
         }
 
         let checksum = self.compute_checksum().await?;
-        self.checksum_cache
-            .set(bundle_build, checksum.clone())
-            .await;
+        self.checksum_cache.set(key, checksum.clone()).await;
         Ok(checksum)
     }
 }
@@ -131,19 +134,4 @@ impl BundleUpdatePolicy {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::BundleChecksumCache;
-
-    #[tokio::test]
-    async fn checksum_cache_is_keyed_by_bundle_build() {
-        let cache = BundleChecksumCache::new();
-
-        cache.set(100, "checksum-100".to_string()).await;
-        assert_eq!(cache.get(100).await.as_deref(), Some("checksum-100"));
-        assert_eq!(cache.get(101).await, None);
-
-        cache.set(101, "checksum-101".to_string()).await;
-        assert_eq!(cache.get(100).await, None);
-        assert_eq!(cache.get(101).await.as_deref(), Some("checksum-101"));
-    }
-}
+mod test;

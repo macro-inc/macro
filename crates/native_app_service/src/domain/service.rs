@@ -53,13 +53,15 @@ where
             })));
         }
 
-        if manifest.bundle_build <= current_bundle_build {
+        let bundle_build = manifest.bundle_build();
+        if bundle_build <= current_bundle_build {
             return Ok(None);
         }
 
-        // A native release embeds the bundle from its own commit, numbered by
-        // commit time, while the web deploy of that commit is numbered by its
-        // later build time. Same commit, same bundle: nothing to download.
+        // Transition: while production still serves legacy manifests numbered
+        // by build time, a desktop release (numbered by commit time) would see
+        // the deploy of its own commit as newer. Same commit, same bundle:
+        // nothing to download. Stamped manifests already compare equal.
         if current_git_sha
             .as_deref()
             .is_some_and(|sha| manifest.built_from(sha))
@@ -68,7 +70,7 @@ where
         }
 
         if matches!(target, AllTargets::Desktop(_))
-            && manifest.schema_version > manifest_schema.unwrap_or(LEGACY_DESKTOP_MANIFEST_SCHEMA)
+            && manifest.schema_version() > manifest_schema.unwrap_or(LEGACY_DESKTOP_MANIFEST_SCHEMA)
         {
             return Ok(None);
         }
@@ -80,7 +82,7 @@ where
         if min_native_build > native_build {
             return Ok(Some(BundleAction::NativeUpdateRequired(
                 BundleNativeUpdateRequired {
-                    bundle_build: manifest.bundle_build,
+                    bundle_build,
                     min_native_build,
                 },
             )));
@@ -88,17 +90,17 @@ where
 
         if self.bundle_policy.rules.iter().any(|rule| {
             rule.action == BundlePolicyAction::Block
-                && rule.matches(target, native_build, manifest.bundle_build)
+                && rule.matches(target, native_build, bundle_build)
         }) {
             return Ok(None);
         }
 
         let checksum = self
             .bundle_fetcher
-            .get_app_bundle_checksum(manifest.bundle_build)
+            .get_app_bundle_checksum(&manifest)
             .await?;
         Ok(Some(BundleAction::Update(BundleUpdate {
-            bundle_build: manifest.bundle_build,
+            bundle_build,
             min_native_build,
             notes: None,
             url: self.bundle_fetcher.get_app_bundle_path(),

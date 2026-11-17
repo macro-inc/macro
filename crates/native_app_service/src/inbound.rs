@@ -7,6 +7,7 @@ use axum::{
     extract::{Path, Query, State},
     routing::get,
 };
+use bundle_identity::BundleBuild;
 use serde::Deserialize;
 
 use crate::domain::models::{
@@ -63,7 +64,7 @@ async fn bundle_update_handler<S: NativeAppService>(
         .get_bundle_update(BundleUpdateRequest {
             target,
             arch,
-            current_bundle_build: query.current_bundle_build,
+            current_bundle_build: BundleBuild::reported(query.current_bundle_build),
             native_build: query.native_build,
             manifest_schema: query.manifest_schema,
             current_git_sha: query.current_git_sha,

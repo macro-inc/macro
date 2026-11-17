@@ -14076,7 +14076,6 @@ dependencies = [
  "macro_env_var",
  "native_app_service",
  "rootcause",
- "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -14093,6 +14092,7 @@ name = "native_app_service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bundle_identity",
  "cool_asserts",
  "futures",
  "macro_env_var",
