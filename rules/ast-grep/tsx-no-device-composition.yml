@@ -25,6 +25,7 @@ ignores:
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  - apps/web/src/features/block-canvas/canvas-next.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
