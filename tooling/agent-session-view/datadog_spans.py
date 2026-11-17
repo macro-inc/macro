@@ -180,6 +180,16 @@ def documentation(span):
     }
 
 
+def cut_json(text):
+    """Whether `text` is JSON cut short. `macro.genai.content_truncated` says
+    nothing about the tool list alone, and Datadog cuts long strings itself."""
+    try:
+        json.loads(text or "[]")
+    except ValueError:
+        return True
+    return False
+
+
 def tool_offer(span):
     """The names of the tools a turn's MCP servers offered, eager and
     deferred alike, from its `invoke_agent` span. Only names are kept."""
@@ -189,7 +199,7 @@ def tool_offer(span):
         "start_ms": epoch_ms(span["start_timestamp"]),
         "end_ms": epoch_ms(span["end_timestamp"]),
         "names": list(dict.fromkeys(TOOL_DEFINITION.findall(definitions))),
-        "cut": flag(dig(custom, "macro.genai.content_truncated")),
+        "cut": cut_json(definitions),
     }
 
 

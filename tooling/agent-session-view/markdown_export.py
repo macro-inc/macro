@@ -378,8 +378,9 @@ def context_lines(context):
         f"{loaded or 'none loaded this turn'}"
     )
     lines.append(
-        f"- deferred MCP tools offered: {len(tools['deferred'])} of {tools['offered']} listed"
-        + (" (listing cut at 25 KB)" if tools["offered_cut"] else "")
+        f"- deferred MCP tools offered: "
+        f"{'unknown' if tools['deferred'] is None else len(tools['deferred'])} of {tools['offered']} listed"
+        + (" (listing cut short)" if tools["offered_cut"] else "")
     )
     if context["prompt"]["largest"]:
         parts = [

@@ -94,10 +94,12 @@ def already_available(steps):
     return names
 
 
-def in_turn(rows, turn, slack=5):
+def in_turn(rows, turn, after, slack=5):
     """Rows that started within the turn, allowing `slack` seconds before its
-    prompt frame was appended."""
-    return [row for row in rows if turn.started - slack <= row["start_ms"] / 1000 <= turn.bound]
+    prompt frame was appended but never reaching back past `after`, the end
+    of the turn before."""
+    earliest = max(turn.started - slack, after)
+    return [row for row in rows if earliest < row["start_ms"] / 1000 <= turn.bound]
 
 
 def prompt_parts(call):
@@ -108,15 +110,15 @@ def prompt_parts(call):
     ]
 
 
-def turn_context(turn, spans, eager_source, session_tools, session_available):
+def turn_context(turn, after, spans, eager_source, session_tools, session_available):
     """The context of one turn of `markdown_export.parse`."""
     calls = markdown_export.model_calls(spans, turn)
     # The turn's own model calls offer tools; a side call (the session's
     # title) offers none.
     agent_calls = [call for call in calls if call.get("eager_tools")]
     last = agent_calls[-1] if agent_calls else None
-    selections = in_turn(spans.get("documentation") or [], turn)
-    offers = in_turn(spans.get("tool_offers") or [], turn)
+    selections = in_turn(spans.get("documentation") or [], turn, after)
+    offers = in_turn(spans.get("tool_offers") or [], turn, after)
     offered = list(dict.fromkeys(bare(name) for offer in offers for name in offer["names"]))
 
     eager_count = last.get("eager_tools") if last else None
@@ -127,7 +129,10 @@ def turn_context(turn, spans, eager_source, session_tools, session_available):
         eager_names = [name for name in dict.fromkeys(eager_source) if name in present]
     loaded = loaded_tools(turn.steps)
     loaded_names = {entry["name"] for entry in loaded}
-    deferred = [name for name in offered if name not in (eager_names or []) and name not in loaded_names]
+    # Without the eager names, eager and deferred can't be told apart.
+    deferred = None if eager_names is None else [
+        name for name in offered if name not in eager_names and name not in loaded_names
+    ]
 
     context = {
         "turn": turn.number,
@@ -151,11 +156,13 @@ def turn_context(turn, spans, eager_source, session_tools, session_available):
             if agent_calls else None,
         },
     }
-    context["flags"] = flags(turn, context, bool(spans))
+    # Exports made before the docs selection was fetched have no key for it:
+    # a missing span there proves nothing.
+    context["flags"] = flags(turn, context, "documentation" in spans)
     return context
 
 
-def flags(turn, context, with_spans):
+def flags(turn, context, selections_fetched):
     """Cheap signs of a turn that went wrong, each {id, level, text}."""
     found = []
     tools = [step for step in turn.steps if step.kind == "tool"]
@@ -168,7 +175,7 @@ def flags(turn, context, with_spans):
             "text": f"No SDK index loaded: {count(selection['selected'])} entities selected "
                     f"(status {selection['status']}), <macro_sdk> {count(selection['bytes'])} bytes, catalog only",
         })
-    elif with_spans and code_runs and not selection:
+    elif selections_fetched and code_runs and not selection:
         found.append({"id": "no-docs-span", "level": "info",
                       "text": "ExecuteCode ran but no select_documentation span was found"})
 
@@ -248,4 +255,8 @@ def for_session(export, eager_source):
     steps = [step for turn in turns for step in turn.steps if step.kind == "tool"]
     session_tools = {bare(step.name) for step in steps}
     session_available = already_available(steps)
-    return [turn_context(turn, spans, eager_source, session_tools, session_available) for turn in turns]
+    afters = [float("-inf")] + [turn.bound for turn in turns[:-1]]
+    return [
+        turn_context(turn, after, spans, eager_source, session_tools, session_available)
+        for turn, after in zip(turns, afters)
+    ]

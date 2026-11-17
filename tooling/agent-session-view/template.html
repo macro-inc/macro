@@ -461,6 +461,8 @@ const PROMPT_GROUPS = [
   ['history', 'var(--p-history)', ['history']],
   ['tool results', 'var(--p-results)', ['tool_results']],
 ];
+// A span value as text: numbers from an export are not trusted to be numbers.
+const num = value => value == null ? '?' : esc(value);
 const kb = bytes => bytes == null ? '? KB' : `${(bytes / 1000).toFixed(1)} KB`;
 const promptTotal = parts => Object.values(parts || {}).reduce((a, b) => a + b, 0);
 
@@ -517,7 +519,7 @@ function renderContext(turn) {
   const wrap = el('div', { class: 'context' });
   const docs = context.documentation;
   wrap.append(el('div', { class: 'card' }, docs
-    ? `<h5>SDK docs (select_documentation)</h5><div class="big ${docs.selected === 0 || docs.status !== 'selected' ? 'bad' : ''}">${docs.selected ?? '?'} entities selected</div>` +
+    ? `<h5>SDK docs (select_documentation)</h5><div class="big ${docs.selected === 0 || docs.status !== 'selected' ? 'bad' : ''}">${num(docs.selected)} entities selected</div>` +
       `<div>status <b>${esc(docs.status)}</b> · &lt;macro_sdk&gt; ${kb(docs.bytes)} · guidance ${esc(docs.guidance)}</div>` +
       `<div class="muted">trace <code>${esc(docs.trace_id)}</code></div>` +
       (docs.entities.length ? `<div class="names">${docs.entities.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div>` : `<div class="muted">catalog only: no entity index in the prompt</div>`)
@@ -527,14 +529,16 @@ function renderContext(turn) {
   const used = new Set(turn.tools.map(item => item.name));
   const eagerNames = eager.names == null
     ? `<div class="big bad">names unknown</div><div>the eager lists in the source could not be read</div>`
-    : nameChips(eager.names, used) + (eager.count != null && eager.names.length !== eager.count ? `<div class="muted">${eager.names.length} of ${eager.count} named from the source's eager lists</div>` : '');
+    : nameChips(eager.names, used) + (eager.count != null && eager.names.length !== eager.count ? `<div class="muted">${eager.names.length} of ${num(eager.count)} named from the source's eager lists</div>` : '');
   const loaded = tools.loaded.length
     ? `<div class="names">${tools.loaded.map(entry => `<a class="chip ${used.has(entry.name) ? 'used' : ''}" href="#tool-${turn.n}-${entry.tool}" data-dom="tool-${turn.n}-${entry.tool}" title="loaded by ${esc(entry.via)} #${entry.tool}">${esc(entry.name)}</a>`).join('')}</div>`
     : `<div class="muted">none loaded this turn</div>`;
   const card = el('div', { class: 'card' },
-    `<h5>Tools</h5><div><b>${eager.count ?? '?'}</b> eager, full schema · ${kb(eager.bytes)}</div>${eagerNames}` +
-    `<div><b>${tools.loaded_count ?? '?'}</b> loaded · ${kb(tools.loaded_bytes)}</div>${loaded}` +
-    `<details><summary>${tools.deferred.length} deferred MCP tools of ${tools.offered} listed${tools.offered_cut ? ' (listing cut at 25 KB)' : ''}</summary>${nameChips(tools.deferred, used)}</details>`);
+    `<h5>Tools</h5><div><b>${num(eager.count)}</b> eager, full schema · ${kb(eager.bytes)}</div>${eagerNames}` +
+    `<div><b>${num(tools.loaded_count)}</b> loaded · ${kb(tools.loaded_bytes)}</div>${loaded}` +
+    (tools.deferred == null
+      ? `<div class="muted">deferred tools unknown: ${num(tools.offered)} listed, eager not named</div>`
+      : `<details><summary>${tools.deferred.length} deferred MCP tools of ${num(tools.offered)} listed${tools.offered_cut ? ' (listing cut short)' : ''}</summary>${nameChips(tools.deferred, used)}</details>`));
   card.querySelectorAll('a[data-dom]').forEach(a => a.onclick = e => { e.preventDefault(); jumpTo(a.dataset.dom); });
   wrap.append(card);
 

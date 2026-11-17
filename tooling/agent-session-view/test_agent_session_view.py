@@ -138,6 +138,12 @@ class DocumentationAndTools(unittest.TestCase):
         self.assertEqual(offer["names"], ["ExecuteCode", "mcp__GitHub__get_me"])
         self.assertTrue(offer["cut"])
 
+    def test_a_whole_tool_listing_is_not_cut_whatever_the_span_says(self):
+        span = {"start_timestamp": "2026-11-09T10:00:00Z", "end_timestamp": "2026-11-09T10:00:09Z",
+                "custom": {"gen_ai": {"tool": {"definitions": '[{"type":"function","name":"ExecuteCode"}]'}},
+                           "macro": {"genai": {"content_truncated": "true"}}}}
+        self.assertFalse(datadog_spans.tool_offer(span)["cut"])
+
     def test_the_eager_lists_are_read_from_the_source(self):
         names = turn_context.eager_names_from_source()
         self.assertIn("SearchTools", names)
@@ -231,6 +237,25 @@ class TurnContext(unittest.TestCase):
         flags = turn_context.for_session(export, ["BashCodeExecution"])[0]["flags"]
         self.assertEqual(flags[0]["id"], "repeated-failure")
         self.assertIn("3 times", flags[0]["text"])
+
+    def test_an_export_from_before_docs_selection_was_fetched_has_no_missing_span_flag(self):
+        spans = {"tools": {}, "model_calls": []}
+        export = {"session": {"id": "s"}, "spans": spans, "frames": [
+            prompt(0), *code_failure(1, "c1", "boom"), end(2),
+        ]}
+        self.assertEqual(turn_context.for_session(export, ["ExecuteCode"])[0]["flags"], [])
+
+    def test_a_short_turn_does_not_lend_its_spans_to_the_next(self):
+        spans = spans_for_turn(0)
+        export = {"session": {"id": "s"}, "spans": spans, "frames": [prompt(0), end(2), prompt(3), end(4)]}
+        contexts = turn_context.for_session(export, ["ExecuteCode"])
+        self.assertIsNotNone(contexts[0]["documentation"])
+        self.assertIsNone(contexts[1]["documentation"])
+        self.assertEqual(contexts[1]["tools"]["offered"], 0)
+
+    def test_unknown_eager_names_leave_deferred_unknown(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [prompt(0), end(1)]}
+        self.assertIsNone(turn_context.for_session(export, None)[0]["tools"]["deferred"])
 
     def test_without_spans_there_is_no_context(self):
         self.assertEqual(turn_context.for_session({"session": {"id": "s"}, "frames": [prompt(0)]}, []), [])
