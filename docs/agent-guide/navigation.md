@@ -703,7 +703,7 @@ That header field hands the keyboard to the results: `ArrowDown` or `Enter`
 moves to the first row, where `j`/`k` and the arrows continue, and `Escape`
 leaves the field with the search still on screen. `Escape` in the list then
 steps back one level at a time: it clears a selection first, then the search.
-`Cmd/Ctrl+F` (and `/` in Email) returns to the field with the query selected;
+`Cmd/Ctrl+F` returns to the field with the query selected;
 only the field's X clears from inside it. An empty field collapses on `Escape`.
 Check it in Email, Tasks, Drive, and Projects, which land on the first row and
 scroll it into view; a list without the shared list keys keeps the row it was
@@ -1803,7 +1803,7 @@ restart rules still apply.
   would describe the menu. A view's `g` letters are listed under that view.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
-- `/` — search everything (in Email it focuses email search). `j`/`k` — move in
+- `/` — search everything, from every view including Email. `j`/`k` — move in
   lists. `e` — mark done.
   After opening a list item in the same split, `j`/`k` continue through the
   originating list; native detail paging can still load its next page. Check
