@@ -2,7 +2,6 @@ import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail, useUserId } from '@core/context/user';
 import type { IUser } from '@core/user';
 import {
-  agentMatchesQuery,
   peopleBeforeAgents,
   placeAgentsAfterPeople,
   rankAgentsAfterPeople,
@@ -137,12 +136,7 @@ export function useUsersMention(
     const results = userSearch()(list, term);
     if (!usesDirectory()) {
       if (term) {
-        return rankAgentsAfterPeople(
-          results,
-          (item) => item.id,
-          (item) => item.searchText,
-          term
-        );
+        return rankAgentsAfterPeople(results, (item) => item.id);
       }
       return peopleBeforeAgents(
         results.map(({ item }) => item),
@@ -175,10 +169,11 @@ export function useUsersMention(
     const ranks = new Map(
       results.map((result) => [result.item.id, result.nameMatchRank])
     );
+    const rank = (item: UserItem) => ranks.get(item.id) ?? -1;
     return placeAgentsAfterPeople(
       orderedPeople,
-      agents.filter((item) => agentMatchesQuery(item.searchText, term)),
-      (item) => ranks.get(item.id) ?? -1
+      agents.filter((item) => rank(item) >= 0),
+      rank
     );
   });
 

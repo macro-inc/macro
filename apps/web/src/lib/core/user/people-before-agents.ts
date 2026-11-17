@@ -1,7 +1,6 @@
 import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import type { FreshSortResult } from '@core/util/freshSort';
-import { normalizeNameText } from '@core/util/name-match-score';
 
 function browseGroup(id: string, viewerId: string | undefined): number {
   if (viewerId !== undefined && id === viewerId) return 0;
@@ -26,13 +25,14 @@ export function peopleBeforeAgents<T>(
   );
 }
 
-/** Letters scattered through a name are not a match for an agent: it must hold every typed word. */
-export function agentMatchesQuery(text: string, query: string): boolean {
-  const normalized = normalizeNameText(text);
-  return normalizeNameText(query)
-    .split(/[\s,]+/)
-    .filter(Boolean)
-    .every((word) => normalized.includes(word));
+/** A menu's row limit applies to its people; its few agents always stay listed. */
+export function capPeople<T>(
+  rows: readonly T[],
+  id: (row: T) => string,
+  limit: number
+): T[] {
+  let people = 0;
+  return rows.filter((row) => isBotPrincipalId(id(row)) || people++ < limit);
 }
 
 /**
@@ -65,21 +65,24 @@ export function placeAgentsAfterPeople<T>(
   return result;
 }
 
-/** A search's results, keeping its people in order and placing only the agents that match by {@link placeAgentsAfterPeople}. */
+/**
+ * A `NAME_MATCH_RANKING` search's results, keeping its people in order and
+ * placing its agents by {@link placeAgentsAfterPeople}. An agent whose text
+ * holds the typed letters only scattered (rank -1) is no match and is dropped.
+ */
 export function rankAgentsAfterPeople<T>(
   results: readonly FreshSortResult<T>[],
-  id: (row: T) => string,
-  text: (row: T) => string,
-  query: string
+  id: (row: T) => string
 ): T[] {
   const ranks = new Map(
     results.map((result) => [result.item, result.nameMatchRank])
   );
   const isAgent = (row: T) => isBotPrincipalId(id(row));
   const rows = results.map((result) => result.item);
+  const rank = (row: T) => ranks.get(row) ?? -1;
   return placeAgentsAfterPeople(
     rows.filter((row) => !isAgent(row)),
-    rows.filter((row) => isAgent(row) && agentMatchesQuery(text(row), query)),
-    (row) => ranks.get(row) ?? -1
+    rows.filter((row) => isAgent(row) && rank(row) >= 0),
+    rank
   );
 }

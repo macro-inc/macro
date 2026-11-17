@@ -8,7 +8,15 @@ import {
 } from '@solidjs/testing-library';
 import { Dropdown } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
 import { PropertiesProvider } from '../../context/PropertiesContext';
 import {
@@ -20,6 +28,8 @@ import { EntityEditor, EntitySheetEditor } from './EntityEditor';
 
 const agentId = 'bot|00000000-0000-0000-0000-000000000123';
 const userId = 'macro|alice@example.com';
+const TEAM = ['macro|alice@example.com', 'macro|teammate@example.com'];
+const team = vi.hoisted(() => ({ members: [] as string[] }));
 
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'alice@example.com',
@@ -114,10 +124,7 @@ vi.mock('@queries/team/teams', () => ({
     isPending: false,
     isError: false,
     data: {
-      members: [
-        { user_id: 'macro|alice@example.com' },
-        { user_id: 'macro|teammate@example.com' },
-      ],
+      members: team.members.map((user_id) => ({ user_id })),
     },
   }),
 }));
@@ -222,6 +229,10 @@ function setup(
 beforeAll(() => {
   // A key press puts the list in keyboard mode, which scrolls its row into view.
   Element.prototype.scrollIntoView = vi.fn();
+});
+
+beforeEach(() => {
+  team.members = TEAM;
 });
 
 afterEach(() => {
@@ -424,6 +435,33 @@ describe('team-first assignees', () => {
       await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
       expect(screen.getByText('Teammate')).toBeTruthy();
       expect(screen.queryByText('Research assistant')).toBeNull();
+    }
+  );
+
+  it.each([EntityEditor, EntitySheetEditor])(
+    'keeps agents past a full page of team members, and ahead of people they match better',
+    async (Editor) => {
+      team.members = [
+        ...TEAM,
+        ...Array.from(
+          { length: 60 },
+          (_, index) => `macro|person${index}@resorts.example`
+        ),
+      ];
+      setup(undefined, { ...property, value: null }, Editor);
+      expect(screen.getByText('Research assistant')).toBeTruthy();
+
+      // Every person's address holds "res"; only the agent's name starts with it.
+      fireEvent.input(screen.getByRole('textbox'), {
+        target: { value: 'res' },
+      });
+      await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
+      expect(
+        screen
+          .getByText('Research assistant')
+          .closest('[data-entity-index]')
+          ?.getAttribute('data-entity-index')
+      ).toBe('0');
     }
   );
 

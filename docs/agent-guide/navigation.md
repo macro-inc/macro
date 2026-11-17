@@ -1661,8 +1661,8 @@ People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
 browsing lists you, then other people, then agents with Macro first; a search
 uses the shared name-match ranking, lists an agent only when its name or handle
 holds every typed word, and never above a person whose name matches as well.
-Typing `@teo` lists Teo before anyone whose letters merely include t, e and o,
-and no agent at all. Phone rows keep that People order in the slots the blended
+Typing `@eve` lists Eve before anyone whose name merely holds e, v and e in
+order, and no agent whose name only scatters those letters. Phone rows keep that People order in the slots the blended
 ranking gives people.
 
 Counts describe loaded results, not the full server corpus. Scans through

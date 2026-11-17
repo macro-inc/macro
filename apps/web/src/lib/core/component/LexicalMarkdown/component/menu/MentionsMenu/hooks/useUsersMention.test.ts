@@ -26,7 +26,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
-  useUserId: () => () => 'macro|gab@macro.com',
+  useUserId: () => () => 'macro|morgan@macro.com',
 }));
 
 const seamus: IUser = {
@@ -45,34 +45,34 @@ const sean: IUser = {
   email: 'sean@macro.com',
 };
 const viewer: IUser = {
-  id: 'macro|gab@macro.com',
-  name: 'Gab Birman',
-  email: 'gab@macro.com',
+  id: 'macro|morgan@macro.com',
+  name: 'Morgan Reyes',
+  email: 'morgan@macro.com',
 };
 const macroAgent: IUser = {
   id: 'bot|00000000-0000-0000-0000-00000000a2a2',
   name: 'Macro',
   email: 'Macro',
 };
-const vmCodex: IUser = {
+const reviewCodex: IUser = {
   id: 'bot|00000000-0000-0000-0000-000000000101',
-  name: 'Peter VM Codex',
-  email: '@peter-vm-codex',
+  name: 'Review Desk Codex',
+  email: '@review-desk-codex',
 };
-const ssdCodex: IUser = {
+const releaseCodex: IUser = {
   id: 'bot|00000000-0000-0000-0000-000000000102',
-  name: 'Peter SSD Codex',
-  email: '@peter-ssd-codex',
+  name: 'Release Verifier Codex',
+  email: '@release-verifier-codex',
 };
-const tod: IUser = {
-  id: 'macro|tod@macro.com',
-  name: 'Tod',
-  email: 'tod.example@macro.com',
+const esteban: IUser = {
+  id: 'macro|esteban@macro.com',
+  name: 'Esteban Valdez',
+  email: 'esteban.valdez@macro.com',
 };
-const teo: IUser = {
-  id: 'macro|teo@macro.com',
-  name: 'Teo Nys',
-  email: 'teo@macro.com',
+const eve: IUser = {
+  id: 'macro|eve@macro.com',
+  name: 'Eve Hart',
+  email: 'eve@macro.com',
 };
 const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
   id: user.id,
@@ -120,18 +120,18 @@ it('lists you, then people, then Macro and the other agents while browsing', () 
   createRoot((dispose) => {
     const scoped = useUsersMention({
       searchTerm: () => '',
-      users: () => [vmCodex, sean, macroAgent, viewer, seamus],
+      users: () => [reviewCodex, sean, macroAgent, viewer, seamus],
     });
     expect(scoped.users().map((item) => item.id)).toEqual([
       viewer.id,
       seamus.id,
       sean.id,
       macroAgent.id,
-      vmCodex.id,
+      reviewCodex.id,
     ]);
 
     mocks.users = () => [
-      { ...userItem(vmCodex, new Date()), personOrder: 0 },
+      { ...userItem(reviewCodex, new Date()), personOrder: 0 },
       { ...userItem(sean), personOrder: 1 },
       { ...userItem(seamus), personOrder: 2 },
       { ...userItem(viewer), personOrder: 3 },
@@ -143,7 +143,7 @@ it('lists you, then people, then Macro and the other agents while browsing', () 
       sean.id,
       seamus.id,
       macroAgent.id,
-      vmCodex.id,
+      reviewCodex.id,
     ]);
     dispose();
   });
@@ -151,38 +151,38 @@ it('lists you, then people, then Macro and the other agents while browsing', () 
 
 it('lists an agent only when it holds the typed words, never above a person who matches as well', () => {
   createRoot((dispose) => {
-    const [searchTerm, setSearchTerm] = createSignal('teo');
-    // Every row holds t…e…o in order; only Teo Nys has the word itself.
+    const [searchTerm, setSearchTerm] = createSignal('eve');
+    // Every row holds e…v…e in order; only Eve Hart has the word itself.
     mocks.users = () => [
-      userItem(tod, new Date()),
-      userItem(teo, new Date('2026-09-15T12:00:00Z')),
+      userItem(esteban, new Date()),
+      userItem(eve, new Date('2026-09-15T12:00:00Z')),
     ];
     const scoped = useUsersMention({
       searchTerm,
-      users: () => [vmCodex, ssdCodex, tod, teo],
+      users: () => [reviewCodex, releaseCodex, esteban, eve],
     });
     expect(scoped.users().map((item) => item.data.name)).toEqual([
-      'Teo Nys',
-      'Tod',
+      'Eve Hart',
+      'Esteban Valdez',
     ]);
     setSearchTerm('codex');
     expect(scoped.users().map((item) => item.data.name)).toEqual([
-      'Peter VM Codex',
-      'Peter SSD Codex',
+      'Review Desk Codex',
+      'Release Verifier Codex',
     ]);
 
     // The directory's window is the server's match for the query.
-    setSearchTerm('teo');
+    setSearchTerm('eve');
     mocks.users = () => [
-      { ...userItem(teo), personOrder: 0 },
-      { ...userItem(tod, new Date()), personOrder: 1 },
-      userItem(vmCodex, new Date()),
-      userItem(ssdCodex, new Date()),
+      { ...userItem(eve), personOrder: 0 },
+      { ...userItem(esteban, new Date()), personOrder: 1 },
+      userItem(reviewCodex, new Date()),
+      userItem(releaseCodex, new Date()),
     ];
     const directory = useUsersMention({ searchTerm });
     expect(directory.users().map((item) => item.data.name)).toEqual([
-      'Teo Nys',
-      'Tod',
+      'Eve Hart',
+      'Esteban Valdez',
     ]);
     dispose();
   });

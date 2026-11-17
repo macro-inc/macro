@@ -1,6 +1,9 @@
 import { useEmail, useUserId } from '@core/context/user';
 import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
-import { rankAgentsAfterPeople } from '@core/user/people-before-agents';
+import {
+  capPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
@@ -16,6 +19,7 @@ import {
 import {
   type CombinedEntity,
   createEntitySearchConfig,
+  createRosterSearch,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -160,6 +164,7 @@ export function useEntitiesForProperty(
   });
 
   // search function for fuzzy matching
+  const rosterSearch = createRosterSearch(currentUserDomain, currentUserId);
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -177,10 +182,10 @@ export function useEntitiesForProperty(
 
     // When no search query, sort self to top BEFORE slicing
     if (!query) {
-      const visible = sortEntitiesWithSelfFirst(available, userId).slice(
-        0,
-        MAX_RESULTS
-      );
+      const ordered = sortEntitiesWithSelfFirst(available, userId);
+      const visible = options?.users?.()
+        ? capPeople(ordered, (entity) => entity.id, MAX_RESULTS)
+        : ordered.slice(0, MAX_RESULTS);
       const selectedIds = options?.selectedIds?.();
       if (selectedIds) {
         for (const entity of available) {
@@ -193,17 +198,18 @@ export function useEntitiesForProperty(
       return visible;
     }
 
-    const results = entitySearch(available, query);
-    const localResults = (
-      options?.users?.()
-        ? rankAgentsAfterPeople(
-            results,
-            (entity) => entity.id,
-            getEntitySearchText,
-            query
-          )
-        : results.map((result) => result.item)
-    ).slice(0, MAX_RESULTS);
+    const localResults = options?.users?.()
+      ? capPeople(
+          rankAgentsAfterPeople(
+            rosterSearch(available, query),
+            (entity) => entity.id
+          ),
+          (entity) => entity.id,
+          MAX_RESULTS
+        )
+      : entitySearch(available, query)
+          .slice(0, MAX_RESULTS)
+          .map((result) => result.item);
 
     if (needsEmailSearch()) {
       const localIds = new Set(localResults.map((e) => e.id));
