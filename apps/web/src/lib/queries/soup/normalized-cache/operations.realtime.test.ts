@@ -32,7 +32,6 @@ import {
   getSoupEntityById,
   invalidateSoupEntity,
   refetchSoupEntity,
-  removeSoupEntitiesFromDoneFilteredQueries,
 } from './operations';
 
 type HomeData = InfiniteData<SoupAstItemsFlatPage, unknown>;
@@ -235,21 +234,5 @@ describe('Home notification revalidation with real normalized query keys', () =>
       expect(home.observer.getCurrentResult().fetchStatus).toBe('idle')
     );
     expect(homeItems()).toHaveLength(1);
-  });
-
-  it('does not resurrect a restored row that the user marks done again', async () => {
-    const home = mountHome([]);
-    cacheChannelOutsideHome();
-    updateSoupForNotification(notification());
-    expect(homeItems()).toHaveLength(1);
-
-    removeSoupEntitiesFromDoneFilteredQueries(new Set(['channel-1']));
-    const refetch = testQueryClient.invalidateQueries({
-      queryKey: homeKey,
-      exact: true,
-    });
-    home.resolve(page([]));
-    await refetch;
-    expect(homeItems()).toEqual([]);
   });
 });

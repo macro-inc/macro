@@ -4,11 +4,7 @@ import {
   traceParentExchange,
 } from '@app/lib/urql-solid/trace-parent-exchange';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_BEARER_TOKEN_AUTH,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
@@ -754,9 +750,7 @@ function fallbackAfterInitializationFailure(error: unknown): void {
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
   cacheInitializationFailed = true;
-  cachedClient = isFeatureEnabled(enableGraphqlSoup)
-    ? getUncachedRealtimeClient()
-    : graphqlSoupClient;
+  cachedClient = getUncachedRealtimeClient();
   browserCacheClientActivated = false;
   try {
     cleanup?.();
@@ -809,17 +803,14 @@ export const hasGraphqlCacheHost = (): boolean =>
 export function getGraphqlSoupClient(): Client {
   if (!sessionActive()) return graphqlSoupClient;
   const native = isTauri();
-  // Only the browser Turso client is session-latched. Tauri keeps the prior
-  // dynamic GraphQL transport behavior and can return to the plain client when
-  // ENABLE_GRAPHQL_SOUP changes without constructing a browser resource.
+  // Only the browser Turso client is session-latched, so a later emergency
+  // kill applies on the next navigation rather than mid-page. A browser with
+  // no stored PostHog flags (first visit, cleared site data) decides before
+  // `/flags` answers, so it sees the kill switch only from its next load.
   if (!native && browserCacheClientActivated && cachedClient)
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
-  if (!rollout.enabled) {
-    return isFeatureEnabled(enableGraphqlSoup)
-      ? getUncachedRealtimeClient()
-      : graphqlSoupClient;
-  }
+  if (!rollout.enabled) return getUncachedRealtimeClient();
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
@@ -1020,15 +1011,13 @@ export function getGraphqlSoupClient(): Client {
       cacheRecovery.failed(error);
       setCacheAvailability((version) => version + 1);
       console.warn('graphql cache init failed; using uncached client', error);
-      return isFeatureEnabled(enableGraphqlSoup)
-        ? getUncachedRealtimeClient()
-        : graphqlSoupClient;
+      return getUncachedRealtimeClient();
     }
   })();
   return cachedClient;
 }
 
-/** Returns the cache host backing the flagged GraphQL Soup client, or
+/** Returns the cache host backing the GraphQL Soup client, or
  * undefined while that host is retired or unusable. */
 export function getGraphqlSoupCacheHost(): CacheHost | undefined {
   if (!graphqlCacheEnabled()) return undefined;

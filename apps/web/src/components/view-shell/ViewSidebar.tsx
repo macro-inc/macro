@@ -2,6 +2,7 @@ import { SplitHeaderContextMenu } from '@components/app/split-layout/components/
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { mergeRefs } from '@solid-primitives/refs';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
@@ -13,6 +14,8 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useListSearchKeys } from './list-search-keys';
+import { SearchBar } from './SearchBar';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
@@ -30,6 +33,15 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
     </aside>
   );
 }
+
+type SearchControls = {
+  /** Collapses the header's search field. */
+  close: () => void;
+  /** The header button that opens the field. */
+  button: () => HTMLElement | undefined;
+};
+
+const SearchControlsContext = createContext<SearchControls>();
 
 function Header(
   props: JSX.HTMLAttributes<HTMLDivElement> & {
@@ -55,6 +67,11 @@ function Header(
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+  const closeSearch = () => {
+    setOpen(false);
+    local.onSearchOpenChange?.(false);
+  };
   const toggleSearch = () => {
     const next = !searchOpen();
     setOpen(next);
@@ -82,6 +99,7 @@ function Header(
             {local.actions}
             <Show when={!isTouchDevice() && local.search}>
               <Control
+                ref={searchButton}
                 aria-label={local.searchLabel ?? 'Search'}
                 aria-expanded={searchOpen()}
                 onClick={toggleSearch}
@@ -100,10 +118,68 @@ function Header(
           style={{ '--view-search-height': 'var(--sidebar-row-height)' }}
           data-sidebar-search=""
         >
-          {local.search?.()}
+          <SearchControlsContext.Provider
+            value={{ close: closeSearch, button: () => searchButton }}
+          >
+            {local.search?.()}
+          </SearchControlsContext.Provider>
         </div>
       </Show>
     </>
+  );
+}
+
+/**
+ * The search field of a sidebar that is the list it searches (Home, Chat),
+ * in its header's search slot. It keeps the list search keys of
+ * `ListHeaderSearch`: ArrowDown or Enter moves to the first result, Escape
+ * leaves the field with the search, and Escape in the list clears it. An
+ * empty field collapses back to the header's search button.
+ */
+function Search(props: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  /** Moves keyboard focus into the sidebar's result list. */
+  focusResults?: () => void;
+  /** Whether that list has a row; see `ListSearchKeysOptions.hasResults`. */
+  hasResults?: () => boolean;
+  hotkey?: string;
+  ref?: (element: HTMLInputElement) => void;
+}) {
+  const header = useContext(SearchControlsContext);
+  let input: HTMLInputElement | undefined;
+  const keys = useListSearchKeys({
+    value: () => props.value,
+    clear: () => {
+      props.onValueChange('');
+      header?.close();
+    },
+    focusResults: () => props.focusResults,
+    hasResults: props.hasResults,
+    input: () => input,
+    trigger: () => header?.button(),
+    // The preview or conversation beside the sidebar keeps its own Escape.
+    ownsEscape: () =>
+      input
+        ?.closest('[data-view-shell-aside]')
+        ?.contains(document.activeElement) ?? false,
+  });
+
+  return (
+    <SearchBar
+      ref={mergeRefs((element) => (input = element), props.ref)}
+      label={props.label}
+      placeholder={props.placeholder ?? props.label}
+      value={props.value}
+      onValueChange={props.onValueChange}
+      hotkey={props.hotkey}
+      // The browser's own history popup would take ArrowDown and Enter.
+      autocomplete="off"
+      onKeyDown={keys.onKeyDown}
+      onEscape={keys.onEscape}
+    />
   );
 }
 
@@ -399,6 +475,7 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
 export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
+  Search,
   CloseButton: ViewSidebarCloseButton,
   Title,
   Primary,

@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
@@ -24,7 +23,6 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
-  const notificationSource = useGlobalNotificationSource();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
   const requests = new Set<AbortController>();
@@ -133,7 +131,7 @@ export function useChannelSectionNotifications(
         span.setAttr('notification.count', channelIds.length);
 
         if (action === 'read') {
-          await markChannelsAsRead(notificationSource, channelIds, isCurrent);
+          await markChannelsAsRead(channelIds);
           return;
         }
 

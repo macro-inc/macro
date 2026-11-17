@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useIsAuthenticated } from '@core/context/user';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -128,11 +126,9 @@ const restHistoryQueryOptions = {
 
 export function useHistoryQuery() {
   const authenticated = useIsAuthenticated();
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
-    if (authenticated() !== true || !graphqlSoupFlag().enabled)
-      return undefined;
+    if (authenticated() !== true) return undefined;
     return getGraphqlSoupCacheHost();
   };
 

@@ -7,6 +7,68 @@ use crate::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::process::Command;
 
+mod benchmark;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_excludes_other_writers_and_releases_after_completion_or_cancellation(pool: PgPool) {
+    use crate::domain::service::test::fakes::{FakeProvider, WriteGate};
+    let (repository, actor, record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let repository = Arc::new(repository);
+    for complete in [true, false] {
+        let provider = Arc::new(FakeProvider::new());
+        let gate = Arc::new(WriteGate::new());
+        *provider.all_writes_gate.lock().unwrap() = Some(gate.clone());
+        let service = PasswordService {
+            repository: repository.clone(),
+            provider: provider.clone(),
+            availability: Arc::new(FakeAvailability),
+        };
+        let batch = synthetic_batch();
+        let mut work = Box::pin(service.import_batch(&actor, team, Uuid::now_v7(), batch));
+        tokio::select! {
+            _ = gate.started.notified() => {},
+            _ = &mut work => panic!("provider gate must hold the batch"),
+        }
+        let operation = Uuid::now_v7();
+        let ordinary = || {
+            serde_json::from_value(serde_json::json!({
+            "operationId":operation, "name":"Synthetic ordinary write", "kind":"login", "favorite":false,"private":false,
+            "values":{"username":"", "password":"synthetic", "notes":"", "fields":[]}
+        })).unwrap()
+        };
+        assert!(matches!(
+            service.create(&actor, team, ordinary()).await,
+            Err(Error::Busy)
+        ));
+        if complete {
+            gate.release.add_permits(2);
+            let result = work.await.unwrap();
+            assert!(
+                result
+                    .items
+                    .iter()
+                    .all(|item| item.outcome == ImportOutcome::Created)
+            );
+            assert_eq!(provider.stored.lock().unwrap().len(), 2);
+        } else {
+            drop(work);
+            assert!(provider.stored.lock().unwrap().is_empty());
+        }
+        *provider.all_writes_gate.lock().unwrap() = None;
+        // SQLx rolls a dropped transaction back asynchronously. Drain the pool
+        // to prove the server processed it before testing the next admission.
+        let mut connections = Vec::new();
+        for _ in 0..pool.options().get_max_connections() {
+            connections.push(pool.acquire().await.unwrap());
+        }
+        drop(connections);
+        let created = service.create(&actor, team, ordinary()).await.unwrap();
+        assert_eq!(created.metadata.id, ItemId(operation));
+        assert_eq!(created.metadata.version, 1);
+    }
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 #[ignore = "requires explicit disposable local OpenBao and bootstrap signing key"]
 #[expect(
@@ -130,6 +192,54 @@ async fn real_import_retries_preserve_provider_version_folder_grants_and_totp(po
         }
     }
     panic!("disposable namespace purge acknowledgement did not complete");
+}
+
+fn synthetic_batch() -> ImportBatch {
+    serde_json::from_value(serde_json::json!({
+        "format":"bitwarden_json", "target":{"kind":"root"}, "private":false, "folders":[],
+        "items":[
+            {"sourceKey":"one", "name":"Synthetic one", "kind":"login", "favorite":false,
+             "values":{"username":"", "password":"synthetic", "notes":"", "fields":[]}},
+            {"sourceKey":"two", "name":"Synthetic two", "kind":"login", "favorite":false,
+             "values":{"username":"", "password":"synthetic", "notes":"", "fields":[]}}
+        ]
+    }))
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imports_progress_with_only_a_lease_and_one_query_connection(pool: PgPool) {
+    let limited = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let (repository, actor, record) = folder_fixture(limited.clone()).await;
+    let service = PasswordService {
+        repository: Arc::new(repository),
+        provider: Arc::new(crate::domain::service::test::fakes::FakeProvider::new()),
+        availability: Arc::new(FakeAvailability),
+    };
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        service.import_batch(
+            &actor,
+            record.metadata.team_id,
+            Uuid::now_v7(),
+            synthetic_batch(),
+        ),
+    )
+    .await
+    .expect("small pools must not deadlock")
+    .unwrap();
+    assert_eq!(result.items.len(), 2);
+    assert!(
+        result
+            .items
+            .iter()
+            .all(|item| item.outcome == ImportOutcome::Created)
+    );
+    limited.close().await;
 }
 
 /// 20261116193746 widens the format check NOT VALID for `bitwarden_zip`,
