@@ -14,8 +14,9 @@ just android-benchmark --serial emulator-5580
 # the same as: bun scripts/android-benchmark/run.ts --serial emulator-5580
 ```
 
-It writes `android-benchmark-results/android-benchmark-<time>.json` and prints
-a summary table.
+It writes `android-benchmark-results/android-benchmark-<time>-cpu<rates>.json`
+and prints a summary table per [CPU profile](#cpu-profile). Add
+`--cpu-throttle 4` for a phone-like WebView CPU.
 
 ## What a number means
 
@@ -134,6 +135,53 @@ finds rows by title, so the order does not matter.
 | `--out` | `android-benchmark-results` | Results directory (git-ignored). |
 | `--label` | | Stored in the results. |
 | `--port` | 9333 | Host port for the DevTools forward. |
+| `--cpu-throttle` | 1 | WebView CPU slowdown, or a list such as `1,4` that alternates within each iteration; see [CPU profile](#cpu-profile). |
+
+## CPU profile
+
+The emulator gives the WebView a fast desktop-class core. Android phones run
+the app's JavaScript, style and layout about four times slower, so unthrottled
+lab view switches read like an iPhone's, not an Android phone's.
+`--cpu-throttle <rate>` slows the WebView renderer by that factor with DevTools
+(`Emulation.setCPUThrottlingRate`; 4 is Chrome's "mid-tier mobile" preset). At
+4× the median view switch in the lab is close to the field Android median.
+
+| Profile | Use it for |
+| --- | --- |
+| `--cpu-throttle 1` (default) | Comparing with earlier runs; flows bound by IPC, the network or native code (cold channel open, cold start), which throttling does not make phone-like. |
+| `--cpu-throttle 4` | Work on the WebView's main thread: view switches, document opens, rendering. Judge view-switch changes here. |
+| `--cpu-throttle 1,4` | Both in one run, alternating within each iteration so both see the same host load. It launches the app twice per iteration and takes twice as long. |
+
+The default stays one profile because most runs compare two builds at one
+profile, and running both would double every run.
+
+How the harness applies it:
+
+- DevTools attaches only once the WebView is up, and the rate is set after the
+  `app.boot` span has arrived, so `cold-start` and `cold-start.boot-span` are
+  never throttled. Their rows sit under 1× in every run.
+- The rate lasts as long as the DevTools connection that set it: a relaunch or
+  a new attach resets it to 1×. The harness sets it after every launch and
+  checks it before and after every timed step by timing a fixed loop in the
+  page against the same loop before throttling. A step whose measured slowdown
+  is not within 1.5× of the rate fails. The `cpu` column is that measured
+  slowdown.
+- Each sample records `cpuThrottle` and `cpuThrottleMeasured` (before, after),
+  each summary row its `cpuThrottle`, `meta.cpuThrottle` the rates of the run,
+  and the file name ends in `-cpu4x` or `-cpu1x-4x`. Compare rows only at the
+  same rate.
+
+Caveats:
+
+- Throttling slows only the WebView renderer's main thread. The Android UI
+  thread, Rust and other native code, the network and rendering on the GPU
+  side run at emulator speed, so a flow that waits on them gets no slower.
+- This software-rendered emulator already draws frames about twice as slowly
+  as a phone (about 33 ms while animating, against 8–16 ms). Tauri IPC calls
+  wait for the Android UI thread, about one frame each while anything
+  animates, so IPC-bound flows such as the cold channel open are slower in the
+  lab than on phones at either rate. Don't read them at 4× as phone numbers.
+- 4× spreads the samples more; see [Noise and comparing builds](#noise-and-comparing-builds).
 
 ## Noise and comparing builds
 
