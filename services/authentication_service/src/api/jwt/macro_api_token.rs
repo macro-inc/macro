@@ -46,7 +46,7 @@ pub struct MacroApiTokenQuery {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(db, macro_api_token_context, authorization))]
+#[tracing::instrument(skip_all)]
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
@@ -106,8 +106,8 @@ pub async fn handler(
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
             agent_correlation_id: None,
             agent_session_id: None,
-            // Re-minting keeps the signed routine `propagate` accepted, so a
-            // routine run cannot shed it; callers can never supply one.
+            // Programs are refused above, so these claims are empty here; they
+            // are still copied so a relaxed refusal could never shed them.
             routine_id: agent_correlation::context::current_routine(),
             // No scope to keep: `AccountHolderOrInternal` refuses this route
             // to every credential that signs one (`ScopedMacroApiJwt`).

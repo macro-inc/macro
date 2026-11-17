@@ -91,17 +91,25 @@ fn token(agent: Option<Uuid>, routine: Option<Uuid>) -> String {
     .unwrap()
 }
 
-async fn mint(bearer: &str) -> StatusCode {
-    router()
-        .oneshot(
-            Request::get("/jwt/macro_api_token")
-                .header("authorization", format!("Bearer {bearer}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+async fn mint_with(bearer: &str, code_execution: bool) -> (StatusCode, String) {
+    let mut request =
+        Request::get("/jwt/macro_api_token").header("authorization", format!("Bearer {bearer}"));
+    if code_execution {
+        request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+    }
+    let response = router()
+        .oneshot(request.body(Body::empty()).unwrap())
         .await
-        .unwrap()
-        .status()
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, String::from_utf8_lossy(&body).into_owned())
+}
+
+async fn mint(bearer: &str) -> StatusCode {
+    mint_with(bearer, false).await.0
 }
 
 /// A program's 60-second run credential must not become an hour-long token
@@ -118,13 +126,18 @@ async fn a_programs_credential_cannot_mint_a_longer_lived_token() {
     ] {
         assert_eq!(mint(&bearer).await, StatusCode::FORBIDDEN, "{program}");
     }
+    let (status, _) = mint_with(&token(None, None), true).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the code-mode runtime's header"
+    );
 }
 
 #[tokio::test]
 async fn a_persons_credential_reaches_the_profile_lookup() {
     // The lookup fails on the unreachable database: the request was admitted.
-    assert_eq!(
-        mint(&token(None, None)).await,
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
+    let (status, body) = mint_with(&token(None, None), false).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(body.contains("unable to get user profile"), "{body}");
 }
