@@ -18,7 +18,13 @@ import {
   TableNode,
   TableRowNode,
 } from '@lexical/table';
-import { $isParagraphNode, $isTextNode, type LexicalNode } from 'lexical';
+import {
+  $isParagraphNode,
+  $isTextNode,
+  type ElementFormatType,
+  type LexicalNode,
+} from 'lexical';
+import { match } from 'ts-pattern';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
@@ -107,6 +113,8 @@ const HEADER_STATE_BY_ATTR: Record<string, TableCellHeaderState> = {
   both: TableCellHeaderStates.BOTH,
 };
 
+const CELL_ALIGNMENTS = ['left', 'center', 'right'] as const;
+
 const REG_EXP_XML_TABLE = xmlMatcherWithAttrs(TAG_TABLE, '');
 const REG_EXP_XML_TABLE_ROW = xmlMatcherWithAttrs(TAG_TABLE_ROW, 'gs');
 const REG_EXP_XML_TABLE_CELL = xmlMatcherWithAttrs(TAG_TABLE_CELL, 'gs');
@@ -172,6 +180,9 @@ export const I_TABLE_NODE: ElementTransformer = {
               colspan: cell.getColSpan() > 1 ? cell.getColSpan() : undefined,
               rowspan: cell.getRowSpan() > 1 ? cell.getRowSpan() : undefined,
               header: HEADER_ATTR_BY_STATE[cell.__headerState],
+              align: CELL_ALIGNMENTS.find(
+                (format) => format === cell.getFormatType()
+              ),
             })}>`;
             output += $convertToMarkdownString(
               internalTransformersWithinTables,
@@ -224,6 +235,12 @@ export const I_TABLE_NODE: ElementTransformer = {
           const headerState = HEADER_STATE_BY_ATTR[cellAttrs.header];
           if (headerState !== undefined) {
             cellNode.setHeaderStyles(headerState);
+          }
+          const alignment = CELL_ALIGNMENTS.find(
+            (format) => format === cellAttrs.align
+          );
+          if (alignment) {
+            cellNode.setFormat(alignment);
           }
 
           $convertFromMarkdownString(
@@ -387,6 +404,49 @@ function mapToTableCells(textContent: string): Array<TableCellNode> | null {
   return splitTableRow(match[1]).map((text) => createTableCell(text));
 }
 
+type ColumnAlignment = (typeof CELL_ALIGNMENTS)[number];
+
+/** The alignment each `:---`, `:---:` or `---:` marker of a delimiter row sets. */
+function columnAlignments(divider: string): Array<ColumnAlignment | ''> {
+  return splitTableRow(divider.trim().replace(/^\||\|$/g, '')).map((marker) => {
+    const trimmed = marker.trim();
+    const left = trimmed.startsWith(':');
+    const right = trimmed.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    if (left) return 'left';
+    return '';
+  });
+}
+
+function delimiterFor(format: ElementFormatType): string {
+  return match(format)
+    .with('left', 'start', () => ':---')
+    .with('center', () => ':---:')
+    .with('right', 'end', () => '---:')
+    .otherwise(() => '---');
+}
+
+/** Gives rows joining a table the alignment of their column's header cell. */
+function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
+  const header = table.getFirstChild();
+  if (!$isTableRowNode(header)) return;
+  const headerCells = header.getChildren().filter($isTableCellNode);
+  if (
+    !headerCells.some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+  ) {
+    return;
+  }
+  for (const row of rows) {
+    row
+      .getChildren()
+      .filter($isTableCellNode)
+      .forEach((cell, column) => {
+        cell.setFormat(headerCells[column]?.getFormatType() ?? '');
+      });
+  }
+}
+
 export const E_TABLE_NODE: ElementTransformer = {
   dependencies: [TableNode, TableRowNode, TableCellNode],
   type: 'element',
@@ -426,9 +486,13 @@ export const E_TABLE_NODE: ElementTransformer = {
       }
 
       output.push(`| ${rowOutput.join(' | ')} |`);
-      // GFM needs the delimiter row after the first row, and only there.
+      // GFM reads the first row as the header, so the delimiter row follows it
+      // and nothing else, carrying the header cells' alignment.
       if (row === 0) {
-        output.push(`| ${rowOutput.map(() => '---').join(' | ')} |`);
+        const delimiters = gridMap[row].map((mapCell) =>
+          delimiterFor(mapCell?.cell?.getFormatType() ?? '')
+        );
+        output.push(`| ${delimiters.join(' | ')} |`);
       }
     }
     return output.join('\n');
@@ -436,29 +500,30 @@ export const E_TABLE_NODE: ElementTransformer = {
   replace: (parentNode, _unused, match) => {
     if (REG_EXP_TABLE_ROW_DIVIDER.test(match[0])) {
       const table = parentNode.getPreviousSibling();
-      if (!table || !$isTableNode(table)) {
+      if (!$isTableNode(table)) {
         return;
       }
-
-      const rows = table.getChildren();
-      const lastRow = rows[rows.length - 1];
-      if (!lastRow || !$isTableRowNode(lastRow)) {
-        return;
-      }
-
-      for (const cell of lastRow.getChildren()) {
-        if (!$isTableCellNode(cell)) {
-          continue;
-        }
-        cell.setHeaderStyles(
-          TableCellHeaderStates.NO_STATUS,
-          TableCellHeaderStates.NO_STATUS
-          // TableCellHeaderStates.ROW, // disable header for now
-          // TableCellHeaderStates.ROW // disable header for now
-        );
-      }
-
       parentNode.remove();
+      // Only a delimiter right after the first row makes that row the header;
+      // tables without one load as body rows.
+      if (table.getChildrenSize() !== 1) {
+        return;
+      }
+      const headerRow = table.getFirstChild();
+      if (!$isTableRowNode(headerRow)) {
+        return;
+      }
+      const alignments = columnAlignments(match[0]);
+      headerRow
+        .getChildren()
+        .filter($isTableCellNode)
+        .forEach((cell, column) => {
+          cell.setHeaderStyles(
+            TableCellHeaderStates.ROW,
+            TableCellHeaderStates.ROW
+          );
+          cell.setFormat(alignments[column] ?? '');
+        });
       return;
     }
 
@@ -512,7 +577,9 @@ export const E_TABLE_NODE: ElementTransformer = {
       $isTableNode(previousSibling) &&
       getTableColumnsSize(previousSibling) === maxCells
     ) {
-      previousSibling.append(...table.getChildren());
+      const rows = table.getChildren().filter($isTableRowNode);
+      previousSibling.append(...rows);
+      $alignToHeader(previousSibling, rows);
       parentNode.remove();
     } else {
       parentNode.replace(table);

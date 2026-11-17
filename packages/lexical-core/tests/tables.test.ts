@@ -864,7 +864,7 @@ describe('pipe characters inside pipe-table cells', () => {
     });
   });
 
-  it('writes the GFM delimiter row after the first row only', async () => {
+  it('writes the GFM delimiter row, with alignment, after the first row only', async () => {
     const editor = createTestEditor();
     await importWith(
       editor,
@@ -879,10 +879,91 @@ describe('pipe characters inside pipe-table cells', () => {
 
     expect(exportMarkdown(editor, EXTERNAL_TRANSFORMERS).split('\n')).toEqual([
       '| Person | Bug Reports |',
-      '| --- | --- |',
+      '| :--- | :---: |',
       '| @gab | 206 |',
       '| Plain row | 117 |',
     ]);
+  });
+
+  it('makes the row above a delimiter a header and aligns its columns', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Bug Reports | Share | Note |',
+        '| :--- | :---: | ---: | --- |',
+        '| a | 206 | 26.8% | x |',
+        '| b | 117 | 15.3% | y |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(
+        grid.map((row) =>
+          row.map((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+        )
+      ).toEqual([
+        [true, true, true, true],
+        [false, false, false, false],
+        [false, false, false, false],
+      ]);
+      expect(
+        grid.map((row) => row.map((cell) => cell.getFormatType()))
+      ).toEqual([
+        ['left', 'center', 'right', ''],
+        ['left', 'center', 'right', ''],
+        ['left', 'center', 'right', ''],
+      ]);
+    });
+  });
+
+  it('loads a table without a delimiter row as body rows, as before', async () => {
+    const editor = createTestEditor();
+    await importWith(editor, ['| a | b |', '| c | d |'].join('\n'));
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect($cellTexts()).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
+      expect(
+        grid
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
+  it('keeps the full mention, header and alignment through the internal (lossless) set', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Share |',
+        '| :--- | :---: |',
+        `| ${GAB_MENTION} | $$ 26.8\\% $$ |`,
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const first = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    expect(first).toContain(
+      '<m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com"'
+    );
+    expect(first).toContain('<m-table-cell header="row" align="left">Person');
+
+    await importWith(editor, first, INTERNAL_TRANSFORMERS);
+    expect(exportMarkdown(editor, INTERNAL_TRANSFORMERS)).toBe(first);
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
+      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+      expect(mention?.getEmail()).toBe('gab@macro.com');
+      expect(grid[0][1].hasHeaderState(TableCellHeaderStates.ROW)).toBe(true);
+      expect(grid[1][1].getFormatType()).toBe('center');
+    });
   });
 
   it('round-trips markdown -> lexical -> markdown stably', async () => {
