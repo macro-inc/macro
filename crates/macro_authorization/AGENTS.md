@@ -29,7 +29,7 @@ by policy.
 
 ## Boundaries
 
-- Depends on: `macro_auth` (outbound JWT validation), `bot_id`, `bot_token`,
+- Depends on: `macro_auth` (outbound JWT validation), `route_policy`, `bot_id`, `bot_token`,
   `harness_id`, `harness_token`, `model_user`, `model-error-response`.
 - Used by: essentially every
   authenticated HTTP surface (`agent_session`, `agent_harness`, `ai_tools`,
@@ -82,6 +82,12 @@ naming the grant and the agent holding it. `AccountHolderOrInternal` is
 that signs `agent_scope`, held by a scoped code-mode run or a routine dry run):
 use it on anything that mints credentials, changes who can sign in, deletes
 the account, or changes its managers.
+The route policy (`crates/route_policy`) decides a route before this crate
+looks a user API key up, so it reads every key as an API credential. Once the
+lookup finds a manager's, the extractor decides the route again as
+`AccountManager` and answers that refusal with a 403. An extractor inside
+router-level middleware runs before the route is decided and leaves it to
+the handler's.
 
 ## Gotchas
 

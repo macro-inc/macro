@@ -2286,3 +2286,75 @@ async fn user_api_key_wins_over_ambient_cookies() {
         )]
     );
 }
+
+/// Routes that declare a category, behind a stand-in for `propagate`, which
+/// reads every user API key as an API credential: only the key's lookup
+/// tells a manager's apart.
+fn categorized_router() -> Router {
+    let service = FakeAuthorizationService::default();
+    let state = TestState {
+        authorization: MacroAuthorizationState::new(Arc::new(service)),
+        _unrelated_state: "composite state",
+    };
+    Router::new()
+        .route(
+            "/keys",
+            route_policy::inbound::axum::get(
+                route_policy::Category::CredentialMint,
+                policy_handler::<UserOrInternal>,
+            ),
+        )
+        .route(
+            "/items",
+            route_policy::inbound::axum::get(
+                route_policy::Category::Read,
+                policy_handler::<UserOrInternal>,
+            ),
+        )
+        .with_state(state)
+        .layer(::axum::middleware::from_fn(
+            |mut request: Request<Body>, next: ::axum::middleware::Next| async move {
+                request
+                    .extensions_mut()
+                    .insert(route_policy::ResolvedCaller(
+                        route_policy::Caller::ApiCredential,
+                    ));
+                next.run(request).await
+            },
+        ))
+}
+
+#[tokio::test]
+async fn a_manager_credential_is_held_to_what_an_account_manager_may_do() {
+    let router = categorized_router();
+
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/keys", MANAGER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        body,
+        json!({
+            "message": "An account manager can't create credentials or bearer links. Ask the account holder to do it themselves in Macro."
+        })
+    );
+
+    // The account holder's own key is only observed refusing it, for now.
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/keys", VALID_USER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["acting_entity"], API_KEY_USER_ID);
+
+    // A manager may read.
+    let (status, _) = send(
+        &router,
+        empty_body(user_api_key_request("/items", MANAGER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
