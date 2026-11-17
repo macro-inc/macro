@@ -1203,7 +1203,8 @@ export class Document
    * @readonly
    */
   webUrl(): string {
-    const fileType = this.detail.peek()?.fileType;
+    const fileType =
+      this.detail.peek()?.fileType ?? this.detail.listedField('fileType');
     const route = fileType && NATIVE_FILE_TYPES.has(fileType) ? fileType : 'md';
     return `${this.client.webAppUrl}/app/${route}/${this.id}`;
   }

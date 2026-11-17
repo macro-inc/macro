@@ -157,7 +157,7 @@ test('documents.recent() handles read listed metadata without a detail request',
     documentName: 'Launch plan',
     documentVersionId: 3,
     owner: 'macro|owner@example.com',
-    fileType: 'md',
+    fileType: 'canvas',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-02T00:00:00Z',
     projectId: null,
@@ -184,8 +184,9 @@ test('documents.recent() handles read listed metadata without a detail request',
     new DocumentNamespace(client).recent(),
   );
 
+  expect(document?.webUrl()).toEndWith('/app/canvas/doc-1');
   expect(await document?.name()).toBe('Launch plan');
-  expect(await document?.fileType()).toBe('md');
+  expect(await document?.fileType()).toBe('canvas');
   expect(await document?.updatedAt()).toBe('2026-01-02T00:00:00Z');
   expect(detailRequests).toEqual([]);
   expect((await document?.project())?.id).toBe('project-1');
