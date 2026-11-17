@@ -4,7 +4,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-pin="$here/../../../crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs"
+pin="$here/../../../crates/agents/macrod/src/tui/agent_catalog/claude_code.rs"
 version="$(sed -n 's|.*"@agentclientprotocol/claude-agent-acp@\([^"]*\)".*|\1|p' "$pin")"
 [ -n "$version" ] || { echo "no adapter pin in $pin" >&2; exit 1; }
 

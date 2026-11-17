@@ -18,6 +18,10 @@ connection_gateway = []
 default = ["connection_gateway"]
 
 [dependencies]
+document_storage_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+auth_service_url = { workspace = true }
+app_service_url = { workspace = true }
 agent_correlation = { workspace = true, features = ["http", "postgres"] }
 email_api_client_core = { workspace = true, features = ["ports"] }
 email_api_client_outbound = { workspace = true, features = ["outbound-outlook", "microsoft-gate"] }
@@ -50,10 +54,6 @@ macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
-app_service_url = { workspace = true }
-auth_service_url = { workspace = true }
-connection_gateway_url = { workspace = true }
-document_storage_service_url = { workspace = true }
 email_types = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }

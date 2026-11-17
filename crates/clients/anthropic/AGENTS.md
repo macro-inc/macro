@@ -23,7 +23,7 @@ tools.
   built-in code-execution tools.
 - Not here: web search and fetch → `crates/ai/web_search` (wired as tools in `crates/ai/agent_tools`).
 - Not here: model selection, pricing, usage/billing policy, or the provider-agnostic
-  chat abstraction → `crates/ai/agent`, `crates/billing/ai_billing`, `crates/billing/ai_usage`.
+  chat abstraction → `crates/ai/agent_loop`, `crates/billing/ai_billing`, `crates/billing/ai_usage`.
 
 ## Boundaries
 

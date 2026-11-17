@@ -3,7 +3,7 @@
 ## What it is
 
 Test support for the agent: a stand-in for the Gemini API that answers from
-scripts instead of a model. The real model router (`crates/ai/agent`, rig's
+scripts instead of a model. The real model router (`crates/ai/agent_loop`, rig's
 Gemini client) and the agent harness run against it, in a `cargo test`, as a
 standalone process or as part of a local stack, so a test decides ahead of
 time what the model says and which tools it calls. No model is ever called.
@@ -81,4 +81,4 @@ time what the model says and which tools it calls. No model is ever called.
 
 ## Related
 
-- Rules: `.agents/rules/config-and-service-urls.md` · `crates/ai/agent/AGENTS.md`
+- Rules: `.agents/rules/config-and-service-urls.md` · `crates/ai/agent_loop/AGENTS.md`

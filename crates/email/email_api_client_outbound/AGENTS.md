@@ -135,4 +135,3 @@ admission gate every Graph request passes.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
-

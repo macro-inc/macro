@@ -346,8 +346,8 @@ Four vocabularies must agree:
    `crates/comms/channels_outbound/src/pg_channel_reference_share_permissions.rs`, or it
    falls through to legacy share permissions and fails at runtime.
 
-- **Agent prompt:** add the kind to `crates/agents/prompt/src/mentions.rs` and, if it has
-  URLs, `crates/agents/prompt/src/mcp_item_links.rs`. Without it agents linked forms as
+- **Agent prompt:** add the kind to `crates/agents/agent_prompts/src/mentions.rs` and, if it has
+  URLs, `crates/agents/agent_prompts/src/mcp_item_links.rs`. Without it agents linked forms as
   plain URLs.
 - **Deploy skew:** lexical-service and the web app deploy separately, so either
   can run against the other's previous release. New node data must parse in the

@@ -334,8 +334,8 @@ struct RunTokens(std::sync::Mutex<Vec<String>>);
 impl ProgramExecutor for RunTokens {
     async fn execute_program(
         &self,
-        _: code_execution::domain::ExecuteRequest,
-        environment: code_execution::domain::RunEnvironment,
+        _: code_execution_core::ExecuteRequest,
+        environment: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         self.0.lock().unwrap().push(environment.token);
@@ -355,7 +355,7 @@ async fn a_dry_run_token_is_refused_every_write() {
         Arc::clone(&tokens) as Arc<dyn ProgramExecutor>,
         Arc::new(NoChecks),
         SignedTokens,
-        code_execution::domain::SdkEndpoints::default(),
+        code_execution_core::SdkEndpoints::default(),
         Arc::new(ai_usage::NoOpUsageRecorder),
         None,
         Arc::new(NoTimeZones),

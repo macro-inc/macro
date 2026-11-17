@@ -10,7 +10,7 @@ the chat domain, and the crates that persist or ship messages.
 
 - Owns: the serde and OpenAPI (`schema` feature) shape of message roles and
   content.
-- Not here: `ChatMessage`/`ChatMessages` with resolved attachments → `crates/ai/agent`
+- Not here: `ChatMessage`/`ChatMessages` with resolved attachments → `crates/ai/agent_loop`
   (`agent::types`, which also re-exports this crate's types).
 
 ## Boundaries
