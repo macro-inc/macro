@@ -1407,3 +1407,56 @@ export async function main({token, hosts}) {
     server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
 }
+
+/// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
+/// lose the mark either.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_trailing_dot_host_is_still_marked() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /dotted "), "{request}");
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-macro-code-execution: 1\r\n"),
+            "{request}"
+        );
+        respond(&mut stream, "{}").await;
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://localhost:{port}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main() {{
+  await fetch("http://localhost.:{port}/dotted");
+  return {{data: null, reviews: []}};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    // A fetch refused before connecting fails here rather than hanging below.
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
+}
