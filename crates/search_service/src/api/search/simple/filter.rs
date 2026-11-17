@@ -189,10 +189,10 @@ pub(super) async fn email_search(
     filters: &item_filters::EmailFilters,
     should_include: bool,
 ) -> Result<Option<EmailSearch>, SearchError> {
+    reject_unsupported_email_filters(filters)?;
     if !should_include {
         return Ok(None);
     }
-    reject_unsupported_email_filters(filters)?;
     // Every inbox the caller can reach (their own plus delegated). Connected
     // secondary inboxes share the owner's user_id; delegated inboxes index
     // under their own, so collect the distinct macro_ids the caller can search.
