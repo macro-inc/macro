@@ -1,0 +1,50 @@
+crates/bundle_identity/src/test.rs
+  s_358a0656ff17a9::t_5b7ee62a4d0e6e 1-154,159-214,219-256,265
+  s_358a0656ff17a9::t_056c9ecf6499e0 155-158,215-218,257-264
+.config/hakari.toml
+  s_358a0656ff17a9::t_f8ea778d2fbb30 87-89
+  s_358a0656ff17a9::t_d67e299cec08e9 90-92
+.github/workspace-dep-closures.json
+  s_358a0656ff17a9::t_8cad3a9a1df137 2865-2871
+crates/bundle_identity/Cargo.toml
+  s_358a0656ff17a9::t_d435283a8404d2 1-15
+tooling/bundle_stamp/Cargo.toml
+  s_358a0656ff17a9::t_11bd7ae38a3f88 1-19
+Cargo.toml
+  s_358a0656ff17a9::t_f8ea778d2fbb30 156,234
+tooling/bundle_stamp/src/main.rs
+  s_358a0656ff17a9::t_056c9ecf6499e0 34-37,77-81,84-88,109-111,169-171
+  s_358a0656ff17a9::t_38477d977292a1 1-33,38-76,82-83,89-108,112-168,172-285
+tooling/bundle_stamp/src/test.rs
+  s_358a0656ff17a9::t_6dc891109dbbab 1-103,108-181
+  s_358a0656ff17a9::t_056c9ecf6499e0 104-107
+crates/bundle_identity/src/lib.rs
+  s_358a0656ff17a9::t_eb3c15332a29f0 1-71,75-380,387-482
+  s_358a0656ff17a9::t_056c9ecf6499e0 72-74,381-386
+Cargo.lock
+  s_358a0656ff17a9::t_5a88b3ca1eed22 3755-3776
+crates/bundle_identity/AGENTS.md
+  s_358a0656ff17a9::t_1107a476f06fae 1-40
+crates/bundle_identity/CLAUDE.md
+  s_358a0656ff17a9::t_02e8aa05b268f2 1
+tooling/bundle_stamp/AGENTS.md
+  s_358a0656ff17a9::t_a326a23ebd063e 1-29
+tooling/bundle_stamp/CLAUDE.md
+  s_358a0656ff17a9::t_35078441f2b26b 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d70616151f1035388f887267c9588603b2c8caf9",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
