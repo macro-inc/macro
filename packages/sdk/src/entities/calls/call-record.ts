@@ -318,10 +318,13 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
    */
   readonly shareWithTeam = this.field('shareWithTeam');
 
-  /** URL of the call recording, once available. */
+  /**
+   * URL of the call recording, once available; empty for an agent's program
+   * (ExecuteCode, a routine), which reads the bytes with `recording.bytes()`.
+   */
   readonly recordingUrl = this.field('recordingUrl');
 
-  /** URL of the recording preview (thumbnail), once available. */
+  /** URL of the recording preview (thumbnail), once available; empty for an agent's program. */
   readonly recordingPreviewUrl = this.field('recordingPreviewUrl');
 
   /** When the recording started, if it was recorded. */
