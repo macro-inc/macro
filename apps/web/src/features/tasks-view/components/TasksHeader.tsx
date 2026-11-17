@@ -1,7 +1,6 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
-  ViewShell,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
@@ -22,7 +21,6 @@ import {
   TaskSaveViewButton,
 } from '../views/task-saved-views';
 import { TasksControls } from './TasksControls';
-import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -89,41 +87,32 @@ export function TasksHeader(props: TasksHeaderProps) {
   });
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <ListHeader
-          title={
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewBreadcrumbs.Outlet aria-label="Task location" />
-              <TaskSavedViewMenu />
-            </div>
-          }
-        >
-          <TaskSaveViewButton />
-          <TaskSavedViewActions />
-          <TasksControls />
-          <TasksCreateAction
-            presentation="toolbar"
-            projectsEnabled={projectsEnabled()}
-          />
-          <ListHeaderSearch
-            label="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-            focusResults={props.focusSearchResults}
-            registerFocus={(focus) => {
-              focusSearch = focus;
-            }}
-          />
-        </ListHeader>
-      }
-    >
-      <ViewShell.Header>
-        <div class="flex min-w-0 flex-col">
-          <TasksMobileTabs />
-        </div>
-      </ViewShell.Header>
+    <Show when={!isTouchDevice()}>
+      <ListHeader
+        title={
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewBreadcrumbs.Outlet aria-label="Task location" />
+            <TaskSavedViewMenu />
+          </div>
+        }
+      >
+        <TaskSaveViewButton />
+        <TaskSavedViewActions />
+        <TasksControls />
+        <TasksCreateAction
+          presentation="toolbar"
+          projectsEnabled={projectsEnabled()}
+        />
+        <ListHeaderSearch
+          label="Search tasks"
+          value={state.search}
+          onValueChange={(search) => setState('search', search)}
+          focusResults={props.focusSearchResults}
+          registerFocus={(focus) => {
+            focusSearch = focus;
+          }}
+        />
+      </ListHeader>
     </Show>
   );
 }

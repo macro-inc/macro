@@ -104,7 +104,19 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
   policy history. Selected consent uses its own grant bit and exact revision FK;
   legacy-write/version triggers and mailbox revocation must survive rollbacks.
+  The eligibility function migration rejects preexisting selected rows because
+  old inline readers remain during deployment. Keep selected activation absent
+  until the scalar function, ingestion and Team reader are compatible.
   Keep applied migration files immutable and add forward corrections instead.
+
+- `crm_email_consent.consent_incarnation` is nullable for legacy writers;
+  server UUIDv7 initialization preserves existing consent, and an initialized
+  identity cannot be cleared or changed. New policy envelopes carry both that
+  identity and `policy_version`; null outbox generation fields mean legacy work.
+  Keep mailbox/membership cascades and the bounded source-event reverse indexes
+  on rule tables. Interrupted concurrent builds of `crm_email_rule_contacts_source`
+  or `crm_email_rule_companies_source` require inspecting and dropping only the
+  invalid index before retrying the unapplied migration.
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
@@ -205,4 +217,5 @@ invalid index before retrying.
 `crm_email_thread_exclusions` stores one contributor's private thread exceptions;
 its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
-veto used by the shared eligibility function and mirrored in set-based ingestion.
+veto used by the shared eligibility function and mirrored in set-based ingestion
+and the inline Team reader, including selected contribution.

@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
   useSearchParams: () => [mocks.searchParams],
+  useResolvedPath: (path: () => string) => path,
+  useMatch: (path: () => string) => () => ({ path: path(), params: {} }),
 }));
 vi.mock('@app/features/inbox/AddInboxDialog', () => ({
   openAddInboxDialog: mocks.openAddInbox,

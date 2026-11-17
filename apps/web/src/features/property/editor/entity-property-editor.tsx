@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
@@ -162,12 +163,15 @@ export function EntityPropertyEditor(props: {
   );
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
-    const pool = [...agents(), ...team.users()];
+    const pool = [...team.users(), ...agents()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(
-      pool,
-      people(),
-      propertiesContext?.retainedAssigneeIds() ?? []
+    return peopleBeforeAgents(
+      scopedUserOptions(
+        pool,
+        people(),
+        propertiesContext?.retainedAssigneeIds() ?? []
+      ),
+      (user) => user.id
     );
   });
   const { entities } = useEntitiesForProperty(
