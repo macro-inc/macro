@@ -8,6 +8,9 @@ pub const SDK: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk.mjs")
 /// Handlebars bundled as one ES module for Deno.
 pub const HANDLEBARS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/handlebars.mjs"));
 
+/// Jimp, an image editing library, bundled as one ES module for Deno.
+pub const JIMP: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/jimp.mjs"));
+
 /// The agent SDK catalog: an index per entity and a reference per symbol, as JSON.
 pub const DOCUMENTATION: &str =
     include_str!(concat!(env!("CODE_MODE_ASSETS"), "/documentation.json"));

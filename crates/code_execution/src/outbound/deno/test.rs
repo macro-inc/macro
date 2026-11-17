@@ -277,6 +277,29 @@ async fn javascript_logs_result_and_cleanup() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_edits_an_image_with_jimp() {
+    let (_root, service) = setup(Limits::default()).await;
+    let source = r#"
+import { Jimp, JimpMime } from 'jimp';
+export async function main() {
+  const image = new Jimp({ width: 200, height: 100, color: 0xff0000ff });
+  image.resize({ w: 100 }).rotate(90).greyscale();
+  const png = await image.getBuffer(JimpMime.png);
+  const decoded = await Jimp.read(png);
+  const jpeg = await decoded.getBuffer(JimpMime.jpeg, { quality: 80 });
+  return { width: decoded.width, height: decoded.height, jpeg: jpeg.length > 0 };
+}
+"#;
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if *value == serde_json::json!({"width": 50, "height": 100, "jpeg": true})),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn links_point_at_the_deployment_web_app() {
     let (_root, service) = setup(Limits::default()).await;
     let environment = RunEnvironment {

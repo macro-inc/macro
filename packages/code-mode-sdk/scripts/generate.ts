@@ -37,6 +37,7 @@ async function artifact(name: string, output: string) {
 for (const [entry, name] of [
   ['packages/code-mode-sdk/src/index.ts', 'sdk'],
   ['node_modules/handlebars/dist/handlebars.js', 'handlebars'],
+  ['node_modules/jimp/dist/esm/index.js', 'jimp'],
 ]) {
   const result = await Bun.build({
     entrypoints: [`${root}${entry}`],
@@ -45,6 +46,36 @@ for (const [entry, name] of [
     minify: true,
     define: { 'process.env': '{}' },
     plugins: [
+      {
+        name: 'runtime-zlib',
+        setup(build) {
+          // Bun's browser target stubs zlib out, which breaks PNG encoding.
+          // Leave it as an import: the program's import map resolves it to
+          // Deno's own zlib, a pure computation.
+          build.onResolve({ filter: /^zlib$/ }, () => ({
+            path: 'zlib',
+            namespace: 'runtime-zlib',
+          }));
+          build.onResolve({ filter: /^node:zlib$/ }, () => ({
+            path: 'node:zlib',
+            external: true,
+          }));
+          build.onLoad({ filter: /.*/, namespace: 'runtime-zlib' }, () => ({
+            contents: [
+              "import zlib from 'node:zlib';",
+              'export const createDeflate = zlib.createDeflate;',
+              'export const createInflate = zlib.createInflate;',
+              'export const deflateSync = zlib.deflateSync;',
+              'export const inflateSync = zlib.inflateSync;',
+              'export const Inflate = zlib.Inflate;',
+              'export const Z_FINISH = zlib.constants.Z_FINISH;',
+              'export const Z_MIN_CHUNK = zlib.constants.Z_MIN_CHUNK;',
+              'export default zlib;',
+            ].join('\n'),
+            loader: 'js',
+          }));
+        },
+      },
       {
         name: 'explicit-service-hosts',
         setup(build) {

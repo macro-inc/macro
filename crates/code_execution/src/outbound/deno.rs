@@ -140,6 +140,7 @@ fn import_map(unattended: bool) -> String {
     imports.insert("@macro-inc/sdk".into(), "./sdk.mjs".into());
     if !unattended {
         imports.insert("handlebars".into(), "./handlebars.mjs".into());
+        imports.insert("jimp".into(), "./jimp.mjs".into());
     }
     for &name in NODE_BUILTINS {
         let target = match name {
@@ -241,6 +242,9 @@ impl DenoRunner {
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("handlebars.mjs"), code_mode_assets::HANDLEBARS)
+            .await
+            .map_err(internal)?;
+        tokio::fs::write(root.join("jimp.mjs"), code_mode_assets::JIMP)
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("timers.mjs"), TIMERS)

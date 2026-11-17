@@ -2,7 +2,7 @@
 
 ## What it is
 
-Agent code mode's generated assets: the public SDK and Handlebars bundled for
+Agent code mode's generated assets: the public SDK, Handlebars and Jimp bundled for
 Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
 method, path and whether it writes), every service the SDK can reach with its
 host in each environment, and the SDK's TypeScript declarations

@@ -12,7 +12,8 @@
 		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {
-		"handlebars": "4.7.9"
+		"handlebars": "4.7.9",
+		"jimp": "1.6.1"
 	},
 	"devDependencies": {
 		"@types/node": "^25.9.3",
