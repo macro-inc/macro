@@ -13,7 +13,6 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, PgUserApiKeyAuthorizationRepo,
     PgUserApiKeyAuthorizer,
 };
-use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -27,7 +26,11 @@ const PUBLIC: &str = include_str!(
 
 /// A sign-in route behind the guard, answering 200 when it is reached.
 fn router() -> Router {
-    let db = PgPool::connect_lazy("postgres://nobody@127.0.0.1:1/none").unwrap();
+    // Unreachable: a user API key lookup fails fast.
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_millis(200))
+        .connect_lazy("postgres://nobody@127.0.0.1:1/none")
+        .unwrap();
     let authorization = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
         MacroAuthJwtValidator::new(JwtValidationArgs::testing_macro_token("fixture", PUBLIC)),
         InternalAuthConfig {
@@ -61,9 +64,21 @@ fn token(agent: Option<Uuid>, routine: Option<Uuid>) -> String {
 }
 
 async fn sign_in(bearer: Option<&str>, code_execution: bool) -> (StatusCode, String) {
-    let mut request = Request::post("/login/passwordless");
+    sign_in_with(bearer, code_execution, &[], "/login/passwordless").await
+}
+
+async fn sign_in_with(
+    bearer: Option<&str>,
+    code_execution: bool,
+    headers: &[(&str, &str)],
+    uri: &str,
+) -> (StatusCode, String) {
+    let mut request = Request::post(uri);
     if let Some(bearer) = bearer {
         request = request.header("authorization", format!("Bearer {bearer}"));
+    }
+    for (name, value) in headers {
+        request = request.header(*name, *value);
     }
     if code_execution {
         request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
@@ -112,5 +127,34 @@ async fn a_person_signs_in_with_or_without_a_credential() {
         ("holding an invalid credential", Some("not-a-token")),
     ] {
         assert_eq!(sign_in(bearer, false).await.0, StatusCode::OK, "{who}");
+    }
+}
+
+/// A stale session cookie, a bad token in the query, or a user API key whose
+/// lookup fails all count as no credential.
+#[tokio::test]
+async fn a_credential_that_does_not_verify_never_blocks_a_sign_in() {
+    for (who, headers, uri) in [
+        (
+            "a stale session cookie",
+            vec![("cookie", "macro-access-token=stale")],
+            "/login/passwordless",
+        ),
+        (
+            "a bad token in the query",
+            vec![],
+            "/login/passwordless?macro-api-token=stale",
+        ),
+        (
+            "a user API key the store cannot check",
+            vec![(macro_authorization::USER_API_KEY_HEADER, "mk_unchecked")],
+            "/login/passwordless",
+        ),
+    ] {
+        assert_eq!(
+            sign_in_with(None, false, &headers, uri).await.0,
+            StatusCode::OK,
+            "{who}"
+        );
     }
 }

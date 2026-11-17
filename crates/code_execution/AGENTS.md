@@ -37,7 +37,8 @@ confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`).
+(`macro_authorization::is_agent_run`). The email sign-in and the MCP OAuth
+broker take no credential, so the header is what refuses a program there.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of

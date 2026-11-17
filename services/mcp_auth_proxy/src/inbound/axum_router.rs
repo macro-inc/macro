@@ -908,13 +908,12 @@ fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceI
         .with_state(auth_proxy)
 }
 
-/// Why a program may not drive the sign-in broker.
-const PROGRAM_SIGN_IN_REFUSAL: &str = "An agent's program cannot sign in to Macro: the sign-in code would give it the account. Tell the user to sign in themselves.";
-
 /// Refuse the broker to a program: one that drives the email sign-in and
 /// reads the code from the user's inbox would hold an MCP grant for the
-/// account. These routes take no Macro credential, so a program shows by the
-/// code-mode runtime's header, which it sets on every request to a Macro host.
+/// account. These routes take no Macro credential; a program shows by
+/// `x-macro-code-execution`, which the code-mode runtime sets on requests to
+/// SDK origins. The broker shares the gateway origin in dev and prod, and is
+/// not a host a program may reach locally.
 async fn refuse_programs(
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -927,7 +926,11 @@ async fn refuse_programs(
             path = request.uri().path(),
             "refused the sign-in broker to a program"
         );
-        return (axum::http::StatusCode::FORBIDDEN, PROGRAM_SIGN_IN_REFUSAL).into_response();
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            macro_authorization::PROGRAM_SIGN_IN_REFUSAL,
+        )
+            .into_response();
     }
     next.run(request).await
 }

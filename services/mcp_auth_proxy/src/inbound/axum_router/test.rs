@@ -1813,8 +1813,14 @@ async fn a_program_cannot_drive_the_sign_in_broker() {
             &flow.cookie,
             flow.form(EMAIL_ADDRESS, Some(EMAIL_CODE)),
         ),
+        post_form("/authorize", &flow.cookie, "decision=approve".to_owned()),
+        callback_request(&flow.session, Some(&flow.cookie)),
         register_request(LOOPBACK_REDIRECT_URI),
         token_request("grant_type=authorization_code&code=x"),
+        Request::post("/revoke")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from("token=x"))
+            .unwrap(),
     ];
     for mut request in requests {
         let route = format!("{} {}", request.method(), request.uri().path());
@@ -1832,4 +1838,11 @@ async fn a_program_cannot_drive_the_sign_in_broker() {
             response.body
         );
     }
+
+    let mut health = Request::get("/health").body(Body::empty()).unwrap();
+    health.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    assert_eq!(send(&flow.harness, health).await.status, StatusCode::OK);
 }
