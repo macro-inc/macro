@@ -1334,9 +1334,10 @@ Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep
 the native receipt pending until the destination route is applied; release the
 native cover for auth/retry UI without consuming the receipt. That cover exists
-only while a tap is pending: on a tap that opens the app, or a page load that
-boots into one. A tap on an app already on screen navigates in place, and
-backgrounding never covers the app. Use the existing
+only while a tap is pending: on a tap that arrives while the app is not active
+or its page has not booted, or a page load that boots into one. A tap on the
+active, booted app navigates in place, and backgrounding never covers the app.
+Use the existing
 pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in

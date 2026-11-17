@@ -30,8 +30,8 @@ and owns durable notification-tap delivery across cold launches/WebView reloads.
   it, so the previous page never shows in between. Only a tap on an active app
   whose page has booted navigates in place; read the app state when the
   response arrives, not after a main-queue hop, by which time an opening tap
-  can already be active. `phase=capture covered=` logs the decision. Never
-  cover on lifecycle changes;
+  can already be active. `phase=capture covered=` logs whether the cover is
+  up once the tap was handed to the page. Never cover on lifecycle changes;
   the app switcher and system overlays must show the app's real content.
   Auth/error screens use `release_notification_cover` without
   consuming the intent. A hidden bootstrap must never wait for foregrounding.
