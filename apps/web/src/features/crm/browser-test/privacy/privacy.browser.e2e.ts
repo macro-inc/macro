@@ -1,5 +1,20 @@
 import { expect, test } from '@playwright/test';
 
+// All API data is local to this fixture; rich previews use its seeded cache.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/*', (route) => {
+    const request = route.request();
+    if (['fetch', 'xhr'].includes(request.resourceType()))
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: '{}',
+      });
+    return route.continue();
+  });
+  await page.routeWebSocket('**/*', (socket) => socket.close());
+});
+
 const mailboxId = '00000000-0000-4000-8000-000000000045';
 for (const admin of [false, true]) {
   test(`privacy controls and exact mailbox consent for ${admin ? 'admin' : 'member'}`, async ({
@@ -168,7 +183,12 @@ test('owner can inspect and remove a private-thread exception', async ({
   await page.screenshot({
     path: testInfo.outputPath('thread-exclusion-settings.png'),
   });
+  const paneCount = await page.getByTestId('panes').getByTestId('pane').count();
   await remove.click();
+  await expect(page.getByTestId('panes').getByTestId('pane')).toHaveCount(
+    paneCount
+  );
+  await expect(dialog).toBeVisible();
   await expect(page.getByTestId('last-change')).toHaveText(
     JSON.stringify({
       action: 'set_thread_exclusion',
@@ -416,14 +436,8 @@ test('header exclusion and settings removal stay synchronized', async ({
   );
 });
 
-for (const mode of [
-  'click',
-  'row-click',
-  'shift-click',
-  'already-open',
-  'keyboard',
-]) {
-  test(`excluded thread link uses split navigation: ${mode}`, async ({
+for (const mode of ['click', 'shift-click', 'already-open', 'keyboard']) {
+  test(`excluded thread mention uses split navigation: ${mode}`, async ({
     page,
   }, info) => {
     test.skip(
@@ -432,6 +446,7 @@ for (const mode of [
     );
     await page.goto(`/?${mode === 'already-open' ? 'already-open' : ''}`);
     const panes = page.getByTestId('panes').getByTestId('pane');
+    await expect(panes.first()).toBeAttached();
     const initialCount = await panes.count();
     await page
       .getByRole('button', { name: 'Email settings', exact: true })
@@ -440,20 +455,25 @@ for (const mode of [
       name: 'Private conversation',
       exact: true,
     });
-    await expect(link).toHaveAttribute(
-      'href',
-      '/app/mail/00000000-0000-4000-8000-000000000046'
+    await expect(link.locator('[data-document-mention]')).toHaveAttribute(
+      'data-block-name',
+      'email'
     );
+    await expect(link.locator('svg')).toBeVisible();
+    await expect(link.locator('.animate-pulse')).toHaveCount(0);
     if (mode === 'keyboard') {
       await expect(page.getByRole('dialog')).not.toHaveAttribute(
         'data-opening'
       );
-      await link.focus();
+      await page
+        .getByRole('button', {
+          name: 'Remove Private conversation from excluded threads',
+          exact: true,
+        })
+        .focus();
+      await page.keyboard.press('Shift+Tab');
       await expect(link).toBeFocused();
-      await link.press('Enter');
-    } else if (mode === 'row-click') {
-      // Click the row's padding, outside the subject text and Remove button.
-      await link.locator('../../..').click({ position: { x: 4, y: 4 } });
+      await page.keyboard.press('Enter');
     } else
       await link.click({ modifiers: mode === 'shift-click' ? ['Shift'] : [] });
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -468,3 +488,61 @@ for (const mode of [
     await expect(page.getByTestId('last-change')).toBeEmpty();
   });
 }
+
+test('email mention preview opens its thread and dismisses settings', async ({
+  page,
+}, info) => {
+  test.skip(
+    info.project.name === 'phone',
+    'Touch opens accessible mentions directly.'
+  );
+  const previewInputs: unknown[] = [];
+  page.on('request', (request) => {
+    if (!request.url().endsWith('/items/soup/graphql')) return;
+    const body = request.postDataJSON();
+    if (body?.operationName === 'ItemPreviews')
+      previewInputs.push(body.variables.input);
+  });
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  const mention = page.getByRole('link', {
+    name: 'Private conversation',
+    exact: true,
+  });
+  await expect(mention).toBeVisible();
+  expect(previewInputs).toHaveLength(0);
+  await mention.hover();
+  const preview = page.getByRole('button', {
+    name: 'Private conversation',
+    exact: true,
+  });
+  await expect(preview).toBeVisible();
+  expect(previewInputs).toEqual([
+    expect.objectContaining({
+      initial: expect.objectContaining({
+        limit: 1,
+        filters: expect.objectContaining({
+          emailFilter: {
+            tree: {
+              literal: {
+                threadId: '00000000-0000-4000-8000-000000000046',
+              },
+            },
+          },
+        }),
+      }),
+    }),
+  ]);
+  await expect(dialog).toBeVisible();
+  await preview.click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.locator(
+      '[data-testid="pane"][data-content="00000000-0000-4000-8000-000000000046"]'
+    )
+  ).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('last-change')).toBeEmpty();
+});

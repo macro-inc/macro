@@ -66,6 +66,11 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
   createEmailPrivacy(): {
     createExcludedThreads(
       after: Accessor<string | undefined>

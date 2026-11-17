@@ -113,7 +113,7 @@ function ThreadExclusions(props: {
   source: PrivacySource;
   onOpenThread?: () => void;
 }) {
-  const navigation = useCrmContext().createNavigation();
+  const { EmailThreadMention } = useCrmContext();
   const [after, setAfter] = createSignal<string>();
   const query = props.source.createExcludedThreads(after);
   return (
@@ -159,30 +159,17 @@ function ThreadExclusions(props: {
           >
             {(thread) => (
               <SettingsRow
-                class="relative not-touch:hover:bg-hover"
                 label={
-                  <a
-                    class="break-words text-link focus-visible:outline-2 focus-visible:outline-accent after:absolute after:inset-0"
-                    href={`/app/mail/${thread.threadId}`}
-                    onClick={(event) => {
-                      if (event.metaKey || event.ctrlKey || event.altKey)
-                        return;
-                      event.preventDefault();
-                      navigation.openWithSplit(
-                        { type: 'email', id: thread.threadId },
-                        { activate: true, preferNewSplit: event.shiftKey }
-                      );
-                      props.onOpenThread?.();
-                    }}
-                  >
-                    {thread.subject || t('crm.privacyThreadNoSubject')}
-                  </a>
+                  <EmailThreadMention
+                    threadId={thread.threadId}
+                    subject={thread.subject || t('crm.privacyThreadNoSubject')}
+                    onOpened={props.onOpenThread}
+                  />
                 }
               >
                 <Button
                   variant="ghost"
                   size="sm"
-                  class="relative z-1"
                   disabled={props.source.update.isPending}
                   aria-label={t('crm.privacyRestoreThreadLabel', {
                     subject: thread.subject || t('crm.privacyThreadNoSubject'),

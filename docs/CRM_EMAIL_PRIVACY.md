@@ -93,9 +93,12 @@ messages, documents, or agent transcripts is not retroactively redacted.
   action beside sharing in its menu, or the desktop icon before the reminder
   bell. Both explain when ownership or mailbox consent prevents exclusion.
   **Email settings → Excluded threads** lists only their own exclusions, fifty
-  per page. Each row opens its thread; **Remove** clears the exclusion without
-  opening the thread, including after mailbox sharing is turned off. Removing an exception
-  restores eligibility only if consent and every other exclusion still allow it.
+  per page. Each thread uses the existing email mention (icon, subject, hover
+  preview, and split navigation). Inline titles come from the owner-scoped list;
+  full previews load only when opened. **Remove** clears the exclusion without
+  opening the thread, including after mailbox sharing is turned off. Removing
+  an exception restores eligibility only if consent and every other exclusion
+  still allow it.
   The same controls are available in the phone menu and settings drawer.
   `GET /crm/email-privacy/threads?thread_id=<uuid>` returns zero or one own
   exclusion for the header, with no continuation; `after` and `thread_id` are

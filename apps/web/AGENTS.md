@@ -832,9 +832,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   immediately before the reminder bell in desktop thread headers. Disable it
   with the same reason unless the member contributes that exact mailbox; show
   excluded state and allow removal even after consent is withdrawn.
-  **Excluded threads** settings rows open via
-  shared split navigation and dismiss the phone Settings sheet; keep **Remove**
-  independent of the row link.
+  Render **Excluded threads** with the existing email mention component,
+  including its preview and split navigation, and dismiss the phone Settings
+  sheet after opening; keep **Remove** independent of the mention. Supply the
+  owner-authorized row title inline and load full previews only on interaction.
   Read only the consent projection and exact thread lookup for thread controls;
   keep their owner/session CRM cache keys synchronized by the privacy mutation.
   Use the shared privacy mutation so contact/company contribution email readers

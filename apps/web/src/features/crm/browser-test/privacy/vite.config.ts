@@ -17,11 +17,6 @@ function navigationStandIns(): Plugin {
     name: 'privacy-navigation-stand-ins',
     enforce: 'pre',
     resolveId(source) {
-      if (
-        source.endsWith('/constant/allBlocks') ||
-        source === './constant/allBlocks'
-      )
-        return `${directory}/navigation-stand-ins.tsx`;
       if (source.endsWith('componentRegistry'))
         return `${directory}/navigation-stand-ins.tsx`;
       if (

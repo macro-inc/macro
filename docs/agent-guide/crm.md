@@ -741,11 +741,13 @@ teammate's copy of the same conversation may still appear, including the same
 messages. Separately granted thread access is also unaffected.
 Sales Email uses your own mailbox, so your copy remains visible there too.
 
-Open **Email settings → Excluded threads** to see your exclusions. Click a
-row to open its thread, reusing a split that already shows it; Shift-click
-requests another split when the thread is not already open. On phones the Settings
-sheet closes to reveal the thread. **Remove** makes that thread eligible again when your consent and
-other privacy settings permit; restoration also queues a backfill. Use **Next
+Open **Email settings → Excluded threads** to see your exclusions. Each thread
+is an email mention with the same icon, subject, and hover preview as mentions
+in documents and channels. Click or press Enter to open it, reusing a split that
+already shows it. Desktop clicks and Shift-clicks prefer a new split when it is
+not already open; phones navigate in place. On phones the Settings
+sheet closes to reveal the thread. **Remove** makes that thread eligible again
+when your consent and other privacy settings permit; restoration also queues a backfill. Use **Next
 page** for further exceptions and **Back to first page** to return. Other members
 cannot see or change your exclusion list. **Remove** never opens the thread;
 the empty list says **No excluded threads.** Company and contact records and their

@@ -6,7 +6,13 @@ import type {
   EmailPrivacy,
   EmailPrivacyChange,
 } from '../../core/email-privacy';
+import { EmailThreadMention } from '../../email-thread-mention';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
+
+// Rich mentions import the same optional capabilities as other app references.
+export * from '@app/lib/analytics/posthog.tsx';
+export * from '@core/context/user.ts';
+export * from '@queries/team/teams.ts';
 
 const params = new URLSearchParams(location.search);
 export const mailboxId = '00000000-0000-4000-8000-000000000045';
@@ -65,6 +71,7 @@ const [threads, setThreads] = createSignal([
     : []),
 ]);
 export const useCrmContext = () => ({
+  EmailThreadMention,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
       {
@@ -84,12 +91,23 @@ export const useCurrentTeamQuery = () => ({
     ? undefined
     : { team: { id: '00000000-0000-4000-8000-000000000048' } },
 });
+export const useIsTeamAdmin = () => () => params.has('admin');
 export const useUserId = () => () => 'member@example.com';
+export const useEmail = () => () => 'member@example.com';
+export const useAuthor = () => () => 'Example Member';
+export const useLicenseStatus = () => () => undefined;
 export const useIsAuthenticated = () => () => true;
+export const usePosthog = () => ({
+  instance: { capture() {} },
+  featureFlags: () => [],
+  flagsLoaded: () => true,
+  flagsUnreachable: () => false,
+});
 export const [lastToast, setLastToast] = createSignal('');
 export const toast = { success: setLastToast, failure: setLastToast };
-export const useFeatureFlag = () => () => ({
-  enabled: !params.has('flag-off'),
+export const useFeatureFlag = (flag: { key: string }) => () => ({
+  enabled:
+    flag.key === 'enable-crm-thread-exclusions' && !params.has('flag-off'),
   loading: false,
 });
 function response() {

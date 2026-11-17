@@ -2,7 +2,9 @@ import '../../../../index.css';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { previewKeys } from '@queries/preview/keys';
+import { Route, Router } from '@solidjs/router';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -19,6 +21,19 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'member@example.com',
   authenticated: true,
 });
+for (const [id, name] of [
+  ['00000000-0000-4000-8000-000000000046', 'Private conversation'],
+  ['00000000-0000-4000-8000-000000000047', 'Another private conversation'],
+]) {
+  queryClient.setQueryData(previewKeys.item(id).queryKey, {
+    id,
+    type: 'email',
+    access: 'access',
+    loading: false,
+    name,
+    rawName: name,
+  });
+}
 
 function Fixture() {
   const [open, setOpen] = createSignal(false);
@@ -41,10 +56,17 @@ const root = document.getElementById('root');
 if (root)
   render(
     () => (
-      <QueryClientProvider client={new QueryClient()}>
-        <PrivacyNavigationFixture>
-          <Fixture />
-        </PrivacyNavigationFixture>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <Route
+            path="*"
+            component={() => (
+              <PrivacyNavigationFixture>
+                <Fixture />
+              </PrivacyNavigationFixture>
+            )}
+          />
+        </Router>
       </QueryClientProvider>
     ),
     root
