@@ -226,7 +226,7 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** Search chats by name and content, most relevant first, auto-paginated. */
+  /** Search chats by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { chat_filters: {} },
     type: 'chat',

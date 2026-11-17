@@ -1,4 +1,4 @@
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Team } from '../teams/team';
 import { SavedView, type SavedViewConfig } from './saved-view';
@@ -47,7 +47,7 @@ export class SavedViewsNamespace {
   }
 
   /**
-   * The saved views you can see, in your own order, auto-paginated: placed
+   * The saved views you can see, in your own order, auto-paginated (`maxItems` caps the total): placed
    * views first, then by creation time. Each handle already holds its record.
    *
    * @readonly
@@ -55,20 +55,23 @@ export class SavedViewsNamespace {
   list(opts?: {
     /** Only views of this kind, such as `email`. */
     kind?: string;
+    maxItems?: number;
   }): AsyncGenerator<SavedView> {
-    return paginate(async (after?: string) => {
-      const page = unwrap(
-        await this.client.storage.listSavedViewDefinitions({
-          query: { kind: opts?.kind, first: PAGE_SIZE, after },
-        }),
-      );
-      return {
-        items: page.views.map((record) =>
-          SavedView.fromRecord(this.client, record),
-        ),
-        nextCursor: page.nextCursor,
-      };
-    });
+    return iterate('savedViews.list', opts, { kind: true }, () =>
+      paginate(async (after?: string) => {
+        const page = unwrap(
+          await this.client.storage.listSavedViewDefinitions({
+            query: { kind: opts?.kind, first: PAGE_SIZE, after },
+          }),
+        );
+        return {
+          items: page.views.map((record) =>
+            SavedView.fromRecord(this.client, record),
+          ),
+          nextCursor: page.nextCursor,
+        };
+      }),
+    );
   }
 
   /**

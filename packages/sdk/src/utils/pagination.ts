@@ -1,3 +1,6 @@
+import { rejectUnknownOptions } from './options';
+import { MacroError } from './unwrap';
+
 /** One page of a cursor-paginated list. */
 export interface Page<T, Cursor = string> {
   items: T[];
@@ -27,4 +30,54 @@ export async function* paginate<T, Cursor = string>(
     yield* page.items;
     cursor = nextCursor;
   } while (cursor !== undefined);
+}
+
+/** The option every auto-paginating iterator takes. */
+export interface IterationOptions {
+  /**
+   * Yield at most this many items in all, then stop without fetching another
+   * page. A page size (`pageSize`, or `limit` where an iterator calls it that)
+   * sets only how many items one request returns.
+   */
+  maxItems?: number;
+}
+
+/**
+ * An auto-paginating iterator's public entry: rejects options it does not
+ * take (code-mode programs are untyped, so a wrong key would be dropped
+ * silently), checks `maxItems`, and yields at most that many items from
+ * `source`. Throws at the call, before any request.
+ */
+export function iterate<T, Options extends IterationOptions>(
+  method: string,
+  options: Options | undefined,
+  allowed: Record<Exclude<keyof Options, 'maxItems'>, true>,
+  source: () => AsyncIterable<T>,
+): AsyncGenerator<T> {
+  const given = options ?? ({} as Options);
+  rejectUnknownOptions(method, given, {
+    ...allowed,
+    maxItems: true,
+  } as Record<keyof Options, true>);
+  const { maxItems } = given;
+  if (maxItems !== undefined && !(Number.isInteger(maxItems) && maxItems > 0))
+    throw new MacroError(
+      `${method}: \`maxItems\` must be a positive whole number, not ${maxItems}.`,
+    );
+  return upTo(source(), maxItems);
+}
+
+async function* upTo<T>(
+  items: AsyncIterable<T>,
+  maxItems: number | undefined,
+): AsyncGenerator<T> {
+  if (maxItems === undefined) {
+    yield* items;
+    return;
+  }
+  let yielded = 0;
+  for await (const item of items) {
+    yield item;
+    if (++yielded >= maxItems) return;
+  }
 }

@@ -198,7 +198,7 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     );
   }
 
-  /** Search projects by name and content, most relevant first, auto-paginated. */
+  /** Search projects by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { project_filters: {} },
     type: 'project',

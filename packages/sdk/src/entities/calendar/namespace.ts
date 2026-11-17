@@ -21,7 +21,7 @@ import type {
   ListTeamCalendarData,
   ListTeamOutOfOfficeData,
 } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Link } from '../email/link';
 import { User } from '../users/user';
@@ -185,7 +185,7 @@ export class CalendarNamespace {
 
   /** Occurrences on every calendar the user can see: their schedule is only
    * `contributesToAvailability` rows and meetings they attend; call the rest
-   * by `calendarName`. Automatically paginated within the viewport. Each names
+   * by `calendarName`. Automatically paginated within the viewport; `maxItems` caps the total. Each names
    * its calendar (`calendarName`), whether a calendar holding it is on the
    * user's schedule (`contributesToAvailability`), the address of the
    * connected inbox holding that copy of the event (`inbox`) and whether the
@@ -219,33 +219,42 @@ export class CalendarNamespace {
    *
    * @readonly
    */
-  occurrences(options: Omit<ListOccurrencesData['query'], 'cursor'>) {
+  occurrences(
+    options: Omit<ListOccurrencesData['query'], 'cursor'> & IterationOptions,
+  ) {
+    const { maxItems: _maxItems, ...query } = options;
     let calendars: Promise<Map<string, VisibleCalendar>> | undefined;
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.storage.listOccurrences({
-          query: { ...options, cursor },
-        }),
-      );
-      calendars ??= visibleCalendars(this.client);
-      const calendarById = await calendars;
-      return {
-        items: page.items.map((item) => {
-          const calendar = item.event.calendarId
-            ? calendarById.get(item.event.calendarId)
-            : undefined;
+    return iterate(
+      'calendar.occurrences',
+      options,
+      { start: true, end: true, startDate: true, endDate: true, limit: true },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await this.client.storage.listOccurrences({
+              query: { ...query, cursor },
+            }),
+          );
+          calendars ??= visibleCalendars(this.client);
+          const calendarById = await calendars;
           return {
-            event: CalendarEvent.fromRecord(this.client, item.event),
-            occurrence: item.occurrence,
-            calendarName: calendar?.name,
-            contributesToAvailability: onSchedule(item.event, calendarById),
-            inbox: calendar?.emailAddress,
-            role: eventRole(item.event, calendarById),
+            items: page.items.map((item) => {
+              const calendar = item.event.calendarId
+                ? calendarById.get(item.event.calendarId)
+                : undefined;
+              return {
+                event: CalendarEvent.fromRecord(this.client, item.event),
+                occurrence: item.occurrence,
+                calendarName: calendar?.name,
+                contributesToAvailability: onSchedule(item.event, calendarById),
+                inbox: calendar?.emailAddress,
+                role: eventRole(item.event, calendarById),
+              };
+            }),
+            nextCursor: page.nextCursor,
           };
         }),
-        nextCursor: page.nextCursor,
-      };
-    });
+    );
   }
 
   /**

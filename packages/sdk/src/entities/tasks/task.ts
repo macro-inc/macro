@@ -254,7 +254,7 @@ export class Task extends Document {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }
 
-  /** Search tasks by name and content, most relevant first, auto-paginated. */
+  /** Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
     type: 'document',

@@ -2,12 +2,13 @@ import type {
   ActivityWireRow,
   AgentActivityCursor,
 } from '../../../generated/agent-harness/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import type { AgentSession } from './agent-session';
 
 /** Page options for recorded session activity, newest first. */
-export type AgentActivityOptions = {
+export type AgentActivityOptions = IterationOptions & {
   /** Page size, from 1 to 100; defaults to 50. */
   limit?: number;
   /** Restrict to one code-mode invocation belonging to this session. */
@@ -37,11 +38,15 @@ export class AgentInvocation {
   }
 
   /**
-   * Recorded activity caused by this invocation, lazily paginated.
+   * Recorded activity caused by this invocation, lazily paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   activity(options: Omit<AgentActivityOptions, 'invocation'> = {}) {
+    rejectUnknownOptions('invocation.activity', options, {
+      limit: true,
+      maxItems: true,
+    });
     return sessionActivity(this.client, this.parent, {
       ...options,
       invocation: this,
@@ -71,26 +76,32 @@ export function sessionActivity(
   if (options.invocation && options.invocation.session().id !== session.id) {
     throw new Error('Activity invocation must belong to this session');
   }
-  return paginate<AgentActivity, AgentActivityCursor>(async (cursor) => {
-    const page = unwrap(
-      await client.agentHarness.getAgentSessionActivity({
-        path: { session_id: session.id },
-        query: {
-          limit: options.limit,
-          agentCorrelationId: options.invocation?.id,
-          beforeAt: cursor?.occurredAt,
-          beforeId: cursor?.id,
-        },
-      }),
-    );
-    return {
-      items: page.activities.map((snapshot) => ({
-        snapshot,
-        invocation: snapshot.agent_correlation_id
-          ? AgentInvocation.byId(client, session, snapshot.agent_correlation_id)
-          : undefined,
-      })),
-      nextCursor: page.nextCursor,
-    };
-  });
+  return iterate('activity', options, { limit: true, invocation: true }, () =>
+    paginate<AgentActivity, AgentActivityCursor>(async (cursor) => {
+      const page = unwrap(
+        await client.agentHarness.getAgentSessionActivity({
+          path: { session_id: session.id },
+          query: {
+            limit: options.limit,
+            agentCorrelationId: options.invocation?.id,
+            beforeAt: cursor?.occurredAt,
+            beforeId: cursor?.id,
+          },
+        }),
+      );
+      return {
+        items: page.activities.map((snapshot) => ({
+          snapshot,
+          invocation: snapshot.agent_correlation_id
+            ? AgentInvocation.byId(
+                client,
+                session,
+                snapshot.agent_correlation_id,
+              )
+            : undefined,
+        })),
+        nextCursor: page.nextCursor,
+      };
+    }),
+  );
 }

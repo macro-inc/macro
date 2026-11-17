@@ -82,7 +82,7 @@ export class TaskNamespace {
   }
 
   /**
-   * Search tasks by name and content, most relevant first, auto-paginated.
+   * Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */

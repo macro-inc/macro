@@ -1,5 +1,5 @@
 import type { InitiativePageRow } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { User } from '../users/user';
 import { Initiative, type InitiativeOptions } from './initiative';
@@ -53,7 +53,7 @@ function optionName<Name extends string>(
 }
 
 /** Filters and order for {@link InitiativeNamespace.list}. */
-export interface InitiativeListOptions {
+export interface InitiativeListOptions extends IterationOptions {
   /** Case-insensitive substring of the name. */
   query?: string;
   /** Only initiatives with this Status. */
@@ -113,12 +113,31 @@ export class InitiativeNamespace {
    * Initiatives the caller can view that match every given filter, with their
    * name, Status, Priority, assignees, due date and progress over the tasks the
    * caller can view; most recently updated first unless `sort` says otherwise.
-   * Iterate with `for await`; pages load as the loop advances.
+   * Iterate with `for await`; pages load as the loop advances, and `maxItems` caps the total.
    *
    * @readonly
    */
-  async *list(
-    options: InitiativeListOptions = {},
+  list(options: InitiativeListOptions = {}): AsyncGenerator<InitiativeListing> {
+    return iterate(
+      'initiatives.list',
+      options,
+      {
+        query: true,
+        status: true,
+        priority: true,
+        assignee: true,
+        dueAfter: true,
+        dueBefore: true,
+        sort: true,
+        descending: true,
+        limit: true,
+      },
+      () => this.listPages(options),
+    );
+  }
+
+  private async *listPages(
+    options: InitiativeListOptions,
   ): AsyncGenerator<InitiativeListing> {
     const query = {
       query: options.query,

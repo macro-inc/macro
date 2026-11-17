@@ -4,7 +4,7 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { CalendarEvent } from '../calendar/event';
@@ -105,14 +105,37 @@ export class SearchNamespace {
   }
 
   /**
-   * Every match across every kind of item, most relevant first, auto-paginated.
+   * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
    * Break a `for await` loop to stop; no further page is fetched.
    *
    * @readonly
    */
-  async *all(
+  all(
     query: string,
-    options: SearchOptions = {},
+    options: SearchOptions & IterationOptions = {},
+  ): AsyncGenerator<SearchResult> {
+    const { maxItems: _maxItems, ...search } = options;
+    return iterate(
+      'search.all',
+      options,
+      {
+        types: true,
+        searchOn: true,
+        matchType: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        agentSessions: true,
+        calendarScope: true,
+        pageSize: true,
+      },
+      () => this.allPages(query, search),
+    );
+  }
+
+  private async *allPages(
+    query: string,
+    options: SearchOptions,
   ): AsyncGenerator<SearchResult> {
     const scope = new WorkspaceQuery(this.client);
     const body = await this.request(scope, query, options);

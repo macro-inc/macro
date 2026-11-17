@@ -10,6 +10,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
+import type { SearchOpts } from '../search/options';
 import { Team } from '../teams/team';
 import { Company } from './company';
 import { Contact } from './contact';
@@ -254,11 +255,11 @@ export class CrmNamespace {
   }
 
   /**
-   * Search CRM companies by name/domain, most relevant first, auto-paginated.
+   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  searchCompanies(query: string): AsyncGenerator<Company> {
-    return Company.search(this.client, query);
+  searchCompanies(query: string, opts?: SearchOpts): AsyncGenerator<Company> {
+    return Company.search(this.client, query, opts);
   }
 }

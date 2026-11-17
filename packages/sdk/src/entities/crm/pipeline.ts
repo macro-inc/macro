@@ -11,7 +11,14 @@ import type {
   StorageRowsQuery,
   TableDetail,
 } from '../../../generated/storage/types.gen';
-import { Lazy, MacroNotFoundError, paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  Lazy,
+  MacroNotFoundError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
@@ -274,51 +281,63 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Rows in pipeline order, automatically paginated.
+   * Rows in pipeline order, automatically paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  rows(): AsyncGenerator<PipelineRow> {
-    return paginate(async (after) => {
-      const page = unwrap(
-        await this.client.storage.getCrmPipelineRows({
-          path: { id: this.id },
-          query: { after },
-        }),
-      );
-      return {
-        items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
-        nextCursor: page.next,
-      };
-    });
+  rows(opts?: IterationOptions): AsyncGenerator<PipelineRow> {
+    return iterate('pipeline.rows', opts, {}, () =>
+      paginate(async (after) => {
+        const page = unwrap(
+          await this.client.storage.getCrmPipelineRows({
+            path: { id: this.id },
+            query: { after },
+          }),
+        );
+        return {
+          items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
+          nextCursor: page.next,
+        };
+      }),
+    );
   }
 
   /**
-   * Query pipeline rows, optionally restricting the query to typed row handles.
+   * Query pipeline rows, optionally restricting the query to typed row handles; `maxItems` caps the total.
    *
    * @readonly
    */
   queryRows(
-    options: { query?: StorageRowsQuery['query']; rows?: PipelineRow[] } = {},
+    options: {
+      query?: StorageRowsQuery['query'];
+      rows?: PipelineRow[];
+      maxItems?: number;
+    } = {},
   ): AsyncGenerator<PipelineRow> {
     if (options.rows?.some((r) => r.pipeline.id !== this.id))
       throw new Error('Rows belong to another pipeline');
-    return paginate(async (after) => {
-      const page = unwrap(
-        await this.client.storage.queryCrmPipelineRows({
-          path: { id: this.id },
-          body: {
-            after,
-            query: options.query,
-            rowIds: options.rows?.map((r) => r.id),
-          },
+    return iterate(
+      'pipeline.queryRows',
+      options,
+      { query: true, rows: true },
+      () =>
+        paginate(async (after) => {
+          const page = unwrap(
+            await this.client.storage.queryCrmPipelineRows({
+              path: { id: this.id },
+              body: {
+                after,
+                query: options.query,
+                rowIds: options.rows?.map((r) => r.id),
+              },
+            }),
+          );
+          return {
+            items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
+            nextCursor: page.next,
+          };
         }),
-      );
-      return {
-        items: page.rows.map((r) => PipelineRow.from(this.client, this, r)),
-        nextCursor: page.next,
-      };
-    });
+    );
   }
 
   /**
@@ -731,12 +750,12 @@ export class PipelineTable extends MacroEntity<TableDetail> {
   }
 
   /**
-   * Rows from the authorized pipeline surface.
+   * Rows from the authorized pipeline surface; `maxItems` caps the total.
    *
    * @readonly
    */
-  rows(): AsyncGenerator<PipelineRow> {
-    return this.pipeline.rows();
+  rows(opts?: IterationOptions): AsyncGenerator<PipelineRow> {
+    return this.pipeline.rows(opts);
   }
 }
 

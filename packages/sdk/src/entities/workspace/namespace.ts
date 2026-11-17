@@ -1,5 +1,5 @@
 import type { PostSoupAstRequest } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { properties, workspaceItem } from './items';
 import { WorkspaceQuery } from './query';
@@ -96,15 +96,48 @@ export class WorkspaceNamespace {
   }
 
   /**
-   * Every matching item, newest first by default, auto-paginated. `limit` is a
-   * page size, not a total result limit.
+   * Every matching item, newest first by default, auto-paginated; `maxItems` caps the total. `limit` is a
+   * page size; `maxItems` caps the total.
    * Break a `for await` loop to stop; no speculative next page is fetched.
    * Tag/inbox resolution is reused within this iterator.
    *
    * @readonly
    */
-  async *list(
-    options: WorkspaceListOptions = {},
+  list(
+    options: WorkspaceListOptions & IterationOptions = {},
+  ): AsyncGenerator<WorkspaceItem> {
+    const { maxItems: _maxItems, ...list } = options;
+    return iterate(
+      'workspace.list',
+      options,
+      {
+        df: true,
+        pf: true,
+        cf: true,
+        ef: true,
+        chanf: true,
+        cthf: true,
+        callf: true,
+        fef: true,
+        calf: true,
+        asf: true,
+        propf: true,
+        includeTypes: true,
+        favoritesOnly: true,
+        sortBy: true,
+        limit: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        emailPreset: true,
+        emailView: true,
+      },
+      () => this.listPages(list),
+    );
+  }
+
+  private async *listPages(
+    options: WorkspaceListOptions,
   ): AsyncGenerator<WorkspaceItem> {
     const query = new WorkspaceQuery(this.client);
     const body = await query.body(options);
