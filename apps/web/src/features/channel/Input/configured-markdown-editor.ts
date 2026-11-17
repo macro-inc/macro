@@ -3,7 +3,6 @@ import {
   FORM_ACTION,
 } from '@app/features/block-form/composer-actions';
 import type { Action } from '@core/component/LexicalMarkdown/plugins/actions/types';
-import { enableForms, isFeatureEnabled } from '@core/constant/featureFlags';
 import {
   createConfiguredMessageEditor,
   type MessageEditorOptions,
@@ -14,7 +13,6 @@ import {
  * (`sendMessage`) also offers `/poll`, which posts the poll at once.
  */
 export function channelComposerActions(sendMessage?: () => void): Action[] {
-  if (!isFeatureEnabled(enableForms)) return [];
   return sendMessage
     ? [createPollAction(sendMessage), FORM_ACTION]
     : [FORM_ACTION];

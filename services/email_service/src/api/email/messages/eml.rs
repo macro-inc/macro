@@ -45,10 +45,11 @@ impl utoipa::ToSchema for EmlFile {}
             (status = 503, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(eml_bytes = tracing::field::Empty), err)]
+#[tracing::instrument(skip(ctx, authorization, headers), fields(eml_bytes = tracing::field::Empty), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Response, AttachmentApiError> {
     let source = ctx
@@ -56,6 +57,19 @@ pub async fn handler(
         .download(&authorization.authorization.user.macro_user_id, id)
         .await?;
     tracing::Span::current().record("eml_bytes", source.bytes.len());
+    // The raw message carries the code itself; a program reads Macro's
+    // sign-in emails only redacted, through the JSON message routes.
+    if macro_authorization::is_program_run(authorization.authorization.user.attribution(), &headers)
+        && models_email::sign_in_email::is_macro_sign_in_eml(&source.bytes)
+    {
+        return Ok((
+            axum::http::StatusCode::FORBIDDEN,
+            axum::Json(ErrorResponse {
+                message: models_email::sign_in_email::HIDDEN_SIGN_IN_EMAIL.into(),
+            }),
+        )
+            .into_response());
+    }
     Ok((
         [
             (header::CONTENT_TYPE, EML_CONTENT_TYPE.to_owned()),

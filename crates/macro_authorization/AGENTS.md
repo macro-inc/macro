@@ -85,6 +85,7 @@ the account, or changes its managers.
 
 ## Gotchas
 
+- `rewrite_program_json` rewrites a JSON response only for a program's request (`request_is_program`: the header, or the request's own user token, from `request_credential`, signed for an agent or routine run). Layer it inside compression, so it reads the handler's JSON.
 - Both extractors read the request's credential only through
   `macro_auth::credential::request_credential`, the same reading the agent
   scope check (`agent_correlation`) uses, so the two can't disagree. A user

@@ -241,9 +241,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 export type NavItemGates = {
   showNotifications: boolean;
   showForYou: boolean;
-  showCalendar: boolean;
-  showScheduling: boolean;
-  showCustomers: boolean;
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
@@ -260,9 +257,6 @@ export const isNavItemAvailable = (
 ): boolean => {
   if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'for-you') return gates.showForYou;
-  if (item.id === 'calendar') return gates.showCalendar;
-  if (item.id === 'booking-links') return gates.showScheduling;
-  if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
@@ -351,9 +345,8 @@ export const moreMenuItems = (gates: NavItemGates): SidebarNextMenuItem[] =>
 /**
  * The nav buttons currently on the outer rail.
  *
- * Gates are passed in rather than read here: both are PostHog-backed, and the
- * imperative `ENABLE_CRM()` / `ENABLE_CALENDAR_UI()` readers call
- * `isFeatureEnabled` without tracking it, so a flag that resolves after mount
+ * Gates are passed in rather than read here: they are PostHog-backed, and
+ * `isFeatureEnabled` does not track them, so a flag that resolves after mount
  * would never reach the rendered list. Callers subscribe with `useFeatureFlag`.
  */
 export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>

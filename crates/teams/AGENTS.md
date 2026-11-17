@@ -94,6 +94,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Inviting, creating an invite link, patching the team (roles, CRM access, default share scope), changing a member's plan, and the auto-join-domain and non-admin-invite toggles refuse an agent's program or a bot (`refuse_programs` in `inbound/axum_router.rs`, `macro_authorization::is_program_run`, 403). A person does those in Settings, Team; an agent account's own key counts as a person.
 - Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.
 

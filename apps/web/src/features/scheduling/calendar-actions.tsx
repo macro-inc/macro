@@ -1,9 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute } from '@app/routes/routes';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -128,10 +126,8 @@ export function CalendarSchedulingActions(props: {
   compact?: boolean;
 }) {
   return (
-    <ShowFeatureFlag flag={enableCalendarScheduling}>
-      <Suspense>
-        <Actions sidebar={props.sidebar} compact={props.compact} />
-      </Suspense>
-    </ShowFeatureFlag>
+    <Suspense>
+      <Actions sidebar={props.sidebar} compact={props.compact} />
+    </Suspense>
   );
 }
