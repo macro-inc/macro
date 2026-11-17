@@ -22,8 +22,8 @@ use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
 use entity_registry::NonUserOwners;
 use ip_extractor::{ClientIp, ClientIpError};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    MacroUserAuthentication, UserOnly,
+    CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, MacroUserAuthentication, UserOnly,
 };
 use macro_uuid::Uuid;
 use serde::Serialize;
@@ -121,9 +121,11 @@ where
 
 /// Who asks: the routine's owner in person, or an agent's code, a routine's
 /// run or a bot, read from the request's verified credential: a person's own
-/// session (never an API token) with no agent context on the request.
+/// session (never an API token), signed for no agent or routine run, with no
+/// agent context on the request.
 fn managing_caller(user: &MacroUserAuthentication) -> ManagingCaller {
     let agent = !user.is_human_session()
+        || user.attribution() != CredentialAttribution::Person
         || agent_correlation::context::current().is_some()
         || agent_correlation::context::current_session().is_some()
         || agent_correlation::context::current_scope().is_some()

@@ -513,3 +513,96 @@ fn only_a_persons_own_session_manages_a_webhook() {
     attributed.agent_id = Some(bot_id::BotId::TEST_A);
     assert_eq!(managing_caller(&attributed), ManagingCaller::Agent);
 }
+
+/// Refuses whoever the router calls a program, as the domain does, and
+/// answers the owner in person with "not found"; records whom it was given.
+#[derive(Default)]
+struct Manages(Mutex<Vec<ManagingCaller>>);
+
+impl Manages {
+    fn answer(&self, caller: ManagingCaller) -> WebhookManagementError {
+        self.0.lock().unwrap().push(caller);
+        match caller {
+            ManagingCaller::Agent => WebhookManagementError::NotOwnerInPerson,
+            ManagingCaller::Person => WebhookManagementError::NotFound,
+        }
+    }
+}
+
+impl RoutineWebhookService for Manages {
+    async fn status(
+        &self,
+        _: &EntityAccessReceipt<EditAccessLevel>,
+        caller: ManagingCaller,
+    ) -> Result<Option<WebhookInfo>, WebhookManagementError> {
+        Err(self.answer(caller))
+    }
+    async fn mint(
+        &self,
+        _: &EntityAccessReceipt<EditAccessLevel>,
+        caller: ManagingCaller,
+    ) -> Result<MintedWebhook, WebhookManagementError> {
+        Err(self.answer(caller))
+    }
+    async fn remove(
+        &self,
+        _: &EntityAccessReceipt<EditAccessLevel>,
+        caller: ManagingCaller,
+    ) -> Result<bool, WebhookManagementError> {
+        Err(self.answer(caller))
+    }
+    async fn receive(&self, _: DeliveryRequest<'_>) -> Result<Delivered, DeliveryError> {
+        unimplemented!()
+    }
+}
+
+#[tokio::test]
+async fn a_credential_signed_for_a_routine_run_cannot_manage_a_url() {
+    use crate::inbound::axum_router::test::{FakeAuth, FakeEntityAccessService, request};
+
+    let service = Arc::new(Manages::default());
+    let app = webhook_management_router::<_, _, _, ()>(WebhookRouterState {
+        service: Arc::clone(&service),
+        access_service: Arc::new(FakeEntityAccessService::owner_only()),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
+        public_base: Arc::from("https://example.test/scheduled-action"),
+    });
+    let uri = format!("/scheduled-actions/{}/webhook", generate_uuid_v7());
+    // Read, make, replace (a second make) and delete.
+    let methods = ["GET", "POST", "POST", "DELETE"];
+    let answers = async |token: &str| {
+        let mut answers = Vec::new();
+        for method in methods {
+            answers.push(request(&app, method, &uri, token, json!(null)).await);
+        }
+        answers
+    };
+
+    let refused = answers("agent").await;
+    assert!(
+        refused
+            .iter()
+            .all(|(status, _)| *status == StatusCode::FORBIDDEN),
+        "{refused:?}"
+    );
+    // A run's API token, and a run's credential arriving as a session.
+    for token in ["routine", "routine-session"] {
+        assert_eq!(answers(token).await, refused, "{token}");
+    }
+    let owner = answers("owner").await;
+    assert!(
+        owner
+            .iter()
+            .all(|(status, _)| *status == StatusCode::NOT_FOUND),
+        "{owner:?}"
+    );
+    let callers = service.0.lock().unwrap().clone();
+    assert_eq!(
+        callers,
+        [
+            [ManagingCaller::Agent; 12].as_slice(),
+            &[ManagingCaller::Person; 4]
+        ]
+        .concat()
+    );
+}
