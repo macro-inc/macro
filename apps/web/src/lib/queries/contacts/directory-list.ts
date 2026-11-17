@@ -42,7 +42,8 @@ export function createContactDirectoryList(
   const trace = createContactSearchTrace(
     reader ?? readContactDirectory,
     MAX_LISTED_CONTACTS,
-    eligible
+    eligible,
+    () => options.resetKey?.()
   );
   createEffect(
     on(enabled, (active) => {

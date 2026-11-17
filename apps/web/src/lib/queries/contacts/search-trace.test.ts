@@ -136,6 +136,7 @@ it('records one span per search with its pages, empty run, source and end', asyn
   expect(search.attributes).toEqual({
     'contacts.mode': 'property',
     'contacts.query_length': 4,
+    'contacts.repeat': false,
     'contacts.outcome': 'end',
     'contacts.reached_end': true,
     'contacts.source': 'server',
@@ -151,9 +152,18 @@ it('records one span per search with its pages, empty run, source and end', asyn
   });
   expect(search.endTime! - search.startTime!).toBe(60);
 
-  // A re-read of the first page after the end is not a new search.
-  await readPages(trace.read, 'rare', [0]);
-  expect(telemetry.spans).toHaveLength(1);
+  // Reading the same input again, as a reopened picker or a re-read after a
+  // contact change does, is a new search marked as a repeat, scan included.
+  await readPages(trace.read, 'rare', [0, 1, 2]);
+  trace.close();
+  expect(telemetry.spans).toHaveLength(2);
+  expect(telemetry.spans[1].attributes).toMatchObject({
+    'contacts.repeat': true,
+    'contacts.outcome': 'closed',
+    'contacts.pages': 3,
+    'contacts.max_empty_run': 2,
+  });
+  expect(telemetry.spans[1].children).toBe(3);
 });
 
 it('ends a search when the query changes or the list closes, before its end', async () => {
@@ -210,8 +220,32 @@ it('counts a page with only ineligible or already listed rows as empty, and ends
     'contacts.outcome': 'bound',
     'contacts.listed': 3,
   });
+});
 
-  // Nothing after the end of a search starts another.
-  await readPages(trace.read, '', [3]);
+it('lists pages as the list does when page one is read again', async () => {
+  vi.useFakeTimers();
+  let firstPage = [person(0), person(1)];
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => ({
+      query: request.query,
+      source: 'cache',
+      sync: 'partial',
+      offline: false,
+      users: request.cursor ? [person(1), person(2)] : firstPage,
+      nextCursor: cursor(request.query, 1),
+    }));
+  const trace = createContactSearchTrace(reader, 500, (users) => users);
+  await readPages(trace.read, '', [0]);
+  // A contact change re-reads page one without a row listed before.
+  firstPage = [person(0)];
+  await readPages(trace.read, '', [0, 1]);
+  trace.close();
+  // The next page lists that row again, so it is not empty.
   expect(telemetry.spans).toHaveLength(1);
+  expect(telemetry.spans[0].attributes).toMatchObject({
+    'contacts.pages': 3,
+    'contacts.empty_pages': 0,
+    'contacts.listed': 3,
+  });
 });

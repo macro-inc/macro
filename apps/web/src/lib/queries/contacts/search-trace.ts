@@ -12,7 +12,9 @@ type Search = {
   /** When the last page landed; the span ends there, not when the list closes. */
   landedAt: number | undefined;
   source: string | undefined;
-  listed: Set<string>;
+  /** The listed ids, kept as the list keeps them: page one, then the rest. */
+  first: Set<string>;
+  later: Set<string>;
   pages: number;
   serverPages: number;
   serverMs: number;
@@ -29,22 +31,26 @@ type Search = {
  * read to the page that ended it, with every `contacts.read_window` read as a
  * child. A page is empty when it lists no new eligible row, which is when a
  * picker reads on by itself; the span records how many such pages came in a
- * row, so a long scan through a large server directory is findable.
+ * row, so a long scan through a large server directory is findable. Reading
+ * the same input again after a search ended (reopening a picker, or re-reading
+ * after a contact change) is a new search, marked `contacts.repeat`.
  */
 export function createContactSearchTrace(
   reader: typeof readContactDirectory,
   limit: number,
-  eligible: (users: IUser[]) => IUser[]
+  eligible: (users: IUser[]) => IUser[],
+  /** Local eligibility outside the request, which also restarts the list. */
+  resetKey: () => string | undefined = () => undefined
 ) {
   let search: Search | undefined;
-  /** A search already traced to its end; reads for it after that are not a new search. */
-  let ended: string | undefined;
+  /** The input of the last search that ended. */
+  let previous: string | undefined;
 
   const finish = (outcome: Outcome) => {
     const current = search;
     if (!current) return;
     search = undefined;
-    ended = current.key;
+    previous = current.key;
     const { span } = current;
     const end = current.landedAt ?? current.startedAt;
     span.setAttr('contacts.outcome', outcome);
@@ -57,7 +63,7 @@ export function createContactSearchTrace(
     span.setAttr('contacts.empty_pages', current.emptyPages);
     span.setAttr('contacts.max_empty_run', current.maxEmptyRun);
     span.setAttr('contacts.max_empty_run_ms', current.maxEmptyRunMs);
-    span.setAttr('contacts.listed', Math.min(current.listed.size, limit));
+    span.setAttr('contacts.listed', current.first.size + current.later.size);
     span.setAttr('contacts.elapsed_ms', end - current.startedAt);
     span.end(end);
   };
@@ -72,6 +78,7 @@ export function createContactSearchTrace(
       attributes: {
         'contacts.mode': request.policy?.mode ?? 'property',
         'contacts.query_length': request.query.length,
+        'contacts.repeat': previous === key,
       },
     });
     return {
@@ -80,7 +87,8 @@ export function createContactSearchTrace(
       startedAt,
       landedAt: undefined,
       source: undefined,
-      listed: new Set(),
+      first: new Set(),
+      later: new Set(),
       pages: 0,
       serverPages: 0,
       serverMs: 0,
@@ -91,6 +99,26 @@ export function createContactSearchTrace(
       maxEmptyRun: 0,
       maxEmptyRunMs: 0,
     };
+  };
+
+  /** Lists a page as the list does; returns how many rows it added. */
+  const list = (current: Search, continued: boolean, users: IUser[]) => {
+    const ids = eligible(users).map((user) => user.id);
+    if (!continued) {
+      // Page one replaces the first rows and keeps the later ones below it.
+      const known = current.first.size + current.later.size;
+      current.first = new Set(ids);
+      for (const id of current.first) current.later.delete(id);
+      return current.first.size + current.later.size - known;
+    }
+    let added = 0;
+    for (const id of ids) {
+      if (current.first.size + current.later.size >= limit) break;
+      if (current.first.has(id) || current.later.has(id)) continue;
+      current.later.add(id);
+      added += 1;
+    }
+    return added;
   };
 
   const landed = (
@@ -108,16 +136,11 @@ export function createContactSearchTrace(
       current.serverPages += 1;
       current.serverMs += now - readAt;
     }
-    let added = 0;
-    for (const user of eligible(page.users)) {
-      if (current.listed.has(user.id)) continue;
-      current.listed.add(user.id);
-      added += 1;
-    }
+    const added = list(current, continued, page.users);
     // A re-read of the first page after a contact change neither scans on nor
     // breaks a run of empty pages.
     if (continued || first) {
-      if (added) {
+      if (added > 0) {
         current.emptyRun = 0;
       } else {
         if (!current.emptyRun) current.emptyRunStartedAt = readAt;
@@ -131,7 +154,7 @@ export function createContactSearchTrace(
       }
     }
     if (!page.nextCursor) finish('end');
-    else if (current.listed.size >= limit) finish('bound');
+    else if (current.first.size + current.later.size >= limit) finish('bound');
   };
 
   const read: typeof readContactDirectory = async (
@@ -146,14 +169,10 @@ export function createContactSearchTrace(
       host?.clientId,
       request.query,
       request.policy,
+      resetKey(),
     ]);
     if (search && search.key !== key) finish('changed');
-    if (!search && ended === key)
-      return reader(viewer, host, request, signal, online);
-    if (!search) {
-      ended = undefined;
-      search = begin(key, request);
-    }
+    search ??= begin(key, request);
     const current = search;
     const readAt = Date.now();
     try {

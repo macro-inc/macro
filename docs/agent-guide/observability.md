@@ -219,7 +219,9 @@ eligible row), `contacts.max_empty_run` and `contacts.max_empty_run_ms` (the
 longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
 `contacts.reached_end`, and `contacts.outcome` (`end`, `bound` at 500 rows,
 `changed` for a new query, `closed`). The span ends when its last page lands, so
-time a picker stays open afterwards is not counted. Never add the query text.
+time a picker stays open afterwards is not counted. Reading the same input again
+after a search ended, as a reopened picker or a re-read after a contact change
+does, starts a new span with `contacts.repeat` true. Never add the query text.
 
 ## Agent sessions
 
