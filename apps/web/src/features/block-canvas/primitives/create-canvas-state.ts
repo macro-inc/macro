@@ -191,12 +191,21 @@ export function createCanvasState(
     ungroup: () => editor.ungroupSelection(),
     toolLocked,
     setToolLocked,
-    /** A tool has finished what it draws: back to Select, unless it is locked. */
+    /**
+     * A tool has finished what it draws: back to Select. Locked, it stays, and
+     * what it drew is not left selected under a tool about to draw again.
+     */
     toolDone() {
-      if (!toolLocked()) chooseTool('select');
+      if (toolLocked()) editor.select();
+      else chooseTool('select');
     },
     shapeCreated(id: string) {
-      if (tool() === 'pencil' || toolLocked()) return;
+      if (tool() === 'pencil') return;
+      if (toolLocked()) {
+        // Nothing stays selected under a tool that is about to draw again.
+        editor.select();
+        return;
+      }
       editor.select(id);
       setTool('select');
     },

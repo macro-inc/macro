@@ -4,7 +4,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { selectAllCommand } from '@macro-inc/graphics';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { onKeyboardClosed } from '../../primitives/on-keyboard-closed';
 import {
   CanvasViewParts,
@@ -215,6 +215,11 @@ function MobileCanvasLayout() {
       setActions('long-press');
     };
   };
+  // The switch for keeping a tool lives in this view's sheet. A device that
+  // turns into a desktop takes the other view, which has no way to switch it
+  // off, so the lock does not go with it.
+  onCleanup(() => state.setToolLocked(false));
+
   // The item a long press landed on, when it sits inside the group the press
   // selected. A finger has no Cmd/Ctrl-click, so the sheet offers to select it.
   const [pressedInside, setPressedInside] = createSignal<string>();
@@ -238,7 +243,8 @@ function MobileCanvasLayout() {
     if (!draft) return;
     state.text.finish();
     state.toolDone();
-    if (editor.document.items[draft.id]) editor.select(draft.id);
+    if (!state.toolLocked() && editor.document.items[draft.id])
+      editor.select(draft.id);
   };
   // A phone's Done button takes the focus from the text, to nowhere. Focus
   // that moves to the canvas or to a control is that press's business, and it

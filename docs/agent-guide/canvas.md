@@ -40,7 +40,8 @@ closing a sheet leaves the selection as it was.
 Text made low on the screen is panned up clear of the keyboard as it appears,
 and a long line keeps its end in view; the page itself never scrolls and the
 header stays put. The keyboard's Done button on a phone, or its hide key on a
-tablet, commits the text and leaves it selected with the Select tool.
+tablet, commits the text and leaves it selected with the Select tool (with
+Keep tool after drawing on, the Text tool stays and nothing is selected).
 
 **Zoom to fit** in the zoom sheet shows the whole scene between the header and
 the bottom chrome, 24px clear of both and of the screen's sides, and left of the

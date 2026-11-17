@@ -548,22 +548,26 @@ test('a long press on an item in a group offers to select it alone', async ({
   await expect(sheet).toBeHidden();
   expect((await canvas(page)).selectedIds).toEqual(['filled']);
 
+  // More has no place the finger pressed, so it does not offer it.
+  await page.getByRole('button', { name: 'More actions' }).tap();
+  await expect(sheet).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Select inside group' })
+  ).toHaveCount(0);
+  // The sheet slides up on the page's clock; a tap during the slide is not
+  // yet a dismissal.
+  await page.clock.runFor(800);
+  await settle(sheet);
+  await page.touchscreen.tap(shape.x + 180, 40);
+  await page.clock.runFor(800);
+  await expect(sheet).toBeHidden();
+
   // A second long press on the item is about the item, not its group again.
   await touch(cdp, 'touchStart', [shape]);
   await page.clock.runFor(600);
   await touch(cdp, 'touchEnd', []);
   await expect(sheet).toBeVisible();
   expect((await canvas(page)).selectedIds).toEqual(['filled']);
-  await page.touchscreen.tap(shape.x + 180, 40);
-  await expect(sheet).toBeHidden();
-
-  // More has no place the finger pressed, so it does not offer it.
-  await page.touchscreen.tap(shape.x, shape.y);
-  await page.getByRole('button', { name: 'More actions' }).tap();
-  await expect(sheet).toBeVisible();
-  await expect(
-    sheet.getByRole('button', { name: 'Select inside group' })
-  ).toHaveCount(0);
 });
 
 test('with the tool kept, one choice of Rectangle draws several', async ({

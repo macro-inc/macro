@@ -146,18 +146,21 @@ it('hands a drawing tool back to Select once it has drawn, unless the tool is lo
       expect(state.tool()).toBe('select');
       expect(editor.getSession().selectedIds).toEqual(['first']);
 
-      // Locked, the tool stays for the next shape and nothing is selected.
-      editor.selectMany([]);
+      // Locked, the tool stays for the next shape and nothing is selected,
+      // not even what was selected before.
       state.setToolLocked(true);
       state.chooseTool('rectangle');
       state.shapeCreated('first');
       expect(state.tool()).toBe('rectangle');
       expect(editor.getSession().selectedIds).toEqual([]);
 
-      // The same goes for tools that report they are done: lines and text.
+      // The same goes for tools that report they are done, lines and text,
+      // which select what they commit.
       state.chooseTool('arrow');
+      editor.select('first');
       state.toolDone();
       expect(state.tool()).toBe('arrow');
+      expect(editor.getSession().selectedIds).toEqual([]);
       state.setToolLocked(false);
       state.toolDone();
       expect(state.tool()).toBe('select');
