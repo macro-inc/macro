@@ -1,5 +1,5 @@
 import {
-  emailRowStyle,
+  chosenEmailRowStyle,
   setEmailRowStyle,
 } from '@app/features/email-view/primitives/email-row-style';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -13,6 +13,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -51,13 +52,17 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
-      <SettingsSection
-        title={t('settingsEmail.displayOptions')}
-        target="Display options"
-        description={t('settingsEmail.displayOptionsDescription')}
-      >
-        <EmailDisplayOptions />
-      </SettingsSection>
+      {/* Phones always show Minimalist rows, so the choice lives on tablets
+          and desktop. */}
+      <Show when={!isMobile()}>
+        <SettingsSection
+          title={t('settingsEmail.displayOptions')}
+          target="Display options"
+          description={t('settingsEmail.displayOptionsDescription')}
+        >
+          <EmailDisplayOptions />
+        </SettingsSection>
+      </Show>
       <Show when={signatures().enabled}>
         <SettingsSection
           title="Signatures"
@@ -146,7 +151,7 @@ function EmailDisplayOptions() {
             { value: 'minimalist', label: t('settingsEmail.minimalist') },
             { value: 'classic', label: t('settingsEmail.classic') },
           ]}
-          value={emailRowStyle()}
+          value={chosenEmailRowStyle()}
           onChange={setEmailRowStyle}
         />
       </SettingsRow>

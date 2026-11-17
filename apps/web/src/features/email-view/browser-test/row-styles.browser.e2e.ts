@@ -1,8 +1,10 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
+// Phones always show Minimalist rows, whatever the setting says.
 const SIZES = [
   { name: 'wide', width: 1100, height: 700, touch: false, wide: true },
   { name: 'stacked', width: 440, height: 800, touch: false, wide: false },
+  { name: 'tablet', width: 820, height: 1180, touch: true, wide: true },
   { name: 'phone', width: 390, height: 844, touch: true, wide: false },
 ];
 
@@ -65,36 +67,42 @@ test.afterEach(async ({ page }) => {
 
 for (const size of SIZES) {
   test.describe(size.name, () => {
+    // The `mobile:` variant: touch and under 640px.
+    const phone = size.touch && size.width < 640;
     test.use({
       viewport: { width: size.width, height: size.height },
       hasTouch: size.touch,
-      isMobile: size.touch,
+      isMobile: phone,
     });
 
-    test('Minimalist marks unread mail with a dot and hides the checkbox', async ({
-      page,
-    }) => {
-      await open(page, 'minimalist');
-      const unread = page.getByTestId('row-unread-1');
-      const read = page.getByTestId('row-read-1');
+    const minimalistStyles = phone ? ['minimalist', 'classic'] : ['minimalist'];
+    for (const style of minimalistStyles) {
+      test(`${style} setting: unread mail has a dot, the checkbox is hidden`, async ({
+        page,
+      }) => {
+        await open(page, style);
+        const unread = page.getByTestId('row-unread-1');
+        const read = page.getByTestId('row-read-1');
 
-      await expect(unread.locator('.bg-accent.rounded-full')).toBeVisible();
-      expect(await showsCheckbox(unread)).toBe(false);
-      // No surface of its own: unread and read rows share the list's.
-      await expect(rowSurface(page, 'unread-1')).toHaveCSS(
-        'background-color',
-        'rgba(0, 0, 0, 0)'
-      );
-      await expect(read.locator('.bg-accent.rounded-full')).toHaveCSS(
-        'opacity',
-        '0'
-      );
-    });
+        await expect(unread.locator('.bg-accent.rounded-full')).toBeVisible();
+        expect(await showsCheckbox(unread)).toBe(false);
+        // No surface of its own: unread and read rows share the list's.
+        await expect(rowSurface(page, 'unread-1')).toHaveCSS(
+          'background-color',
+          'rgba(0, 0, 0, 0)'
+        );
+        await expect(read.locator('.bg-accent.rounded-full')).toHaveCSS(
+          'opacity',
+          '0'
+        );
+      });
+    }
 
     for (const theme of ['dark', 'light']) {
       test(`Classic lifts unread rows and keeps the checkbox (${theme})`, async ({
         page,
       }) => {
+        test.skip(phone);
         await open(page, 'classic', theme);
         const unread = page.getByTestId('row-unread-1');
         const read = page.getByTestId('row-read-1');
@@ -143,6 +151,7 @@ for (const size of SIZES) {
     }
 
     test('Classic draws a faint line under each read row', async ({ page }) => {
+      test.skip(phone);
       await open(page, 'classic');
       const lineUnder = (id: string) =>
         rowSurface(page, id).evaluate((root, wide) => {
@@ -163,6 +172,7 @@ for (const size of SIZES) {
     test('Classic checkboxes select without opening; rows still open', async ({
       page,
     }) => {
+      test.skip(phone);
       await open(page, 'classic');
       const main = page.getByRole('main');
       const checkbox = page.getByTestId('row-read-1').getByRole('checkbox');

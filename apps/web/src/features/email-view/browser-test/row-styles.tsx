@@ -21,7 +21,10 @@ import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
-import { parseEmailRowStyle } from '../primitives/email-row-style';
+import {
+  parseEmailRowStyle,
+  rowStyleForDevice,
+} from '../primitives/email-row-style';
 
 const VIEWER_ID = 'macro|row-styles@example.test';
 
@@ -34,7 +37,7 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const search = new URLSearchParams(window.location.search);
 applyTheme(search.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
-const rowStyle = parseEmailRowStyle(search.get('style'));
+const chosenStyle = parseEmailRowStyle(search.get('style'));
 
 type Thread = Extract<
   EmailFocusQuery['user']['emailFocus'][number],
@@ -148,7 +151,7 @@ function Fixture() {
                   <div role="gridcell">
                     <ListEntity
                       entity={entity}
-                      rowStyle={rowStyle}
+                      rowStyle={rowStyleForDevice(chosenStyle)}
                       checked={selected().includes(entity.id)}
                       highlighted={
                         !isTouchDevice() && highlighted() === entity.id

@@ -408,6 +408,8 @@ export function searchSettings(
   query: string,
   options: {
     emailSignatures?: boolean;
+    /** Phones always show Minimalist rows and leave out the choice. */
+    emailRowStyle?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
   } = {}
@@ -431,6 +433,8 @@ export function searchSettings(
         setting.tab === page.tab &&
         (options.emailSignatures !== false ||
           setting.title !== 'Email signatures') &&
+        (options.emailRowStyle !== false ||
+          setting.title !== 'Email row style') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
         (options.macroComputers !== false || !setting.macroComputers)
     ).map((setting) => ({

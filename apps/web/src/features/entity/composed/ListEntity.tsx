@@ -285,6 +285,9 @@ export function ListEntity(props: ListEntityProps) {
       email: isEmailEntity(props.entity),
     });
 
+  // Classic rows run wall to wall too, square and edged only above and below.
+  const fullBleed = () => isNarrowEmail() || classic();
+
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
     if (!props.showUnrollNotifications) return [];
@@ -317,32 +320,34 @@ export function ListEntity(props: ListEntityProps) {
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
-        isNarrowEmail()
+        fullBleed()
           ? // The gutter moves inside, so text still lines up with the headers.
             'w-full px-(--soup-row-gutter)'
           : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
         // Keep avatar-group separators in sync with the row background so they
         // blend into it instead of creating visible rings.
         '[--avatar-group-separator:var(--color-panel)]',
-        // Classic rows reserve the lifted surface's border, so an unread row is
-        // as tall as a read one. Wide read rows draw the line between rows
-        // here; the stacked layouts already end in one (`InboxDivider`), and a
-        // lifted row's own edge separates it.
-        classic() && 'border border-transparent',
+        // Classic rows reserve the lifted surface's top and bottom border, so
+        // an unread row is as tall as a read one. Wide read rows draw the line
+        // between rows here; the stacked layouts already end in one
+        // (`InboxDivider`), and a lifted row's own edges separate it.
+        classic() && 'border-y border-transparent',
         classic() &&
           isWide() &&
           !unread() &&
-          'after:pointer-events-none after:absolute after:inset-x-2 after:-bottom-px after:h-px after:bg-edge-divider',
-        // The lifted surface of the sidebar's Accounts section. State fills
-        // below (selected, highlighted, hover) still win over it.
+          'after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-edge-divider',
+        // The lifted surface of the sidebar's Accounts section (its fill, edge
+        // and control shadow), edged only above and below because it runs
+        // wall to wall. State fills below (selected, highlighted, hover) still
+        // win over it.
         classic() &&
           unread() &&
-          'bg-control touch:border-edge-button not-touch:elevated [--avatar-group-separator:var(--color-control)]',
+          'bg-control border-edge-button not-touch:shadow-(--shadow-control) [--avatar-group-separator:var(--color-control)]',
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
           'touch:min-h-[44px]': isEmailEntity(props.entity),
-          'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
+          'mx-(--soup-row-gutter)': !isMobile() && !fullBleed(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,
           'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
@@ -355,9 +360,8 @@ export function ListEntity(props: ListEntityProps) {
             !!rowActions() && !props.highlighted && !props.checked,
           'before:absolute before:left-0 before:w-0.5 before:bg-accent':
             props.current,
-          'before:inset-y-2 before:rounded-full':
-            props.current && !isNarrowEmail(),
-          'before:inset-y-0': props.current && isNarrowEmail(),
+          'before:inset-y-2 before:rounded-full': props.current && !fullBleed(),
+          'before:inset-y-0': props.current && fullBleed(),
         }
       )}
       aria-current={props.current ? 'true' : undefined}

@@ -1,9 +1,18 @@
 import { usePreference } from '@app/lib/preferences/use-preference';
+import { isMobile } from '@core/mobile/isMobile';
 import type { EmailRowStyle } from '@entity';
 
 /** A saved value this build doesn't know reads as the default, Minimalist. */
 export function parseEmailRowStyle(value: unknown): EmailRowStyle {
   return value === 'classic' ? 'classic' : 'minimalist';
+}
+
+/**
+ * Phones always show Minimalist rows: Classic's checkbox column and raised
+ * cards don't fit a phone row. The choice applies to tablets and desktop.
+ */
+export function rowStyleForDevice(style: EmailRowStyle): EmailRowStyle {
+  return isMobile() ? 'minimalist' : style;
 }
 
 /**
@@ -16,8 +25,13 @@ const [storedEmailRowStyle, setStoredEmailRowStyle] = usePreference<string>(
   { default: 'minimalist' }
 );
 
-export const emailRowStyle = (): EmailRowStyle =>
+/** The style chosen in Settings. */
+export const chosenEmailRowStyle = (): EmailRowStyle =>
   parseEmailRowStyle(storedEmailRowStyle());
+
+/** The style Mail rows use on this device. */
+export const emailRowStyle = (): EmailRowStyle =>
+  rowStyleForDevice(chosenEmailRowStyle());
 
 export function setEmailRowStyle(style: EmailRowStyle) {
   setStoredEmailRowStyle(style);

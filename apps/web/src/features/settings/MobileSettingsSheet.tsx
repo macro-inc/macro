@@ -35,6 +35,7 @@ type MobileSettingsSheetProps = {
   groups: SettingsTabGroup[];
   searchGroups?: SettingsTabGroup[];
   emailSignatures?: boolean;
+  emailRowStyle?: boolean;
   /** Whether search lists the Outlook connection; see `searchSettings`. */
   outlook?: boolean;
   /** Whether search lists Macro computer settings; see `searchSettings`. */
@@ -55,6 +56,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
   const results = createMemo(() =>
     searchSettings(props.searchGroups ?? props.groups, query(), {
       emailSignatures: props.emailSignatures,
+      emailRowStyle: props.emailRowStyle,
       outlook: props.outlook,
       macroComputers: props.macroComputers,
     })
