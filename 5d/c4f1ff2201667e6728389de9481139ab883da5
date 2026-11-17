@@ -1,0 +1,24 @@
+apps/web/src/features/block-agent/browser-test/README.md
+  s_581071301e3f96::t_b3c12f140a450e 14-16
+apps/web/src/features/block-agent/ui/QueuedPrompts.tsx
+  s_581071301e3f96::t_a5cfad597da8a6 269-272
+apps/web/src/features/block-agent/browser-test/queued.browser.e2e.ts
+  s_581071301e3f96::t_3a837d0b63bc50 212-213
+  s_581071301e3f96::t_1026ddb9fcd8d4 198-211,214-224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5dc4f1ff2201667e6728389de9481139ab883da5",
+  "prompts": {},
+  "sessions": {
+    "s_581071301e3f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dca7219f-baa0-44cb-b0d6-d7c79265cadc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
