@@ -31,6 +31,11 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: vi.fn(),
 }));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => undefined,
+  isCurrentQueryAccount: () => false,
+  queryAccountSessionPending: () => false,
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlNotification: vi.fn(),
 }));

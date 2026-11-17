@@ -11487,6 +11487,13 @@ type GraphqlUser {
 	"""
 	notificationInbox(input: NotificationInboxInput): NotificationInboxPage!
 	"""
+	Ids of the authenticated user's active (unseen or seen) notifications
+	whose event type is one of `eventTypes`, newest first: at most `limit`,
+	100 by default and 500 at most. For acting on every notification of a
+	type without reading a notification list.
+	"""
+	activeNotificationIds(eventTypes: [String!]!, limit: Int): [ID!]!
+	"""
 	The authenticated user's clears of their notifications inbox: the
 	one named by `clearId` when given (none once it is forgotten, a day
 	after it finished), otherwise every clear and undo still running.

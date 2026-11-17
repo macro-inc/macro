@@ -37,7 +37,7 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialOrigin, MacroAuthorizationExtractor,
+    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
@@ -431,7 +431,7 @@ pub async fn get_or_create_call_handler<
     headers: HeaderMap,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+    if is_agent_run(user.authorization.user.attribution(), &headers) {
         return Err(CallError::Forbidden(
             "an agent-attributed start requires approval".to_string(),
         ));
@@ -498,7 +498,7 @@ pub async fn start_call_handler<
     {
         return Err(CallError::NotFound("call".to_string()));
     }
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+    if is_agent_run(user.authorization.user.attribution(), &headers) {
         return Err(CallError::Forbidden(
             "an agent-attributed start requires approval".to_string(),
         ));
