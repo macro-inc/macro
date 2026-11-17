@@ -81,6 +81,18 @@ refetches its agent, bot and channel-bot lists. A failed push is retried with
 backoff, then logged and dropped; clients refetch profiles when their gateway
 connection reopens.
 
+## Live updates over GraphQL
+
+Every Document Storage Service process also reads `macro.bots` through
+`BotTopicChanges`: no consumer group, every partition assigned from its end,
+nothing committed. For each event, `BotUpdates` reads the bot's current
+`BotIdentity` and `bot_audience` from the primary. It hands the identity to
+that audience's `botUpdates` subscribers on that process. Processing joins the
+publisher's trace through the Kafka trace headers. A change made while a
+process restarts is not replayed; clients refetch the bots they show when they
+resubscribe. This replaces the profile push once web clients read bots through
+GraphQL.
+
 ## Delivery semantics and rollout
 
 Publication occurs after the repository mutation and is fire-and-forget. The API
