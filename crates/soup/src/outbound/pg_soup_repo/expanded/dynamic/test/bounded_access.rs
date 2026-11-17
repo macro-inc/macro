@@ -171,9 +171,15 @@ async fn same_pages_as_semi_join(
     let sql = |filter: &EntityFilterAst| {
         let sort = DynamicSort::Timestamp(sort);
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-        build_query(filter, exclude_frecency, sort, &mut arrays)
-            .sql()
-            .to_owned()
+        build_query(
+            filter,
+            exclude_frecency,
+            sort,
+            AccessGate::Planned,
+            &mut arrays,
+        )
+        .sql()
+        .to_owned()
     };
     assert!(sql(&bounded).contains("bounded_documents"));
     assert!(!sql(&joined).contains("bounded_documents"));
@@ -214,7 +220,7 @@ async fn grouped_ids(pool: &PgPool, filter: EntityFilterAst) -> anyhow::Result<V
 fn only_id_bounded_arms_check_access_after_their_filters() {
     let sql = |filter: &EntityFilterAst| {
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
-        build_query(filter, false, SORT, &mut arrays)
+        build_query(filter, false, SORT, AccessGate::Planned, &mut arrays)
             .sql()
             .to_owned()
     };
@@ -230,7 +236,10 @@ fn only_id_bounded_arms_check_access_after_their_filters() {
     assert!(broad.contains(&bound_access_semi_join(
         "d.id",
         "document",
-        source_ids_slot(SORT, false)
+        SourceGrants {
+            slot: source_ids_slot(SORT, false),
+            gate: AccessGate::Planned,
+        }
     )));
 
     // An id OR'ed with anything else does not bound the arm.
@@ -394,7 +403,7 @@ async fn named_notified_documents_match_the_semi_join(pool: PgPool) -> anyhow::R
     let (bounded, _) = bounded_and_joined(unseen.clone());
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
     assert!(
-        build_query(&bounded, false, SORT, &mut arrays)
+        build_query(&bounded, false, SORT, AccessGate::Planned, &mut arrays)
             .sql()
             .contains("INNER JOIN NotificationItems ni_document")
     );
@@ -451,7 +460,7 @@ async fn named_documents_probe_property_filters_per_candidate(pool: PgPool) -> a
     filter.properties_filter = Some(Arc::new(Expr::or(status(NOT_STARTED), status(IN_PROGRESS))));
 
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
-    let sql = build_query(&filter, false, SORT, &mut arrays)
+    let sql = build_query(&filter, false, SORT, AccessGate::Planned, &mut arrays)
         .sql()
         .to_owned();
     assert!(sql.contains("::text[] OFFSET 0\n        )"), "{sql}");
