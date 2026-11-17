@@ -163,7 +163,7 @@ WRT-15	ledger/breaks/stored-send-never-forgotten.patch	failed: Error: the channe
 CHN-16	none: the build as it is, with or without the flag	failed: Error: expect(locator).toContainText(expected) failed
 OFF-13	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-14	ledger/breaks/left-behind-reads-not-held.patch	failed: Error: expect(received).toEqual(expected) // deep equality
-CHN-08	ledger/breaks/favorite-does-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CHN-08	ledger/breaks/favorite-does-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed (at the Favorites step, before the deletion; no break of the deletion itself has been built)
 DM-06	ledger/breaks/teammate-not-offered-by-name.patch	failed: Error: expect(locator).toBeVisible() failed
-CHN-15	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 2 of 3 without the break
+CHN-15	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 14 of 14 (Error: expect(locator).toHaveCount(expected) failed); 7 of 13 without the break
 MEM-03	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 0 of 3 without the break

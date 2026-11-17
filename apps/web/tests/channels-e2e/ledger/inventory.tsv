@@ -62,7 +62,7 @@ device-scroll-offline	History read while connected can be scrolled through offli
 device-many-channels-offline	A held channel opens offline however many newer channels the person has	OFF-13	
 device-jump-offline	Going back to a link to an older held message opens at that message offline	OFF-12	
 device-threads-offline	Threads show their replies offline, long ones included	OFF-06,OFF-07	
-device-cut-off-reload	A thread read on a page that was reloaded before the device kept it is kept by the next page	OFF-14	
+device-cut-off-reload	A thread read on a page that was left, by loading the app again, before the device kept it is kept by the next page	OFF-14	
 device-first-visit	A channel seen once and left at once is held; a message that arrived while it was open is held	OFF-09,OFF-10	
 sync-current	A channel changed while the person was in another channel, offline, reloading or had the app closed is right when they see it again	SYN-01,SYN-02,SYN-03,SYN-04,SYN-09,SYN-10	
 sync-device-equals-server	What the device holds after catching up is what the services hold	SYN-05	

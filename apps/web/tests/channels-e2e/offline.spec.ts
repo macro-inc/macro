@@ -374,10 +374,10 @@ test('OFF-13 a channel read while connected opens with no connection after a hun
   await expectShown(view, ['in the old channel']);
 });
 
-// If this fails, what a person read just before a reload, in the second or
+// If this fails, what a person read just before the page was loaded again, in the second or
 // two a new page takes to start keeping channels, is not on their device:
 // without a connection the thread they read shows no replies.
-test('OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection', async ({
+test('OFF-14 a thread read on a page that was left before the device kept it shows its replies with no connection', async ({
   pageFor,
   ada,
   ben,

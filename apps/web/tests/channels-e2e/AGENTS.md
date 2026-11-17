@@ -111,6 +111,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   services and keeps nothing until it is let go (OFF-14). A device fetches
   recent channels by itself but not their threads, so only a thread tells
   what a lost page left behind from what the next page fetched anyway.
+  Nothing on screen says when the next page has kept it: OFF-14 relies on
+  the pause `goOffline` makes, which held 30 of 30 at a load of 30 to 50.
 - A break patch that no longer applies proves nothing: after merging the
   base, run `git apply --check` over `ledger/breaks/` and prove again the
   tests of each patch that had to be rewritten.
