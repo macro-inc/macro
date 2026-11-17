@@ -9,6 +9,7 @@ mark-changed = [
   "documents",
   "graphql_calendar",
   "seed_cli",
+  "xtask_email_coverage",
   "xtask_graphql_schema_compat",
   "xtask_local",
   "xtask_workflows",

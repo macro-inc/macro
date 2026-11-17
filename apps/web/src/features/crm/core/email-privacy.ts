@@ -8,6 +8,10 @@ export type EmailPrivacy = {
 };
 
 export type EmailBlockScope = 'team' | 'personal';
+export type EmailConsent = Pick<
+  EmailPrivacy,
+  'enabled' | 'mailboxEmail' | 'mailboxLinkId'
+>;
 export type ExcludedThreads = {
   threads: { threadId: string; linkId: string; subject: string | null }[];
   nextCursor: string | null;

@@ -1,18 +1,9 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
-import {
-  isMutedItem,
-  notificationIsRead as railNotificationIsRead,
-} from '@entity/utils/notification';
-import { queryClient } from '@queries/client';
+import { isMutedItem } from '@entity/utils/notification';
 import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
@@ -92,7 +83,7 @@ export function notificationIsRead(notification: UnifiedNotification): boolean {
  * @param entity
  * @returns boolean
  */
-export function entityHasUnreadNotifications(
+function entityHasUnreadNotifications(
   notificationSource: NotificationSource,
   entity: Entity
 ): boolean {
@@ -194,7 +185,7 @@ export async function markNotificationForEntityIdAsRead(
 }
 
 /** Cold imperative actions must load the full feed rather than act on an empty snapshot. */
-export async function ensureNotificationSourceLoaded(
+async function ensureNotificationSourceLoaded(
   notificationSource: NotificationSource
 ): Promise<void> {
   const query = notificationSource._notificationsQuery;
@@ -233,7 +224,7 @@ export async function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
-  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
+  if (entityRef) {
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
@@ -251,35 +242,16 @@ export async function markNotificationsForEntityAsRead(
 }
 
 /**
- * Marks every notification of the given channels as read. GraphQL mode writes
- * by entity, so it never loads the notification feed to find them.
+ * Marks every notification of the given channels as read. It writes by
+ * entity, so it never loads the notification feed to find them.
  */
 export async function markChannelsAsRead(
-  notificationSource: NotificationSource,
-  channelIds: Iterable<string>,
-  isCurrent: () => boolean = () => true
+  channelIds: Iterable<string>
 ): Promise<void> {
-  const members = new Set(channelIds);
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    await updateNotificationsForEntities({
-      entities: [...members].map((id) => ({ type: 'channel', id })),
-      operation: 'MARK_SEEN',
-    });
-    return;
-  }
-
-  await ensureNotificationSourceLoaded(notificationSource);
-  if (!isCurrent()) return;
-  await notificationSource.bulkMarkAsRead(
-    notificationSource
-      .notifications()
-      .filter(
-        (notification) =>
-          notification.entity_type === 'channel' &&
-          members.has(notification.entity_id) &&
-          !railNotificationIsRead(notification)
-      )
-  );
+  await updateNotificationsForEntities({
+    entities: [...new Set(channelIds)].map((id) => ({ type: 'channel', id })),
+    operation: 'MARK_SEEN',
+  });
 }
 
 /** Best-effort read marker for navigation/timer callers with no awaiting UI. */
@@ -326,11 +298,6 @@ export async function executeMarkNotificationsDone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 
@@ -348,11 +315,6 @@ export async function executeMarkNotificationsUndone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 

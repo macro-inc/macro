@@ -1,6 +1,9 @@
 //! HTTP routes for agent teammates, nested at `/team_agents` in the auth
 //! service, and the internal enrollment route the computer operator calls.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use axum::{
@@ -74,7 +77,7 @@ impl IntoResponse for TeamAgentError {
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
             Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
-            Self::NotEnabled => StatusCode::FORBIDDEN,
+            Self::NotEnabled | Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::ComputerUnavailable(_) | Self::PurchaseConfirming => StatusCode::CONFLICT,
             Self::RepoUnavailable(_) | Self::VoiceUnavailable(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -156,7 +159,8 @@ where
 )]
 #[tracing::instrument(err, skip_all)]
 pub async fn create_team_agent_handler<S, Eas, Auth>(
-    _authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: axum::http::HeaderMap,
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
     Json(body): Json<CreateTeamAgent>,
@@ -166,6 +170,16 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    // Creating one adds a member to the team, mints its key and buys a
+    // computer: a person does that, never an agent's program (a credential
+    // signed for an agent or a routine run, or the code-mode header).
+    let attribution = authorization.authorization.user.attribution();
+    if macro_authorization::is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused creating a team agent to a program");
+        return Err(TeamAgentError::Forbidden(
+            "An agent's program cannot add an agent teammate: it adds a team member and buys a computer. Tell the user to add one in Macro, under Settings, Agents.",
+        ));
+    }
     let agent = state
         .service
         .create(access.entity_access_receipt, body)

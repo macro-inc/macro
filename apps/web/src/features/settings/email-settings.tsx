@@ -1,9 +1,10 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { toast } from '@core/component/Toast/Toast';
+import { EmailRowStylePreview } from '@app/features/email-view/components/EmailRowStylePreview';
 import {
-  enableEmailReadReceipts,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
+  chosenEmailRowStyle,
+  setEmailRowStyle,
+} from '@app/features/email-view/primitives/email-row-style';
+import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
@@ -11,7 +12,7 @@ import { useEmailLinks } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -22,9 +23,11 @@ import {
 } from './primitives';
 import { SignatureSection } from './SignatureSection';
 
-export function EmailSettings() {
-  const signatures = useFeatureFlag(enableEmailSignatures);
-  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
+/**
+ * `displayOptions` shows the Mail row style; the phone settings sheet leaves
+ * it out because phones always show Minimalist rows.
+ */
+export function EmailSettings(props: { displayOptions: boolean }) {
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -46,38 +49,43 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
-      <Show when={signatures().enabled}>
+      <Show when={props.displayOptions}>
         <SettingsSection
-          title="Signatures"
-          description="Create a signature for each email account and preview it before sending."
+          title={t('settingsEmail.displayOptions')}
+          target="Display options"
+          description={t('settingsEmail.displayOptionsDescription')}
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading signatures…
-              </p>
-            }
-          >
-            <EmailSignatures />
-          </Suspense>
+          <EmailDisplayOptions />
         </SettingsSection>
       </Show>
-      <Show when={readReceipts().enabled}>
-        <SettingsSection
-          title="Read receipts"
-          description="See when recipients open messages you send."
+      <SettingsSection
+        title="Signatures"
+        description="Create a signature for each email account and preview it before sending."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading signatures…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading accounts…
-              </p>
-            }
-          >
-            <EmailReadReceipts />
-          </Suspense>
-        </SettingsSection>
-      </Show>
+          <EmailSignatures />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title="Read receipts"
+        description="See when recipients open messages you send."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading accounts…
+            </p>
+          }
+        >
+          <EmailReadReceipts />
+        </Suspense>
+      </SettingsSection>
       <Show when={isAvailable('Notifications') || isAvailable('Calendar')}>
         <SettingsSection title="Related settings">
           <SettingsCard>
@@ -115,6 +123,35 @@ export function EmailSettings() {
         </SettingsSection>
       </Show>
     </SettingsPage>
+  );
+}
+
+/** The Row style control and its live sample, as Display options shows them. */
+export function EmailDisplayOptions() {
+  return (
+    <SettingsCard>
+      {/* One card child, so the card draws no divider above the sample. */}
+      <div>
+        <SettingsRow stackOnNarrow label={t('settingsEmail.rowStyle')}>
+          <Tabs
+            aria-label={t('settingsEmail.rowStyle')}
+            touch="segmented"
+            size="sm"
+            options={[
+              { value: 'minimalist', label: t('settingsEmail.minimalist') },
+              { value: 'classic', label: t('settingsEmail.classic') },
+            ]}
+            value={chosenEmailRowStyle()}
+            onChange={setEmailRowStyle}
+          />
+        </SettingsRow>
+        <EmailRowStylePreview
+          rowStyle={chosenEmailRowStyle()}
+          class="mx-4 mb-4"
+        />
+        <p class="sr-only">{t('settingsEmail.rowStyleDescription')}</p>
+      </div>
+    </SettingsCard>
   );
 }
 

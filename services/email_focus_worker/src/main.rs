@@ -38,7 +38,7 @@ use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
-use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl, TypesafeApiUrl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
 use sqlx::postgres::PgPoolOptions;
@@ -91,7 +91,10 @@ async fn main() -> Result<(), Report> {
     let provider = config
         .typesafe_api_key
         .value()
-        .map(SystemOneJev::typesafe)
+        .map(|api_key| -> Result<_, Report> {
+            let url = TypesafeApiUrl::new()?;
+            Ok(SystemOneJev::typesafe_at(api_key, url.as_ref())?)
+        })
         .transpose()?;
     let Some(provider) = provider else {
         // Off until configured; stay up so the deployment stays healthy.
