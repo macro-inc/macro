@@ -27,20 +27,23 @@ fi
 context="kind-$name"
 nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootstrap" -- \
   --context "$context" --revision "$revision"
+# On a kept cluster the applications may still show an older commit.
+kubectl --context "$context" -n argocd annotate applications --all \
+  argocd.argoproj.io/refresh=hard --overwrite
 
-# Every application must sync. Without AWS two can't become healthy: the
-# load balancer controller can't look up its VPC, and the ClusterSecretStore
-# can't authenticate.
+# Every application must sync this commit. Without AWS two can't become
+# healthy: the load balancer controller can't look up its VPC, and the
+# ClusterSecretStore can't authenticate.
 expected_unhealthy="aws-load-balancer-controller external-secrets"
 deadline=$((SECONDS + 1200))
 while :; do
   table=$(kubectl --context "$context" -n argocd get applications \
-    -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}')
-  pending=$(awk -v skip=" $expected_unhealthy " \
-    '$2 != "Synced" || (index(skip, " " $1 " ") == 0 && $3 != "Healthy")' <<<"$table")
+    -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{end}')
+  pending=$(awk -v skip=" $expected_unhealthy " -v rev="$remote" \
+    '$2 != "Synced" || $4 != rev || (index(skip, " " $1 " ") == 0 && $3 != "Healthy")' <<<"$table")
   if [ -z "$pending" ]; then break; fi
   if [ $SECONDS -ge $deadline ]; then
-    echo "Timed out; not Synced and Healthy:" >&2
+    echo "Timed out; not Synced at $remote and Healthy:" >&2
     echo "$pending" >&2
     exit 1
   fi

@@ -24,9 +24,9 @@ in
           cm = {
             "admin.enabled" = true;
             # Applications here are plain YAML; nothing renders on the server.
-            "kustomize.enabled" = false;
-            "helm.enabled" = false;
-            "jsonnet.enabled" = false;
+            # (`jsonnet.enable` would turn off plain directories too.)
+            "kustomize.enable" = "false";
+            "helm.enable" = "false";
           };
           # The monorepo is public, so no credentials. A depth-1 fetch keeps
           # the repo server's clone small; the whole history is several GB.

@@ -4,9 +4,8 @@ data:
   application.instanceLabelKey: argocd.argoproj.io/instance
   application.sync.impersonation.enabled: "false"
   exec.enabled: "false"
-  helm.enabled: "false"
-  jsonnet.enabled: "false"
-  kustomize.enabled: "false"
+  helm.enable: "false"
+  kustomize.enable: "false"
   resource.customizations.ignoreResourceUpdates.ConfigMap: |
     jqPathExpressions:
       # Ignore the cluster-autoscaler status
