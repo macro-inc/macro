@@ -213,6 +213,7 @@ fn bot_authentication(bot_scope: BotScope, acting_user_id: Option<&str>) -> BotA
             origin: crate::CredentialOrigin::Bot,
             agent_id: None,
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from(user_id.to_owned())
                 .expect("valid bot acting user id"),
             user_context: user_context(user_id, Some(42)),
@@ -2300,6 +2301,7 @@ fn macro_user_authentication(user_id: &str) -> MacroUserAuthentication {
         origin: crate::CredentialOrigin::Session,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_owned()).expect("valid Macro user ID"),
         user_context: user_context(user_id, None),
     }

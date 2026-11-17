@@ -95,6 +95,7 @@ export const entityResolverSchema = {
         'GraphqlSoupInitiative',
         'GraphqlSoupProject',
         'GraphqlSoupReminder',
+        'GraphqlSoupTeam',
       ],
       argumentPaths: [['input', 'entityId']],
     },
@@ -121,7 +122,8 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlSoupHarness'
   | 'GraphqlSoupInitiative'
   | 'GraphqlSoupProject'
-  | 'GraphqlSoupReminder';
+  | 'GraphqlSoupReminder'
+  | 'GraphqlSoupTeam';
 export type GeneratedEntityResolverArgumentPath =
   | readonly ['id']
   | readonly ['initiativeId']

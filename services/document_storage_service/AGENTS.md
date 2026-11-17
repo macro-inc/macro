@@ -63,8 +63,15 @@ threads, pins, recents, notifications, folders, activity.
   bounded shutdown drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
+- `src/released_attachments.rs`: drains `released_email_attachment_documents`
+  on LISTEN `email_attachment_documents_released` and a one-minute sweep,
+  through the documents domain's `ReleasedAttachmentService`, which trashes
+  email attachments whose mail is gone. Runs on the consumer tracker.
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/server.rs` also runs `bots::inbound::profile_consumer`, which pushes a
+  changed bot's current profile to the people who see it (see
+  `crates/bots/README.md`).
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -95,6 +102,9 @@ threads, pins, recents, notifications, folders, activity.
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.

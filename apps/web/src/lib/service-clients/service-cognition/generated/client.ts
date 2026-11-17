@@ -43,7 +43,6 @@ import type {
   GetUserActivityParams,
   HttpSendChatMessageRequest,
   ImportEntitiesResponse,
-  ImportErrorBody,
   ImportNotionPageRequest,
   ImportNotionPageResponse,
   ImportSource,
@@ -64,8 +63,6 @@ import type {
   PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
-  PlanWorkspaceImportRequest,
-  ProjectionStateResponse,
   ReadActivityResponse,
   ReadMyActivityParams,
   RejectToolCallRequest,
@@ -94,7 +91,6 @@ import type {
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
-  UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
   WebErrorBody,
@@ -297,71 +293,6 @@ export const getUsageHandler = async (
     status: res.status,
     headers: res.headers,
   } as getUsageHandlerResponse;
-};
-
-/**
- * @summary Gets or creates an ai projection and the requesting user's instance,
-triggering (or awaiting) materialization when needed.
- */
-export type upsertAiProjectionResponse200 = {
-  data: ProjectionStateResponse;
-  status: 200;
-};
-
-export type upsertAiProjectionResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type upsertAiProjectionResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type upsertAiProjectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type upsertAiProjectionResponseSuccess =
-  upsertAiProjectionResponse200 & {
-    headers: Headers;
-  };
-export type upsertAiProjectionResponseError = (
-  | upsertAiProjectionResponse400
-  | upsertAiProjectionResponse403
-  | upsertAiProjectionResponse500
-) & {
-  headers: Headers;
-};
-
-export type upsertAiProjectionResponse =
-  | upsertAiProjectionResponseSuccess
-  | upsertAiProjectionResponseError;
-
-export const getUpsertAiProjectionUrl = () => {
-  return `/ai-projections`;
-};
-
-export const upsertAiProjection = async (
-  upsertProjectionRequest: UpsertProjectionRequest,
-  options?: RequestInit
-): Promise<upsertAiProjectionResponse> => {
-  const res = await fetch(getUpsertAiProjectionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(upsertProjectionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: upsertAiProjectionResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as upsertAiProjectionResponse;
 };
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -2317,76 +2248,6 @@ export const cancelWorkspaceHandler = async (
 };
 
 /**
- * @summary Plan a reviewed workspace import, replacing any earlier plan for this
-source. Planning goes on in the background; this answers within seconds
-with where it got. Nothing is written until the plan's import review is
-approved.
- */
-export type planWorkspaceHandlerResponse200 = {
-  data: NotionImportReport;
-  status: 200;
-};
-
-export type planWorkspaceHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
-
-export type planWorkspaceHandlerResponse409 = {
-  data: ImportErrorBody;
-  status: 409;
-};
-
-export type planWorkspaceHandlerResponse500 = {
-  data: void;
-  status: 500;
-};
-
-export type planWorkspaceHandlerResponseSuccess =
-  planWorkspaceHandlerResponse200 & {
-    headers: Headers;
-  };
-export type planWorkspaceHandlerResponseError = (
-  | planWorkspaceHandlerResponse400
-  | planWorkspaceHandlerResponse409
-  | planWorkspaceHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type planWorkspaceHandlerResponse =
-  | planWorkspaceHandlerResponseSuccess
-  | planWorkspaceHandlerResponseError;
-
-export const getPlanWorkspaceHandlerUrl = (source: ImportSource) => {
-  return `/import/workspaces/${source}/plan`;
-};
-
-export const planWorkspaceHandler = async (
-  source: ImportSource,
-  planWorkspaceImportRequest: PlanWorkspaceImportRequest,
-  options?: RequestInit
-): Promise<planWorkspaceHandlerResponse> => {
-  const res = await fetch(getPlanWorkspaceHandlerUrl(source), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(planWorkspaceImportRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: planWorkspaceHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as planWorkspaceHandlerResponse;
-};
-
-/**
  * @summary List all MCP servers configured for the authenticated user.
  */
 export type listMcpServersResponse200 = {
@@ -3008,6 +2869,11 @@ export type editExplicitMemoryResponse500 = {
   status: 500;
 };
 
+export type editExplicitMemoryResponse503 = {
+  data: MemoryErrorBody;
+  status: 503;
+};
+
 export type editExplicitMemoryResponseSuccess =
   editExplicitMemoryResponse200 & {
     headers: Headers;
@@ -3017,6 +2883,7 @@ export type editExplicitMemoryResponseError = (
   | editExplicitMemoryResponse409
   | editExplicitMemoryResponse422
   | editExplicitMemoryResponse500
+  | editExplicitMemoryResponse503
 ) & {
   headers: Headers;
 };

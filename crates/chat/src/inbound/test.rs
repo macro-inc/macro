@@ -564,6 +564,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id: MacroUserIdStr::try_from(user_id.clone())
                         .expect("test user id should be valid"),
                     user_context: UserContext {

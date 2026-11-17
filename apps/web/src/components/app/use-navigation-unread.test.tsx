@@ -1,5 +1,4 @@
 import type { EmailEntity } from '@entity/types/entity';
-import type { UnifiedNotification } from '@notifications/types';
 import type { GetNotificationTypePreferencesResponse } from '@service-notification/generated/schemas/getNotificationTypePreferencesResponse';
 import type { NotificationState } from '@service-storage/graphql/generated/graphql';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -17,8 +16,6 @@ import { useNavigationUnread } from './use-navigation-unread';
 const mocks = vi.hoisted(() => ({
   home: vi.fn(),
   email: vi.fn(),
-  notifications: vi.fn(),
-  graphqlFlag: vi.fn(),
   channels: vi.fn(),
   withLocalState: vi.fn(),
   hasUnreadEntity: vi.fn(),
@@ -26,9 +23,6 @@ const mocks = vi.hoisted(() => ({
   notificationPreferences: vi.fn(),
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => mocks.graphqlFlag,
-}));
 vi.mock('@queries/channel/unread-presence', () => ({
   createChannelUnreadQuery: mocks.channels,
 }));
@@ -44,7 +38,6 @@ vi.mock('@queries/soup/items', () => ({
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({
-    notifications: mocks.notifications,
     withLocalState: mocks.withLocalState,
   }),
 }));
@@ -74,22 +67,6 @@ const unreadEmail: EmailEntity = {
   done: false,
 };
 
-const message: UnifiedNotification = {
-  id: 'notification',
-  entity_id: 'channel',
-  entity_type: 'channel',
-  created_at: '2026-09-10T12:00:00Z',
-  updated_at: '2026-09-10T12:00:00Z',
-  state: 'unseen',
-  sent: true,
-  viewed_at: null,
-  notification_event_type: 'channel_message_send',
-  notification_metadata: {
-    tag: 'channel_message_send',
-    content: { channelType: 'directMessage', messageId: 'message' },
-  },
-};
-
 let dispose: VoidFunction;
 const clients: QueryClient[] = [];
 afterEach(() => {
@@ -101,12 +78,10 @@ afterEach(() => {
 });
 
 function setup(
-  graphql = false,
   preferences?: () => UseQueryResult<GetNotificationTypePreferencesResponse>
 ) {
   return createRoot((cleanup) => {
     dispose = cleanup;
-    const [graphqlEnabled, setGraphqlEnabled] = createSignal(graphql);
     const [done, setDone] = createSignal(false);
     const [disabledTypes, setDisabledTypes] = createSignal<string[]>([]);
     mocks.withLocalState.mockImplementation(({ state }) =>
@@ -124,13 +99,10 @@ function setup(
     const [witnesses, setWitnesses] = createSignal<
       { id: string; state: NotificationState }[]
     >([]);
-    mocks.graphqlFlag.mockImplementation(() => ({ enabled: graphqlEnabled() }));
     const [loading, setLoading] = createSignal(true);
     const [fetching, setFetching] = createSignal(true);
     mocks.channels.mockReturnValue({
-      get isEnabled() {
-        return graphqlEnabled();
-      },
+      isEnabled: true,
       get isPending() {
         return loading();
       },
@@ -143,9 +115,6 @@ function setup(
       },
     });
     const [emails, setEmails] = createSignal<EmailEntity[]>([]);
-    const [notifications, setNotifications] = createSignal<
-      UnifiedNotification[]
-    >([]);
     const query = {
       get isPending() {
         return loading();
@@ -165,15 +134,12 @@ function setup(
       loading() ? false : mocks.hasUnreadEntity(emails())
     );
     mocks.email.mockReturnValue(query);
-    mocks.notifications.mockImplementation(notifications);
     return {
       unread: useNavigationUnread(),
       setLoading,
       setFetching,
       setEmails,
-      setNotifications,
       setWitnesses,
-      setGraphqlEnabled,
       setDone,
       setDisabledTypes,
     };
@@ -182,7 +148,7 @@ function setup(
 
 describe('navigation unread presence', () => {
   it('does not read pending email or channel data when their requests pause', () => {
-    const { unread, setFetching } = setup(true);
+    const { unread, setFetching } = setup();
     setFetching(false);
     expect(unread('mail')).toBe(false);
     expect(unread('channels')).toBe(false);
@@ -200,7 +166,7 @@ describe('navigation unread presence', () => {
       });
       clients.push(client);
       function Shell() {
-        const { unread, setLoading, setEmails } = setup(false, () =>
+        const { unread, setLoading, setEmails } = setup(() =>
           useQuery(() => ({
             queryKey: ['preferences'],
             queryFn: () => response.promise,
@@ -244,7 +210,7 @@ describe('navigation unread presence', () => {
     });
     clients.push(client);
     function Shell() {
-      const { unread, setLoading, setEmails } = setup(false, () => {
+      const { unread, setLoading, setEmails } = setup(() => {
         const query = useQuery(() => ({
           queryKey: ['preferences'],
           queryFn: () => response.promise,
@@ -283,8 +249,6 @@ describe('navigation unread presence', () => {
     }
     expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
     expect(mocks.transformEntities).not.toHaveBeenCalled();
-    expect(mocks.home).toHaveBeenCalledWith(expect.any(Function));
-    expect(mocks.home.mock.calls[0][0]()).toBe(false);
   });
 
   it('reacts to read, unread, and done changes in loaded rows', () => {
@@ -306,9 +270,8 @@ describe('navigation unread presence', () => {
   });
 
   it('uses bounded GraphQL witnesses without reading the full feed', () => {
-    const { unread, setLoading, setWitnesses, setDone } = setup(true);
+    const { unread, setLoading, setWitnesses, setDone } = setup();
     expect(unread('channels')).toBe(false);
-    expect(mocks.notifications).not.toHaveBeenCalled();
     expect(mocks.channels.mock.calls[0][0]).toMatchObject({
       initial: {
         limit: 500,
@@ -327,82 +290,6 @@ describe('navigation unread presence', () => {
     setWitnesses([{ id: 'witness', state: 'SEEN' }]);
     expect(unread('channels')).toBe(false);
     setWitnesses([]);
-    expect(unread('channels')).toBe(false);
-    expect(mocks.notifications).not.toHaveBeenCalled();
-  });
-
-  it('follows cold-start transport changes without reading the inactive feed', () => {
-    const {
-      unread,
-      setLoading,
-      setGraphqlEnabled,
-      setWitnesses,
-      setNotifications,
-    } = setup();
-    setLoading(false);
-    setNotifications([message]);
-    expect(unread('channels')).toBe(true);
-    mocks.notifications.mockClear();
-    setGraphqlEnabled(true);
-    expect(unread('channels')).toBe(false);
-    setWitnesses([{ id: 'bounded', state: 'UNSEEN' }]);
-    expect(unread('channels')).toBe(true);
-    expect(mocks.notifications).not.toHaveBeenCalled();
-    setNotifications([]);
-    setGraphqlEnabled(false);
-    expect(unread('channels')).toBe(false);
-  });
-
-  it('badges top-level mentions but not thread mentions or reactions', () => {
-    const { unread, setNotifications } = setup();
-    const mention = (threadId?: string): UnifiedNotification => ({
-      ...message,
-      notification_metadata: {
-        tag: 'channel_mention',
-        content: {
-          channelType: 'directMessage',
-          messageId: 'message',
-          messageContent: 'Hello',
-          threadId,
-        },
-      },
-    });
-    setNotifications([mention('parent')]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([
-      {
-        ...message,
-        notification_metadata: {
-          tag: 'channel_message_reaction',
-          content: {
-            channelType: 'directMessage',
-            messageId: 'message',
-            emoji: '👍',
-            messageContent: 'Hello',
-          },
-        },
-      },
-    ]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([mention()]);
-    expect(unread('channels')).toBe(true);
-  });
-
-  it('uses unread channel messages, ignoring seen, completed, and other entities', () => {
-    const { unread, setNotifications } = setup();
-    setNotifications([message]);
-    expect(unread('channels')).toBe(true);
-    setNotifications([
-      { ...message, state: 'seen', viewed_at: message.created_at },
-    ]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([{ ...message, state: 'done' }]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([{ ...message, entity_type: 'document' }]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([message, { ...message, id: 'another' }]);
-    expect(unread('channels')).toBe(true);
-    setNotifications([]);
     expect(unread('channels')).toBe(false);
   });
 

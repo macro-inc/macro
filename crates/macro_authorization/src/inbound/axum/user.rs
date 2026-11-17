@@ -156,6 +156,7 @@ where
     )?;
     user.agent_id = identity.agent_id;
     user.agent_via = identity.agent_via;
+    user.routine_id = identity.routine_id;
     Ok(user)
 }
 
