@@ -743,3 +743,112 @@ fn every_request_the_client_can_send_only_reads_notion() {
         ]
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn database_body_references_resolve_against_documented_rest_shapes() {
+    use crate::domain::databases::{SourceOwnership, read_page_databases};
+
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../fixtures/database_occurrences.json")).unwrap();
+    let transport = ScriptedTransport::new(vec![
+        ok(fixture["page_markdown"].clone()),
+        ok(fixture["database"].clone()),
+        ok(fixture["owned_source"].clone()),
+        ok(fixture["linked_source"].clone()),
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let body = read_page_databases(&client, &page).await.unwrap();
+
+    assert_eq!(
+        body.markdown,
+        fixture["page_markdown"]["markdown"].as_str().unwrap()
+    );
+    assert_eq!(body.occurrences.len(), 1);
+    assert_eq!(
+        body.occurrences[0].sources[0].ownership,
+        Some(SourceOwnership::Owned)
+    );
+    assert_eq!(
+        body.occurrences[0].sources[1].ownership,
+        Some(SourceOwnership::Linked)
+    );
+    assert_eq!(
+        body.occurrences[0].view_id,
+        NotionId::parse("c7f0aa501f0e4a529a17e2f6f3a3b0c1")
+    );
+    assert!(body.occurrences[0].losses.is_empty());
+    assert_eq!(
+        transport
+            .requests()
+            .iter()
+            .map(|request| request.path.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "/v1/pages/598337872cf94fdf8782e53db20768a5/markdown",
+            "/v1/databases/d9824bdc84454327be8b5b47500af6ce",
+            "/v1/data_sources/1a44be1209534631a1d67d4c2b1b4a2f",
+            "/v1/data_sources/ee5f0f84409a440f983aa5315961c6e4",
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn database_placements_keep_access_failures_distinct_from_needing_views() {
+    use crate::domain::databases::{DatabaseLoss, ReadFailure, read_page_databases};
+
+    let markdown = include_str!("../../../fixtures/database_unresolved.md");
+    let transport = ScriptedTransport::new(vec![
+        ok(json!({"object": "page_markdown", "markdown": markdown, "unknown_block_ids": []})),
+        ok(json!({"object": "database", "data_sources": []})),
+        TransportResponse {
+            status: StatusCode::FORBIDDEN, retry_after: None,
+            body: r#"{"object":"error","status":403,"code":"restricted_resource","message":"Access denied"}"#.into(),
+        },
+        TransportResponse {
+            status: StatusCode::NOT_FOUND, retry_after: None,
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Object not found"}"#.into(),
+        },
+        TransportResponse {
+            status: StatusCode::BAD_REQUEST, retry_after: None,
+            body: r#"{"object":"error","status":400,"code":"validation_error","message":"Not a database"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let body = read_page_databases(&client, &page).await.unwrap();
+    assert_eq!(body.markdown, markdown);
+    assert_eq!(body.occurrences.len(), 5);
+    assert_eq!(body.occurrences[0].losses, vec![DatabaseLoss::NeedsViews]);
+    assert_eq!(
+        body.occurrences[1].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::Forbidden
+        }]
+    );
+    assert_eq!(
+        body.occurrences[2].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::NotFound
+        }]
+    );
+    assert_eq!(
+        body.occurrences[3].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::InvalidObject
+        }]
+    );
+    assert_eq!(
+        body.occurrences[4].losses,
+        vec![DatabaseLoss::MissingContainerId]
+    );
+    assert_eq!(body.occurrences[4].fallback_url(&page), page.url());
+    assert_eq!(body.occurrences[4].title, "Notion database");
+    assert_eq!(transport.requests().len(), 5);
+}
