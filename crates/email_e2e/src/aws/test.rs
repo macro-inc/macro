@@ -36,3 +36,34 @@ async fn a_refused_send_is_answered_once() {
 
     aws.stop().await;
 }
+
+/// A batch delete removes the objects it names and leaves the others.
+#[tokio::test]
+async fn a_batch_delete_removes_the_named_objects() {
+    let aws = Aws::start("http://127.0.0.1:1", crate::evidence::Recorder::default())
+        .await
+        .unwrap();
+    let http = reqwest::Client::new();
+    for key in ["a&b.txt", "kept.txt", "dir/c.txt"] {
+        let url = format!("{}/bucket/{}", aws.url(), urlencoding::encode(key));
+        let stored = http.put(url).body("x").send().await.unwrap();
+        assert_eq!(stored.status(), StatusCode::OK);
+    }
+
+    let deleted = http
+        .post(format!("{}/bucket?delete", aws.url()))
+        .body(
+            "<Delete><Object><Key>a&amp;b.txt</Key></Object>\
+             <Object><Key>dir/c.txt</Key></Object></Delete>",
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+    assert!(deleted.text().await.unwrap().contains("DeleteResult"));
+
+    let left: Vec<String> = aws.objects().into_iter().map(|object| object.key).collect();
+    assert_eq!(left, ["kept.txt"]);
+
+    aws.stop().await;
+}

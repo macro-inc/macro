@@ -328,8 +328,14 @@ shared with the web app's suite) and backend entry points second.
 - Owns: the harness and the email and calendar scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
+- The web app against this stack: `apps/web/tests/email-e2e` (its README).
+  `src/stack_server.rs` and the `email_e2e_stacks` binary serve stacks over
+  HTTP for it, one per browser test; add a route there when a browser test
+  needs another of the harness's levers. With `EMAIL_E2E_STACK_POOL` set it
+  keeps that many stacks started ahead of the tests
+  (`src/stack_server/pool.rs`); a stack is still handed to one test only.
 - Not started yet: the real notification and
-  authentication services, and the web app. `document_storage_service` is
+  authentication services. `document_storage_service` is
   started for its GraphQL API, its lists and, on a stack with `search`,
   search over mail; its document and AI features run on placeholder
   settings.
@@ -365,6 +371,8 @@ shared with the web app's suite) and backend entry points second.
   results of the known-bug runs where there are any. A scenario outside
   `tests/search.rs` that sets `StackOptions::search` has no cluster in CI:
   keep search scenarios in that file.
+  `Email end-to-end (browser)` (`email_e2e_browser.rs`) runs the browser suite.
+- A change to `src/stack_server.rs`: `just email-e2e-browser`.
 
 ## Gotchas
 
