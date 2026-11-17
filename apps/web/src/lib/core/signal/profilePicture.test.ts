@@ -171,4 +171,48 @@ describe('profile picture refresh', () => {
       expect(sweeps).toHaveLength(2);
     });
   });
+
+  it('keeps a live update when an older sweep batch answers in between', async () => {
+    const id = 'macro|race-mirror@example.com';
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+    await getProfilePictureUrl(id);
+
+    let releaseSweep!: () => void;
+    const sweepGate = new Promise<void>((resolve) => (releaseSweep = resolve));
+    let sweepSent!: () => void;
+    const sweepWasSent = new Promise<void>((resolve) => (sweepSent = resolve));
+    let releaseLive!: () => void;
+    const liveGate = new Promise<void>((resolve) => (releaseLive = resolve));
+    let liveSent!: () => void;
+    const liveWasSent = new Promise<void>((resolve) => (liveSent = resolve));
+    postProfilePictures.mockImplementation(
+      async (args: { user_id_list: string[] }) => {
+        if (args.user_id_list.length === 1 && args.user_id_list[0] === id) {
+          liveSent();
+          await liveGate;
+          return picturesFor('https://x/file/new')(args);
+        }
+        if (args.user_id_list.includes(id)) {
+          sweepSent();
+          await sweepGate;
+          return picturesFor('https://x/file/stale')(args);
+        }
+        return picturesFor('https://x/file/stale')(args);
+      }
+    );
+
+    // Sweep sent first, then the live refetch; the sweep answers between the
+    // live request and its response.
+    const sweep = refreshCachedProfilePictures();
+    await sweepWasSent;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const live = refreshProfilePicture(id);
+    await liveWasSent;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    releaseSweep();
+    await sweep;
+    releaseLive();
+    await live;
+    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
+  });
 });

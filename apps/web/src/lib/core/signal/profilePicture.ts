@@ -1,6 +1,7 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 
+import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import { until } from '@solid-primitives/promise';
 import {
@@ -175,11 +176,14 @@ export async function getProfilePictureUrl(
 const REFRESH_BATCH_SIZE = 100;
 
 /**
- * Refetches the given users' pictures, batched. The old URL stays visible until
- * the new one arrives, and a failed batch keeps its URLs. An entry written
- * after a batch was sent is newer than its response, so it is left alone.
+ * Refetches the given users' pictures, batched, and returns how many batches
+ * failed. The old URL stays visible until the new one arrives, and a failed
+ * batch keeps its URLs. Entries are versioned by when their request was sent,
+ * so responses apply in send order however they arrive: one never overwrites
+ * an entry from a request sent after it.
  */
-async function refreshPictures(ids: string[]): Promise<void> {
+async function refreshPictures(ids: string[]): Promise<number> {
+  let failed = 0;
   for (let start = 0; start < ids.length; start += REFRESH_BATCH_SIZE) {
     const batch = ids.slice(start, start + REFRESH_BATCH_SIZE);
     const sentAt = new Date();
@@ -188,22 +192,23 @@ async function refreshPictures(ids: string[]): Promise<void> {
     });
     if (result.isErr()) {
       console.error('Failed to refresh user profile pictures');
+      failed += 1;
       continue;
     }
 
     const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
-    const fetchedAt = new Date();
     for (const id of batch) {
       const current = userProfilePictures[id];
       if (current && current._createdAt > sentAt) continue;
       setUserProfilePictures(id, {
-        _createdAt: fetchedAt,
+        _createdAt: sentAt,
         id,
         url: urls.get(id),
         loading: false,
       });
     }
   }
+  return failed;
 }
 
 /**
@@ -223,7 +228,16 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
  * would otherwise stay stale until a reload.
  */
 export async function refreshCachedProfilePictures(): Promise<void> {
-  await refreshPictures(Object.keys(userProfilePictures));
+  await Telemetry.span('profile_pictures.resync', async (span) => {
+    const ids = Object.keys(userProfilePictures);
+    span.setAttr('profile_pictures.resync.user_count', ids.length);
+    span.setAttr(
+      'profile_pictures.resync.batch_count',
+      Math.ceil(ids.length / REFRESH_BATCH_SIZE)
+    );
+    const failed = await refreshPictures(ids);
+    span.setAttr('profile_pictures.resync.failed_batches', failed);
+  });
 }
 
 let resync: Promise<void> | undefined;
