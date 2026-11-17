@@ -1,0 +1,1379 @@
+{
+  "$schema": "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Macro",
+    "subtitle": "Search and edit your workspace",
+    "description": "Macro is a unified workspace for email, chat, tasks, documents, calendars, CRM and agents. This app lets you work with your Macro workspace from ChatGPT: search across all your content, read and edit documents, post in channels, triage and send email, manage tasks, projects and calendar events, and query databases. Every action runs as you, so Macro's sharing and permission rules apply.",
+    "category": "PRODUCTIVITY"
+  },
+  "mcp_server": {
+    "url": "https://mcp-chatgpt-worker.macroverse.workers.dev/mcp"
+  },
+  "tools": {
+    "activity_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's activity history (for example activity.mine) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "agent_sessions_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's agent sessions (for example AgentInvocation.activity, AgentSession.access.direct, AgentSession.access.state) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Can list the repositories and branches of the user's connected GitHub account, but only reads them.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "agent_sessions_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's agent sessions in Macro (for example AgentSession.access.request, AgentSession.access.submit, AgentSession.archive).",
+        "open_world_justification": "Can start managed coding agents and refresh their changes against the user's connected code repositories.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in agent_sessions_delete."
+      }
+    },
+    "agent_sessions_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's agent sessions (for example AgentSession.delete, AgentSession.access.remove, AgentSession.access.cancel).",
+        "open_world_justification": "Can prompt and control coding agents and submit review results that act on the user's connected code repositories.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel agent sessions (operations such as AgentSession.delete, AgentSession.access.remove, AgentSession.access.cancel), which may not be recoverable."
+      }
+    },
+    "agents_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's agent configurations (for example agents.coding, agents.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "agents_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's agent configurations in Macro (for example Agent.update, agents.create).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in agents_delete."
+      }
+    },
+    "agents_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's agent configurations (for example Agent.replace).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel agent configurations (operations such as Agent.replace), which may not be recoverable."
+      }
+    },
+    "ai_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's AI helper results (for example ai.usage) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "ai_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Runs a new AI model generation over input the user supplies and returns its answer; it changes nothing in the user's workspace but is not declared read-only because each call runs a model.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "api_keys_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's API keys (for example apiKeys.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "api_keys_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's API keys in Macro (for example apiKeys.create, apiKeys.tokenForEmail).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in api_keys_delete."
+      }
+    },
+    "api_keys_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's API keys (for example UserApiKey.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel API keys (operations such as UserApiKey.delete), which may not be recoverable."
+      }
+    },
+    "bots_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's bots (for example Bot.channels, Bot.tokens, Bot.webhooks) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "bots_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's bots in Macro (for example Bot.createToken, Bot.grantChannel, Bot.update).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in bots_delete."
+      }
+    },
+    "bots_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's bots (for example Bot.delete, Bot.revokeChannel, BotToken.revoke).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel bots (operations such as Bot.delete, Bot.revokeChannel, BotToken.revoke), which may not be recoverable."
+      }
+    },
+    "calendar_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's calendars, events and bookings (for example Booking.rescheduleSlots, BookingLink.webUrl, calendar.availabilityCalendars) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "calendar_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's calendars, events and bookings in Macro (for example Booking.setAttendance, BookingLink.edit, calendar.booking.createLink).",
+        "open_world_justification": "Adds events to and changes availability settings on the user's connected calendar provider (Google or Microsoft).",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in calendar_delete."
+      }
+    },
+    "calendar_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's calendars, events and bookings (for example CalendarEvent.delete, Booking.cancel, CalendarReplacement.confirm).",
+        "open_world_justification": "Creates, updates, cancels and deletes events and bookings on the user's connected calendar provider and can send invitations to guests.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel calendars, events and bookings (operations such as CalendarEvent.delete, Booking.cancel, CalendarReplacement.confirm), which may not be recoverable."
+      }
+    },
+    "calls_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's calls and call records (for example CallMessage.author, CallRecord.access.direct, CallRecord.access.state) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "calls_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's calls and call records in Macro (for example CallMessage.reply, CallRecord.access.request, CallRecord.access.submit).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in calls_delete."
+      }
+    },
+    "calls_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's calls and call records (for example CallMessage.delete, CallRecord.delete, CallRecord.access.remove).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel calls and call records (operations such as CallMessage.delete, CallRecord.delete, CallRecord.access.remove), which may not be recoverable."
+      }
+    },
+    "channels_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's channels and messages (for example Channel.activeCall, Channel.agentConversations, Channel.attachments) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "channels_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's channels and messages in Macro (for example Channel.addParticipants, Channel.favorite, Channel.join).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in channels_delete."
+      }
+    },
+    "channels_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's channels and messages (for example Channel.delete, Channel.deleteProperty, channels.labels.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel channels and messages (operations such as Channel.delete, Channel.deleteProperty, channels.labels.delete), which may not be recoverable."
+      }
+    },
+    "chats_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's AI chats (for example Chat.access.direct, Chat.access.state, Chat.history) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "chats_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's AI chats in Macro (for example Chat.access.request, Chat.access.submit, Chat.copy).",
+        "open_world_justification": "Sending a chat message runs an AI model that can call out to external services such as web search.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in chats_delete."
+      }
+    },
+    "chats_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's AI chats (for example Chat.delete, Chat.deleteProperty, Chat.access.remove).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel AI chats (operations such as Chat.delete, Chat.deleteProperty, Chat.access.remove), which may not be recoverable."
+      }
+    },
+    "core_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's comments, threads and account-manager grants (for example AccountManagerGrant.managed, AccountManagerGrant.manager, accountManagers.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "core_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's comments, threads and account-manager grants in Macro (for example accountManagers.askToBeManagedBy, accountManagers.askToManage, DiscussionComment.edit).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in core_delete."
+      }
+    },
+    "core_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's comments, threads and account-manager grants (for example DiscussionComment.delete, MessageThread.delete, AccountManagerGrant.revoke).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel comments, threads and account-manager grants (operations such as DiscussionComment.delete, MessageThread.delete, AccountManagerGrant.revoke), which may not be recoverable."
+      }
+    },
+    "crm_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's CRM companies, contacts and deals (for example Company.comments, Company.contacts, Company.domain) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "crm_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's CRM companies, contacts and deals in Macro (for example Company.comment, Company.createContact, Company.favorite).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in crm_delete."
+      }
+    },
+    "crm_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's CRM companies, contacts and deals (for example Company.deleteProperty, crm.blockDomain, crm.resetStages).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel CRM companies, contacts and deals (operations such as Company.deleteProperty, crm.blockDomain, crm.resetStages), which may not be recoverable."
+      }
+    },
+    "databases_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's databases, tables and rows (for example Database.access.direct, Database.access.state, Database.columnCasts) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "databases_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's databases, tables and rows in Macro (for example Database.access.request, Database.access.submit, Database.addColumn).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in databases_delete."
+      }
+    },
+    "databases_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's databases, tables and rows (for example Database.deleteColumn, Database.deleteTable, DatabaseColumn.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel databases, tables and rows (operations such as Database.deleteColumn, Database.deleteTable, DatabaseColumn.delete), which may not be recoverable."
+      }
+    },
+    "documents_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's documents, comments and files (for example Comment.author, Comment.threadId, Document.access.direct) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "documents_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's documents, comments and files in Macro (for example Comment.edit, Comment.reply, Document.access.request).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in documents_delete."
+      }
+    },
+    "documents_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's documents, comments and files (for example Comment.delete, Document.delete, Document.deleteProperty).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel documents, comments and files (operations such as Comment.delete, Document.delete, Document.deleteProperty), which may not be recoverable."
+      }
+    },
+    "email_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's email threads, drafts and labels (for example email.blockedSenders, email.connectionProviders, email.contacts) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "email_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's email threads, drafts and labels in Macro (for example DraftAttachment.complete, email.archive, email.blockSender).",
+        "open_world_justification": "Archives, labels, drafts and blocks senders in the user's connected email provider (Gmail or Outlook).",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in email_delete."
+      }
+    },
+    "email_send": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Sends new messages on the user's behalf (for example email.send, email.sendConfirmed, EmailDraft.schedule), which changes state outside Macro.",
+        "open_world_justification": "Sends, replies to, forwards and schedules email to recipients outside Macro through the user's connected email provider.",
+        "destructive_justification": "Only sends new messages and does not delete, overwrite or revoke anything, though a sent message cannot be unsent."
+      }
+    },
+    "email_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's email threads, drafts and labels (for example email.deleteLabel, EmailDraft.delete, EmailFilter.delete).",
+        "open_world_justification": "Deletes drafts and labels and changes thread state in the user's connected email provider.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel email threads, drafts and labels (operations such as email.deleteLabel, EmailDraft.delete, EmailFilter.delete), which may not be recoverable."
+      }
+    },
+    "entity_mentions_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's mentions in Macro (for example entityMentions.create).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in entity_mentions_delete."
+      }
+    },
+    "entity_mentions_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's mentions (for example EntityMention.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel mentions (operations such as EntityMention.delete), which may not be recoverable."
+      }
+    },
+    "external_chat_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's external chat conversations (for example ExternalChat.community, ExternalChat.delivery, ExternalChat.messageAttachments) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "external_chat_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's external chat conversations in Macro (for example ExternalChat.favorite, ExternalChat.markRead, ExternalChat.muteNotifications).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in external_chat_delete."
+      }
+    },
+    "external_chat_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's external chat conversations (for example ExternalChat.remove, ExternalChat.send).",
+        "open_world_justification": "Can send messages to people on external chat networks connected to the user's account.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel external chat conversations (operations such as ExternalChat.remove, ExternalChat.send), which may not be recoverable."
+      }
+    },
+    "favorites_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's favorites (for example favorites.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "favorites_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's favorites in Macro (for example favorites.add, favorites.remove, favorites.reorder).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "foreign_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's linked external items (for example foreignEntities.bySource, foreignEntities.githubPullRequestFacets, ForeignEntity.metadata) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "foreign_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's linked external items in Macro (for example ForeignEntity.favorite, ForeignEntity.muteNotifications, ForeignEntity.unfavorite).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "forms_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's forms and responses (for example Form.myResponse, Form.questions, Form.respondUrl) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "forms_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's forms and responses in Macro (for example Form.submit, Form.update, Form.updateSharePermissions).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in forms_delete."
+      }
+    },
+    "forms_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's forms and responses (for example Form.replaceLayout, Form.editResponse).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel forms and responses (operations such as Form.replaceLayout, Form.editResponse), which may not be recoverable."
+      }
+    },
+    "github_pull_requests_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's linked GitHub pull requests (for example GithubPullRequest.changes) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "harnesses_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's agent harnesses (for example Harness.access.direct, Harness.access.state, Harness.residents) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "harnesses_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's agent harnesses in Macro (for example Harness.access.request, Harness.access.submit, Harness.rename).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in harnesses_delete."
+      }
+    },
+    "harnesses_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's agent harnesses (for example Harness.delete, Harness.access.remove, Harness.access.cancel).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel agent harnesses (operations such as Harness.delete, Harness.access.remove, Harness.access.cancel), which may not be recoverable."
+      }
+    },
+    "images_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's images (for example StaticImage.toMarkdown) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "images_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Generates or edits an image with an AI model and stores the result as a new file in the user's Macro workspace.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "initiatives_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's initiatives (for example Initiative.access.direct, Initiative.access.state, Initiative.activity) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "initiatives_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's initiatives in Macro (for example Initiative.access.request, Initiative.access.submit, Initiative.comment).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in initiatives_delete."
+      }
+    },
+    "initiatives_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's initiatives (for example Initiative.delete, Initiative.access.remove, Initiative.access.cancel).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel initiatives (operations such as Initiative.delete, Initiative.access.remove, Initiative.access.cancel), which may not be recoverable."
+      }
+    },
+    "me_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's own profile (for example me.profilePicture) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "me_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's own profile in Macro (for example me.update).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "meetings_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's meetings (for example Meeting.invitePermissions, Meeting.webUrl, meetings.active) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "meetings_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's meetings in Macro (for example Meeting.inviteUsers, Meeting.update, meetings.create).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in meetings_delete."
+      }
+    },
+    "meetings_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's meetings (for example Meeting.cancel, Meeting.invite).",
+        "open_world_justification": "Can email meeting invitations to the addresses the user names.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel meetings (operations such as Meeting.cancel, Meeting.invite), which may not be recoverable."
+      }
+    },
+    "memory_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's saved memory (for example memory.read) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "memory_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's saved memory (for example memory.edit).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel saved memory (operations such as memory.edit), which may not be recoverable."
+      }
+    },
+    "notifications_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's notifications (for example Notification.seen, notifications.list, notifications.preferences) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "notifications_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's notifications in Macro (for example Notification.markDone, Notification.markSeen, Notification.markUndone).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in notifications_delete."
+      }
+    },
+    "notifications_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's notifications (for example Notification.delete, notifications.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel notifications (operations such as Notification.delete, notifications.delete), which may not be recoverable."
+      }
+    },
+    "pins_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's pins (for example pins.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "pins_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's pins in Macro (for example pins.add, pins.remove, pins.reorder).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "projects_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's projects (for example Project.access.direct, Project.access.state, Project.accessLevel) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "projects_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's projects in Macro (for example Project.access.request, Project.access.submit, Project.favorite).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in projects_delete."
+      }
+    },
+    "projects_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's projects (for example Project.delete, Project.deleteProperty, Project.access.remove).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel projects (operations such as Project.delete, Project.deleteProperty, Project.access.remove), which may not be recoverable."
+      }
+    },
+    "properties_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's properties (for example properties.bulkEntityProperties, properties.list, properties.tags) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "properties_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's properties in Macro (for example properties.create, properties.createTag, PropertyDefinition.addOption).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in properties_delete."
+      }
+    },
+    "properties_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's properties (for example PropertyDefinition.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel properties (operations such as PropertyDefinition.delete), which may not be recoverable."
+      }
+    },
+    "referrals_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's referrals (for example referrals.link) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "referrals_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Emails referral invitations to the addresses the user names.",
+        "open_world_justification": "Can email referral invitations to the addresses the user names.",
+        "destructive_justification": "Sends invitation emails, which cannot be recalled once sent."
+      }
+    },
+    "routines_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's routines (for example Routine.children, Routine.history, Routine.template) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "routines_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's routines in Macro (for example Routine.activateTemplate, Routine.execute, Routine.keepAsOwn).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in routines_delete."
+      }
+    },
+    "routines_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's routines (for example Routine.delete, Routine.stopSharingTemplate).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel routines (operations such as Routine.delete, Routine.stopSharingTemplate), which may not be recoverable."
+      }
+    },
+    "saved_views_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's saved views (for example SavedView.refresh, savedViews.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "saved_views_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's saved views in Macro (for example SavedView.edit, savedViews.create, savedViews.reorder).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in saved_views_delete."
+      }
+    },
+    "saved_views_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's saved views (for example SavedView.remove).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel saved views (operations such as SavedView.remove), which may not be recoverable."
+      }
+    },
+    "search_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's content (for example search.all, search.page) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "spreadsheets_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's spreadsheets (for example Spreadsheet.calculate, Spreadsheet.read, Spreadsheet.webUrl) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "spreadsheets_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's spreadsheets in Macro (for example Spreadsheet.applyEdits, Spreadsheet.edit).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "tasks_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's tasks (for example Task.completed, Task.webUrl, tasks.findSimilar) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "tasks_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's tasks in Macro (for example tasks.create).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "teams_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's teams (for example Team.invites, Team.members, teams.current) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "teams_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's teams (for example TeamInvite.revoke, Team.invite).",
+        "open_world_justification": "Can email team invitations to the addresses the user names.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel teams (operations such as TeamInvite.revoke, Team.invite), which may not be recoverable."
+      }
+    },
+    "unfurls_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's link previews (for example unfurls.bulk, unfurls.get) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Fetches previews of external web links the user shares, without changing them.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "users_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's users and contacts (for example User.activity, User.email, User.isAgent) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "users_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's users and contacts in Macro (for example User.dm, User.favorite, User.muteNotifications).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in users_delete."
+      }
+    },
+    "users_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's users and contacts (for example User.deleteProperty).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel users and contacts (operations such as User.deleteProperty), which may not be recoverable."
+      }
+    },
+    "web_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Runs a public web search or fetches one public web page through Macro on the user's behalf; it changes nothing in the user's workspace but is not declared read-only because each call reaches the internet.",
+        "open_world_justification": "Runs web searches and fetches public web pages on the user's behalf; it does not post or publish anything.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "webhooks_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's webhooks (for example Webhook.scope, webhooks.list) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "webhooks_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's webhooks in Macro (for example Webhook.pause, Webhook.rename, Webhook.resume).",
+        "open_world_justification": "Creates webhooks that deliver Macro events to external URLs the user provides and sends a validation request to them.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything; those operations are in webhooks_delete."
+      }
+    },
+    "webhooks_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes, overwrites or cancels the user's webhooks (for example Webhook.delete).",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Can permanently delete, overwrite or cancel webhooks (operations such as Webhook.delete), which may not be recoverable."
+      }
+    },
+    "whatsapp_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's WhatsApp chats (for example whatsapp.account, whatsapp.chats, WhatsAppAccount.refresh) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    },
+    "whatsapp_write": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and changes the user's WhatsApp chats in Macro (for example WhatsAppChat.add).",
+        "open_world_justification": "Connects a WhatsApp chat from the user's linked WhatsApp account.",
+        "destructive_justification": "Makes undoable changes only and does not delete, overwrite or revoke anything."
+      }
+    },
+    "workspace_read": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the user's workspace items (for example workspace.list, workspace.page) and returns the results without creating, changing or deleting anything.",
+        "open_world_justification": "Only operates on the user's private Macro workspace and does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access or perform irreversible actions."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Search the user's Macro content by keyword across documents, messages and email.",
+      "user_prompt": "Find everything in Macro about the Q3 launch plan.",
+      "file_attachment_urls": null,
+      "tools_triggered": "search_read",
+      "expected_output": "Lists matching documents, messages and emails with titles and links into Macro.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create a new markdown document in the user's workspace.",
+      "user_prompt": "Create a Macro document called \"Weekly sync notes\" with an agenda for tomorrow's team meeting.",
+      "file_attachment_urls": null,
+      "tools_triggered": "documents_write",
+      "expected_output": "Creates the document with an agenda and returns a link to open it in Macro.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Read and summarize the user's inbox.",
+      "user_prompt": "Summarize the emails in my Macro inbox from today.",
+      "file_attachment_urls": null,
+      "tools_triggered": "email_read",
+      "expected_output": "Summarizes today's inbox threads with senders and subjects.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Read the user's calendar for a day.",
+      "user_prompt": "What's on my calendar in Macro this Friday?",
+      "file_attachment_urls": null,
+      "tools_triggered": "calendar_read",
+      "expected_output": "Lists Friday's events with times and attendees.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Post a message to a Macro channel the user belongs to.",
+      "user_prompt": "Post \"Deploy is done\" in the engineering channel in Macro.",
+      "file_attachment_urls": null,
+      "tools_triggered": "channels_write",
+      "expected_output": "Posts the message in the engineering channel and confirms with a link to it.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for general knowledge questions.",
+      "user_prompt": "Explain how photosynthesis works.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "ChatGPT answers directly without invoking the app.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for creative writing that does not involve the user's workspace.",
+      "user_prompt": "Write a short poem about Monday mornings.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "ChatGPT writes the poem without invoking the app.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for travel booking, which the app does not support.",
+      "user_prompt": "Book me a flight to Denver next Tuesday.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app is not invoked because booking travel is outside its supported workflows.",
+      "expected_output_url": null
+    }
+  ]
+}
