@@ -305,11 +305,18 @@ your inbox** opens Signal.
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
 All mailbox with Done applied, excluding threads teammates shared with you. It
-respects the selected inboxes and filters. The search service cannot filter
-archive state, so search within the tab keeps only archived hits on the client.
-Rows offer **Unarchive email**;
+respects the selected inboxes and filters, and search within the tab finds only
+done threads. Rows offer **Unarchive email**;
 unarchiving removes the row at once. The tab persists across reloads. An empty
 list shows `No archived email`.
+
+Search within a tab or facet finds the threads the list would show: Shared finds
+threads shared with you through a grant to you, a channel or a team, and none of
+your own; Calendar finds only threads with an invitation; Read status and Done
+filter by the thread's read and inbox state, as the list does (Done is not the
+notification's state). Check each with a search term that also matches threads
+the tab leaves out. Drafts and Sent still search all your mail and trim on the
+client.
 
 A thread carrying a sent file shows a muted paperclip immediately before its
 date, in every list layout. Inline images (an image with a Content-ID, such as
