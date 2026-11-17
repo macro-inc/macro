@@ -79,8 +79,9 @@ where
         .map_err(|_| status_rejection(StatusCode::BAD_REQUEST, "conflicting_credentials"))?;
     let user_token = match credential {
         RequestCredential::Internal => {
-            let convention = internal_header_convention(&parts.headers)
-                .expect("an internal key header was found");
+            let Some(convention) = internal_header_convention(&parts.headers) else {
+                return Err(rejection("unauthorized"));
+            };
             return authorize_internal_request::<S, Svc>(parts, state, convention).await;
         }
         RequestCredential::UserApiKey => {
