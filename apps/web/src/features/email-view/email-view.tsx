@@ -43,6 +43,7 @@ import { EmailReader } from './components/EmailReader';
 import { EmailRecentSearches } from './components/EmailRecentSearches';
 import { EmailSidebar } from './components/EmailSidebar';
 import { canSearchEmailTab, EMAIL_TABS } from './constants';
+import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
@@ -145,7 +146,7 @@ function EmailPanes(props: {
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        focusSearchResults={props.focusList}
+        focusSearchResults={() => focusEmailSearchResults(panel)}
         registerSearch={search.registerListSearch}
         searchSuggestions={searchSuggestions()}
       />
@@ -156,7 +157,7 @@ function EmailPanes(props: {
             suggestions={suggestions()}
             onPick={(index) => {
               suggestions().pick(index);
-              props.focusList();
+              focusEmailSearchResults(panel);
             }}
           />
         )}

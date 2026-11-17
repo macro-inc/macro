@@ -56,7 +56,9 @@ and `Reminders` (when reminders are enabled), followed by a **Library** section 
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
-`g i` or `g o`. Calendar mail remains available through the calendar filter and
+`g i` or `g o`. Leaving the search field (`Escape`, `ArrowDown`, `Enter`, or
+picking a recent search) hands the keyboard to the view, not the list, so `Tab`
+still switches tabs there. Calendar mail remains available through the calendar filter and
 existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
