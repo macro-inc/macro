@@ -34,7 +34,7 @@ the same occurrence never resets edits. Read-only occurrences keep their existin
 detail surface and do not replace the pinned draft. Pinned editors ignore outside
 clicks. Close, Cancel,
 Escape, and leaving the view ask before discarding edits; an open field menu
-handles Escape first. Touch continues to use its existing sheet.
+handles Escape first. Touch uses a single grouped sheet with its save action pinned below the scroll body.
 New-menu drafts start at the next half hour and last thirty minutes. Grid
 selections and supplied draft values keep their chosen range.
 
@@ -55,11 +55,22 @@ commit together; Escape or an outside press drops an incomplete selection. Same-
 ranges show one date, except when only the end is editable; multi-day ranges show
 both. Each timed end keeps its time field: type `3p` or `15:30` and the list jumps
 there, Enter commits, and Escape restores the old time. Escape dismisses the active
-menu before the composer. Touch keeps its existing per-end date pickers until the
-phone composer replacement.
+menu before the composer. The phone sheet uses the same paired date picker above
+its start/end clock pills.
 Start-time edits keep the event's length until its end is explicitly changed.
 Legacy per-end date pickers also preserve the duration or all-day day count.
 A start past a fixed end shows the end-before-start error.
+
+The phone composer orders title/type, When, people, call/calendar, optional-field
+add rows, time zone, reminders, guest permissions, and visibility. Adding a
+Description or Location replaces its add row and focuses the field in its final
+position. The title becomes compact above the scroller after its group scrolls
+away. The footer stays outside the single scroll viewport; its fade disappears
+at the bottom. First tap on a time pill opens the keyboard-free list, a second
+tap enters typing, and choosing an overnight end advances the end date. People
+selection opens a staged picker: Done applies; Cancel or lost permission drops
+the draft. Verify both ordinary and recurring edits, keyboard dismissal, and
+save-failure retry on a physical phone.
 
 The time-zone selector describes the displayed wall-clock fields, initially in
 the viewer's local zone. Explicitly selecting another zone reinterprets those
@@ -79,7 +90,7 @@ calendar retain their locale default unless their host supplies a preference.
 Calendar foundation examples are in the UI gallery: `?ui=time-input`,
 `?ui=date-tile`, `?ui=calendar-range`, `?ui=calendar-swatch`, `?ui=busy-indicator`,
 `?ui=value-pill`, `?ui=mobile-time-input`, and `?ui=mobile-sheet-parts` under
-`/app/component/ui`. The new phone time-picker example is not yet wired into the
+`/app/component/ui`. The phone time-picker example uses the same control as the
 phone composer: its first tap opens a list; tapping the open value enters typing.
 The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
@@ -591,7 +602,7 @@ does not silently send the invitation from another connected inbox.
 Failed calendar or account queries show `Could not load your calendars.` with
 `Try again`, rather than offering consent or presenting the failure as backfill.
 
-`New event` opens the desktop composer with All day in the duration menu; the phone form retains its All-day switch.
+`New event` opens the desktop composer with All day in the duration menu; the phone form keeps an All day switch below its date/time grid.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates the Macro call together with the event in one save, so the

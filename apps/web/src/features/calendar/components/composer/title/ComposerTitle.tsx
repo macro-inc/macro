@@ -2,7 +2,9 @@ import { t } from '@app/lib/i18n';
 import { TextField } from '@ui';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
-export function ComposerTitle() {
+export function ComposerTitle(
+  props: { autofocus?: boolean; submitOnEnter?: boolean } = {}
+) {
   const model = useCalendarComposer();
   return (
     <TextField
@@ -15,8 +17,8 @@ export function ComposerTitle() {
         variant="title"
         rows={1}
         autoResize
-        submitOnEnter
-        autofocus={!model.isEdit()}
+        submitOnEnter={props.submitOnEnter ?? true}
+        autofocus={props.autofocus ?? !model.isEdit()}
         aria-label={t('calendar.composerTitle')}
         placeholder={t('calendar.newEvent')}
       />

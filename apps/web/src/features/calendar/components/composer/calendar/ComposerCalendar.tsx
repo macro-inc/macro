@@ -5,16 +5,18 @@ import { For, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { CalendarSwatch } from '../../calendar-swatch/CalendarSwatch';
 
-export function ComposerCalendar() {
+export function ComposerCalendar(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
   const selected = model.controller.selectedCalendarOption;
   const readOnly = () => model.isEdit() || model.fieldIsDisabled('calendar');
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="value"
+        variant={props.fullWidth ? 'ghost' : 'value'}
         finish="flat"
-        size="sm"
+        size={props.fullWidth ? 'sheet' : 'sm'}
+        fullWidth={props.fullWidth}
+        class={props.fullWidth ? 'justify-between' : undefined}
         aria-label={t('calendar.composerCalendar')}
         disabled={readOnly()}
       >
@@ -22,7 +24,15 @@ export function ComposerCalendar() {
           {(calendar) => (
             <>
               <CalendarSwatch color={calendar().color} />
-              {calendar().label}
+              <span
+                class={
+                  props.fullWidth
+                    ? 'min-w-0 flex-1 truncate text-left'
+                    : undefined
+                }
+              >
+                {calendar().label}
+              </span>
             </>
           )}
         </Show>

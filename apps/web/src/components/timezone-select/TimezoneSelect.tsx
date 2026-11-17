@@ -22,6 +22,7 @@ export function TimezoneSelect(props: {
   label?: string;
   selectionLabel?: string;
   appearance?: 'default' | 'value';
+  fullWidth?: boolean;
 }) {
   let triggerRef: HTMLButtonElement | undefined;
   let searchRef: HTMLInputElement | undefined;
@@ -108,9 +109,10 @@ export function TimezoneSelect(props: {
           class={
             props.appearance === 'value'
               ? buttonClasses({
-                  variant: 'value',
-                  size: 'sm',
-                  class: `min-w-0 ${props.class ?? ''}`,
+                  variant: props.fullWidth ? 'ghost' : 'value',
+                  size: props.fullWidth ? 'sheet' : 'sm',
+                  fullWidth: props.fullWidth,
+                  class: `min-w-0 ${props.fullWidth ? 'justify-between' : ''} ${props.class ?? ''}`,
                 })
               : selectTriggerClasses(
                   `min-w-0 text-sm touch:h-9 ${props.class ?? ''}`

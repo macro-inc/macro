@@ -4,7 +4,7 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { createMemo, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
-export function ComposerTimeZone() {
+export function ComposerTimeZone(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
   const options = timezoneOptions();
   const selectionLabel = createMemo(
@@ -26,6 +26,7 @@ export function ComposerTimeZone() {
         label={t('calendar.timeZone')}
         selectionLabel={selectionLabel()}
         appearance="value"
+        fullWidth={props.fullWidth}
         portalScope="local"
       />
     </Show>

@@ -6,7 +6,7 @@ import { useCalendarComposer } from '../../../context/calendar-composer-context'
 
 const VALUES = ['default', 'public', 'private', 'confidential'] as const;
 
-export function ComposerVisibility() {
+export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
   const unavailable = () => model.editScope() === 'this_event';
   const labels = {
@@ -33,15 +33,24 @@ export function ComposerVisibility() {
       <Tooltip
         label={t('calendar.visibilityUnavailable')}
         disabled={!unavailable()}
+        class={props.fullWidth ? 'w-full' : undefined}
       >
         <Dropdown.Trigger
-          variant="value"
+          variant={props.fullWidth ? 'ghost' : 'value'}
           finish="flat"
-          size="sm"
+          size={props.fullWidth ? 'sheet' : 'sm'}
+          fullWidth={props.fullWidth}
+          class={props.fullWidth ? 'justify-between' : undefined}
           disabled={model.visibilityIsDisabled()}
           aria-label={t('calendar.visibility')}
         >
-          {label()}
+          <span
+            class={
+              props.fullWidth ? 'min-w-0 flex-1 truncate text-left' : undefined
+            }
+          >
+            {label()}
+          </span>
           <CaretDownIcon class="size-3" />
         </Dropdown.Trigger>
       </Tooltip>

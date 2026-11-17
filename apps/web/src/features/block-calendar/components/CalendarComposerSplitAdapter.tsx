@@ -1,10 +1,9 @@
 import { StandaloneComposer } from '@app/features/calendar/views/composer/StandaloneComposer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type ComponentProps, onMount, Show } from 'solid-js';
-import { EventComposerSplit } from './EventComposerSplit';
+import { type ComponentProps, onMount } from 'solid-js';
+import type { EventComposerSplit } from './EventComposerSplit';
 
-/** Outside a calendar workspace, keep the split host and select its desktop editor. */
+/** Adapt the popover split lifecycle; the composer owns its platform layout. */
 export function CalendarComposerSplitAdapter(
   props: ComponentProps<typeof EventComposerSplit>
 ) {
@@ -13,22 +12,15 @@ export function CalendarComposerSplitAdapter(
     panel.handle.setDisplayName(props.event ? 'Edit event' : 'New event')
   );
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <StandaloneComposer
-          event={props.event}
-          initialValues={props.initialValues}
-          suggestedValues={props.suggestedValues}
-          onCalendarChange={props.onCalendarChange}
-          onDirtyChange={props.onDirtyChange}
-          onCreated={props.onCreated}
-          onSaved={props.onSaveSuccess}
-          onClose={() => panel.handle.close()}
-        />
-      }
-    >
-      <EventComposerSplit {...props} />
-    </Show>
+    <StandaloneComposer
+      event={props.event}
+      initialValues={props.initialValues}
+      suggestedValues={props.suggestedValues}
+      onCalendarChange={props.onCalendarChange}
+      onDirtyChange={props.onDirtyChange}
+      onCreated={props.onCreated}
+      onSaved={props.onSaveSuccess}
+      onClose={() => panel.handle.close()}
+    />
   );
 }

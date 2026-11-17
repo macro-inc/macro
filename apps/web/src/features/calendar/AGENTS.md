@@ -25,15 +25,15 @@ host lives in `../block-calendar/`.
 - `components/composer/root/` and `context/calendar-composer-context.ts`: new composer
   Root/parts over `primitives/create-calendar-composer.ts`; preserved behavior has
   temporary old/new conformance coverage. `views/composer/StandaloneComposer.tsx`
-  owns the readiness boundary; `views/composer/create-standalone-composer-setup.ts`
-  constructs its shared model once, with `DesktopComposer.tsx` as the current layout.
+  owns the readiness boundary; `CalendarComposerEditor.tsx` selects desktop/phone
+  composition around one model from `views/composer/create-standalone-composer-setup.ts`.
   `../calendar-view/views/composer/` owns floating/pinned placement and navigation
   dismissal through `primitives/create-calendar-composer-session.ts`. Header dragging
   uses `primitives/create-composer-header-drag.ts`; its target matches the future
   dock without resizing the calendar until drop. Pinned occurrence changes use
   `primitives/create-pinned-composer-selection.ts` and the session's guarded
   `replacePinned`; resolve current selection again after discard approval.
-  Keep the legacy form and split components for touch until the phone replacement is ready.
+  Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
   Initialize the zone to the zone represented by the form's wall-clock fields.
@@ -62,8 +62,10 @@ host lives in `../block-calendar/`.
   and picked clock state through its `primitives/create-time-input.ts` in both layouts.
   Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
   `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
-  `views/composer/mobile/MobileComposerWhen.tsx` composes its two-column date/time
-  grid; keep the old phone form wired until the full 2J layout passes conformance.
+  `views/composer/mobile/MobileComposer.tsx` composes the 2J sheet around those fields;
+  `MobileComposerHost.tsx` uses the popover's footer, header, and sole scroll viewport.
+  Add-field visibility and compact-title observation live in composer primitives.
+  Guest selection stages changes in `PickerSheet` and applies only on Done.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,

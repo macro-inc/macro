@@ -14,6 +14,7 @@ export interface ComposerConferenceProps {
   macroCallsEnabled: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
+  fullWidth?: boolean;
 }
 
 export function ComposerConference(props: ComposerConferenceProps) {
@@ -32,16 +33,24 @@ export function ComposerConference(props: ComposerConferenceProps) {
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="value"
+        variant={props.fullWidth ? 'ghost' : 'value'}
         finish="flat"
-        size="sm"
+        size={props.fullWidth ? 'sheet' : 'sm'}
+        fullWidth={props.fullWidth}
+        class={props.fullWidth ? 'justify-between' : undefined}
         aria-label={t('calendar.conferencing')}
         disabled={props.disabled}
       >
         <Show when={props.value === 'macro'}>
           <MacroLogo class="size-3.5 text-ink-muted" />
         </Show>
-        {label()}
+        <span
+          class={
+            props.fullWidth ? 'min-w-0 flex-1 truncate text-left' : undefined
+          }
+        >
+          {label()}
+        </span>
         <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local" class="min-w-48">

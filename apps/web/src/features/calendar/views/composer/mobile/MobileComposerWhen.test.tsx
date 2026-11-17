@@ -12,7 +12,10 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-function setup(timeFormat: '12-hour' | '24-hour' = '12-hour') {
+function setup(
+  timeFormat: '12-hour' | '24-hour' = '12-hour',
+  thisEvent = false
+) {
   let state: ReturnType<typeof createCalendarEventFormController> | undefined;
   render(() => {
     const controller = createCalendarEventFormController({
@@ -32,10 +35,12 @@ function setup(timeFormat: '12-hour' | '24-hour' = '12-hour') {
     const model = createCalendarComposer({
       controller,
       pending: false,
-      isEdit: false,
+      isEdit: thisEvent,
+      showRecurringEditNotice: thisEvent,
       timeFormat,
       onSubmit: vi.fn(),
     });
+    if (thisEvent) model.changeEditScope('this_event');
     return (
       <ComposerRoot model={model}>
         <MobileComposerWhen />
@@ -85,4 +90,14 @@ it('commits both range dates without changing the displayed 24-hour times', asyn
   expect(
     screen.getByRole('combobox', { name: 'event end time' }).textContent
   ).toBe('21:00');
+});
+
+it('announces why recurrence cannot change for a single occurrence', () => {
+  setup('12-hour', true);
+  const repeat = screen.getByRole('button', { name: 'Repeats' });
+  const reasonId = repeat.getAttribute('aria-describedby');
+  expect(reasonId).toBeTruthy();
+  expect(document.getElementById(reasonId ?? '')?.textContent).toContain(
+    'All events'
+  );
 });

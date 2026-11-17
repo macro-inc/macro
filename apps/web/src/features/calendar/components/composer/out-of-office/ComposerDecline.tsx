@@ -16,7 +16,7 @@ const DECLINE_MODES = [
   { value: 'decline_none', label: 'calendar.declineNone' },
 ] as const;
 
-export function ComposerDecline() {
+export function ComposerDecline(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
   const selected = () =>
     DECLINE_MODES.find(
@@ -25,14 +25,26 @@ export function ComposerDecline() {
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="value"
+        variant={props.fullWidth ? 'ghost' : 'value'}
         finish="flat"
-        size="sm"
+        size={props.fullWidth ? 'sheet' : 'sm'}
+        fullWidth={props.fullWidth}
+        class={props.fullWidth ? 'justify-between' : undefined}
         aria-label={t('calendar.declineMode')}
         disabled={model.fieldIsDisabled('outOfOffice')}
       >
         <Show when={selected()} fallback={t('calendar.declineMode')}>
-          {(mode) => t(mode().label)}
+          {(mode) => (
+            <span
+              class={
+                props.fullWidth
+                  ? 'min-w-0 flex-1 truncate text-left'
+                  : undefined
+              }
+            >
+              {t(mode().label)}
+            </span>
+          )}
         </Show>
         <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>

@@ -8,7 +8,7 @@ import { exportCalendarDescription } from '../../../utils/calendar-description';
 export type ComposerDescriptionEditorProps = Pick<
   ComponentProps<typeof MarkdownTextarea>,
   'resolveAppLink'
-> & { initialValue: string };
+> & { initialValue: string; inputRef?: (element: HTMLDivElement) => void };
 
 export function ComposerDescriptionEditor(
   props: ComposerDescriptionEditorProps
@@ -32,9 +32,10 @@ export function ComposerDescriptionEditor(
         resolveAppLink={props.resolveAppLink}
         placeholder={t('calendar.addDescription')}
         portalScope="local"
-        domRef={(element) =>
-          element.setAttribute('aria-label', t('calendar.description'))
-        }
+        domRef={(element) => {
+          element.setAttribute('aria-label', t('calendar.description'));
+          props.inputRef?.(element);
+        }}
         class="min-h-12 w-full bg-transparent px-2.5 py-1 text-sm text-ink outline-none"
       />
     </div>

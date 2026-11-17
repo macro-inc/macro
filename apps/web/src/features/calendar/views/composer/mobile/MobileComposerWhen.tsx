@@ -6,6 +6,7 @@ import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
 import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
 import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import { ComposerRecurrence } from '../../../components/composer/recurrence/ComposerRecurrence';
@@ -51,8 +52,8 @@ export function MobileComposerWhen() {
             onChange={model.controller.setAllDay}
           />
         </SheetRow>
-        <SheetRow label={t('calendar.composerRepeats')}>
-          <ComposerRecurrence />
+        <SheetRow icon={<RepeatIcon class="size-4" />}>
+          <ComposerRecurrence fullWidth />
         </SheetRow>
         <Show when={model.controller.recurrenceChoice() === 'custom'}>
           <SheetRow class="py-3">
@@ -69,6 +70,16 @@ export function MobileComposerWhen() {
           </SheetRow>
         </Show>
       </SheetGroup>
+      <Show when={model.recurrenceScopeReason()}>
+        {(reason) => (
+          <p
+            id={model.ids.recurrenceReason}
+            class="px-3 text-[13px] text-ink-muted"
+          >
+            {reason()}
+          </p>
+        )}
+      </Show>
       <ComposerRangeFeedback />
     </DateTimeRange.Root>
   );
