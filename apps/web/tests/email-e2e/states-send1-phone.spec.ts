@@ -2,7 +2,7 @@
 // header for a time chosen, held, proposed anew and being cancelled, the
 // clock's names, and the picker's own rows on a phone (Clear time, the held
 // or proposed time with its footer, Cancel schedule while the cancel is on
-// its way), and the notice of a schedule with its Undo (a known bug in some runs).
+// its way), and the notice that Undo took a schedule back.
 //
 // Gmail only: these are the composer's own words for a time Macro holds,
 // the same code whatever the mailbox; the desktop specs see them on both.
@@ -96,16 +96,15 @@ test.describe("the phone composer's send time, Gmail inbox", () => {
     await expect.poll(async () => (await scheduled(mailbox)).length).toBe(1);
   });
 
-  // Known bug (phone-scheduled-notice-replaced), in some runs: the composer
-  // mounted again after a schedule can read the draft from before it, and
-  // then takes the schedule for one made elsewhere: its alert "Email
-  // scheduled for … Cancel the schedule to edit." takes the place of the
-  // "Email scheduled" notice a fraction of a second after it is shown, and
-  // Undo goes with it. Seen in 6 of 90 runs of this test under load
-  // (8 workers), and in one CI shard on both attempts: `@sometimes`.
-  test('known bug: phone-scheduled-notice-replaced: the notice of a schedule made on a phone stays, and its Undo says the schedule is gone @known-bug', {
-    tag: ['@known-bug', '@sometimes'],
-  }, async ({ page, mailbox }) => {
+  // When this fails, a schedule made on a phone loses its notice or its
+  // Undo: the composer the thread view mounts after the schedule takes it
+  // for one made elsewhere and its alert takes the notice's place (a phone
+  // shows one notice at a time), or Undo says nothing of the schedule it
+  // took back.
+  test('the notice of a schedule made on a phone stays, and its Undo says the schedule is gone', async ({
+    page,
+    mailbox,
+  }) => {
     await openPhoneComposer(page, mailbox);
     await chooseTomorrow(page, 'Picnic undone');
     await page
@@ -113,9 +112,7 @@ test.describe("the phone composer's send time, Gmail inbox", () => {
       .tap();
     await expect(scheduledNotice(page)).toBeVisible({ timeout: 30_000 });
     await expect.poll(async () => (await scheduled(mailbox)).length).toBe(1);
-    await scheduledNotice(page)
-      .getByRole('button', { name: 'Undo' })
-      .tap({ timeout: 15_000 });
+    await scheduledNotice(page).getByRole('button', { name: 'Undo' }).tap();
     await expect(notice(page, /^Schedule cancelled\.$/)).toBeVisible();
     saw('STC-065');
     await expect.poll(() => scheduled(mailbox)).toEqual([]);
@@ -134,8 +131,7 @@ test.describe("the phone composer's send time, Gmail inbox", () => {
     await page
       .getByRole('button', { name: 'Schedule send', exact: true })
       .tap();
-    // Not by its notice: that can give way to an alert at once (the known
-    // bug above).
+    await expect(scheduledNotice(page)).toBeVisible({ timeout: 30_000 });
     await expect.poll(async () => (await scheduled(mailbox)).length).toBe(1);
 
     const held = summary(page, /^Scheduled for [A-Z][a-z]{2} \d+ at 8:00 AM/);
