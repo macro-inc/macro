@@ -77,6 +77,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         origin,
         Arc::new(|_| false),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&origin_harness),
         origin_ready,
         empty_models(redis.clone()),
@@ -87,6 +88,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         peer,
         Arc::new(|_| false),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&peer_harness),
         peer_ready,
         empty_models(redis.clone()),
@@ -121,6 +123,7 @@ async fn a_responsible_replicas_error_does_not_fail_the_publish() {
         replica,
         Arc::new(|_| false),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -151,6 +154,7 @@ async fn publishing_without_an_owner_still_succeeds() {
         ReplicaId::mint(),
         Arc::new(|_| false),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -184,6 +188,7 @@ async fn overlapping_harness_connections_execute_once() {
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&first),
         first_ready,
         empty_models(redis.clone()),
@@ -194,6 +199,7 @@ async fn overlapping_harness_connections_execute_once() {
         ReplicaId::mint(),
         Arc::new(move |harness| harness == target),
         Arc::new(|_| false),
+        no_agent_handoff(),
         Arc::clone(&second),
         second_ready,
         empty_models(redis.clone()),
@@ -237,6 +243,7 @@ async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
         ReplicaId::mint(),
         Arc::new(|_| false),
         Arc::new(move |harness| dropped_tx.send(harness).is_ok()),
+        no_agent_handoff(),
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
@@ -250,6 +257,50 @@ async fn a_disconnect_reaches_every_replica_and_runs_no_command() {
         .expect("the disconnect arrives")
         .expect("the consumer is running");
     assert_eq!(disconnected, target);
+    assert_eq!(harness.calls.load(Ordering::SeqCst), 0);
+    consumer.abort();
+}
+
+fn no_agent_handoff() -> super::ApplyAgent {
+    Arc::new(|_, _| Box::pin(async { false }))
+}
+
+#[tokio::test]
+async fn an_agent_handoff_reaches_the_replica_holding_the_runtime_and_runs_no_command() {
+    let redis = redis_client();
+    let harness = harness(false);
+    let target = harness_id();
+    let (handed_tx, mut handed) = tokio::sync::mpsc::unbounded_channel();
+    let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
+    let consumer = tokio::spawn(consume_runtime_commands(
+        redis.clone(),
+        ReplicaId::mint(),
+        Arc::new(|_| false),
+        Arc::new(|_| false),
+        Arc::new(move |harness, environment| {
+            let handed_tx = handed_tx.clone();
+            Box::pin(async move { handed_tx.send((harness, environment)).is_ok() })
+        }),
+        Arc::clone(&harness),
+        ready_tx,
+        empty_models(redis.clone()),
+    ));
+    ready(&mut readiness).await;
+    let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+        [("MACRO_API_KEY".to_owned(), "mak_ada".to_owned())]
+            .into_iter()
+            .collect(),
+    );
+
+    super::publish_apply_agent(&redis, target, environment.clone())
+        .await
+        .unwrap();
+
+    let received = tokio::time::timeout(std::time::Duration::from_secs(2), handed.recv())
+        .await
+        .expect("the agent hand-off arrives")
+        .expect("the consumer is running");
+    assert_eq!(received, (target, environment));
     assert_eq!(harness.calls.load(Ordering::SeqCst), 0);
     consumer.abort();
 }

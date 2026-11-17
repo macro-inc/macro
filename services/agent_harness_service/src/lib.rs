@@ -1771,6 +1771,15 @@ pub async fn run() -> anyhow::Result<()> {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
                         Arc::new(move |harness| runtimes.disconnect(harness))
                     },
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        Arc::new(move |harness, environment| {
+                            let runtimes = Arc::clone(&runtimes);
+                            Box::pin(
+                                async move { runtimes.apply_agent(harness, environment).await },
+                            )
+                        })
+                    },
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),

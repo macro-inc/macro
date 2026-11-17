@@ -10,7 +10,10 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
             memory_gb: 64,
             reserve_gb: 8,
             oversell_factor: 3,
-            image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            images: crate::domain::image::GuestImages {
+                regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+                agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+            },
         })
         .await
         .unwrap();

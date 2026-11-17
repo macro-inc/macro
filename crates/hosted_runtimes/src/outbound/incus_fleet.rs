@@ -352,9 +352,10 @@ impl Fleet for IncusFleet {
                         &format!("{data_gib}GiB"),
                     )
                     .await?;
+                let awaits_agent = enrollment.awaits_agent();
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
-                let image = self.images.for_enrollment(&enrollment);
+                let image = self.images.for_guest(&enrollment, awaits_agent);
                 let mut body =
                     instance_body(&self.config, image, computer, &enrollment_json, Utc::now())?;
                 {
@@ -511,8 +512,7 @@ impl Fleet for IncusFleet {
             memory_gb,
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
-            // Pool computers run no agent, so they use the regular image.
-            image: self.images.regular.name.clone(),
+            images: self.images.map(|image| image.name.clone()),
         })
     }
 

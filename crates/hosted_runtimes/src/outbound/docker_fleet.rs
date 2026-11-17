@@ -288,9 +288,14 @@ impl Fleet for DockerFleet {
                     computer_id: computer.id,
                 });
             }
+            let awaits_agent = enrollment.awaits_agent();
             let enrollment = enrollment.issue().await?;
             let dir = self.write_enrollment(computer.id, &enrollment).await?;
-            let image = self.config.images.for_enrollment(&enrollment).clone();
+            let image = self
+                .config
+                .images
+                .for_guest(&enrollment, awaits_agent)
+                .clone();
             let spec = CreateSpec {
                 image: image.clone(),
                 network: self.config.network.clone(),
@@ -425,8 +430,7 @@ impl Fleet for DockerFleet {
             memory_gb: self.config.memory_gb,
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
-            // Pool computers run no agent, so they use the regular image.
-            image: self.config.images.regular.clone(),
+            images: self.config.images.clone(),
         })
     }
 

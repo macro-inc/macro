@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM team_agents\n                WHERE user_id = $1 AND first_online_at IS NOT NULL\n            ) AS \"online!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "online!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "971c3e1cf099fcc266a38517189dcb5ec3d4e9911e07b65605f4f8cc891b5a22"
+}

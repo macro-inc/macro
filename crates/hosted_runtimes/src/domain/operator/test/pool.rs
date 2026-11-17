@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::lifecycle::{Billing, ClaimBilling};
 use crate::domain::models::{Claim, NewPoolComputer};
-use crate::domain::pool::PoolTargets;
+use crate::domain::pool::{PoolKind, PoolTargets};
 
 const ONE_STANDARD: PoolTargets = PoolTargets {
     standard: 1,
@@ -9,9 +9,17 @@ const ONE_STANDARD: PoolTargets = PoolTargets {
     xl: 0,
 };
 
-/// Computer 1, the one [`HARNESS`] runs on, as a pool computer.
+/// Computer 1, the one [`HARNESS`] runs on, as a regular pool computer.
 async fn add_pool_computer(
     operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+) -> ComputerId {
+    add_pool_computer_of(operator, PoolKind::Regular).await
+}
+
+/// Computer 1 as a pool computer of `kind`.
+async fn add_pool_computer_of(
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+    kind: PoolKind,
 ) -> ComputerId {
     let catalog = crate::domain::size::current_catalog();
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
@@ -25,6 +33,7 @@ async fn add_pool_computer(
                 resources: catalog[0].resources,
                 catalog_entry: catalog[0].id.clone(),
                 name: ComputerName::try_new("Macro computer").unwrap(),
+                kind,
             },
             1,
             now(),
@@ -170,4 +179,202 @@ async fn filling_a_full_pool_creates_nothing_and_a_disabled_pool_drains() {
     operator.fill_pool().await.unwrap();
 
     assert!(pool_computers(&operator).is_empty());
+}
+
+fn ada() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|ada-1@agents.macro.invalid".to_owned()).unwrap()
+}
+
+fn ada_enrollment() -> crate::domain::agent::AgentEnrollment {
+    let mut values = std::collections::BTreeMap::new();
+    values.insert(
+        crate::domain::agent::AgentEnvKey::new("MACRO_API_KEY").unwrap(),
+        "mak_ada".to_owned(),
+    );
+    crate::domain::agent::AgentEnrollment {
+        agent_user_id: ada(),
+        env: crate::domain::agent::AgentEnv::new(values).unwrap(),
+    }
+}
+
+/// Issues Ada's environment for the computers linked to her.
+#[derive(Default)]
+struct AdaRuns {
+    linked: Mutex<Vec<ComputerId>>,
+    issued: Mutex<Vec<ComputerId>>,
+}
+
+impl crate::domain::agent::AgentEnrollmentSource for AdaRuns {
+    fn issue(
+        &self,
+        computer: ComputerId,
+        _generation: EnrollmentGeneration,
+    ) -> crate::domain::agent::AgentEnrollmentFuture<'_> {
+        self.issued.lock().unwrap().push(computer);
+        let linked = self.linked.lock().unwrap().contains(&computer);
+        Box::pin(async move { Ok(linked.then(ada_enrollment)) })
+    }
+}
+
+fn agent_purchase(
+    resources: crate::domain::size::ComputerResources,
+    catalog_entry: crate::domain::size::CatalogEntryId,
+) -> NewReservation {
+    NewReservation {
+        id: ComputerId::new_from_uuid(Uuid::from_u128(99)),
+        team_id: TEAM,
+        purchase_key: crate::domain::models::PurchaseKey::try_new("invite-ada-1".to_owned())
+            .unwrap(),
+        name: ComputerName::try_new("Ada").unwrap(),
+        size: ComputerSize::Standard,
+        resources,
+        catalog_entry,
+        funding: crate::domain::models::Funding::Comped {
+            reason: "internal team".to_owned(),
+        },
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+        extra_items: vec![],
+        provision_traceparent: None,
+        agent: Some(ada()),
+    }
+}
+
+#[tokio::test]
+async fn an_agent_pool_computer_is_created_from_the_agent_image() {
+    let operator = operator(FakeFleet::default())
+        .await
+        .with_agent_pool(ONE_STANDARD);
+
+    operator.fill_pool().await.unwrap();
+    let pooled = pool_computers(&operator);
+    assert_eq!(pooled.len(), 1);
+    assert_eq!(
+        operator.repo.pool_kinds.lock().unwrap().get(&pooled[0].id),
+        Some(&PoolKind::Agent)
+    );
+    operator.run_fleet_effects().await.unwrap();
+
+    assert_eq!(
+        *operator.fleet.agent_images.lock().unwrap(),
+        vec![(pooled[0].id, true)]
+    );
+    // Built from the agent image, so the next pass keeps it.
+    operator.fill_pool().await.unwrap();
+    assert_eq!(pool_computers(&operator).len(), 1);
+}
+
+#[tokio::test]
+async fn an_agent_purchase_takes_only_an_agent_pool_computer() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = add_pool_computer(&operator).await;
+    operator.run_fleet_effects().await.unwrap();
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    let pooled = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+
+    let claim = operator
+        .repo
+        .claim_pool_computer(
+            &agent_purchase(pooled.resources, pooled.catalog_entry.clone()),
+            ClaimBilling::Comped {
+                reason: "internal team".to_owned(),
+            },
+            now(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(claim, Claim::Unavailable));
+    assert_eq!(pool_computers(&operator).len(), 1);
+}
+
+#[tokio::test]
+async fn a_taken_agent_pool_computer_hands_over_once_its_agent_is_online() {
+    let operator = operator(FakeFleet::default())
+        .await
+        .with_agent_pool(ONE_STANDARD);
+    let source = std::sync::Arc::new(AdaRuns::default());
+    let operator = operator.with_agent_enrollment(source.clone());
+    let id = add_pool_computer_of(&operator, PoolKind::Agent).await;
+    operator.run_fleet_effects().await.unwrap();
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    // A pool computer enrolls with no agent.
+    assert_eq!(*source.issued.lock().unwrap(), vec![id]);
+    assert_eq!(operator.fleet.enrollments.lock().unwrap()[0].0.agent, None);
+    let pooled = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+
+    let claim = operator
+        .repo
+        .claim_pool_computer(
+            &agent_purchase(pooled.resources, pooled.catalog_entry.clone()),
+            ClaimBilling::Comped {
+                reason: "internal team".to_owned(),
+            },
+            now(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(claim, Claim::Taken(_)));
+    assert_eq!(operator.repo.agents.lock().unwrap().get(&id), Some(&ada()));
+    source.linked.lock().unwrap().push(id);
+
+    // The handover delivers the agent and waits for it to report online.
+    operator.run_fleet_effects().await.unwrap();
+    assert_eq!(
+        *operator.harnesses.applied_agents.lock().unwrap(),
+        vec![(HARNESS, ada_enrollment())]
+    );
+    assert_eq!(
+        *operator.harnesses.reconnects.lock().unwrap(),
+        vec![HARNESS]
+    );
+    assert!(
+        operator
+            .repo
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|pending| pending.computer_id == id && pending.effect == Effect::JoinTeam),
+        "the handover retries until the agent is online"
+    );
+    assert_eq!(*operator.harnesses.default_agents.lock().unwrap(), vec![]);
+
+    // Not online yet: the retry delivers it again, without a second reconnect.
+    operator.repo.effect_run_after.lock().unwrap().clear();
+    operator.run_fleet_effects().await.unwrap();
+    assert_eq!(operator.harnesses.applied_agents.lock().unwrap().len(), 2);
+    assert_eq!(
+        *operator.harnesses.reconnects.lock().unwrap(),
+        vec![HARNESS]
+    );
+
+    operator.repo.online_agents.lock().unwrap().insert(ada());
+    operator.repo.effect_run_after.lock().unwrap().clear();
+    operator.run_fleet_effects().await.unwrap();
+
+    assert_eq!(operator.harnesses.applied_agents.lock().unwrap().len(), 2);
+    assert!(
+        !operator
+            .repo
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|pending| pending.computer_id == id && pending.effect == Effect::JoinTeam),
+        "the handover is done"
+    );
 }

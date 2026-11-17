@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime\n            SET team_id = $2, created_by = $3, purchase_key = $4, name = $5, catalog_entry = $6,\n                price_id = $7, comp_reason = $8, created_at = $9, agent_user_id = $10\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fcc429584d9277ac7cf93711c4514cfad21d9bf803eac8d357ee82750fb2b432"
+}

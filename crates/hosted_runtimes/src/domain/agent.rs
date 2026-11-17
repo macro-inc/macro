@@ -183,4 +183,9 @@ pub trait ComputerAgents: Send + Sync + 'static {
         team_id: uuid::Uuid,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+    /// Whether the agent has reported itself online (`first_online_at`).
+    fn agent_online(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 }

@@ -184,6 +184,17 @@ pub struct Config {
     /// XL computers in each host's warm pool; off unless set.
     #[macro_config_default(0)]
     pub computers_pool_xl: u32,
+    /// Standard agent-image computers in each host's warm pool, for agent
+    /// teammate purchases. Off unless set; set only once the agent image's
+    /// macrod applies an agent it is handed after boot.
+    #[macro_config_default(0)]
+    pub computers_pool_agent_standard: u32,
+    /// Large agent-image computers in each host's warm pool; off unless set.
+    #[macro_config_default(0)]
+    pub computers_pool_agent_large: u32,
+    /// XL agent-image computers in each host's warm pool; off unless set.
+    #[macro_config_default(0)]
+    pub computers_pool_agent_xl: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -489,6 +500,15 @@ impl Config {
             standard: self.computers_pool_standard,
             large: self.computers_pool_large,
             xl: self.computers_pool_xl,
+        }
+    }
+
+    /// How many agent-image warm-pool computers each fleet host keeps per size.
+    pub fn computer_agent_pool(&self) -> hosted_runtimes::domain::pool::PoolTargets {
+        hosted_runtimes::domain::pool::PoolTargets {
+            standard: self.computers_pool_agent_standard,
+            large: self.computers_pool_agent_large,
+            xl: self.computers_pool_agent_xl,
         }
     }
 

@@ -12,7 +12,10 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
             memory_gb: 31,
             reserve_gb: 7,
             oversell_factor: 3,
-            image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            images: crate::domain::image::GuestImages {
+                regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+                agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+            },
         })
         .await
         .unwrap();

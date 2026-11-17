@@ -337,8 +337,18 @@ impl ComputerRepo for PgComputerRepo {
         self.claim(purchase, billing, now).await
     }
 
-    async fn pool_computers(&self, host: HostId) -> Result<Vec<Computer>, PgComputerError> {
+    async fn pool_computers(
+        &self,
+        host: HostId,
+    ) -> Result<Vec<crate::domain::models::PoolMember>, PgComputerError> {
         self.live_pool_computers(host).await
+    }
+
+    async fn pool_kind(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<crate::domain::pool::PoolKind>, PgComputerError> {
+        self.pool_kind_of(computer_id).await
     }
 
     #[tracing::instrument(skip(self, computer), fields(computer_id = %computer.id, size = computer.size.as_ref()), err)]
@@ -878,12 +888,13 @@ impl ComputerRepo for PgComputerRepo {
         let sold = i32::try_from(registration.sold_capacity_units())?;
         let row = sqlx::query!(
             r#"
-            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units, image)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units, image, agent_image)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (name) DO UPDATE
             SET awake_capacity_units = EXCLUDED.awake_capacity_units,
                 sold_capacity_units = EXCLUDED.sold_capacity_units,
                 image = EXCLUDED.image,
+                agent_image = EXCLUDED.agent_image,
                 updated_at = now()
             RETURNING id, name, awake_capacity_units, sold_capacity_units
             "#,
@@ -891,7 +902,8 @@ impl ComputerRepo for PgComputerRepo {
             registration.name,
             awake,
             sold,
-            registration.image.as_str(),
+            registration.images.regular.as_str(),
+            registration.images.agent.as_str(),
         )
         .fetch_one(&self.pool)
         .await?;

@@ -185,6 +185,7 @@ pub(crate) async fn operator(
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
     .with_pool(config.computer_pool())
+    .with_agent_pool(config.computer_agent_pool())
     // Every computer asks: one bought for an agent teammate must never
     // enroll without its agent.
     // The authentication service checks its own internal key, not ours.
@@ -548,6 +549,24 @@ impl Harnesses for HostedHarnesses {
 
     async fn reconnect(&self, harness_id: HarnessId) -> Result<(), Self::Err> {
         crate::runtime_commands::publish_disconnect(&self.redis, harness_id)
+            .await
+            .map_err(HostedHarnessError::Bus)
+    }
+
+    async fn apply_agent(
+        &self,
+        harness_id: HarnessId,
+        agent: &hosted_runtimes::domain::agent::AgentEnrollment,
+    ) -> Result<(), Self::Err> {
+        let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+            agent
+                .env
+                .expose()
+                .iter()
+                .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+                .collect(),
+        );
+        crate::runtime_commands::publish_apply_agent(&self.redis, harness_id, environment)
             .await
             .map_err(HostedHarnessError::Bus)
     }

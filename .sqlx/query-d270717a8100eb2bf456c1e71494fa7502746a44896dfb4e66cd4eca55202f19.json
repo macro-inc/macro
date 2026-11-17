@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units, image, agent_image)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (name) DO UPDATE\n            SET awake_capacity_units = EXCLUDED.awake_capacity_units,\n                sold_capacity_units = EXCLUDED.sold_capacity_units,\n                image = EXCLUDED.image,\n                agent_image = EXCLUDED.agent_image,\n                updated_at = now()\n            RETURNING id, name, awake_capacity_units, sold_capacity_units\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "awake_capacity_units",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "sold_capacity_units",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d270717a8100eb2bf456c1e71494fa7502746a44896dfb4e66cd4eca55202f19"
+}

@@ -663,7 +663,10 @@ document storage, app and egress URLs) that the harness resolves through
 authentication_service and agent_harness_service; set them only to override.
 `COMPUTERS_POOL_STANDARD`, `COMPUTERS_POOL_LARGE` and `COMPUTERS_POOL_XL`
 (all default `0`, so the pool is off) set how many booted warm-pool computers
-agent_harness_service keeps per host and size.
+agent_harness_service keeps per host and size;
+`COMPUTERS_POOL_AGENT_STANDARD`, `COMPUTERS_POOL_AGENT_LARGE` and
+`COMPUTERS_POOL_AGENT_XL` (also `0`) do the same for agent-image computers that
+agent teammate invites take.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,

@@ -4,7 +4,8 @@
 use super::*;
 
 use crate::domain::lifecycle::ClaimBilling;
-use crate::domain::models::{Claim, NewPoolComputer, Ownership};
+use crate::domain::models::{Claim, NewPoolComputer, Ownership, PoolMember};
+use crate::domain::pool::PoolKind;
 
 impl PgComputerRepo {
     pub(super) async fn claim(
@@ -48,9 +49,11 @@ impl PgComputerRepo {
             }
         }
 
-        // A pool computer of the purchase's exact resources, built from its
-        // host's current image, up and connected, on a host with sold units
-        // left for it (pool computers hold none until taken).
+        // A pool computer of the purchase's kind and exact resources, built
+        // from the image its host creates that kind from, up and connected,
+        // on a host with sold units left for it (pool computers hold none
+        // until taken).
+        let kind = PoolKind::for_purchase(purchase.agent.is_some());
         let row = sqlx::query_as!(
             ComputerRow,
             r#"
@@ -69,9 +72,9 @@ impl PgComputerRepo {
             FROM hosted_runtime c
             JOIN hosted_runtime_host host ON host.id = c.host_id
             LEFT JOIN held ON held.host_id = host.id
-            WHERE c.team_id IS NULL
+            WHERE c.team_id IS NULL AND c.pool_kind = $6
               AND c.size = $1 AND c.vcpus = $2 AND c.memory_gib = $3 AND c.disk_gib = $4
-              AND c.image = host.image
+              AND c.image = (CASE WHEN $6 = 'agent'::hosted_runtime_pool_kind THEN host.agent_image ELSE host.image END)
               AND (c.state->'phase'->>'phase') = 'running'
               AND (c.state->>'macrod_connected') = 'true'
               AND host.sold_capacity_units - COALESCE(held.units, 0) >= $5::BIGINT
@@ -84,6 +87,7 @@ impl PgComputerRepo {
             i32::try_from(purchase.resources.memory_gib.get())?,
             i32::try_from(purchase.resources.disk_gib.get())?,
             i64::from(units(purchase.resources)?),
+            kind as PoolKind,
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -127,7 +131,7 @@ impl PgComputerRepo {
             r#"
             UPDATE hosted_runtime
             SET team_id = $2, created_by = $3, purchase_key = $4, name = $5, catalog_entry = $6,
-                price_id = $7, comp_reason = $8, created_at = $9
+                price_id = $7, comp_reason = $8, created_at = $9, agent_user_id = $10
             WHERE id = $1
             "#,
             computer.id.as_uuid(),
@@ -139,6 +143,7 @@ impl PgComputerRepo {
             price_id,
             comp_reason,
             now,
+            purchase.agent.as_ref().map(|agent| agent.as_ref()),
         )
         .execute(&mut *tx)
         .await?;
@@ -165,7 +170,20 @@ impl PgComputerRepo {
     pub(super) async fn live_pool_computers(
         &self,
         host: HostId,
-    ) -> Result<Vec<Computer>, PgComputerError> {
+    ) -> Result<Vec<PoolMember>, PgComputerError> {
+        let kinds: std::collections::HashMap<Uuid, PoolKind> = sqlx::query!(
+            r#"
+            SELECT id, pool_kind AS "pool_kind!: PoolKind" FROM hosted_runtime
+            WHERE host_id = $1 AND team_id IS NULL AND pool_kind IS NOT NULL
+              AND (state->'phase'->>'phase') <> 'destroying'
+            "#,
+            host.into_inner(),
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| (row.id, row.pool_kind))
+        .collect();
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
@@ -184,7 +202,24 @@ impl PgComputerRepo {
             .await?
             .into_iter()
             .filter_map(|record| record.into_healthy().ok())
+            .filter_map(|computer| {
+                let kind = *kinds.get(&computer.id.as_uuid())?;
+                Some(PoolMember { kind, computer })
+            })
             .collect())
+    }
+
+    pub(super) async fn pool_kind_of(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<PoolKind>, PgComputerError> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT pool_kind AS "pool_kind: PoolKind" FROM hosted_runtime WHERE id = $1"#,
+            computer_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten())
     }
 
     pub(super) async fn insert_pool_computer(
@@ -200,11 +235,12 @@ impl PgComputerRepo {
         let pooled = sqlx::query_scalar!(
             r#"
             SELECT count(*) AS "pooled!" FROM hosted_runtime
-            WHERE host_id = $1 AND team_id IS NULL AND size = $2
+            WHERE host_id = $1 AND team_id IS NULL AND size = $2 AND pool_kind = $3
               AND (state->'phase'->>'phase') <> 'destroying'
             "#,
             computer.host.into_inner(),
             computer.size as ComputerSize,
+            computer.kind as PoolKind,
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -235,8 +271,8 @@ impl PgComputerRepo {
             r#"
             INSERT INTO hosted_runtime
                 (id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, host_id, awake,
-                 state, enrollment_generation, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+                 state, enrollment_generation, created_at, updated_at, pool_kind)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13)
             "#,
             computer.id.as_uuid(),
             computer.name.as_str(),
@@ -250,6 +286,7 @@ impl PgComputerRepo {
             serde_json::to_value(&state)?,
             i64::from(generation.get()),
             now,
+            computer.kind as PoolKind,
         )
         .execute(&mut *tx)
         .await?;

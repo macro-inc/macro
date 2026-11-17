@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, pool_kind AS \"pool_kind!: PoolKind\" FROM hosted_runtime\n            WHERE host_id = $1 AND team_id IS NULL AND pool_kind IS NOT NULL\n              AND (state->'phase'->>'phase') <> 'destroying'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pool_kind!: PoolKind",
+        "type_info": {
+          "Custom": {
+            "name": "hosted_runtime_pool_kind",
+            "kind": {
+              "Enum": [
+                "regular",
+                "agent"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "8898162198cabaf76f4d18b61b4ec773ae0cb8bd68d97011ab675dbb5a82f576"
+}

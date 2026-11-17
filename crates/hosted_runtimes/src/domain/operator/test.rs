@@ -66,9 +66,12 @@ struct FakeFleet {
     /// Each guest's data disk, named by the generation that created it.
     volumes: Mutex<HashMap<ComputerId, String>>,
     instances: Mutex<Vec<FleetInstance>>,
+    /// Each created guest and whether it was built from the agent image.
+    agent_images: Mutex<Vec<(ComputerId, bool)>>,
 }
 
 const BASE_IMAGE: &str = "macro-box/2026-11-01";
+const AGENT_IMAGE: &str = "macro-box-agent/2026-11-01";
 
 impl Fleet for FakeFleet {
     type Err = FakeFleetError;
@@ -86,7 +89,12 @@ impl Fleet for FakeFleet {
         enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<GuestImage, FakeFleetError> {
-        let image = GuestImage::try_new(BASE_IMAGE).unwrap();
+        let image = GuestImage::try_new(if enrollment.awaits_agent() {
+            AGENT_IMAGE
+        } else {
+            BASE_IMAGE
+        })
+        .unwrap();
         if self.rejects {
             return Err(FakeFleetError::Rejected);
         }
@@ -108,7 +116,12 @@ impl Fleet for FakeFleet {
                 return Ok(image);
             }
         }
+        let awaits_agent = enrollment.awaits_agent();
         let enrollment = enrollment.issue().await?;
+        self.agent_images
+            .lock()
+            .unwrap()
+            .push((computer.id, awaits_agent));
         if self.lose_during_create.swap(false, Ordering::SeqCst) {
             return Err(FakeFleetError::Missing);
         }
@@ -196,7 +209,10 @@ impl Fleet for FakeFleet {
             memory_gb: 31,
             reserve_gb: 7,
             oversell_factor: 3,
-            image: crate::domain::image::GuestImage::try_new(BASE_IMAGE).unwrap(),
+            images: crate::domain::image::GuestImages {
+                regular: GuestImage::try_new(BASE_IMAGE).unwrap(),
+                agent: GuestImage::try_new(AGENT_IMAGE).unwrap(),
+            },
         })
     }
 
@@ -273,6 +289,7 @@ struct FakeHarnesses {
     fail_default_agent: std::sync::atomic::AtomicBool,
     default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
     reconnects: Mutex<Vec<HarnessId>>,
+    applied_agents: Mutex<Vec<(HarnessId, crate::domain::agent::AgentEnrollment)>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -306,6 +323,18 @@ impl Harnesses for FakeHarnesses {
 
     async fn reconnect(&self, harness_id: HarnessId) -> Result<(), FakeError> {
         self.reconnects.lock().unwrap().push(harness_id);
+        Ok(())
+    }
+
+    async fn apply_agent(
+        &self,
+        harness_id: HarnessId,
+        agent: &crate::domain::agent::AgentEnrollment,
+    ) -> Result<(), FakeError> {
+        self.applied_agents
+            .lock()
+            .unwrap()
+            .push((harness_id, agent.clone()));
         Ok(())
     }
 

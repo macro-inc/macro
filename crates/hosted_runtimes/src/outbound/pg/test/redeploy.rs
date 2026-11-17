@@ -10,7 +10,10 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
             memory_gb: 31,
             reserve_gb: 7,
             oversell_factor: 3,
-            image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            images: crate::domain::image::GuestImages {
+                regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+                agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+            },
         })
         .await
         .unwrap();
@@ -48,7 +51,10 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,
-        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+        images: crate::domain::image::GuestImages {
+            regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+        },
     })
     .await
     .unwrap();
@@ -103,7 +109,10 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,
-        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+        images: crate::domain::image::GuestImages {
+            regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+        },
     })
     .await
     .unwrap();

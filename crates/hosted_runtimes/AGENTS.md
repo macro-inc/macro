@@ -73,6 +73,10 @@ read it before changing behaviour.
 - A pool computer has no team (`Computer::owner` is `None`, billing
   `Billing::Pool`): every sold-unit query filters `team_id IS NOT NULL`, and
   every team-scoped one already skips it. Keep both true in new queries.
+  `hosted_runtime.pool_kind` says which guest it is; a claim takes only the
+  purchase's kind (`PoolKind::for_purchase`).
+- An agent pool computer's `JoinTeam` fails on purpose until the agent
+  reports online, so the effect's retries redeliver its environment.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - `NotifySetup` tells the buyer how first setup ended through the

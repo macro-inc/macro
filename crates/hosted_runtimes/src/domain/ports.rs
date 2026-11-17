@@ -186,12 +186,18 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn pool_computers(
         &self,
         host: HostId,
-    ) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<crate::domain::models::PoolMember>, Self::Err>> + Send;
+
+    /// The kind a computer was created as, if it was a pool computer.
+    fn pool_kind(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<crate::domain::pool::PoolKind>, Self::Err>> + Send;
 
     /// Under the host lock: insert a pool computer and queue its creation,
     /// started, when its host has awake room for it and fewer than `target`
-    /// live pool computers of its size; `None` (nothing written) otherwise,
-    /// so concurrent passes never overfill.
+    /// live pool computers of its size and kind; `None` (nothing written)
+    /// otherwise, so concurrent passes never overfill.
     fn add_pool_computer(
         &self,
         computer: crate::domain::models::NewPoolComputer,
@@ -736,6 +742,15 @@ pub trait Harnesses: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Hand macrod on `harness_id` the agent's environment, so the guest
+    /// starts the agent (a pool computer a purchase took for one). Delivery
+    /// is not confirmed here: the agent's own online report is.
+    fn apply_agent(
+        &self,
+        harness_id: HarnessId,
+        agent: &crate::domain::agent::AgentEnrollment,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.
     fn create_default_agent(
@@ -793,4 +808,10 @@ pub trait FleetEnrollment: Send + Sync {
 
     /// Rotate credentials and pairing, without retaining or replaying plaintext.
     fn issue(&self) -> impl Future<Output = Result<Enrollment, EnrollmentIssueError>> + Send;
+
+    /// Whether the guest is an agent pool computer, created from the agent
+    /// image before any agent is issued to it.
+    fn awaits_agent(&self) -> bool {
+        false
+    }
 }

@@ -5,13 +5,43 @@
 //! goes through the fleet port like any other computer's.
 
 use crate::domain::ids::ComputerId;
-use crate::domain::image::GuestImage;
+use crate::domain::image::{GuestImage, GuestImages};
 use crate::domain::lifecycle::Phase;
 use crate::domain::models::Computer;
 use crate::domain::size::ComputerSize;
 
 #[cfg(test)]
 mod test;
+
+/// Which guest a pool computer is: the regular one, or the agent-mode build
+/// an agent teammate's computer runs. A purchase takes only its own kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter)]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "hosted_runtime_pool_kind", rename_all = "snake_case")
+)]
+pub enum PoolKind {
+    /// For computers that run no agent teammate.
+    Regular,
+    /// Built from the agent image, waiting for the agent a purchase brings.
+    Agent,
+}
+
+impl PoolKind {
+    /// The kind a purchase takes: the agent kind when it is for an agent.
+    pub fn for_purchase(agent: bool) -> Self {
+        if agent { Self::Agent } else { Self::Regular }
+    }
+
+    /// The image this kind is created from.
+    pub fn image<Image>(self, images: &GuestImages<Image>) -> &Image {
+        match self {
+            Self::Regular => &images.regular,
+            Self::Agent => &images.agent,
+        }
+    }
+}
 
 /// How many pool computers each host keeps per size. Zero disables a size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

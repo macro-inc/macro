@@ -354,3 +354,45 @@ async fn a_pool_computer_cannot_be_reached_through_team_requests() {
         Err(ComputerError::NotFound)
     ));
 }
+
+fn ada() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|ada-1@agents.macro.invalid".to_owned()).unwrap()
+}
+
+#[tokio::test]
+async fn an_agent_purchase_takes_an_agent_pool_computer_and_links_its_agent() {
+    let repo = repo_with_pool();
+    repo.pool_kinds
+        .lock()
+        .unwrap()
+        .insert(POOLED, crate::domain::pool::PoolKind::Agent);
+    let service =
+        service_with(repo, FakeBilling::default()).with_rollout(super::rollout::enabled_rollout());
+
+    let purchase = service
+        .purchase_for_agent(standard_purchase("invite-ada-1"), ada())
+        .await
+        .unwrap();
+
+    assert_eq!(purchase, Purchase::Ready(POOLED));
+    assert_eq!(
+        service.repo.agents.lock().unwrap().get(&POOLED),
+        Some(&ada())
+    );
+    assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn an_agent_purchase_never_takes_a_regular_pool_computer() {
+    let service = service_with(repo_with_pool(), FakeBilling::default())
+        .with_rollout(super::rollout::enabled_rollout());
+
+    let purchase = service
+        .purchase_for_agent(standard_purchase("invite-ada-1"), ada())
+        .await
+        .unwrap();
+
+    assert_ne!(purchase, Purchase::Ready(POOLED));
+    assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 1);
+    assert!(service.repo.agents.lock().unwrap().get(&POOLED).is_none());
+}

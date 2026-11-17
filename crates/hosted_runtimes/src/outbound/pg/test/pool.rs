@@ -1,7 +1,9 @@
 use super::*;
+use crate::domain::agent::ComputerAgents;
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::ClaimBilling;
 use crate::domain::models::{Claim, NewPoolComputer, POOL_HARNESS_OWNER};
+use crate::domain::pool::PoolKind;
 
 const OWNER: &str = "macro|owner@example.com";
 
@@ -19,20 +21,35 @@ async fn pool_host(repo: &PgComputerRepo) -> Host {
         memory_gb: 24,
         reserve_gb: 0,
         oversell_factor: 3,
-        image: GuestImage::try_new("macro-box/test").unwrap(),
+        images: crate::domain::image::GuestImages {
+            regular: GuestImage::try_new("macro-box/test").unwrap(),
+            agent: GuestImage::try_new("macro-box-agent/test").unwrap(),
+        },
     })
     .await
     .unwrap()
 }
 
-/// A standard pool computer `id` on `host`, created from `image`, booted
-/// and connected, with its pool-owned harness.
+/// A standard regular pool computer `id` on `host`, created from `image`,
+/// booted and connected, with its pool-owned harness.
 async fn ready_pool_computer(
     repo: &PgComputerRepo,
     pool: &PgPool,
     host: HostId,
     id: u128,
     image: &str,
+) -> ComputerId {
+    ready_pool_computer_of(repo, pool, host, id, image, PoolKind::Regular).await
+}
+
+/// [`ready_pool_computer`] of `kind`.
+async fn ready_pool_computer_of(
+    repo: &PgComputerRepo,
+    pool: &PgPool,
+    host: HostId,
+    id: u128,
+    image: &str,
+    kind: PoolKind,
 ) -> ComputerId {
     let catalog = crate::domain::size::current_catalog();
     let standard = &catalog[0];
@@ -45,6 +62,7 @@ async fn ready_pool_computer(
                 resources: standard.resources,
                 catalog_entry: standard.id.clone(),
                 name: ComputerName::try_new("Macro computer").unwrap(),
+                kind,
             },
             8,
             now(),
@@ -280,6 +298,7 @@ async fn the_pool_fills_to_its_target_within_awake_room(pool: PgPool) {
         id: ComputerId::new_from_uuid(Uuid::from_u128(id)),
         host: host.id,
         size: ComputerSize::Standard,
+        kind: PoolKind::Regular,
         resources: standard.resources,
         catalog_entry: standard.id.clone(),
         name: ComputerName::try_new("Macro computer").unwrap(),
@@ -299,4 +318,114 @@ async fn the_pool_fills_to_its_target_within_awake_room(pool: PgPool) {
     assert_eq!(repo.pool_computers(host.id).await.unwrap().len(), 3);
     // Pool computers hold awake units only.
     assert_eq!(repo.allocation().await.unwrap()[0].sold_units, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_agent_purchase_takes_only_an_agent_pool_computer_and_links_its_agent(pool: PgPool) {
+    insert_team(&pool).await;
+    let agent = super::agents::insert_agent(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    let host = pool_host(&repo).await;
+    let regular = ready_pool_computer(&repo, &pool, host.id, 0xb0b, "macro-box/test").await;
+    let agent_pooled = ready_pool_computer_of(
+        &repo,
+        &pool,
+        host.id,
+        0xa9e,
+        "macro-box-agent/test",
+        PoolKind::Agent,
+    )
+    .await;
+    // On the regular image: not what the host builds agent computers from.
+    let stale = ready_pool_computer_of(
+        &repo,
+        &pool,
+        host.id,
+        0xa9f,
+        "macro-box/test",
+        PoolKind::Agent,
+    )
+    .await;
+    let members = repo.pool_computers(host.id).await.unwrap();
+    assert_eq!(
+        members
+            .iter()
+            .map(|member| (member.computer.id, member.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (regular, PoolKind::Regular),
+            (agent_pooled, PoolKind::Agent),
+            (stale, PoolKind::Agent),
+        ]
+    );
+    assert_eq!(
+        repo.pool_kind(agent_pooled).await.unwrap(),
+        Some(PoolKind::Agent)
+    );
+
+    let mut for_agent = standard(1);
+    for_agent.agent = Some(agent.clone());
+    let claim = repo
+        .claim_pool_computer(&for_agent, charge(), now() + Duration::seconds(1))
+        .await
+        .unwrap();
+
+    let Claim::Taken(taken) = claim else {
+        panic!("expected the agent pool computer, got {claim:?}");
+    };
+    assert_eq!(taken.id, agent_pooled);
+    assert_eq!(repo.agent_of(agent_pooled).await.unwrap(), Some(agent));
+
+    // A purchase for no agent never takes an agent pool computer. Comped,
+    // since the team's first charge is still settling.
+    let mut comped = standard(2);
+    comped.funding = Funding::Comped {
+        reason: "internal team".to_owned(),
+    };
+    let claim = repo
+        .claim_pool_computer(
+            &comped,
+            ClaimBilling::Comped {
+                reason: "internal team".to_owned(),
+            },
+            now() + Duration::seconds(2),
+        )
+        .await
+        .unwrap();
+    let Claim::Taken(taken) = claim else {
+        panic!("expected the regular pool computer, got {claim:?}");
+    };
+    assert_eq!(taken.id, regular);
+    assert_eq!(repo.agent_of(regular).await.unwrap(), None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_agent_is_online_once_it_has_reported_so(pool: PgPool) {
+    insert_team(&pool).await;
+    let agent = super::agents::insert_agent(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    sqlx::query!(
+        r#"
+        INSERT INTO team_agents (user_id, team_id, created_by, persona_seed)
+        VALUES ($1, $2, $3, '{}')
+        "#,
+        agent.as_ref(),
+        TEAM,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(!repo.agent_online(&agent).await.unwrap());
+
+    sqlx::query!(
+        "UPDATE team_agents SET first_online_at = now() WHERE user_id = $1",
+        agent.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(repo.agent_online(&agent).await.unwrap());
 }

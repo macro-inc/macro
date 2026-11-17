@@ -455,6 +455,17 @@ pub struct NewPoolComputer {
     pub catalog_entry: CatalogEntryId,
     /// The name its harness shows until a team names it.
     pub name: ComputerName,
+    /// Which guest it is, so only a purchase of its kind takes it.
+    pub kind: crate::domain::pool::PoolKind,
+}
+
+/// A live pool computer and its kind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PoolMember {
+    /// Which guest it is.
+    pub kind: crate::domain::pool::PoolKind,
+    /// The computer.
+    pub computer: Computer,
 }
 
 /// How a purchase ended in the request that made it.
@@ -624,8 +635,8 @@ pub struct HostRegistration {
     pub reserve_gb: u32,
     /// How many units are sold per awake unit.
     pub oversell_factor: u32,
-    /// The image the host's fleet creates computers from.
-    pub image: crate::domain::image::GuestImage,
+    /// The images the host's fleet creates computers from.
+    pub images: crate::domain::image::GuestImages<crate::domain::image::GuestImage>,
 }
 
 impl HostRegistration {

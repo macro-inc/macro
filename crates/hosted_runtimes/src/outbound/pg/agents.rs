@@ -55,6 +55,11 @@ impl ComputerAgents for PgComputerRepo {
             .has_live_computer(team_id, agent)
             .await
     }
+    async fn agent_online(&self, agent: &MacroUserIdStr<'_>) -> Result<bool, PgComputerError> {
+        PgComputerAgents::new(self.pool.clone())
+            .agent_online(agent)
+            .await
+    }
 }
 
 /// The harness listings mark an agent teammate's computer by its agent.
@@ -163,6 +168,23 @@ impl ComputerAgents for PgComputerAgents {
             ) AS "live!"
             "#,
             team_id,
+            agent.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    /// `team_agents` is the team_agents crate's; this reads only the time
+    /// the agent first reported itself online.
+    #[tracing::instrument(skip(self, agent), err)]
+    async fn agent_online(&self, agent: &MacroUserIdStr<'_>) -> Result<bool, PgComputerError> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM team_agents
+                WHERE user_id = $1 AND first_online_at IS NOT NULL
+            ) AS "online!"
+            "#,
             agent.as_ref(),
         )
         .fetch_one(&self.pool)

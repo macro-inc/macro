@@ -131,10 +131,10 @@ impl<
         };
 
         // A pool computer is already up and connected: the purchase takes it
-        // and returns, and its charge settles in the billing worker. An agent
-        // teammate's computer enrolls with the agent's environment, which a
-        // pool computer never had, so it always takes the cold path.
-        if purchase.agent.is_none() {
+        // and returns, and its charge settles in the billing worker. One for
+        // an agent teammate takes an agent-image pool computer, which gets
+        // the agent's environment when it joins the team.
+        {
             let claim_billing = match &purchase.funding {
                 Funding::Stripe { price_id } => ClaimBilling::Charge {
                     price_id: price_id.clone(),

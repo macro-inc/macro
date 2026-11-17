@@ -10,12 +10,12 @@ use chrono::{DateTime, Duration, Utc};
 use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass, ClaudeSignIns};
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
-use crate::domain::image::GuestImage;
+use crate::domain::image::{GuestImage, GuestImages};
 use crate::domain::lifecycle::{
     Backoff, Effect, EffectWorker, Event, Failure, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
 };
 use crate::domain::models::{Computer, ComputerName, ComputerRecord, NewPoolComputer};
-use crate::domain::pool::PoolTargets;
+use crate::domain::pool::{PoolKind, PoolTargets};
 use crate::domain::ports::{
     ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
     InstanceStatus, PendingEffect, SetupNotice, SetupNotices,
@@ -67,13 +67,14 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     agents: std::sync::Arc<dyn crate::domain::agent::AgentEnrollmentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
     pool: PoolTargets,
+    agent_pool: PoolTargets,
 }
 
 #[derive(Default)]
 struct HostReadiness {
     id: Option<HostId>,
-    /// The image the registered host creates computers from.
-    image: Option<GuestImage>,
+    /// The images the registered host creates computers from.
+    images: Option<GuestImages<GuestImage>>,
     retry_at: Option<DateTime<Utc>>,
     failures: u8,
 }
@@ -107,6 +108,7 @@ where
             agents: std::sync::Arc::new(crate::domain::agent::NoAgentEnrollment),
             host: tokio::sync::Mutex::new(HostReadiness::default()),
             pool: PoolTargets::NONE,
+            agent_pool: PoolTargets::NONE,
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.
@@ -117,6 +119,14 @@ where
     /// Keep `pool` computers per size on the host, ready for purchases to take.
     pub fn with_pool(mut self, pool: PoolTargets) -> Self {
         self.pool = pool;
+        self
+    }
+
+    /// Keep `pool` agent-image computers per size on the host, ready for
+    /// agent teammate purchases. Only for images whose macrod applies an
+    /// agent it is handed after boot (`ToRuntimeMessage::ApplyAgent`).
+    pub fn with_agent_pool(mut self, pool: PoolTargets) -> Self {
+        self.agent_pool = pool;
         self
     }
 
@@ -135,10 +145,10 @@ where
     }
 
     /// The registered host and the image it creates computers from.
-    async fn registered_host(&self) -> Result<(HostId, GuestImage), ComputerError> {
+    async fn registered_host(&self) -> Result<(HostId, GuestImages<GuestImage>), ComputerError> {
         let mut readiness = self.host.lock().await;
-        if let (Some(id), Some(image)) = (readiness.id, &readiness.image) {
-            return Ok((id, image.clone()));
+        if let (Some(id), Some(images)) = (readiness.id, &readiness.images) {
+            return Ok((id, images.clone()));
         }
         let now = self.clock.now();
         if readiness.retry_at.is_some_and(|at| now < at) {
@@ -148,7 +158,7 @@ where
         }
         let registration = async {
             let registration = self.fleet.host().await.map_err(internal)?;
-            let image = registration.image.clone();
+            let image = registration.images.clone();
             let host = self
                 .repo
                 .register_host(registration)
@@ -167,7 +177,7 @@ where
                     awake_units = host.awake_capacity_units, sold_units = host.sold_capacity_units,
                     "computer host registered");
                 readiness.id = Some(host.id);
-                readiness.image = Some(image.clone());
+                readiness.images = Some(image.clone());
                 readiness.retry_at = None;
                 Ok((host.id, image))
             }
@@ -382,12 +392,15 @@ where
                         "invalid enrollment generation"
                     )));
                 }
+                let awaits_agent = self.repo.pool_kind(computer_id).await.map_err(internal)?
+                    == Some(PoolKind::Agent);
                 let enrollment = CreateEnrollment {
                     harnesses: &self.harnesses,
                     deployment: self.deployment.as_ref(),
                     agents: self.agents.as_ref(),
                     computer: &computer,
                     generation: *generation,
+                    awaits_agent,
                 };
                 let result = match self
                     .fleet
@@ -833,81 +846,136 @@ where
         if !computer.state.is_live() {
             return Ok(());
         }
-        if let Some(harness_id) = computer.harness_id {
-            if computer.enrolled_at.is_none() {
-                self.repo
-                    .mark_enrolled(computer.id, self.clock.now())
-                    .await
-                    .map_err(internal)?;
-                // A convenience: the span records a failure, and setup carries on.
-                self.create_default_agent(&computer, harness_id).await.ok();
-            }
+        let Some(harness_id) = computer.harness_id else {
+            return Ok(());
+        };
+        if computer.enrolled_at.is_none() {
             // Required: until macrod redials it runs the pool owner's
-            // configuration, so a failure retries this effect.
+            // configuration, so a failure retries this effect. Before the
+            // enrollment mark, so a retry after a failed mark redials again
+            // and a retry after it does not.
             self.harnesses
                 .reconnect(harness_id)
                 .await
                 .map_err(internal)?;
+            self.repo
+                .mark_enrolled(computer.id, self.clock.now())
+                .await
+                .map_err(internal)?;
+            // A convenience: the span records a failure, and setup carries on.
+            self.create_default_agent_unless_teammate(&computer, harness_id)
+                .await
+                .ok();
+            self.fill_pool()
+                .await
+                .inspect_err(
+                    |error| tracing::warn!(error = ?error, "could not refill the computer pool"),
+                )
+                .ok();
         }
-        self.fill_pool()
-            .await
-            .inspect_err(
-                |error| tracing::warn!(error = ?error, "could not refill the computer pool"),
-            )
-            .ok();
-        Ok(())
+        self.hand_over_agent(&computer, harness_id).await
     }
 
-    /// Keep the host's warm pool at its targets: drain pool computers on an
-    /// older image (or that gave up or are off), and create the missing ones
-    /// while the host has awake room. See [`crate::domain::pool::plan`].
+    /// For an agent teammate's computer taken from the pool: hand macrod the
+    /// agent's environment until the agent reports itself online. Each
+    /// attempt issues fresh credentials (retiring the previous ones) and
+    /// delivers them again, so a delivery lost on the runtime bus, or sent
+    /// before macrod redialed, is made up on the effect's next retry.
+    async fn hand_over_agent(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<(), ComputerError> {
+        let Some(agent) = self.repo.agent_of(computer.id).await.map_err(internal)? else {
+            return Ok(());
+        };
+        if self.repo.agent_online(&agent).await.map_err(internal)? {
+            return Ok(());
+        }
+        // `None`: the agent teammates rollout is off for its creator, so
+        // the computer runs as a plain one.
+        let Some(enrollment) = self
+            .agents
+            .issue(computer.id, computer.enrollment_generation)
+            .await
+            .map_err(internal)?
+        else {
+            return Ok(());
+        };
+        self.harnesses
+            .apply_agent(harness_id, &enrollment)
+            .await
+            .map_err(internal)?;
+        Err(ComputerError::Internal(rootcause::report!(
+            "the agent was handed its environment and has not reported online yet"
+        )))
+    }
+
+    /// Keep the host's warm pool at its targets, for each kind of guest:
+    /// drain pool computers built from another image than the one their kind
+    /// is created from (or that gave up or are off), and create the missing
+    /// ones while the host has awake room. See [`crate::domain::pool::plan`].
     #[tracing::instrument(name = "computer.pool.fill", skip(self), fields(drained, created), err)]
     pub async fn fill_pool(&self) -> Result<(), ComputerError> {
-        let (host, image) = self.registered_host().await?;
+        let (host, images) = self.registered_host().await?;
         let members = self.repo.pool_computers(host).await.map_err(internal)?;
-        let plan = crate::domain::pool::plan(self.pool, &image, &members);
-        let span = tracing::Span::current();
-        span.record("drained", plan.drain.len() as i64);
-
-        for computer_id in plan.drain {
-            tracing::info!(%computer_id, "draining a pool computer");
-            self.repo
-                .apply(computer_id, Event::Drain, self.clock.now())
-                .await
-                .map_err(internal)?;
-        }
-
         let catalog = crate::domain::size::current_catalog();
-        let mut created = 0_i64;
-        for size in plan.create {
-            let Some(entry) = catalog.iter().find(|entry| entry.size == size) else {
-                continue;
+        let (mut drained, mut created) = (0_i64, 0_i64);
+
+        for kind in <PoolKind as strum::IntoEnumIterator>::iter() {
+            let targets = match kind {
+                PoolKind::Regular => self.pool,
+                PoolKind::Agent => self.agent_pool,
             };
-            let added = self
-                .repo
-                .add_pool_computer(
-                    NewPoolComputer {
-                        id: ComputerId::new_from_uuid(uuid::Uuid::now_v7()),
-                        host,
-                        size,
-                        resources: entry.resources,
-                        catalog_entry: entry.id.clone(),
-                        name: ComputerName::try_new(POOL_COMPUTER_NAME).map_err(internal)?,
-                    },
-                    self.pool.target(size),
-                    self.clock.now(),
-                )
-                .await
-                .map_err(internal)?;
-            match added {
-                Some(computer) => {
-                    created += 1;
-                    tracing::info!(computer_id = %computer.id, size = size.as_ref(), "created a pool computer");
+            let of_kind: Vec<Computer> = members
+                .iter()
+                .filter(|member| member.kind == kind)
+                .map(|member| member.computer.clone())
+                .collect();
+            let plan = crate::domain::pool::plan(targets, kind.image(&images), &of_kind);
+
+            for computer_id in plan.drain {
+                tracing::info!(%computer_id, kind = ?kind, "draining a pool computer");
+                self.repo
+                    .apply(computer_id, Event::Drain, self.clock.now())
+                    .await
+                    .map_err(internal)?;
+                drained += 1;
+            }
+
+            for size in plan.create {
+                let Some(entry) = catalog.iter().find(|entry| entry.size == size) else {
+                    continue;
+                };
+                let added = self
+                    .repo
+                    .add_pool_computer(
+                        NewPoolComputer {
+                            id: ComputerId::new_from_uuid(uuid::Uuid::now_v7()),
+                            host,
+                            size,
+                            resources: entry.resources,
+                            catalog_entry: entry.id.clone(),
+                            name: ComputerName::try_new(POOL_COMPUTER_NAME).map_err(internal)?,
+                            kind,
+                        },
+                        targets.target(size),
+                        self.clock.now(),
+                    )
+                    .await
+                    .map_err(internal)?;
+                match added {
+                    Some(computer) => {
+                        created += 1;
+                        tracing::info!(computer_id = %computer.id, size = size.as_ref(), kind = ?kind, "created a pool computer");
+                    }
+                    // Purchased computers come first; the next pass tries again.
+                    None => break,
                 }
-                // Purchased computers come first; the next pass tries again.
-                None => break,
             }
         }
+        let span = tracing::Span::current();
+        span.record("drained", drained);
         span.record("created", created);
         Ok(())
     }
@@ -1005,9 +1073,14 @@ struct CreateEnrollment<'a, Registry> {
     agents: &'a dyn crate::domain::agent::AgentEnrollmentSource,
     computer: &'a Computer,
     generation: EnrollmentGeneration,
+    awaits_agent: bool,
 }
 
 impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
+    fn awaits_agent(&self) -> bool {
+        self.awaits_agent
+    }
+
     async fn claimed(&self, pairing: PairingId) -> Result<bool, EnrollmentIssueError> {
         self.harnesses
             .pairing_claimed(pairing)

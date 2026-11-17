@@ -169,9 +169,16 @@ attempt, so a busy database never fails a computer or abandons a removal.
   owner) only while the host has awake room (`add_pool_computer` counts under
   the host lock). A pool computer's first connection records neither
   enrollment nor a default agent.
-  A Stripe or comped purchase first tries `ComputerRepo::claim_pool_computer`
-  (never one for an agent teammate: a pool computer enrolled without the
-  agent's environment, so those always take the cold path):
+  Pool computers come in two kinds (`hosted_runtime.pool_kind`,
+  `PoolKind`): regular ones, and agent ones built from the host's agent image
+  (`hosted_runtime_host.agent_image`, `FleetEnrollment::awaits_agent`) that boot
+  with no agent; each kind has its own targets
+  (`COMPUTERS_POOL_AGENT_{STANDARD,LARGE,XL}`, all 0) and is planned and
+  drained against its own image. A purchase takes only its own kind: one for an
+  agent teammate an agent pool computer, which the claim links to the agent
+  (`agent_user_id`). Turn the agent pool on only for an agent image whose
+  macrod handles `ToRuntimeMessage::ApplyAgent`.
+  A Stripe or comped purchase first tries `ComputerRepo::claim_pool_computer`:
   in one transaction under the host locks it takes the oldest up, connected
   pool computer of the purchase's exact resources on the host's current image
   with sold units left (`FOR UPDATE SKIP LOCKED`), unless the key was used or
@@ -194,7 +201,17 @@ attempt, so a busy database never fails a computer or abandons a removal.
   agent, drops macrod's connection through the runtime command bus
   (`Harnesses::reconnect`, `RuntimeRegistry::disconnect` on the replica that
   holds it; a failed publish retries the effect) so macrod reloads as the
-  team's, then refills. It does nothing for a computer released before it ran. A taken computer
+  team's, then refills. It does nothing for a computer released before it ran.
+  For an agent teammate's computer it then hands macrod the agent's
+  environment (`Harnesses::apply_agent`: fresh credentials from the
+  `AgentEnrollmentSource`, published on the runtime bus, sent by the replica
+  holding the socket as `ToRuntimeMessage::ApplyAgent`); macrod stages it at
+  `/run/macro-agent-inbox/agent.env` and the guest's `macro-agent-apply` unit
+  installs it as `/var/lib/macrod/agent.env`, which starts the agent. The
+  effect keeps failing, and so retries with new credentials, until the agent
+  reports itself online (`team_agents.first_online_at`, read by
+  `ComputerAgents::agent_online`); after the effect's last attempt the
+  computer fails. A taken computer
   never returns to the pool.
 - **Capacity**: free sold units are sold capacity minus the units of live
   bought computers (phase not `destroying`) and every reservation, expired or not

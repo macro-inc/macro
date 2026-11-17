@@ -71,6 +71,25 @@ pub struct GuestImages<Image> {
 
 impl<Image> GuestImages<Image> {
     /// The image a new guest is created from: the agent image when its
+    /// enrollment carries an agent, or when it is a pool computer waiting
+    /// for one (`awaits_agent`).
+    pub fn for_guest(&self, enrollment: &Enrollment, awaits_agent: bool) -> &Image {
+        if awaits_agent {
+            &self.agent
+        } else {
+            self.for_enrollment(enrollment)
+        }
+    }
+
+    /// Apply `f` to both images.
+    pub fn map<Mapped>(&self, mut f: impl FnMut(&Image) -> Mapped) -> GuestImages<Mapped> {
+        GuestImages {
+            regular: f(&self.regular),
+            agent: f(&self.agent),
+        }
+    }
+
+    /// The image a new guest is created from: the agent image when its
     /// enrollment carries an agent. A guest recreated after a loss enrolls
     /// the same way, so an agent computer stays on the agent image.
     pub fn for_enrollment(&self, enrollment: &Enrollment) -> &Image {

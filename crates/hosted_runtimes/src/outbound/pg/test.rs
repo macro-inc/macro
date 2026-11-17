@@ -139,7 +139,10 @@ async fn host(
         memory_gb,
         reserve_gb,
         oversell_factor,
-        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+        images: crate::domain::image::GuestImages {
+            regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+        },
     })
     .await
     .unwrap()
@@ -714,7 +717,10 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
             memory_gb: 32,
             reserve_gb: 8,
             oversell_factor: 2,
-            image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+            images: crate::domain::image::GuestImages {
+                regular: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
+                agent: crate::domain::image::GuestImage::try_new("macro-box-agent/test").unwrap(),
+            },
         })
         .await
         .unwrap();

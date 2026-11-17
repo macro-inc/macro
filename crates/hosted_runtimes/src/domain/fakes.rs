@@ -115,6 +115,10 @@ pub struct FakeRepo {
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
     /// The agent teammate each computer was bought for.
     pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+    /// The kind each pool computer was created as.
+    pub pool_kinds: Mutex<HashMap<ComputerId, crate::domain::pool::PoolKind>>,
+    /// Agents that have reported themselves online.
+    pub online_agents: Mutex<std::collections::HashSet<MacroUserIdStr<'static>>>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -125,6 +129,15 @@ impl crate::domain::agent::ComputerAgents for FakeRepo {
         computer: ComputerId,
     ) -> Result<Option<MacroUserIdStr<'static>>, Self::Error> {
         Ok(self.agents.lock().unwrap().get(&computer).cloned())
+    }
+
+    async fn agent_online(&self, agent: &MacroUserIdStr<'_>) -> Result<bool, Self::Error> {
+        Ok(self
+            .online_agents
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|online| online.as_ref() == agent.as_ref()))
     }
 
     async fn computer_for_agent(
@@ -387,8 +400,15 @@ impl ComputerRepo for FakeRepo {
         {
             return Ok(Claim::Unavailable);
         }
+        let kind = crate::domain::pool::PoolKind::for_purchase(purchase.agent.is_some());
+        let kinds = self.pool_kinds.lock().unwrap().clone();
         let Some(computer) = computers.values_mut().find(|computer| {
             computer.owner.is_none()
+                && kinds
+                    .get(&computer.id)
+                    .copied()
+                    .unwrap_or(crate::domain::pool::PoolKind::Regular)
+                    == kind
                 && computer.size == purchase.size
                 && computer.resources == purchase.resources
                 && computer.state.claimable()
@@ -422,12 +442,22 @@ impl ComputerRepo for FakeRepo {
             .lock()
             .unwrap()
             .insert(purchase.purchase_key.clone(), computer.id);
+        if let Some(agent) = &purchase.agent {
+            self.agents
+                .lock()
+                .unwrap()
+                .insert(computer.id, agent.clone());
+        }
         Ok(Claim::Taken(Box::new(computer.clone())))
     }
 
-    async fn pool_computers(&self, host: HostId) -> Result<Vec<Computer>, FakeError> {
+    async fn pool_computers(
+        &self,
+        host: HostId,
+    ) -> Result<Vec<crate::domain::models::PoolMember>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let mut pooled: Vec<Computer> = self
+        let kinds = self.pool_kinds.lock().unwrap().clone();
+        let mut pooled: Vec<crate::domain::models::PoolMember> = self
             .computers
             .lock()
             .unwrap()
@@ -435,10 +465,23 @@ impl ComputerRepo for FakeRepo {
             .filter(|computer| {
                 computer.host == host && computer.owner.is_none() && computer.state.is_live()
             })
-            .cloned()
+            .map(|computer| crate::domain::models::PoolMember {
+                kind: kinds
+                    .get(&computer.id)
+                    .copied()
+                    .unwrap_or(crate::domain::pool::PoolKind::Regular),
+                computer: computer.clone(),
+            })
             .collect();
-        pooled.sort_by_key(|computer| computer.created_at);
+        pooled.sort_by_key(|member| member.computer.created_at);
         Ok(pooled)
+    }
+
+    async fn pool_kind(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<crate::domain::pool::PoolKind>, FakeError> {
+        Ok(self.pool_kinds.lock().unwrap().get(&computer_id).copied())
     }
 
     async fn add_pool_computer(
@@ -448,6 +491,7 @@ impl ComputerRepo for FakeRepo {
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let kinds = self.pool_kinds.lock().unwrap().clone();
         let pooled = self
             .computers
             .lock()
@@ -456,6 +500,11 @@ impl ComputerRepo for FakeRepo {
             .filter(|existing| {
                 existing.owner.is_none()
                     && existing.size == computer.size
+                    && kinds
+                        .get(&existing.id)
+                        .copied()
+                        .unwrap_or(crate::domain::pool::PoolKind::Regular)
+                        == computer.kind
                     && existing.state.is_live()
             })
             .count();
@@ -492,6 +541,10 @@ impl ComputerRepo for FakeRepo {
             enrollment_generation: Default::default(),
         };
         self.push_effects(&mut added, effects, now);
+        self.pool_kinds
+            .lock()
+            .unwrap()
+            .insert(added.id, computer.kind);
         self.computers
             .lock()
             .unwrap()

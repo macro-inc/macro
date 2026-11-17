@@ -41,12 +41,51 @@ pub(crate) async fn publish_disconnect(
     Ok(())
 }
 
-// Untagged: a disconnect's one required field appears in no other event, so
-// it is tried first.
+/// Hand an agent teammate's environment to whichever replica holds the
+/// harness's runtime connection (an agent pool computer a team just took).
+/// Its values are credentials; Debug shows none.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct ApplyAgentRuntime {
+    pub(crate) apply_agent_harness: HarnessId,
+    pub(crate) environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+}
+
+/// Broadcast an [`ApplyAgentRuntime`] to every replica.
+pub(crate) async fn publish_apply_agent(
+    redis: &redis::Client,
+    harness: HarnessId,
+    environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+) -> anyhow::Result<()> {
+    let payload = zeroize::Zeroizing::new(serde_json::to_string(&ApplyAgentRuntime {
+        apply_agent_harness: harness,
+        environment,
+    })?);
+    redis
+        .get_multiplexed_async_connection()
+        .await?
+        .publish::<_, _, ()>(COMMAND_CHANNEL, payload.as_str())
+        .await?;
+    Ok(())
+}
+
+/// Hands a harness's live runtime an agent environment; whether this
+/// replica held the connection.
+pub(crate) type ApplyAgent = Arc<
+    dyn Fn(
+            HarnessId,
+            agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        ) -> futures::future::BoxFuture<'static, bool>
+        + Send
+        + Sync,
+>;
+
+// Untagged: a disconnect's and an agent hand-off's required fields appear in
+// no other event, so they are tried first.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
     Disconnect(DisconnectRuntime),
+    ApplyAgent(ApplyAgentRuntime),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
@@ -56,6 +95,7 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     replica: ReplicaId,
     connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
     disconnect: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    apply_agent: ApplyAgent,
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
@@ -98,6 +138,15 @@ where
         let request = match event {
             RuntimeBusEvent::Disconnect(request) => {
                 disconnect(request.disconnect_harness);
+                continue;
+            }
+            RuntimeBusEvent::ApplyAgent(request) => {
+                // Only the replica holding the connection sends it; the rest
+                // find nothing to hand it to.
+                let handed = apply_agent(request.apply_agent_harness, request.environment);
+                probes.spawn(async move {
+                    handed.await;
+                });
                 continue;
             }
             RuntimeBusEvent::Command(request) => *request,
