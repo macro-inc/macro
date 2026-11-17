@@ -91,16 +91,16 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "path-check: ${{ needs.path-check.result }}"
-          echo "biome-check: ${{ needs.biome-check.result }}"
-          echo "check: ${{ needs.check.result }}"
+          echo "path-check: $PATH_CHECK_RESULT"
+          echo "biome-check: $BIOME_CHECK_RESULT"
+          echo "check: $CHECK_RESULT"
 
           # Only success and skipped are OK. A job that hits its timeout reports
           # cancelled, and passing on that would merge code whose checks never ran.
           for result in \
-            "${{ needs.path-check.result }}" \
-            "${{ needs.biome-check.result }}" \
-            "${{ needs.check.result }}"; do
+            "$PATH_CHECK_RESULT" \
+            "$BIOME_CHECK_RESULT" \
+            "$CHECK_RESULT"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "❌ One or more jobs failed or were cancelled"
               exit 1
@@ -108,3 +108,7 @@ jobs:
           done
 
           echo "✅ All jobs passed or were skipped"
+        env:
+          PATH_CHECK_RESULT: ${{ needs.path-check.result }}
+          BIOME_CHECK_RESULT: ${{ needs.biome-check.result }}
+          CHECK_RESULT: ${{ needs.check.result }}

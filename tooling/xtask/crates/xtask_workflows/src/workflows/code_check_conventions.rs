@@ -121,21 +121,8 @@ fn run_ast_grep() -> Step<Run> {
 }
 
 fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "ast-grep: ${{ needs.ast-grep.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.ast-grep.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
+    Step::new("Check job results")
+        .run(include_str!("code_check_conventions/check_job_results.sh"))
+        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
+        .add_env(("AST_GREP_RESULT", AST_GREP.result()))
 }

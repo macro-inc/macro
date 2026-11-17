@@ -724,7 +724,8 @@ fn with_wasm_pkg_cache(step: Step<Run>) -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test --shard=${{ matrix.shard }}/6")
+        .run(r#"bun run test --shard="${SHARD}/6""#)
+        .add_env(("SHARD", matrix::<Num>("shard")))
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
@@ -827,43 +828,20 @@ fn run_build() -> Step<Run> {
 }
 
 fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # The Android check always runs, so it must succeed. For the rest only
-        # success and skipped are OK: a job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
-          echo "Android Native Check did not succeed"
-          exit 1
-        fi
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.typescript.result }}" \
-          "${{ needs.generated-code.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.functional.result }}" \
-          "${{ needs.browser.result }}" \
-          "${{ needs.cycles.result }}" \
-          "${{ needs.build.result }}" \
-          "${{ needs.ios-native-check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "All jobs passed or were skipped"
-    "#})
+    Step::new("Check job results")
+        .run(include_str!("web_app_check_main/check_job_results.sh"))
+        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
+        .add_env((
+            "ANDROID_NATIVE_CHECK_RESULT",
+            android_native_check::JOB.result(),
+        ))
+        .add_env(("TYPESCRIPT_RESULT", TYPESCRIPT.result()))
+        .add_env(("GENERATED_CODE_RESULT", GENERATED_CODE.result()))
+        .add_env(("BIOME_CHECK_RESULT", BIOME_CHECK.result()))
+        .add_env(("TEST_RESULT", TEST.result()))
+        .add_env(("FUNCTIONAL_RESULT", FUNCTIONAL.result()))
+        .add_env(("BROWSER_RESULT", BROWSER.result()))
+        .add_env(("CYCLES_RESULT", CYCLES.result()))
+        .add_env(("BUILD_RESULT", BUILD.result()))
+        .add_env(("IOS_NATIVE_CHECK_RESULT", ios_native_check::JOB.result()))
 }

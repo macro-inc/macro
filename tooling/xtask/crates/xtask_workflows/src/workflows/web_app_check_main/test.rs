@@ -62,7 +62,10 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
         .nth(1)
         .expect("status job");
     assert!(status.contains("- android-native-check"));
-    assert!(status.contains("needs.android-native-check.result }}\" != \"success\""));
+    assert!(
+        status.contains("ANDROID_NATIVE_CHECK_RESULT: ${{ needs.android-native-check.result }}")
+    );
+    assert!(status.contains("\"$ANDROID_NATIVE_CHECK_RESULT\" != \"success\""));
 }
 
 fn filters(yaml: &str) -> (&str, &str) {
@@ -164,22 +167,27 @@ const STATUS_CHECK_NEEDS: &[&str] = &[
 /// and say whether it passed.
 fn status_check_passes(results: &[(&str, &str)]) -> bool {
     let step = serde_json::to_value(check_job_results()).expect("status check step");
-    let script = STATUS_CHECK_NEEDS.iter().fold(
-        step["run"].as_str().expect("script").to_owned(),
-        |script, need| {
-            let result = results
-                .iter()
-                .find(|(id, _)| id == need)
-                .map_or("success", |(_, result)| *result);
-            script.replace(&format!("${{{{ needs.{need}.result }}}}"), result)
-        },
-    );
+    let script = step["run"].as_str().expect("script");
     assert!(
         !script.contains("${{"),
-        "a need is missing from the list: {script}"
+        "the script reads results from env: {script}"
     );
-    std::process::Command::new("bash")
-        .args(["-c", &script])
+    let env = step["env"].as_object().expect("status check env");
+    let mut command = std::process::Command::new("bash");
+    command.args(["-c", script]);
+    for need in STATUS_CHECK_NEEDS {
+        let expression = format!("${{{{ needs.{need}.result }}}}");
+        let (name, _) = env
+            .iter()
+            .find(|(_, value)| value.as_str() == Some(expression.as_str()))
+            .unwrap_or_else(|| panic!("a need is missing from the env: {need}"));
+        let result = results
+            .iter()
+            .find(|(id, _)| id == need)
+            .map_or("success", |(_, result)| *result);
+        command.env(name, result);
+    }
+    command
         .output()
         .expect("run the status check script")
         .status
@@ -483,7 +491,7 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
     let vitest = test_job
-        .find("bun run test --shard=${{ matrix.shard }}/6")
+        .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
     for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
         let wasm = test_job

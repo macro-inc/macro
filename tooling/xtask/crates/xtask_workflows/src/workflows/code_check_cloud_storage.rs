@@ -564,29 +564,17 @@ fn run_tests() -> Step<Run> {
 
 /// Aggregate the upstream job results into a single required status check.
 fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-        echo "doppler-config: ${{ needs.doppler-config.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose tests never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.check.result }}" \
-          "${{ needs.doppler-config.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.build-service-bins.result }}" \
-          "${{ needs.graphql-schema-compat.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
+    Step::new("Check job results")
+        .run(include_str!(
+            "code_check_cloud_storage/check_job_results.sh"
+        ))
+        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
+        .add_env(("CHECK_RESULT", CHECK.result()))
+        .add_env(("DOPPLER_CONFIG_RESULT", DOPPLER_CONFIG.result()))
+        .add_env(("TEST_RESULT", TEST.result()))
+        .add_env(("BUILD_SERVICE_BINS_RESULT", BUILD_SERVICE_BINS.result()))
+        .add_env((
+            "GRAPHQL_SCHEMA_COMPAT_RESULT",
+            GRAPHQL_SCHEMA_COMPAT.result(),
+        ))
 }

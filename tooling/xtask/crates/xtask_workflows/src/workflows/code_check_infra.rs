@@ -156,23 +156,9 @@ fn bun_check() -> Step<Run> {
 }
 
 fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
+    Step::new("Check job results")
+        .run(include_str!("code_check_infra/check_job_results.sh"))
+        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
+        .add_env(("BIOME_CHECK_RESULT", BIOME_CHECK.result()))
+        .add_env(("CHECK_RESULT", CHECK.result()))
 }

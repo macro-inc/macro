@@ -1254,22 +1254,22 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "path-check: ${{ needs.path-check.result }}"
-          echo "check: ${{ needs.check.result }}"
-          echo "doppler-config: ${{ needs.doppler-config.result }}"
-          echo "test: ${{ needs.test.result }}"
-          echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-          echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
+          echo "path-check: $PATH_CHECK_RESULT"
+          echo "check: $CHECK_RESULT"
+          echo "doppler-config: $DOPPLER_CONFIG_RESULT"
+          echo "test: $TEST_RESULT"
+          echo "build-service-bins: $BUILD_SERVICE_BINS_RESULT"
+          echo "graphql-schema-compat: $GRAPHQL_SCHEMA_COMPAT_RESULT"
 
           # Only success and skipped are OK. A job that hits its timeout reports
           # cancelled, and passing on that would merge code whose tests never ran.
           for result in \
-            "${{ needs.path-check.result }}" \
-            "${{ needs.check.result }}" \
-            "${{ needs.doppler-config.result }}" \
-            "${{ needs.test.result }}" \
-            "${{ needs.build-service-bins.result }}" \
-            "${{ needs.graphql-schema-compat.result }}"; do
+            "$PATH_CHECK_RESULT" \
+            "$CHECK_RESULT" \
+            "$DOPPLER_CONFIG_RESULT" \
+            "$TEST_RESULT" \
+            "$BUILD_SERVICE_BINS_RESULT" \
+            "$GRAPHQL_SCHEMA_COMPAT_RESULT"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "❌ One or more jobs failed or were cancelled"
               exit 1
@@ -1277,3 +1277,10 @@ jobs:
           done
 
           echo "✅ All jobs passed or were skipped"
+        env:
+          PATH_CHECK_RESULT: ${{ needs.path-check.result }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          DOPPLER_CONFIG_RESULT: ${{ needs.doppler-config.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_SERVICE_BINS_RESULT: ${{ needs.build-service-bins.result }}
+          GRAPHQL_SCHEMA_COMPAT_RESULT: ${{ needs.graphql-schema-compat.result }}

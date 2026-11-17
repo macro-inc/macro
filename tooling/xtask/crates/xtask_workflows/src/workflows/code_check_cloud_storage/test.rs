@@ -69,6 +69,7 @@ fn filter_binary_cache_is_trusted_only() {
 fn status_check_covers_every_job() {
     let status = serde_json::to_value(status_check()).unwrap();
     let script = status["steps"][0]["run"].as_str().unwrap();
+    let env = status["steps"][0]["env"].as_object().unwrap();
     for needed in [
         "path-check",
         "check",
@@ -77,7 +78,12 @@ fn status_check_covers_every_job() {
         "build-service-bins",
         "graphql-schema-compat",
     ] {
-        let check = format!(r#""${{{{ needs.{needed}.result }}}}""#);
+        let expression = format!("${{{{ needs.{needed}.result }}}}");
+        let (name, _) = env
+            .iter()
+            .find(|(_, value)| value.as_str() == Some(expression.as_str()))
+            .unwrap_or_else(|| panic!("{needed} is missing from the env: {env:?}"));
+        let check = format!(r#""${name}""#);
         assert!(script.contains(&check), "{check}: {script}");
         assert!(
             status["needs"]
@@ -325,10 +331,12 @@ fn rust_jobs_have_timeouts() {
 fn status_check_rejects_cancelled_jobs() {
     let status = serde_json::to_value(status_check()).unwrap();
     let script = status["steps"][0]["run"].as_str().unwrap();
+    let env = status["steps"][0]["env"].as_object().unwrap();
     assert!(
         script.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#),
         "{script}"
     );
+    assert_eq!(env["TEST_RESULT"], "${{ needs.test.result }}");
 }
 
 /// Plain `cargo test` here rebuilt hundreds of crates under different flags to run

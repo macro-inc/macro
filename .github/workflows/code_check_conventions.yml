@@ -71,14 +71,14 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "path-check: ${{ needs.path-check.result }}"
-          echo "ast-grep: ${{ needs.ast-grep.result }}"
+          echo "path-check: $PATH_CHECK_RESULT"
+          echo "ast-grep: $AST_GREP_RESULT"
 
           # Only success and skipped are OK. A job that hits its timeout reports
           # cancelled, and passing on that would merge code whose checks never ran.
           for result in \
-            "${{ needs.path-check.result }}" \
-            "${{ needs.ast-grep.result }}"; do
+            "$PATH_CHECK_RESULT" \
+            "$AST_GREP_RESULT"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "❌ One or more jobs failed or were cancelled"
               exit 1
@@ -86,3 +86,6 @@ jobs:
           done
 
           echo "✅ All jobs passed or were skipped"
+        env:
+          PATH_CHECK_RESULT: ${{ needs.path-check.result }}
+          AST_GREP_RESULT: ${{ needs.ast-grep.result }}

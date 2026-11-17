@@ -696,8 +696,9 @@ jobs:
         timeout-minutes: 15
         working-directory: apps/web
       - name: Test
-        run: bun run test --shard=${{ matrix.shard }}/6
+        run: bun run test --shard="${SHARD}/6"
         env:
+          SHARD: ${{ matrix.shard }}
           VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
         working-directory: apps/web
       - name: Teardown Nix
@@ -1008,14 +1009,17 @@ jobs:
         if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
         run: |
           PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
-            --pr ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }} \
-            --token ${{ secrets.GITHUB_TOKEN }} \
+            --pr "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
             --branch "$BRANCH")
           echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
           echo "Preview ID: $PREVIEW_ID"
         env:
           BRANCH: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREVIEW_BUCKET: macro-preview-assets-dev
         continue-on-error: true
         working-directory: apps/web
@@ -1023,7 +1027,7 @@ jobs:
         name: Validate bucket name
         if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
         run: |
-          if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
+          if [[ "$PREVIEW_BUCKET" != "macro-preview-assets-dev" ]]; then
             echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
             exit 1
           fi
@@ -1035,9 +1039,10 @@ jobs:
         if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
         run: |
           bun scripts/preview/deploy.ts \
-            --preview-id ${{ steps.preview-id.outputs.id }} \
+            --preview-id "$PREVIEW_ID" \
             --skip-build
         env:
+          PREVIEW_ID: ${{ steps.preview-id.outputs.id }}
           PREVIEW_BUCKET: macro-preview-assets-dev
         continue-on-error: true
         working-directory: apps/web
@@ -1045,12 +1050,17 @@ jobs:
         if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
         run: |
           bun scripts/preview/post-comment.ts \
-            --pr ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }} \
-            --token ${{ secrets.GITHUB_TOKEN }} \
-            --preview-id ${{ steps.preview-id.outputs.id }} \
-            --sha ${{ github.sha }}
+            --pr "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --preview-id "$PREVIEW_ID" \
+            --sha "$SHA"
         env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_ID: ${{ steps.preview-id.outputs.id }}
+          SHA: ${{ github.sha }}
           PREVIEW_BUCKET: macro-preview-assets-dev
         continue-on-error: true
         working-directory: apps/web
@@ -1444,36 +1454,36 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "path-check: ${{ needs.path-check.result }}"
-          echo "android-native-check: ${{ needs.android-native-check.result }}"
-          echo "typescript: ${{ needs.typescript.result }}"
-          echo "generated-code: ${{ needs.generated-code.result }}"
-          echo "biome-check: ${{ needs.biome-check.result }}"
-          echo "test: ${{ needs.test.result }}"
-          echo "functional: ${{ needs.functional.result }}"
-          echo "browser: ${{ needs.browser.result }}"
-          echo "cycles: ${{ needs.cycles.result }}"
-          echo "build: ${{ needs.build.result }}"
-          echo "ios-native-check: ${{ needs.ios-native-check.result }}"
+          echo "path-check: $PATH_CHECK_RESULT"
+          echo "android-native-check: $ANDROID_NATIVE_CHECK_RESULT"
+          echo "typescript: $TYPESCRIPT_RESULT"
+          echo "generated-code: $GENERATED_CODE_RESULT"
+          echo "biome-check: $BIOME_CHECK_RESULT"
+          echo "test: $TEST_RESULT"
+          echo "functional: $FUNCTIONAL_RESULT"
+          echo "browser: $BROWSER_RESULT"
+          echo "cycles: $CYCLES_RESULT"
+          echo "build: $BUILD_RESULT"
+          echo "ios-native-check: $IOS_NATIVE_CHECK_RESULT"
 
           # The Android check always runs, so it must succeed. For the rest only
           # success and skipped are OK: a job that hits its timeout reports
           # cancelled, and passing on that would merge code whose checks never ran.
-          if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
+          if [[ "$ANDROID_NATIVE_CHECK_RESULT" != "success" ]]; then
             echo "Android Native Check did not succeed"
             exit 1
           fi
           for result in \
-            "${{ needs.path-check.result }}" \
-            "${{ needs.typescript.result }}" \
-            "${{ needs.generated-code.result }}" \
-            "${{ needs.biome-check.result }}" \
-            "${{ needs.test.result }}" \
-            "${{ needs.functional.result }}" \
-            "${{ needs.browser.result }}" \
-            "${{ needs.cycles.result }}" \
-            "${{ needs.build.result }}" \
-            "${{ needs.ios-native-check.result }}"; do
+            "$PATH_CHECK_RESULT" \
+            "$TYPESCRIPT_RESULT" \
+            "$GENERATED_CODE_RESULT" \
+            "$BIOME_CHECK_RESULT" \
+            "$TEST_RESULT" \
+            "$FUNCTIONAL_RESULT" \
+            "$BROWSER_RESULT" \
+            "$CYCLES_RESULT" \
+            "$BUILD_RESULT" \
+            "$IOS_NATIVE_CHECK_RESULT"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               echo "One or more jobs failed or were cancelled"
               exit 1
@@ -1481,3 +1491,15 @@ jobs:
           done
 
           echo "All jobs passed or were skipped"
+        env:
+          PATH_CHECK_RESULT: ${{ needs.path-check.result }}
+          ANDROID_NATIVE_CHECK_RESULT: ${{ needs.android-native-check.result }}
+          TYPESCRIPT_RESULT: ${{ needs.typescript.result }}
+          GENERATED_CODE_RESULT: ${{ needs.generated-code.result }}
+          BIOME_CHECK_RESULT: ${{ needs.biome-check.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          FUNCTIONAL_RESULT: ${{ needs.functional.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          CYCLES_RESULT: ${{ needs.cycles.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          IOS_NATIVE_CHECK_RESULT: ${{ needs.ios-native-check.result }}
