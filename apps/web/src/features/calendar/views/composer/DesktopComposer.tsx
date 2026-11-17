@@ -13,6 +13,7 @@ import { Button } from '@ui';
 import {
   type ComponentProps,
   createSignal,
+  type JSX,
   Match,
   type ParentProps,
   Show,
@@ -28,6 +29,7 @@ import { ComposerConference } from '../../components/composer/conference/Compose
 import { ComposerDescription } from '../../components/composer/description/ComposerDescription';
 import { ComposerFieldRow } from '../../components/composer/field-row/ComposerFieldRow';
 import { ComposerGuests } from '../../components/composer/guests/ComposerGuests';
+import { ComposerHeader } from '../../components/composer/header/ComposerHeader';
 import { ComposerKind } from '../../components/composer/kind/ComposerKind';
 import { ComposerLocation } from '../../components/composer/location/ComposerLocation';
 import { ComposerNotices } from '../../components/composer/notices/ComposerNotices';
@@ -48,6 +50,7 @@ import { DEFAULT_CALENDAR_SOURCE } from '../../types';
 interface DesktopComposerProps {
   pinned?: boolean;
   onTogglePin?: () => void;
+  onHeaderPointerDown?: JSX.EventHandler<HTMLDivElement, PointerEvent>;
   onClose: () => void;
   onCancel: () => void;
   macroCallsEnabled: boolean;
@@ -66,7 +69,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
 
   return (
     <>
-      <div class="flex h-11 shrink-0 items-center gap-1.5 pt-2 pr-2.5 pb-2 pl-4">
+      <ComposerHeader onPointerDown={props.onHeaderPointerDown}>
         <ComposerKind />
         <div class="flex-1" />
         <Show when={props.onTogglePin}>
@@ -79,7 +82,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
           )}
         </Show>
         <ComposerClose onClose={props.onClose} />
-      </div>
+      </ComposerHeader>
       <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pt-1 pb-3">
         <ComposerFieldRow
           class="py-0"

@@ -116,6 +116,7 @@ export function StandaloneComposerEditor(
         <DesktopComposer
           pinned={props.pinned}
           onTogglePin={props.onTogglePin}
+          onHeaderPointerDown={props.onHeaderPointerDown}
           onClose={props.onClose}
           onCancel={props.onClose}
           macroCallsEnabled={props.macroCallsEnabled()}

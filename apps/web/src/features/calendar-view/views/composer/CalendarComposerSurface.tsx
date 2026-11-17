@@ -1,15 +1,21 @@
+import { ComposerDropTarget } from '@app/features/calendar/components/composer/drop-target/ComposerDropTarget';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import type { CalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
+import { createComposerHeaderDrag } from '@app/features/calendar/primitives/create-composer-header-drag';
 import {
   classifyOpenEventOutsidePress,
   handleOpenEventOutsidePress,
 } from '@app/features/calendar/utils/open-event-outside-press';
 import { StandaloneComposer } from '@app/features/calendar/views/composer/StandaloneComposer';
 import { t } from '@app/lib/i18n';
+import {
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 type ComposerSession = NonNullable<CalendarComposerSession['state']['session']>;
 
@@ -23,6 +29,23 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
   const [measureVersion, setMeasureVersion] = createSignal(0);
   let content: HTMLDivElement | undefined;
   let measureFrame: number | undefined;
+  let operation: UiOperation | undefined;
+  const drag = createComposerHeaderDrag({
+    // The dock's parent is the content area below the toolbar and beside the sidebar.
+    boundary: () => host.dock()?.parentElement?.getBoundingClientRect(),
+    surface: () => content?.getBoundingClientRect(),
+    disabled: () => pinned() || host.sessions.state.transitioning,
+    onPin: () => host.sessions.setPinned(session.key, true),
+    onStart: () => {
+      operation = startUiOperation('calendar.composer.drag');
+    },
+    onFinish: (outcome) => {
+      operation?.span.setAttr('calendar.composer.drag_outcome', outcome);
+      if (outcome === 'cancelled') operation?.cancel();
+      else operation?.afterPaint();
+      operation = undefined;
+    },
+  });
   const measure = () => {
     if (measureFrame !== undefined) return;
     measureFrame = requestAnimationFrame(() => {
@@ -62,6 +85,8 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
     const dock = dockRect();
     if (pinned() && dock)
       return new DOMRect(dock.left, dock.top, 0, dock.height);
+    const position = drag.position();
+    if (position) return new DOMRect(position.x - 8, position.y, 0, 0);
     const anchor = session.request.anchorRect?.();
     if (anchor) return anchor;
     const boundary = host.boundary()?.getBoundingClientRect();
@@ -78,11 +103,19 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
       open
       placement="right-start"
       gutter={pinned() ? 0 : 8}
-      flip={!pinned()}
-      slide={!pinned()}
+      flip={!pinned() && !drag.state.position}
+      slide={!pinned() && !drag.state.position}
       getAnchorRect={anchorRect}
     >
       <ScopedPortal scope="global">
+        <Show when={drag.state.active && drag.target()}>
+          {(bounds) => (
+            <ComposerDropTarget
+              bounds={bounds()}
+              active={drag.state.overTarget}
+            />
+          )}
+        </Show>
         <Popover.Content
           ref={content}
           class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-hidden outline-none"
@@ -132,6 +165,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
             {...session.request}
             pinned={pinned()}
             onTogglePin={() => host.sessions.setPinned(session.key, !pinned())}
+            onHeaderPointerDown={pinned() ? undefined : drag.start}
             onDirtyChange={(dirty) =>
               host.sessions.setDirty(session.key, dirty)
             }

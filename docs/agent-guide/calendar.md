@@ -24,7 +24,11 @@ calendar account metadata and other conferencing providers keep their original U
 Desktop event creation and editing use a 384px composer rather than a second
 split inside Calendar. A selected grid range or event anchors it beside that
 selection. **Pin event composer** reserves a right-side panel; unpinning keeps the
-same draft and field state. Pinned editors ignore outside clicks. Close, Cancel,
+same draft and field state. Drag the empty header area to move a floating composer;
+the right-side target lights up, and dropping there pins it. Escape, pointer
+cancellation, or losing window focus cancels the drag without discarding edits.
+Header menus and buttons retain their normal behavior. Pinned editors ignore
+outside clicks. Close, Cancel,
 Escape, and leaving the view ask before discarding edits; an open field menu
 handles Escape first. Touch continues to use its existing sheet.
 New-menu drafts start at the next half hour and last thirty minutes. Grid
