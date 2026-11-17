@@ -10,6 +10,8 @@ export type TaskDetailContext = MarkdownDetailContext;
 
 export type TaskDetailProps = {
   task: TaskDetailTarget;
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: TaskDetailContext) => JSX.Element;
 };
 
@@ -28,6 +30,8 @@ export function TaskDetail(props: TaskDetailProps) {
       documentId={props.task.id}
       kind="task"
       fallbackName={props.task.fallbackName ?? 'New Task'}
+      onDuplicate={props.onDuplicate}
+      onDelete={props.onDelete}
       children={props.children}
     />
   );
