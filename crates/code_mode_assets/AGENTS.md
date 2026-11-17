@@ -35,9 +35,12 @@ A failed run or a missing file fails the build; there is no stale fallback.
 OCaml programs (`crates/code_execution`) compile against a second, run-time
 asset directory: the `code-mode-ocaml` flake package (`codeModeOcaml` next
 to `codeModeAssets` in `nix/cloud-storage.nix`). `OCAML_BUNDLE` is the
-`CODE_MODE_OCAML_DIR` this crate was built with, or `None`. Only CI's Deno
-suite and manual builds set it so far; no Nix service build merges
-`codeModeOcamlEnv` yet, so deployed harnesses refuse OCaml programs. Unlike
+`CODE_MODE_OCAML_DIR` this crate was built with, or `None`. The agent
+harness's deploy build merges `codeModeOcamlEnv`
+(`deployServiceBinaryPackage` in `nix/cloud-storage.nix`), so its binary
+names the bundle and its image carries it; CI's Deno suite and manual
+builds set it too. Other services are built without it and refuse OCaml
+programs. Unlike
 these assets the bundle is read from that path at run time, not embedded,
 so it must be present there: Wasm modules, `.cmi` files, `ocamlc`,
 `wasm_of_ocaml`, binaryen, the policy check and a `fingerprint` file. Its layout, commands
