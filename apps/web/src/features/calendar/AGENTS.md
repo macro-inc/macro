@@ -25,7 +25,8 @@ host lives in `../block-calendar/`.
 - `components/composer/root/` and `context/calendar-composer-context.ts`: new composer
   Root/parts over `primitives/create-calendar-composer.ts`; preserved behavior has
   temporary old/new conformance coverage. `views/composer/StandaloneComposer.tsx`
-  owns the new desktop data composition, with `DesktopComposer.tsx` as its layout.
+  owns the readiness boundary; `views/composer/create-standalone-composer-setup.ts`
+  constructs its shared model once, with `DesktopComposer.tsx` as the current layout.
   `../calendar-view/views/composer/` owns floating/pinned placement and navigation
   dismissal through `primitives/create-calendar-composer-session.ts`. Header dragging
   uses `primitives/create-composer-header-drag.ts`; its target matches the future
@@ -59,6 +60,8 @@ host lives in `../block-calendar/`.
   arithmetic; `DateTimeRange.Dates` stages and commits a two-click date range,
   while the original per-end parts retain existing callers' behavior. Share typed
   and picked clock state through its `primitives/create-time-input.ts` in both layouts.
+  Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
+  keep the old phone form wired until the full 2J layout passes conformance.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,

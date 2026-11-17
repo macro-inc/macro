@@ -1,0 +1,111 @@
+import { usePending } from '@app/observability/flow';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { Accessor } from 'solid-js';
+import { createCalendarEventFormController } from '../../components/composer/create-calendar-event-form-controller';
+import {
+  useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
+} from '../../hooks/use-calendar-ui-flag';
+import { useEventEditor } from '../../hooks/use-event-editor';
+import { useSyncedCalendarEvent } from '../../hooks/use-synced-calendar-event';
+import { createCalendarComposer } from '../../primitives/create-calendar-composer';
+import { createComposerSuggestions } from '../../primitives/create-composer-suggestions';
+import { defaultComposerValues } from '../../primitives/default-composer-values';
+import { useCalendarPreferences } from '../../utils/preferences';
+import type { StandaloneComposerProps } from './StandaloneComposer';
+
+/** Construct one editor model for either layout; views retain DOM and placement ownership. */
+export function createStandaloneComposerSetup(
+  props: StandaloneComposerProps & { macroCallsEnabled: Accessor<boolean> }
+) {
+  const [preferences] = useCalendarPreferences();
+  const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const forwardEnabled = useCalendarInvitationForwardFlag();
+  const saved = () => {
+    props.onSaved?.();
+    props.onClose();
+  };
+  const editor = useEventEditor({
+    event: () => props.event,
+    macroCallsEnabled: props.macroCallsEnabled,
+    guestInvitesEnabled,
+    invitationForwardEnabled: forwardEnabled,
+    syncedEvent: useSyncedCalendarEvent(() => props.event),
+    onDetailsLocked: () => model.resetDetails(),
+    onCreated: (created) => props.onCreated?.(created),
+    onSaved: saved,
+  });
+  const isEdit = () => props.event !== undefined;
+  const initial =
+    editor.initialValues() ??
+    props.initialValues ??
+    defaultComposerValues(new Date(), props.macroCallsEnabled());
+  const initialValue =
+    !isEdit() && initial.conference === 'macro' && !props.macroCallsEnabled()
+      ? { ...initial, conference: 'none' as const }
+      : initial;
+  const controller = createCalendarEventFormController({
+    initialValue,
+    isEdit: isEdit(),
+    calendarOptions: editor.calendarOptions,
+    guestOptions: editor.guestOptions,
+  });
+  const model = createCalendarComposer({
+    controller,
+    get pending() {
+      return editor.pending();
+    },
+    get isEdit() {
+      return isEdit();
+    },
+    get timeFormat() {
+      return preferences.timeFormat;
+    },
+    // The existing form's wall-clock fields use the viewer's local zone.
+    initialMetadata: { visibility: props.event?.visibility },
+    get disabledFields() {
+      return editor.disabledFields();
+    },
+    get addOnlyGuests() {
+      return editor.addOnlyGuests();
+    },
+    get guestsReadOnlyReason() {
+      return editor.guestsReadOnlyReason();
+    },
+    get guestListHidden() {
+      return editor.guestListHidden();
+    },
+    get guestPolicyEditable() {
+      return editor.guestPolicyEditable();
+    },
+    get detailsReadOnlyReason() {
+      return editor.detailsReadOnlyReason();
+    },
+    get showRecurringEditNotice() {
+      return editor.showRecurringEditNotice();
+    },
+    onSubmit: (values, scope, metadata) =>
+      fireAndForget(
+        editor.save(values, scope, metadata),
+        'calendar-composer-save'
+      ),
+    onDirtyChange: (dirty) => props.onDirtyChange?.(dirty),
+    onCalendarChange: (id, color) => props.onCalendarChange?.(id, color),
+  });
+  const suggestions = createComposerSuggestions({
+    suggestion: isEdit() ? undefined : props.suggestedValues,
+    isDirty: model.isDirty,
+    apply: (values) =>
+      controller.replaceFromExternal({ ...controller.state(), ...values }),
+  });
+  fireAndForget(suggestions.completion, 'calendar-composer-suggestions');
+  usePending('calendar.composer.suggestions', suggestions.pending);
+  return {
+    model,
+    saveError: editor.saveError,
+    suggestionsPending: suggestions.pending,
+    guestInvitesEnabled,
+    forwardEnabled,
+    saved,
+  };
+}

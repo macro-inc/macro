@@ -78,7 +78,9 @@ calendar retain their locale default unless their host supplies a preference.
 
 Calendar foundation examples are in the UI gallery: `?ui=time-input`,
 `?ui=date-tile`, `?ui=calendar-range`, `?ui=calendar-swatch`, `?ui=busy-indicator`,
-`?ui=value-pill`, and `?ui=mobile-sheet-parts` under `/app/component/ui`.
+`?ui=value-pill`, `?ui=mobile-time-input`, and `?ui=mobile-sheet-parts` under
+`/app/component/ui`. The new phone time-picker example is not yet wired into the
+phone composer: its first tap opens a list; tapping the open value enters typing.
 The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
 sheet handles use 12px above and 16px below the 36×4px grabber.

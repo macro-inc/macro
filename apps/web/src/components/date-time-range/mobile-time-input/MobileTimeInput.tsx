@@ -1,0 +1,235 @@
+import { t } from '@app/lib/i18n';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { Popover } from '@kobalte/core/popover';
+import { Button, cn, Input } from '@ui';
+import {
+  type ComponentProps,
+  createEffect,
+  createMemo,
+  createUniqueId,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import { createTimeInput } from '../primitives/create-time-input';
+import type { TimeInput } from '../time-input';
+import {
+  dayTimeOptions,
+  formatTimeValue,
+  selectedTimeOptionId,
+  type TimeOption,
+} from '../time-options';
+import { MobileTimeOptions } from './MobileTimeOptions';
+import { MobileTimeValue } from './MobileTimeValue';
+
+type MobileTimeInputProps = ComponentProps<typeof TimeInput> & {
+  /** Anchor date for end-list headings after midnight. */
+  date?: string;
+};
+
+/**
+ * Phone clock input: first tap picks without a keyboard; the next tap types.
+ * @do Pass end-time options and the anchor date for overnight ranges.
+ * @dont Replace a selected option with its clock value alone; preserve its day offset.
+ */
+export function MobileTimeInput(props: MobileTimeInputProps) {
+  const listId = createUniqueId();
+  let anchor: HTMLSpanElement | undefined;
+  let button: HTMLButtonElement | undefined;
+  let input: HTMLInputElement | undefined;
+  let list: HTMLDivElement | undefined;
+  let revealFrame: number | undefined;
+  const options = createMemo(
+    () => props.options ?? dayTimeOptions(props.timeFormat)
+  );
+  const selectedId = () =>
+    props.selectedId ?? selectedTimeOptionId(props.value);
+  const model = createTimeInput({
+    options,
+    selectedId,
+    disabled: () => props.disabled ?? false,
+    onChange: (option) => props.onChange(option),
+  });
+  // Permission loss closes the native typing focus as well as the pending picker draft.
+  createEffect(
+    on(
+      () => props.disabled,
+      (disabled) => {
+        if (!disabled) return;
+        model.reset();
+        if (document.activeElement === input) input?.blur();
+      }
+    )
+  );
+  const typing = () => model.state.mode === 'typing';
+  const activeId = () => {
+    const option = model.isOpen() ? model.highlighted() : undefined;
+    return option ? `${listId}-${option.id.replace('|', '-')}` : undefined;
+  };
+  const reveal = (block: ScrollLogicalPosition) => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
+    revealFrame = requestAnimationFrame(() => {
+      revealFrame = undefined;
+      list
+        ?.querySelector<HTMLElement>('[data-highlighted]')
+        ?.scrollIntoView({ block });
+    });
+  };
+  onCleanup(() => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
+  });
+  const focusValue = () => button?.focus({ preventScroll: true });
+  const cancel = () => {
+    model.reset();
+    focusValue();
+  };
+  const choose = (option: TimeOption) => {
+    model.choose(option);
+    focusValue();
+  };
+  const openList = () => {
+    model.openList();
+    reveal('center');
+  };
+  const beginTyping = () => {
+    model.beginTyping();
+    // Both controls stay mounted so this focus stays inside the initiating touch gesture.
+    input?.focus({ preventScroll: true });
+    input?.select();
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && model.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!model.isOpen()) openList();
+      else {
+        model.moveHighlight(event.key === 'ArrowDown' ? 1 : -1);
+        reveal('nearest');
+      }
+    } else if (event.key === 'Enter' && (typing() || model.state.navigated)) {
+      event.preventDefault();
+      event.stopPropagation();
+      model.commit();
+      focusValue();
+    }
+  };
+  return (
+    <Popover
+      anchorRef={() => anchor}
+      open={model.isOpen()}
+      onOpenChange={(open) => {
+        if (!open) model.commit();
+      }}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <span
+        ref={anchor}
+        class={cn('inline-flex w-[110px] shrink-0', props.class)}
+      >
+        <span hidden={typing()} class="w-full">
+          <Button
+            ref={button}
+            id={props.id}
+            variant="value"
+            size="sm"
+            fullWidth
+            role="combobox"
+            aria-label={props.label}
+            aria-haspopup="listbox"
+            aria-controls={listId}
+            aria-expanded={model.isOpen()}
+            aria-activedescendant={activeId()}
+            aria-invalid={props.invalid || undefined}
+            aria-describedby={props.describedBy}
+            disabled={props.disabled}
+            onClick={() => (model.isOpen() ? beginTyping() : openList())}
+            onKeyDown={onKeyDown}
+          >
+            <MobileTimeValue
+              value={props.value}
+              timeFormat={props.timeFormat}
+            />
+          </Button>
+        </span>
+        <span hidden={!typing()} class="w-full">
+          <Input
+            ref={input}
+            id={`${props.id}-input`}
+            type="text"
+            role="combobox"
+            aria-label={props.label}
+            aria-autocomplete="both"
+            aria-controls={listId}
+            aria-expanded={model.isOpen()}
+            aria-activedescendant={activeId()}
+            aria-invalid={props.invalid || undefined}
+            aria-describedby={props.describedBy}
+            disabled={props.disabled}
+            autocomplete="off"
+            spellcheck={false}
+            placeholder={t('common.time')}
+            size="sm"
+            value={
+              model.state.shown ??
+              formatTimeValue(props.value, props.timeFormat) ??
+              ''
+            }
+            onInput={(event) => {
+              const text = event.currentTarget.value;
+              const filled = model.input(
+                text,
+                event.inputType.startsWith('insert')
+              );
+              if (model.highlighted()) reveal('center');
+              if (filled) input?.setSelectionRange(text.length, filled.length);
+            }}
+            onBlur={model.commit}
+            on:keydown={onKeyDown}
+          />
+        </span>
+      </span>
+      <Show when={model.isOpen()}>
+        <ScopedPortal scope="local">
+          <Popover.Content
+            class="menu-surface z-action-menu max-h-72 min-w-40 max-w-[90vw] overflow-y-auto rounded-[22px] p-1.5 outline-none"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onEscapeKeyDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              cancel();
+            }}
+            onInteractOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && anchor?.contains(target))
+                event.preventDefault();
+            }}
+          >
+            <Popover.Title class="sr-only">
+              {t('common.chooseTime', { label: props.label })}
+            </Popover.Title>
+            <MobileTimeOptions
+              ref={(element) => {
+                list = element;
+              }}
+              id={listId}
+              label={props.label}
+              date={props.date}
+              options={options()}
+              selectedId={selectedId()}
+              highlightedId={model.state.highlightedId}
+              onChoose={choose}
+            />
+          </Popover.Content>
+        </ScopedPortal>
+      </Show>
+    </Popover>
+  );
+}
