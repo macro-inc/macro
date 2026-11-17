@@ -345,6 +345,9 @@ impl<'a> TeamRead<'a> {
         // inbox's contacts; a message naming another inbox's contact would
         // let a copy the superset misses hide this one
         // (docs/CRM_EMAIL_PRIVACY.md).
+        // Fetch each copy by primary key before dedupe or privacy checks.
+        // Stale statistics can otherwise rescan the mailbox and repeat
+        // root-message lookups for each returned row.
         builder.push(
             r#"
                     OFFSET 0
@@ -365,7 +368,9 @@ impl<'a> TeamRead<'a> {
                     SELECT CASE WHEN ranked.dedupe_key ~ {UUID_TEXT}
                                 THEN ranked.dedupe_key::uuid END
                 ) AS copy
-                JOIN email_threads t ON t.id = copy.id
+                CROSS JOIN LATERAL (
+                    SELECT * FROM email_threads WHERE id = copy.id OFFSET 0
+                ) AS t
                 WHERE t.id <> ranked.id AND t.link_id = ANY("#
         ));
         builder.push_bind(self.inboxes.clone());
