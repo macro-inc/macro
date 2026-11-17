@@ -139,13 +139,13 @@ class Spans(unittest.TestCase):
 class DocumentationAndTools(unittest.TestCase):
     def test_a_documentation_selection_reads_its_entities_and_bytes(self):
         span = {"trace_id": "t1", "start_timestamp": "2026-11-09T10:00:00Z",
-                "tags": ["region:us-east-1", "task_family:agent-harness-service-1a2b3c4d"],
+                "tags": ["region:us-east-1", "task_family:agent-harness-service-1a2b3c4d", "task_version:3"],
                 "custom": {"selection_status": "selected", "selected": "2", "selected_entities": "channels,users",
                            "bytes": "20111", "guidance": "Inline", "batches": "2"}}
         self.assertEqual(datadog_spans.documentation(span), {
             "trace_id": "t1", "start_ms": 1794218400000.0, "status": "selected", "selected": 2,
             "entities": ["channels", "users"], "bytes": 20111, "guidance": "Inline", "batches": 2,
-            "task_family": "agent-harness-service-1a2b3c4d",
+            "task_definition": "agent-harness-service-1a2b3c4d:3",
         })
 
     def test_a_cut_tool_listing_keeps_every_whole_name_and_no_descriptions(self):
@@ -306,13 +306,18 @@ class Reconstruct(unittest.TestCase):
         self.assertEqual(reconstruct.check("sdk_docs", text, None, None)["status"], "unverified")
 
     def test_the_commit_is_the_deploy_that_registered_the_task(self):
+        asked = []
+
         def run(args, **_):
+            asked.append(args)
             if args[0] == "gh":
                 return completed(json.dumps(RELEASE_RUNS))
             return completed('"2026-11-16T23:31:34.381000+00:00"')
         with mock.patch("subprocess.run", side_effect=run):
-            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429",
-                                               reconstruct.iso("2026-11-17T16:00:42Z"), "prod")
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-17T16:00:42Z"), "prod",
+                                               reconstruct.production_deploys())
+        self.assertIn("agent-harness-service-52dc1429:1", asked[1])
         self.assertEqual(commit["sha"], "bbb222")
         self.assertTrue(commit["exact"])
 
@@ -322,14 +327,30 @@ class Reconstruct(unittest.TestCase):
                 return completed(json.dumps(RELEASE_RUNS))
             raise subprocess.CalledProcessError(255, args)
         with mock.patch("subprocess.run", side_effect=run):
-            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429",
-                                               reconstruct.iso("2026-11-16T20:00:00Z"), "prod")
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-16T20:00:00Z"), "prod",
+                                               reconstruct.production_deploys())
         self.assertEqual(commit["sha"], "aaa111")
         self.assertFalse(commit["exact"])
         self.assertIn("not readable", commit["reason"])
         self.assertIn("last production deploy before the turn", commit["reason"])
 
-    def test_parts_pick_the_routed_prompt_by_hash_and_flag_a_docs_byte_mismatch(self):
+    def test_an_unseen_turn_checks_neither_the_session_preamble_nor_a_macro_prompt(self):
+        output = {"preamble": "P", "macro_prompt": "inline", "routed_macro_prompt": "routed",
+                  "identities": [], "integrations": [], "docs": []}
+        call_row = {"start_ms": seconds(1) * 1000, "eager_tools": 4,
+                    "prompt_bytes": {"preamble": 40}, "prompt_hashes": {"preamble": "0123456789abcdef"}}
+        turn = markdown_export.parse([prompt(0), end(5)])[0]
+        found = reconstruct.parts({"documentation": None}, turn, [call_row], output, iter([]))
+        self.assertEqual([(part["name"], part["status"]) for part in found], [("preamble", "not reconstructed")])
+
+    def test_candidates_of_one_size_without_a_hash_stay_unverified(self):
+        sizes = {"identity": 3}
+        part = reconstruct.inferred("identity", ["Ada", "ada"], sizes, {}, "inferred")
+        self.assertEqual(part["status"], "unverified")
+        self.assertEqual(reconstruct.inferred("identity", ["Ada", "Bo"], sizes, {}, "inferred")["status"], "verified")
+
+    def test_parts_pick_the_routed_prompt_by_guidance_and_flag_a_docs_byte_mismatch(self):
         docs = "\n<macro_sdk>\ncatalog</macro_sdk>\n"
         output = {"preamble": "P", "macro_prompt": "inline guides", "routed_macro_prompt": "routed",
                   "identities": [], "integrations": [], "docs": [docs]}

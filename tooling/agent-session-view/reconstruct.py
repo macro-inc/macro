@@ -81,40 +81,51 @@ def check(name, text, span_bytes, span_hash, note=None):
 
 
 def run_json(args):
-    return json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
+    # In the repository, so `gh` resolves {owner}/{repo} from its remote.
+    return json.loads(subprocess.run(args, check=True, capture_output=True, text=True, cwd=REPO).stdout)
 
 
 def iso(timestamp):
     return datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
 
 
-def deploy_commit(task_family, turn_started, env):
-    """{"sha", "exact", "reason"}: the commit that served a turn."""
+def production_deploys():
+    """Successful production deploy runs, newest first, or the reason there
+    are none to read."""
+    try:
+        listing = run_json(["gh", "api", "repos/{owner}/{repo}/actions/runs?event=release&per_page=100"])
+        return [
+            run for run in listing["workflow_runs"]
+            if run["name"] == PROD_DEPLOY and run["conclusion"] == "success"
+        ], None
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
+        return [], f"production deploy runs not readable ({type(error).__name__})"
+
+
+def deploy_commit(task, turn_started, env, deploys):
+    """{"sha", "exact", "reason"}: the commit that served a turn. `task` is
+    its ECS task definition (`family:revision`), `deploys` what
+    `production_deploys` returned."""
     if env == "dev":
         return closest_main(turn_started, "dev deploys every main push; the last main commit before the turn")
-    runs = []
-    try:
-        runs = [
-            run for run in run_json(["gh", "api", "repos/{owner}/{repo}/actions/runs?event=release&per_page=100"])
-            ["workflow_runs"] if run["name"] == PROD_DEPLOY and run["conclusion"] == "success"
-        ]
-    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
-        return closest_main(turn_started, f"production deploy runs not readable ({type(error).__name__})")
-    if task_family:
+    runs, unreadable = deploys
+    if unreadable:
+        return closest_main(turn_started, unreadable)
+    if task:
         try:
             registered = iso(run_json([
-                "aws", "ecs", "describe-task-definition", "--task-definition", task_family,
+                "aws", "ecs", "describe-task-definition", "--task-definition", task,
                 "--query", "taskDefinition.registeredAt", "--output", "json",
             ]))
             for run in runs:
                 if iso(run["created_at"]) <= registered <= iso(run["updated_at"]):
                     return {"sha": run["head_sha"], "exact": True,
-                            "reason": f"{run['head_branch']}: its deploy registered task {task_family}"}
-            reason = f"no production deploy run spans task {task_family}'s registration"
+                            "reason": f"{run['head_branch']}: its deploy registered task {task}"}
+            reason = f"no production deploy run spans task {task}'s registration"
         except (OSError, subprocess.CalledProcessError, ValueError) as error:
-            reason = f"task definition {task_family} not readable ({type(error).__name__})"
+            reason = f"task definition {task} not readable ({type(error).__name__})"
     else:
-        reason = "the spans name no ECS task family"
+        reason = "the spans name no ECS task definition"
     before = [run for run in runs if iso(run["updated_at"]) <= turn_started]
     if not before:
         return closest_main(turn_started, reason + "; no production deploy before the turn listed")
@@ -164,7 +175,10 @@ def render(sha, request):
     if assets.returncode != 0:
         raise ReconstructionFailed(f"code-mode-assets did not build at {sha[:11]}: " + assets.stderr[-2000:])
     command = [
-        *wrapper, "env", "SQLX_OFFLINE=true", f"CARGO_TARGET_DIR={CACHE / 'target'}",
+        # A target directory per commit: cargo names a workspace member's
+        # artifacts by its path in the workspace and judges freshness by
+        # mtime, so checkouts sharing one could reuse another commit's build.
+        *wrapper, "env", "SQLX_OFFLINE=true", f"CARGO_TARGET_DIR={CACHE / 'target' / sha}",
         f"CODE_MODE_ASSETS_DIR={assets.stdout.strip().splitlines()[-1]}",
         "nix", "develop", str(path), "-c",
         "cargo", "run", "-q", "-p", "ai_tools", "--example", "asv_reconstruct",
@@ -216,46 +230,64 @@ def integration_candidates(spans):
     return [servers, sorted(servers), sorted(servers, key=str.lower)] if servers else [[]]
 
 
+def own_calls(turn, calls):
+    """The turn's own model calls (a side call, such as the title, offers no tools)."""
+    return [call for call in calls if turn.started <= call["start_ms"] / 1000 <= turn.bound and call.get("eager_tools")]
+
+
 def attach(export, contexts, turns, env):
-    """Add a "literal" entry to each turn context; one build per commit."""
+    """Add a "literal" entry to each turn context: each turn is rebuilt at
+    the commit that served it, with one build per commit."""
     spans = export.get("spans") or {}
     calls = spans.get("model_calls") or []
     if not contexts:
         return
-    task = next((row.get("task_family") for row in (spans.get("documentation") or []) + calls
-                 if row.get("task_family")), None)
-    started = datetime.datetime.fromtimestamp(turns[0].started, datetime.timezone.utc)
-    try:
-        commit = deploy_commit(task, started, env)
-    except (OSError, subprocess.CalledProcessError) as error:
-        for context in contexts:
-            context["literal"] = {"error": f"no commit to rebuild from: {error}"}
-        return
+    deploys = production_deploys() if env != "dev" else ([], None)
+    commits, groups = {}, {}
+    for context, turn in zip(contexts, turns):
+        rows = own_calls(turn, calls) + ([context["documentation"]] if context["documentation"] else [])
+        task = next((row.get("task_definition") for row in rows if row.get("task_definition")), None)
+        started = datetime.datetime.fromtimestamp(turn.started, datetime.timezone.utc)
+        # Turns served by one task share its lookup; without one, each turn's
+        # own start time decides.
+        key = task or started
+        if key not in commits:
+            try:
+                commits[key] = deploy_commit(task, started, env, deploys)
+            except (OSError, subprocess.CalledProcessError) as error:
+                context["literal"] = {"error": f"no commit to rebuild from: {error}"}
+                continue
+        commit = commits[key]
+        groups.setdefault(commit["sha"], (commit, []))[1].append((context, turn))
 
     candidates = integration_candidates(spans)
-    docs = [
-        {"entities": context["documentation"]["entities"], "guidance": context["documentation"]["guidance"]}
-        for context in contexts if context["documentation"]
-    ]
-    request = {"docs": docs, "identities": identities(export), "integrations": candidates}
-    try:
-        output = render(commit["sha"], request)
-    except (ReconstructionFailed, OSError, subprocess.CalledProcessError, ValueError) as error:
-        for context in contexts:
-            context["literal"] = {"commit": commit, "error": str(error)}
-        return
+    for sha, (commit, members) in groups.items():
+        docs = [
+            {"entities": context["documentation"]["entities"], "guidance": context["documentation"]["guidance"]}
+            for context, _ in members if context["documentation"]
+        ]
+        request = {"docs": docs, "identities": identities(export), "integrations": candidates}
+        try:
+            output = render(sha, request)
+        except (ReconstructionFailed, OSError, subprocess.CalledProcessError, ValueError) as error:
+            for context, _ in members:
+                context["literal"] = {"commit": commit, "error": str(error)}
+            continue
+        rendered_docs = iter(output["docs"])
+        for context, turn in members:
+            mark(context, commit, parts(context, turn, calls, output, rendered_docs))
 
-    rendered_docs = iter(output["docs"])
-    for context, turn in zip(contexts, turns):
-        found = parts(context, turn, calls, output, rendered_docs)
-        context["literal"] = {"commit": commit, "parts": found}
-        wrong = [part["label"] for part in found if part["status"] == "mismatch"]
-        if wrong:
-            context["flags"].insert(0, {
-                "id": "reconstruction-mismatch", "level": "warn",
-                "text": f"Rebuilt from source at {commit['sha'][:11]}, these differ from what the span recorded: "
-                        + ", ".join(wrong),
-            })
+
+def mark(context, commit, found):
+    """Attach a turn's rebuilt parts, and flag any that differ from the span."""
+    context["literal"] = {"commit": commit, "parts": found}
+    wrong = [part["label"] for part in found if part["status"] == "mismatch"]
+    if wrong:
+        context["flags"].insert(0, {
+            "id": "reconstruction-mismatch", "level": "warn",
+            "text": f"Rebuilt from source at {commit['sha'][:11]}, these differ from what the span recorded: "
+                    + ", ".join(wrong),
+        })
 
 
 def texts(contexts):
@@ -274,35 +306,51 @@ def inferred(name, texts, sizes, hashes, note):
     """A part rendered from inputs this tool had to infer: the candidate the
     span confirms, or, when none does, the first one marked unverified. A
     wrong guess at the inputs says nothing about the code, so it is not a
-    mismatch."""
-    texts = [text for text in texts if text is not None]
-    for text in texts:
-        part = check(name, text, sizes.get(name), hashes.get(name), note)
-        if part["status"] == "verified":
-            return part
-    part = check(name, texts[0] if texts else None, sizes.get(name), hashes.get(name), note)
-    if part["status"] == "mismatch":
+    mismatch. Without a hash, candidates of one size can't be told apart, so
+    only a single matching text counts as verified."""
+    texts = list(dict.fromkeys(text for text in texts if text is not None))
+    parts = [check(name, text, sizes.get(name), hashes.get(name), note) for text in texts]
+    matching = [part for part in parts if part["status"] == "verified"]
+    if len(matching) == 1:
+        return matching[0]
+    part = matching[0] if matching else (parts[0] if parts else check(name, None, sizes.get(name), hashes.get(name), note))
+    if part["status"] in ("verified", "mismatch"):
         part["status"] = "unverified"
-        part["note"] = f"{note}; none of {len(texts)} candidates matches the span"
+        part["note"] = (
+            f"{note}; {len(matching)} candidates match the span's size and it has no hash to choose by"
+            if matching else f"{note}; none of {len(texts)} candidates matches the span"
+        )
     return part
 
 
 def parts(context, turn, calls, output, rendered_docs):
     """The turn's prompt parts, each rebuilt where it can be, and checked."""
-    own = [call for call in calls if turn.started <= call["start_ms"] / 1000 <= turn.bound and call.get("eager_tools")]
+    own = own_calls(turn, calls)
     last = own[-1] if own else {}
     sizes, hashes = last.get("prompt_bytes") or {}, last.get("prompt_hashes") or {}
+    # With the span's sections known, only the sections it had are rebuilt.
+    had = (lambda name: name in sizes) if sizes else (lambda name: True)
     found = []
 
-    found.append(check("preamble", output["preamble"], sizes.get("preamble"), hashes.get("preamble")))
+    # A turn nobody watches (a routine draft) has no Macro prompt and a
+    # preamble of its own, private to the harness.
+    unseen = bool(sizes) and "preamble" in sizes and "macro_prompt" not in sizes
+    if unseen:
+        found.append({"name": "preamble", "label": "preamble", "text": None, "status": "not reconstructed",
+                      "note": "an unseen turn's preamble: private to the harness", "span_bytes": sizes["preamble"],
+                      "span_hash": hashes.get("preamble"), "bytes": None, "hash": None})
+    elif had("preamble"):
+        found.append(check("preamble", output["preamble"], sizes.get("preamble"), hashes.get("preamble")))
 
-    inline, routed = output["macro_prompt"], output["routed_macro_prompt"]
-    if hashes.get("macro_prompt") == short_hash(routed) and routed != inline:
-        found.append(check("macro_prompt", routed, sizes.get("macro_prompt"), hashes.get("macro_prompt"),
-                           "the routed prompt: selected entities bring their own guidance"))
-    else:
-        found.append(check("macro_prompt", inline, sizes.get("macro_prompt"), hashes.get("macro_prompt"),
-                           "area guidance inline"))
+    if had("macro_prompt") and not unseen:
+        # Turns whose docs bring their entities' guidance get the prompt
+        # without it.
+        routed = (context["documentation"] or {}).get("guidance") == "Selected"
+        found.append(check(
+            "macro_prompt", output["routed_macro_prompt" if routed else "macro_prompt"],
+            sizes.get("macro_prompt"), hashes.get("macro_prompt"),
+            "routed: selected entities bring their own guidance" if routed else "area guidance inline",
+        ))
 
     if "identity" in sizes:
         found.append(inferred("identity", output["identities"], sizes, hashes,

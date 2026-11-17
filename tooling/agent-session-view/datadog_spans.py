@@ -166,18 +166,19 @@ def model_call(span):
             for section in PROMPT_SECTIONS
             if isinstance(dig(prompt, f"{section}.hash"), str)
         },
-        "task_family": task_family(span),
+        "task_definition": task_definition(span),
         "failed": failed(span),
     }
 
 
-def task_family(span):
-    """The ECS task family that served the span, from its tags: the way back
-    to the image, and so the commit, it ran."""
-    for tag in span.get("tags") or []:
-        if tag.startswith("task_family:"):
-            return tag.split(":", 1)[1]
-    return None
+def task_definition(span):
+    """The ECS task definition (`family:revision`) that served the span, from
+    its tags: the way back to the image, and so the commit, it ran. A family
+    alone would name its latest revision, not this one."""
+    tags = dict(tag.split(":", 1) for tag in span.get("tags") or [] if ":" in tag)
+    if "task_family" not in tags or "task_version" not in tags:
+        return None
+    return f"{tags['task_family']}:{tags['task_version']}"
 
 
 def documentation(span):
@@ -194,7 +195,7 @@ def documentation(span):
         "bytes": number(custom.get("bytes")),
         "guidance": custom.get("guidance"),
         "batches": number(custom.get("batches")),
-        "task_family": task_family(span),
+        "task_definition": task_definition(span),
     }
 
 

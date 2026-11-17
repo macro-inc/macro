@@ -224,7 +224,7 @@ def take_input(step, raw):
         return
     raw = dict(raw)
     code = raw.pop("source", None)
-    if code is None and step.name in SHELL_TOOLS:
+    if code is None and step.name.removeprefix("mcp__macro_internal__") in SHELL_TOOLS:
         code = raw.pop("input", None)
     if code is not None:
         step.code = code
