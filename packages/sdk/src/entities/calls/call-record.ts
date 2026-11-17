@@ -167,7 +167,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   readonly access = new EntityAccess(this.client, 'call', this);
 
   /**
-   * Get or create a shareable meeting for this call.
+   * Get or create a shareable meeting for this call; refused to an agent's
+   * program (ExecuteCode, a routine), so there ask the user to share it.
    *
    * @write
    * @idempotent
