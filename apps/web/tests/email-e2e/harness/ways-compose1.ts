@@ -80,6 +80,40 @@ export async function addContacts(
   );
 }
 
+/**
+ * Waits until the open app has read the account into its cache once: every
+ * lane of items (it keeps a checkpoint per lane, and reads CRM entities
+ * last) and the contacts. Until then, each page it writes makes the
+ * recipient suggestions read their first window again, which takes back a
+ * window a test just asked for. (The item lanes as `backfilled` in
+ * `full-stack-notifications.spec.ts` reads them.)
+ */
+export async function cacheFilled(page: Page): Promise<void> {
+  const filled = () =>
+    page.evaluate(() => {
+      const done = (key: string, field: string) =>
+        !!JSON.parse(localStorage.getItem(key) ?? '{}')[field];
+      const keys = Object.keys(localStorage);
+      const lanes = keys.filter(
+        (key) =>
+          key.startsWith('graphql-soup-backfill:') &&
+          !key.endsWith(':coordinator')
+      );
+      return (
+        lanes.some((key) => key.endsWith(':auxiliary-entities')) &&
+        lanes.every((key) => done(key, 'completed')) &&
+        keys.some(
+          (key) =>
+            key.startsWith('graphql-contacts-backfill:') &&
+            done(key, 'completedAt')
+        )
+      );
+    });
+  await expect
+    .poll(filled, { message: 'the app never finished filling its cache' })
+    .toBe(true);
+}
+
 /** Opens the phone's full-screen composer from the list's New email. */
 export async function openPhoneComposer(
   page: Page,

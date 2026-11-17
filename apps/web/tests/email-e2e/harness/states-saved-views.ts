@@ -4,6 +4,7 @@
 
 import { devices, type Page, type Route } from '@playwright/test';
 import { expect, type Mailbox } from './fixtures';
+import type { LinkedInbox } from './stack';
 import { closeMenus, filterSubmenu, openFilterGroup } from './ways-list1';
 
 const { defaultBrowserType: _browser, ...iPhone } = devices['iPhone 13'];
@@ -140,9 +141,10 @@ function passOn(route: Route): Promise<void> {
 
 /**
  * Links a second Gmail inbox whose account has a send-as alias, made in the
- * emulator with its alias first, as `ways-list1-inboxes.spec.ts` does.
+ * emulator with its alias first, as `ways-list1-inboxes.spec.ts` does, and
+ * gives that inbox.
  */
-export async function linkAliasInbox(mailbox: Mailbox): Promise<void> {
+export async function linkAliasInbox(mailbox: Mailbox): Promise<LinkedInbox> {
   const created = await fetch(
     `${mailbox.stack.info.gmailUrl}/_emulator/mailboxes`,
     {
@@ -152,7 +154,7 @@ export async function linkAliasInbox(mailbox: Mailbox): Promise<void> {
     }
   );
   expect(created.ok).toBe(true);
-  await mailbox.stack.link(mailbox.user, 'GMAIL', WORK);
+  return mailbox.stack.link(mailbox.user, 'GMAIL', WORK);
 }
 
 /** Narrows the list to the mail of the alias, from the sidebar's account menu. */

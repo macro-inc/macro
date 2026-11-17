@@ -319,12 +319,16 @@ export async function savedNew(
 }
 
 /**
- * Waits until the email service told the app that the Gmail inbox finished
- * its first backfill. The app reads the inbox list again when it hears it,
- * which mounts an open composer again; a page opened afterwards never hears
- * it. (Copied from `backfillAnnounced` in `harness/ways-settings-more.ts`.)
+ * Waits until the email service told the app that a Gmail inbox (the test's
+ * own, unless another is given) finished its first backfill. The app reads
+ * the inbox list again when it hears it, which mounts an open composer
+ * again, and says "Inbox synced"; a page opened afterwards never hears it.
+ * (Copied from `backfillAnnounced` in `harness/ways-settings-more.ts`.)
  */
-export async function backfilled(mailbox: Mailbox): Promise<void> {
+export async function backfilled(
+  mailbox: Mailbox,
+  inbox: { linkId: string } = mailbox.inbox
+): Promise<void> {
   const mine = `/message/send/user/${mailbox.user.macroUserId}`;
   const announced = async () =>
     (await mailbox.stack.serviceRequests()).some((request) => {
@@ -338,7 +342,7 @@ export async function backfilled(mailbox: Mailbox): Promise<void> {
         body.message_type === 'refresh_email' &&
         body.message?.event === 'backfill_progress' &&
         body.message.status === 'complete' &&
-        body.message.link_id === mailbox.inbox.linkId
+        body.message.link_id === inbox.linkId
       );
     });
   await expect
