@@ -15,10 +15,6 @@ import {
 import { createLivePreviewBatcher } from '../preview/live-batcher';
 import { createTrailingRefetch } from '../trailing-refetch';
 import { isHexHyphenatedId } from './bot-id';
-import {
-  type GatewayBotProfile,
-  gatewayBotProfile,
-} from './gateway-profile-bridge';
 
 /** A bot's name, handle and picture as every view shows it. */
 export type BotIdentity = {
@@ -29,9 +25,6 @@ export type BotIdentity = {
   deleted: boolean;
   isSystem: boolean;
 };
-
-/** The copy of a bot's identity a payload (message, session) arrived with. */
-export type BotIdentitySeed = { name: string; avatarUrl?: string | null };
 
 /** `user.bots` takes at most 100 ids. */
 const MAX_BOT_IDS = 100;
@@ -122,31 +115,14 @@ function toIdentity(bot: BotFieldsFragment): BotIdentity {
   };
 }
 
-/** A gateway profile over what the read returned; it lacks a handle. */
-function withPushed(
-  found: BotFieldsFragment | undefined,
-  pushed: GatewayBotProfile
-): BotIdentity {
-  return {
-    id: pushed.id,
-    name: pushed.name,
-    handle: found?.handle ?? '',
-    avatarUrl: pushed.avatarUrl ?? undefined,
-    deleted: pushed.deletedAt != null,
-    isSystem: found?.isSystem ?? false,
-  };
-}
-
 /**
  * A bot's identity by bare id, as it is now. Mounted readers share batched
  * live `user.bots` reads, so a `botUpdates` push re-renders every one of them
- * without a request. `undefined` until known (the `seed` stands in meanwhile),
- * `null` when no bot has the id. An empty or malformed id reads nothing.
+ * without a request. `undefined` until known, `null` when no bot has the
+ * id; once known, a revalidation keeps the answer until it settles. An empty
+ * or malformed id reads nothing.
  */
-export function createBotIdentity(
-  botId: Accessor<string>,
-  seed?: Accessor<BotIdentitySeed | undefined>
-) {
+export function createBotIdentity(botId: Accessor<string>) {
   const id = () => (isHexHyphenatedId(botId()) ? botId() : '');
   const [batch, setBatch] = createSignal<Batch>();
   createComputed(() => {
@@ -158,29 +134,15 @@ export function createBotIdentity(
     onCleanup(subscription.dispose);
   });
 
-  const fromSeed = (): BotIdentity | undefined => {
-    const copy = seed?.();
-    if (!copy) return undefined;
-    return {
-      id: id(),
-      name: copy.name,
-      handle: '',
-      avatarUrl: copy.avatarUrl ?? undefined,
-      deleted: false,
-      isSystem: false,
-    };
-  };
-
   const data = (): BotIdentity | null | undefined => {
     const current = id();
     if (!current) return undefined;
-    const pushed = gatewayBotProfile(current);
     const query = batch();
     const found = query?.data?.user.bots.find((bot) => bot.id === current);
-    if (pushed) return withPushed(found, pushed);
     if (found) return toIdentity(found);
-    if (query?.data && !query.isFetching) return null;
-    return fromSeed();
+    // The server answered without the bot; a later read in flight keeps it.
+    if (query?.data && (query.isFetched || !query.isFetching)) return null;
+    return undefined;
   };
 
   return {
