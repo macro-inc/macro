@@ -923,7 +923,7 @@ fn contacts_reads_have_viewer_scoped_entity_keys() {
 }
 
 #[test]
-fn bot_identity_is_one_entity_reached_from_the_user_sessions_and_channels() {
+fn bot_identity_is_one_entity_reached_from_the_user_and_sessions() {
     let sdl = crate::build_schema().sdl();
     for expected in [
         "type GraphqlBot {",
@@ -933,7 +933,6 @@ fn bot_identity_is_one_entity_reached_from_the_user_sessions_and_channels() {
         "bots(ids: [ID!]!): [GraphqlBot!]!",
         "mentionableBots(channelId: ID): [GraphqlBot!]!",
         "botProfile: GraphqlBot",
-        "bots: [GraphqlBot!]",
         "bot: GraphqlAgentSessionLogBot! @deprecated(reason: \"Use the session's botProfile. Remove after 2026-12-17.\")",
     ] {
         assert_sdl_line(&sdl, expected);

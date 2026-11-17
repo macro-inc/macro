@@ -8784,11 +8784,6 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	channelType: String!
 	"""
-	The bots installed in this channel, oldest first; null when the viewer
-	is not a member of the channel.
-	"""
-	bots: [GraphqlBot!]
-	"""
 	The identifier of the owner.
 	"""
 	ownerId: String!

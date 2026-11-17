@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     BotReads, BotsGraphqlContext, ChannelMemberAuthorizer, GraphqlBot, GraphqlBotsQuery,
-    bot_identity_loader, resolve_bot, resolve_channel_bots,
+    bot_identity_loader, resolve_bot,
 };
 
 const VIEWER: &str = "macro|viewer@example.com";
@@ -72,7 +72,6 @@ fn installed_bot() -> Bot {
 struct FakeBots {
     identity_calls: Mutex<Vec<Vec<BotId>>>,
     mentionable_channels: Mutex<Vec<Option<String>>>,
-    listed_channels: Mutex<Vec<String>>,
 }
 
 impl BotReads for FakeBots {
@@ -98,17 +97,6 @@ impl BotReads for FakeBots {
             .lock()
             .unwrap()
             .push(channel.map(|receipt| receipt.entity().entity_id.clone()));
-        Ok(vec![installed_bot()])
-    }
-
-    async fn channel_bots(
-        &self,
-        channel: EntityAccessReceipt<MemberParticipantRole>,
-    ) -> Result<Vec<Bot>, BotError> {
-        self.listed_channels
-            .lock()
-            .unwrap()
-            .push(channel.entity().entity_id.clone());
         Ok(vec![installed_bot()])
     }
 }
@@ -145,14 +133,6 @@ impl Query {
     #[graphql(flatten)]
     async fn bots_query(&self) -> GraphqlBotsQuery {
         GraphqlBotsQuery::new(viewer())
-    }
-
-    async fn channel_bots(
-        &self,
-        ctx: &Context<'_>,
-        channel_id: ID,
-    ) -> async_graphql::Result<Option<Vec<GraphqlBot>>> {
-        resolve_channel_bots(ctx, Uuid::parse_str(&channel_id)?).await
     }
 
     async fn bot_edge(
@@ -273,48 +253,18 @@ async fn mentionable_bots_pass_the_channel_membership_to_the_bots_service() {
 }
 
 #[tokio::test]
-async fn channel_bot_lists_are_withheld_outside_the_viewers_channels() {
+async fn mentionable_bots_in_a_channel_the_viewer_has_not_joined_are_forbidden() {
     let bots = Arc::new(FakeBots::default());
     let other = OTHER_CHANNEL.to_string();
 
-    let mentionable = execute(
+    let response = execute(
         &bots,
         &format!(r#"{{ mentionableBots(channelId: "{other}") {{ id }} }}"#),
     )
     .await;
-    let installed = execute(
-        &bots,
-        &format!(r#"{{ channelBots(channelId: "{other}") {{ id }} }}"#),
-    )
-    .await;
 
-    assert_eq!(error_code(&mentionable).as_deref(), Some("FORBIDDEN"));
-    // A channel edge reads as "no bots to show" rather than failing the row.
-    assert!(installed.errors.is_empty(), "{:?}", installed.errors);
-    assert_eq!(installed.data, value!({ "channelBots": null }));
+    assert_eq!(error_code(&response).as_deref(), Some("FORBIDDEN"));
     assert!(bots.mentionable_channels.lock().unwrap().is_empty());
-    assert!(bots.listed_channels.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn channel_bots_list_a_member_channels_installed_bots() {
-    let bots = Arc::new(FakeBots::default());
-    let member = MEMBER_CHANNEL.to_string();
-
-    let response = execute(
-        &bots,
-        &format!(r#"{{ channelBots(channelId: "{member}") {{ id handle isSystem }} }}"#),
-    )
-    .await;
-
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data,
-        value!({ "channelBots": [
-            { "id": "00000000-0000-0000-0000-000000000001", "handle": "scout", "isSystem": false }
-        ] })
-    );
-    assert_eq!(*bots.listed_channels.lock().unwrap(), vec![member]);
 }
 
 #[tokio::test]

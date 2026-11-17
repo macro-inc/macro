@@ -1,19 +1,15 @@
 use bots::domain::{
-    models::{Bot, BotId, BotIdentity, BotKind},
+    models::{Bot, BotId, BotIdentity},
     ports::BotError,
 };
 use entity_access::domain::models::{MemberParticipantRole, ParticipantRole};
 use graphql_bots::{BotReads, BotsGraphqlContext, ChannelMemberAuthorizer, bot_identity_loader};
-use models_soup::comms::{
-    Channel, ChannelId, ChannelType, ChannelWithParticipants, LatestMessage, SoupChannel,
-};
 
 use super::*;
 
 /// The bot `soup_agent_session` runs as.
 const SESSION_BOT: Uuid = Uuid::from_u128(99);
 const MEMBER_CHANNEL: Uuid = Uuid::from_u128(0x10);
-const STRANGER_CHANNEL: Uuid = Uuid::from_u128(0x20);
 
 fn session_bot() -> BotIdentity {
     BotIdentity {
@@ -43,27 +39,6 @@ impl BotReads for FakeBots {
     ) -> Result<Vec<Bot>, BotError> {
         Ok(Vec::new())
     }
-
-    async fn channel_bots(
-        &self,
-        _channel: EntityAccessReceipt<MemberParticipantRole>,
-    ) -> Result<Vec<Bot>, BotError> {
-        let at = "2026-10-01T00:00:00Z".parse().unwrap();
-        Ok(vec![Bot {
-            id: BotId::new_from_uuid(SESSION_BOT),
-            kind: BotKind::Owned,
-            owner: None,
-            name: "Ship Scout".to_string(),
-            handle: "scout".to_string(),
-            description: None,
-            avatar_url: Some("https://static.example/scout.png".to_string()),
-            created_by: None,
-            created_at: at,
-            updated_at: at,
-            deleted_at: None,
-            has_agent: true,
-        }])
-    }
 }
 
 /// A member of [`MEMBER_CHANNEL`] only.
@@ -89,30 +64,6 @@ impl ChannelMemberAuthorizer for MemberOfOneChannel {
             },
         )
     }
-}
-
-fn soup_channel(id: Uuid) -> SoupItem<()> {
-    SoupItem::Channel(SoupChannel {
-        agent_dm: None,
-        channel: ChannelWithParticipants {
-            channel: Channel {
-                id: ChannelId(id),
-                name: Some("releases".to_string()),
-                channel_type: ChannelType::Public,
-                org_id: None,
-                team_id: None,
-                auto_join_team: false,
-                created_at: "2026-01-01T00:00:00Z".parse().unwrap(),
-                updated_at: "2026-01-02T00:00:00Z".parse().unwrap(),
-                owner_id: MacroUserIdStr::try_from(VALID_USER_ID.to_string()).unwrap(),
-            },
-            participants: Vec::new(),
-            is_participant: true,
-        },
-        latest_message: LatestMessage::default(),
-        viewed_at: None,
-        interacted_at: None,
-    })
 }
 
 async fn execute_with_bots(harness: &TestHarness, query: &str) -> async_graphql::Response {
@@ -217,35 +168,5 @@ async fn agent_sessions_read_their_bot_as_the_shared_bot_record() {
                 "avatarUrl": "https://static.example/scout.png"
             }
         }] } } })
-    );
-}
-
-#[tokio::test]
-async fn channels_list_their_bots_only_for_members() {
-    let harness = harness();
-    harness.soup_service.set_raw_response(vec![
-        soup_channel(MEMBER_CHANNEL),
-        soup_channel(STRANGER_CHANNEL),
-    ]);
-
-    let response = execute_with_bots(
-        &harness,
-        r#"{ user { soup(input: {initial: {}}) { items {
-            id
-            ... on GraphqlSoupChannel { bots { id handle } }
-        } } } }"#,
-    )
-    .await;
-
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data,
-        async_graphql::value!({ "user": { "soup": { "items": [
-            {
-                "id": "00000000-0000-0000-0000-000000000010",
-                "bots": [{ "id": "00000000-0000-0000-0000-000000000063", "handle": "scout" }]
-            },
-            { "id": "00000000-0000-0000-0000-000000000020", "bots": null }
-        ] } } })
     );
 }

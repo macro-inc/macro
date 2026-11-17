@@ -91,7 +91,6 @@ impl SoupEntityEdges for TestSoupEdges {
     type EmailThreadEdges = TestEmailThreadEdges;
     type CrmRecordEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
-    type ChannelEdges = TestAgentSessionEdges;
     type InitiativeEdges = TestInitiativeEdges;
 
     fn initiative_edges(id: Uuid) -> Self::InitiativeEdges {
@@ -116,10 +115,6 @@ impl SoupEntityEdges for TestSoupEdges {
         _email_thread_id: uuid::Uuid,
     ) -> async_graphql::Result<Option<String>> {
         Ok(None)
-    }
-
-    fn channel_edges(_channel_id: Uuid) -> Self::ChannelEdges {
-        TestAgentSessionEdges { available: true }
     }
 
     fn agent_session_edges(

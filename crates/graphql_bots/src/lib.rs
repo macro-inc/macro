@@ -14,4 +14,4 @@ mod user_query;
 pub use context::{BotReads, BotsGraphqlContext, ChannelMemberAuthorizer};
 pub use loader::{BotIdentityDataLoader, BotIdentityLoader, bot_identity_loader, resolve_bot};
 pub use objects::GraphqlBot;
-pub use user_query::{GraphqlBotsQuery, resolve_channel_bots};
+pub use user_query::GraphqlBotsQuery;

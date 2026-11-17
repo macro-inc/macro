@@ -1,8 +1,7 @@
 use async_graphql::{Context, ID, Object};
 use bots::domain::models::{BotId, MAX_BOT_IDENTITY_IDS};
-use graphql_common::{parse_id, require_authenticated_user};
+use graphql_common::parse_id;
 use macro_user_id::user_id::MacroUserIdStr;
-use uuid::Uuid;
 
 use crate::{BotsGraphqlContext, GraphqlBot, errors::BotReadError};
 
@@ -65,23 +64,5 @@ impl GraphqlBotsQuery {
             .mentionable_bots(self.user_id.clone(), channel_id)
             .await?;
         Ok(bots.into_iter().map(Into::into).collect())
-    }
-}
-
-/// The bots installed in a channel, for its `bots` edge, or `None` when the
-/// viewer is not a member of the channel (the check `GET /channels/{id}/bots`
-/// makes). Not an error: a Soup list can hold channels the viewer has not
-/// joined, and an error there would fail the whole row.
-#[tracing::instrument(skip(ctx), err(Debug))]
-pub async fn resolve_channel_bots(
-    ctx: &Context<'_>,
-    channel_id: Uuid,
-) -> async_graphql::Result<Option<Vec<GraphqlBot>>> {
-    let viewer = require_authenticated_user(ctx)?;
-    let context = ctx.data::<BotsGraphqlContext>()?;
-    match context.reads.channel_bots(viewer, channel_id).await {
-        Ok(bots) => Ok(Some(bots.into_iter().map(Into::into).collect())),
-        Err(BotReadError::Forbidden) => Ok(None),
-        Err(error) => Err(error.into()),
     }
 }

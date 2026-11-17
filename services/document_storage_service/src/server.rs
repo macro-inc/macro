@@ -2293,10 +2293,18 @@ async fn run_server() -> anyhow::Result<()> {
     let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
         calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
     ));
-    // Bot identities read the primary: a just-renamed or just-created bot must
-    // read back as it now is. Every read is a primary-key lookup.
+    // GraphQL bot reads use the replica, like the rest of the Soup graph: they
+    // run per page and per session row. A bot changed in the last few seconds
+    // can read stale; the change push carries its current identity.
     let graphql_bots_context = graphql_bots::BotsGraphqlContext::new(
-        Arc::new(bots_service.clone()),
+        Arc::new(BotServiceImpl::new(
+            PgBotsRepo::new(readonly_db.clone()),
+            macro_event_broker.clone(),
+            harnesses::domain::service::HarnessServiceImpl::new(
+                PgHarnessRepo::new(readonly_db.clone()),
+                hosted_runtimes::outbound::pg::PgComputerAgents::new(readonly_db.clone()),
+            ),
+        )),
         entity_access_service.clone(),
     );
     let graphql_calendar_context = graphql_calendar::CalendarGraphqlContext::new(

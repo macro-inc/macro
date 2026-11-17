@@ -10,7 +10,7 @@ use graphql_activity::{
     ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
     parse_activity_edge_limit,
 };
-use graphql_bots::{BotIdentityDataLoader, GraphqlBot, resolve_bot, resolve_channel_bots};
+use graphql_bots::{BotIdentityDataLoader, GraphqlBot, resolve_bot};
 use graphql_crm::{CrmRecord, GraphqlCrmPipelineEntry, load_pipeline_entries};
 use graphql_email::{
     EmailContentKey, GraphqlEmailThreadFocus, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
@@ -78,7 +78,6 @@ where
     type AgentSessionEdges = SoupAgentSessionEdges;
     type InitiativeEdges = SoupInitiativeEdges;
     type CrmRecordEdges = SoupCrmRecordEdges;
-    type ChannelEdges = SoupChannelEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -148,10 +147,6 @@ where
                 _ => None,
             },
         }
-    }
-
-    fn channel_edges(channel_id: Uuid) -> Self::ChannelEdges {
-        SoupChannelEdges { channel_id }
     }
 
     fn agent_session_edges(session_id: Uuid, bot_id: Uuid) -> Self::AgentSessionEdges {
@@ -720,22 +715,6 @@ impl SoupInitiativeEdges {
                 .await?
                 .completed_task_count,
         )
-    }
-}
-
-/// Bot fields composed onto Soup channels.
-#[derive(Clone)]
-pub struct SoupChannelEdges {
-    /// The channel.
-    channel_id: Uuid,
-}
-
-#[Object]
-impl SoupChannelEdges {
-    /// The bots installed in this channel, oldest first; null when the viewer
-    /// is not a member of the channel.
-    async fn bots(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Vec<GraphqlBot>>> {
-        resolve_channel_bots(ctx, self.channel_id).await
     }
 }
 

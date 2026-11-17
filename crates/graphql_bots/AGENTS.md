@@ -11,7 +11,7 @@ lookups and lists and the resolvers other domains' edges use.
 
 - `src/objects.rs`: `GraphqlBot`, mapped from `bots::domain::models::BotIdentity`.
 - `src/user_query.rs`: `GraphqlBotsQuery` (`bots(ids)`, `mentionableBots(channelId)`),
-  flattened onto `GraphqlUser`, and `resolve_channel_bots` for `GraphqlSoupChannel.bots`.
+  flattened onto `GraphqlUser`.
 - `src/loader.rs`: the request-scoped identity `DataLoader` and `resolve_bot`, which
   `GraphqlSoupAgentSession.botProfile` (in `complete_graph`) reads through.
 - `src/context.rs`: `BotsGraphqlContext`, the type-erased request data, over the
@@ -38,9 +38,13 @@ lookups and lists and the resolvers other domains' edges use.
 ## Gotchas
 
 - Identity reads have no access check: any signed-in user may read the identity of a
-  bot id they hold, as `GET /bots/profiles` allows. Channel lists check membership.
-- `GraphqlSoupChannel.bots` is null, not an error, for a channel the viewer has not
-  joined, so one such row in a Soup list does not fail the list.
+  bot id they hold, as `GET /bots/profiles` allows. `mentionableBots(channelId)`
+  checks channel membership.
+- Don't add a per-row list field (such as a channel's bots) on Soup entities without a
+  batched loader: Soup pages run up to 500 rows, and a per-row access check plus
+  query costs seconds of database time per page.
+- DSS builds the context over the read replica; a bot changed in the last few
+  seconds can read stale.
 - DSS must insert both `BotsGraphqlContext` and `bot_identity_loader(...)` in
   `insert_graphql_context_data`; a missing insert only fails at query time.
 

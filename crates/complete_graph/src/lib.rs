@@ -18,7 +18,7 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{
-    GraphqlSessionBot, SoupAgentSessionEdges, SoupChannelEdges, SoupEdges, SoupEmailThreadEdges,
+    GraphqlSessionBot, SoupAgentSessionEdges, SoupEdges, SoupEmailThreadEdges,
     agent_session_log_loader,
 };
 pub use graphql_activity::{

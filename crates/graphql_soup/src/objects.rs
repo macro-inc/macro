@@ -116,12 +116,6 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// Construct the agent-session-specific edge object.
     fn agent_session_edges(session_id: Uuid, bot_id: Uuid) -> Self::AgentSessionEdges;
 
-    /// Additional fields attached only to channel entities.
-    type ChannelEdges: ObjectType + Clone + Send + Sync + 'static;
-
-    /// Construct the channel-specific edge object without loading it.
-    fn channel_edges(channel_id: Uuid) -> Self::ChannelEdges;
-
     /// Additional fields attached only to CRM company and contact entities.
     type CrmRecordEdges: ObjectType + Clone + Send + Sync + 'static;
 
@@ -2203,12 +2197,6 @@ where
     /// The channel type.
     async fn channel_type(&self) -> &'static str {
         Self::channel_type_name(self.0.channel.channel.channel_type)
-    }
-
-    #[graphql(flatten)]
-    /// Fields hydrated through other domains, such as the channel's bots.
-    async fn channel_edges(&self) -> E::ChannelEdges {
-        E::channel_edges(self.0.channel.channel.id.0)
     }
 
     /// The identifier of the owner.

@@ -28,12 +28,6 @@ pub trait BotReads: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         channel: Option<EntityAccessReceipt<MemberParticipantRole>>,
     ) -> impl Future<Output = Result<Vec<Bot>, BotError>> + Send;
-
-    /// Bots installed in a channel the caller is a member of.
-    fn channel_bots(
-        &self,
-        channel: EntityAccessReceipt<MemberParticipantRole>,
-    ) -> impl Future<Output = Result<Vec<Bot>, BotError>> + Send;
 }
 
 impl<S: BotService> BotReads for S {
@@ -51,18 +45,9 @@ impl<S: BotService> BotReads for S {
     ) -> impl Future<Output = Result<Vec<Bot>, BotError>> + Send {
         self.list_mentionable_bots(caller, channel)
     }
-
-    async fn channel_bots(
-        &self,
-        channel: EntityAccessReceipt<MemberParticipantRole>,
-    ) -> Result<Vec<Bot>, BotError> {
-        let channel_id = Uuid::parse_str(&channel.entity().entity_id)
-            .map_err(|error| BotError::BadRequest(error.to_string()))?;
-        self.list_channel_bots(channel_id).await
-    }
 }
 
-/// Channel membership check for the channel-scoped bot lists, the one
+/// Channel membership check for channel-scoped bot lists, the one
 /// `GET /channels/{id}/bots` makes.
 pub trait ChannelMemberAuthorizer: Send + Sync + 'static {
     /// A member receipt for `user_id` in `channel_id`.
@@ -101,12 +86,6 @@ pub(crate) trait BotGraphqlReads: Send + Sync {
         &self,
         viewer: MacroUserIdStr<'static>,
         channel_id: Option<Uuid>,
-    ) -> ReadFuture<'_, Vec<Bot>>;
-
-    fn channel_bots(
-        &self,
-        viewer: MacroUserIdStr<'static>,
-        channel_id: Uuid,
     ) -> ReadFuture<'_, Vec<Bot>>;
 }
 
@@ -159,17 +138,6 @@ impl<R: BotReads, A: ChannelMemberAuthorizer> BotGraphqlReads for ServiceReads<R
                 None => None,
             };
             Ok(self.bots.mentionable_bots(viewer, channel).await?)
-        })
-    }
-
-    fn channel_bots(
-        &self,
-        viewer: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> ReadFuture<'_, Vec<Bot>> {
-        Box::pin(async move {
-            let channel = self.channel_member(&viewer, channel_id).await?;
-            Ok(self.bots.channel_bots(channel).await?)
         })
     }
 }
