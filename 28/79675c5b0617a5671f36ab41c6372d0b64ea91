@@ -1,0 +1,66 @@
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client/test.rs
+  s_cff529df4623a0::t_6344ef84e1efbc 7,66-79
+  s_cff529df4623a0::t_ffef820a664a27 80-81
+apps/web/tauri/macro_bundle_updater_plugin/src/inbound/plugin.rs
+  s_cff529df4623a0::t_1d45fd1591cc67 219,230,236-243,505
+crates/native_app_service/src/domain/models.rs
+  s_cff529df4623a0::t_db113a67a427c3 89-100,103-110,196-198
+  s_cff529df4623a0::t_2610e4638636ff 101-102
+crates/native_app_service/src/domain/service.rs
+  s_cff529df4623a0::t_db113a67a427c3 39,60-66
+  s_cff529df4623a0::t_0c93c3656f8b74 67-69
+crates/native_app_service/src/inbound.rs
+  s_cff529df4623a0::t_db113a67a427c3 69,84-85
+nix/tauri-desktop.nix
+  s_cff529df4623a0::t_1d45fd1591cc67 32-34,367
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/system_info.rs
+  s_cff529df4623a0::t_1d45fd1591cc67 16,21-25,29,84
+apps/web/scripts/write-bundle-manifest.mjs
+  s_cff529df4623a0::t_1d45fd1591cc67 21-23
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_cff529df4623a0::t_1d45fd1591cc67 215-216,228-230
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client.rs
+  s_cff529df4623a0::t_2610e4638636ff 66-67
+  s_cff529df4623a0::t_1d45fd1591cc67 65,68
+apps/web/tauri/src-tauri/build.rs
+  s_cff529df4623a0::t_1d45fd1591cc67 44-46,64-67,70-85
+apps/web/tauri/src-tauri/README.md
+  s_cff529df4623a0::t_4ab21b150fc638 623-627
+crates/native_app_service/src/tests.rs
+  s_cff529df4623a0::t_2610e4638636ff 588-589,593-594
+  s_cff529df4623a0::t_db113a67a427c3 135
+  s_cff529df4623a0::t_2e9d4c958b3938 35-37,50,545-587,590-592,595-597
+apps/web/tauri/src-tauri/src/lib.rs
+  s_cff529df4623a0::t_1d45fd1591cc67 90-94,350
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service.rs
+  s_cff529df4623a0::t_6344ef84e1efbc 1335-1337
+  s_cff529df4623a0::t_65ab903b3cf070 1387,1551
+  s_cff529df4623a0::t_1d45fd1591cc67 175-178,180-181
+  s_54d4fdca46c105::t_7000d8ce3641bf 2374-2396
+apps/web/scripts/write-bundle-manifest.test.mjs
+  s_cff529df4623a0::t_1d45fd1591cc67 32-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2879675c5b0617a5671f36ab41c6372d0b64ea91",
+  "prompts": {},
+  "sessions": {
+    "s_54d4fdca46c105": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd7762df-5be9-45ba-989b-e46815e6a310",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cff529df4623a0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "959e474b-c9cc-4f38-ad97-919560ef37e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
