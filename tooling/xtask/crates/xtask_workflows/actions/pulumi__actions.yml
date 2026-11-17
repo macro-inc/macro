@@ -1,0 +1,137 @@
+name: Pulumi CLI Action
+description: Pulumi's GitHub Actions deploy apps and infrastructure to your cloud of choice, using just your favorite language and GitHub.
+inputs:
+  command:
+    description: Pulumi command to run, eg. up
+    required: false
+  stack-name:
+    description: Which stack you want to apply to, eg. dev
+    required: false
+  pulumi-version:
+    description: Install a specific version of the Pulumi CLI
+    required: false
+  pulumi-version-file:
+    description: 'File containing the version of the Pulumi CLI to install. Example: .pulumi.version'
+    required: false
+  work-dir:
+    description: Location of your Pulumi files. Defaults to ./
+    required: false
+    default: ./
+  comment-on-pr:
+    description: If true, a comment will be created with results
+    required: false
+    default: 'false'
+  comment-on-pr-number:
+    description: Overrides the PR used to comment on
+    required: false
+  comment-on-summary:
+    description: If true, a comment on the GitHub step summary will be created
+    required: false
+    default: 'false'
+  github-token:
+    description: Github Token
+    required: false
+    default: ${{ github.token }}
+  cloud-url:
+    description: A cloud URL to log in to
+    required: false
+  secrets-provider:
+    description: 'The type of the provider that should be used to encrypt and decrypt secrets. Possible choices: default, passphrase, awskms, azurekeyvault, gcpkms, hashivault'
+    required: false
+  parallel:
+    description: Allow P resource operations to run in parallel at once (1 for no parallelism). Defaults to unbounded.
+    required: false
+  message:
+    description: Optional message to associate with the update operation
+    required: false
+  config-map:
+    description: Config to use during the operations
+    required: false
+  expect-no-changes:
+    description: Return an error if any changes occur during this update
+    required: false
+    default: 'false'
+  diff:
+    description: Display operation as a rich diff showing the overall change
+    required: false
+    default: 'false'
+  replace:
+    description: Specify resources to replace. Multiple resources can be specified one per line
+    required: false
+  exclude:
+    description: Specify a single resource URN to ignore. Multiple resources can be specified one per line
+    required: false
+  exclude-dependents:
+    description: Allows ignoring of dependent targets discovered but not specified in exclude.
+    required: false
+    default: 'false'
+  target:
+    description: Specify a single resource URN to update. Other resources will not be updated. Multiple resources can be specified one per line
+    required: false
+  target-dependents:
+    description: Allows updating of dependent targets discovered but not specified in target.
+    required: false
+    default: 'false'
+  policyPacks:
+    description: Run one or more policy packs as part of this update.
+    required: false
+  policyPackConfigs:
+    description: Path to JSON file containing the config for the policy pack of the corresponding "--policy-pack" flag.
+    required: false
+  refresh:
+    description: Execute the operation with the `--refresh` option
+    required: false
+    default: 'false'
+  upsert:
+    description: Create the stack if it currently does not exist
+    required: false
+    default: 'false'
+  remove:
+    description: Delete the stack after a destroy operation
+    required: false
+    default: 'false'
+  edit-pr-comment:
+    description: Edit previous PR comment instead of posting new one
+    required: false
+    default: 'true'
+  color:
+    description: 'Colorize output. Choices are: always, never, raw, auto'
+    required: false
+    default: auto
+  exclude-protected:
+    description: Skip destroying protected resources. Only valid when command is destroy.
+    required: false
+    default: 'false'
+  plan:
+    description: Where to either save an Update Plan or read an Update Plan from
+    required: false
+  suppress-outputs:
+    description: Suppress display of stack outputs (in case they contain sensitive values).
+    required: false
+    default: 'false'
+  suppress-progress:
+    description: Suppress display of periodic progress dots to limit logs length
+    required: false
+    default: 'false'
+  always-include-summary:
+    description: If comments must be trimmed, trim them from the front. This ensures the resources summary is always included in the comment
+    required: false
+    default: 'false'
+  continue-on-error:
+    description: Continue running the update even if an error is encountered
+    required: false
+    default: 'false'
+  log-verbosity:
+    description: Enable verbose logging (1-11; >3 is very verbose)
+    required: false
+  log-flow:
+    description: Flow log settings to child processes (like plugins)
+    required: false
+    default: 'false'
+  debug:
+    description: Print detailed debugging output during resource operations
+    required: false
+    default: 'false'
+outputs:
+  output:
+    description: Output from running command
