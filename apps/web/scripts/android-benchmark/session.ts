@@ -34,6 +34,8 @@ export class Session {
   readonly requests: PageRequest[] = [];
   /** OTLP exports captured; a cold start that exported before attaching loses those spans. */
   exports = 0;
+  /** Exports whose body could not be read: their spans are missing. */
+  captureFailures = 0;
   #listeners: (() => void)[] = [];
   /** Export bodies are read in request order, so a root never lands before its children. */
   #captures: Promise<void> = Promise.resolve();
@@ -61,11 +63,18 @@ export class Session {
       const socket = pid && (await device.devtoolsSocket(pid));
       if (pid && socket) {
         await device.forward(port, socket);
-        const page = await Session.#page(port, deadline);
-        const cdp = await Cdp.connect(page);
-        const session = new Session(cdp, device, port, pid);
-        await session.#start();
-        return session;
+        let cdp: Cdp | undefined;
+        try {
+          const page = await Session.#page(port, deadline);
+          cdp = await Cdp.connect(page, Math.max(deadline - Date.now(), 1));
+          const session = new Session(cdp, device, port, pid);
+          await session.#start();
+          return session;
+        } catch (error) {
+          cdp?.close();
+          await device.removeForward(port);
+          throw error;
+        }
       }
       await sleep(50);
     }
@@ -138,6 +147,7 @@ export class Session {
         )
       ).postData;
     } catch (error) {
+      this.captureFailures++;
       console.error(`OTLP capture failed: ${(error as Error).message}`);
       return;
     }

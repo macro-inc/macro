@@ -82,11 +82,20 @@ async function frames(video: string, width: number, height: number) {
     Number(match[1])
   );
   const size = width * height;
-  return times.map((time, index) => ({
-    time: time * 1000,
-    pixels: raw.subarray(index * size, (index + 1) * size),
-  }));
+  const duration = /Duration: (\d+):(\d+):([\d.]+)/.exec(log);
+  return {
+    list: times.map((time, index) => ({
+      time: time * 1000,
+      pixels: raw.subarray(index * size, (index + 1) * size),
+    })),
+    durationMs: duration
+      ? (Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3])) * 1000
+      : 0,
+  };
 }
+
+/** How long the screen must stay unchanged after the last change. */
+const STABLE_MS = 1000;
 
 /** Mean absolute grey difference between two frames. */
 function difference(a: Uint8Array, b: Uint8Array) {
@@ -103,7 +112,7 @@ function difference(a: Uint8Array, b: Uint8Array) {
  * pressed state); the screen has settled at the first frame from which every
  * later frame matches the last one.
  */
-function analyse(list: Frame[]) {
+function analyse({ list, durationMs }: { list: Frame[]; durationMs: number }) {
   const touched = list.findIndex(
     (frame, index) =>
       index > 0 && difference(frame.pixels, list[index - 1].pixels) > 0.2
@@ -114,6 +123,9 @@ function analyse(list: Frame[]) {
   for (let index = touched; index < list.length; index++)
     if (difference(list[index].pixels, final) > 1) settled = index + 1;
   const end = list[Math.min(settled, list.length - 1)];
+  // A screen still changing when recording stopped has not settled.
+  if (Math.max(durationMs, list.at(-1)?.time ?? 0) - end.time < STABLE_MS)
+    return undefined;
   return { touchedAt: list[touched].time, settledMs: end.time - list[touched].time };
 }
 
@@ -129,7 +141,12 @@ async function record(work: () => Promise<{ x: number; y: number; spanMs: number
     await sleep(500);
     const directory = await mkdtemp(join(tmpdir(), 'macro-benchmark-'));
     const local = join(directory, 'step.mp4');
-    await device.adb('pull', REMOTE, local);
+    try {
+      await device.adb('pull', REMOTE, local);
+    } catch (error) {
+      await rm(directory, { recursive: true, force: true });
+      throw error;
+    }
     return { ...result, video: local, directory };
   } finally {
     await device.shell('pkill -INT screenrecord || true');
@@ -140,7 +157,12 @@ async function record(work: () => Promise<{ x: number; y: number; spanMs: number
 const touches = (await device.shell('settings get system show_touches')).trim();
 const restoreTouches = () =>
   device.shell(`settings put system show_touches ${touches === '1' ? 1 : 0}`);
+// Ctrl-C skips the finally blocks: stop and delete the recording (it shows
+// account content), drop the forward, and restore the setting first.
 process.on('SIGINT', async () => {
+  await device.shell('pkill -INT screenrecord || true').catch(() => '');
+  await device.shell(`rm -f ${REMOTE}`).catch(() => '');
+  await device.removeForward(Number(options.port));
   await restoreTouches();
   process.exit(130);
 });
@@ -155,8 +177,13 @@ try {
     try {
       await sleep(5000);
       await prepare(session, scenario, targets, 3000);
-      // Cold: the steps before this one. Warm: this one and its return too.
-      const before = steps.slice(0, options.variant === 'warm' ? stepIndex + 2 : stepIndex);
+      // Cold: the steps before this one. Warm: those, this one, and then a
+      // step that leaves it (its back step, or another view).
+      const leave = steps[stepIndex + 1] ?? steps.find((_, index) => index !== stepIndex);
+      const before =
+        options.variant === 'warm' && leave
+          ? [...steps.slice(0, stepIndex + 1), leave]
+          : steps.slice(0, stepIndex);
       for (const step of before) {
         await measureStep(session, step, targets, 'cold', iteration);
         await sleep(1500);
@@ -171,10 +198,15 @@ try {
         const sample = await measureStep(session, step, targets, 'cold', iteration, 120);
         return { ...point, spanMs: sample.readyMs };
       });
-      const visual = analyse(await frames(recorded.video, width, height));
-      if (options.keep)
-        console.log(`  recording: ${recorded.video} (touch at ${visual?.touchedAt} ms)`);
-      else await rm(recorded.directory, { recursive: true, force: true });
+      let visual: ReturnType<typeof analyse>;
+      try {
+        visual = analyse(await frames(recorded.video, width, height));
+      } finally {
+        // Recordings show account content: keep them only when asked.
+        if (options.keep)
+          console.log(`  recording: ${recorded.video}`);
+        else await rm(recorded.directory, { recursive: true, force: true });
+      }
       rows.push({ iteration, spanMs: recorded.spanMs, visualMs: visual?.settledMs });
       console.log(
         `  ${iteration} span ${Math.round(recorded.spanMs)} ms, screen ${visual ? Math.round(visual.settledMs) : '-'} ms`

@@ -34,11 +34,18 @@ export VITE_OTEL_ENV=benchmark
 export VITE_ENABLE_BROWSER_OTEL=true
 export VITE_OTEL_EXPORTER_URL=/__benchmark/otlp/v1/traces
 
-if [[ ! -e "$android/keystore.properties" ]]; then
-  [[ -n "$signing" ]] || {
-    echo "Pass --signing with a local test keystore.properties (never the Play upload key)" >&2
+# Sign with the test key named here and nothing else: an existing
+# configuration may be the Play upload key.
+[[ -n "$signing" && -f "$signing" ]] || {
+  echo "Pass --signing with a local test keystore.properties (never the Play upload key)" >&2
+  exit 1
+}
+if [[ -e "$android/keystore.properties" || -L "$android/keystore.properties" ]]; then
+  if [[ "$(readlink -f "$android/keystore.properties")" != "$(readlink -f "$signing")" ]]; then
+    echo "$android/keystore.properties is another signing configuration; move it aside first" >&2
     exit 1
-  }
+  fi
+else
   ln -s "$signing" "$android/keystore.properties"
 fi
 if [[ ! -e "$android/app/google-services.json" ]]; then

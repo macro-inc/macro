@@ -44,15 +44,27 @@ export class Cdp {
     });
   }
 
-  static connect(url: string): Promise<Cdp> {
+  static connect(url: string, timeoutMs: number): Promise<Cdp> {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
-      socket.addEventListener('open', () => resolve(new Cdp(socket)), {
-        once: true,
-      });
+      const timer = setTimeout(() => {
+        socket.close();
+        reject(new Error(`Timed out connecting to ${url}`));
+      }, timeoutMs);
+      socket.addEventListener(
+        'open',
+        () => {
+          clearTimeout(timer);
+          resolve(new Cdp(socket));
+        },
+        { once: true }
+      );
       socket.addEventListener(
         'error',
-        () => reject(new Error(`Cannot connect to ${url}`)),
+        () => {
+          clearTimeout(timer);
+          reject(new Error(`Cannot connect to ${url}`));
+        },
         { once: true }
       );
     });

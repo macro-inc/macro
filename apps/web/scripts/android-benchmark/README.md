@@ -73,7 +73,9 @@ adb -s emulator-5580 install -r \
 ```
 
 Sign with a throwaway test key, never the Play upload key; it cannot update a
-Play-installed app. `build.sh` takes the public PostHog key from the
+Play-installed app. `--signing` is required, and the script refuses to build
+when `gen/android/keystore.properties` already points at another
+configuration. `build.sh` takes the public PostHog key from the
 production bundle unless `VITE_POSTHOG_API_KEY` is set, so feature flags match
 the shipped app. Prerequisites are those of [Android development](../../../../docs/development/android.md);
 on an x86_64 Linux host build `--target x86_64` for an x86_64 emulator.
@@ -151,7 +153,9 @@ is rare).
 finds the frame where Android's touch dot appears and the frame after which
 the screen stops changing, and compares that with the step's span time. It
 needs `ffmpeg` (`FFMPEG=/path/to/ffmpeg`). It turns on Show touches for the
-run and restores it.
+run and restores it. `--step` takes an open or view step (a back step depends
+on the open before it); a screen that has not stayed still for a second
+before recording stops counts as unsettled and gets no screen time.
 
 ```sh
 bun scripts/android-benchmark/visual.ts --serial emulator-5580 --step document.large.open --iterations 5

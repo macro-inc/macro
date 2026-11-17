@@ -26,6 +26,7 @@ export async function measureStep(
   holdMs?: number
 ): Promise<Sample> {
   const point = await session.waitFor(step.target(targets));
+  const failures = session.captureFailures;
   // The same clock as the page's event and span times.
   const before = await session.cdp.evaluate<number>(
     'performance.timeOrigin + performance.now()'
@@ -52,6 +53,9 @@ export async function measureStep(
       `${step.id}: landed on ${route}, not ${step.route(targets)}`
     );
   await session.captured();
+  // A lost export may hold this step's child spans; its counts would be wrong.
+  if (session.captureFailures > failures)
+    throw new Error(`${step.id}: a trace export could not be read`);
   return sampleFrom(session, step.id, variant, iteration, start, root, extra);
 }
 

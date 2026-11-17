@@ -5,6 +5,8 @@ const run = promisify(execFile);
 
 export const ANDROID_PACKAGE = 'com.macro.workspace.mobile';
 const ACTIVITY = `${ANDROID_PACKAGE}/.MainActivity`;
+/** Longer than any adb call the harness makes; a stalled one fails the step. */
+const ADB_TIMEOUT_MS = 60_000;
 
 /** One emulator or device, addressed by serial on every adb call. */
 export class Device {
@@ -13,6 +15,7 @@ export class Device {
   async adb(...args: string[]): Promise<string> {
     const { stdout } = await run('adb', ['-s', this.serial, ...args], {
       maxBuffer: 64 * 1024 * 1024,
+      timeout: ADB_TIMEOUT_MS,
     });
     return stdout;
   }

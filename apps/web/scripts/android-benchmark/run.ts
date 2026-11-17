@@ -41,11 +41,21 @@ if (!options.serial) {
   process.exit(2);
 }
 
+/** Parses a numeric option, exiting when it is outside its range. */
+function numberOption(name: string, value: string, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    console.error(`--${name} must be an integer from ${min} to ${max}`);
+    process.exit(2);
+  }
+  return parsed;
+}
+
 const device = new Device(options.serial);
-const iterations = Number(options.iterations);
-const settleMs = Number(options.settle);
-const bootSettleMs = Number(options['boot-settle']);
-const port = Number(options.port);
+const iterations = numberOption('iterations', options.iterations, 1, 1000);
+const settleMs = numberOption('settle', options.settle, 0, 60_000);
+const bootSettleMs = numberOption('boot-settle', options['boot-settle'], 0, 60_000);
+const port = numberOption('port', options.port, 1024, 65_535);
 const selected = options.scenarios.split(',').filter(Boolean);
 for (const id of selected)
   if (!SCENARIOS[id]) throw new Error(`Unknown scenario ${id}`);
@@ -208,4 +218,5 @@ await writeFile(file, `${JSON.stringify({ meta, summary, failures, samples }, nu
 print(summary);
 if (failures.length) console.warn(`${failures.length} failed steps; see ${file}`);
 console.log(`Results: ${file}`);
-process.exit(0);
+// A run that measured nothing (signed out, wrong build) is a failure.
+process.exit(samples.length > 0 ? 0 : 1);
