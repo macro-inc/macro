@@ -82,10 +82,33 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Selected-email policy types live in `domain/email_rules.rs`; their validation
   checks format/resource bounds only. Target authorization and activation are
-  separate operations. Dormant selected storage keeps legacy `enabled` false;
-  never treat that bit as the effective selected consent or bypass its guards.
+  separate operations. Selected storage keeps legacy `enabled` false;
+  recognize `enabled OR selected_enabled` for compatible grant readers without
+  bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
+  and inlined Team reader in parity; live contact/company selectors follow
+  same-team role visibility and retain every exclusion veto. Activation remains
+  unavailable until the policy API and generation-safe backfill are ready.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
+
+- Private policy storage lives in `domain/email_policy.rs` and
+  `outbound/companies_repo/email_policy/`. Initialize consent identity only via
+  `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
+  incarnation before idempotency lookup. The later API owns version CAS and
+  authentication. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview IDs
+  are immutable retry identities; a new ID replaces the member's slot.
+  Source events page raw contact/company rule references before filtering active
+  revisions. Wire event insertion inside the source edit's existing transaction;
+  preserve its lock order and never enqueue as a separate post-commit effect.
+  Bulk teardown must keep withdrawal available; close its first-activation race
+  with target locking/fresh reference checks before the policy API can activate.
+  `domain/email_policy_work.rs` and its service own generation-bound history:
+  raw contact pages of 100, sent-first passes, effect reauthorization and exact
+  cursor completion. Source reconciliation uses stable retry receipts and system
+  audit entries; matching edit hooks live in `email_policy/source_changes.rs`.
+  Add the same transactional hook to any new address/domain/visibility writer.
+  No worker initializes consent or activates selected contribution.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -196,7 +219,13 @@ tools/HTTP/GraphQL surfaces over them.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
-  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  team/member/mailbox/thread; mutations, paginated listing and the optional
+  `thread_id` lookup on that list are owner-only. The optional `consent_only=true`
+  projection on `GET /crm/email-privacy` reads only the current mailbox and
+  effective consent, with the same authorization and 15-second read timeout;
+  leave domain-list queries on the full settings path. Exact lookup returns zero or
+  one row without a cursor through an indexed owner lookup; reject it with
+  `after`.
   Keep these contribution controls available to members denied CRM viewing,
   like mailbox consent; use membership authority without `check_access`.
   Require `enable-crm-thread-exclusions` in the domain before set/clear, failing

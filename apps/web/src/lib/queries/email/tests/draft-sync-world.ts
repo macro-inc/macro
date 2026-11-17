@@ -79,10 +79,6 @@ async function boot(world: WorldCore) {
       dismiss: () => undefined,
     },
   }));
-  vi.doMock('@core/constant/featureFlags', () => ({
-    enableGraphqlSoup: {},
-    isFeatureEnabled: () => true,
-  }));
   vi.doMock('@app/lib/analytics', () => ({
     analytics: { track: () => {}, posthog: { captureException: () => {} } },
   }));

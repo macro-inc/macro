@@ -107,6 +107,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -138,6 +139,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -187,6 +189,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -581,6 +584,7 @@ impl AgentSessionNotificationRecipient for RecordingControls {
         _: AgentActionId,
         _: String,
         _: Option<MacroUserIdStr<'static>>,
+        _: crate::domain::model::PrompterKind,
     ) -> crate::domain::error::Result<()> {
         unreachable!()
     }
@@ -1942,6 +1946,7 @@ fn an_agents_program_is_not_a_user_principal() {
             origin,
             agent_id: agent.then_some(BotId::TEST_A),
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
             user_context: model_user::UserContext {
                 user_id: "macro|owner@example.com".to_owned(),
@@ -1971,4 +1976,18 @@ fn an_agents_program_is_not_a_user_principal() {
             ControlPrincipal::Program
         ));
     }
+    // A routine code step running as its owner signs `routine_id` and no
+    // `agent_id`; the token alone makes it a program.
+    let UserBotOrHarnessAuthorization::User(owner) = user(CredentialOrigin::MacroApiJwt, false)
+    else {
+        unreachable!()
+    };
+    let routine_step = UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+        routine_id: Some(macro_uuid::Uuid::from_u128(0x7001)),
+        ..owner
+    });
+    assert!(matches!(
+        control_principal(&routine_step, &plain),
+        ControlPrincipal::Program
+    ));
 }

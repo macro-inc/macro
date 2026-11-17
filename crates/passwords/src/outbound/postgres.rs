@@ -16,6 +16,7 @@ pub struct PgRepository {
     /// Metadata database pool; private payloads never cross this adapter.
     pool: PgPool,
     lock_admission: Arc<Semaphore>,
+    import_capacity: std::num::NonZeroUsize,
 }
 impl PgRepository {
     /// Construct one shared adapter per pool, reserving half its connections for repository queries.
@@ -26,6 +27,11 @@ impl PgRepository {
             return Err(Error::Invalid);
         }
         Ok(Self {
+            import_capacity: std::num::NonZeroUsize::new(
+                usize::try_from(pool.options().get_max_connections() - 1)
+                    .map_err(|_| Error::Invalid)?,
+            )
+            .ok_or(Error::Invalid)?,
             pool,
             lock_admission: Arc::new(Semaphore::new(
                 usize::try_from(capacity).map_err(|_| Error::Invalid)?,
@@ -175,6 +181,7 @@ fn trace_id() -> String {
 struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
+    _span: tracing::Span,
 }
 #[async_trait]
 impl ItemLock for PgItemLock {
@@ -209,6 +216,9 @@ const _: () = assert!(password_import::vault::MAX_IMPORT_MATCH_NAMES == 500);
 
 #[async_trait]
 impl Repository for PgRepository {
+    fn import_capacity(&self) -> std::num::NonZeroUsize {
+        self.import_capacity
+    }
     async fn is_human(
         &self,
         user: &macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -403,6 +413,7 @@ impl Repository for PgRepository {
         Ok(Box::new(PgItemLock {
             _admission: admission,
             _transaction: transaction,
+            _span: tracing::info_span!("passwords.lease.hold", team_id = %team.0),
         }))
     }
     #[tracing::instrument(skip_all,err,name="passwords.intent.publish",fields(team_id=%record.metadata.team_id.0,item_id=%record.metadata.id.0,outcome=tracing::field::Empty))]

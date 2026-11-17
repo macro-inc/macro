@@ -22,14 +22,8 @@ const setGraphqlPreviewFileTypeMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewNameMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewOnCreateMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true, loading: false }),
-}));
-
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => policy.graphql,
   LOCAL_ONLY: false,
 }));
 
@@ -62,7 +56,7 @@ vi.mock('../graphql', async (importOriginal) => ({
   canWriteGraphqlPreviewCache: canWriteGraphqlPreviewCacheMock,
   createGraphqlItemPreviewQuery: createGraphqlItemPreviewQueryMock,
   getGraphqlItemPreview: getGraphqlPreviewMock,
-  isGraphqlPreviewItem: () => true,
+  isGraphqlPreviewItem: () => policy.graphql,
   setGraphqlPreviewFileType: setGraphqlPreviewFileTypeMock,
   setGraphqlPreviewName: setGraphqlPreviewNameMock,
   setGraphqlPreviewOnCreate: setGraphqlPreviewOnCreateMock,
@@ -181,7 +175,6 @@ describe('preview transport facade', () => {
       expect(name()).toBe('Document');
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
-        expect.any(Function),
         false
       );
       dispose();
@@ -209,7 +202,6 @@ describe('preview transport facade', () => {
         value: '🚀',
       });
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
-        expect.any(Function),
         expect.any(Function),
         false
       );
@@ -375,7 +367,7 @@ describe('preview transport facade', () => {
     expect(setQueryDataMock).not.toHaveBeenCalled();
   });
 
-  it('invalidates only active REST fallbacks under the GraphQL flag', async () => {
+  it('invalidates only active REST fallbacks', async () => {
     await invalidatePreview('doc-1');
 
     const options = invalidateQueriesMock.mock.calls[0]?.[0];

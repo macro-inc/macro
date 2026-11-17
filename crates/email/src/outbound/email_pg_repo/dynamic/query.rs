@@ -22,9 +22,9 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use team_scope::TeamRead;
+use std::time::Instant;
 pub(crate) use team_scope::TeamReadTuning;
+use team_scope::read_team_page;
 use uuid::Uuid;
 
 struct QueryParams {
@@ -1389,16 +1389,17 @@ async fn read_page(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
     );
 
-    // Resolve Complete email addresses to contact ids and look up the TRASH
-    // label id once, so the candidate WHERE can use direct id equality
-    // instead of joining email_contacts/email_labels per message row.
-    //
-    // When team_id is set, resolution spans every team-member's link so the
-    // resulting contact_id / TRASH label_id sets cover all team mailboxes.
-    let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
-    if can_short_circuit(email_filter, &resolved) {
-        return Ok((Vec::new(), None));
-    }
+    // Team reads resolve addresses and contribution modes inside their read
+    // snapshot, before choosing SQL for all-mail or selected contributors.
+    let resolved = if team_id.is_some() {
+        ResolvedFilters::default()
+    } else {
+        let resolved = resolve_filters(pool, link_ids, None, email_filter).await?;
+        if can_short_circuit(email_filter, &resolved) {
+            return Ok((Vec::new(), None));
+        }
+        resolved
+    };
     let subject_subscans =
         team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
@@ -1460,43 +1461,6 @@ async fn read_page(
     Ok((query.fetch_all(pool).await?, None))
 }
 
-/// How long a team-scoped (CRM) page may run in the database, across all its
-/// statements: under the web client's 12s Soup request timeout, after which
-/// nobody reads the page. The server never cancels a query its client
-/// dropped, so the database enforces the bound.
-const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
-
-/// Reads a team-scoped page with [`TeamRead`] when it covers the request, and
-/// with the general builder otherwise, within [`TEAM_READ_BUDGET`].
-async fn read_team_page(
-    pool: &PgPool,
-    view: &PreviewView,
-    email_filter: &Expr<EmailLiteral>,
-    params: QueryParams,
-    tuning: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let deadline = Instant::now() + TEAM_READ_BUDGET;
-    let team_read = match tuning {
-        Some(tuning) => TeamRead::new(view, email_filter, params, tuning),
-        None => Err(Box::new(params)),
-    };
-    let mut transaction = pool.begin().await?;
-    let rows = match team_read {
-        Ok(read) => read.fetch(&mut transaction, deadline).await?,
-        Err(params) => {
-            limit_statement_time(&mut transaction, deadline).await?;
-            let mut qb = build_query(view, email_filter, *params);
-            qb.build()
-                .persistent(false)
-                .try_map(map_row)
-                .fetch_all(&mut *transaction)
-                .await?
-        }
-    };
-    transaction.commit().await?;
-    Ok(rows)
-}
-
 /// `link_ids` without repeats, in order.
 fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
     let mut seen = HashSet::with_capacity(link_ids.len());
@@ -1530,7 +1494,7 @@ pub(crate) async fn begin_snapshot(
 }
 
 /// Bounds the transaction's next statement by what is left until `deadline`.
-async fn limit_statement_time(
+pub(super) async fn limit_statement_time(
     connection: &mut PgConnection,
     deadline: Instant,
 ) -> Result<(), sqlx::Error> {

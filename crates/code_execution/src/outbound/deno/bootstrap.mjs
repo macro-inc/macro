@@ -130,22 +130,41 @@ try {
   }
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
-  const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // `--allow-net` lets `host.` through as `host`, but the URL keeps the dot.
+  const originOf = (url) => {
+    const parsed = new URL(url);
+    parsed.hostname = parsed.hostname.replace(/\.$/, "");
+    return parsed.origin;
+  };
+  const origins = new Set(Object.values(context.hosts).map(originOf));
+  // A proxied run reaches only its forwarder: a request to a host's base is
+  // sent to that service under the forwarder, longest base first. The
+  // forwarder, not this, marks it.
+  const forwarded = Object.entries(context.forwarder ?? {})
+    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
+    .sort(([left], [right]) => right.length - left.length);
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
-    if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
+    // Every request to an SDK origin, whatever credential it carries.
+    if (origins.has(originOf(request.url))) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
-      // A dry run's backstop: an authenticated request that didn't come
+      // A dry run's backstop: a request to an SDK origin that didn't come
       // through the gate is sent only if a read matches its route.
       if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
         const path = new URL(request.url).pathname;
         const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
         if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
+    }
+    for (const [base, local] of forwarded) {
+      const url = request.url;
+      if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
+        return originalFetch(new Request(`${local}${url.slice(base.length)}`, request));
       }
     }
     return originalFetch(request);

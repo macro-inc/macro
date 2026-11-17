@@ -34,6 +34,11 @@ pub struct OutlookCalendarLease {
     pub page_loaded: bool,
     /// Opaque current-page URL.
     pub page_cursor: Option<String>,
+    /// Whether the current page chain lists only this month and next
+    /// ([`OccurrenceRange::near_window`]): a calendar's first import reads
+    /// them before its whole window, so what the user looks at first arrives
+    /// first. Nothing counts as synced until the whole window is read.
+    pub near_window: bool,
     /// [`OutlookCalendarReader::READER_REVISION`] of the worker holding the
     /// lease, which every event it reads is stamped with.
     pub reader_revision: i16,
@@ -94,6 +99,20 @@ pub enum OutlookCalendarProgress {
     Reset,
 }
 
+/// What a committed checkpoint completed besides its own step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutlookCheckpoint {
+    /// A step inside a round, or the end of one of its pages.
+    Step,
+    /// A first import's near window is in; the whole window is listed next.
+    NearWindowImported,
+    /// The round finished and the calendar is synced.
+    RoundFinished {
+        /// Whether this was the calendar's first sync.
+        first_sync: bool,
+    },
+}
+
 /// One provider event read back for synchronization.
 pub enum OutlookEventRefresh {
     /// The current event or series, normalized.
@@ -139,12 +158,14 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         token: &str,
         binding: CalendarGrantBinding,
     ) -> impl Future<Output = Result<OutlookDiscovery, CalendarProviderError>> + Send;
-    /// Fetch one provider page without advancing any checkpoint.
+    /// Fetch one provider page without advancing any checkpoint. A `delta`
+    /// round reads the primary calendar's changes; any other lists every event
+    /// in the target's range.
     fn calendar_page(
         &self,
         token: &str,
         target: &ProviderCalendarTarget,
-        primary: bool,
+        delta: bool,
         cursor: Option<&str>,
     ) -> impl Future<Output = Result<OutlookCalendarPage, CalendarProviderError>> + Send;
     /// Refresh one event or complete recurring series, bounded to the target window.
@@ -185,12 +206,13 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         observed: Option<Vec<String>>,
         cursor: Option<String>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
-    /// Advance one exact leased step, preserving all pending work across crashes.
+    /// Advance one exact leased step, preserving all pending work across
+    /// crashes, and report what the step completed.
     fn checkpoint_outlook_calendar(
         &self,
         lease: &OutlookCalendarLease,
         progress: OutlookCalendarProgress,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<OutlookCheckpoint, Report>> + Send;
     /// Persist a sanitized failure and release a matching lease for retry.
     fn fail_outlook_calendar(
         &self,
@@ -265,6 +287,8 @@ impl<
             account_id = %lease.account_id,
             calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
             step = tracing::field::Empty,
+            near_window = tracing::field::Empty,
+            milestone = tracing::field::Empty,
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
             rejected_field = tracing::field::Empty,
@@ -356,14 +380,20 @@ impl<
                     OutlookCalendarProgress::Finish
                 } else {
                     span.record("step", "page");
+                    span.record("near_window", lease.near_window);
+                    let near;
+                    let (listed, delta) = if lease.near_window {
+                        near = ProviderCalendarTarget {
+                            range: OccurrenceRange::near_window(chrono::Utc::now()),
+                            ..target.clone()
+                        };
+                        (&near, false)
+                    } else {
+                        (target, lease.is_primary)
+                    };
                     match self
                         .provider
-                        .calendar_page(
-                            &token,
-                            target,
-                            lease.is_primary,
-                            lease.page_cursor.as_deref(),
-                        )
+                        .calendar_page(&token, listed, delta, lease.page_cursor.as_deref())
                         .await
                     {
                         Ok(page) => OutlookCalendarProgress::Page(page),
@@ -375,10 +405,12 @@ impl<
                         Err(error) => return Err(error),
                     }
                 };
-                self.repository
+                let checkpoint = self
+                    .repository
                     .checkpoint_outlook_calendar(lease, progress)
                     .await
                     .map_err(storage_error)?;
+                record_milestone(&span, lease, target, checkpoint);
             } else {
                 span.record("step", "discover");
                 let discovery = self.provider.calendars(&token, lease.binding).await?;
@@ -415,6 +447,36 @@ impl<
         }
         .inspect_err(|error| record_failure(&span, error))
     }
+}
+
+/// Marks the end of a first import's near window and of a calendar's first
+/// sync, with the time since the calendar's work was created (its first
+/// discovery), so time to the current month can be read per calendar.
+fn record_milestone(
+    span: &tracing::Span,
+    lease: &OutlookCalendarLease,
+    target: &ProviderCalendarTarget,
+    checkpoint: OutlookCheckpoint,
+) {
+    let milestone = match checkpoint {
+        OutlookCheckpoint::NearWindowImported => "near_window_imported",
+        OutlookCheckpoint::RoundFinished { first_sync: true } => "first_sync_finished",
+        OutlookCheckpoint::Step | OutlookCheckpoint::RoundFinished { first_sync: false } => {
+            return;
+        }
+    };
+    span.record("milestone", milestone);
+    let since_discovery_s = lease.id.get_timestamp().map(|created| {
+        chrono::Utc::now().timestamp() - i64::try_from(created.to_unix().0).unwrap_or(i64::MAX)
+    });
+    tracing::info!(
+        account_id = %lease.account_id,
+        calendar_id = %target.calendar_id,
+        is_primary = lease.is_primary,
+        milestone,
+        since_discovery_s,
+        "an Outlook calendar's first import reached a milestone"
+    );
 }
 
 fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {

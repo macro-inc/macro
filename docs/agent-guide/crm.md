@@ -1,8 +1,14 @@
 # Customers (CRM)
 
+On touch, CRM lists fill their pane behind floating filter controls and a list-local top fade. Activity controls stack below the main navigation pills; their combined measured height clears the first row.
+
 ## Customers (CRM) — `/app/companies`
 
-On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
+Desktop navigation docks above 720px and overlays at narrower widths. On wide
+touch, the selected list or pipeline stays left of the empty or selected record,
+item, or settings preview. Show sidebar leads the list's filter pills and opens
+sub-view navigation in a sheet; selecting a destination dismisses it. Narrow
+touch navigation is unchanged.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled). The new-pipeline dialog's type menu
 (**Companies**, **Contacts**, **Generic**) shows the same icon, title and
@@ -119,7 +125,7 @@ display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
-preserved across window changes. Next options replaces its page; Only changes
+preserved as further pages load on scroll. Only changes
 Owner without clearing Stage. Closed chips resolve only their selected labels,
 not the full personal directory.
 
@@ -356,6 +362,17 @@ into view. Cells edit like the pipeline table's when you can edit that pipeline.
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
 header; both start expanded on each visit. The
 section is absent when the record is in no pipeline.
+When pipelines are enabled, **Add to pipeline** beside the title (a plus icon
+on phones) lists the team's pipelines of the record's type, by name; generic and
+trashed pipelines are never listed. A pipeline the record is in shows a check and
+`In <stage>`; one you can only view or comment on is greyed, with the reason in a
+tooltip (on touch, under its name). A contact cannot join a contact pipeline it
+is already in; a company can, as another deal. Hovering (on touch, tapping) a
+pipeline lists its stages under **Choose stage**, with a back row on phones.
+Choosing a stage adds the row at once and shows `Added to <pipeline> at <stage>`
+with the new card in Pipelines; a stage with required fields opens **Add deal**
+(or **Add contact**) with the record fixed and the stage chosen. With no
+matching pipelines the menu says `No company pipelines yet` (or contact).
 Team lists the contacts with `Add contact`. Emails keeps the
 `Signal`/`All` and `Team`/`Me` toggles; `Team` shows teammates' threads even to
 a viewer with no connected mailbox. Files, Tasks, and Calls list items
@@ -649,7 +666,9 @@ the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
 Members without CRM access keep their email contribution controls. Revoke access
 while this page is open: **Stages** and **Email sync** disappear while contribution
-settings remain usable. Restoring access returns those sections.
+settings remain usable. The excluded-thread list and its email mentions also disappear
+without CRM access; the thread header only reads the viewer’s own mailbox consent
+and exclusion status. Restoring access returns the CRM settings sections.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
 contributing to CRM** opens **Review and opt in**. The dialog shows the exact
@@ -713,26 +732,36 @@ flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
 
-### Keep one thread out of CRM
+### Exclude one thread from CRM
 
 These controls require `enable-crm-thread-exclusions`, off by default everywhere.
 The API also refuses set/clear while its rollout flag is unavailable or disabled.
 Keep the flag off until ingestion and Team email reader binaries both support
 thread exceptions; older inlined readers ignore them.
 
-Open a thread from your own mailbox and choose **Keep this thread out of CRM**
-from its menu (the title menu on desktop, the thread menu on phone). This stops
+Open a thread from your contributed mailbox and choose **Exclude thread from CRM**
+beside sharing in its menu (the title menu on desktop, the thread menu on phone).
+The desktop header also has an exclusion icon immediately before the reminder
+bell; an excluded thread offers **Remove from excluded threads**, even after
+mailbox sharing is turned off. Both surfaces disable exclusion with a reason for another member’s thread, an unshared
+mailbox, or unavailable privacy state. The phone header keeps its existing
+title and Info controls. This stops
 sharing your copy through CRM, including mail already contributed, on the next
 CRM read. It does not remove the email from your mailbox. Another consenting
 teammate's copy of the same conversation may still appear, including the same
 messages. Separately granted thread access is also unaffected.
 Sales Email uses your own mailbox, so your copy remains visible there too.
 
-Open **Email settings → Threads kept out of CRM** to see your exceptions.
-**Remove exception** makes that thread eligible again when your consent and
-other privacy settings permit; restoration also queues a backfill. Use **Next
+Open **Email settings → Excluded threads** to see your exclusions. Each thread
+is an email mention with the same icon, subject, and hover preview as mentions
+in documents and channels. Click or press Enter to open it, reusing a split that
+already shows it. Desktop clicks and Shift-clicks prefer a new split when it is
+not already open; phones navigate in place. On phones the Settings
+sheet closes to reveal the thread. **Remove** makes that thread eligible again
+when your consent and other privacy settings permit; restoration also queues a backfill. Use **Next
 page** for further exceptions and **Back to first page** to return. Other members
-cannot see or change your exception list. Company and contact records and their
+cannot see or change your exclusion list. **Remove** never opens the thread;
+the empty list says **No excluded threads.** Company and contact records and their
 existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 

@@ -17,7 +17,7 @@ vi.mock('@service-storage/graphql-contacts', () => ({
 }));
 afterEach(() => vi.useRealTimers());
 
-it('replaces ranked windows, forwards queries, excludes inboxes and retains no query/name history', async () => {
+it('lists further property pages below the first, forwards queries, and retains no query/name history', async () => {
   vi.useFakeTimers();
   const viewer = 'macro|viewer@example.com';
   const search = vi
@@ -72,7 +72,7 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       scope: () => ({ userId: viewer, host }),
       search: query,
       enabled: () => true,
-      // Property pickers page a replaceable window.
+      // Property pickers list each further page below the earlier ones.
       policy: () => ({ mode: 'property', excluded: [viewer] }),
       activity: () => new Map(),
       conversation: () => undefined,
@@ -99,6 +99,7 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
   await next;
   await committed.promise;
   expect(list?.items().map((item) => item.id)).toEqual([
+    'macro|first@example.com',
     'macro|next@example.com',
   ]);
   expect(list?.hasMore()).toBe(false);

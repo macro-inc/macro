@@ -127,12 +127,7 @@ describe('GraphQL item previews', () => {
           { id: 'private-company', type: 'crm_company' },
           { id: 'shared-thread', type: 'email' },
         ] satisfies ItemEntity[]
-      ).map((item) =>
-        createGraphqlItemPreviewQuery(
-          () => item,
-          () => true
-        )
-      ),
+      ).map((item) => createGraphqlItemPreviewQuery(() => item)),
       dispose,
     }));
     try {
@@ -177,10 +172,10 @@ describe('GraphQL item previews', () => {
     getGraphqlSoupCacheHostMock.mockReturnValue(cacheHost(read));
     trackPreviewBatches();
     const { query, dispose } = createRoot((dispose) => ({
-      query: createGraphqlItemPreviewQuery(
-        () => ({ id: 'late-document', type: 'document' }),
-        () => true
-      ),
+      query: createGraphqlItemPreviewQuery(() => ({
+        id: 'late-document',
+        type: 'document',
+      })),
       dispose,
     }));
     await vi.advanceTimersByTimeAsync(30);
@@ -277,10 +272,7 @@ describe('GraphQL item previews', () => {
     createUrqlQueryMock.mockReturnValue(result);
     const { queries, dispose } = createRoot((dispose) => ({
       queries: ['one', 'two', 'one'].map((id) =>
-        createGraphqlItemPreviewQuery(
-          () => ({ id, type: 'document' }),
-          () => true
-        )
+        createGraphqlItemPreviewQuery(() => ({ id, type: 'document' }))
       ),
       dispose,
     }));
@@ -338,10 +330,10 @@ describe('GraphQL item previews', () => {
     createUrqlQueryMock.mockReturnValue(result);
 
     const { query, dispose } = createRoot((dispose) => ({
-      query: createGraphqlItemPreviewQuery(
-        () => ({ id: 'doc-1', type: 'document' }),
-        () => true
-      ),
+      query: createGraphqlItemPreviewQuery(() => ({
+        id: 'doc-1',
+        type: 'document',
+      })),
       dispose,
     }));
 
@@ -398,18 +390,12 @@ describe('GraphQL item previews', () => {
     createUrqlQueryMock.mockReturnValue(result);
     const { queries, dispose } = createRoot((dispose) => ({
       queries: [
-        createGraphqlItemPreviewQuery(
-          () => ({ id: 'same', type: 'document' }),
-          () => true
-        ),
-        createGraphqlItemPreviewQuery(
-          () => ({ id: 'same', type: 'project' }),
-          () => true
-        ),
-        createGraphqlItemPreviewQuery(
-          () => ({ id: 'missing', type: 'document' }),
-          () => true
-        ),
+        createGraphqlItemPreviewQuery(() => ({ id: 'same', type: 'document' })),
+        createGraphqlItemPreviewQuery(() => ({ id: 'same', type: 'project' })),
+        createGraphqlItemPreviewQuery(() => ({
+          id: 'missing',
+          type: 'document',
+        })),
       ],
       dispose,
     }));
@@ -508,13 +494,12 @@ describe('GraphQL item previews', () => {
     );
   });
 
-  it('only rejoins a batch when entity identity or enabled state changes', async () => {
+  it('only rejoins a batch when entity identity changes', async () => {
     const options = trackPreviewBatches();
-    const { setItem, setEnabled, query, dispose } = createRoot((dispose) => {
+    const { setItem, dispose } = createRoot((dispose) => {
       const [item, setItem] = createSignal<ItemEntity>({ id: 'doc-1' });
-      const [enabled, setEnabled] = createSignal(true);
-      const query = createGraphqlItemPreviewQuery(item, enabled);
-      return { setItem, setEnabled, query, dispose };
+      createGraphqlItemPreviewQuery(item);
+      return { setItem, dispose };
     });
     try {
       expect(options).toHaveLength(0);
@@ -540,14 +525,6 @@ describe('GraphQL item previews', () => {
         options.at(-1)?.variables?.input.initial?.filters?.chatFilter
       ).toEqual({ literal: { chatId: 'doc-2' } });
 
-      setEnabled(false);
-      expect(query.isEnabled()).toBe(false);
-      await vi.advanceTimersByTimeAsync(30);
-      expect(options).toHaveLength(3);
-      setEnabled(true);
-      expect(query.isEnabled()).toBe(true);
-      await vi.advanceTimersByTimeAsync(30);
-      expect(options).toHaveLength(4);
       expect(options.at(-1)?.requestPolicy).toBe('cache-and-network');
     } finally {
       dispose();
@@ -562,10 +539,7 @@ describe('GraphQL item previews', () => {
         type: 'channel' as const,
         messageId: undefined as string | undefined,
       });
-      const query = createGraphqlItemPreviewQuery(
-        () => item,
-        () => true
-      );
+      const query = createGraphqlItemPreviewQuery(() => item);
       return { setItem, query, dispose };
     });
     try {
@@ -637,10 +611,10 @@ describe('GraphQL item previews', () => {
       );
 
       createRoot((dispose) => {
-        const query = createGraphqlItemPreviewQuery(
-          () => ({ id: 'new-doc', type: 'document' }),
-          () => true
-        );
+        const query = createGraphqlItemPreviewQuery(() => ({
+          id: 'new-doc',
+          type: 'document',
+        }));
 
         vi.advanceTimersByTime(30);
         expect(query.data()).toBeUndefined();
@@ -672,10 +646,10 @@ describe('GraphQL item previews', () => {
     createUrqlQueryMock.mockReturnValue(result);
 
     createRoot((dispose) => {
-      const query = createGraphqlItemPreviewQuery(
-        () => ({ id: 'missing-doc', type: 'document' }),
-        () => true
-      );
+      const query = createGraphqlItemPreviewQuery(() => ({
+        id: 'missing-doc',
+        type: 'document',
+      }));
 
       vi.advanceTimersByTime(30);
       expect(query.shouldFallback()).toBe(true);
@@ -732,10 +706,10 @@ describe('GraphQL item previews', () => {
     createUrqlQueryMock.mockReturnValue(result);
 
     const { query, dispose } = createRoot((dispose) => ({
-      query: createGraphqlItemPreviewQuery(
-        () => ({ id: 'cached-doc', type: 'document' }),
-        () => true
-      ),
+      query: createGraphqlItemPreviewQuery(() => ({
+        id: 'cached-doc',
+        type: 'document',
+      })),
       dispose,
     }));
 

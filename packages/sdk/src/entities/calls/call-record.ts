@@ -50,7 +50,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   }
 
   /**
-   * Join only while this call is live; never start a replacement call.
+   * Join only while this call is live, never starting a replacement call;
+   * refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.
@@ -167,7 +168,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   readonly access = new EntityAccess(this.client, 'call', this);
 
   /**
-   * Get or create a shareable meeting for this call.
+   * Get or create a shareable meeting for this call; refused to an agent's
+   * program (ExecuteCode, a routine), so there ask the user to share it.
    *
    * @write
    * @idempotent

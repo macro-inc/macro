@@ -673,7 +673,6 @@ function previewBatcher(client: Client, includeProperties: boolean) {
 /** Joins a shared live preview batch; rich document edges load in the first request. */
 export function createGraphqlItemPreviewQuery(
   getItem: Accessor<ItemEntity>,
-  enabled: Accessor<boolean>,
   includeProperties = true
 ): GraphqlItemPreviewQuery {
   const pendingAppearance = usePendingEntityAppearance();
@@ -699,7 +698,6 @@ export function createGraphqlItemPreviewQuery(
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
   const isEnabled = () =>
-    enabled() &&
     isGraphqlPreviewItem(item()) &&
     (!queryAuthorization().paused || !previewNeedsCrmProof(item()));
   createComputed(() => {

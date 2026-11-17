@@ -1,3 +1,4 @@
+import type * as PlatformModule from '@core/util/platform';
 import {
   keepPreviousData,
   partialMatchKey,
@@ -20,6 +21,10 @@ import {
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof PlatformModule>()),
+  isTauri: () => true,
+}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));

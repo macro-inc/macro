@@ -17,6 +17,7 @@ const unused = (): never => {
 };
 const context: CrmContext = {
   canAccess: () => true,
+  EmailThreadMention: unused,
   createEmailPrivacy: unused,
   createPipelines: unused,
   openCreateItem: unused,
@@ -35,6 +36,7 @@ const context: CrmContext = {
   createNavigation: unused,
   listsEnabled: unused,
   pipelinesEnabled: unused,
+  createAddToPipeline: unused,
   createCompanyEmails: unused,
   createContactEmails: unused,
   createActivity: unused,

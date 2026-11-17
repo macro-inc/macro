@@ -74,10 +74,9 @@
         ]
       },
       {
-        "group": "Agents",
+        "group": "Agent setup",
         "pages": [
           "AI/bring-your-own",
-          "AI/cursor",
           "AI/mcp/overview"
         ]
       },

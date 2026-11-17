@@ -15,7 +15,6 @@ import {
   enableCrm,
   enableDatabases,
   enableForms,
-  enableGraphqlSoup,
   enableProjects,
 } from '@core/constant/featureFlags';
 import {
@@ -396,7 +395,6 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 export function createQuickAccessValue(): QuickAccessContextValue {
   const crmFlag = useFeatureFlag(enableCrm);
   const projectsFlag = useFeatureFlag(enableProjects);
-  const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -410,13 +408,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Read reactively: if the session abandons its cache mid-session, Quick
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
-  const cacheHost = createMemo(() => {
-    // The host getter reads PostHog imperatively; retry when the remote flag
-    // arrives after mount, while leaving cache lifetime decisions to the getter.
-    graphqlFlag();
-    return getGraphqlSoupCacheHost();
-  });
-  const localDrafts = createLocalDraftSource(() => graphqlFlag().enabled);
+  const cacheHost = createMemo(() => getGraphqlSoupCacheHost());
+  const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
     localDraftQuickAccessItems(localDrafts.drafts())
   );
@@ -1425,6 +1418,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       error: () => personList.error() ?? projected?.error(),
       loadMore: async () => {
         await Promise.all([personList.loadMore(), projected?.loadMore()]);
+      },
+      // Each failed source reads its page again; the projected list retries
+      // through its ordinary pagination.
+      retry: async () => {
+        await Promise.all([
+          personList.error() ? personList.retry?.() : undefined,
+          projected?.error() ? projected.loadMore() : undefined,
+        ]);
       },
     };
   }) as QuickAccessContextValue['useList'];

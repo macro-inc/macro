@@ -5,7 +5,7 @@ const webDirectory = fileURLToPath(new URL('../../../../', import.meta.url));
 const port = process.env.CRM_PIPELINE_TEST_PORT ?? '3047';
 export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
-  testMatch: '*.browser.e2e.ts',
+  testMatch: '**/crm/browser-test/*.browser.e2e.ts',
   workers: 1,
   timeout: 60_000,
   use: {

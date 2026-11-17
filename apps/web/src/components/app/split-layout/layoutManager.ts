@@ -1217,6 +1217,10 @@ export function createSplitLayout(
       return;
     }
 
+    setActiveSplit(id);
+  }
+
+  function setActiveSplit(id: SplitId) {
     const current = state.activeSplitId;
     if (current !== id) setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
@@ -1226,12 +1230,19 @@ export function createSplitLayout(
     viewState.activate(id);
   }
 
-  /** Stacked panes bring a pane behind the front forward; the panes that were in front of it stay, behind it. */
+  /**
+   * Stacked panes bring a pane behind the front forward; the panes that were in
+   * front of it stay, behind it. The router applies the move later while it is
+   * busy, and the splits follow its order only when their computations run, so
+   * neither has happened yet inside an effect, a batch, or a router commit: the
+   * split is activated without waiting. The move targets the end of the panes
+   * as they are when it applies, which the router clamps to the front.
+   */
   function bringToFront(id: SplitId) {
     if (splitIndexById(id) < 0) return;
 
-    router.move(paneOf(id), state.splits.length - 1);
-    activateSplit(id);
+    router.move(paneOf(id), Number.MAX_SAFE_INTEGER);
+    setActiveSplit(id);
   }
 
   function spotlightSplit(id: SplitId) {

@@ -40,7 +40,7 @@ import type { HistoryItem as Item } from '@queries/history/history';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
-import { Button, Surface } from '@ui';
+import { Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -1095,17 +1095,32 @@ function VirtualizedItemList(props: {
     }
   });
 
+  // Read the next page when the end of the list is in view: on scroll, and
+  // whenever a page lands still short of the end. A window with only group
+  // headings (no matching people yet) keeps reading until one matches or the
+  // directory ends.
+  const loadNearEnd = () => {
+    if (!scrollContainerRef || !props.hasMore || props.isLoadingMore) return;
+    const target = scrollContainerRef;
+    const remaining =
+      target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
+  };
+  createEffect(
+    on(
+      [
+        () => props.items.length,
+        () => props.hasMore,
+        () => props.isLoadingMore,
+      ],
+      loadNearEnd
+    )
+  );
+
   return (
     <div
       ref={scrollContainerRef}
-      onScroll={(event) => {
-        if (!props.items.length || !props.hasMore || props.isLoadingMore)
-          return;
-        const target = event.currentTarget;
-        const remaining =
-          target.scrollHeight - target.scrollTop - target.clientHeight;
-        if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
-      }}
+      onScroll={loadNearEnd}
       class="overflow-y-auto scrollbar-hidden"
       style={{
         'max-height':
@@ -1153,20 +1168,6 @@ function VirtualizedItemList(props: {
           }}
         </For>
       </div>
-      <Show
-        when={
-          props.items.every((item) => item.kind === 'group') && props.hasMore
-        }
-      >
-        <div
-          on:pointerdown={(event) => event.preventDefault()}
-          on:mousedown={(event) => event.preventDefault()}
-        >
-          <Button disabled={props.isLoadingMore} onClick={props.onEndReached}>
-            {t('viewMenus.nextOptions')}
-          </Button>
-        </div>
-      </Show>
     </div>
   );
 }

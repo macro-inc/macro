@@ -150,10 +150,6 @@ function MobileNameResults(props: {
       source.pagination.isLoadingMore() ||
       source.hasError(),
     loadMore: source.pagination.loadMore,
-    replaceWindows: () =>
-      category() === 'people' ||
-      ((category() === 'all' || category() === 'dms') &&
-        state.query().trim().length > 0),
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
@@ -238,16 +234,6 @@ function MobileNameResults(props: {
       </Show>
       <Show when={!source.isLoadingEntities() && items().length === 0}>
         <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
-        <Show when={source.pagination.hasMore()}>
-          <Button
-            disabled={source.pagination.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(source.pagination.loadMore(), 'mobile-search')
-            }
-          >
-            {t('viewMenus.nextOptions')}
-          </Button>
-        </Show>
       </Show>
     </div>
   );
