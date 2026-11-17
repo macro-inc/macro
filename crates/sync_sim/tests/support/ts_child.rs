@@ -17,9 +17,17 @@ impl TsChild {
             Err(std::env::VarError::NotPresent) => "current".into(),
             Err(error) => panic!("invalid SYNC_SIM_TS_LORO: {error}"),
         };
+        // The web catalog pins loro-crdt 1.16.3 against the native workspace's
+        // loro 1.17.1, so the current lane is the shipped mixed pair. The
+        // loro-crdt-legacy alias is the same 1.16.3: a legacy run would repeat
+        // that pair while claiming an older one.
         let expected_loro = match lane.as_str() {
-            "current" => "1.17.1",
-            "legacy" => "1.16.3",
+            "current" => "1.16.3",
+            "legacy" => panic!(
+                "SYNC_SIM_TS_LORO=legacy has no older Loro: the loro-crdt-legacy alias \
+                 equals the web catalog (1.16.3), which the current lane already pairs \
+                 with native 1.17.1"
+            ),
             _ => panic!("SYNC_SIM_TS_LORO must be current or legacy"),
         };
         let mut child = Command::new("bun")

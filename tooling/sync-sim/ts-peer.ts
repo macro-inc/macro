@@ -4,7 +4,8 @@ import type { PeerCommand, PeerReport } from './generated';
 import { activity, clock, WALL_ORIGIN, wakeAt } from './runtime';
 
 // Each child selects its actual Loro implementation before importing the shipping
-// engine/mirror. The legacy lane exercises real 1.16 updates against native 1.17.
+// engine/mirror. The legacy lane loads the loro-crdt-legacy alias, which now
+// equals the catalog, so the native host refuses it until the alias is older.
 const lane = process.argv[3];
 if (lane !== 'current' && lane !== 'legacy')
   throw new Error('peer requires a current or legacy Loro lane');

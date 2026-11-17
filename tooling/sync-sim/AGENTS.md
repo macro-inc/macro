@@ -23,7 +23,7 @@ by native clients. No shipped package depends on this directory.
 
 - Keep IPC types generated from `tests/support/peer_protocol.rs` with Specta:
   `cargo run -p sync_sim --example export_peer_types > tooling/sync-sim/generated.ts`.
-- Keep the current catalog pin and the explicit legacy 1.16.3 alias; select the actual implementation before importing the shipping engine.
+- Keep the current catalog pin and select the actual implementation before importing the shipping engine. The `loro-crdt-legacy` alias equals the catalog (1.16.3), so the legacy lane has no older Loro and the native host refuses it; pin the alias to an older release before using it again.
 - Install fake timers and seeded entropy before importing shipping modules.
   Keep fetch blocked; do not initialize observability exporters.
 - Await issued storage work and the event-loop barrier; never await a future
@@ -52,6 +52,5 @@ by native clients. No shipped package depends on this directory.
 - `bun run --cwd tooling/sync-sim typecheck`
 - `bun run --cwd tooling/sync-sim check` (generated output excluded; Rust drift test checks it exactly).
 - `cargo test -p sync_sim --test mixed_versions` (TS catalog 1.16.3/native 1.17.1).
-- `SYNC_SIM_TS_LORO=legacy cargo test -p sync_sim --test mixed_versions` (TS 1.16.3/native 1.17.1; the child checks its loaded package version).
 - Compare actual TS content/VV and WAL metadata; replay the complete IPC transcript
   and raw Room ports exactly, not only native final states.

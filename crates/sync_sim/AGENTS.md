@@ -135,7 +135,7 @@ Observe snapshot statistics through the same pure real-document port as producti
 
 ## Checks
 
-- Run mixed_versions for both the catalog lane and `SYNC_SIM_TS_LORO=legacy`; retain exact child version assertions and compare all content, VV, WAL and wire observations.
+- Run mixed_versions on the catalog lane (TS 1.16.3 against native 1.17.1); retain exact child version assertions and compare all content, VV, WAL and wire observations. `SYNC_SIM_TS_LORO=legacy` fails until the legacy alias pins a release older than the catalog.
 
 - `cargo test -p sync_sim` (includes reusable transaction reference comparisons, FIFO,
   completion/crash, uncertain retry, no-wipe, namespace isolation and lease-order contracts).
