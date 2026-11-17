@@ -51438,7 +51438,7 @@
         "properties": {
           "markdown": {
             "type": "string",
-            "description": "GitHub-flavored markdown; empty while no one has opened or written it."
+            "description": "Internal markdown, chips as `<m-*>` tags; empty while no one has opened or written it."
           }
         }
       },

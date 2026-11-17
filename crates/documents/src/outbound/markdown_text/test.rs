@@ -11,7 +11,10 @@ async fn live_markdown_is_read_in_the_lossless_internal_format() {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
-        assert_eq!(line.trim_end(), "GET /markdown/doc-1?target=internal HTTP/1.1");
+        assert_eq!(
+            line.trim_end(),
+            "GET /markdown/doc-1?target=internal HTTP/1.1"
+        );
         loop {
             line.clear();
             reader.read_line(&mut line).unwrap();
