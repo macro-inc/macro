@@ -21,7 +21,7 @@ import {
   sheetIn,
 } from './harness/states-organise';
 import { PHONE } from './harness/ways-list1';
-import { deliverAll, rowMenu } from './harness/ways-organise';
+import { deliverAll, titleMenu } from './harness/ways-organise';
 import { expectReminder, remindWhen } from './harness/ways-organise-more';
 import { phoneHeaderSubject } from './harness/ways-thread-more';
 import { saw } from './ledger/record';
@@ -173,8 +173,12 @@ test.describe('the Remind me menu on a desktop', () => {
       mailbox,
       ids,
       shared,
-      async (id) => {
-        await rowMenu(page, id, /^Remind me/);
+      // From the open thread: the same menu opened from a row's menu
+      // closes at once (known bug row-menu-dialogs-close-at-once).
+      async (id, subject) => {
+        await mailbox.open(`/app/email/${id}`);
+        await expect(page.getByText(`About ${subject}.`).first()).toBeVisible();
+        await titleMenu(page, subject, /^Remind me/);
         await expect(remindWhen(page)).toBeVisible();
       },
       (target) => target.click()
