@@ -85,6 +85,45 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_first_online_report_is_stamped_and_kept(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool);
+    let account = sam();
+    repo.create_account(&account).await.unwrap();
+    assert_eq!(
+        repo.get(&account.user_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .first_online_at,
+        None
+    );
+
+    repo.mark_online(&account.user_id).await.unwrap();
+    let first = repo
+        .get(&account.user_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .first_online_at
+        .expect("the first report is stamped");
+    repo.mark_online(&account.user_id).await.unwrap();
+
+    assert_eq!(
+        repo.get(&account.user_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .first_online_at,
+        Some(first)
+    );
+    assert_eq!(
+        repo.list_for_team(TEAM).await.unwrap()[0].first_online_at,
+        Some(first)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_the_account_deletes_the_agent(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool);

@@ -12,9 +12,9 @@ use uuid::Uuid;
 
 use super::admission::AgentAccountFacts;
 use super::models::{
-    AgentApiKey, AgentRepo, ComputerId, ComputerPurchase, ComputerState, CreateTeamAgent,
-    NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord, TeamAgents,
-    VoiceModel,
+    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerId, ComputerPurchase,
+    ComputerState, CreateTeamAgent, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError,
+    TeamAgentRecord, TeamAgents, VoiceModel,
 };
 use super::voice::AgentVoice;
 
@@ -57,6 +57,13 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<TeamAgentRecord>, Self::Err>> + Send;
+
+    /// Stamp the agent's first report of being online; a later report
+    /// keeps the first time.
+    fn mark_online(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// What an agent's own account says about it, for admission.
@@ -171,12 +178,25 @@ pub trait Computers: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<ComputerState, TeamAgentError>> + Send;
 
+    /// The computer's name and harness, for the agent's ready notice.
+    fn details(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<ComputerDetails, TeamAgentError>> + Send;
+
     /// Release the computer now; an already released one is success.
     fn release(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+}
+
+/// Telling an agent's inviter that the agent is up.
+pub trait AgentReadyNotices: Send + Sync + 'static {
+    /// Deliver `notice`. Delivering it again must not notify twice.
+    fn send(&self, notice: AgentReady) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
 /// The computer-facing addresses an agent's brain uses, resolved per
@@ -228,6 +248,15 @@ pub trait TeamAgentService: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
         voice: AgentVoice,
     ) -> impl Future<Output = Result<AgentVoice, TeamAgentError>> + Send;
+
+    /// The calling agent reports that it is online. The first report makes
+    /// it `running` and tells its inviter it is ready; later ones change
+    /// nothing. Refused for an account that isn't an agent of the receipt's
+    /// team.
+    fn agent_online(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// The agent part of a computer's enrollment: fresh credentials and its
     /// environment, or `None` when the computer runs no agent.

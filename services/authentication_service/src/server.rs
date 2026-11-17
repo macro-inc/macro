@@ -765,6 +765,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notification_ingress_service.clone(),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        ),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
     let domain_notice_service =

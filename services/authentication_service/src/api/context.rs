@@ -221,6 +221,10 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
     >,
     agent_credentials::rollout::PgAgentCreators,
     feature_flags::outbound::posthog::PostHogFeatureFlags,
+    team_agents::outbound::setup_notices::IngressSetupNotices<
+        NotificationIngressType,
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    >,
 >;
 
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<

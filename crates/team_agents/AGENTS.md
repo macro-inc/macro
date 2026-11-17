@@ -41,8 +41,18 @@ typed `NotAdmitted` reason, or `Unavailable` when any dependency fails (fail
 closed). `resolve(agent)` admits an account to its own team, for the vault's
 `AgentDirectory`, whose adapter lives in document_storage_service's outbound.
 
-An agent's status comes from its computer (`provisioning`, `running`,
-`paused`, `failed`, `released`); nothing about it is stored here.
+An agent's status comes from its computer (`provisioning`, `paused`,
+`failed`, `released`), except that an up computer is `starting` until the
+agent first reports itself online and `running` after. The agent reports with
+its own API key: `POST /team_agents/me/online` (the starter agent calls it once
+per run when its presence socket opens) stamps `team_agents.first_online_at`
+once. The first report sends the inviter the computer's `computer_setup`
+ready notice (same notification id as the operator's, so an older operator's
+send dedupes). `outbound/setup_notices.rs` (`IngressSetupNotices`) builds that
+notification for both senders: the auth service's `AgentReadyNotices` and the
+computer operator's `SetupNotices` in agent_harness_service, which sends nothing
+on macrod connect for an agent's computer. Not tied to the starter agent: any
+agent runtime reports the same way.
 
 ## Start here
 

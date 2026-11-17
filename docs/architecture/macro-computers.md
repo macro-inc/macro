@@ -380,7 +380,10 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
   failing is dropped after its retries and never fails the computer. For an
   agent teammate's computer the notice carries the agent (`agent_of`) and goes
-  to the agent's inviter by the agent's name: "<name> is ready".
+  to the agent's inviter by the agent's name, but only when it failed: macrod
+  connecting doesn't start the agent, so "<name> is ready" is sent by the auth
+  service when the agent first reports online (`POST /team_agents/me/online`,
+  `crates/team_agents/AGENTS.md`), under the same notification id.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 

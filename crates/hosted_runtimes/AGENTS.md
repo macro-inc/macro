@@ -71,12 +71,14 @@ read it before changing behaviour.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - `NotifySetup` tells the buyer how first setup ended through the
-  `ports::SetupNotices` port (adapter: agent_harness_service
-  `computers/setup_notice.rs`): `Ready` on the first macrod connection,
+  `ports::SetupNotices` port (adapter: team_agents
+  `outbound/setup_notices.rs`): `Ready` on the first macrod connection,
   `Failed` on each give-up before it (keyed by `failed_at`, so a retried
   attempt notifies again). It never fails the computer when it cannot be sent.
   `SetupNotice.agent` names the agent teammate an agent computer runs
-  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
+  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name;
+  for such a computer the adapter skips `Ready`, which the agent's own
+  online report sends instead.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related
