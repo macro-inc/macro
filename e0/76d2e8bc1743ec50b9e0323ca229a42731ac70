@@ -1,0 +1,37 @@
+crates/code_execution/AGENTS.md
+  s_8d2e22180e6c54::t_77136605f29acf 72-73
+crates/code_execution/README.md
+  s_8d2e22180e6c54::t_2694995ba88980 66-67,69-70,78-95
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_8d2e22180e6c54::t_852a1397062e8e 345-358
+crates/code_execution/src/outbound/ocaml.rs
+  s_8d2e22180e6c54::t_fc5a0160eec8e8 336-337,359-366,371,426-430,437,447-453,455-456,458,460-466
+crates/code_execution/src/outbound/ocaml/test.rs
+  s_8d2e22180e6c54::t_370ddc81805924 54-77
+packages/sdk-ocaml/README.md
+  s_8d2e22180e6c54::t_4f0cc6964590b9 261-274
+packages/sdk-ocaml/code_mode/policy/code_mode_policy.ml
+  s_8d2e22180e6c54::t_accc00fbe73f28 14-34,154-176,181-189,191,195,197,200-204,208-209,215,218-222,338-339,341-345
+packages/sdk-ocaml/code_mode/policy/test/allowed.ml
+  s_8d2e22180e6c54::t_88dc5f0fc55d09 30-65
+packages/sdk-ocaml/code_mode/policy/test/rejected.expected
+  s_8d2e22180e6c54::t_38041b1411bd94 31-48
+packages/sdk-ocaml/code_mode/policy/test/rejected.ml
+  s_8d2e22180e6c54::t_d0a5c5bf0520f2 92-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e076d2e8bc1743ec50b9e0323ca229a42731ac70",
+  "prompts": {},
+  "sessions": {
+    "s_8d2e22180e6c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91019101-35a6-4689-b257-b312bf0392b1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
