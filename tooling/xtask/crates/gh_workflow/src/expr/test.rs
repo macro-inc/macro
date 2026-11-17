@@ -181,3 +181,12 @@ fn rendering_rejects_a_context_its_key_does_not_offer() {
         "{error}"
     );
 }
+
+#[test]
+fn a_star_segment_reads_every_item() {
+    let labels = github().event::<super::typed::Json>("pull_request.labels.*.name");
+    assert_eq!(
+        labels.ast(),
+        &parse("github.event.pull_request.labels.*.name").unwrap()
+    );
+}

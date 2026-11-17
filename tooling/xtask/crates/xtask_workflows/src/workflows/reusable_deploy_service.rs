@@ -10,6 +10,7 @@
 //! amortise, so the per-service build realises its own closure directly (the
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
 
+use gh_workflow::expr::typed::{input, needs};
 use gh_workflow::{
     Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowInput,
@@ -129,7 +130,7 @@ fn build_service_binaries() -> Job {
         .add_step(build_prebuilt_binaries())
         .add_step(steps::upload_handoff_artifact(
             "prebuilt-binaries.tar.gz",
-            "${{ inputs.service-name }}",
+            input("service-name"),
         ))
         .add_step(steps::teardown_nix())
 }
@@ -170,7 +171,7 @@ fn build_lambda_artifacts() -> Job {
     .add_step(log_lambda_receipt())
     .add_step(steps::upload_handoff_artifact(
         "lambda-artifacts.tar.gz",
-        "${{ inputs.service-name }}",
+        input("service-name"),
     ))
     .add_step(steps::teardown_nix())
 }
@@ -195,7 +196,10 @@ fn log_lambda_receipt() -> Step<Run> {
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         "Check ${{ inputs.service-name }} migrations are applied",
-        "needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'",
+        needs("setup")
+            .output("has_binaries")
+            .is_true()
+            .or(needs("setup").output("has_lambdas").is_true()),
     )
 }
 

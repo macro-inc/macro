@@ -119,6 +119,12 @@ fn same_expressions(before: &str, after: &str, whole_expression: bool) -> bool {
                 .map(|ast| vec![ast.meaning().to_string()]);
         }
         let parts = expr::parse_template(text).ok()?;
+        // `if: ${{ x }}` and `if: x` are the same condition.
+        if let [TemplatePart::Expression(ast)] = parts.as_slice()
+            && whole_expression
+        {
+            return Some(vec![ast.meaning().to_string()]);
+        }
         Some(
             parts
                 .into_iter()

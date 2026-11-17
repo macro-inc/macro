@@ -10,6 +10,7 @@
 //! `test`. `check` (fmt + clippy), `build-service-bins`, `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
 
+use gh_workflow::expr::typed;
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, Run, Step, Workflow, WorkflowCall,
 };
@@ -37,10 +38,6 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job("graphql-schema-compat", graphql_schema_compat())
         .add_job("status-check", status_check())
 }
-
-/// Same-repo PRs only: the binary cache below is shared, so an untrusted fork
-/// must not be able to plant a binary under a key a later PR would execute.
-const TRUSTED_CONTEXT: &str = steps::TRUSTED_NAMESPACE_SCCACHE_CONTEXT;
 
 /// Where `path-check` keeps the release `xtask_nextest_filter` binary (keyed by
 /// its source trees and `Cargo.lock`) and the target dir that builds it.
@@ -82,9 +79,12 @@ fn path_check() -> Job {
                 .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
         )
         .add_step(
-            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(Expression::new(
-                format!("steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"),
-            )),
+            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(
+                typed::steps("filter")
+                    .output("should_run")
+                    .is_true()
+                    .and(steps::trusted_namespace_sccache_context()),
+            ),
         )
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())

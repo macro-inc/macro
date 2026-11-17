@@ -20,6 +20,7 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
+use gh_workflow::expr::typed::github;
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
     Workflow, WorkflowDispatch,
@@ -56,7 +57,7 @@ fn build_job() -> Job {
         .add_env(("CI", "true"))
         .add_env(("RELEASE_TAG", "${{ github.ref_name }}"))
         .add_step(require_release())
-        .add_step(steps::checkout_ref("${{ github.ref }}"))
+        .add_step(steps::checkout_ref(github().git_ref()))
         .add_step(android_build::install_android_sdk())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup prerequisites", false))

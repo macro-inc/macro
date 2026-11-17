@@ -7,6 +7,7 @@
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
 
+use gh_workflow::expr::typed::matrix;
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
@@ -201,7 +202,7 @@ fn build_service_binaries() -> Job {
     ))
     .add_step(steps::upload_handoff_artifact(
         "prebuilt-binaries.tar.gz",
-        "${{ matrix.service }}",
+        matrix("service"),
     ))
     .add_step(steps::teardown_nix())
 }
@@ -243,7 +244,7 @@ fn build_lambda_artifacts() -> Job {
     .add_step(log_lambda_receipt())
     .add_step(steps::upload_handoff_artifact(
         "lambda-artifacts.tar.gz",
-        "${{ matrix.service }}",
+        matrix("service"),
     ))
     .add_step(steps::teardown_nix())
 }

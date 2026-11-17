@@ -2,6 +2,7 @@
 //! folder under `infra/stacks`, to dev or prod. Generated into
 //! `deploy-pulumi-stack.yml`.
 
+use gh_workflow::expr::typed::needs;
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowDispatch,
     WorkflowInput,
@@ -62,7 +63,7 @@ fn check_artifact_config() -> Step<Run> {
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         "Check ${{ inputs.pulumi-service-name }} migrations are applied",
-        "needs.setup.outputs.ships_code == 'true'",
+        needs("setup").output("ships_code").is_true(),
     )
 }
 

@@ -1,6 +1,7 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
+use gh_workflow::expr::typed::{Expr, Str, input};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowInput,
@@ -40,18 +41,18 @@ pub fn build_appimage() -> Workflow {
                 )
                 .secrets(desktop_build_secrets()),
         ))
-        .add_job("build-appimage", build_appimage_job("${{ inputs.ref }}"))
+        .add_job("build-appimage", build_appimage_job(input("ref")))
 }
 
 /// Build the AppImage job, checking out and naming artifacts from `ref_expr`.
-pub fn build_appimage_job(ref_expr: &str) -> Job {
+pub fn build_appimage_job(ref_expr: Expr<Str>) -> Job {
     Job::default()
         .name("Build AppImage")
         .runs_on(runners::Runner::Mid.with_cache_tag("desktop-linux"))
-        .add_step(steps::checkout_ref(ref_expr))
+        .add_step(steps::checkout_ref(ref_expr.clone()))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(steps::derive_artifact_metadata(ref_expr.clone()))
         .add_step(prepare_desktop_release(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
@@ -63,7 +64,7 @@ pub fn build_appimage_job(ref_expr: &str) -> Job {
 }
 
 /// Embed one release identity in the native app and its bundled frontend.
-pub fn prepare_desktop_release(ref_expr: &str) -> Step<Run> {
+pub fn prepare_desktop_release(ref_expr: Expr<Str>) -> Step<Run> {
     Step::new("Prepare desktop release identity")
         .run("nix develop --command bun apps/web/scripts/desktop-release.mjs prepare \"$RAW_REF\"")
         .shell("bash")
@@ -71,7 +72,7 @@ pub fn prepare_desktop_release(ref_expr: &str) -> Step<Run> {
 }
 
 /// Publish desktop artifacts from the workflow run to the release tag.
-pub fn publish_job(ref_expr: &str, artifacts_path: xtask_paths::RuntimePath<'_>) -> Job {
+pub fn publish_job(ref_expr: Expr<Str>, artifacts_path: xtask_paths::RuntimePath<'_>) -> Job {
     Job::default()
         .name("Upload Release Artifacts")
         .runs_on("ubuntu-latest")

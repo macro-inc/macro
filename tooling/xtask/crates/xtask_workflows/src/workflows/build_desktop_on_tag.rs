@@ -5,6 +5,7 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`].
 
+use gh_workflow::expr::typed::{Expr, Str, needs};
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
     WorkflowDispatch, WorkflowInput,
@@ -15,7 +16,10 @@ use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
 #[cfg(test)]
 mod test;
 
-const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
+/// The ref `resolve-ref` resolved, so every build job checks out the same commit.
+fn resolved_ref() -> Expr<Str> {
+    needs("resolve-ref").output("ref")
+}
 
 /// Build the workflow.
 pub fn build_desktop_on_tag() -> Workflow {
@@ -28,11 +32,11 @@ pub fn build_desktop_on_tag() -> Workflow {
         .add_job("resolve-ref", resolve_ref())
         .add_job(
             "build-appimage",
-            build_appimage_on_tag::build_appimage_job(RESOLVED_REF).add_needs("resolve-ref"),
+            build_appimage_on_tag::build_appimage_job(resolved_ref()).add_needs("resolve-ref"),
         )
         .add_job(
             "build-dmg",
-            build_dmg_on_tag::build_dmg_job(RESOLVED_REF).add_needs("resolve-ref"),
+            build_dmg_on_tag::build_dmg_job(resolved_ref()).add_needs("resolve-ref"),
         )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
@@ -40,7 +44,7 @@ pub fn build_desktop_on_tag() -> Workflow {
         .add_job(
             "publish-installers",
             build_appimage_on_tag::publish_job(
-                RESOLVED_REF,
+                resolved_ref(),
                 xtask_paths::runtime_path!("release-artifacts/*"),
             )
             .name("Publish desktop installers")
@@ -74,9 +78,9 @@ fn publish_desktop_job() -> Job {
             contents: Some(Level::Write),
             ..Default::default()
         })
-        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::setup_nix())
-        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(steps::derive_artifact_metadata(resolved_ref()))
         .add_step(steps::download_artifacts(xtask_paths::runtime_path!(
             "release-artifacts"
         )))

@@ -13,6 +13,7 @@
 //! waiting on DMG notarization, and a flaky desktop build has no business
 //! holding it back.
 
+use gh_workflow::expr::typed::{Expr, Str, needs};
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
@@ -22,7 +23,10 @@ use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
+/// The ref `resolve-ref` resolved, so every build job checks out the same commit.
+fn resolved_ref() -> Expr<Str> {
+    needs("resolve-ref").output("ref")
+}
 
 /// One published binary.
 struct DaemonTarget {
@@ -104,7 +108,7 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     }
 
     let mut publish = build_appimage_on_tag::publish_job(
-        RESOLVED_REF,
+        resolved_ref(),
         xtask_paths::runtime_path!("release-artifacts/*"),
     )
     .add_needs("resolve-ref");
@@ -173,7 +177,7 @@ fn linux_job(target: &DaemonTarget) -> Job {
     Job::default()
         .name(format!("Build daemon ({})", target.slug))
         .runs_on(runners::Runner::RustCi.to_string())
-        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_cache())
         .add_step(steps::setup_dev_shell_named("agent-daemon"))
@@ -182,7 +186,7 @@ fn linux_job(target: &DaemonTarget) -> Job {
         // compile of the whole dependency graph. It degrades to the local
         // cache on failure, so it is never load-bearing.
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
-        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(steps::derive_artifact_metadata(resolved_ref()))
         .add_step(build_step(
             target,
             include_str!("scripts/build_agent_daemon_linux.sh"),
@@ -198,9 +202,9 @@ fn macos_job(target: &DaemonTarget) -> Job {
     Job::default()
         .name(format!("Build daemon ({})", target.slug))
         .runs_on(runners::Runner::MacOsArm.to_string())
-        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::setup_rust_light())
-        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(steps::derive_artifact_metadata(resolved_ref()))
         .add_step(build_step(
             target,
             include_str!("scripts/build_agent_daemon_macos.sh"),
@@ -215,9 +219,9 @@ fn windows_job(target: &DaemonTarget) -> Job {
     Job::default()
         .name(format!("Build daemon ({})", target.slug))
         .runs_on(runners::Runner::Windows.to_string())
-        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::setup_rust_light())
-        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(steps::derive_artifact_metadata(resolved_ref()))
         .add_step(build_step(
             target,
             include_str!("scripts/build_agent_daemon_windows.sh"),

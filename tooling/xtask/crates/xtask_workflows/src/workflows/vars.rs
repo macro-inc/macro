@@ -1,13 +1,14 @@
 //! Shared workflow environment: secrets, the repo-wide env block, concurrency,
 //! and Namespace cache names. This is the "environment" file.
 
-use gh_workflow::{Concurrency, Expression, Workflow};
+use gh_workflow::expr::typed::{Secret, Var, github};
+use gh_workflow::{Concurrency, Workflow};
 
-/// Declares a `${{ secrets.NAME }}` reference as a `&str` const named `NAME`, so
-/// secret usage is greppable and typo-proof.
+/// Declares a secret as a [`Secret`] const named `NAME`, so secret usage is
+/// greppable and typo-proof; it renders `${{ secrets.NAME }}`.
 macro_rules! secret {
     ($name:ident) => {
-        pub const $name: &str = concat!("${{ secrets.", stringify!($name), " }}");
+        pub const $name: Secret = Secret(stringify!($name));
     };
 }
 
@@ -35,10 +36,18 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 /// Webhook that posts to the Macro Alerts channel, a repo *variable*; it takes
 /// [`MACRO_BUILD_ALERT_BOT_TOKEN`] in an `x-macro-channel-bot-token` header.
 /// The hand-written `alert-native-build-failures.yml` posts there too.
-pub const MACRO_BUILD_ALERT_WEBHOOK_URL: &str = "${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}";
+pub const MACRO_BUILD_ALERT_WEBHOOK_URL: Var = Var("MACRO_BUILD_ALERT_WEBHOOK_URL");
+
+/// Workload identity provider that lets CI authenticate to Google Play, a
+/// repo *variable*.
+pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
+    Var("GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER");
+
+/// Service account CI acts as on Google Play, a repo *variable*.
+pub const GOOGLE_PLAY_SERVICE_ACCOUNT: Var = Var("GOOGLE_PLAY_SERVICE_ACCOUNT");
 
 /// Cloudflare account id. A repo *variable* (not a secret).
-pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
+pub const CLOUDFLARE_ACCOUNT_ID: Var = Var("CLOUDFLARE_ACCOUNT_ID");
 
 /// S3 nix binary cache store URL, a repo *variable* — e.g.
 /// `s3://macro-nix-cache?region=us-east-1`. The substituter role Cachix used
@@ -46,12 +55,12 @@ pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
 /// instead of a from-source rebuild. Empty/unset disables all nix-cache
 /// wiring (setup skips the substituter config; push steps no-op), so the
 /// workflows are safe to run before the bucket exists.
-pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
+pub const NIX_CACHE_URL: Var = Var("NIX_CACHE_URL");
 
 /// Public counterpart of [`NIX_CACHE_SIGNING_KEY`], a repo *variable* — e.g.
 /// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
 /// paths verify.
-pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
+pub const NIX_CACHE_PUBLIC_KEY: Var = Var("NIX_CACHE_PUBLIC_KEY");
 
 /// Limit on entering the Nix dev shell. Healthy runs take under 9 minutes even
 /// from an empty cache volume, while a stalled store download has run for over
@@ -132,8 +141,9 @@ pub fn with_global_env(workflow: Workflow) -> Workflow {
 /// calls the workflow, the group is that run's own, because `PR CI` cancels
 /// its own superseded runs.
 pub fn concurrency(prefix: &str) -> Concurrency {
-    Concurrency::new(Expression::new(format!(
-        "{prefix}-${{{{ github.event_name == 'pull_request' && github.run_id || github.ref }}}}"
-    )))
-    .cancel_in_progress(true)
+    let run_or_ref = github()
+        .event_name()
+        .eq("pull_request")
+        .then_else(github().run_id(), github().git_ref());
+    Concurrency::new(format!("{prefix}-{run_or_ref}")).cancel_in_progress(true)
 }

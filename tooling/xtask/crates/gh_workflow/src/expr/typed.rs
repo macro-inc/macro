@@ -80,6 +80,13 @@ impl<T> fmt::Display for Expr<T> {
     }
 }
 
+/// In a `with:`, `env:` or other value: the `${{ ... }}` text.
+impl<T> From<Expr<T>> for serde_json::Value {
+    fn from(expr: Expr<T>) -> Self {
+        Self::String(expr.to_string())
+    }
+}
+
 impl Expr<Bool> {
     pub fn and(self, other: impl Into<Expr<Bool>>) -> Expr<Bool> {
         self.binary(Op::And, other.into())
@@ -152,6 +159,110 @@ impl Expr<Json> {
     pub fn field<T>(self, name: &str) -> Expr<T> {
         Expr::from_ast(Ast::Property(Box::new(self.ast), name.to_string()))
     }
+
+    /// Item `index` of an array, read as type `T`.
+    pub fn item<T>(self, index: i64) -> Expr<T> {
+        Expr::from_ast(Ast::Index(
+            Box::new(self.ast),
+            Box::new(Ast::Number(index.to_string())),
+        ))
+    }
+
+    /// Whether the array holds `value`.
+    pub fn contains(self, value: impl Into<Expr<Str>>) -> Expr<Bool> {
+        call("contains", [self.ast, value.into().ast])
+    }
+}
+
+impl Expr<Num> {
+    pub fn lt(self, other: impl Into<Expr<Num>>) -> Expr<Bool> {
+        self.binary(Op::Lt, other.into())
+    }
+
+    pub fn le(self, other: impl Into<Expr<Num>>) -> Expr<Bool> {
+        self.binary(Op::Le, other.into())
+    }
+
+    pub fn gt(self, other: impl Into<Expr<Num>>) -> Expr<Bool> {
+        self.binary(Op::Gt, other.into())
+    }
+
+    pub fn ge(self, other: impl Into<Expr<Num>>) -> Expr<Bool> {
+        self.binary(Op::Ge, other.into())
+    }
+}
+
+/// An expression written as text: the escape hatch for what the builders
+/// don't cover yet. Rendering still parses and checks it; every use is
+/// counted so the count only goes down.
+///
+/// # Panics
+///
+/// If `text` is not an expression. It is a literal in the generator, so a
+/// panic is a bug in that literal, caught by `cargo x workflows`.
+pub fn raw<T>(text: &str) -> Expr<T> {
+    match super::parse(text) {
+        Ok(ast) => Expr::from_ast(ast),
+        Err(error) => panic!("{error}"),
+    }
+}
+
+/// A repository or organization secret, by name. A `const` of this type
+/// renders `${{ secrets.NAME }}` wherever it is formatted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Secret(pub &'static str);
+
+impl Secret {
+    pub fn expr(self) -> Expr<Str> {
+        secret(self.0)
+    }
+}
+
+impl fmt::Display for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.expr().fmt(f)
+    }
+}
+
+impl From<Secret> for serde_json::Value {
+    fn from(name: Secret) -> Self {
+        Self::String(name.to_string())
+    }
+}
+
+impl From<Secret> for Expr<Str> {
+    fn from(secret: Secret) -> Self {
+        secret.expr()
+    }
+}
+
+/// A repository or organization variable, by name; renders
+/// `${{ vars.NAME }}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Var(pub &'static str);
+
+impl Var {
+    pub fn expr(self) -> Expr<Str> {
+        var(self.0)
+    }
+}
+
+impl fmt::Display for Var {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.expr().fmt(f)
+    }
+}
+
+impl From<Var> for serde_json::Value {
+    fn from(name: Var) -> Self {
+        Self::String(name.to_string())
+    }
+}
+
+impl From<Var> for Expr<Str> {
+    fn from(var: Var) -> Self {
+        var.expr()
+    }
 }
 
 impl From<&str> for Expr<Str> {
@@ -182,12 +293,13 @@ fn call<T, const N: usize>(name: &str, args: [Ast; N]) -> Expr<T> {
     Expr::from_ast(Ast::Call(name.to_string(), args.into()))
 }
 
-/// `root.a.b...`
+/// `root.a.b...`; a `*` segment is GitHub's `.*` (every item).
 fn path<T>(root: &str, properties: &[&str]) -> Expr<T> {
     let ast = properties
         .iter()
-        .fold(Ast::Context(root.to_string()), |object, name| {
-            Ast::Property(Box::new(object), name.to_string())
+        .fold(Ast::Context(root.to_string()), |object, name| match *name {
+            "*" => Ast::Star(Box::new(object)),
+            name => Ast::Property(Box::new(object), name.to_string()),
         });
     Expr::from_ast(ast)
 }
@@ -398,6 +510,14 @@ impl Needs {
     pub fn result(&self) -> Expr<Str> {
         path("needs", &[&self.0, "result"])
     }
+}
+
+/// `needs.*.result`: every needed job's result, for `contains(...)`.
+pub fn all_needs_results() -> Expr<Json> {
+    Expr::from_ast(Ast::Property(
+        Box::new(Ast::Star(Box::new(Ast::Context("needs".to_string())))),
+        "result".to_string(),
+    ))
 }
 
 /// `steps.<id>.*`, for an earlier step of the same job.

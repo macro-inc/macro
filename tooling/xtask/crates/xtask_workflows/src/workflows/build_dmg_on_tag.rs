@@ -1,6 +1,7 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. The release orchestrator also uses its build job directly.
 
+use gh_workflow::expr::typed::{Expr, Str, input};
 use gh_workflow::{
     Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
@@ -51,11 +52,11 @@ pub fn build_dmg() -> Workflow {
                         .required(true),
                 ),
         ))
-        .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
+        .add_job("build-dmg", build_dmg_job(input("ref")))
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
-pub fn build_dmg_job(ref_expr: &str) -> Job {
+pub fn build_dmg_job(ref_expr: Expr<Str>) -> Job {
     Job::default()
         .name("Build macOS DMG")
         .runs_on(vec![
@@ -64,13 +65,13 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
             format!("nscloud-cache-size-{NIX_CACHE_SIZE_GB}gb"),
         ])
         .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
-        .add_step(steps::checkout_ref(ref_expr))
+        .add_step(steps::checkout_ref(ref_expr.clone()))
         .add_step(assert_arm64())
         .add_step(steps::mount_macos_nix_cache_volume())
         .add_step(steps::install_nix_macos())
         .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
-        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(steps::derive_artifact_metadata(ref_expr.clone()))
         .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
         .add_step(nix_build_dmg())
         .add_step(save_nix_cache())

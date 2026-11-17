@@ -10,6 +10,7 @@
 //! WebKit. The harness is `apps/web/tests/macos/qa.mjs`.
 //! Generated into `desktop_qa_macos.yml`.
 
+use gh_workflow::expr::typed::input;
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch,
     WorkflowInput,
@@ -79,7 +80,7 @@ fn qa_macos_job() -> Job {
         .add_env(("QA_SUITE", "${{ inputs.suite }}"))
         .add_env(("QA_REF", "${{ inputs.ref }}"))
         .add_env(("QA_REPORT", "${{ inputs.report }}"))
-        .add_step(steps::checkout_ref("${{ inputs.ref }}"))
+        .add_step(steps::checkout_ref(input("ref")))
         .add_step(harness_checkout())
         .add_step(record_sha())
         .add_step(build_dmg_on_tag::assert_arm64())

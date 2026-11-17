@@ -5,7 +5,8 @@
 //! trailing comment, or in the doc of a `*_SHA` const when several workflows
 //! use the action.
 
-use gh_workflow::{Env, Expression, Job, Run, Step, Use};
+use gh_workflow::expr::typed::{Bool, Expr, Str, always, github, input, needs, steps};
+use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
 use crate::workflows::{runners, vars};
@@ -30,11 +31,16 @@ pub(crate) const SETUP_BUN_SHA: &str = "0c5077e51419868618aeaa5fe8019c62421857d6
 /// Namespace's sccache setup mints a short-lived workspace credential. GitHub
 /// withholds repository secrets from fork PRs, but this runner-minted token is
 /// not a `secrets.*` value, so enforce the equivalent trust boundary here.
-pub(crate) const TRUSTED_NAMESPACE_SCCACHE_CONTEXT: &str = concat!(
-    "(github.event_name != 'pull_request' && ",
-    "github.event_name != 'pull_request_target') || ",
-    "github.event.pull_request.head.repo.full_name == github.repository"
-);
+pub(crate) fn trusted_namespace_sccache_context() -> Expr<Bool> {
+    let not_a_pull_request = github()
+        .event_name()
+        .ne("pull_request")
+        .and(github().event_name().ne("pull_request_target"));
+    let same_repository = github()
+        .event::<Str>("pull_request.head.repo.full_name")
+        .eq(github().repository());
+    not_a_pull_request.or(same_repository)
+}
 
 /// `.map` / `.when` combinators for fluent conditional composition
 /// ("push ifs up"): centralize branching in the builder chain instead of
@@ -115,9 +121,9 @@ pub fn google_play_auth(credentials_file: bool) -> Step<Use> {
         .id("auth")
         .add_with((
             "workload_identity_provider",
-            "${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}",
+            vars::GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER,
         ))
-        .add_with(("service_account", "${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}"))
+        .add_with(("service_account", vars::GOOGLE_PLAY_SERVICE_ACCOUNT))
         .add_with(("token_format", "access_token"))
         .add_with((
             "access_token_scopes",
@@ -306,7 +312,8 @@ pub fn mount_wasm_cache_volume() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "${{{{ github.workspace }}}}/target\n{}\n{}",
+                "{}/target\n{}\n{}",
+                github().workspace(),
                 xtask_paths::runtime_path!("/home/runner/.cargo/bin").as_str(),
                 xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
             ),
@@ -320,8 +327,7 @@ pub fn mount_wasm_cache_volume() -> Step<Use> {
 /// the setup action's local fallback so untrusted code never receives the
 /// runner-minted Namespace workspace token.
 pub fn configure_namespace_sccache(cache_name: &str) -> Step<Run> {
-    namespace_sccache_step(cache_name)
-        .if_condition(Expression::new(TRUSTED_NAMESPACE_SCCACHE_CONTEXT))
+    namespace_sccache_step(cache_name).if_condition(trusted_namespace_sccache_context())
 }
 
 fn namespace_sccache_step(cache_name: &str) -> Step<Run> {
@@ -460,7 +466,7 @@ pub fn node_script(source: &str) -> String {
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")
         .run("sccache --show-stats || true")
-        .if_condition(Expression::new("always()"))
+        .if_condition(always())
 }
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only where
@@ -468,9 +474,7 @@ pub fn show_sccache_stats() -> Step<Run> {
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        .cond(needs("path-check").output("should_run").is_true())
 }
 
 // ---------------------------------------------------------------------------
@@ -492,11 +496,11 @@ pub fn checkout_v4() -> Step<Use> {
 /// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
 /// whether the deploy carries binaries or Lambdas; the deploy job must list
 /// this job in its `needs`.
-pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
+pub fn check_macro_db_migrations_job(name: &str, ships_code: Expr<Bool>) -> Job {
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string()])
-        .cond(Expression::new(format!("${{{{ {ships_code} }}}}")))
+        .cond(ships_code)
         .runs_on(runners::DB_MIGRATOR)
         .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(
@@ -504,7 +508,7 @@ pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
                 "Check migrations",
                 xtask_paths::repo_dir!(".github/actions/check-macro-db-migrations"),
             )
-            .add_with(("environment", "${{ inputs.environment }}")),
+            .add_with(("environment", input::<Str>("environment"))),
         )
 }
 
@@ -521,7 +525,7 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 /// consistent object storage that rides Namespace's network rather than the
 /// GitHub artifacts API. Attempt-scoped path so re-runs never collide with
 /// stale uploads; the deploy job logs the same hash on read.
-pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
+pub fn upload_handoff_artifact(file: &str, service: Expr<Str>) -> Step<Run> {
     Step::new("Upload handoff artifact")
         .run(format!(
             "bun .github/scripts/upload-handoff-artifact.ts {file} \"$DEST\""
@@ -530,7 +534,11 @@ pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
         .shell("bash")
         .add_env(Env::new(
             "DEST",
-            format!("handoff/${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}/{service_expr}/{file}"),
+            format!(
+                "handoff/{}-{}/{service}/{file}",
+                github().run_id(),
+                github().run_attempt()
+            ),
         ))
 }
 
@@ -561,10 +569,10 @@ pub fn ensure_pulumi_home_writable() -> Step<Run> {
 // ---------------------------------------------------------------------------
 
 /// `actions/checkout` with a dynamic ref (for tag-triggered builds).
-pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
+pub fn checkout_ref(git_ref: Expr<Str>) -> Step<Use> {
     Step::new("Checkout Repo")
         .uses("actions", "checkout", CHECKOUT_SHA)
-        .add_with(("ref", ref_expr))
+        .add_with(("ref", git_ref))
         .add_with(("persist-credentials", false))
 }
 
@@ -582,7 +590,7 @@ pub fn mount_macos_nix_cache_volume() -> Step<Use> {
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.
-pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
+pub fn derive_artifact_metadata(raw_ref: Expr<Str>) -> Step<Run> {
     Step::new("Derive artifact metadata")
         .run(indoc::indoc! {r#"
             set -euo pipefail
@@ -596,7 +604,7 @@ pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
         "#})
         .id("metadata")
         .shell("bash")
-        .add_env(("RAW_REF", raw_ref_expr))
+        .add_env(("RAW_REF", raw_ref))
 }
 
 /// Upload build artifacts within the workflow run for a later publish job.
@@ -629,10 +637,8 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
             "action-gh-release",
             "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
         ) // v2
-        .if_condition(Expression::new(
-            "startsWith(steps.metadata.outputs.tag, 'v')",
-        ))
-        .add_with(("tag_name", "${{ steps.metadata.outputs.tag }}"))
+        .if_condition(steps("metadata").output("tag").starts_with("v"))
+        .add_with(("tag_name", steps("metadata").output("tag")))
         .add_with(("files", path.as_str()))
         .add_with(("fail_on_unmatched_files", true))
 }
@@ -643,5 +649,5 @@ pub fn teardown_nix() -> Step<Use> {
         "Teardown Nix",
         xtask_paths::repo_dir!(".github/actions/teardown-nix"),
     )
-    .if_condition(Expression::new("always()"))
+    .if_condition(always())
 }
