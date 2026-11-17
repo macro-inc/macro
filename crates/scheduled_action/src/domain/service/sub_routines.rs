@@ -49,6 +49,7 @@ where
         mut input: ActionConfiguration,
         run: RunningRun,
         key: Option<SubRoutineKey>,
+        requester: Requester,
     ) -> Result<SavedAction> {
         // One level: a sub-routine's creations follow its own parent.
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
@@ -94,6 +95,7 @@ where
                 EntityAppearance::default(),
                 None,
                 Some(link),
+                requester,
             )
             .await;
 
@@ -126,7 +128,9 @@ where
     /// Make `parent`'s sub-routines follow it off or back on. Switching it
     /// off pauses the ones that are on; switching it on resumes only those.
     /// One sub-routine that can't follow doesn't stop the rest.
-    pub(super) async fn follow_parent(&self, parent: &ScheduledAction) {
+    /// A program switching the parent on leaves the sub-routines that write as
+    /// their owner off: only a person switches those on.
+    pub(super) async fn follow_parent(&self, parent: &ScheduledAction, requester: Requester) {
         let Some(parent_id) = parent.id else {
             return;
         };
@@ -151,7 +155,10 @@ where
 
             for child in children {
                 let follows = match (&child.sub_routine, parent.enabled) {
-                    (Some(link), true) => link.paused_by_parent,
+                    (Some(link), true) => {
+                        link.paused_by_parent
+                            && (requester == Requester::Person || !writes_as_owner(&child.task))
+                    }
                     (Some(_), false) => child.enabled,
                     (None, _) => false,
                 };
