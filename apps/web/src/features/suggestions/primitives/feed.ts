@@ -183,6 +183,24 @@ export function createSuggestionsFeed(
 
         await actions.openComposer(suggestion.prompt);
       }),
+    /** Open what a finished suggestion left, else what taking it up opened. */
+    open: (suggestion: Suggestion) =>
+      act(suggestion, 'open', async () => {
+        if (suggestion.result) return actions.openItem(suggestion.result);
+        // A finished run that left nothing has nothing to open.
+        if (suggestion.kind === 'routine') return;
+        if (suggestion.kind === 'prompt') {
+          if (suggestion.runMode === 'composer') {
+            await actions.openComposer(suggestion.prompt);
+          }
+          return;
+        }
+
+        if (suggestion.draft) return actions.openDraft(suggestion.draft);
+
+        const [about] = suggestion.about;
+        if (about) actions.openItem(about);
+      }),
     /** Sent at once; a refusal leaves the card, marked failed. */
     dismiss: (suggestion: Suggestion) =>
       act(suggestion, 'dismiss', async () => {

@@ -303,11 +303,12 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   server ranks them. A row opens For you with that suggestion first; **All in
   For you** opens the page.
 
-For you is two cards under **Today** and the date. **Suggestions** is work
+For you is up to four cards under **Today** and the date. **Suggestions** is work
 Macro can do: each row says what Macro will do and has one button. **Run**
 starts a background run at once (the row says what it posts or sends first,
-or that nothing is sent); the row then reads "Running." with **View**, which
-opens its session, and a failed run turns red with **Retry**. **Open chat**
+or that nothing is sent); the row moves to **Running**, where it reads
+"Running." with **View**, which opens its session, and a failed run turns
+red with **Retry**. **Open chat**
 opens the composer with a prompt typed, unsent, and **Turn on** saves a
 routine. Pressing a Suggestions row's text looks without taking it up: a
 routine opens for review and a run's prompt opens in the composer. **To do**
@@ -318,8 +319,11 @@ marks it done without opening anything; pressing its text, or **Open** /
 the thread with the draft in its reply composer and a footer under it that
 reads **Drafted by Macro**, links what else the suggestion cites, and offers
 **Rewrite**, which opens the agent composer with the thread mentioned and the
-request typed, unsent. A suggestion that is taken up or finished leaves the
-page; with nothing left, one card reads **You’re clear for today**. The `x`
+request typed, unsent. A suggestion that is taken up or finished moves to
+**Done today**, which shows the latest one with its time; the earlier ones
+are behind **Logbook** in the card's footer, and pressing a finished row's
+text opens what it left. With nothing waiting or running, a card reads
+**You’re clear for today** above everything finished. The `x`
 (shown on hover or focus) dismisses at once and leaves the row in its card
 with **Undo** for the visit; Undo restores the suggestion, which the server
 allows for a few minutes. Dismissing a running suggestion stops its run, and

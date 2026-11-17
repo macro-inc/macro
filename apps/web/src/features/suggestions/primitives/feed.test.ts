@@ -15,6 +15,7 @@ import {
   doneSuggestion,
   draftedReplySuggestion,
   failedSuggestion,
+  quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
   routineSuggestion,
   runningSuggestion,
@@ -303,6 +304,34 @@ describe('suggestions feed', () => {
         expect(source.accept).not.toHaveBeenCalled();
       }
     );
+  });
+
+  it('opens what a finished run left, and a finished reply’s draft, without accepting', async () => {
+    const opened = { ...draftedReplySuggestion, status: 'done' as const };
+    await withFeed(
+      [doneSuggestion, opened],
+      async (feed, { source, actions }) => {
+        await feed.open(doneSuggestion);
+        expect(actions.openItem).toHaveBeenLastCalledWith({
+          entityType: 'document',
+          entityId: 'document-1',
+        });
+
+        await feed.open(opened);
+        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
+        expect(source.accept).not.toHaveBeenCalled();
+      }
+    );
+  });
+
+  it('opens nothing for a finished run that left nothing', async () => {
+    const unsettled: Suggestion = { ...quietSuggestion, status: 'done' };
+    await withFeed([unsettled], async (feed, { actions }) => {
+      await feed.open(unsettled);
+
+      expect(actions.openItem).not.toHaveBeenCalled();
+      expect(actions.openComposer).not.toHaveBeenCalled();
+    });
   });
 
   it('marks a reply done by taking it up, without opening anything', async () => {

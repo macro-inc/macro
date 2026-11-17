@@ -6,6 +6,7 @@ import { Key } from '@solid-primitives/keyed';
 import { Button, Card, Item } from '@ui';
 import {
   type Accessor,
+  createSignal,
   createUniqueId,
   For,
   type JSX,
@@ -17,6 +18,7 @@ import {
 import { RefreshSuggestions } from '../components/refresh-suggestions';
 import {
   DismissedSuggestion,
+  DoneRow,
   MacroRow,
   ToDoRow,
 } from '../components/suggestion-row';
@@ -24,8 +26,13 @@ import type { SuggestionItemParts } from '../context/suggestions-source';
 import type { FeedEntry, SuggestionsFeed } from '../primitives/feed';
 import type { Refresh } from '../primitives/refresh';
 
-/** One of the page's two lists, as a card under its name. */
-function ListCard(props: { label: string; children: JSX.Element }) {
+/** One of the page's lists, as a card under its name. */
+function ListCard(props: {
+  label: string;
+  /** A last line under the rows, such as what the list folds away. */
+  footer?: JSX.Element;
+  children: JSX.Element;
+}) {
   const headingId = createUniqueId();
 
   return (
@@ -38,6 +45,7 @@ function ListCard(props: { label: string; children: JSX.Element }) {
       <Card.Body class="p-1 pt-0">
         <ul class="m-0 flex list-none flex-col p-0">{props.children}</ul>
       </Card.Body>
+      {props.footer}
     </Card>
   );
 }
@@ -100,10 +108,27 @@ export function ForYouRefresh(props: { refresh: Refresh }) {
   );
 }
 
+type ListName = 'macro' | 'toDo' | 'running' | 'done';
+
 /**
- * The For you page: two lists. Suggestions is work Macro can do, started by
+ * Which list an entry is in: where it stands first (done, then running or
+ * failed), else whose it is, since an item of the person's own waits on them
+ * and everything else is work Macro can do.
+ */
+function listOf(entry: FeedEntry): ListName {
+  if (entry.status === 'done') return 'done';
+  if (entry.status === 'running' || entry.status === 'failed') {
+    return 'running';
+  }
+
+  return entry.suggestion.kind === 'entity' ? 'toDo' : 'macro';
+}
+
+/**
+ * The For you page: four lists. Suggestions is work Macro can do, started by
  * each row's button; To do is the person's own mail and documents that wait
- * on them. What is finished leaves the page.
+ * on them; Running is what was started, failed runs included; Done today is
+ * what finished.
  */
 export function ForYouView(props: {
   feed: SuggestionsFeed;
@@ -115,18 +140,27 @@ export function ForYouView(props: {
     const view = props.feed.view();
     return view.kind === 'suggestions' ? view.entries : [];
   };
-  // Finished ones are not listed; a dismissed one stays in its list to undo.
-  const listed = () =>
-    entries().filter((entry) => entry.dismissed || entry.status !== 'done');
-  // An item of the person's own waits on them; everything else is Macro's.
-  const toDo = () =>
-    listed().filter((entry) => entry.suggestion.kind === 'entity');
-  const macro = () =>
-    listed().filter((entry) => entry.suggestion.kind !== 'entity');
+  // A dismissed entry stays in the list it was in, to undo.
+  const inList = (name: ListName) =>
+    entries().filter((entry) => listOf(entry) === name);
+  const macro = () => inList('macro');
+  const toDo = () => inList('toDo');
+  const running = () => inList('running');
+  const done = () => inList('done').filter((entry) => !entry.dismissed);
+  // Nothing waits on the person, is offered, or runs.
   const clear = () =>
     props.feed.view().kind === 'empty' ||
     (props.feed.view().kind === 'suggestions' &&
-      !listed().some((entry) => !entry.dismissed));
+      ![...macro(), ...toDo(), ...running()].some((entry) => !entry.dismissed));
+  // While something still waits, only the latest finished one is in view;
+  // the earlier ones fold away, unless one of them was asked for.
+  const [logbookOpen, setLogbookOpen] = createSignal(false);
+  const earlier = () => (clear() ? [] : done().slice(1));
+  const folded = () =>
+    earlier().length > 0 &&
+    !logbookOpen() &&
+    !earlier().some((entry) => entry.suggestion.id === props.focusedId);
+  const doneShown = () => (folded() ? done().slice(0, 1) : done());
   const byId = (entry: FeedEntry) => entry.suggestion.id;
   const today = new Intl.DateTimeFormat(formatLocale(), {
     weekday: 'long',
@@ -155,6 +189,12 @@ export function ForYouView(props: {
             busy={entry().busy}
             failed={entry().failed}
             onUndo={() => props.feed.undoDismiss(entry().suggestion)}
+          />
+        </Match>
+        <Match when={entry().status === 'done'}>
+          <DoneRow
+            suggestion={entry().suggestion}
+            onOpen={() => props.feed.open(entry().suggestion)}
           />
         </Match>
         <Match when={entry().suggestion.kind === 'entity'}>
@@ -227,6 +267,42 @@ export function ForYouView(props: {
             <Show when={toDo().length > 0}>
               <ListCard label={t('suggestions.toDo')}>
                 <Key each={toDo()} by={byId}>
+                  {row}
+                </Key>
+              </ListCard>
+            </Show>
+            <Show when={running().length > 0}>
+              <ListCard label={t('suggestions.running')}>
+                <Key each={running()} by={byId}>
+                  {row}
+                </Key>
+              </ListCard>
+            </Show>
+            <Show when={done().length > 0}>
+              <ListCard
+                label={t('suggestions.doneToday')}
+                footer={
+                  <Show when={earlier().length > 0}>
+                    <Card.Footer class="py-2 pr-2 pl-3">
+                      <Card.Metadata class="text-ink-placeholder">
+                        {t('suggestions.earlierToday', {
+                          count: earlier().length,
+                        })}
+                      </Card.Metadata>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={!folded()}
+                        data-suggestions-logbook
+                        onClick={() => setLogbookOpen((open) => !open)}
+                      >
+                        {t('suggestions.logbook')}
+                      </Button>
+                    </Card.Footer>
+                  </Show>
+                }
+              >
+                <Key each={doneShown()} by={byId}>
                   {row}
                 </Key>
               </ListCard>

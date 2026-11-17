@@ -1,5 +1,7 @@
 import { t } from '@app/lib/i18n';
+import { formatTime } from '@core/util/date';
 import SparkleIcon from '@icon/system/fill/sparkle-fill.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import CircleIcon from '@icon/system/regular/circle.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import RepeatIcon from '@icon/system/regular/repeat.svg';
@@ -42,7 +44,8 @@ export type ToDoRowProps = RowState & {
 function RowText(props: {
   titleId: string;
   title: string;
-  muted?: boolean;
+  /** A finished row's title is quieter, a dismissed one's quieter still. */
+  tone?: 'done' | 'dismissed';
   onPress?: () => void;
   children: JSX.Element;
 }) {
@@ -50,7 +53,11 @@ function RowText(props: {
     <>
       <Item.Title
         id={props.titleId}
-        class={cn('font-medium', props.muted && 'text-ink-placeholder')}
+        class={cn(
+          'font-medium',
+          props.tone === 'done' && 'text-ink-muted',
+          props.tone === 'dismissed' && 'text-ink-placeholder'
+        )}
       >
         {props.title}
       </Item.Title>
@@ -357,6 +364,48 @@ export function ToDoRow(props: ToDoRowProps) {
   );
 }
 
+/**
+ * A finished suggestion, as a quiet row: what it was, what was done, and
+ * when. Pressing its text opens what it left.
+ */
+export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
+  const titleId = () => `suggestion-title-${props.suggestion.id}`;
+  const line = () =>
+    routineSentence(props.suggestion) ?? props.suggestion.summary;
+
+  return (
+    <Item
+      size="sm"
+      role="article"
+      aria-labelledby={titleId()}
+      data-suggestion={props.suggestion.id}
+      data-suggestion-status="done"
+      class="border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
+    >
+      <Item.Icon class="text-success [&>svg]:size-3.5" aria-hidden="true">
+        <CheckCircleIcon />
+      </Item.Icon>
+      <Item.Content class="gap-0.5">
+        <RowText
+          titleId={titleId()}
+          title={props.suggestion.title}
+          tone="done"
+          onPress={props.onOpen}
+        >
+          <Show when={line()}>
+            <Item.Description class="text-[13px] leading-[18px] text-ink-extra-muted">
+              {line()}
+            </Item.Description>
+          </Show>
+        </RowText>
+      </Item.Content>
+      <Item.Metadata class="text-ink-placeholder" data-suggestion-time>
+        {formatTime(props.suggestion.stateChangedAt)}
+      </Item.Metadata>
+    </Item>
+  );
+}
+
 /** A dismissed suggestion, in its card until the person leaves, with Undo. */
 export function DismissedSuggestion(props: {
   suggestion: Suggestion;
@@ -380,7 +429,11 @@ export function DismissedSuggestion(props: {
         <CircleDashedIcon />
       </Item.Icon>
       <Item.Content class="gap-0.5">
-        <RowText titleId={titleId()} title={props.suggestion.title} muted>
+        <RowText
+          titleId={titleId()}
+          title={props.suggestion.title}
+          tone="dismissed"
+        >
           <Item.Description class="text-[13px] leading-[18px] text-ink-placeholder">
             {t(
               props.wasRunning

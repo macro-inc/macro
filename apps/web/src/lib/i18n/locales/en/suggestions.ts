@@ -1,6 +1,12 @@
 export default {
   toDo: 'To do',
   suggestionsTitle: 'Suggestions',
+  running: 'Running',
+  doneToday: 'Done today',
+  logbook: 'Logbook',
+  earlierToday: {
+    other: '{{count}} earlier today',
+  },
   badgeRunning: 'Running',
   badgeFailed: 'Failed',
   run: 'Run',

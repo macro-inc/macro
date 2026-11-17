@@ -25,7 +25,8 @@ only, behind `enable-suggestions`.
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
   or draft; a routine suggestion saves its drafted routine. `look` opens what
-  a prompt or routine would do without accepting it.
+  a prompt or routine would do without accepting it, and `open` what a
+  finished one left.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
 - `draft-origin.tsx` is the footer the email thread draws under a reply
@@ -85,12 +86,15 @@ only, behind `enable-suggestions`.
   is now: the source puts that in the feed and answers `changed`, and the
   card shows the new text with a note, so nothing is taken up or run on text
   the person didn't see.
-- The page is two cards under Today and the date, each in the server's
-  order: Suggestions (prompts and routines: work Macro can do, in any status
-  but done) then To do (entity suggestions that are open: the person's own
-  mail and documents). A done suggestion is not listed, so taking one up or
-  a run finishing removes its row. With no row left, one card says so.
-  Refresh sits in the bar above the page (`ForYouRefresh`).
+- The page is up to four cards under Today and the date, each in the
+  server's order: Suggestions (open prompts and routines: work Macro can
+  do), To do (open entity suggestions: the person's own mail and documents),
+  Running (`running` and `failed`) and Done today (`done`). A card with no
+  row is not drawn. While something waits or runs, Done today shows the
+  latest finished one and folds the earlier ones behind its footer's
+  Logbook button; with nothing waiting or running, a card says so and every
+  finished one is listed. Refresh sits in the bar above the page
+  (`ForYouRefresh`).
 - The cards are `Card variant="filled" depth={3}` and the rows `Item
   size="sm"` with `border-0`, a medium `text-sm` title and one 13px line.
   Don't give them local surfaces, borders, counts or descriptions beside
@@ -99,9 +103,10 @@ only, behind `enable-suggestions`.
 - A Suggestions row (`MacroRow`) leads with its kind's mark (a violet
   sparkle, an orange repeat for a routine, a spinner while running, a red
   mark once failed), says what Macro will do, and has one secondary button:
-  Run, Open chat, Turn on, Retry, or View while it runs. A background run's
-  line ends with what it sends, or that nothing is sent, since pressing Run
-  is the approval. Pressing the row's text looks without taking it up
+  Run, Open chat, Turn on, Retry, or View while it runs. Running and failed
+  runs are the same row in the Running card. A background run's line ends
+  with what it sends, or that nothing is sent, since pressing Run is the
+  approval. Pressing the row's text looks without taking it up
   (`feed.look`): a routine opens for review, a run under way opens its
   session, and a prompt opens in the composer.
 - A To do row (`ToDoRow`) leads with a circle that marks it done without
@@ -113,13 +118,15 @@ only, behind `enable-suggestions`.
   pointing at the row or focusing in it swaps that for Open or Open draft
   and dismiss, in a slot wide enough that the row doesn't change size.
   Pressing the text opens it too. Rows don't open in place.
+- A Done today row (`DoneRow`) is a green check, a quieter title, what was
+  done and when; pressing its text opens what it left (`feed.open`).
 - Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
   `primary`), and colour is left to the kind's mark and a failed run.
 - The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,
   or when the suggestion arrived without it (`ageLabel`).
 - Rows are kept by suggestion id (`Key`), so a feed read updates a row in
-  place, a run starting or failing included: don't key a branch on an object
-  that is rebuilt on every read.
+  place: don't key a branch on an object that is rebuilt on every read. A
+  row whose status changes moves to another card's list and is rebuilt.
 - What a card holds belongs to the account that read it. Accept and
   regenerate compare the signed-in account before acting on an answer.
 - Every change to the feed also invalidates Home's rows
