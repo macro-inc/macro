@@ -84,11 +84,7 @@ fn status_check() -> Job {
 
 fn checkout(full_history: bool) -> Step<Use> {
     Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
+        .uses("actions", "checkout", steps::CHECKOUT_SHA)
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
 }
 

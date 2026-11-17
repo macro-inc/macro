@@ -196,7 +196,7 @@ jobs:
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+          LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
@@ -1011,10 +1011,11 @@ jobs:
           --pr ${{ github.event.pull_request.number }} \
           --repo ${{ github.repository }} \
           --token ${{ secrets.GITHUB_TOKEN }} \
-          --branch "${{ github.head_ref }}")
-        echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+          --branch "$BRANCH")
+        echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
         echo "Preview ID: $PREVIEW_ID"
       env:
+        BRANCH: ${{ github.head_ref }}
         PREVIEW_BUCKET: macro-preview-assets-dev
       continue-on-error: true
       working-directory: apps/web

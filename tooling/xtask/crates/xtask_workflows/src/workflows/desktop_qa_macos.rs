@@ -113,11 +113,7 @@ fn qa_macos_job() -> Job {
 /// ref under test, so any ref can be tested with the current checks.
 fn harness_checkout() -> Step<Use> {
     Step::new("Checkout QA harness")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
+        .uses("actions", "checkout", steps::CHECKOUT_SHA)
         .add_with(("ref", "${{ github.sha }}"))
         .add_with(("path", ".qa-harness"))
         .add_with(("sparse-checkout", "apps/web/tests/macos"))

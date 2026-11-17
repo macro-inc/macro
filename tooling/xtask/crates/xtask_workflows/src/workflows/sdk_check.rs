@@ -44,11 +44,7 @@ fn check_package() -> Job {
         .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
         .add_step(
             Step::new("Setup Node")
-                .uses(
-                    "actions",
-                    "setup-node",
-                    "49933ea5288caeca8642d1e84afbd3f7d6820020",
-                )
+                .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
                 .add_with(("node-version", "24")),
         )
         .add_step(install_dependencies())

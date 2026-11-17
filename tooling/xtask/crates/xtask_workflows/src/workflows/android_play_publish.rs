@@ -220,11 +220,7 @@ fn provenance_stamp() -> Step<Run> {
 
 fn download_artifact() -> Step<Use> {
     Step::new("Download the built App Bundle")
-        .uses(
-            "actions",
-            "download-artifact",
-            "634f93cb2916e3fdff6788551b99b062d0335ce0",
-        ) // v5
+        .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
         .add_with(("name", "android-release"))
         .add_with(("run-id", "${{ github.event.workflow_run.id }}"))
         .add_with(("github-token", "${{ github.token }}"))

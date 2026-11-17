@@ -149,11 +149,7 @@ const ENVIRONMENT: &str = "${{ inputs.environment }}";
 /// `artifact` is a [`build_web_app::ARTIFACT`] name the same run uploaded.
 pub fn download_dist(artifact: &str) -> Step<Use> {
     Step::new("Download dist")
-        .uses(
-            "actions",
-            "download-artifact",
-            "634f93cb2916e3fdff6788551b99b062d0335ce0",
-        ) // v5
+        .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
         .add_with(("name", artifact))
         .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
 }

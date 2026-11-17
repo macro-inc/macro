@@ -68,11 +68,7 @@ fn require_release_tag() -> Step<Run> {
 
 fn setup_bun() -> Step<Use> {
     Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
         .add_with(("bun-version", "1.3.13"))
 }
 

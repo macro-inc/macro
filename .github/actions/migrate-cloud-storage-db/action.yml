@@ -9,8 +9,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
-      with:
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with: # zizmor: ignore[artipacked] the calling deploy job may use the persisted token; dropping it needs that job audited
         sparse-checkout: |
           .github/
           crates/macro_db_client
@@ -18,8 +18,10 @@ runs:
     - name: Get database URL from Secrets Manager
       id: get-db-url
       shell: bash
+      env:
+        MIGRATION_ENVIRONMENT: ${{ inputs.environment }}
       run: |
-        if [ "${{ inputs.environment }}" = "prod" ]; then
+        if [ "$MIGRATION_ENVIRONMENT" = "prod" ]; then
           SECRET_NAME="macro-db-prod"
         else
           SECRET_NAME="macro-db-dev"
@@ -47,9 +49,10 @@ runs:
       working-directory: crates/macro_db_client
       env:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
+        MIGRATION_ENVIRONMENT: ${{ inputs.environment }}
       run: |
-        echo "Running migrations for ${{ inputs.environment }} environment..."
-        if [ "${{ inputs.environment }}" = "dev" ]; then
+        echo "Running migrations for $MIGRATION_ENVIRONMENT environment..."
+        if [ "$MIGRATION_ENVIRONMENT" = "dev" ]; then
           cargo sqlx migrate run --ignore-missing
         else
           cargo sqlx migrate run

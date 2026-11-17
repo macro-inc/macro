@@ -11,7 +11,7 @@ use gh_workflow::{
 
 use xtask_paths::RepoGlob;
 
-use crate::workflows::runners;
+use crate::workflows::{runners, steps};
 
 #[cfg(test)]
 mod test;
@@ -118,11 +118,7 @@ fn preview_status() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
 }
 
 fn changed_files() -> Step<Use> {
@@ -220,14 +216,14 @@ fn detect_affected_services() -> Step<Run> {
             fi
 
             if [ ${#services[@]} -eq 0 ]; then
-              echo "has-changes=false" >> $GITHUB_OUTPUT
-              echo "services=[]" >> $GITHUB_OUTPUT
+              echo "has-changes=false" >> "$GITHUB_OUTPUT"
+              echo "services=[]" >> "$GITHUB_OUTPUT"
               echo "No services affected by changes"
             else
-              echo "has-changes=true" >> $GITHUB_OUTPUT
+              echo "has-changes=true" >> "$GITHUB_OUTPUT"
               services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s -c .)
-              echo "services=${services_json}" >> $GITHUB_OUTPUT
-              echo "Services to preview: ${services[@]}"
+              echo "services=${services_json}" >> "$GITHUB_OUTPUT"
+              echo "Services to preview: ${services[*]}"
             fi
         "#})
         .id("detect")

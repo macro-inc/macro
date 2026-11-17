@@ -41,7 +41,7 @@
 
 use gh_workflow::{Expression, Job, Level, Permissions, Run, Step, Use};
 
-use crate::workflows::{runners, vars};
+use crate::workflows::{runners, steps, vars};
 
 /// The job's id in the web app check workflow.
 pub(super) const JOB_ID: &str = "ios-native-check";
@@ -186,11 +186,7 @@ fn read_labels() -> Step<Run> {
 
 fn setup_bun() -> Step<Use> {
     Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+        .uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
         .id("bun")
         .if_condition(gated())
         .add_with(("bun-version", "1.3.13"))

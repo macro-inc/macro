@@ -72,11 +72,7 @@ fn hakari_and_dep_closures() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
 }
 
 /// `cargo install` skips the build when the same version is already present

@@ -48,6 +48,9 @@ pub fn patch(root: &mut serde_yaml::Value) -> anyhow::Result<()> {
             MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
               description: Password for the Developer ID certificate
               required: true
+            MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64:
+              description: Developer ID provisioning profile for the notification entitlements
+              required: true
             MACOS_RELEASE_DOPPLER_TOKEN:
               description: Doppler token for notarizing the macOS DMG
               required: true

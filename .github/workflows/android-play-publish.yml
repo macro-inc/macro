@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 10
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -50,7 +50,7 @@ jobs:
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+          LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
@@ -203,7 +203,7 @@ jobs:
     timeout-minutes: 30
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -224,7 +224,7 @@ jobs:
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+          LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
@@ -461,7 +461,7 @@ jobs:
         gh_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+          LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }

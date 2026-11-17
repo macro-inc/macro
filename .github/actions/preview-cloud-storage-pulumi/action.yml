@@ -53,8 +53,8 @@ runs:
   using: composite
   steps:
     # checkout the repo
-    - uses: actions/checkout@v6
-      with:
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with: # zizmor: ignore[artipacked] Pulumi programs and builds run after it may use the persisted token; needs an audit
         lfs: ${{ inputs.use-lfs }}
 
     - name: Check Lambda config
@@ -78,11 +78,11 @@ runs:
         tar -xzf lambda-artifacts.tar.gz -C .
 
     # setup docker
-    - uses: docker/setup-buildx-action@v3
+    - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       if: ${{ inputs.use-docker == 'true' }}
 
     # install bun
-    - uses: oven-sh/setup-bun@v2
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
         bun-version: 1.2.0
 

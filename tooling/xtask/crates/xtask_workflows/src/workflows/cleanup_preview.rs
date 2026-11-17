@@ -7,7 +7,7 @@ use gh_workflow::{
     Workflow,
 };
 
-use crate::workflows::{runners, vars};
+use crate::workflows::{runners, steps, vars};
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
@@ -35,19 +35,11 @@ fn cleanup() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses(
-        "oven-sh",
-        "setup-bun",
-        "0c5077e51419868618aeaa5fe8019c62421857d6",
-    ) // v2
+    Step::new("Setup Bun").uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
 }
 
 fn configure_aws_credentials() -> Step<Use> {
@@ -72,7 +64,7 @@ fn get_preview_id() -> Step<Run> {
               --repo ${{ github.repository }} \
               --token ${{ secrets.GITHUB_TOKEN }} \
               --branch "$BRANCH")
-            echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+            echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
         .id("preview-id")

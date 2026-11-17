@@ -15,7 +15,7 @@ runs:
       shell: bash
       env:
         SCCACHE_VERSION: ${{ inputs.version }}
-      run: |
+      run: | # zizmor: ignore[github-env] a setup action: putting sccache on PATH is its job
         set -euo pipefail
 
         install_dir="$HOME/.local/bin"

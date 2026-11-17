@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -96,7 +96,7 @@ jobs:
     timeout-minutes: 10
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -126,7 +126,7 @@ jobs:
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -148,7 +148,7 @@ jobs:
       run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
       shell: pwsh
     - name: Setup Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: '24'
     - name: Claude Code from npm

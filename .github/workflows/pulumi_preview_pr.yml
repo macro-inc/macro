@@ -120,14 +120,14 @@ jobs:
         fi
 
         if [ ${#services[@]} -eq 0 ]; then
-          echo "has-changes=false" >> $GITHUB_OUTPUT
-          echo "services=[]" >> $GITHUB_OUTPUT
+          echo "has-changes=false" >> "$GITHUB_OUTPUT"
+          echo "services=[]" >> "$GITHUB_OUTPUT"
           echo "No services affected by changes"
         else
-          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
           services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s -c .)
-          echo "services=${services_json}" >> $GITHUB_OUTPUT
-          echo "Services to preview: ${services[@]}"
+          echo "services=${services_json}" >> "$GITHUB_OUTPUT"
+          echo "Services to preview: ${services[*]}"
         fi
   preview-services:
     needs:

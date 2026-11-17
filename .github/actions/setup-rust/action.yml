@@ -17,7 +17,7 @@ runs:
   steps:
     - name: setup rust toolchain
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] a setup action: putting the toolchain on PATH is its job
         set -euo pipefail
 
         # Namespace runners do not always include Rust; rustup installs into
@@ -54,7 +54,7 @@ runs:
       uses: ./.github/actions/setup-sccache
     - name: setup rust caching
       if: ${{ inputs.rust-cache == 'true' }}
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         shared-key: cloud-storage
         cache-all-crates: true

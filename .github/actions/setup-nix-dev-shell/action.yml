@@ -14,7 +14,7 @@ runs:
       shell: bash
       env:
         DEV_SHELL: ${{ inputs.shell }}
-      run: |
+      run: | # zizmor: ignore[github-env] a setup action: exporting the dev shell to later steps is its job
         set -euo pipefail
         case "$DEV_SHELL" in
           ''|*[!A-Za-z0-9_-]*)

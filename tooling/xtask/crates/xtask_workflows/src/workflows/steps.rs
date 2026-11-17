@@ -2,7 +2,8 @@
 //! helpers that return `Step`s and `Job`s, composed by the workflow files.
 //!
 //! Third-party actions are pinned to a SHA with the human-readable version in a
-//! trailing comment, matching the rest of the repo's workflows.
+//! trailing comment, or in the doc of a `*_SHA` const when several workflows
+//! use the action.
 
 use gh_workflow::{Env, Expression, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
@@ -11,6 +12,20 @@ use crate::workflows::{runners, vars};
 
 #[cfg(test)]
 mod test;
+
+/// `actions/checkout` v6.0.3. Every checkout uses this one pin. v6.1.0
+/// changes how `pull_request_target` runs check out a PR, so moving past
+/// v6.0.3 needs its own review.
+pub(crate) const CHECKOUT_SHA: &str = "df4cb1c069e1874edd31b4311f1884172cec0e10";
+
+/// `actions/download-artifact` v5.0.0.
+pub(crate) const DOWNLOAD_ARTIFACT_SHA: &str = "634f93cb2916e3fdff6788551b99b062d0335ce0";
+
+/// `actions/setup-node` v4.4.0.
+pub(crate) const SETUP_NODE_SHA: &str = "49933ea5288caeca8642d1e84afbd3f7d6820020";
+
+/// `oven-sh/setup-bun` v2.2.0.
+pub(crate) const SETUP_BUN_SHA: &str = "0c5077e51419868618aeaa5fe8019c62421857d6";
 
 /// Namespace's sccache setup mints a short-lived workspace credential. GitHub
 /// withholds repository secrets from fork PRs, but this runner-minted token is
@@ -64,11 +79,7 @@ pub fn setup_namespace_buildx() -> Step<Use> {
 /// whether checkout leaves the token in git config for later steps.
 pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
     Step::new("Checkout")
-        .uses(
-            "actions",
-            "checkout",
-            "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-        ) // v4
+        .uses("actions", "checkout", CHECKOUT_SHA)
         .add_with(("clean", false))
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
         .when(!persist_credentials, |step| {
@@ -76,21 +87,16 @@ pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
         })
 }
 
-/// `oven-sh/setup-bun` — installs Bun on the runner. Version-tagged (not
-/// SHA-pinned) to match the JS deploy/publish workflows.
+/// `oven-sh/setup-bun` — installs the Bun version the action picks.
 pub fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
+    Step::new("Setup Bun").uses("oven-sh", "setup-bun", SETUP_BUN_SHA)
 }
 
-/// `oven-sh/setup-bun`, SHA-pinned with an exact Bun version, for the native
+/// `oven-sh/setup-bun` with an exact Bun version, for the native
 /// release workflows that run the `apps/web/scripts` release helpers.
 pub fn setup_bun_pinned() -> Step<Use> {
     Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+        .uses("oven-sh", "setup-bun", SETUP_BUN_SHA)
         .add_with(("bun-version", "1.3.13"))
 }
 
@@ -475,16 +481,12 @@ pub fn gated_job() -> Job {
 // Deploy family (deploy_all_services / reusable_deploy_service) shared steps
 // ---------------------------------------------------------------------------
 
-/// `actions/checkout` pinned to the v4 SHA the deploy pipelines use. Compose
+/// `actions/checkout` for the deploy pipelines, without credentials. Compose
 /// options at the call site (`clean: false` on jobs reusing a mounted /nix
 /// volume, `sparse-checkout` for action-only jobs).
 pub fn checkout_v4() -> Step<Use> {
     Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-        ) // v4
+        .uses("actions", "checkout", CHECKOUT_SHA)
         .add_with(("persist-credentials", false))
 }
 
@@ -562,15 +564,10 @@ pub fn ensure_pulumi_home_writable() -> Step<Run> {
 // Desktop (AppImage / DMG) shared steps
 // ---------------------------------------------------------------------------
 
-/// `actions/checkout` with a dynamic ref (for tag-triggered builds). Uses the
-/// same pinned SHA as [`checkout`].
+/// `actions/checkout` with a dynamic ref (for tag-triggered builds).
 pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
     Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
+        .uses("actions", "checkout", CHECKOUT_SHA)
         .add_with(("ref", ref_expr))
         .add_with(("persist-credentials", false))
 }
@@ -623,11 +620,7 @@ pub fn upload_artifact(name: &str, path: RuntimePath<'_>) -> Step<Use> {
 /// Download all build artifacts into one directory for release publishing.
 pub fn download_artifacts(path: RuntimePath<'_>) -> Step<Use> {
     Step::new("Download Build Artifacts")
-        .uses(
-            "actions",
-            "download-artifact",
-            "634f93cb2916e3fdff6788551b99b062d0335ce0",
-        ) // v5
+        .uses("actions", "download-artifact", DOWNLOAD_ARTIFACT_SHA)
         .add_with(("path", path.as_str()))
         .add_with(("merge-multiple", true))
 }

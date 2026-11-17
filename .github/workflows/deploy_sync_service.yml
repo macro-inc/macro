@@ -27,7 +27,7 @@ jobs:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -48,7 +48,7 @@ jobs:
     - name: Add wasm32 target
       run: rustup target add wasm32-unknown-unknown
     - name: Setup Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: '22'
     - name: Install dependencies

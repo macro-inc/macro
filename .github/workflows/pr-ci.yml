@@ -498,6 +498,10 @@ jobs:
             - 'tooling/xtask/**'
             - 'crates/macro_event_topics/**'
             - '.github/workflows/**'
+            - '.github/actions/**'
+            - '.github/actionlint.yaml'
+            - '.github/zizmor.yml'
+            - 'nix/workflow-lint.nix'
             - '.github/kafka-cluster-topics.json'
           node_modules_nix:
             - 'bun.lock'

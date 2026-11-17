@@ -21,6 +21,16 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   its script with `include_str!` and runs it on the hosted image's Node.
 - A few older workflows are still hand-written YAML. When you change one
   substantially, port it to the generator instead of editing the YAML.
+- Pin each third-party action to one SHA (CS-39); an action used in several
+  places gets one `*_SHA` const in `steps.rs`, its release tag in the doc.
+- `check generated workflows` lints every workflow with actionlint (shellcheck
+  on `run` scripts) and every workflow and composite action with zizmor. Fix a finding when the fix leaves
+  what the job runs unchanged; otherwise allowlist it with its reason, one
+  rule and file per entry: shellcheck in `.github/actionlint.yaml` `paths:`,
+  zizmor in `.github/zizmor.yml`, and for composite actions inline
+  `# zizmor: ignore[rule] reason`. New runner labels go in
+  `.github/actionlint.yaml`.
 
-Check: `cargo x workflows --check` passes and no new `.github/workflows/*.yml`
-lacks the generated header.
+Check: `cargo x workflows --check` passes, no new `.github/workflows/*.yml`
+lacks the generated header, and `nix develop .#workflow-lint -c sh -c
+'actionlint && zizmor --offline .github'` passes.

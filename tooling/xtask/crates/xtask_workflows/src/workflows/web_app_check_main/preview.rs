@@ -74,10 +74,11 @@ fn get_or_create_preview_id() -> Step<Run> {
               --pr ${{ github.event.pull_request.number }} \
               --repo ${{ github.repository }} \
               --token ${{ secrets.GITHUB_TOKEN }} \
-              --branch "${{ github.head_ref }}")
-            echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+              --branch "$BRANCH")
+            echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
+        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
         .id("preview-id")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

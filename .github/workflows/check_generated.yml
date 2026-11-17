@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 15
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         clean: 'false'
         persist-credentials: 'false'
@@ -22,3 +22,30 @@ jobs:
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check
     - name: verify kafka cluster topics are up to date
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check
+  lint-workflows:
+    runs-on: namespace-profile-linux-small
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: workflow-lint
+    - name: actionlint
+      run: actionlint
+    - name: zizmor
+      run: zizmor --offline .github
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

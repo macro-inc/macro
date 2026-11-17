@@ -17,7 +17,9 @@ runs:
     - name: Get project path for ${{ inputs.service-name }}
       id: get-project
       shell: bash
+      env:
+        SERVICE_NAME: ${{ inputs.service-name }}
       run: |
-        PROJECT_NAME=$(.github/actions/get-project-name/get-project-name.sh "${{ inputs.service-name }}")
+        PROJECT_NAME=$(.github/actions/get-project-name/get-project-name.sh "$SERVICE_NAME")
         echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
-        echo "Using project: $PROJECT_NAME for service: ${{ inputs.service-name }}"
+        echo "Using project: $PROJECT_NAME for service: $SERVICE_NAME"

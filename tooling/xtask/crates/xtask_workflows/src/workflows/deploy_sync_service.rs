@@ -101,7 +101,7 @@ fn add_wasm_target() -> Step<Run> {
 
 fn setup_node() -> Step<Use> {
     Step::new("Setup Node")
-        .uses("actions", "setup-node", "v4")
+        .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
         .add_with(("node-version", "22"))
 }
 
