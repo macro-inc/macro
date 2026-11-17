@@ -218,9 +218,10 @@ Programs must not print to stdout: it carries the bootstrap's frames.
 Code mode compiles each program against a bundle built once per image, the
 `code-mode-ocaml` flake package (`nix/cloud-storage.nix`;
 `code_mode/bundle/build.sh` does the work). A build of `code_mode_assets`
-with `CODE_MODE_OCAML_DIR` set to it (`code_mode_assets::OCAML_BUNDLE`; CI's
-Deno suite does this) runs OCaml programs; no service build sets it yet
-(`codeModeOcamlEnv` is unused):
+with `CODE_MODE_OCAML_DIR` set to it (`code_mode_assets::OCAML_BUNDLE`)
+runs OCaml programs: the agent harness's deploy build merges
+`codeModeOcamlEnv`, so its image ships the bundle, and CI's Deno suite sets
+it too:
 
 | Path | Contents |
 | --- | --- |
