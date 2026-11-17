@@ -242,7 +242,9 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
     await mute();
     await expect(mutedBell(row)).toBeVisible({ timeout: 5_000 });
   });
-  if ((await mutedBell(row).count()) === 0) await mute();
+  // Only while the submenu is still open: once muted, the menu offers Unmute.
+  const entry = page.getByRole('menuitem', { name: 'Until I turn it off' });
+  if ((await entry.count()) > 0) await mute();
   await expect(mutedBell(row)).toBeVisible();
 
   await ben.post(made.muted, 'while muted');
