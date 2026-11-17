@@ -111,6 +111,7 @@ import {
 import { unwrap } from 'solid-js/store';
 import { applyDocumentTabScope } from './document-tab-scope';
 import { resolveInitialViewFilters } from './initial-view-filters';
+import { searchAwaitsInput } from './search-awaits-input';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -816,6 +817,17 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     setSearchText,
   });
 
+  // Search lists nothing until there is something to search for.
+  const searchAwaitingInput = () =>
+    activeListView() === 'search' &&
+    searchAwaitsInput({
+      text: searchText(),
+      state: queryFilters.state,
+      activeFilterIds: soup.predicates.activeIds(),
+      assigneeCount: assigneeFilter().length,
+      preset: activePreset(),
+    });
+
   const initialize = (options: SoupViewInitializeOptions = {}) => {
     initializing = true;
     try {
@@ -936,7 +948,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // after a tab switch.
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled: enabled() && !search.isSearching(),
+        enabled: enabled() && !search.isSearching() && !searchAwaitingInput(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
@@ -949,8 +961,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
   // Read loading first so REST fallback leaves the view shell rendered.
+  // A disabled query's data read suspends too, so Search skips it while it
+  // waits for input.
   const itemsQueryData = () =>
-    itemsQuery.isLoading ? undefined : itemsQuery.data;
+    itemsQuery.isLoading || searchAwaitingInput() ? undefined : itemsQuery.data;
   const itemsQueryHasData = () =>
     itemsQueryData() !== undefined && !itemsQuery.isPlaceholderData;
   const itemsQueryError = () =>
@@ -994,6 +1008,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       const searching = search.isSearching();
 
       if (!searching) {
+        if (searchAwaitingInput()) return [];
         const data = itemsSource().data();
         const extras = [
           ...(config().additionalEntities?.() ?? []),
@@ -1171,7 +1186,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       const view = activeListView();
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled: enabled() && !search.isSearching(),
+        enabled: enabled() && !search.isSearching() && !searchAwaitingInput(),
         meta: {
           itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
           insertFilter: emailImportanceInsertFilter(emailImportance),
@@ -1243,6 +1258,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const builtRows = createMemo((): SoupRow[] => {
+    if (searchAwaitingInput()) return [];
     const field = groupByField();
     const groups = itemsSource().data()?.groups;
 

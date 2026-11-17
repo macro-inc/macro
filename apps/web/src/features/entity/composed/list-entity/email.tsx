@@ -168,7 +168,7 @@ export function EmailWideContent(props: {
       </span>
       <span
         ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate flex-1 inline-flex items-center"
+        class="text-ink/50 font-medium truncate flex-1"
       >
         <EmailSnippet
           entity={props.entity}

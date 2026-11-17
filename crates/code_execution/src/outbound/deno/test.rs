@@ -1404,8 +1404,8 @@ export async function main({token, hosts}) {
             .unwrap(),
     )
     .await;
-    server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
 }
 
 /// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
