@@ -72,7 +72,7 @@ fn path_check() -> Job {
 }
 
 fn biome_check() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(15u32)
         .name("Biome Check")
         .runs_on(infra_runner())
@@ -85,7 +85,7 @@ fn biome_check() -> Job {
 }
 
 fn check() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))

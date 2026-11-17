@@ -6,7 +6,7 @@
 //! use the action.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, StepHandle, StepOutput, Str, always, github, input, needs,
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, github, input,
 };
 use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
@@ -490,10 +490,10 @@ pub fn show_sccache_stats() -> Step<Run> {
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only where
 /// the path filter matched. Shared by `check` and `test`.
-pub fn gated_job() -> Job {
+pub fn gated_job(should_run: &JobOutput<Flag>) -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(needs("path-check").output("should_run").is_true())
+        .needs(vec![should_run.job().to_string()])
+        .cond(should_run.read().is_set())
 }
 
 // ---------------------------------------------------------------------------
@@ -515,10 +515,14 @@ pub fn checkout_v4() -> Step<Use> {
 /// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
 /// whether the deploy carries binaries or Lambdas; the deploy job must list
 /// this job in its `needs`.
-pub fn check_macro_db_migrations_job(name: &str, ships_code: Expr<Bool>) -> Job {
+pub fn check_macro_db_migrations_job<SetupOutputs>(
+    name: &str,
+    setup: &JobHandle<SetupOutputs>,
+    ships_code: Expr<Bool>,
+) -> Job {
     Job::default()
         .name(name)
-        .needs(vec!["setup".to_string()])
+        .needs(vec![setup.to_string()])
         .cond(ships_code)
         .runs_on(runners::DB_MIGRATOR)
         .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))

@@ -104,6 +104,7 @@ fn check_artifact_config() -> Step<Run> {
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         &format!("Check {} migrations are applied", stack()),
+        &SETUP,
         SETUP.outputs.ships_code.read().is_set(),
     )
 }

@@ -71,7 +71,7 @@ fn path_check() -> Job {
 }
 
 fn ast_grep() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())

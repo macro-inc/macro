@@ -169,7 +169,7 @@ fn path_check() -> Job {
 
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
@@ -201,7 +201,7 @@ fn with_check_env(job: Job) -> Job {
 /// computing the bin list compiled an xtask from scratch on every PR. A cheap
 /// path filter gates it; the xtask then picks the exact binaries.
 fn doppler_config() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .cond(
             PATH_CHECK
@@ -232,7 +232,7 @@ fn doppler_config() -> Job {
 /// clients built against the base branch still send. The checkout is the PR
 /// merge commit, so its first parent is the base branch tip.
 fn graphql_schema_compat() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(15u32)
         .cond(
             PATH_CHECK.outputs.should_run.read()
@@ -253,7 +253,7 @@ fn graphql_schema_compat() -> Job {
 /// the path filter selected no Rust packages (Nix-only / unmapped files) or
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .cond(
             PATH_CHECK
@@ -304,7 +304,7 @@ fn with_test_compile_env(job: Job) -> Job {
 /// compiles. The script picks them from the selected packages; this gate only
 /// avoids a dev shell when none can match.
 fn build_service_bins() -> Job {
-    steps::gated_job()
+    steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .cond(build_service_bins_condition())
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
