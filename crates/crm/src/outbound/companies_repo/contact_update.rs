@@ -207,6 +207,14 @@ impl CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         }
 
+        // Choosing a different primary among held addresses changes display,
+        // not the live address set matched by a rule.
+        if change.added.is_some()
+            || change.removed.is_some()
+            || change.company_id != current.company_id
+        {
+            Self::record_contact_matching_change(&mut tx, *team_id, *contact_id).await?;
+        }
         let contact = Self::read_contact(&mut *tx, team_id, contact_id, true)
             .await?
             .ok_or(CrmError::ContactNotFoundForTeam)?;

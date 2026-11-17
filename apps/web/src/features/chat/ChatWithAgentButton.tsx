@@ -1,6 +1,7 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
@@ -226,8 +227,8 @@ export function AskMacroButton(props: {
       grouped={props.grouped}
       size={props.size}
       onClick={() => openChatWithAgent(props.entity)}
-      tooltip="Ask Macro"
-      label="Ask Macro"
+      tooltip={t('entityActions.askMacro')}
+      label={t('entityActions.askMacro')}
       icon={
         <AgentIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       }

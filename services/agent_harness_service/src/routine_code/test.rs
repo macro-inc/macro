@@ -307,7 +307,7 @@ impl RoutineCredentials for SignedTokens {
         dry_run: bool,
     ) -> anyhow::Result<String> {
         let (agent_id, scope) = routine_claims(acts_as, dry_run);
-        Ok(macro_auth::macro_api_token::encode_macro_api_token(
+        macro_auth::macro_api_token::encode_macro_api_token(
             macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
                 fusionauth_id: "fixture".into(),
                 macro_user_id: "macro|owner@example.com".into(),
@@ -322,7 +322,7 @@ impl RoutineCredentials for SignedTokens {
                 routine_id: Some(routine_id),
                 agent_scope: scope.map(|scope| scope.as_str().to_owned()),
             },
-        )?)
+        )
     }
 }
 
