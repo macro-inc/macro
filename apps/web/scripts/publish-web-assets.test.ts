@@ -33,7 +33,7 @@ function publishingFixture() {
     'index.html': '<script src="app-abcdefgh.js"></script>',
     'pipedream-connect.html': '<script src="app-abcdefgh.js"></script>',
     'manifest.json': '{"name":"Macro"}',
-    'bundle-manifest.json': '{"bundleBuild":123}',
+    'bundle-manifest.json': '{"bundleBuild":1794870406000,"commitTime":1794870406,"builtAt":1794871234567}',
     'semver.txt': '1.0.0',
     'sw.js': 'self.registration.unregister()',
     'app-abcdefgh.js': 'export const ready = true;',
