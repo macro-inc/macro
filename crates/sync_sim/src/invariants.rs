@@ -297,8 +297,8 @@ pub(crate) fn ranges_cover(ranges: &[IdSpan], target: &IdSpan) -> bool {
 /// Live model and persisted reconstruction agree except on the root state the editor's
 /// sync policy retains live. Source applies only root children on import, so a remote
 /// write of a retained root slot (the root id, document metadata) reaches the persisted
-/// document while the live model keeps its own until its next local write. Every other
-/// field is compared exactly.
+/// document while the live model keeps its own until its next local write. Both sides
+/// are compared as an importer reads them (comparable).
 pub(crate) fn projection_matches(editor: &EditorFinal) -> Result<bool, Failure> {
     projection_json_matches(&editor.synced_json, &editor.reconstructed)
 }
@@ -312,8 +312,9 @@ fn projection_json_matches(
 /// Editor JSON as an importer of the document holds it (as_importer_reads), without the
 /// retained live root state: the form live models and persisted reconstructions are
 /// compared in. A creator omits a storage-null key an importer holds as null, and a
-/// remote root id or metadata write waits for the next local write, both as in Source;
-/// present values are compared exactly.
+/// remote root id or metadata write waits for the next local write, both as in Source.
+/// Present values are compared exactly, except the stored-normalized fields the
+/// importer read drops or resets, as Source's import does.
 fn comparable(
     json: &serde_json::Value,
     invariant: &'static str,
@@ -323,7 +324,8 @@ fn comparable(
 }
 /// A creating peer's editor JSON as an importer of the same document holds it: the
 /// editor sync policy's storage-null keys the creator's export left absent read back as
-/// null (lexical_loro::read_back_storage_nulls); present values are unchanged.
+/// null, then the stored-normalized fields take the values Source's import gives them
+/// (lexical_loro::read_back_storage_nulls).
 pub fn as_importer_reads(
     json: &serde_json::Value,
 ) -> Result<serde_json::Value, lexical_loro::ProjectionError> {

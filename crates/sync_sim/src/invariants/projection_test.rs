@@ -75,3 +75,57 @@ fn a_present_storage_null_value_still_has_to_match() {
     }});
     assert!(!projection_json_matches(&live, &persisted).unwrap());
 }
+
+#[test]
+fn a_checked_difference_inside_a_check_list_still_fails() {
+    let list = |checked: bool| {
+        json!({"root": {"type": "root", "children": [{
+            "type": "list",
+            "listType": "check",
+            "children": [{"type": "listitem", "checked": checked, "children": []}],
+        }]}})
+    };
+    assert!(!projection_json_matches(&list(true), &list(false)).unwrap());
+}
+
+#[test]
+fn a_classed_block_class_difference_still_fails() {
+    let block = |class: &str| {
+        json!({"root": {"type": "root", "children": [{
+            "type": "classed-block",
+            "tag": "div",
+            "classes": [class],
+            "children": [],
+        }]}})
+    };
+    assert!(!projection_json_matches(&block("a"), &block("b")).unwrap());
+}
+
+// Source's ClassedBlockNode.importJSON never restores attributes, so no reload can
+// tell these apart.
+#[test]
+fn classed_block_attributes_are_not_compared() {
+    let block = |value: &str| {
+        json!({"root": {"type": "root", "children": [{
+            "type": "classed-block",
+            "tag": "div",
+            "classes": [],
+            "attributes": {"data-x": value},
+            "children": [],
+        }]}})
+    };
+    assert!(projection_json_matches(&block("a"), &block("b")).unwrap());
+}
+
+#[test]
+fn a_truthy_tablecell_width_difference_still_fails() {
+    let cell = |width: u32| {
+        json!({"root": {"type": "root", "children": [{
+            "type": "table",
+            "children": [{"type": "tablerow", "children": [
+                {"type": "tablecell", "width": width, "children": []},
+            ]}],
+        }]}})
+    };
+    assert!(!projection_json_matches(&cell(100), &cell(200)).unwrap());
+}

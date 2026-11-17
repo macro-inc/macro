@@ -1,5 +1,6 @@
 //! read_back_storage_nulls reads a creator's export as a Source importer holds it:
-//! only an absent storage-null key becomes null; present values never change.
+//! an absent storage-null key becomes null, and the policy's declared stored-normalized
+//! fields take Source's import values; every other present value is unchanged.
 use super::*;
 
 struct TablePolicy;
