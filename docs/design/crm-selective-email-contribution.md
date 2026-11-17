@@ -305,11 +305,37 @@ Before activation, drain legacy unversioned work or durably replace its unfinish
 eligible history through the current authorized scheduling path. Never attach
 the current incarnation to an old job at consumption time.
 
+Historical work walks raw mailbox contacts in pages of 100 through the existing
+`(link_id, email_address)` index. Empty or ineligible contacts advance the cursor;
+sent-capable contacts run first, then a second pass includes received-only
+contacts. Every effect recomputes current eligible dates. Checkpoints compare
+the captured generation, work ID, pass and address before publishing the next
+page. A modern outbox row remains as a recovery signal, due again after 15
+minutes if no page advances it; completion deletes only its exact generation.
+Legacy history stays unversioned and may run only while consent identity is
+null. New live-mail notifications are explicitly marked as reconciliation hints
+and use current stored eligibility; they carry no historical grant. Initializing
+a consent in the API phase must atomically schedule modern replacement history
+before retiring legacy work. Rollout must drain old unmarked live notifications.
+
 A source-record edit may affect many policies. Persist reconciliation work with
 that edit, use indexed reverse references and bounded fan-out, and coalesce
 backfills per member. Do not make one contact edit synchronously scan every
 mailbox. Authorization always resolves live data; asynchronous reconciliation
-only refreshes counts/history/population, never grants stale access.
+only refreshes counts/history/population, never grants stale access. The worker
+records one content-free `live_targets_changed` system audit entry per affected
+member and event; retries neither duplicate that entry nor restart completed work.
+
+Use application transaction hooks for contact address/parent edits, contact and
+company hiding, hide cascades, and sync deletion. Probe the rule-target reverse
+indexes before recording events; bulk deletion first checks for any team rule
+references and preserves its existing SQL when there are none. Row triggers on
+all CRM imports and enrichment were rejected after measuring per-row overhead.
+New IDs cannot already be selected, and metadata-only changes do not change
+matching. Direct SQL edits and future domain/address writers must use the same
+transactional hook. Before activation, audit every live matching source, including
+member role changes, and complete any missing event producers. Preview context
+invalidation belongs with the preview API in 3c.
 
 **Alternatives rejected:** destructive cleanup loses shared/manual work; future-
 only rules leave old mail readable; canceling every stale job silently loses
@@ -523,8 +549,16 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    - **3c: own-member and agent APIs.** Add validation, CAS/idempotency, verified
      audit provenance, direct activation and bounded asynchronous count preview.
      Keep private controls independent of CRM viewing. Regenerate OpenAPI/storage
-     SDK outputs and record SDK coverage deferrals. Refuse activation on a false
+     SDK outputs and record SDK coverage deferrals. Replace the dormant
+     `PopulateCrmPolicy` email E2E deferral with a full-stack generation/retry
+     scenario before activation. Refuse activation on a false
      or unavailable flag; stored restrictions, inspection and withdrawal remain.
+     Close the first-activation/bulk-deletion race before exposing activation:
+     lock and revalidate live targets, and make teardown observe references
+     committed while it waited for source rows. The dormant worker's early
+     no-reference shortcut and same-statement deletion/reference snapshot do
+     not provide that guarantee. Do not hold the team privacy lock through bulk
+     teardown: its existing long cascades would delay or fail withdrawal.
 
    Merge 3a, then 3b, then 3c. These depend on PR 2 and confirmed reader/ingestion
    compatibility. The unmatched discovery bound and million-thread mailbox tier
@@ -550,11 +584,12 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    An overflow must never authorize a truncated target set, and falling back
    to a dense record stream is not a sufficient bound. Retain the deterministic
    all-mail/selected snapshot-transition regressions added in PR 2.
-   CRM-scoped email search is a fourth contribution reader: the team-search
-   follow-up to [#11067](https://github.com/macro-inc/macro/pull/11067) must
-   enforce the same consent, selected-rule and thread-exclusion eligibility as
-   `crm_email_thread_allowed`. Add it to the cross-reader parity suite before
-   selected contribution can be activated. This storage phase adds no search code.
+   CRM-scoped email search is deferred: email search rejects CRM filters with
+   HTTP 400 and reads no team mail. **If CRM-scoped search ships before selected
+   activation**, it becomes a fourth contribution reader and must enforce the
+   same consent, selected-rule and thread-exclusion eligibility as
+   `crm_email_thread_allowed`, with a cross-reader parity test before activation.
+   This worker phase adds no search code.
    Depends on all prior PRs. Enabling flags or deployment requires separate
    authorization.
 

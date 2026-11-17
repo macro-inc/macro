@@ -392,7 +392,13 @@ async fn replacing_work_fences_old_completion_and_preserves_a_retried_checkpoint
         )
         .await?
         .expect("new version");
-    assert!(tx.work().await?.is_none());
+    assert_ne!(
+        tx.work()
+            .await?
+            .expect("newly granted history is scheduled")
+            .work_id,
+        second
+    );
     assert!(!tx.complete_work(second, generation).await?);
     // Even reusing a stable request ID after a version change must not let
     // an old worker delete the new generation's replacement.
@@ -400,10 +406,11 @@ async fn replacing_work_fences_old_completion_and_preserves_a_retried_checkpoint
     // Simulate a generation transfer by a future worker: completion must still
     // compare the old token even if the durable request identity was retained.
     sqlx::query!(
-        "UPDATE crm_email_policy_work SET policy_version = $3 WHERE team_id = $1 AND user_id = $2",
+        "UPDATE crm_email_policy_work SET policy_version = $3, work_id = $4 WHERE team_id = $1 AND user_id = $2",
         team,
         OWNER,
-        tx.state().generation.policy_version
+        tx.state().generation.policy_version,
+        second
     )
     .execute(&pool)
     .await?;
@@ -428,7 +435,9 @@ async fn replacing_work_fences_old_completion_and_preserves_a_retried_checkpoint
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_outbox_and_grants_do_not_adopt_modern_work(pool: PgPool) -> anyhow::Result<()> {
+async fn modern_work_captures_grants_and_survives_outbox_publication(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     let (team, link, repo) = setup(&pool).await?;
     let mut tx = repo
         .open_email_policy(
@@ -448,17 +457,17 @@ async fn legacy_outbox_and_grants_do_not_adopt_modern_work(pool: PgPool) -> anyh
         sqlx::query_scalar!("SELECT count(*) FROM crm_email_backfill_outbox")
             .fetch_one(&pool)
             .await?,
-        Some(0)
+        Some(1)
     );
     consent_to_mailbox(&pool, team, link).await?;
     let outbox = sqlx::query!("SELECT link_id, consent_incarnation, policy_version, work_id FROM crm_email_backfill_outbox WHERE team_id = $1 AND user_id = $2", team, OWNER).fetch_one(&pool).await?;
     assert!(
-        outbox.link_id.is_none()
-            && outbox.consent_incarnation.is_none()
-            && outbox.policy_version.is_none()
-            && outbox.work_id.is_none()
+        outbox.link_id == Some(link)
+            && outbox.consent_incarnation == Some(generation.consent_incarnation)
+            && outbox.policy_version == Some(generation.policy_version + 1)
+            && outbox.work_id.is_some()
     );
-    let error = sqlx::query!("UPDATE crm_email_backfill_outbox SET consent_incarnation = $3 WHERE team_id = $1 AND user_id = $2", team, OWNER, generation.consent_incarnation).execute(&pool).await.unwrap_err();
+    let error = sqlx::query!("UPDATE crm_email_backfill_outbox SET link_id = NULL WHERE team_id = $1 AND user_id = $2 AND consent_incarnation = $3", team, OWNER, generation.consent_incarnation).execute(&pool).await.unwrap_err();
     assert_eq!(
         error.as_database_error().and_then(|e| e.code()).as_deref(),
         Some("23514")
@@ -478,7 +487,7 @@ async fn legacy_outbox_and_grants_do_not_adopt_modern_work(pool: PgPool) -> anyh
         )
         .fetch_one(&pool)
         .await?,
-        work
+        outbox.work_id.unwrap()
     );
     assert_eq!(
         sqlx::query_scalar!(
