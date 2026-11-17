@@ -1,20 +1,9 @@
 use super::ABOUT_MACRO;
 
-/// The section the model answers "how do I run Claude Code or Codex through
-/// macrod?" from. A cached copy of an older docs page once taught the model a
-/// webhook design that no longer exists; this page must give the current steps.
-fn macrod_section() -> &'static str {
-    let start = ABOUT_MACRO
-        .find("## Running Claude Code or Codex through macrod")
-        .expect("the about page has a macrod section");
-    let rest = &ABOUT_MACRO[start..];
-    let end = rest[3..].find("\n## ").map_or(rest.len(), |end| end + 3);
-    &rest[..end]
-}
-
+/// A cached copy of an older docs page once taught the model a webhook
+/// design that no longer exists; the about page must give the current steps.
 #[test]
 fn macrod_section_gives_the_current_setup_steps() {
-    let section = macrod_section();
     for step in [
         "crates/coding_agent_worker/install/install.sh",
         "Run `macrod`",
@@ -24,6 +13,7 @@ fn macrod_section_gives_the_current_setup_steps() {
         "Codex in herdr",
         "**Create and pair**",
         "**Settings → Machines → New machine**",
+        "**Look up**",
         "**Approve**",
         "**Settings → Agents**",
         "**Add agent**",
@@ -32,7 +22,7 @@ fn macrod_section_gives_the_current_setup_steps() {
         "On a cloud server",
         "https://macro.com/docs/AI/bring-your-own",
     ] {
-        assert!(section.contains(step), "macrod section is missing {step:?}");
+        assert!(ABOUT_MACRO.contains(step), "about page is missing {step:?}");
     }
 }
 
