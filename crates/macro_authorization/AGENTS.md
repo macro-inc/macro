@@ -75,9 +75,9 @@ An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`
 naming the grant and the agent holding it. `AccountHolderOrInternal` is
 `UserOrInternal` minus that credential and `ScopedMacroApiJwt` (a Macro API token
-that signs `agent_scope`, held by a scoped code-mode run): use it on anything that
-mints credentials, changes who can sign in, deletes the account, or changes its
-managers.
+that signs `agent_scope`, held by a scoped code-mode run or a routine dry run):
+use it on anything that mints credentials, changes who can sign in, deletes
+the account, or changes its managers.
 
 ## Gotchas
 

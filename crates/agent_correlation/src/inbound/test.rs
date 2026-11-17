@@ -307,6 +307,8 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
             StatusCode::FORBIDDEN,
         ),
         ("no_send", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        ("dry_run", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        ("dry_run", "GET", "/email/threads", StatusCode::OK),
         ("newer", "POST", "/email/messages", StatusCode::FORBIDDEN),
         ("newer", "GET", "/email/threads", StatusCode::OK),
     ] {
@@ -325,8 +327,8 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
             .unwrap();
         assert_eq!(response.status(), expected, "{scope} {method} {path}");
     }
-    // Only the one request inside its signed scope reached the lookup.
-    assert_eq!(repository.calls.load(Ordering::SeqCst), 1);
+    // Only the two requests inside their signed scope reached the lookup.
+    assert_eq!(repository.calls.load(Ordering::SeqCst), 2);
 }
 
 /// A handler sees the scope stored with the correlation, else the one the

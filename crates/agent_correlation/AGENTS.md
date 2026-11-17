@@ -22,7 +22,10 @@ code, not in its prompt. The harness also signs the scope into the credential
   someone else or start work with the person's full access (agent sessions,
   session control, tool approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
-  credentials). The harness tests
+  credentials); `dry_run` (a routine step's dry run, signed with no
+  correlation): reads by method and `POST_READS`, nothing else, held to the
+  SDK catalog by the harness test `the_dry_run_scope_is_every_sdk_read_and_no_write`.
+  The harness tests
   `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` (every
   send-like SDK write is refused or reviewed, and every reviewed one is still
   allowed) and

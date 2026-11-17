@@ -6,6 +6,7 @@ use crate::domain::released_attachments::{
 };
 use sqlx::PgPool;
 
+mod orphans;
 #[cfg(test)]
 mod test;
 
@@ -116,14 +117,70 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
         .fetch_all(&mut *transaction)
         .await?;
 
-        // Adopted: moved into a folder, shared (a grant to anyone but the owner,
-        // or sharing changed after import), or edited (a second version, a PDF
-        // highlight or placed comment, a comment thread). The OFFSET fences keep
-        // each check a probe per document; without them stale statistics turn
-        // a check into a hash of its whole table.
-        let checked = sqlx::query_as!(
-            Release,
-            r#"
+        let checked = classify(&mut *transaction, &existing).await?;
+        let batch = decide(
+            claimed.len(),
+            claimed.len().saturating_sub(existing.len()),
+            checked,
+        );
+
+        if !batch.trashed.is_empty() {
+            trash(&mut transaction, &batch.trashed).await?;
+        }
+        transaction.commit().await?;
+
+        Ok(batch)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn queue(&self) -> Result<ReleaseQueue, Self::Err> {
+        queue_stats(&self.pool).await
+    }
+}
+
+/// The queue's depth, counted up to [`QUEUE_DEPTH_CAP`], and the age of its
+/// oldest row.
+async fn queue_stats<'e>(executor: impl sqlx::PgExecutor<'e>) -> Result<ReleaseQueue, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"
+            SELECT
+                (
+                    SELECT COUNT(*)
+                    FROM (SELECT 1 FROM released_email_attachment_documents LIMIT $1) waiting
+                ) AS "depth!",
+                (
+                    SELECT EXTRACT(EPOCH FROM now() - MIN(released_at))::bigint
+                    FROM released_email_attachment_documents
+                ) AS "oldest_age_seconds"
+            "#,
+        QUEUE_DEPTH_CAP,
+    )
+    .fetch_one(executor)
+    .await?;
+
+    Ok(ReleaseQueue {
+        depth: row.depth,
+        oldest_age_seconds: row.oldest_age_seconds,
+    })
+}
+
+/// What the drain decides about each of `document_ids` that still exists.
+///
+/// It only reads. The drain runs it on the documents it has just locked, so
+/// what it reads is final; the orphan scan runs it on documents it has not
+/// queued yet, to preview the drain.
+async fn classify<'e>(
+    executor: impl sqlx::PgExecutor<'e>,
+    document_ids: &[String],
+) -> Result<Vec<Release>, sqlx::Error> {
+    // Adopted: moved into a folder, shared (a grant to anyone but the owner,
+    // or sharing changed after import), or edited (a second version, a PDF
+    // highlight or placed comment, a comment thread). The OFFSET fences keep
+    // each check a probe per document; without them stale statistics turn
+    // a check into a hash of its whole table.
+    sqlx::query_as!(
+        Release,
+        r#"
             SELECT
                 d.id AS "id!",
                 EXISTS (
@@ -174,60 +231,33 @@ impl ReleasedAttachmentRepo for PgReleasedAttachmentRepo {
                 OFFSET 0
             ) d
             "#,
-            &existing,
-        )
-        .fetch_all(&mut *transaction)
-        .await?;
+        document_ids,
+    )
+    .fetch_all(executor)
+    .await
+}
 
-        let mut batch = ReleasedBatch {
-            claimed: claimed.len(),
-            missing: claimed.len().saturating_sub(existing.len()),
-            ..ReleasedBatch::default()
-        };
-        for release in checked {
-            match release.outcome() {
-                Outcome::Relinked => batch.relinked += 1,
-                Outcome::Trash => batch.trashed.push(release.id),
-                Outcome::KeepAdopted => {
-                    batch.adopted += 1;
-                    batch.kept.push(release.id);
-                }
-                Outcome::KeepInTrash => batch.kept.push(release.id),
+/// Sort checked documents by what the drain does with them, for `claimed`
+/// queue rows of which `missing` named no document.
+fn decide(claimed: usize, missing: usize, releases: Vec<Release>) -> ReleasedBatch {
+    let mut batch = ReleasedBatch {
+        claimed,
+        missing,
+        ..ReleasedBatch::default()
+    };
+    for release in releases {
+        match release.outcome() {
+            Outcome::Relinked => batch.relinked += 1,
+            Outcome::Trash => batch.trashed.push(release.id),
+            Outcome::KeepAdopted => {
+                batch.adopted += 1;
+                batch.kept.push(release.id);
             }
+            Outcome::KeepInTrash => batch.kept.push(release.id),
         }
-
-        if !batch.trashed.is_empty() {
-            trash(&mut transaction, &batch.trashed).await?;
-        }
-        transaction.commit().await?;
-
-        Ok(batch)
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn queue(&self) -> Result<ReleaseQueue, Self::Err> {
-        let row = sqlx::query!(
-            r#"
-            SELECT
-                (
-                    SELECT COUNT(*)
-                    FROM (SELECT 1 FROM released_email_attachment_documents LIMIT $1) waiting
-                ) AS "depth!",
-                (
-                    SELECT EXTRACT(EPOCH FROM now() - MIN(released_at))::bigint
-                    FROM released_email_attachment_documents
-                ) AS "oldest_age_seconds"
-            "#,
-            QUEUE_DEPTH_CAP,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(ReleaseQueue {
-            depth: row.depth,
-            oldest_age_seconds: row.oldest_age_seconds,
-        })
-    }
+    batch
 }
 
 /// What a document's own trash writes (`PgDocumentRepo::soft_delete_document`),
