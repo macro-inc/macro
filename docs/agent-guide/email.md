@@ -1531,7 +1531,11 @@ gives the full send time, with secondary **View message** on the left and primar
 **Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
-inline reply back into view.
+inline reply back into view. The notice and its Undo stay while the thread opens
+after the schedule, on a phone too: the composer there starts from the schedule
+just made, even when its first read of the draft predates it, and raises no
+**Email scheduled for … Cancel the schedule to edit.** alert, which is for a
+schedule made in another tab or device.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
 subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
