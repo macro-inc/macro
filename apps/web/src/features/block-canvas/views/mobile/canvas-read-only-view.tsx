@@ -16,7 +16,7 @@ function MobileCanvasReadOnlyLayout() {
     <>
       <CanvasReadOnlyParts.Surface />
       <CanvasReadOnlyParts.Presentation />
-      <MobileCanvasChrome>
+      <MobileCanvasChrome frame={view.frameWithin}>
         <div class="flex items-center gap-(--mobile-chrome-gap)">
           <MobileCanvasViewButton
             scale={view.scale()}

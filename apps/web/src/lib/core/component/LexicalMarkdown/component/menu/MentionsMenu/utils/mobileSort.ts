@@ -12,8 +12,8 @@ const TOP_USERS = 2;
 
 /**
  * The blended sort decides where the other candidates sit among docs and
- * channels; they fill those slots in candidate order, so people stay ahead of
- * agents as they do in desktop's People bucket.
+ * channels; they fill those slots in candidate order, so phones keep the order
+ * of desktop's People bucket.
  */
 export function sortMobileMentions(
   items: MentionItem[],

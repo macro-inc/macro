@@ -253,7 +253,16 @@ impl OutlookEmulator {
         seed: Seed,
         options: Options,
     ) -> Result<Self, StartError> {
-        let listener = TcpListener::bind(address).await?;
+        Self::start_with_listener(TcpListener::bind(address).await?, seed, options)
+    }
+
+    /// Starts an emulator on a listener the caller bound, for a caller that
+    /// picks its own port. Call it inside a Tokio runtime.
+    pub fn start_with_listener(
+        listener: TcpListener,
+        seed: Seed,
+        options: Options,
+    ) -> Result<Self, StartError> {
         let address = listener.local_addr()?;
         let mut state = State::new(options.allow_http_notification_urls);
         state.apply_seed(&seed)?;

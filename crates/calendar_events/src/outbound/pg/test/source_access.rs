@@ -59,6 +59,136 @@ async fn pre_migration_sources_force_a_full_refresh_before_team_readiness(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_source_a_full_snapshot_cannot_rewrite_keeps_later_polls_incremental(pool: PgPool) {
+    let owner = "macro|stale-source@example.com";
+    let link_id = insert_link(&pool, owner).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = google_job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let provider_calendar = ProviderCalendar {
+        provider_calendar_id: "primary".to_owned(),
+        name: "Primary".to_owned(),
+        description: None,
+        time_zone: Some("UTC".to_owned()),
+        color: None,
+        access_role: Some("owner".to_owned()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: Vec::new(),
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar.clone())
+        .await
+        .unwrap()
+        .id;
+    let provider = (account_id, calendar_id);
+    let stored = timed_upsert(owner, link_id, provider, "stale@example.com", "Stored", 2);
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::GoogleBackfill {
+            key,
+            lease_token,
+            upsert: stored,
+        })
+        .await
+        .unwrap()
+        .event_id;
+    // The stored copy predates the role certificate, as the access-role
+    // migration left every source.
+    sqlx::query!(
+        "UPDATE calendar_event_sources SET provider_access_role = NULL WHERE event_id = $1",
+        event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // The full snapshot reads an older copy than the stored one, so the
+    // freshness guard keeps the stored copy and its unverified role.
+    let range = OccurrenceRange::historical_sync(Utc::now().trunc_subsecs(6));
+    let older = timed_upsert(owner, link_id, provider, "stale@example.com", "Older", 1);
+    repo.upsert_event(CalendarEventWrite::GoogleBackfill {
+        key,
+        lease_token,
+        upsert: older,
+    })
+    .await
+    .unwrap();
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "snapshot-token".to_owned(),
+            observed_provider_event_ids: Some(vec!["provider-stale@example.com".to_owned()]),
+            materialized_range: Some(range.clone()),
+            cancelled_provider_event_ids: Vec::new(),
+        },
+        1,
+    )
+    .await
+    .unwrap();
+
+    // Another full read returns the same older copy, so the next poll keeps
+    // the token instead of rebuilding the calendar again.
+    let next_poll = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar.clone())
+        .await
+        .unwrap();
+    assert_eq!(next_poll.sync_token.as_deref(), Some("snapshot-token"));
+    assert_eq!(
+        next_poll.sync_plan(&range),
+        crate::domain::models::GoogleSyncPlan::Incremental
+    );
+    let role = sqlx::query_scalar!(
+        "SELECT provider_access_role FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(role.is_none(), "the unrewritten source stays ineligible");
+
+    // A copy written under another role after that commit has not been read
+    // back under the current role yet, so it still earns a full snapshot.
+    let mut delayed = timed_upsert(owner, link_id, provider, "stale@example.com", "Delayed", 3);
+    delayed.source.details_mut().observed_access_role = Some("reader".to_owned());
+    repo.upsert_event(CalendarEventWrite::UserMutation(delayed))
+        .await
+        .unwrap();
+    let after_delayed = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar)
+        .await
+        .unwrap();
+    assert!(after_delayed.sync_token.is_none());
+    assert_eq!(
+        after_delayed.sync_plan(&range),
+        crate::domain::models::GoogleSyncPlan::FullSnapshot
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn role_change_requires_a_new_snapshot_without_changing_event_identity(pool: PgPool) {
     let owner = "macro|role-change@example.com";
     let link = insert_link(&pool, owner).await;

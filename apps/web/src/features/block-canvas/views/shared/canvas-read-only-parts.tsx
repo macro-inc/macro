@@ -26,6 +26,7 @@ import { ArtifactPresentation } from '../artifact-presentation';
 import { CanvasArtifactView } from '../artifact-view';
 import { CanvasMediaView } from '../embedded-items';
 import { CanvasTextContent } from '../text-content';
+import { createCanvasFraming } from './canvas-framing';
 
 export type CanvasReadOnlyViewProps = {
   editor: GraphicsEditor;
@@ -55,10 +56,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
   );
   onCleanup(unsubscribeCamera);
 
-  const viewportSize = () => ({
-    width: host?.clientWidth ?? 0,
-    height: host?.clientHeight ?? 0,
-  });
+  const framing = createCanvasFraming(editor, () => host);
   const focus = () =>
     host
       ?.querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
@@ -68,6 +66,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
+      framing.watchPresses(element);
     },
     host: () => host,
     tool,
@@ -79,14 +78,11 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     hasSelection,
     focus,
     zoom(factor: number) {
-      const { width, height } = viewportSize();
-      editor.zoomAt(
-        { x: width / 2, y: height / 2 },
-        editor.getCamera().scale * factor
-      );
+      editor.zoomAt(framing.centre(), editor.getCamera().scale * factor);
     },
-    fit: () => editor.fitScene(viewportSize()),
-    fitSelection: () => editor.fitSelection(viewportSize()),
+    fit: framing.fit,
+    fitSelection: framing.fitSelection,
+    frameWithin: framing.frameWithin,
     activeArtifact,
     setActiveArtifact,
     presenting,

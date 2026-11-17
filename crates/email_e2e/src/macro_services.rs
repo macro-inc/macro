@@ -19,7 +19,6 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use rootcause::prelude::*;
-use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -167,7 +166,7 @@ impl MacroServices {
             document_storage: document_storage.clone(),
         };
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the Macro services stand-in")?;
         let address = listener.local_addr()?;
