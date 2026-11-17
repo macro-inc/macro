@@ -357,6 +357,7 @@ impl World {
                         mentions: vec![],
                     },
                     reply_to: None,
+                    user_confirmation: None,
                 },
                 SendAuthority::Human,
             )
@@ -792,6 +793,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
                     caption: Some("return label".to_owned()),
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::Human,
         )
