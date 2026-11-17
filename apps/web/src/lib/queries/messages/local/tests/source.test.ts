@@ -3,11 +3,14 @@ import type {
   MessageThread,
   MessageTimelinePage,
 } from '@service-storage/messages';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { onlineManager } from '@tanstack/solid-query';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  holdUnheldReads,
   loadLocalChannelThread,
   loadLocalChannelTimelinePage,
 } from '../source';
+import { noteUnheldRead, resetUnheldReads, unheldReads } from '../unheld-reads';
 import { CHANNEL_ID } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
@@ -56,7 +59,11 @@ beforeEach(() => {
   mocks.channelCacheHost.mockReturnValue(host);
   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
   mocks.channelCacheAnswered.mockReturnValue(true);
+  localStorage.clear();
+  resetUnheldReads();
 });
+
+afterEach(() => onlineManager.setOnline(true));
 
 describe('loadLocalChannelTimelinePage', () => {
   it('answers with the device page when no push is ahead of it', async () => {
@@ -163,5 +170,114 @@ describe('loadLocalChannelThread', () => {
       CHANNEL_ID,
       'root'
     );
+  });
+
+  it('notes a thread REST answered until the device is given it', async () => {
+    mocks.channelCacheAnswered.mockReturnValue(false);
+    // The host is still starting: the hold has not settled.
+    mocks.loadChannelThread.mockReturnValue(new Promise(() => {}));
+
+    await loadLocalChannelThread(CHANNEL_ID, 'root');
+
+    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID, rootId: 'root' }]);
+  });
+});
+
+describe('holdUnheldReads', () => {
+  const leftPage = { channelId: 'left-channel' };
+  const leftThread = { channelId: CHANNEL_ID, rootId: 'left-root' };
+  // Noted by a page that is gone: in storage, not in this page's memory.
+  const leave = (...reads: Array<{ channelId: string; rootId?: string }>) => {
+    for (const read of reads) noteUnheldRead(read);
+    resetUnheldReads();
+  };
+
+  it('has the device hold the pages and threads a page that is gone left noted', async () => {
+    leave(leftPage, leftThread);
+    let stored = false;
+    mocks.loadChannelPage.mockResolvedValue({
+      page: page('server'),
+      source: 'server',
+      serverSeq: '9',
+      stored: (async () => {
+        await Promise.resolve();
+        stored = true;
+        return '9';
+      })(),
+    });
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+
+    await holdUnheldReads(host);
+
+    expect(mocks.loadChannelPage).toHaveBeenCalledExactlyOnceWith(host, {
+      channelId: 'left-channel',
+      limit: 50,
+    });
+    expect(stored).toBe(true);
+    expect(mocks.loadChannelThread).toHaveBeenCalledExactlyOnceWith(
+      host,
+      CHANNEL_ID,
+      'left-root'
+    );
+    expect(unheldReads()).toEqual([]);
+  });
+
+  it('leaves the reads this page is still storing, and runs one pass at a time', async () => {
+    leave(leftThread);
+    noteUnheldRead(leftPage);
+    let finish = () => {};
+    mocks.loadChannelThread.mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ thread: thread('s'), source: 'server' });
+      })
+    );
+
+    const first = holdUnheldReads(host);
+    const second = holdUnheldReads(host);
+    finish();
+    await Promise.all([first, second]);
+
+    expect(mocks.loadChannelThread).toHaveBeenCalledTimes(1);
+    expect(mocks.loadChannelPage).not.toHaveBeenCalled();
+    expect(unheldReads()).toEqual([leftPage]);
+  });
+
+  it('keeps them noted without a connection', async () => {
+    leave(leftPage, leftThread);
+    onlineManager.setOnline(false);
+
+    await holdUnheldReads(host);
+
+    expect(mocks.loadChannelPage).not.toHaveBeenCalled();
+    expect(unheldReads()).toEqual([leftPage, leftThread]);
+  });
+
+  it('keeps a read noted when the connection drops during it', async () => {
+    leave(leftThread);
+    mocks.loadChannelThread.mockImplementation(async () => {
+      onlineManager.setOnline(false);
+      throw new Error('Failed to fetch');
+    });
+
+    await holdUnheldReads(host);
+
+    expect(unheldReads()).toEqual([leftThread]);
+  });
+
+  it('gives up a read the server refuses and carries on', async () => {
+    leave(leftPage, leftThread);
+    mocks.loadChannelPage.mockRejectedValue(new Error('FORBIDDEN'));
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('device'),
+      source: 'device',
+    });
+
+    await holdUnheldReads(host);
+
+    expect(mocks.loadChannelThread).toHaveBeenCalledTimes(1);
+    expect(unheldReads()).toEqual([]);
   });
 });

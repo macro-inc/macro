@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   rereadChannelsAfterStorageReset: vi.fn(),
   resetChannelSync: vi.fn(),
   storeUnstoredPushes: vi.fn(async () => {}),
+  holdUnheldReads: vi.fn(async () => {}),
   resetPendingChannelPages: vi.fn(),
   holdUnqueuedSendsPage: vi.fn(),
   resendUnqueuedSends: vi.fn(async (..._args: unknown[]) => 0),
@@ -37,6 +38,7 @@ vi.mock('../catch-up', () => ({
   resetChannelSync: mocks.resetChannelSync,
   storeUnstoredPushes: mocks.storeUnstoredPushes,
 }));
+vi.mock('../source', () => ({ holdUnheldReads: mocks.holdUnheldReads }));
 vi.mock('../pages', () => ({
   resetPendingChannelPages: mocks.resetPendingChannelPages,
 }));
@@ -108,6 +110,7 @@ describe('useChannelCache', () => {
 
     expect(mocks.holdUnqueuedSendsPage).toHaveBeenCalled();
     expect(mocks.storeUnstoredPushes).toHaveBeenCalledWith(host);
+    expect(mocks.holdUnheldReads).toHaveBeenCalledWith(host);
     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
       .calls[0] as [unknown, string, (send: unknown, at: string) => void];
     expect([resendHost, sender]).toEqual([host, 'sender-1']);
@@ -143,6 +146,7 @@ describe('useChannelCache', () => {
     // Held so another tab starting now does not post the same sends.
     expect(mocks.holdUnqueuedSendsPage).toHaveBeenCalled();
     expect(mocks.storeUnstoredPushes).not.toHaveBeenCalled();
+    expect(mocks.holdUnheldReads).not.toHaveBeenCalled();
     expect(mocks.resendUnqueuedSends).toHaveBeenCalledOnce();
     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
       .calls[0] as [unknown, string, (send: unknown, at: string) => void];

@@ -34,6 +34,7 @@ import {
   channelMessageKey,
   cursorFromSortKey,
 } from './sort-key';
+import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
 
 export type ChannelPageHost = Pick<
   CacheHost,
@@ -434,7 +435,10 @@ async function loadPage(
     heldChannels.delete(request.channelId);
   }
   if (device?.kind === 'page') {
-    if (latest) heldChannels.add(request.channelId);
+    if (latest) {
+      heldChannels.add(request.channelId);
+      forgetUnheldRead({ channelId: request.channelId });
+    }
     span.setAttr('page.source', 'device');
     span.setAttr('page.entries', device.page.entries.length);
     return {
@@ -445,6 +449,9 @@ async function loadPage(
   }
   const { page: server, cached } = fetched ?? (await fetchServer());
   const coverage = serverPageCoverage(request, server);
+  // The views show this page before the device holds it, and the host may
+  // still be starting; a reload meanwhile leaves it to the next page.
+  if (latest && coverage) noteUnheldRead({ channelId: request.channelId });
   const store = async (): Promise<string | null> => {
     await cached;
     // The page won a race against a host that had not answered: record it
@@ -452,6 +459,7 @@ async function loadPage(
     const held = device ?? (await read);
     if (held.kind === 'unsupported') {
       markChannelCacheUnsupported(cacheHost);
+      forgetUnheldRead({ channelId: request.channelId });
       return null;
     }
     markChannelCacheAnswered(cacheHost);
@@ -462,7 +470,10 @@ async function loadPage(
       touchedAtMs: (options.now ?? Date.now)(),
     });
     if (committed.kind !== 'committed') return held.storedSeq;
-    if (latest && coverage) heldChannels.add(request.channelId);
+    if (latest && coverage) {
+      heldChannels.add(request.channelId);
+      forgetUnheldRead({ channelId: request.channelId });
+    }
     return committed.channelSeq;
   };
   const stored = store();

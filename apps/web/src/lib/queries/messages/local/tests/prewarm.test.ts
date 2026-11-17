@@ -1,3 +1,4 @@
+import { onlineManager } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resetChannelSync } from '../catch-up';
 import type { FetchChannelServerPage } from '../pages';
@@ -17,7 +18,10 @@ vi.mock('../../../client', () => ({
   queryClient: { invalidateQueries: vi.fn() },
 }));
 
-afterEach(() => resetChannelSync());
+afterEach(() => {
+  resetChannelSync();
+  onlineManager.setOnline(true);
+});
 
 describe('runChannelPrewarm', () => {
   const signal = () => new AbortController().signal;
@@ -95,6 +99,22 @@ describe('runChannelPrewarm', () => {
       },
     });
     expect(order).toEqual(['ready', 'fetch a', 'ready', 'fetch b', 'ready']);
+  });
+
+  it('asks for nothing without a connection', async () => {
+    onlineManager.setOnline(false);
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const fetchPage = vi.fn<FetchChannelServerPage>();
+
+    const outcome = await runChannelPrewarm(host, ['a', 'b'], {
+      signal: signal(),
+      delayMs: 0,
+      fetchPage,
+    });
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(host.reads).toEqual([]);
+    expect(outcome).toMatchObject({ fetched: 0, failed: 0 });
   });
 
   it('carries on past a channel that fails', async () => {

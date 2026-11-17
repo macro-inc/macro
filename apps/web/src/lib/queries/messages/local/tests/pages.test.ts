@@ -15,6 +15,7 @@ import {
   serverPageCoverage,
 } from '../pages';
 import { channelMessageKey, cursorFromSortKey } from '../sort-key';
+import { resetUnheldReads, unheldReads } from '../unheld-reads';
 import {
   CHANNEL_ID,
   devicePage,
@@ -53,7 +54,11 @@ const startedHost: typeof fakeHost = (...args) => {
 };
 
 describe('loadChannelPage', () => {
-  beforeEach(() => resetPendingChannelPages());
+  beforeEach(() => {
+    resetPendingChannelPages();
+    localStorage.clear();
+    resetUnheldReads();
+  });
 
   it('answers a channel known to be held from the device without a request', async () => {
     const newest = graphqlMessage(3);
@@ -222,6 +227,48 @@ describe('loadChannelPage', () => {
     expect(loaded).toMatchObject({ source: 'device' });
     expect(fetchPage).not.toHaveBeenCalled();
   });
+  it('notes a latest page the views show until the device holds it', async () => {
+    const message = graphqlMessage(1);
+    let commit = () => {};
+    const committing = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    const host = startedHost([devicePage([], { covered: false, seq: null })]);
+    const record = host.channelTimelineCommit.bind(host);
+    host.channelTimelineCommit = async (args) => {
+      await committing;
+      return record(args);
+    };
+
+    const loaded = await loadChannelPage(
+      host,
+      { channelId: CHANNEL_ID, limit: 50 },
+      { fetchPage: async () => fetched(serverPage({ entries: [message] })) }
+    );
+
+    if (typeof loaded === 'string' || loaded.source !== 'server') {
+      throw new Error('expected a server page');
+    }
+    // A reload here leaves the page to the next one.
+    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID }]);
+    commit();
+    await loaded.stored;
+    expect(unheldReads()).toEqual([]);
+  });
+
+  it('does not note an older page', async () => {
+    const message = graphqlMessage(1);
+    const host = startedHost([devicePage([], { covered: false, seq: null })]);
+
+    await loadChannelPage(
+      host,
+      { channelId: CHANNEL_ID, limit: 50, before: graphqlMessage(5).sortKey },
+      { fetchPage: async () => fetched(serverPage({ entries: [message] })) }
+    );
+
+    expect(unheldReads()).toEqual([]);
+  });
+
   it('shows the server page when the device is still starting, then records it', async () => {
     const message = graphqlMessage(1);
     const host = fakeHost([devicePage([], { covered: false, seq: null })]);

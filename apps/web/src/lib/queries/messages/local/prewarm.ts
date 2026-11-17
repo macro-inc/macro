@@ -1,11 +1,12 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { MAX_EVICTED_CHANNELS } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
+import { onlineManager } from '@tanstack/solid-query';
 import { catchUpAndRefresh, type FetchChannelChanges } from './catch-up';
 import { type FetchChannelServerPage, loadChannelPage } from './pages';
 
 /** The page a channel opens with. */
-const PREWARM_PAGE_SIZE = 50;
+export const PREWARM_PAGE_SIZE = 50;
 const CHANNEL_DELAY_MS = 500;
 /** Channels not opened for this long leave the device. */
 export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
@@ -70,6 +71,9 @@ export async function runChannelPrewarm(
     for (const channelId of channelIds) {
       await options.ready?.(signal);
       if (signal.aborted) break;
+      // Offline every channel would fail; the pass after the reconnect
+      // starts over.
+      if (!onlineManager.isOnline()) break;
       try {
         const loaded = await loadChannelPage(
           host,
