@@ -153,12 +153,14 @@ export function useFocusEmailSource(
   trackFocusTabVisits(
     {
       showing: () => state.tab === 'focus',
-      // Rows from the cache count: they are what the tab shows.
+      fetching: () => focus.isFetching,
+      failed: () => focus.error != null,
       loaded: () =>
         tabAvailability('focus') === 'on' &&
         focus.data !== undefined &&
         ready(),
-      threads: () => emails().length,
+      // Threads marked Done here stay in the projection until the next read.
+      threads: () => emails().filter((email) => email.done !== true).length,
       rows: () => built().filter((row) => row.kind === 'entity').length,
       narrowed: () => isFocusListNarrowed(state),
       sort: () => state.focusSort,

@@ -201,7 +201,9 @@ export function EmailList(props: EmailListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
-    if (state.tab === 'focus') trackFocusThreadOpen(sourceRow.id);
+    // Activating the thread the pane already shows opens nothing new.
+    if (state.tab === 'focus' && selectedThread()?.id !== sourceRow.entity.id)
+      trackFocusThreadOpen(sourceRow.id);
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;

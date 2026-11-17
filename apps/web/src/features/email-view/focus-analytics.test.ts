@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { isFocusListNarrowed, trackFocusTabVisits } from './focus-analytics';
 
@@ -6,6 +6,8 @@ type Payload = Parameters<Parameters<typeof trackFocusTabVisits>[1]>[0];
 
 function visitHarness() {
   const [showing, setShowing] = createSignal(false);
+  const [fetching, setFetching] = createSignal(false);
+  const [failed, setFailed] = createSignal(false);
   const [loaded, setLoaded] = createSignal(false);
   const [rows, setRows] = createSignal(0);
   const tracked: Payload[] = [];
@@ -13,6 +15,8 @@ function visitHarness() {
     trackFocusTabVisits(
       {
         showing,
+        fetching,
+        failed,
         loaded,
         threads: () => rows() + 2,
         rows,
@@ -23,54 +27,75 @@ function visitHarness() {
     );
     return dispose;
   });
-  return { setShowing, setLoaded, setRows, tracked, dispose };
+  /** Opens the tab and runs its read to the end with `count` rows. */
+  const visit = (count: number, outcome: 'ok' | 'failed' = 'ok') => {
+    batch(() => {
+      setShowing(true);
+      setFetching(true);
+    });
+    batch(() => {
+      setRows(count);
+      setFailed(outcome === 'failed');
+      setLoaded(true);
+      setFetching(false);
+    });
+  };
+  return { setShowing, setFetching, setRows, visit, tracked, dispose };
 }
 
 describe('trackFocusTabVisits', () => {
-  it('counts a visit once, when its list has loaded', () => {
-    const visit = visitHarness();
-    visit.setShowing(true);
-    expect(visit.tracked).toEqual([]);
-    visit.setRows(3);
-    visit.setLoaded(true);
-    expect(visit.tracked).toEqual([
+  it('counts a visit once, when its read returns', () => {
+    const tab = visitHarness();
+    tab.visit(3);
+    expect(tab.tracked).toEqual([
       { rows: 3, threads: 5, narrowed: false, sort: 'recent' },
     ]);
-    // A refetch or a new thread is the same visit.
-    visit.setLoaded(false);
-    visit.setLoaded(true);
-    visit.setRows(4);
-    expect(visit.tracked).toHaveLength(1);
-    visit.dispose();
+    // A refresh or a new thread is the same visit.
+    tab.setFetching(true);
+    tab.setRows(4);
+    tab.setFetching(false);
+    expect(tab.tracked).toHaveLength(1);
+    tab.dispose();
   });
 
   it('counts an empty tab as zero rows', () => {
-    const visit = visitHarness();
-    visit.setLoaded(true);
-    visit.setShowing(true);
-    expect(visit.tracked).toEqual([
+    const tab = visitHarness();
+    tab.visit(0);
+    expect(tab.tracked).toEqual([
       { rows: 0, threads: 2, narrowed: false, sort: 'recent' },
     ]);
-    visit.dispose();
+    tab.dispose();
   });
 
-  it('counts each return to the tab as a new visit', () => {
-    const visit = visitHarness();
-    visit.setLoaded(true);
-    visit.setShowing(true);
-    visit.setShowing(false);
-    visit.setShowing(true);
-    expect(visit.tracked).toHaveLength(2);
-    visit.dispose();
+  it('reports a return visit with its own read, not the rows kept from the last', () => {
+    const tab = visitHarness();
+    tab.visit(0);
+    tab.setShowing(false);
+    // The kept rows are loaded before the new read starts.
+    tab.setShowing(true);
+    expect(tab.tracked).toHaveLength(1);
+    tab.setFetching(true);
+    tab.setRows(6);
+    tab.setFetching(false);
+    expect(tab.tracked.map((payload) => payload.rows)).toEqual([0, 6]);
+    tab.dispose();
   });
 
-  it('does not count a visit that ends before the list loads', () => {
-    const visit = visitHarness();
-    visit.setShowing(true);
-    visit.setShowing(false);
-    visit.setLoaded(true);
-    expect(visit.tracked).toEqual([]);
-    visit.dispose();
+  it('does not count a visit that ends before its read returns', () => {
+    const tab = visitHarness();
+    tab.setShowing(true);
+    tab.setFetching(true);
+    tab.setShowing(false);
+    tab.setFetching(false);
+    expect(tab.tracked).toEqual([]);
+    tab.dispose();
+  });
+
+  it('does not count a visit whose read fails', () => {
+    const tab = visitHarness();
+    tab.visit(2, 'failed');
+    expect(tab.tracked).toEqual([]);
+    tab.dispose();
   });
 });
 
@@ -80,6 +105,15 @@ describe('isFocusListNarrowed', () => {
   it('is false for the whole list', () => {
     expect(isFocusListNarrowed(whole)).toBe(false);
     expect(isFocusListNarrowed({ ...whole, facets: { tags: [] } })).toBe(false);
+  });
+
+  it('ignores Read status and Done, which Focus does not filter by', () => {
+    expect(
+      isFocusListNarrowed({
+        ...whole,
+        facets: { read: ['unread'], done: ['x'] },
+      })
+    ).toBe(false);
   });
 
   it('is true for a search, a filter or an inbox choice', () => {
