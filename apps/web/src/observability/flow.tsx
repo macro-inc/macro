@@ -198,6 +198,12 @@ export interface Interaction {
   readonly span: Span;
   /** Close the window in which new views join this interaction. */
   end(): void;
+  /**
+   * Keep the interaction's span open past `end()` until the returned release
+   * runs, for an action whose work outlasts its input (an animation), without
+   * keeping the join window open for unrelated views and interactions.
+   */
+  hold(): () => void;
 }
 
 export type InteractionOptions = Omit<UiOperationOptions, 'kind'> & {
@@ -247,7 +253,7 @@ export function beginInteraction(
     },
   };
   openInteraction = interaction;
-  return { span: node.span, end: interaction.close };
+  return { span: node.span, end: interaction.close, hold: node.hold };
 }
 
 function joinInteraction(

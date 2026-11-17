@@ -3,17 +3,20 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import X from '@icon/system/regular/x.svg';
 import { type GraphicsEditor, presentationOrder } from '@macro-inc/graphics';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { ArtifactFrame } from './artifact-frame';
+import { usePresentation } from '../context/presentation';
+import { SlideStage } from './transitions/slide-stage';
 
-/** Full screen, stepping through the canvas's artifacts in presentation order. */
+/** Full screen, stepping through the canvas's artifacts in presentation order
+ * with each slide's transition. */
 export function ArtifactPresentation(props: {
   editor: GraphicsEditor;
   startId: string;
   onExit: () => void;
 }) {
   let root!: HTMLDivElement;
+  const presentation = usePresentation();
   const [document_, setDocument] = createSignal(props.editor.document);
   onCleanup(props.editor.subscribeDocument(setDocument));
 
@@ -84,23 +87,15 @@ export function ArtifactPresentation(props: {
         class="fixed inset-0 z-modal flex flex-col bg-[black] outline-none"
       >
         <div class="min-h-0 flex-1">
-          <Show when={current()?.id} keyed>
-            {(id) => (
-              <Show when={artifacts().find((item) => item.id === id)}>
-                {(artifact) => (
-                  <ArtifactFrame
-                    html={artifact().geometry.html}
-                    title={artifact().geometry.title}
-                    designWidth={artifact().geometry.designWidth}
-                    designHeight={artifact().geometry.designHeight}
-                    interactive
-                    eager
-                    onKey={handleKey}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
+          <SlideStage
+            document={document_()}
+            slides={artifacts()}
+            current={current()}
+            deckDefault={presentation.deckDefault()}
+            interactive
+            surface="present"
+            onKey={handleKey}
+          />
         </div>
         <div class="flex shrink-0 items-center justify-center gap-2 p-2 text-[white] text-xs">
           <button

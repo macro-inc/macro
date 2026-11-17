@@ -16,6 +16,7 @@ import {
 } from '../core/scene';
 import { canLabel } from '../core/shapes/label';
 import { isShape, isShapeKind, shapePayload } from '../core/shapes/registry';
+import { validSlideTransition } from '../core/slide-transition';
 import type { CanvasForest, NodeData } from './schema';
 
 export function readScene(forest: CanvasForest, rootId: string) {
@@ -84,7 +85,12 @@ function poseGeometry(node: GraphicsItem | undefined) {
   if (!isShape(node)) return null;
   if (node.type === 'text') return { ...node.geometry, content: '' };
   if (node.type === 'artifact') {
-    const { html: _html, presentOrder: _order, ...pose } = node.geometry;
+    const {
+      html: _html,
+      presentOrder: _order,
+      transition: _transition,
+      ...pose
+    } = node.geometry;
     return pose;
   }
   if (canLabel(node)) {
@@ -102,6 +108,9 @@ function restoreRegisters(kind: ShapeKind, geometry: object, data: NodeData) {
       ...geometry,
       html: data.html ?? '',
       presentOrder: data.presentOrder ?? '',
+      ...(validSlideTransition(data.transition)
+        ? { transition: data.transition }
+        : {}),
     };
   if (kind === 'rectangle' || kind === 'ellipse' || kind === 'connector')
     return content !== null && labelStyle
@@ -116,6 +125,22 @@ function artifactRegisters(node: GraphicsItem) {
     html: node.geometry.html,
     presentOrder: node.geometry.presentOrder,
   };
+}
+
+const transitionOf = (node: GraphicsItem | undefined) =>
+  node?.type === 'artifact' ? node.geometry.transition : undefined;
+
+/** Written only when this edit changed it: an unchanged slide keeps whatever
+ * is stored, including a value this client could not read. */
+function writeChangedTransition(
+  nextData: NodeData,
+  old: GraphicsItem | undefined,
+  node: GraphicsItem
+) {
+  const transition = transitionOf(node);
+  if (JSON.stringify(transitionOf(old)) === JSON.stringify(transition)) return;
+
+  nextData.transition = transition ?? null;
 }
 
 function labelStyle(node: GraphicsItem | undefined): NodeData['labelStyle'] {
@@ -194,6 +219,7 @@ export function writeScene(
             labelStyle: labelStyle(node),
             ...appearance,
             ...artifactRegisters(node),
+            transition: transitionOf(node) ?? null,
           };
       if (poseChanged)
         nextData.pose = {
@@ -204,8 +230,10 @@ export function writeScene(
         };
       nextData.textContent = textContent(node);
       nextData.labelStyle = labelStyle(node);
-      if (node.type === 'artifact')
+      if (node.type === 'artifact') {
         Object.assign(nextData, artifactRegisters(node));
+        writeChangedTransition(nextData, old, node);
+      }
       if (isShape(node)) writeChangedAppearance(nextData, old, appearance);
       return { data: nextData, children: project(id) };
     });

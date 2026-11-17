@@ -193,11 +193,18 @@ export async function editCanvas(
               execute: async ({ itemIds, format }) => {
                 context = session.snapshot();
                 return format === 'overview'
-                  ? JSON.stringify(canvasOverview(context.document, itemIds))
+                  ? JSON.stringify(
+                      canvasOverview(
+                        context.document,
+                        itemIds,
+                        context.presentation
+                      )
+                    )
                   : describeCanvas(
                       context.document,
                       itemIds,
-                      context.artifactLibrary
+                      context.artifactLibrary,
+                      context.presentation
                     );
               },
             }),

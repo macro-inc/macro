@@ -287,6 +287,25 @@ describe('TraceFlow', () => {
     expect(operations.at(-1)?.outcome).toBe('painted');
   });
 
+  it('holds an interaction open after its window closes without taking joins', async () => {
+    const transition = beginInteraction('canvas.transition');
+    const release = transition.hold();
+    transition.end();
+    expect(operations).toEqual([
+      { name: 'canvas.transition', outcome: undefined },
+    ]);
+
+    // A later action starts its own trace instead of becoming a phase.
+    beginInteraction('panel.toggle').end();
+    expect(operations.map((operation) => operation.name)).toEqual([
+      'canvas.transition',
+      'panel.toggle',
+    ]);
+
+    release();
+    expect(operations[0]?.outcome).toBe('painted');
+  });
+
   it('makes an interaction begun inside another a phase of it', () => {
     const outer = beginInteraction('app.boot');
     const inner = beginInteraction('navigation');

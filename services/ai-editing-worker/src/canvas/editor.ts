@@ -112,6 +112,15 @@ export class CanvasEditor {
   presentOrder(ids: string[]) {
     this.add({ kind: 'presentOrder', ids });
   }
+  /** The deck default transition; null removes it. */
+  presentationTransition(
+    transition: Extract<
+      CanvasOp,
+      { kind: 'presentationTransition' }
+    >['transition']
+  ) {
+    this.add({ kind: 'presentationTransition', transition });
+  }
   drain(): CanvasOp[] {
     return this.ops.splice(0);
   }

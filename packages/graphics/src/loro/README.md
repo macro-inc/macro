@@ -174,6 +174,19 @@ them in the same update as its scene change.
 Artifact HTML and presentation order use their own `html` and `presentOrder`
 registers, so content edits and moves merge independently. Like text, HTML is one
 whole-string register: concurrent edits to the same artifact keep one version.
+An artifact's slide transition is a JSON `transition` register; null or absent
+inherits the deck default. It is written only when an edit changes it, so clients
+that predate it, or cannot read a stored value, keep it when they rewrite the node;
+an invalid value reads as absent. Clearing such a slide is a no-op for that
+client, since it already reads as having no transition, so its value stays until
+a client that can read it clears or replaces it. The deck default is the `transition` key of the
+`presentation` root map (`backend.presentation`), and `commit` takes a presentation
+edit so that it lands in the same update as a scene change. Like a library entry it
+is a last-writer-wins register that an edit sets outright: writers do not
+conflict-check it against a concurrent change. `commit` stages library and deck
+default writes only after the scene and the presentation edit validate, since Loro
+cannot roll back staged writes and a rejected batch must not leak them into the next
+commit.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
 
 ### Canvas host integration

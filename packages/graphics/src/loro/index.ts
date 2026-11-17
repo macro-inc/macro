@@ -2,7 +2,6 @@ export {
   ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH,
   type ArtifactLibrary,
   type ArtifactLibraryEdit,
-  type ArtifactLibraryKind,
 } from './artifact-library';
 export {
   createLoroGraphicsBackend,
@@ -29,3 +28,8 @@ export {
   presenceItemState,
   presenceRegionOccupants,
 } from './presence-state';
+export {
+  type Presentation,
+  type PresentationEdit,
+  readPresentation,
+} from './presentation';

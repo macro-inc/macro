@@ -12,7 +12,10 @@ import {
   setShapeLabelCommand,
   setTextCommand,
 } from '@macro-inc/graphics';
-import type { ArtifactLibraryEdit } from '@macro-inc/graphics/loro';
+import type {
+  ArtifactLibraryEdit,
+  PresentationEdit,
+} from '@macro-inc/graphics/loro';
 import { plainRichText } from '@macro-inc/lexical-core/canvas-text';
 import { match } from 'ts-pattern';
 import { insertCanvasUserMention } from './mentions';
@@ -45,6 +48,14 @@ export function artifactLibraryEdits(ops: CanvasOp[]): ArtifactLibraryEdit[] {
       return [{ kind: 'components', name: op.name, source: op.html }];
     return [];
   });
+}
+
+/** The batch's last deck default change, committed with its scene change. */
+export function presentationEdit(
+  ops: CanvasOp[]
+): PresentationEdit | undefined {
+  const last = ops.findLast((op) => op.kind === 'presentationTransition');
+  return last && { transition: last.transition };
 }
 
 function label(
@@ -143,6 +154,7 @@ export function prepareCanvasEdit(
                   designWidth: op.designWidth ?? 1280,
                   designHeight: op.designHeight ?? 720,
                   presentOrder: nextPresentOrder(current),
+                  ...(op.transition ? { transition: op.transition } : {}),
                 },
               },
             },
@@ -166,8 +178,13 @@ export function prepareCanvasEdit(
         .with({ kind: 'presentOrder' }, (op) => {
           editor.execute(setPresentationOrderCommand, { ids: op.ids });
         })
-        // Library entries live beside the scene, not in it.
-        .with({ kind: 'defineStyle' }, { kind: 'defineComponent' }, () => {})
+        // Library entries and the deck default live beside the scene, not in it.
+        .with(
+          { kind: 'defineStyle' },
+          { kind: 'defineComponent' },
+          { kind: 'presentationTransition' },
+          () => {}
+        )
         .with({ kind: 'connect' }, (op) => {
           for (const end of [op.start, op.end]) {
             const target = end.binding && current.items[end.binding.targetId];

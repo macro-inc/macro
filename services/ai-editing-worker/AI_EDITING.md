@@ -299,8 +299,10 @@ issuing another mutation.
 The optional `artifacts` body field says the user has the `enable-canvas-artifacts`
 rollout. It adds `artifact-prompt.md` to the system prompt and to ReadCanvas as
 `artifactGuide`, shows artifact source when items are named, and allows the artifact
-SDK operations. Without it those operations fail before committing, and renders show
-artifact titles only. See [Canvas architecture](../../docs/architecture/canvas.md#artifacts).
+SDK operations, including slide transitions (`transition` on `createArtifact` and
+`artifactSource`, and the deck default through `presentationTransition`). ReadCanvas
+and the overview then show each artifact's transition and `deckTransition`. Without
+it those operations fail before committing, and renders show artifact titles only. See [Canvas architecture](../../docs/architecture/canvas.md#artifacts).
 
 ### Canvas direct path and performance
 

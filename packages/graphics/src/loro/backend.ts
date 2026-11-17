@@ -9,6 +9,12 @@ import {
   readArtifactLibrary,
   subscribeArtifactLibrary,
 } from './artifact-library';
+import {
+  applyPresentationEdit,
+  type PresentationEdit,
+  readPresentation,
+  subscribePresentation,
+} from './presentation';
 import { readScene, writeScene } from './scene-mapping';
 import { canvasSchema } from './schema';
 
@@ -138,22 +144,27 @@ function graphicsBackend(
       canUndo: !disposed && canEdit() && history.canUndo(),
       canRedo: !disposed && canEdit() && history.canRedo(),
     }),
-    /** Library edits land in the same update as the scene change. */
+    /** Library and presentation edits land in the same update as the scene
+     * change. */
     commit(
       next: GraphicsDocument,
-      libraryEdits: readonly ArtifactLibraryEdit[] = []
+      libraryEdits: readonly ArtifactLibraryEdit[] = [],
+      presentationEdit?: PresentationEdit
     ) {
       const validated = freezeDocument(next);
       local('local', () => {
-        // Staged first: the mirror commits, and these must share that commit.
+        // Loro cannot roll back staged writes, so the checks that reject a
+        // batch run before the first one: the scene is computed (the document
+        // was validated above), and the presentation edit validates before it
+        // stages. The library edits and the mirror's commit share one update.
+        const scene = writeScene(
+          mirror.getState().scene,
+          projection.document,
+          validated
+        );
+        if (presentationEdit) applyPresentationEdit(doc, presentationEdit);
         applyArtifactLibraryEdits(doc, libraryEdits);
-        mirror.setState({
-          scene: writeScene(
-            mirror.getState().scene,
-            projection.document,
-            validated
-          ),
-        });
+        mirror.setState({ scene });
       });
     },
     artifactLibrary: {
@@ -162,6 +173,13 @@ function graphicsBackend(
         subscribeArtifactLibrary(doc, listener),
       edit: (edit: ArtifactLibraryEdit) =>
         local('local', () => applyArtifactLibraryEdits(doc, [edit])),
+    },
+    /** The deck default transition. An edit is one undo step. */
+    presentation: {
+      read: () => readPresentation(doc),
+      subscribe: (listener: () => void) => subscribePresentation(doc, listener),
+      edit: (edit: PresentationEdit) =>
+        local('local', () => applyPresentationEdit(doc, edit)),
     },
     undo() {
       if (!disposed && history.canUndo())

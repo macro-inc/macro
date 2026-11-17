@@ -125,6 +125,7 @@ export {
   type TextMeasurer,
   textDefinition,
 } from './shapes/text';
+export * from './slide-transition';
 export { snapPoint, snapTranslation, snapValue } from './snapping';
 export { regenerateScaledShapes, stretchShapes } from './stretch';
 export { selectedShapeIds } from './style-selection';
