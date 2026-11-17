@@ -117,35 +117,81 @@ let
       ++ expressions alert.reducer condition;
     };
   # Warning and critical are mutually exclusive bands, as in the dev rules.
-  prodRulePair =
-    alert:
+  prodRulePairWith =
+    makeRule: alert:
     let
       critical = builtins.toJSON alert.critical;
       warning = builtins.toJSON alert.warning;
     in
     if alert.firesWhen == "above" then
       [
-        (prodRule alert {
+        (makeRule alert {
           severity = "critical";
           condition = "$B > ${critical}";
         })
-        (prodRule alert {
+        (makeRule alert {
           severity = "warning";
           condition = "$B > ${warning} && $B <= ${critical}";
         })
       ]
     else
       [
-        (prodRule alert {
+        (makeRule alert {
           severity = "critical";
           condition = "$B < ${critical}";
         })
-        (prodRule alert {
+        (makeRule alert {
           severity = "warning";
           condition = "$B < ${warning} && $B >= ${critical}";
         })
       ];
-  prodRules = lib.concatMap (row: lib.concatMap prodRulePair row.alerts) prodAlerts.rows;
+  prodRules = lib.concatMap (
+    row: lib.concatMap (prodRulePairWith prodRule) row.alerts
+  ) prodAlerts.rows;
+
+  # Email Focus rollout rules: the go/stop numbers in email-focus.nix, linked
+  # to their panels on the "Email Focus rollout" dashboard. They notify and
+  # never page.
+  emailFocus = import ./email-focus.nix;
+  focusRule =
+    check:
+    { severity, condition }:
+    {
+      uid = "${check.uid}-${if severity == "critical" then "crit" else "warn"}";
+      title = "[PROD] ${check.title} (${severity})";
+      condition = "C";
+      for = "0s";
+      # The worker publishes only what happened; an idle minute has no data.
+      noDataState = "OK";
+      execErrState = "Error";
+      isPaused = false;
+      labels = {
+        environment = "prod";
+        inherit severity;
+        service = "email-focus-worker";
+        pages = "false";
+      };
+      annotations = {
+        summary = check.title;
+        inherit (check) description;
+        runbook_url = "https://github.com/macro-inc/macro/blob/main/docs/runbooks/${emailFocus.runbook}";
+        panel_url = ''{{ reReplaceAll "/$" "" externalURL }}/d/${emailFocus.dashboardUid}?viewPanel=${toString check.panelId}'';
+        __dashboardUid__ = emailFocus.dashboardUid;
+        __panelId__ = toString check.panelId;
+      };
+      data =
+        map (query: {
+          inherit (query) refId;
+          datasourceUid = "cloudwatch";
+          relativeTimeRange = {
+            from = check.window;
+            to = 0;
+          };
+          model = removeAttrs query [ "hide" ];
+        }) check.queries
+        ++ expressions check.reducer condition;
+    };
+  focusRules = lib.concatMap (check: prodRulePairWith focusRule check) (emailFocus.checks "prod");
   dss = [
     (lokiQuery ''sum(count_over_time({service_name="cloud-storage-service",deployment_environment="dev"} |~ "(?i)\\berror\\w*" [5m]))'')
   ];
@@ -329,6 +375,13 @@ in
           folder = "Macro";
           interval = "1m";
           rules = prodRules;
+        }
+        {
+          orgId = 1;
+          name = "Email Focus";
+          folder = "Macro";
+          interval = "1m";
+          rules = focusRules;
         }
         {
           orgId = 1;

@@ -1,0 +1,46 @@
+# Email Focus rollout
+
+The Email Focus worker (`services/email_focus_worker`) classifies mail for the
+Focus tab of inboxes whose owner is in the `enable-email-focus` rollout. The
+rollout widens in steps; each step goes on only while the numbers below hold.
+They are on the **Email Focus rollout** Grafana dashboard
+(`/d/email-focus-rollout`), and the rules in the `Email Focus` alert group fire
+on them. The rules notify through GoAlert and never page: an alert means hold
+the next step, not wake someone up.
+
+## Where the numbers come from
+
+The worker publishes CloudWatch custom metrics in `Macro/EmailFocus` (us-east-1),
+dimension `Environment` = `prod` or `dev`, once a minute and once more at
+shutdown. A local worker only logs them. Each publish also logs
+"focus usage this minute" with that minute's tokens and dollars. The metric
+names, units and meanings are in `services/email_focus_worker/src/metrics.rs`;
+the thresholds are in `infra/stacks/observability/nixos/email-focus.nix`.
+
+Cost uses the prices in `ai_effective_pricing`, read once per model; a changed
+price is picked up when the worker restarts. A model with no stored price is
+logged ("no stored price") and its cost is not counted.
+
+## Go/stop numbers
+
+| Check | Go while | First look |
+| --- | --- | --- |
+| Cost per enrolled inbox per day | at most $0.03 | The Tokens panel: which of Jev and the due date grew. A backfill wave of newly enrolled inboxes raises it for a day. |
+| Classifier unavailable or rejecting | under 1% of calls, hourly | Jev's API errors in the worker's `jev.evaluate` spans. Unavailable threads are retried by the next sweep. |
+| Due dates failing | under 5% of asks, hourly | `email_focus.due_date` spans, and the agent harness's `universal_input/thread-due-date` errors and latency. A failed ask stores the thread without a date. |
+| Mail waiting to be classified (p95) | under 2 minutes | `email_focus.queue` spans' `event_age_ms`, the Event stream lag panel, and classifier latency. |
+| Sweep duration | under 30 minutes | The "focus sweep finished" log (`inboxes`, `candidates`, `stopped_early`) and the `sweep` span; the stale-thread read below. |
+| Sweep failures | none | The "focus sweep failed" error log. |
+| New inbox backfill time (p95) | under 15 minutes | `email_focus.backfill` spans: `candidates` per pass, and the classifier. |
+| Stale-thread read (p95) | under 500 ms | MacroDB CPU and load on the Prod alerts dashboard; the read's plan for a large inbox. |
+| Worker restarts | at most 3 in 30 minutes | ECS stopped-task reasons for `email-focus-worker`, and the worker's last logs. |
+| Focus tab opened empty | under 5% of opens | PostHog, from the web app's Focus tab events. |
+
+Traces: see "Email Focus live updates" in `docs/agent-guide/observability.md`.
+
+## Stopping the rollout
+
+Lower the `enable-email-focus` rollout percentage in PostHog; the same flag
+shows the tab. The worker remembers an owner in the rollout for up to an hour
+(`flag_enrollment.rs`), so it keeps classifying a removed owner's new mail for
+at most that long. Stored classifications stay.
