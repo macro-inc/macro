@@ -278,6 +278,13 @@ where
                     by: owner.as_ref().to_owned(),
                 },
             ),
+            RoutineRun::Location(location) => (
+                location.reported_at,
+                RunStart::Location {
+                    place: location.place.clone(),
+                    on: location.on,
+                },
+            ),
             RoutineRun::Event(run) => (
                 run.pending.event.event_id().published_at(),
                 RunStart::Event {
@@ -306,6 +313,9 @@ where
                 json!({ "kind": "event", "event": event, "item": item })
             }
             RunStart::Manual { by } => json!({ "kind": "manual", "by": by }),
+            RunStart::Location { place, on } => {
+                json!({ "kind": "location", "place": place, "on": on })
+            }
         };
         let context = json!({
             "run": {
@@ -363,6 +373,11 @@ where
                 schedule: schedule(&action.trigger),
             },
             RoutineRun::Manual { requested_at } => RoutineFiring::Manual { requested_at },
+            RoutineRun::Location(location) => RoutineFiring::Location {
+                place: (&location.place).into(),
+                on: location.on.into(),
+                reported_at: location.reported_at,
+            },
             RoutineRun::Event(run) => match self.content.read_event(owner, run).await {
                 Ok(event) => RoutineFiring::Event {
                     event: Box::new(event),
@@ -406,10 +421,14 @@ fn first_schedule(trigger: &ActionTrigger) -> Option<(String, String)> {
                 .iter()
                 .find_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
-                    RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
+                    RoutineTrigger::Once { .. }
+                    | RoutineTrigger::Events { .. }
+                    | RoutineTrigger::Location { .. } => None,
                 })
         }
-        ActionTrigger::Once { .. } | ActionTrigger::Events { .. } => None,
+        ActionTrigger::Once { .. }
+        | ActionTrigger::Events { .. }
+        | ActionTrigger::Location { .. } => None,
     }
 }
 
@@ -463,16 +482,16 @@ fn schedule(trigger: &ActionTrigger) -> String {
             .filter_map(|trigger| match trigger {
                 RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
                 RoutineTrigger::Once { at } => Some(once(at)),
-                RoutineTrigger::Events { .. } => None,
+                RoutineTrigger::Events { .. } | RoutineTrigger::Location { .. } => None,
             })
             .collect::<Vec<_>>()
             .join("; "),
-        ActionTrigger::Events { .. } => String::new(),
+        ActionTrigger::Events { .. } | ActionTrigger::Location { .. } => String::new(),
     }
 }
 
 /// The routine's triggers as the agent reads them: one entry per schedule,
-/// once time and event filter.
+/// once time, place and event filter.
 fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
     let schedule = |schedule: &Schedule, timezone: &Tz| ContextTrigger::Schedule {
         cron: schedule.as_str().to_owned(),
@@ -484,6 +503,10 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
             timezone,
         } => vec![schedule(cron, timezone)],
         ActionTrigger::Once { at } => vec![ContextTrigger::Once { at: *at }],
+        ActionTrigger::Location { place, on } => vec![ContextTrigger::Location {
+            place: place.into(),
+            on: (*on).into(),
+        }],
         ActionTrigger::Multiple { triggers } => triggers
             .as_slice()
             .iter()
@@ -493,6 +516,10 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                     timezone,
                 } => Some(schedule(cron, timezone)),
                 RoutineTrigger::Once { at } => Some(ContextTrigger::Once { at: *at }),
+                RoutineTrigger::Location { place, on } => Some(ContextTrigger::Location {
+                    place: place.into(),
+                    on: (*on).into(),
+                }),
                 RoutineTrigger::Events { .. } => None,
             })
             .collect(),

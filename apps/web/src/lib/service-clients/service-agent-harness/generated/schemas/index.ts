@@ -403,6 +403,8 @@ export * from './routineCause';
 export * from './routineCauseOneOf';
 export * from './routineCauseOneOfFive';
 export * from './routineCauseOneOfFiveType';
+export * from './routineCauseOneOfSeven';
+export * from './routineCauseOneOfSevenType';
 export * from './routineCauseOneOfThree';
 export * from './routineCauseOneOfThreeType';
 export * from './routineCauseOneOfType';

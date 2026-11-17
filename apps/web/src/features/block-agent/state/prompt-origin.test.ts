@@ -430,6 +430,39 @@ describe('promptOrigin', () => {
     });
   });
 
+  it('says which place a location routine run arrived at', () => {
+    const place = {
+      name: 'Office',
+      latitude: 40.7128,
+      longitude: -74.006,
+      radius_meters: 200,
+    };
+    expect(
+      originOf({
+        promptMarkdown: 'Post my standup notes.',
+        trigger: {
+          kind: 'routine',
+          routine_id: 'r-3',
+          name: 'At the office',
+          owner: julia,
+          instructions: 'Post my standup notes in #standup.',
+          triggers: [{ type: 'location', place, on: 'arrive' }],
+          firing: {
+            type: 'location',
+            place,
+            on: 'arrive',
+            reported_at: '2026-11-07T13:02:11Z',
+          },
+        },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'At the office',
+      tail: '· arrived at Office',
+      destination: { kind: 'routine', routineId: 'r-3' },
+    });
+  });
+
   it('points an event routine run at what fired it', () => {
     const routine = (
       firing: Extract<

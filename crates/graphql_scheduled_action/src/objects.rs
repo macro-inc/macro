@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use rootcause::Report;
 use scheduled_action::domain::{
     event_trigger::{ActionTrigger, EventName, RoutineTrigger},
+    location::{LocationTransition, Place},
     models::{ActionKind, ResolvedTaskTarget, ScheduledAction},
 };
 use serde_json::Value;
@@ -36,7 +37,32 @@ pub(crate) enum GraphqlScheduledActionTrigger {
     Cron(GraphqlScheduledActionCronTrigger),
     Events(GraphqlScheduledActionEventsTrigger),
     Once(GraphqlScheduledActionOnceTrigger),
+    Location(GraphqlScheduledActionLocationTrigger),
     Multiple(GraphqlScheduledActionMultipleTrigger),
+}
+
+/// A routine that runs when its owner's phone arrives at or leaves a place.
+#[derive(SimpleObject)]
+pub(crate) struct GraphqlScheduledActionLocationTrigger {
+    /// What the owner calls the place.
+    place_name: String,
+    /// Degrees north.
+    latitude: f64,
+    /// Degrees east.
+    longitude: f64,
+    /// How far from the point still counts as there.
+    radius_meters: u32,
+    /// Which crossing runs the routine.
+    on: GraphqlScheduledActionLocationTransition,
+}
+
+/// Crossing into or out of a place.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum GraphqlScheduledActionLocationTransition {
+    /// Arriving there.
+    Arrive,
+    /// Leaving.
+    Leave,
 }
 
 /// A routine that runs a single time.
@@ -59,13 +85,15 @@ pub(crate) struct GraphqlScheduledActionCronTrigger {
     next_run_at: Option<String>,
 }
 
-/// Any of several schedules and optional Macro event filters.
+/// Any of several schedules, places and optional Macro event filters.
 #[derive(SimpleObject)]
 pub(crate) struct GraphqlScheduledActionMultipleTrigger {
     /// Each schedule retains its own timezone and next firing.
     schedules: Vec<GraphqlScheduledActionCronTrigger>,
     /// Single runs at exact times.
     once: Vec<GraphqlScheduledActionOnceTrigger>,
+    /// Places whose crossings run the routine.
+    places: Vec<GraphqlScheduledActionLocationTrigger>,
     /// Events that can also trigger this routine.
     events: Option<GraphqlScheduledActionEventsTrigger>,
 }
@@ -253,7 +281,9 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                                     .flatten(),
                             })
                         }
-                        RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
+                        RoutineTrigger::Once { .. }
+                        | RoutineTrigger::Events { .. }
+                        | RoutineTrigger::Location { .. } => None,
                     })
                     .collect(),
                 once: triggers
@@ -261,8 +291,16 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                     .iter()
                     .filter_map(|trigger| match trigger {
                         RoutineTrigger::Once { at } => Some(once_trigger(action, *at)),
-                        RoutineTrigger::Cron { .. } | RoutineTrigger::Events { .. } => None,
+                        RoutineTrigger::Cron { .. }
+                        | RoutineTrigger::Events { .. }
+                        | RoutineTrigger::Location { .. } => None,
                     })
+                    .collect(),
+                places: action
+                    .trigger
+                    .places()
+                    .into_iter()
+                    .map(|(place, on)| location_trigger(place, on))
                     .collect(),
                 events: action.trigger.event_filters().map(event_filters),
             })
@@ -273,6 +311,25 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
         ActionTrigger::Once { at } => {
             GraphqlScheduledActionTrigger::Once(once_trigger(action, *at))
         }
+        ActionTrigger::Location { place, on } => {
+            GraphqlScheduledActionTrigger::Location(location_trigger(place, *on))
+        }
+    }
+}
+
+fn location_trigger(
+    place: &Place,
+    on: LocationTransition,
+) -> GraphqlScheduledActionLocationTrigger {
+    GraphqlScheduledActionLocationTrigger {
+        place_name: place.name().to_owned(),
+        latitude: place.latitude(),
+        longitude: place.longitude(),
+        radius_meters: place.radius_meters(),
+        on: match on {
+            LocationTransition::Arrive => GraphqlScheduledActionLocationTransition::Arrive,
+            LocationTransition::Leave => GraphqlScheduledActionLocationTransition::Leave,
+        },
     }
 }
 

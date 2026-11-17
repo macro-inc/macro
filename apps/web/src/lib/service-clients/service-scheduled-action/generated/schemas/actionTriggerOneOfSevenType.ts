@@ -11,5 +11,5 @@ export type ActionTriggerOneOfSevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ActionTriggerOneOfSevenType = {
-  multiple: 'multiple',
+  location: 'location',
 } as const;

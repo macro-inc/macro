@@ -52,4 +52,20 @@ describe('describeTrigger', () => {
     expect(triggerKind(email)).toBe('email');
     expect(triggerKind(weekly(['2']))).toBe('schedule');
   });
+
+  it('names a place by the crossing that runs it', () => {
+    const office = {
+      id: 'p',
+      kind: 'location' as const,
+      name: 'Office',
+      latitude: 40.7128,
+      longitude: -74.006,
+      radiusMeters: 200,
+      on: 'arrive' as const,
+    };
+    expect(describeTrigger(office)).toBe('Arrive at Office');
+    expect(describeTrigger({ ...office, on: 'leave' })).toBe('Leave Office');
+    expect(describeTrigger({ ...office, name: '' })).toBe('Arrive at a place');
+    expect(triggerKind(office)).toBe('location');
+  });
 });

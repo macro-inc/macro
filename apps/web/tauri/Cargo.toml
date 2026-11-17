@@ -6,6 +6,7 @@ members = [
   "callkit_plugin",
   "edit_menu_plugin",
   "file_export_plugin",
+  "geofence_plugin",
   "graphql_cache_plugin",
   "input_accessory_plugin",
   "ios_push_plugin",

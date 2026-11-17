@@ -57,11 +57,14 @@ export type SessionOrigin =
   | { kind: 'requested'; by: User }
   /** A tool handed the agent work, under this user's authority. */
   | { kind: 'dispatched'; onBehalfOf: User }
-  /** A routine fired. */
+  /**
+   * A routine fired: a schedule came due, its owner ran it, an event it
+   * watches happened, or its owner's phone arrived at or left one of its places.
+   */
   | {
       kind: 'routine';
       routine: Routine;
-      firing: 'scheduled' | 'manual' | 'event';
+      firing: 'scheduled' | 'manual' | 'event' | 'location';
     }
   /** Nothing recorded it: an older session, or an unclaimed warm one. */
   | { kind: 'unknown' };

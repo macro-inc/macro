@@ -7,9 +7,14 @@
  */
 
 import type { ActionTriggerOneOfSevenType } from './actionTriggerOneOfSevenType';
-import type { RoutineTriggers } from './routineTriggers';
+import type { LocationTransition } from './locationTransition';
+import type { Place } from './place';
 
+/**
+ * Fires when the owner's phone arrives at or leaves `place`.
+ */
 export type ActionTriggerOneOfSeven = {
-  triggers: RoutineTriggers;
+  on: LocationTransition;
+  place: Place;
   type: ActionTriggerOneOfSevenType;
 };

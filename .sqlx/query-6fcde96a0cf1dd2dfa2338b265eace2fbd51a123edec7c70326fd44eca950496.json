@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduled_action_location_firing (action_id, fence, fired_at)\n            VALUES ($1, $2, now())\n            ON CONFLICT (action_id, fence) DO UPDATE SET fired_at = now()\n            WHERE scheduled_action_location_firing.fired_at <= now() - make_interval(secs => $3)\n            RETURNING TRUE AS \"claimed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claimed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6fcde96a0cf1dd2dfa2338b265eace2fbd51a123edec7c70326fd44eca950496"
+}

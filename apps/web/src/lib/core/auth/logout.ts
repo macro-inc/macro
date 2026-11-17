@@ -1,8 +1,10 @@
+import { removeRoutineGeofenceDevice } from '@app/features/routines/queries/location';
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { clearNativeDiagnostics } from '@app/observability/native-diagnostics';
 import { reloadApp } from '@app/observability/reload';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { clearGeofences } from '@core/mobile/native-geofence';
 import { clearPipedreamCallbacks } from '@core/pipedream/connect-callback';
 import { syncLoginStorage } from '@core/util/cookies';
 import { isTauri } from '@core/util/platform';
@@ -86,6 +88,8 @@ export function clearLocalAuthSession(
         }
       })(),
       clearLocalDrafts(),
+      // Stop watching the account's places and forget the phone's token.
+      clearGeofences(),
     ]);
     if (results.some((result) => result.status === 'rejected')) {
       await rotateCacheScope();
@@ -154,9 +158,15 @@ export function useLogout() {
     )
       return;
     clearPostLoginRedirect();
-    // Must run before the session is torn down — the unregister call is
+    // Must run before the session is torn down — the unregister calls are
     // authenticated. Time-boxed so a hung request can't block logout.
-    await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);
+    await raceTimeout(
+      Promise.allSettled([
+        unregisterPushRegistrationsForLogout(),
+        removeRoutineGeofenceDevice(),
+      ]),
+      3000
+    );
     await Promise.all([clearLocalAuthSession(), authServiceClient.logout()]);
     analytics.track('sign_out');
     analytics.reset();

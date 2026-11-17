@@ -7,12 +7,14 @@ import type {
   PayloadScalar,
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
+import type { LocationTriggerDraft } from '../core/location-trigger';
 import {
   type EventTriggerDraft,
   newScheduleTrigger,
   type PayloadTestDraft,
   payloadTestValues,
   type RoutineTriggerDraft,
+  type ScheduleTriggerDraft,
 } from '../core/routine-triggers';
 
 /** Typed text as the JSON scalar it names; anything else stays text. */
@@ -70,12 +72,35 @@ function serializeFilter(trigger: EventTriggerDraft): EventFilter {
   };
 }
 
+function serializeLocation(trigger: LocationTriggerDraft) {
+  if (trigger.latitude === null || trigger.longitude === null)
+    throw new Error('Set where the place is.');
+  return {
+    type: 'location' as const,
+    place: {
+      name: trigger.name.trim(),
+      latitude: trigger.latitude,
+      longitude: trigger.longitude,
+      radius_meters: trigger.radiusMeters,
+    },
+    on: trigger.on,
+  };
+}
+
 export function serializeTrigger(trigger: RoutineTriggerDraft) {
-  if (trigger.kind === 'event')
-    return {
+  return match(trigger)
+    .with({ kind: 'event' }, (event) => ({
       type: 'events' as const,
-      filters: [serializeFilter(trigger)],
-    };
+      filters: [serializeFilter(event)],
+    }))
+    .with({ kind: 'schedule' }, serializeSchedule)
+    .with({ kind: 'location' }, serializeLocation)
+    .exhaustive(() => {
+      throw new Error('Choose when the routine runs.');
+    });
+}
+
+function serializeSchedule(trigger: ScheduleTriggerDraft) {
   const [hour, minute] = trigger.time.split(':').map(Number);
   if (trigger.frequency === 'once') return onceTrigger(trigger.onceAt);
   const schedule = match(trigger.frequency)
@@ -95,8 +120,9 @@ export function serializeTrigger(trigger: RoutineTriggerDraft) {
 export function serializeTriggers(
   triggers: RoutineTriggerDraft[]
 ): ActionTrigger {
+  // Schedules and places are triggers of their own; activity filters share one.
   const schedules = triggers
-    .filter((trigger) => trigger.kind === 'schedule')
+    .filter((trigger) => trigger.kind !== 'event')
     .map(serializeTrigger);
   const filters = triggers.flatMap((trigger) =>
     trigger.kind === 'event' ? [serializeFilter(trigger)] : []
@@ -117,11 +143,24 @@ export function parseRoutineTriggers(
       (value) =>
         value.type === 'cron' ||
         value.type === 'once' ||
-        value.type === 'events'
+        value.type === 'events' ||
+        value.type === 'location'
     )
   )
     return undefined;
   return values.flatMap((value): RoutineTriggerDraft[] => {
+    if (value.type === 'location')
+      return [
+        {
+          id: crypto.randomUUID(),
+          kind: 'location',
+          name: value.place.name,
+          latitude: value.place.latitude,
+          longitude: value.place.longitude,
+          radiusMeters: value.place.radius_meters,
+          on: value.on,
+        },
+      ];
     if (value.type === 'once')
       return [
         {

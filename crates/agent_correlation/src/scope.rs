@@ -159,6 +159,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/scheduled-actions/{id}/execute"),
     ("PUT", "/scheduled-actions/{id}/template"),
     ("POST", "/scheduled-actions/{id}/template/activate"),
+    // A registered phone, and the crossings it reports, start routines.
+    ("POST", "/scheduled-actions/location/devices"),
+    ("POST", "/scheduled-actions/location/reports"),
     ("POST", "/call/record/{id}/decline"),
     ("POST", "/call/ring-status/{id}/decline"),
     ("POST", "/call/record/{id}/join"),

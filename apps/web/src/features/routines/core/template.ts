@@ -239,6 +239,7 @@ export function fillTemplateTrigger(args: {
     .with({ type: 'cron' }, (cron) => ({ ...cron, timezone }))
     .with({ type: 'events' }, (events) => events)
     .with({ type: 'once' }, (once) => once)
+    .with({ type: 'location' }, (location) => location)
     .with({ type: 'multiple' }, (multiple) => ({
       ...multiple,
       triggers: multiple.triggers.map((item) =>

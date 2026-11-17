@@ -200,3 +200,20 @@ fn several_triggers_read_as_the_first() {
         "Mondays at 9:00 AM"
     );
 }
+
+#[test]
+fn a_location_reads_as_its_crossing_and_place() {
+    let place =
+        json!({"name": "Office", "latitude": 40.7128, "longitude": -74.006, "radius_meters": 200});
+    assert_eq!(
+        describe(json!({ "type": "location", "place": place, "on": "arrive" })),
+        "Arrive at Office"
+    );
+    assert_eq!(
+        describe(json!({
+            "type": "multiple",
+            "triggers": [{ "type": "location", "place": place, "on": "leave" }],
+        })),
+        "Leave Office"
+    );
+}

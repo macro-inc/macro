@@ -7,14 +7,17 @@
  */
 import type { ActionTriggerOneOf } from './actionTriggerOneOf';
 import type { ActionTriggerOneOfFive } from './actionTriggerOneOfFive';
+import type { ActionTriggerOneOfNine } from './actionTriggerOneOfNine';
 import type { ActionTriggerOneOfSeven } from './actionTriggerOneOfSeven';
 import type { ActionTriggerOneOfThree } from './actionTriggerOneOfThree';
 
 /**
- * A routine may run on one trigger or any of several schedules and Macro events.
+ * A routine may run on one trigger or any of several schedules, places and
+Macro events.
  */
 export type ActionTrigger =
   | ActionTriggerOneOf
   | ActionTriggerOneOfThree
   | ActionTriggerOneOfFive
-  | ActionTriggerOneOfSeven;
+  | ActionTriggerOneOfSeven
+  | ActionTriggerOneOfNine;

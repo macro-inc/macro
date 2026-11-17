@@ -1,4 +1,6 @@
+import { match } from 'ts-pattern';
 import type { HistoryRun, HistoryStart } from './history';
+import { describePlaceCrossing } from './location-trigger';
 import { describeCronExpression, eventLabel } from './routine-triggers';
 
 /** An item an event run is about that the app can open. */
@@ -25,17 +27,20 @@ export function describeRunStart(
   /** A person's name for their user id, "you" for the viewer. */
   person: (id: string) => string
 ): string {
-  switch (start.kind) {
-    case 'schedule': {
-      const schedule =
-        describeCronExpression(start.schedule) ?? 'On its schedule';
-      return start.timezone ? `${schedule} (${start.timezone})` : schedule;
-    }
-    case 'event':
-      return eventLabel(start.event);
-    case 'manual':
-      return `Run by ${person(start.by)}`;
-  }
+  return match(start)
+    .with({ kind: 'schedule' }, (schedule) => {
+      const description =
+        describeCronExpression(schedule.schedule) ?? 'On its schedule';
+      return schedule.timezone
+        ? `${description} (${schedule.timezone})`
+        : description;
+    })
+    .with({ kind: 'event' }, (event) => eventLabel(event.event))
+    .with({ kind: 'manual' }, (manual) => `Run by ${person(manual.by)}`)
+    .with({ kind: 'location' }, (location) =>
+      describePlaceCrossing(location.place, location.on)
+    )
+    .exhaustive();
 }
 
 /** A minute apart or more: the run started later than it counts as. */
@@ -59,7 +64,7 @@ export function runStartLine(
     Math.abs(Date.parse(startedAt) - Date.parse(run.at)) >= LATE_MS;
   if (late)
     parts.push(
-      run.start.kind === 'event'
+      run.start.kind === 'event' || run.start.kind === 'location'
         ? `happened ${formatTime(run.at)}`
         : `due ${formatTime(run.at)}`
     );

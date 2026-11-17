@@ -92,6 +92,7 @@ impl SourceRow {
                 firing: match self.routine_firing.as_deref()? {
                     "scheduled" => RoutineCause::Scheduled,
                     "manual" => RoutineCause::Manual,
+                    "location" => RoutineCause::Location,
                     "event" => RoutineCause::Event {
                         event_id: self.event_id?,
                     },
@@ -206,6 +207,7 @@ fn source_columns(origin: &TriggerOrigin) -> Option<(&'static str, SourceColumns
             let (routine_firing, event_id) = match firing {
                 RoutineCause::Scheduled => ("scheduled", None),
                 RoutineCause::Manual => ("manual", None),
+                RoutineCause::Location => ("location", None),
                 RoutineCause::Event { event_id } => ("event", Some(*event_id)),
             };
             (

@@ -6,6 +6,7 @@
  */
 import type { RoutineCauseOneOf } from './routineCauseOneOf';
 import type { RoutineCauseOneOfFive } from './routineCauseOneOfFive';
+import type { RoutineCauseOneOfSeven } from './routineCauseOneOfSeven';
 import type { RoutineCauseOneOfThree } from './routineCauseOneOfThree';
 
 /**
@@ -14,4 +15,5 @@ import type { RoutineCauseOneOfThree } from './routineCauseOneOfThree';
 export type RoutineCause =
   | RoutineCauseOneOf
   | RoutineCauseOneOfThree
-  | RoutineCauseOneOfFive;
+  | RoutineCauseOneOfFive
+  | RoutineCauseOneOfSeven;

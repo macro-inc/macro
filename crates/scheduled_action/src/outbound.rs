@@ -6,6 +6,7 @@ pub mod inprocess_executor;
 pub mod pg_code_upgrades;
 pub mod pg_draft_hand_backs;
 pub mod pg_event_run_repo;
+pub mod pg_location_repo;
 pub mod pg_polling_dispatcher;
 pub mod pg_routine_template_repo;
 pub mod pg_scheduled_action_repo;

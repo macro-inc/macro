@@ -303,6 +303,18 @@ describe('step outputs and run starts in run history', () => {
       run({ kind: 'event', event: 'channel.mentioned', entity_id: null }).run
         ?.start
     ).toEqual({ kind: 'event', event: 'channel.mentioned' });
+    expect(
+      run({
+        kind: 'location',
+        place: {
+          name: 'Office',
+          latitude: 40.7128,
+          longitude: -74.006,
+          radius_meters: 200,
+        },
+        on: 'leave',
+      }).run?.start
+    ).toEqual({ kind: 'location', place: 'Office', on: 'leave' });
     // Runs recorded before runs kept what started them have none.
     expect(run({ kind: 'unknown' }).run).toBeUndefined();
   });

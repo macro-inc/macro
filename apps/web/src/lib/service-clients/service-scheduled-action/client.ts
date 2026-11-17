@@ -60,9 +60,11 @@ import type {
   DraftJob,
   DraftRoutineRequest,
   ExecutionRecordResponse,
+  FenceList,
   GenerationOverview,
   InProgressExecution,
   RegenerationCooldown,
+  RegisteredDevice,
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
@@ -297,6 +299,25 @@ export const scheduledActionClient = {
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
 
+  /** Mint this phone's token for reporting place crossings; returned only here. */
+  registerLocationDevice: () =>
+    scheduledActionFetch<RegisteredDevice>(
+      '/scheduled-actions/location/devices',
+      { method: 'POST' }
+    ),
+
+  removeLocationDevice: (args: { deviceId: string }) =>
+    scheduledActionFetch(
+      `/scheduled-actions/location/devices/${encodeURIComponent(args.deviceId)}`,
+      { method: 'DELETE' }
+    ),
+
+  /** The places the caller's enabled routines watch. */
+  listLocationFences: () =>
+    scheduledActionFetch<FenceList>('/scheduled-actions/location/fences', {
+      method: 'GET',
+    }),
+
   /**
    * The caller's feed of suggestions. `timezone` is the IANA zone they are
    * in. With `limit`, only that many open ones, best first, and no done ones.
@@ -395,3 +416,6 @@ export const scheduledActionClient = {
       keepalive: args.keepalive,
     }),
 };
+
+/** Where a phone reports crossings, with its device token rather than a session. */
+export const LOCATION_REPORT_URL = `${scheduledActionHost}/scheduled-actions/location/reports`;

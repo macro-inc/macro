@@ -2,6 +2,11 @@ import { formatTimeLabel, getDefaultTimezone } from '@core/util/cron';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import {
+  describeLocationTrigger,
+  locationTriggerSchema,
+  validateLocationTrigger,
+} from './location-trigger';
 
 export const scheduleTriggerSchema = z.object({
   id: z.string(),
@@ -88,6 +93,7 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
+  locationTriggerSchema,
 ]);
 export type ScheduleTriggerDraft = z.infer<typeof scheduleTriggerSchema>;
 export type RoutineTriggerDraft = z.infer<typeof routineTriggerSchema>;
@@ -655,52 +661,64 @@ export function validateTriggers(
   if (!triggers.length)
     return 'Add a trigger to tell this routine when to run.';
   const events = triggers.filter((trigger) => trigger.kind === 'event');
-  const scheduleCount = triggers.length - events.length;
-  if (scheduleCount + Number(events.length > 0) > 16)
-    return 'A routine can have up to 16 schedule and activity trigger groups.';
+  // Activity filters share one trigger; every schedule and place is its own.
+  const ownTriggerCount = triggers.length - events.length;
+  if (ownTriggerCount + Number(events.length > 0) > 16)
+    return 'A routine can have up to 16 schedule, place and activity trigger groups.';
   if (events.length > 32)
     return 'A routine can have up to 32 activity filters.';
   for (const trigger of triggers) {
-    if (trigger.kind === 'event') {
-      const error = validateEventTrigger(trigger, creating);
-      if (error) return error;
-      continue;
-    }
-    if (trigger.frequency === 'once') {
-      const at = new Date(trigger.onceAt).getTime();
-      if (!Number.isFinite(at))
-        return 'Choose a date and time for the one-off trigger.';
-      if (creating && at <= Date.now())
-        return 'Choose a future time for the one-off trigger.';
-      continue;
-    }
-    if (trigger.frequency === 'custom') {
-      const parts = trigger.cron.trim().split(/\s+/);
-      if (
-        parts.length < 6 ||
-        parts.length > 7 ||
-        parts.some((part) => !/^[-\w*/?,]+$/.test(part))
+    const error = match(trigger)
+      .with({ kind: 'event' }, (event) => validateEventTrigger(event, creating))
+      .with({ kind: 'schedule' }, (schedule) =>
+        validateScheduleTrigger(schedule, creating)
       )
-        return 'Use a cron expression with seconds, minutes, hours, day, month, weekday, and an optional year.';
-    } else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(trigger.time))
-      return 'Choose a valid time.';
-    if (trigger.frequency === 'week' && !trigger.daysOfWeek.length)
-      return 'Select at least one day for the weekly trigger.';
-    if (
-      trigger.frequency === 'month' &&
-      (!/^\d+$/.test(trigger.dayOfMonth) ||
-        Number(trigger.dayOfMonth) < 1 ||
-        Number(trigger.dayOfMonth) > 31)
-    )
-      return 'Choose a day between 1 and 31.';
-    try {
-      new Intl.DateTimeFormat(undefined, { timeZone: trigger.timezone });
-    } catch {
-      return 'Choose a valid time zone.';
-    }
+      .with({ kind: 'location' }, validateLocationTrigger)
+      .exhaustive();
+    if (error) return error;
   }
   return null;
 }
+
+function validateScheduleTrigger(
+  trigger: ScheduleTriggerDraft,
+  creating: boolean
+): string | null {
+  if (trigger.frequency === 'once') {
+    const at = new Date(trigger.onceAt).getTime();
+    if (!Number.isFinite(at))
+      return 'Choose a date and time for the one-off trigger.';
+    if (creating && at <= Date.now())
+      return 'Choose a future time for the one-off trigger.';
+    return null;
+  }
+  if (trigger.frequency === 'custom') {
+    const parts = trigger.cron.trim().split(/\s+/);
+    if (
+      parts.length < 6 ||
+      parts.length > 7 ||
+      parts.some((part) => !/^[-\w*/?,]+$/.test(part))
+    )
+      return 'Use a cron expression with seconds, minutes, hours, day, month, weekday, and an optional year.';
+  } else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(trigger.time))
+    return 'Choose a valid time.';
+  if (trigger.frequency === 'week' && !trigger.daysOfWeek.length)
+    return 'Select at least one day for the weekly trigger.';
+  if (
+    trigger.frequency === 'month' &&
+    (!/^\d+$/.test(trigger.dayOfMonth) ||
+      Number(trigger.dayOfMonth) < 1 ||
+      Number(trigger.dayOfMonth) > 31)
+  )
+    return 'Choose a day between 1 and 31.';
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: trigger.timezone });
+  } catch {
+    return 'Choose a valid time zone.';
+  }
+  return null;
+}
+
 /** Cron day numbers (1 is Sunday) in the order a week reads, Monday first. */
 const WEEK_ORDER = ['2', '3', '4', '5', '6', '7', '1'];
 const DAY_NAMES: Record<string, { short: string; plural: string }> = {
@@ -803,7 +821,14 @@ function describeOnce(onceAt: string): string {
  * email received", without its time zone.
  */
 export function describeTrigger(trigger: RoutineTriggerDraft): string {
-  if (trigger.kind === 'event') return eventTriggerLabel(trigger);
+  return match(trigger)
+    .with({ kind: 'event' }, eventTriggerLabel)
+    .with({ kind: 'schedule' }, describeSchedule)
+    .with({ kind: 'location' }, describeLocationTrigger)
+    .exhaustive();
+}
+
+function describeSchedule(trigger: ScheduleTriggerDraft): string {
   const time = formatTimeLabel(trigger.time);
   return match(trigger.frequency)
     .with('week', () => `${describeDays(trigger.daysOfWeek)} at ${time}`)
@@ -833,10 +858,19 @@ export type TriggerKind =
   | 'document'
   | 'channel'
   | 'call'
-  | 'github';
+  | 'github'
+  | 'location';
 
 export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
-  if (trigger.kind === 'schedule') return 'schedule';
+  return match(trigger)
+    .returnType<TriggerKind>()
+    .with({ kind: 'schedule' }, () => 'schedule')
+    .with({ kind: 'location' }, () => 'location')
+    .with({ kind: 'event' }, eventTriggerKind)
+    .exhaustive();
+}
+
+function eventTriggerKind(trigger: EventTriggerDraft): TriggerKind {
   return match(eventScopeKind(trigger))
     .returnType<TriggerKind>()
     .with('THREAD', () => 'email')
@@ -851,10 +885,16 @@ export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
 export function describeTriggers(triggers: RoutineTriggerDraft[]): string {
   return triggers
     .map((trigger) =>
-      trigger.kind === 'event'
-        ? eventTriggerLabel(trigger)
-        : (triggerFrequencies.find((f) => f.value === trigger.frequency)
-            ?.label ?? 'Scheduled')
+      match(trigger)
+        .with({ kind: 'event' }, eventTriggerLabel)
+        .with(
+          { kind: 'schedule' },
+          (schedule) =>
+            triggerFrequencies.find((f) => f.value === schedule.frequency)
+              ?.label ?? 'Scheduled'
+        )
+        .with({ kind: 'location' }, describeLocationTrigger)
+        .exhaustive()
     )
     .join(' · ');
 }

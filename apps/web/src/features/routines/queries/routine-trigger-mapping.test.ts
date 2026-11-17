@@ -430,3 +430,141 @@ describe('task property selectors', () => {
     expect(taskTriggerProperty(trigger)).toBeUndefined();
   });
 });
+
+describe('location triggers', () => {
+  it('round trips a place on its own and beside a schedule and events', () => {
+    const office = {
+      type: 'location' as const,
+      place: {
+        name: 'Office',
+        latitude: 40.7128,
+        longitude: -74.006,
+        radius_meters: 200,
+      },
+      on: 'arrive' as const,
+    };
+    const alone = parseRoutineTriggers(office)!;
+    expect(alone).toEqual([
+      {
+        id: expect.any(String),
+        kind: 'location',
+        name: 'Office',
+        latitude: 40.7128,
+        longitude: -74.006,
+        radiusMeters: 200,
+        on: 'arrive',
+      },
+    ]);
+    expect(routineTriggerSchema.safeParse(alone[0]).success).toBe(true);
+    expect(serializeTriggers(alone)).toEqual(office);
+
+    const combined = {
+      type: 'multiple' as const,
+      triggers: [
+        { type: 'cron' as const, schedule: '0 0 9 * * *', timezone: 'UTC' },
+        {
+          type: 'location' as const,
+          place: {
+            name: 'Home',
+            latitude: -33.8688,
+            longitude: 151.2093,
+            radius_meters: 1000,
+          },
+          on: 'leave' as const,
+        },
+        {
+          type: 'events' as const,
+          filters: [{ events: ['email.message_received' as const] }],
+        },
+      ],
+    };
+    const triggers = parseRoutineTriggers(combined)!;
+    expect(triggers.map((trigger) => trigger.kind)).toEqual([
+      'schedule',
+      'location',
+      'event',
+    ]);
+    expect(serializeTriggers(triggers)).toEqual(combined);
+  });
+
+  it('saves a trimmed place name', () => {
+    expect(
+      serializeTriggers([
+        {
+          id: 'place',
+          kind: 'location',
+          name: '  Gym ',
+          latitude: 51.5,
+          longitude: -0.12,
+          radiusMeters: 500,
+          on: 'leave',
+        },
+      ])
+    ).toEqual({
+      type: 'location',
+      place: {
+        name: 'Gym',
+        latitude: 51.5,
+        longitude: -0.12,
+        radius_meters: 500,
+      },
+      on: 'leave',
+    });
+  });
+
+  it('asks for a name, a location in range and a supported radius', () => {
+    const place = {
+      id: 'place',
+      kind: 'location' as const,
+      name: 'Office',
+      latitude: 40.7128,
+      longitude: -74.006,
+      radiusMeters: 200,
+      on: 'arrive' as const,
+    };
+    expect(validateTriggers([place], true)).toBeNull();
+    expect(validateTriggers([{ ...place, name: '   ' }], true)).toBe(
+      'Name the place, such as Office.'
+    );
+    expect(validateTriggers([{ ...place, name: 'x'.repeat(101) }], true)).toBe(
+      'Keep the place name under 100 characters.'
+    );
+    expect(
+      validateTriggers([{ ...place, name: 'x'.repeat(100) }], true)
+    ).toBeNull();
+    expect(
+      validateTriggers([{ ...place, latitude: null, longitude: null }], true)
+    ).toBe('Set where the place is, or use your current location.');
+    expect(validateTriggers([{ ...place, latitude: 90.5 }], true)).toBe(
+      'Use a latitude between -90 and 90.'
+    );
+    expect(validateTriggers([{ ...place, longitude: -180.5 }], true)).toBe(
+      'Use a longitude between -180 and 180.'
+    );
+    expect(validateTriggers([{ ...place, radiusMeters: 99 }], true)).toBe(
+      'Choose a radius between 100 and 5000 meters.'
+    );
+    expect(validateTriggers([{ ...place, radiusMeters: 5001 }], true)).toBe(
+      'Choose a radius between 100 and 5000 meters.'
+    );
+    expect(
+      validateTriggers([{ ...place, radiusMeters: 5000 }], true)
+    ).toBeNull();
+  });
+
+  it('counts every place as its own trigger toward the limit of 16', () => {
+    const places = Array.from({ length: 16 }, (_, index) => ({
+      id: `place-${index}`,
+      kind: 'location' as const,
+      name: `Place ${index}`,
+      latitude: 10,
+      longitude: 10,
+      radiusMeters: 200,
+      on: 'arrive' as const,
+    }));
+    expect(validateTriggers(places, true)).toBeNull();
+    expect(validateTriggers([...places, newScheduleTrigger('day')], true)).toBe(
+      'A routine can have up to 16 schedule, place and activity trigger groups.'
+    );
+  });
+});

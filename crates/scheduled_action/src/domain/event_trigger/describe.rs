@@ -8,6 +8,7 @@ use cron::TimeUnitSpec;
 use system_properties::SystemPropertyKey;
 
 use super::{ActionTrigger, EventFilter, EventName, RoutineTrigger};
+use crate::domain::location::{LocationTransition, Place};
 use crate::domain::models::Schedule;
 
 #[cfg(test)]
@@ -22,15 +23,25 @@ impl ActionTrigger {
             Self::Cron { schedule, timezone } => describe_schedule(schedule, *timezone, now),
             Self::Events { filters } => describe_filters(filters.as_slice()),
             Self::Once { at } => describe_once(*at, zone, now),
+            Self::Location { place, on } => describe_place(place, *on),
             Self::Multiple { triggers } => match triggers.as_slice().first() {
                 Some(RoutineTrigger::Cron { schedule, timezone }) => {
                     describe_schedule(schedule, *timezone, now)
                 }
                 Some(RoutineTrigger::Events { filters }) => describe_filters(filters.as_slice()),
                 Some(RoutineTrigger::Once { at }) => describe_once(*at, zone, now),
+                Some(RoutineTrigger::Location { place, on }) => describe_place(place, *on),
                 None => String::new(),
             },
         }
+    }
+}
+
+/// "Arrive at Office", "Leave Home".
+fn describe_place(place: &Place, on: LocationTransition) -> String {
+    match on {
+        LocationTransition::Arrive => format!("Arrive at {}", place.name()),
+        LocationTransition::Leave => format!("Leave {}", place.name()),
     }
 }
 

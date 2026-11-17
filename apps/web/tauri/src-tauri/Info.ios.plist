@@ -40,6 +40,10 @@
 	<string>Macro uses the microphone for calls and for videos you record to attach.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to upload attachments.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Macro uses your location to run your routines when you arrive at or leave places you choose.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Macro uses your location to run your routines when you arrive at or leave places you choose.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>INSendMessageIntent</string>

@@ -9,6 +9,7 @@ import {
 } from '@app/features/notification-sounds/use-notification-sounds';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { RoutineDraftsHost } from '@app/features/routines/routine-drafts-host';
+import { useRoutineGeofenceSync } from '@app/features/routines/routine-geofence-sync';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
@@ -131,6 +132,7 @@ export function AppProviders(props: ParentProps) {
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
+  useRoutineGeofenceSync(userId);
   useResumeFolderUploads(userId);
   useGlobalAttachableHistory();
   useInterfaceLanguageSync();

@@ -7,10 +7,8 @@
 import type { RoutineCauseOneOfFiveType } from './routineCauseOneOfFiveType';
 
 /**
- * An event it watches happened.
+ * Its owner's phone arrived at or left a place it watches.
  */
 export type RoutineCauseOneOfFive = {
-  /** The event. */
-  event_id: string;
   type: RoutineCauseOneOfFiveType;
 };
