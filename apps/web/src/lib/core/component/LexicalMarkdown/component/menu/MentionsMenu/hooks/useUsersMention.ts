@@ -1,7 +1,11 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
 import type { IUser } from '@core/user';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  FreshSearchPresets,
+  NAME_MATCH_RANKING,
+} from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
@@ -112,11 +116,14 @@ export function useUsersMention(
     return createFreshSearch<UserItem>({
       config: {
         ...baseConfig,
+        ...NAME_MATCH_RANKING,
         boostFn: (item) =>
           (baseConfig.boostFn?.(item) ?? 0) +
           (isBotMentionUser(item) ? BOT_MENTION_BOOST : 0),
       },
       getName: (item) => item.searchText,
+      getDisplayName: (item) => item.data.name || item.data.email,
+      isPersonItem: () => true,
       getTimestamp: (item) => ({
         lastInteraction: item.timestamps.lastInteraction,
       }),

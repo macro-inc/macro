@@ -47,5 +47,6 @@ Cloudflare Durable Objects and native simulation.
   or update can expose unpersisted causal parents. Retain operation-log IDs and keys;
   reload the snapshot and pending durable prefix, including partially completed writes.
 
-The server encoder uses the vendored Loro 1.16.2 dependency (`loro_server`),
-separate from editor/session Loro 1.17.1. Preserve the unchanged Worker corpus.
+The server encoder uses the workspace Loro 1.17.1 with the `vendor/loro-editor`
+`loro-internal` patch, the same release as the editor and session. Preserve the
+unchanged Worker corpus.

@@ -82,8 +82,9 @@ socket membership. Read-only Room diagnostics expose no mutable Loro handle.
 - `src/persistence_test.rs` checks failed first writes versus durable pending/failed
   archive writes, same-time log identities and actual cold replay after cache invalidation.
 
-The server encoder uses the vendored Loro 1.16.2 dependency (`loro_server`),
-separate from editor/session Loro 1.17.1. Preserve the unchanged Worker corpus.
+The server encoder uses the workspace Loro 1.17.1 with the `vendor/loro-editor`
+`loro-internal` patch, the same release as the editor and session. Preserve the
+unchanged Worker corpus.
 
 Decode every gzip member and reject corrupt tails when loading fixtures or
 following inventory links; never silently accept only the first member.

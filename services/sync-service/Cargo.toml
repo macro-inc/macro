@@ -52,7 +52,7 @@ serde.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
-loro = { path = "../../vendor/loro-server/loro" }
+loro.workspace = true
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 worker-rs-otel = { path = "../../crates/worker-rs-otel" }
 subtle = { workspace = true }

@@ -181,7 +181,6 @@
             "vendor/chrono-tz"
             "vendor/regress"
             "vendor/loro-editor"
-            "vendor/loro-server"
             "vendor/loro-test-utils"
           ])
           || (
@@ -1187,8 +1186,6 @@
           grep -q "pub struct Regex" "$pruned_src/vendor/regress/src/api.rs"
           grep -q "pub mod oplog" "$pruned_src/vendor/loro-editor/loro-internal/src/lib.rs"
           grep -q "fn update_many" "$pruned_src/vendor/loro-editor/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
-          grep -q "fn update_many" "$pruned_src/vendor/loro-server/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
-          grep -q "pub struct LoroDoc" "$pruned_src/vendor/loro-server/loro/src/lib.rs"
           test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
           grep -q "IANA_TZDB_VERSION" "$pruned_src/vendor/chrono-tz/src/prebuilt/directory.rs"
           # Dependency-only builds compile loro against the real patched loro-internal.

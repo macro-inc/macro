@@ -43,7 +43,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 Install root Bun dependencies before running tests; the differential oracle must
 run the current mirror source and must never be replaced with expected values.
 The editor pair uses Rust Loro 1.17.1; the Worker transcript driver uses
-sync-service's own `loro-crdt` beside the vendored 1.16.2 server encoder, and the
+sync-service's own `loro-crdt` beside the workspace 1.17.1 server encoder, and the
 committed transcript bytes were recorded with 1.16.3.
 
 

@@ -41,7 +41,9 @@ dependencies = [
 name = "account_manager"
 version = "0.1.0"
 dependencies = [
+ "account_manager",
  "axum",
+ "bot_id",
  "channels",
  "chrono",
  "entity_access",
@@ -57,6 +59,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "user_api_key",
  "utoipa",
@@ -387,6 +390,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "lazy-regex",
  "macro_auth",
  "macro_db_migrator",
  "rootcause",
@@ -399,6 +403,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]
@@ -6295,6 +6300,7 @@ name = "database_webhooks"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot_id",
  "chrono",
  "databases",
  "entity_access",
@@ -6305,6 +6311,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "models_databases",
  "rand 0.9.4",
  "rootcause",
@@ -6314,6 +6321,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -6847,7 +6855,7 @@ name = "doc_sync_core"
 version = "0.1.0"
 dependencies = [
  "bebop",
- "loro 1.17.1",
+ "loro",
  "macro_user_id",
  "postcard",
  "rootcause",
@@ -6896,8 +6904,8 @@ dependencies = [
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
- "loro 1.17.1",
- "loro-internal 1.17.1",
+ "loro",
+ "loro-internal",
  "macro_document_model",
  "proptest",
  "rand_chacha 0.9.0",
@@ -6921,7 +6929,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "libtest-mimic",
- "loro 1.17.1",
+ "loro",
  "macro_document_model",
  "macro_user_id",
  "serde_json",
@@ -6942,7 +6950,7 @@ dependencies = [
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
- "loro 1.17.1",
+ "loro",
  "macro_document_model",
  "scoped-tls-hkt",
  "serde",
@@ -7284,7 +7292,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
- "loro 1.17.1",
+ "loro",
  "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
@@ -8845,7 +8853,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
- "loro 1.17.1",
+ "loro",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -10301,6 +10309,7 @@ dependencies = [
  "harness_id",
  "harness_token",
  "harnessd_protocol",
+ "harnesses",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
@@ -10315,6 +10324,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -11289,6 +11299,7 @@ dependencies = [
 name = "image_proxy_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
@@ -11319,6 +11330,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -12423,7 +12435,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lexical_model",
  "lexical_rich_nodes",
- "loro 1.17.1",
+ "loro",
  "proptest",
  "rustc-hash 2.1.2",
  "serde_json",
@@ -12509,7 +12521,7 @@ dependencies = [
 name = "lexical_workspace_tests"
 version = "0.1.0"
 dependencies = [
- "loro 1.17.1",
+ "loro",
  "regress",
  "rootcause",
  "serde",
@@ -12887,48 +12899,18 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.16.2"
-dependencies = [
- "enum-as-inner 0.6.1",
- "generic-btree",
- "loro-common 1.16.0",
- "loro-delta",
- "loro-internal 1.16.2",
- "loro-kv-store 1.16.0",
- "rustc-hash 2.1.2",
- "tracing",
-]
-
-[[package]]
-name = "loro"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "410c939fe3bee34b8ed61f7aea93201fb136629f685ffa557039c4d9952f9988"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
- "loro-common 1.18.0",
+ "loro-common",
  "loro-delta",
- "loro-internal 1.17.1",
- "loro-kv-store 1.18.0",
+ "loro-internal",
+ "loro-kv-store",
  "rustc-hash 2.1.2",
  "tracing",
-]
-
-[[package]]
-name = "loro-common"
-version = "1.16.0"
-dependencies = [
- "arbitrary",
- "enum-as-inner 0.6.1",
- "leb128",
- "loro-rle",
- "nonmax",
- "rustc-hash 2.1.2",
- "serde",
- "serde_columnar",
- "serde_json",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -12964,51 +12946,6 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.16.2"
-dependencies = [
- "append-only-bytes",
- "arref",
- "bytes",
- "either",
- "ensure-cov",
- "enum-as-inner 0.6.1",
- "enum_dispatch",
- "generic-btree",
- "getrandom 0.2.17",
- "im",
- "itertools 0.12.1",
- "leb128",
- "loom",
- "loro-common 1.16.0",
- "loro-delta",
- "loro-kv-store 1.16.0",
- "loro-rle",
- "loro_fractional_index",
- "md5 0.7.0",
- "nonmax",
- "num",
- "num-traits",
- "once_cell",
- "parking_lot",
- "pest",
- "pest_derive",
- "postcard",
- "pretty_assertions",
- "rand 0.8.6",
- "rustc-hash 2.1.2",
- "serde",
- "serde_columnar",
- "serde_json",
- "smallvec",
- "thiserror 1.0.69",
- "thread_local",
- "tracing",
- "wasm-bindgen",
- "xxhash-rust",
-]
-
-[[package]]
-name = "loro-internal"
 version = "1.17.1"
 dependencies = [
  "append-only-bytes",
@@ -13024,9 +12961,9 @@ dependencies = [
  "itertools 0.12.1",
  "leb128",
  "loom",
- "loro-common 1.18.0",
+ "loro-common",
  "loro-delta",
- "loro-kv-store 1.18.0",
+ "loro-kv-store",
  "loro-rle",
  "loro_fractional_index",
  "md5 0.7.0",
@@ -13054,28 +12991,13 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.16.0"
-dependencies = [
- "bytes",
- "ensure-cov",
- "loro-common 1.16.0",
- "lz4_flex",
- "once_cell",
- "quick_cache",
- "rustc-hash 2.1.2",
- "tracing",
- "xxhash-rust",
-]
-
-[[package]]
-name = "loro-kv-store"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a169f32c2d2d6ffe67d03603b61bd17d8d90b1a7f8c2f2585304f3181be8089"
 dependencies = [
  "bytes",
  "ensure-cov",
- "loro-common 1.18.0",
+ "loro-common",
  "lz4_flex",
  "once_cell",
  "quick_cache",
@@ -13362,7 +13284,7 @@ dependencies = [
  "lexical_node_id",
  "lexical_rich_nodes",
  "logos",
- "loro 1.17.1",
+ "loro",
  "mention_date",
  "nom 8.0.0",
  "rand_chacha 0.9.0",
@@ -21185,8 +21107,8 @@ version = "0.1.0"
 dependencies = [
  "bebop",
  "flate2",
- "loro 1.17.1",
- "loro-internal 1.17.1",
+ "loro",
+ "loro-internal",
  "postcard",
  "rustc-hash 2.1.2",
  "serde",
@@ -21222,7 +21144,7 @@ dependencies = [
  "bebop",
  "futures",
  "lazy-regex",
- "loro 1.16.2",
+ "loro",
  "macro_document_model",
  "macro_sync_service_jwt",
  "rootcause",
@@ -21244,7 +21166,7 @@ dependencies = [
  "bebop",
  "flate2",
  "futures",
- "loro 1.16.2",
+ "loro",
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
@@ -21264,7 +21186,7 @@ dependencies = [
  "bebop",
  "futures",
  "getrandom 0.3.4",
- "loro 1.16.2",
+ "loro",
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
@@ -21334,7 +21256,7 @@ dependencies = [
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
- "loro 1.17.1",
+ "loro",
  "macro_document_model",
  "macro_env_var",
  "macro_sync_service_jwt",
@@ -21551,6 +21473,7 @@ dependencies = [
  "agent_credentials",
  "agent_git",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "feature_flags",
@@ -21560,12 +21483,15 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "model-error-response",
+ "model_user",
  "rootcause",
  "serde",
  "sqlx",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "user_api_key",
  "utoipa",
@@ -23851,6 +23777,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",

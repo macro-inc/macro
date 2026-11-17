@@ -191,10 +191,6 @@ build-lexical-conformance-wasm:
 lexical-coverage-seed *ARGS:
   bun packages/lexical-conformance/coverage/gen-matrix.ts {{ARGS}}
 
-# Fail unless vendor/loro-server is the crates.io loro 1.16.2 source the sync worker builds.
-check-loro-server-vendor:
-  bash tooling/scripts/check-loro-server-vendor.sh
-
 # Generate or check traceability and list every uncovered P0 symbol.
 lexical-coverage *ARGS:
   bun packages/lexical-conformance/coverage/check.ts {{ARGS}}

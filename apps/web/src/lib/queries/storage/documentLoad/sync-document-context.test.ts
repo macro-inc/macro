@@ -1,4 +1,5 @@
 import { rustEditorModel } from '@core/constant/featureFlags';
+import type * as PlatformModule from '@core/util/platform';
 import 'fake-indexeddb/auto';
 import { render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -29,6 +30,10 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   bundle: vi.fn(),
   location: vi.fn(),
+}));
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof PlatformModule>()),
+  isTauri: () => mocks.native,
 }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.native,

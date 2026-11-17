@@ -9,7 +9,7 @@ in-process-gate = ["dep:macro_document_model"]
 openapi = ["dep:utoipa"]
 
 [dependencies]
-loro_server.workspace = true
+loro.workspace = true
 macro_document_model = { workspace = true, optional = true, default-features = false }
 bebop.workspace = true
 rootcause.workspace = true

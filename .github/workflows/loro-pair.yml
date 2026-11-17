@@ -9,8 +9,6 @@ name: loro-pair
     - crates/client/lexical/**
     - packages/loro-mirror/**
     - packages/lexical-core/markdown-loro-schema.ts
-    - vendor/loro-server/**
-    - tooling/scripts/check-loro-server-vendor.sh
     - Cargo.toml
     - Cargo.lock
     - package.json
@@ -77,8 +75,6 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
-    - name: Server Loro matches crates.io 1.16.2
-      run: just check-loro-server-vendor
     - name: Install catalog dependencies
       run: bun install --frozen-lockfile
     - name: Native projection and catalog Loro compatibility

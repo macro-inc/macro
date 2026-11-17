@@ -442,8 +442,6 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "=1.17.1"
-# Preserve the existing server encoder while editor/session clients use1.17.1.
-loro_server = { package = "loro", path = "vendor/loro-server/loro" }
 loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
@@ -737,13 +735,8 @@ opt-level = 2
 debug-assertions = true
 overflow-checks = true
 
-# Both encoder releases execute measured native rich-text tracking in tests.
+# The encoder executes measured native rich-text tracking in tests.
 # Keep debug assertions and overflow checks enabled.
-[profile.test.package."loro-internal@1.16.2"]
-opt-level = 2
-debug-assertions = true
-overflow-checks = true
-
 [profile.test.package."loro-internal@1.17.1"]
 opt-level = 2
 debug-assertions = true

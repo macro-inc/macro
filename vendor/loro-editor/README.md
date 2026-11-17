@@ -15,7 +15,7 @@ Local runtime change: assign each dense text-tracker update range through a
 checked slice fill instead of repeated checked SmallVec indexing. LeafIndex is
 Copy; input order, bounds/debug checks and resulting leaf assignment remain the
 same, including overlapping and empty ranges. Encoder/serializer code and corpus
-expectations are untouched. The preserved 1.16.2 server copy uses the same change.
+expectations are untouched.
 
 Validate ordered range updates against the existing sequential update algorithm,
 consumer tests, exact replay, and a fresh Worker re-record with 155 zero normalized
