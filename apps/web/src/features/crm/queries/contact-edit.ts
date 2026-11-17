@@ -54,7 +54,7 @@ export async function editContact(
           : undefined;
         if (company) return company.name ?? null;
         const result = await span.span('crm.contact_edit.company', () =>
-          deps.storage.getCompany({ companyId })
+          deps.storage.getCompany({ companyId, includeContacts: false })
         );
         return result.isOk() ? (result.value.name ?? null) : null;
       };

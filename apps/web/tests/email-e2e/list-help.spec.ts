@@ -115,10 +115,12 @@ for (const provider of PROVIDERS) {
       await expect(
         page.getByRole('heading', { name: 'Email drafts', exact: true })
       ).toBeVisible();
+      // Email binds no `/` of its own any more, so the reference lists no
+      // "Search email" key under Email.
       for (const shortcut of [
-        'Search email',
         'Star or unstar',
         'Mute or unmute',
+        'Undo the last action',
         'Discard draft',
         'Attach files',
       ])

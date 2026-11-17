@@ -23,6 +23,16 @@ export default defineConfig({
   resolve: {
     dedupe: ['solid-js'],
     alias: [
+      ...[
+        '@app/lib/analytics/posthog',
+        '@queries/team/teams',
+        '@core/context/user',
+        '@core/component/Toast/Toast',
+        '@service-storage/crm-email-privacy',
+      ].map((find) => ({
+        find,
+        replacement: `${directory}/preview-adapters.ts`,
+      })),
       {
         find: '../context/crm-context',
         replacement: `${directory}/preview-adapters.ts`,

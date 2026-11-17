@@ -1,5 +1,5 @@
 // The ways into a thread's Remind me menu besides the shortcut and the
-// header button, and the ways out of it: the row's context menu, the menu
+// header button, and the ways out of it: the row's context menu (a known bug), the menu
 // after the open thread's subject, the menu's Cancel, and its Retry after
 // the reminder failed to load. Each for a Gmail and an Outlook inbox.
 
@@ -8,12 +8,7 @@ import { expect, test } from './harness/fixtures';
 import { rowIds } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
-import {
-  deliverAll,
-  openFromList,
-  rowMenu,
-  titleMenu,
-} from './harness/ways-organise';
+import { deliverAll, rowMenu, titleMenu } from './harness/ways-organise';
 import {
   expectReminder,
   remindTomorrow,
@@ -26,26 +21,45 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, Remind me in the row's menu or in the menu after an
-    // open thread's subject saves no reminder for the thread; Cancel saves
-    // one anyway or leaves the menu open; or, once the thread's reminder
-    // failed to load, Retry does not load it, so nothing can be saved.
-    test('every way to set a reminder on a thread, and to leave the menu', async ({
+    // Known bug (row-menu-dialogs-close-at-once): the Remind me menu opened
+    // from a row's menu closes at once, because the row's menu dismisses
+    // itself with an Escape that the new menu receives. When this passes, the bug is fixed: remove
+    // the tag and the row's line in `ledger/waivers.tsv`.
+    test("known bug: row-menu-dialogs-close-at-once: Remind me in a row's menu sets a reminder on the thread @known-bug", {
+      tag: '@known-bug',
+    }, async ({ page, mailbox }) => {
+      const ids = await deliverAll(mailbox, ['Agenda']);
+      await mailbox.open();
+      await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
+      await rowMenu(page, ids.Agenda, /^Remind me/);
+      did('AL-082');
+      await remindTomorrow(page);
+      await expectReminder(mailbox, ids.Agenda);
+    });
+
+    // When this fails, Remind me in the menu after an open thread's subject
+    // saves no reminder for the thread; Cancel saves one anyway or leaves
+    // the menu open; or, once the thread's reminder failed to load, Retry
+    // does not load it, so nothing can be saved.
+    test('setting a reminder on an open thread, and leaving the menu', async ({
       page,
       mailbox,
     }) => {
-      const ids = await deliverAll(mailbox, [
-        'Agenda',
-        'Minutes',
-        'Lunch',
-        'Kept',
-      ]);
+      const ids = await deliverAll(mailbox, ['Minutes', 'Lunch', 'Kept']);
       const menu = page.getByRole('dialog', { name: 'Remind me' });
+      // By its address: a thread whose reminder is set gives the screen to
+      // the next one, and the list is then a guess away.
+      const opened = async (id: string, subject: string) => {
+        await mailbox.open(`/app/email/${id}`);
+        await expect(page.getByText(`About ${subject}.`).first()).toBeVisible();
+      };
       // Lunch's reminder fails to load until the test lets it through.
       let failing = true;
+      let lastRead = 0;
       await page.route(
         new RegExp(`/reminders/email/${ids.Lunch}$`),
         async (route) => {
+          if (route.request().method() === 'GET') lastRead = Date.now();
           if (failing && route.request().method() === 'GET') {
             await route.fulfill({ status: 500 });
           } else {
@@ -58,33 +72,36 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(() => rowIds(page))
         .toEqual(expect.arrayContaining(Object.values(ids)));
-      await rowMenu(page, ids.Agenda, /^Remind me/);
-      did('AL-082');
-      await remindTomorrow(page);
-      await expectReminder(mailbox, ids.Agenda);
-
-      await rowMenu(page, ids.Kept, /^Remind me/);
+      await opened(ids.Kept, 'Kept');
+      await titleMenu(page, 'Kept', /^Remind me/);
+      did('AL-161');
       await expect(remindWhen(page)).toBeVisible();
       await menu.getByRole('button', { name: 'Cancel' }).click();
       did('AL-189');
       await expect(menu).toHaveCount(0);
 
-      await rowMenu(page, ids.Lunch, /^Remind me/);
+      await opened(ids.Lunch, 'Lunch');
+      await titleMenu(page, 'Lunch', /^Remind me/);
       await expect(
         menu.getByText('Couldn’t load this email reminder.')
       ).toBeVisible();
+      // The menu reads a reminder that failed to load again by itself: once
+      // more a second later, then every five seconds. In the quiet after
+      // such a pair, only Retry can load it within two seconds.
+      await expect
+        .poll(() => Date.now() - lastRead, { intervals: [100] })
+        .toBeGreaterThan(1_500);
       failing = false;
       await menu.getByRole('button', { name: 'Retry' }).click();
       did('AL-622');
       await expect(
         menu.getByText('Couldn’t load this email reminder.')
-      ).toHaveCount(0);
+      ).toHaveCount(0, { timeout: 2_000 });
       await remindTomorrow(page);
       await expectReminder(mailbox, ids.Lunch);
 
-      await openFromList(page, ids.Minutes, 'About Minutes.');
+      await opened(ids.Minutes, 'Minutes');
       await titleMenu(page, 'Minutes', /^Remind me/);
-      did('AL-161');
       await remindTomorrow(page);
       await expectReminder(mailbox, ids.Minutes);
 

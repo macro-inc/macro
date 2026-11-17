@@ -61,6 +61,14 @@ const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
 ];
 
 impl EmailPrivacyService for FakeCrm {
+    async fn excluded_email_threads(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
+    ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,
@@ -86,6 +94,10 @@ impl EmailPrivacyService for FakeCrm {
 }
 
 impl CrmService for FakeCrm {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn resolve_association(
         &self,
         user_id: &str,
@@ -313,7 +325,7 @@ impl CrmService for FakeCrm {
 
     async fn crm_scope_precheck(
         &self,
-        _team_id: &uuid::Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
         _domains: &[String],
         _addresses: &[String],
     ) -> Result<CrmScopePrecheck, CrmError> {
@@ -338,6 +350,14 @@ impl CrmService for FakeCrm {
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmContact>, CrmError> {
         unimplemented!("FakeCrm.list_contacts_for_company")
+    }
+
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crm::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crm::domain::model::CrmCompanyContactsPage, CrmError> {
+        unimplemented!("FakeCrm.list_company_contacts_page")
     }
 
     async fn get_contact_for_team(
@@ -367,6 +387,7 @@ impl CrmService for FakeCrm {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!("FakeCrm.get_company_for_team")
     }

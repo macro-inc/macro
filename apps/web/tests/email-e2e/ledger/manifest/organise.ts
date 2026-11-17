@@ -144,10 +144,12 @@ export const organise = {
       surface: 'SL-25',
       fn: ['F-084'],
       action: 'Add tag (tag picker)',
-      trigger: 'context menu item (single row)',
+      trigger:
+        'context menu item (single row): opens a submenu with the tag picker',
       source: [
         'src/features/soup/createSoupEntityActions.ts',
         'src/features/soup/SoupEntityContextMenu.tsx',
+        'src/features/property/tags/EntityTagSubmenu.tsx',
       ],
       viewports: ['desktop'],
       note: 'the tag picker is only given to the context menu, not the phone drawer',
@@ -639,9 +641,12 @@ export const organise = {
       id: 'AL-615',
       surface: 'SL-31',
       fn: ['F-084'],
-      action: 'Add tag',
-      trigger: 'title menu',
-      source: ['src/components/app/split-layout/components/SplitFileMenu.tsx'],
+      action: 'Add tag (tag picker)',
+      trigger: 'title menu: opens a submenu with the tag picker',
+      source: [
+        'src/components/app/split-layout/components/SplitFileMenu.tsx',
+        'src/features/property/tags/EntityTagSubmenu.tsx',
+      ],
     },
     {
       id: 'AL-616',
@@ -879,11 +884,13 @@ export const organise = {
       id: 'STL-604',
       surface: 'SL-25',
       fn: ['F-065'],
-      state: 'toast "Link copied to clipboard" / "ID copied to clipboard"',
+      state:
+        "the menu stays open and the item's icon turns to a check (no toast)",
       trigger: 'Copy Link / Copy ID',
       source: [
         'src/features/next-soup/actions/make-copy-link-action.ts',
         'src/features/next-soup/actions/make-copy-entity-id-action.ts',
+        'src/lib/core/component/ContextMenu.tsx',
       ],
     },
     {

@@ -3,16 +3,25 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-flag';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Show } from 'solid-js';
 import { HomeAgentComposer } from '../home-agent-composer';
-import { HomeRecommendedActions } from './home-recommended-actions';
+import { HomeSectionBoundary } from '../home-section-boundary';
 
-/** Desktop Home's idle pane: the agent composer and suggested actions. */
+// Loaded only for people with suggestions on.
+const HomePriorities = lazyNamed(
+  () => import('@app/features/suggestions/home-priorities'),
+  'HomePriorities'
+);
+
+/** Desktop Home's idle pane: the agent composer, and the priorities when suggestions are on. */
 export function HomeChatStart() {
   const shell = useViewShell();
+  const suggestions = useSuggestionsFlag();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
   return (
@@ -37,7 +46,12 @@ export function HomeChatStart() {
             />
           </Show>
           <div
-            class="mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[max(0px,calc(40%-60px))_auto_1fr] pt-6 pb-16"
+            class="mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 pt-6 pb-16"
+            classList={{
+              'grid-rows-[max(0px,calc(40%-60px))_auto_1fr]': !suggestions(),
+              // Today and the priorities need the room below the composer.
+              'grid-rows-[2.5rem_auto_1fr]': suggestions(),
+            }}
             data-home-composer-align="agents"
           >
             <div class="self-end" />
@@ -50,7 +64,12 @@ export function HomeChatStart() {
               </DebugSuspense>
             </div>
             <div class="min-h-0 min-w-0 pb-8">
-              <HomeRecommendedActions />
+              {/* With suggestions on, today and the top priorities sit below the composer. */}
+              <Show when={suggestions()}>
+                <HomeSectionBoundary title="priorities" fallback={null}>
+                  <HomePriorities />
+                </HomeSectionBoundary>
+              </Show>
             </div>
           </div>
         </div>

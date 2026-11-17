@@ -102,8 +102,8 @@ export function useContactQuery(
  * there is no global directory involved — `crm_contacts.name` is already
  * team-scoped, so the write is a plain overwrite. Optimistically updates the
  * contact detail cache (with rollback on error) so the title flips
- * immediately, then invalidates it plus the parent company (whose response
- * embeds the contact list) and soup so every listing picks up the new name.
+ * immediately, then invalidates it plus the parent company's Team list and
+ * soup so every listing picks up the new name.
  */
 export function useSetContactNameMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -149,7 +149,7 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
           }),
           companyId &&
             deps.client.invalidateQueries({
-              queryKey: crmKeys.company(companyId).queryKey,
+              queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);

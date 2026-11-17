@@ -79,3 +79,62 @@ fn provider_readiness_never_loads_rollout_flags() {
         assert_eq!(availability.flags.loads.load(Ordering::SeqCst), 0);
     }
 }
+
+// The agent's own snapshot; the responsible human is never evaluated.
+struct AgentFlags {
+    result: Result<FlagSnapshot, String>,
+    loads: AtomicUsize,
+}
+impl FeatureFlags for AgentFlags {
+    async fn load(&self, user: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, rootcause::Report> {
+        assert_eq!(user.as_ref(), "macro|agent@example.test");
+        self.loads.fetch_add(1, Ordering::SeqCst);
+        self.result
+            .clone()
+            .map_err(|_| rootcause::report!("synthetic flag load failure"))
+    }
+}
+
+#[tokio::test]
+async fn agent_vault_requires_both_own_keys_and_fails_closed() {
+    let both = |passwords: bool, vault: bool| {
+        Ok(FlagSnapshot::new([
+            (PASSWORDS_FLAG.into(), FlagValue::Boolean(passwords)),
+            (AGENT_VAULT_FLAG.into(), FlagValue::Boolean(vault)),
+        ]))
+    };
+    for (result, expected) in [
+        (both(true, true), true),
+        (both(false, true), false),
+        (both(true, false), false),
+        (
+            Ok(FlagSnapshot::new([(
+                PASSWORDS_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+            false,
+        ),
+        (
+            Ok(FlagSnapshot::new([(
+                AGENT_VAULT_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+            false,
+        ),
+        (Ok(FlagSnapshot::default()), false),
+        (Err("remote evaluation failed".to_owned()), false),
+    ] {
+        let availability = PasswordAvailability {
+            flags: AgentFlags {
+                result,
+                loads: AtomicUsize::new(0),
+            },
+            provider_configured: true,
+        };
+        let agent = MacroUserIdStr::parse_from_str("macro|agent@example.test")
+            .unwrap()
+            .into_owned();
+        assert_eq!(availability.agent_vault_enabled(&agent).await, expected);
+        assert_eq!(availability.flags.loads.load(Ordering::SeqCst), 1);
+    }
+}

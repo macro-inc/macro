@@ -12,10 +12,10 @@ use crate::domain::model::{
     InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
     JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
     PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
-    TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError,
+    RemovedTeamMember, RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError,
+    SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails,
+    TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole,
+    TeamWithMembers, ToggleAutoJoinDomainError,
 };
 use crate::domain::owned_entity_cleanup::ClearedTeam;
 
@@ -124,7 +124,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send;
+    ) -> impl Future<Output = Result<RemovedTeamMember<'static>, RemoveUserFromTeamError>> + Send;
 
     ///Gets a team invite by id
     fn get_team_invite_by_id(
@@ -183,10 +183,10 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Rolls back a previously removed team member, restoring whether its
-    /// seat was included.
+    /// seat was included and its stored CRM preference.
     fn rollback_remove_user_from_team(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
         seat_included: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
@@ -268,6 +268,16 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, TeamError>> + Send;
+
+    /// Atomically recheck the administrator and target's current roles while
+    /// changing only the target's CRM access. Refuse denying admins or owners.
+    fn set_member_crm_access(
+        &self,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        member: &MacroUserIdStr<'_>,
+        enabled: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Patches the role of the provided user id for the team
     fn patch_team_user_role(

@@ -345,31 +345,6 @@ export const list = {
       note: 'not available on Spam/Trash/Scheduled/Reminders',
     },
     {
-      id: 'AL-013',
-      surface: 'SL-18',
-      fn: ['F-050'],
-      action: 'focus list search',
-      trigger: 'hotkey / (list header mounted)',
-      source: ['src/features/email-view/use-email-search-hotkeys.ts'],
-      registered: [
-        'src/features/email-view/use-email-search-hotkeys.ts#Search email',
-      ],
-    },
-    {
-      id: 'AL-014',
-      surface: 'SL-17',
-      fn: ['F-050'],
-      action: 'return to the list and focus list search',
-      trigger: 'hotkey / while a thread or new email replaced the list',
-      source: [
-        'src/features/email-view/use-email-search-hotkeys.ts',
-        'src/features/email-view/email-view.tsx',
-      ],
-      registered: [
-        'src/features/email-view/use-email-search-hotkeys.ts#Search email',
-      ],
-    },
-    {
       id: 'AL-015',
       surface: 'SL-18',
       fn: ['F-050'],
@@ -384,9 +359,12 @@ export const list = {
       id: 'AL-017',
       surface: 'SL-18',
       fn: ['F-050'],
-      action: 'leave search field back to list',
+      action: 'leave search field back to list, with the search kept',
       trigger: 'Escape in search field',
-      source: ['src/features/email-view/components/EmailHeader.tsx'],
+      source: [
+        'src/features/email-view/components/EmailHeader.tsx',
+        'src/components/view-shell/list-search-keys.ts',
+      ],
     },
     {
       id: 'AL-018',

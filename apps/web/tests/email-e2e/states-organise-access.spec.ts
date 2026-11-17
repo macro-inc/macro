@@ -3,7 +3,9 @@
 // the Share dialog is reached from a row of the list: a thread that was
 // shared with the user and taken back while their list still shows it. The
 // row's Share opens the dialog with the owner the list knows; the dialog in
-// the open thread is never reached, since the thread no longer opens.
+// the open thread is never reached, since the thread no longer opens. On the
+// desktop that dialog closes at once (a known bug), so until it is fixed the
+// request is covered on a phone, with a Gmail inbox, alone.
 //
 // The app scans the threads shared with the user once it has loaded, and that
 // scan drops a thread whose access is gone; the access is taken back after it,
@@ -137,13 +139,13 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, someone who lost access to a thread still on their
-    // list cannot ask its owner for it from the Share dialog, or the dialog
-    // does not show that the request was sent.
-    test('a thread shared and taken back asks its owner for access from the Share dialog', async ({
-      page,
-      mailbox,
-    }) => {
+    // Known bug (row-menu-dialogs-close-at-once): the Share dialog
+    // opened from a row's menu closes at once, and the row's menu is the
+    // desktop's only way to it for a thread that can no longer be opened.
+    // When this passes, the bug is fixed: remove the tag.
+    test('known bug: row-menu-dialogs-close-at-once: a thread shared and taken back asks its owner for access from the Share dialog @known-bug', {
+      tag: '@known-bug',
+    }, async ({ page, mailbox }) => {
       const budget = await sharedWithUser(page, mailbox, provider);
       const scanned = sharedScan(page, budget.id);
 

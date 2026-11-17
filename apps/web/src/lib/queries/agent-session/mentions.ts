@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createGraphqlAgentSessionMentionPreview } from './graphql-mentions';
@@ -11,17 +9,13 @@ const restPreview = createAgentSessionMentionBatcher((ids) =>
   fetchAgentSessionMentionPreviews(ids, false)
 );
 
-function restMentionQueryOptions(
-  id: string,
-  graphql: boolean,
-  enabled: boolean
-) {
+function restMentionQueryOptions(id: string, enabled: boolean) {
   return queryOptions({
-    queryKey: agentSessionKeys.preview(id, graphql).queryKey,
+    queryKey: agentSessionKeys.preview(id).queryKey,
     queryFn: () => restPreview(id),
     enabled,
     // A missing live record needs a fresh permission-aware answer.
-    staleTime: graphql ? 0 : 15_000,
+    staleTime: 0,
   });
 }
 
@@ -29,23 +23,14 @@ export function useAgentSessionMentionPreview(
   id: Accessor<string>,
   enabled: Accessor<boolean>
 ) {
-  const flag = useFeatureFlag(enableGraphqlSoup);
   const active = () => enabled() && Boolean(id());
-  const live = createGraphqlAgentSessionMentionPreview(
-    id,
-    () => active() && flag().enabled
-  );
-  const restEnabled = () =>
-    active() && (!flag().enabled || live.shouldFallback());
-  const rest = useQuery(() =>
-    restMentionQueryOptions(id(), flag().enabled, restEnabled())
-  );
+  const live = createGraphqlAgentSessionMentionPreview(id, active);
+  const restEnabled = () => active() && live.shouldFallback();
+  const rest = useQuery(() => restMentionQueryOptions(id(), restEnabled()));
   const data = () => {
     if (!active()) return undefined;
-    if (flag().enabled && live.data()) return live.data();
-    return restEnabled() &&
-      rest.isSuccess &&
-      (!flag().enabled || !rest.isFetching)
+    if (live.data()) return live.data();
+    return restEnabled() && rest.isSuccess && !rest.isFetching
       ? rest.data
       : undefined;
   };

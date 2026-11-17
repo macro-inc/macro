@@ -151,6 +151,23 @@ realtime appearance events do not re-ingest history.
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`
   recipes require a typed confirmation before writing.
+- `domain/released_attachments.rs` trashes email attachments whose mail is
+  gone, draining `released_email_attachment_documents` (filled by a trigger
+  when a statement deletes a document's `document_email` rows) in batches of
+  500, at most 20 batches per round. Its repository
+  (`outbound/pg_released_attachments.rs`) restates
+  `PgDocumentRepo::soft_delete_document`'s writes set-based; change the two
+  together, and keep its adoption checks (folder, grant or sharing change,
+  second version, PDF annotation, comment thread) in step with any new way to
+  file, share or edit a document. A document with no link left is trashed,
+  or kept as it is when adopted or already in the Trash. Each batch publishes
+  one `document.email_attachments_released` event naming its trashed and kept
+  documents; Soup realtime removes the trashed ones from open lists, as for
+  the documents of a trashed folder, and nothing else reacts per document.
+  Link an existing document to an attachment with
+  `create::link_live_document_email`: its key-share lock orders the link with
+  the drain's `FOR UPDATE`, so a document the drain trashed after a reuse
+  lookup is never linked.
 - `edit_document.rs` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
   field that isn't a grant joins that check. Grants are checked where they are

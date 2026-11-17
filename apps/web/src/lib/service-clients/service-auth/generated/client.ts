@@ -4687,6 +4687,11 @@ export type patchTeamResponse500 = {
   status: 500;
 };
 
+export type patchTeamResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type patchTeamResponseSuccess = patchTeamResponse200 & {
   headers: Headers;
 };
@@ -4695,6 +4700,7 @@ export type patchTeamResponseError = (
   | patchTeamResponse401
   | patchTeamResponse404
   | patchTeamResponse500
+  | patchTeamResponse503
 ) & {
   headers: Headers;
 };

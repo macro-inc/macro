@@ -1,4 +1,5 @@
 import type { CreatableBlock } from '@app/features/command/types';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { TOKENS } from '@core/hotkey/tokens';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -36,8 +37,9 @@ vi.mock(
 vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
   openCalendarEventSplit: sources.openCalendarEvent,
 }));
-vi.mock('@app/features/task-composer/new-task-title-focus', () => ({
-  raiseKeyboardForNewTaskTitle: sources.raiseKeyboard,
+vi.mock('@core/directive/focusInput', () => ({
+  focusStandInActive: () => false,
+  triggerFocusNewElement: sources.raiseKeyboard,
 }));
 vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: sources.openCompany,
@@ -126,7 +128,10 @@ describe('mobile create availability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Task' }));
     // iOS raises the keyboard only inside the tap; the composer opens after
     // the menu has closed.
-    expect(sources.raiseKeyboard).toHaveBeenCalledOnce();
+    expect(sources.raiseKeyboard).toHaveBeenCalledExactlyOnceWith(
+      NEW_TASK_TITLE_SELECTOR,
+      { touchOnly: true }
+    );
     expect(createTask).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });

@@ -137,6 +137,13 @@ pub trait MembershipPort: Send + Sync {
         &self,
         viewer: &str,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+    /// Configuration kinds the viewer may no longer use. The composition owns
+    /// feature policy; generic saved-view storage does not interpret configurations.
+    fn denied_view_kinds(
+        &self,
+        viewer: &str,
+        kinds: &HashSet<String>,
+    ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
     /// All current members of a team, including its owner.
     fn team_members(
         &self,
@@ -235,12 +242,47 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         Ok(())
     }
 
+    async fn visible_configurations(
+        &self,
+        viewer: &str,
+        views: Vec<View>,
+    ) -> Result<Vec<View>, Error> {
+        let kinds = views
+            .iter()
+            .filter_map(|view| kind_of(&view.config))
+            .collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        Ok(views
+            .into_iter()
+            .filter(|view| kind_of(&view.config).is_none_or(|kind| !denied.contains(&kind)))
+            .collect())
+    }
+
+    async fn require_configuration(&self, viewer: &str, config: &Value) -> Result<(), Error> {
+        let kinds = kind_of(config).into_iter().collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        if denied.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::NotFound)
+        }
+    }
+
     async fn effective(
         &self,
         viewer: &str,
         views: Vec<View>,
         viewer_teams: &HashSet<Uuid>,
     ) -> Result<Vec<View>, Error> {
+        let views = self.visible_configurations(viewer, views).await?;
         let teams: HashSet<_> = views
             .iter()
             .filter_map(|view| view.shared_team_id)
@@ -438,6 +480,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             return self.get(viewer, id).await;
         }
         Self::validate(&name, &config)?;
+        self.require_configuration(viewer, &config).await?;
         if let Some(team) = team {
             let members = self
                 .membership
@@ -487,6 +530,10 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             .ok_or(Error::NotFound)?;
         if current.user_id != viewer {
             return Err(Error::NotFound);
+        }
+        self.require_configuration(viewer, &current.config).await?;
+        if let Some(config) = &change.config {
+            self.require_configuration(viewer, config).await?;
         }
         if current.revision != revision {
             return Err(Error::Conflict);
@@ -548,6 +595,9 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             .get(id)
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        if let Some(view) = &deleting {
+            self.require_configuration(viewer, &view.config).await?;
+        }
         if self
             .repo
             .delete(id, viewer, revision)
@@ -586,6 +636,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         name: String,
         config: Value,
     ) -> Result<View, Error> {
+        self.require_configuration(viewer, &config).await?;
         let view = View::new(viewer.to_owned(), name, config);
         self.repo
             .create(&view)
@@ -596,10 +647,12 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
 
     /// Legacy REST listing includes only the caller's private definitions.
     pub async fn legacy_list(&self, viewer: &str) -> Result<Vec<View>, Error> {
-        self.repo
+        let views = self
+            .repo
             .legacy_list(viewer)
             .await
-            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        self.visible_configurations(viewer, views).await
     }
 
     async fn require_legacy_owner(&self, viewer: &str, id: Uuid) -> Result<(), Error> {
@@ -612,7 +665,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         if view.user_id != viewer {
             return Err(Error::NotOwner);
         }
-        Ok(())
+        self.require_configuration(viewer, &view.config).await
     }
 
     /// Legacy REST PATCH, preserving its shallow JSON merge.
@@ -625,6 +678,9 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         config: Option<&Value>,
     ) -> Result<(), Error> {
         self.require_legacy_owner(viewer, id).await?;
+        if let Some(config) = config {
+            self.require_configuration(viewer, config).await?;
+        }
         self.repo
             .legacy_patch(id, viewer, name, config)
             .await

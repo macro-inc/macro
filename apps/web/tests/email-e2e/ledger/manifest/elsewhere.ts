@@ -366,17 +366,6 @@ export const elsewhere = {
       source: ['src/features/home/components/HomeEmptyState.tsx'],
     },
     {
-      id: 'AX-317',
-      surface: 'SX-23',
-      fn: ['F-001', 'F-002'],
-      action: 'Open Settings > Email from Home suggestions',
-      trigger: 'button "Connect your inbox for suggested actions"',
-      source: [
-        'src/features/home/components/home-suggestions.tsx',
-        'src/features/home/components/home-recommended-actions.tsx',
-      ],
-    },
-    {
       id: 'AX-058',
       surface: 'SX-24',
       fn: ['F-163'],
@@ -798,7 +787,7 @@ export const elsewhere = {
       surface: 'SX-28',
       fn: ['F-184'],
       state:
-        'Shortcut reference sections "Email" (Search email, Star or unstar, Mute or unmute, …) and "Email drafts" (Discard draft, Attach files, …)',
+        'Shortcut reference sections "Email" (Star or unstar, Mute or unmute, Undo the last action, …) and "Email drafts" (Discard draft, Attach files, …)',
       trigger: 'open Settings > Shortcuts',
       source: ['src/features/settings/Shortcuts.tsx'],
     },

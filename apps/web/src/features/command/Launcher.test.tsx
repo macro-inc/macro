@@ -1,6 +1,6 @@
 import { MemoryRouter, Route } from '@solidjs/router';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -15,6 +15,11 @@ const host = vi.hoisted(() => ({
   createSpreadsheet: vi.fn(async () => 'sheet-1' as string | undefined),
   createDatabase: vi.fn(),
   createForm: vi.fn(),
+  createMarkdownFile: vi.fn(async (): Promise<string | undefined> => undefined),
+  createSnippet: vi.fn(async (): Promise<string | undefined> => undefined),
+  createCanvasFile: vi.fn(async () => ({ error: 'offline' })),
+  createCodeFileFromText: vi.fn(async () => err('offline')),
+  toastFailure: vi.fn(),
   projectFlag: (): boolean | undefined => true,
   carouselFlag: (): boolean | undefined => undefined,
 }));
@@ -71,11 +76,21 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({}));
 vi.mock('@core/component/EntityIcon', () => ({
   getIconConfig: () => ({ icon: () => null, foreground: 'text-ink' }),
 }));
-vi.mock('@core/directive/focusInput', () => ({}));
+vi.mock('@core/directive/focusInput', () => ({
+  triggerFocusNewElement: () => {},
+}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
 vi.mock('@core/hotkey/state', () => ({ pressedKeys: () => new Set() }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
-vi.mock('@core/util/create', () => ({}));
+vi.mock('@core/util/create', () => ({
+  createMarkdownFile: host.createMarkdownFile,
+  createSnippet: host.createSnippet,
+  createCanvasFile: host.createCanvasFile,
+  createCodeFileFromText: host.createCodeFileFromText,
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: host.toastFailure },
+}));
 vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));
@@ -278,6 +293,24 @@ it.each([
       expect(openCreated).toHaveBeenCalledExactlyOnceWith({ blockName, id })
     );
     expect(host.openWithSplit).not.toHaveBeenCalled();
+  }
+);
+
+it.each([
+  { blockName: 'md', message: 'Could not create the document' },
+  { blockName: 'snippet', message: 'Could not create the snippet' },
+  { blockName: 'canvas', message: 'Could not create the canvas' },
+  { blockName: 'code', message: 'Could not create the code file' },
+] as const)(
+  'tells the user when a $blockName cannot be created',
+  async ({ blockName, message }) => {
+    const goBack = vi.fn();
+    host.openWithSplit.mockReturnValueOnce({ split: { goBack } });
+
+    runCreateAction(blockName, { source: 'create_menu' });
+
+    await vi.waitFor(() => expect(goBack).toHaveBeenCalledOnce());
+    expect(host.toastFailure).toHaveBeenCalledExactlyOnceWith(message);
   }
 );
 

@@ -303,13 +303,21 @@ Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
 Repository controls appear alongside it in Code mode.
 Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model or effort selector on mobile returns focus to the message input.
+Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
-In new and active agent composers, check that the model selector and lightning
-speed toggle share a height and vertical center: 32px on desktop and 36px with
-touch emulation. Open the model picker and toggle fast mode to verify both
-controls remain interactive at desktop, phone, and tablet widths.
+Beside the model selector, the composer shows **Effort** (a dial plus the
+current level, such as *High*) for models that advertise reasoning effort, and
+**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
+for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
+touch both are icon buttons that open a bottom sheet. The tier is one browser
+preference shared by every composer (`macro:ai-speed`); a model that doesn't
+offer it runs at standard, and the agent composer applies it before the next
+prompt only when the session reports a different tier. Priority sends
+`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
+In new and active agent composers, check that the model selector and these
+controls share a height and vertical center: 32px on desktop and 36px with
+touch emulation, and stay interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -662,7 +670,10 @@ the shimmer.
   Unavailable paired agents stay visible with a reason.
   If Macro is unavailable, its catalog stays searchable but
   model choices are disabled in every list. Model discovery uses the
-  selected runtime. Every coding agent shows repository
+  selected runtime. When Cursor refuses the connected key (a team-owned
+  service token, a revoked key), the Cursor submenu says to reconnect with a
+  personal or service-account Cursor API key instead of the generic failure.
+  Every coding agent shows repository
   controls; chat agents hide those controls but keep the mode bar. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
   The most recently used supported,
@@ -765,7 +776,7 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
+- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
   New conversations remember the last effort picked for each runtime and model,
   per signed-in user, across sends, mode switches, and reloads, while that model
@@ -1138,8 +1149,6 @@ The greeting, agent/model selector, coding repository/branch drawer, and send fl
 are shared. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.
-Home suggestions and document/project context populate this same draft as markdown
-mentions. A failed suggestion conversion preserves the text and shows an error.
 Session creation and prompt delivery use the shared pending-session flow.
 
 ## Sharing a chat
@@ -1332,8 +1341,9 @@ SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
-`render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image; a program's
+`render`; `ReadCanvas`, `ApplyCanvasEdits`, `EditCanvas` and `RenderCanvas`
+are hidden, and the model sees a render a program returns in
+`images: [await canvas.render()]` as an image block; a program's
 render or generated image shows in the reply through the image's
 `toMarkdown()` `<m-image>` line, since a document mention of a static file id
 reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
@@ -1454,7 +1464,10 @@ presenting, the agent asks “Should I kick it off?”, unless the user said not
 to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
-request”. SDK operation
+request”. The HTTP review decision endpoint requires direct user authentication;
+agent runs receive 403 for edits, submissions, and dismissals before their
+request body is decoded. The separate **DecideReview** chat tool keeps its
+existing user-prompted-turn checks. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1675,8 +1688,10 @@ plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and U
 `Open` button that only opens a new tab after you click it. Once answered the card collapses
 to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn. Anyone with edit access to the session may
-answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+square cancels the question and the turn. A directly authenticated user with
+edit access to the session may answer; agent runs and runtimes cannot answer
+questions or permission requests, even using a user's credentials. Viewers see
+the form locked with `Waiting for an editor`. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1709,7 +1724,10 @@ wants to do. The owner sees `Approval needed` with `Decline`, `Always allow`, an
 `Always allow` retains its existing scope: the named requester’s same Macro tool,
 or all tools of the connected app, for this session. It does not change which
 account a call selects. Declined, cancelled, expired, or superseded calls do not
-run. The Magic Chip reads `Waiting for approval` while a call is held.
+run. Agent runs receive 403 for `approve` and `approve_and_remember`, including
+when they use the owner's credentials; deny and cancel remain available under
+the existing owner and edit-access checks. The Magic Chip reads `Waiting for
+approval` while a call is held.
 
 Email/calendar reviews separately retain the account selected at creation. Only
 that account, with session edit access, may edit or submit those drafts. Older
@@ -1936,8 +1954,9 @@ way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
 a separate group. Its dashboard supports markdown, timelines, entity lists,
-channel messages, item cards, calendar agendas and tags, using the same
-full-width view as AI chat. An item card (one to four items: a document or
+channel messages, item cards, calendar agendas, tags and bot token cards
+(minted in the viewer's browser, so the secret never reaches the agent), using
+the same full-width view as AI chat. An item card (one to four items: a document or
 spreadsheet, an email thread, an event, a project, a channel, a routine, a form
 or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
@@ -2537,12 +2556,20 @@ also exercise direct ACP model-change requests, downgrade, and resume.
 
 ## Composing routines from a conversation
 
-The built-in **Compose Routines** skill walks an agent through creating or
-changing a routine with `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`: read
-the existing routine first, pick schedule or activity triggers, write code steps
-that act and decide (`macro.ai.decide`), keep to one Ask AI step, resolve every
-id before writing, and send the complete
-configuration, since an update replaces name, triggers, steps and required apps.
+The built-in **Compose Routines** skill is how an agent writes or changes a
+routine from a conversation. A code-mode session reads it right after the
+routines guide, without looking for it, and usually does the whole job in one
+program: it finds every item the request names by its exact name with the
+SDK (`macro.channels.search`, a name search of `macro.search.page`,
+`macro.users.search`, or the list for its kind), asking, with `AskUser` where
+it can or else in its reply, when a name has no exact match or several; then
+`macro.routines.check` and `create` or `update`; then a one- or two-sentence
+reply with the routine's link. The routine is saved switched on. A code step
+takes each item from a knob holding its name, which it looks up when it runs,
+and never messages the routine's owner: an Ask AI step tells them, as in the
+routine drafter. Hosts without code get the skill in the form they can follow:
+each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
+like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a
@@ -2606,23 +2633,26 @@ to a text-only model is rejected by the backend when sending, with guidance to
 choose a vision model or start a conversation without images.
 
 
-## Accelerated model speed
+## Priority tier
 
-The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
-and GPT-6.1 Sol (6× token pricing). Its tooltip shows the mode, state, and usage
-multiplier before sending. Claude models, including Opus 5.5, stay on standard
-speed until Anthropic approves fast mode for this account. Other models keep
-standard speed. The preference is saved in browser local storage and shared by
-legacy chat and native Macro agent composers. External coding agents use their
-own speed controls.
+The **Priority tier** menu beside the model selector picks how a model's requests
+are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
+*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
+usage multiplier before sending. Claude models, including Opus 5.5, stay on
+standard speed until Anthropic fast mode is enabled for this deployment
+(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
+models keep standard speed and show no menu. The preference is saved in browser
+local storage and shared by legacy chat and native Macro agent composers; an old
+saved "fast mode on" becomes Ultrafast. External coding agents use their own
+speed controls.
 
-Preview the controls at `/app/debug/ui?ui=speed-toggle`.
-Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Preview the control at `/app/debug/ui?ui=speed-selector`.
+Pick Priority and verify the trigger reads *Priority*.
 Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the bolt is hidden; switching back restores
-the preference. With reduced motion enabled, toggling changes the state without
-animation. Native sessions confirm speed configuration before sending the prompt;
-a rejected configuration must retain the unsent draft and attachments.
+Select an unsupported model and verify the menu is hidden; switching back restores
+the preference. Native sessions confirm the tier before sending the prompt when
+the session reports a different one; a rejected configuration must retain the
+unsent draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that

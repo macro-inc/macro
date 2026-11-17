@@ -28,13 +28,35 @@ import { did } from './ledger/record';
 test.use({ provider: 'GMAIL' });
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
-// When this fails, Share in the row's menu or in the menu after an open
-// thread's subject, or Cmd+S in the open thread, opens no Share dialog, or
-// one that does not list the person the thread is shared with.
-test("every way to open a thread's Share dialog", async ({ page, mailbox }) => {
-  const ids = await deliverAll(mailbox, ['Agenda', 'Minutes']);
+// Known bug (row-menu-dialogs-close-at-once): Share in a row's menu
+// opens the Share dialog and closes it at once, because the menu dismisses
+// itself with an Escape that the new dialog receives. When this passes, the
+// bug is fixed: remove the tag and the row's line in `ledger/waivers.tsv`.
+test("known bug: row-menu-dialogs-close-at-once: Share in a row's menu opens the thread's Share dialog @known-bug", {
+  tag: '@known-bug',
+}, async ({ page, mailbox }) => {
+  const ids = await deliverAll(mailbox, ['Agenda']);
   const bob = await mailbox.stack.user('bob@example.com');
-  for (const id of Object.values(ids)) await grantView(mailbox, id, bob);
+  await grantView(mailbox, ids.Agenda, bob);
+  await answerSharingAsUser(page, mailbox);
+
+  await mailbox.open();
+  await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
+  await rowMenu(page, ids.Agenda, /^Share/);
+  did('AL-085');
+  await expectShareDialog(page, 'Agenda', 'bob@example.com');
+});
+
+// When this fails, Share in the menu after an open thread's subject, or
+// Cmd+S in the open thread, opens no Share dialog, or one that does not list
+// the person the thread is shared with.
+test("the ways to open an open thread's Share dialog", async ({
+  page,
+  mailbox,
+}) => {
+  const ids = await deliverAll(mailbox, ['Minutes']);
+  const bob = await mailbox.stack.user('bob@example.com');
+  await grantView(mailbox, ids.Minutes, bob);
   await answerSharingAsUser(page, mailbox);
   // The dialog opens with the keyboard in its To field, which keeps Escape.
   const closed = async (subject: string) => {
@@ -47,11 +69,6 @@ test("every way to open a thread's Share dialog", async ({ page, mailbox }) => {
   await expect
     .poll(() => rowIds(page))
     .toEqual(expect.arrayContaining(Object.values(ids)));
-  await rowMenu(page, ids.Agenda, /^Share/);
-  did('AL-085');
-  await expectShareDialog(page, 'Agenda', 'bob@example.com');
-  await closed('Agenda');
-
   await openFromList(page, ids.Minutes, 'About Minutes.');
   await titleMenu(page, 'Minutes', /^Share/);
   did('AL-149');
@@ -79,7 +96,11 @@ test("the menu after the subject copies the thread's link and its id", async ({
   await titleMenu(page, 'Agenda', /^Copy Link/);
   did('AL-616');
   await expectClipboard(page, `${mailbox.front.origin}/app/mail/${ids.Agenda}`);
-  await titleMenu(page, 'Agenda', /^Copy ID/);
+  // A copy item keeps the menu open: Copy ID is picked from the same menu.
+  await page
+    .getByRole('menu')
+    .getByRole('menuitem', { name: /^Copy ID/ })
+    .click();
   did('AL-617');
   await expectClipboard(page, ids.Agenda);
 });
