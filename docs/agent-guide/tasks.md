@@ -59,10 +59,13 @@ Phones have a separate `Projects` destination in the bottom navigation's More
 menu (or dock after customization), not a Projects pill inside Tasks. Each destination
 restores its own last view; switching to Tasks must not reopen Projects. Its floating
 `Project` action opens the initiative composer, not the Drive folder dialog. The phone
-header has one title island with the current view icon, name, and caret; the filter
-island sits on the right. Its views sheet groups built-in and saved project views
-in 48px cards, marks the selected view with accent and a check, and puts New view
-at the bottom. Saved views show sharing marks and action menus. The filter button
+header orders Filters, Saved views, then the My projects, All projects, and
+Created by me pill tabs in the shared scrolling strip. The Saved views item shows
+the active saved view's name, or Saved views otherwise. Its drawer contains only
+saved project views in 48px cards, marks selection with accent and a check, and
+puts New view at the bottom. Cards retain sharing marks and action menus.
+Desktop uses the same filter, saved-view picker, and built-in tab order.
+The filter button
 opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
 keep Status, Priority, Assignees, Due date, and Updated columns on desktop/tablet.
 A 14px progress ring follows the project name; hover or focus reveals its count.
@@ -1016,8 +1019,11 @@ overwriting the saved selection.
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
 search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
-Desktop project-view titles open the same view switcher as Tasks; individual
-project names remain content titles. Mobile keeps the Projects picker. In a project detail, the phone title island shows the project appearance and name; open it to switch between Overview and Tasks, share, copy the link, or rename when editing is allowed.
+The collection header puts Filters before the saved-view picker and built-in
+project tabs on desktop and phones. Individual project names remain content
+titles. In project detail, the phone title island shows the project appearance
+and name; its actions share, copy the link, or rename when editing is allowed.
+Phone detail stays one page rather than switching Overview and Tasks.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
@@ -1245,7 +1251,9 @@ message instead; no project-empty illustration is shown.
 
 Change project filters, sort, grouping, or layout and choose Save view. Name the
 view and optionally share it with the current team. The view appears below the
-built-in views in the desktop Projects section and in the phone Projects picker.
+built-in views in the desktop Projects section and in the shared saved-view
+drawer opened from the desktop or phone header. Built-in views remain in the
+tabs, not in that drawer.
 Opening it reapplies its settings; search text and scroll are not saved. Assigned
 to me and Created by me remain relative to whoever opens the definition.
 Use a row's menu to Edit its name/sharing, Duplicate a private copy, or Delete.

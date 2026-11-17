@@ -159,8 +159,10 @@ schema changes. Project views reuse shared queries, dialogs, menu/list component
 and draft reconciliation rather than creating another persistence API.
 
 Project views appear below built-in views in the desktop Tasks sidebar's Projects
-section. Phones have a separate Projects navigation destination and picker that
-contains both built-in and saved views. Search and scroll stay local, temporary
+section. Phones have a separate Projects navigation destination. Both collection
+headers order filters, the saved-view picker, then built-in tabs (PillTabs on phones).
+The shared drawer contains only saved views and New view, not built-in scopes.
+Search and scroll stay local, temporary
 settings stay out of entry snapshots, and phone List fallback preserves stored
 Gantt layout. Unsupported project definitions display an error instead of quietly
 broadening the result set. Sharing controls definition discovery only; every

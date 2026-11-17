@@ -378,7 +378,10 @@ title, matching other mobile routes.
 Projects are enabled by default in development; production uses the PostHog
 `enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
 Phones expose Projects as its own dock/More destination, separate from Tasks.
-It opens the shared project collection, whose picker includes saved project views.
+It opens the shared project collection with Filters, a Saved views item, and
+built-in project PillTabs in that order. The desktop header uses the same order
+with standard tabs. The shared saved-view drawer keeps its 48px cards and New
+view action, and no longer lists built-in project scopes.
 Project definitions use the `sN.projects.savedView` search parameter; opening a
 project pushes detail and Back returns to that collection.
 When disabled, project navigation,
@@ -691,8 +694,9 @@ the other entity actions used on Home.
 
 Desktop inner sidebars place the same full-width, outlined **New** pill directly
 below the title. List toolbars use its compact version, including when the
-sidebar is hidden. Email, Drive, Tasks, and the Projects list use one desktop
-row: title, filter controls, view options, New, and Search. Filter and view
+sidebar is hidden. Email, Drive, and Tasks use one desktop row: title, filter
+controls, view options, New, and Search. Projects places filter controls, saved
+views, and built-in tabs first, followed by view options, New, and Search. Filter and view
 controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.

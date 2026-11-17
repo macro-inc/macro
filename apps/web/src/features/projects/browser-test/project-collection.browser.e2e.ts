@@ -52,6 +52,7 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
 }, info) => {
   test.skip(info.project.name !== 'desktop');
   await open(page);
+  const sidebar = page.getByTestId('saved-view-sidebar');
   await page.getByRole('button', { name: 'Create view', exact: true }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const save = page.getByRole('dialog', { name: 'Save view' });
@@ -59,15 +60,17 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
   await save.getByRole('button', { name: 'Save view', exact: true }).click();
   await expect(save).toBeHidden();
   await expect(page.getByTestId('selected')).not.toBeEmpty();
-  const more = page.getByRole('button', {
+  const more = sidebar.getByRole('button', {
     name: 'Actions for Launch watch',
     exact: true,
   });
   const size = await more.boundingBox();
   expect(size).not.toBeNull();
   expect(size!.width).toBeCloseTo(size!.height, 0);
-  await page.getByRole('button', { name: 'Launch watch', exact: true }).hover();
-  await page
+  await sidebar
+    .getByRole('button', { name: 'Launch watch', exact: true })
+    .hover();
+  await sidebar
     .getByRole('button', { name: 'Actions for Launch watch', exact: true })
     .click();
   await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
@@ -75,12 +78,12 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
   await edit.getByRole('textbox', { name: 'Name' }).fill('Launch renamed');
   await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Launch renamed', exact: true })
+    sidebar.getByRole('button', { name: 'Launch renamed', exact: true })
   ).toBeVisible();
-  await page
+  await sidebar
     .getByRole('button', { name: 'Launch renamed', exact: true })
     .hover();
-  await page
+  await sidebar
     .getByRole('button', { name: 'Actions for Launch renamed', exact: true })
     .click();
   await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
@@ -92,10 +95,10 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
     .getByRole('button', { name: 'Duplicate', exact: true })
     .click();
   await expect(duplicate).toBeHidden();
-  await page
+  await sidebar
     .getByRole('button', { name: 'Launch renamed (copy)', exact: true })
     .hover();
-  await page
+  await sidebar
     .getByRole('button', {
       name: 'Actions for Launch renamed (copy)',
       exact: true,
@@ -107,9 +110,9 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
     .getByRole('button', { name: 'Delete view', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Launch renamed (copy)', exact: true })
+    sidebar.getByRole('button', { name: 'Launch renamed (copy)', exact: true })
   ).toHaveCount(0);
-  await page
+  await sidebar
     .getByRole('button', { name: 'Launch renamed', exact: true })
     .click();
   await expect(page.getByRole('row', { name: /Alpha launch/ })).toBeVisible();
@@ -117,7 +120,7 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
   await page
     .getByRole('button', { name: 'Seed unsupported view', exact: true })
     .click();
-  await page
+  await sidebar
     .getByRole('button', { name: 'Future definition', exact: true })
     .click();
   await expect(page.getByRole('alert')).toContainText('unsupported settings');
@@ -129,25 +132,18 @@ test('phone project picker creates and reopens a saved view', async ({
 }, info) => {
   test.skip(info.project.name !== 'phone');
   await open(page);
-  await page.getByRole('button', { name: 'All projects', exact: true }).click();
-  const views = page.getByRole('dialog', { name: 'Projects' });
-  await expect(
-    views.getByRole('button', { name: 'All projects' })
-  ).toHaveAttribute('aria-current', 'page');
-  await views.getByRole('button', { name: 'All projects' }).click();
-  await expect(views).toBeHidden();
-  await page.getByRole('button', { name: 'All projects', exact: true }).click();
+  await page.getByRole('button', { name: 'Saved views', exact: true }).click();
+  const views = page.getByRole('dialog', { name: 'Saved views' });
+  await expect(views.getByText('All projects', { exact: true })).toHaveCount(0);
+  await expect(views.getByText('My projects', { exact: true })).toHaveCount(0);
   await views.getByRole('button', { name: 'New view' }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const save = page.getByRole('dialog', { name: 'Save view' });
   await save.getByRole('textbox', { name: 'Name' }).fill('Phone projects');
   await save.getByRole('button', { name: 'Save view', exact: true }).click();
   await expect(save).toBeHidden();
-  await page
-    .getByRole('button', { name: 'Phone projects', exact: true })
-    .click();
-  await views.getByRole('button', { name: 'My projects' }).click();
   await page.getByRole('button', { name: 'My projects', exact: true }).click();
+  await page.getByRole('button', { name: 'Saved views', exact: true }).click();
   await views
     .getByRole('button', { name: 'Phone projects', exact: true })
     .click();

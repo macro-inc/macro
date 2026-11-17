@@ -237,7 +237,7 @@ export function CollectionFixture() {
           ref={attachHotkeys}
           class="relative flex h-screen min-h-0 flex-col bg-app text-ink"
         >
-          <div class="hidden not-touch:block">
+          <div class="hidden not-touch:block" data-testid="saved-view-sidebar">
             <ProjectSavedViewRows />
           </div>
           <ViewShell.Root aside={false} class="flex min-h-0 flex-1 flex-col">

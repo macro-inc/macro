@@ -81,6 +81,7 @@ import {
   ProjectSavedViewActions,
   ProjectSavedViewStatus,
 } from './project-saved-views';
+import { ProjectsDesktopTabs } from './project-view-tabs';
 import {
   PROJECT_GROUP_OPTIONS,
   PROJECT_SORT_OPTIONS,
@@ -597,14 +598,20 @@ export function ProjectsCollection(props: {
         fallback={
           <ListHeader
             title={
-              <ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>
+              <ProjectsDesktopTabs
+                filters={
+                  <HeaderActionGroup label="Project filters" size="md">
+                    {filterControl()}
+                    {dueDateControl()}
+                  </HeaderActionGroup>
+                }
+                fallback={
+                  <ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>
+                }
+              />
             }
           >
             <ProjectSavedViewActions />
-            <HeaderActionGroup label="Project filters" size="md">
-              {filterControl()}
-              {dueDateControl()}
-            </HeaderActionGroup>
             <HeaderActionGroup label="Project view options" size="md">
               {layoutControl()}
               {sortControl()}
