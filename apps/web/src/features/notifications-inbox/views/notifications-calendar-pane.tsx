@@ -3,7 +3,6 @@ import { createSearchParams } from '@app/lib/split-router';
 import { notificationsCalendarRoute } from '@app/routes/routes';
 import { PreviewFrame } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { useNotificationsCalendarPane } from '../context/notifications-calendar-context';
 
@@ -26,7 +25,7 @@ export function NotificationsCalendarPane() {
     <div class="flex size-full min-h-0">
       <PreviewFrame
         splitPanelContext={panel}
-        hideHeader={!isTouchDevice()}
+        hideHeader
         locationKey={() => `${search.eventId}:${search.occurrenceKey}`}
       >
         <CalendarView

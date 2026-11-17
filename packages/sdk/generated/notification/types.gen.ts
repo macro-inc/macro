@@ -1765,6 +1765,10 @@ export type UserUnsubscribe = {
      */
     item_type: string;
     /**
+     * The item still notifies the user when a message @mentions them directly.
+     */
+    mentions_only?: boolean;
+    /**
      * None for permanent mutes; notifications resume automatically at this deadline.
      */
     snoozed_until?: string | null;
@@ -1860,6 +1864,11 @@ export type UnsubscribeItemData = {
          * A future resume time. Omit to mute indefinitely.
          */
         snoozed_until?: string | null;
+        /**
+         * Keep notifying for messages that @mention the user directly and silence
+         * the rest. Channels only; cannot be combined with `snoozed_until`.
+         */
+        mentions_only?: boolean;
     };
     url: '/unsubscribe/item/{item_type}/{item_id}';
 };
