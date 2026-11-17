@@ -20,9 +20,12 @@ use crate::domain::skill_routing::SESSION_IDLE;
 #[cfg(test)]
 mod test;
 
-/// Most documentation one session's context carries, in bytes. A turn whose
-/// documentation would go past it drops every earlier request's at once, so
-/// the cache misses once, not on every turn after.
+/// Most documentation one session's context carries, in bytes, beyond its
+/// newest request's. A turn whose documentation would go past it drops every
+/// earlier request's at once, so the cache misses once, not on every turn
+/// after. The newest request always keeps its own whole, however large: the
+/// selector bounds it (48 KiB of indexes, plus the catalog and any attached
+/// skill), and that turn needs it.
 pub const DOCS_PER_SESSION_BYTES: usize = 64 * 1024;
 
 /// The documentation each session's requests received. Kept in memory: after
