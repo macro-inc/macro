@@ -98,6 +98,8 @@ export type HoverCardComponentProps = {
   triggerAriaLabel?: string;
   /** Click action for a button trigger that also opens a hover preview. */
   triggerOnClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
+  /** Keyboard action for a standalone interactive trigger. */
+  triggerOnKeyDown?: JSX.EventHandler<HTMLElement, KeyboardEvent>;
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
   /** Receives the underlying Kobalte trigger element. */
@@ -399,8 +401,12 @@ export function HoverCard(props: HoverCardComponentProps) {
           ? { type: 'button', role: 'button' }
           : {})}
         onClick={props.triggerOnClick}
+        on:keydown={props.triggerOnKeyDown}
         class={props.triggerClass}
-        disabled={isDisabled()}
+        // Touch disables the preview, but standalone keyboard actions stay usable.
+        disabled={
+          props.disabled || (isTouchDevice() && !props.triggerOnKeyDown)
+        }
         tabIndex={props.triggerTabIndex}
       >
         {props.trigger}

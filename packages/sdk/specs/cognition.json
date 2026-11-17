@@ -2321,6 +2321,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Privacy review is unavailable; nothing was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -5647,6 +5657,11 @@
             "format": "uuid",
             "description": "The review presenting the run's plan, once one does. A Notion plan is\npresented while it is still `running`; rows staged after that take it."
           },
+          "review_session_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent session presenting that review."
+          },
           "scanned": {
             "oneOf": [
               {
@@ -5865,7 +5880,7 @@
       "ModelSpeed": {
         "type": "string",
         "description": "The requested inference speed. Standard is backward compatible with old clients.",
-        "enum": ["standard", "fast", "ultrafast"]
+        "enum": ["standard", "priority", "fast", "ultrafast"]
       },
       "NewAttachment": {
         "type": "object",

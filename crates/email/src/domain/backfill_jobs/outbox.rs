@@ -2,7 +2,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, FinalizeBackfillPayload, JobScopedPayload,
-    PopulateCrmForUserPayload,
+    PopulateCrmForUserPayload, PopulateCrmPolicyPayload,
 };
 use models_email::service::thread::ListThreadsPayload;
 use tracing::Instrument;
@@ -69,6 +69,14 @@ pub struct CrmOutboxRow {
     pub user_id: String,
     /// Persisted parent trace metadata.
     pub traceparent: Option<String>,
+    /// All four generation fields are absent only on legacy history.
+    pub link_id: Option<Uuid>,
+    /// Consent lifetime captured by the authorized scheduler.
+    pub consent_incarnation: Option<Uuid>,
+    /// Version captured by the authorized scheduler.
+    pub policy_version: Option<i64>,
+    /// Exact durable work slot occupant.
+    pub work_id: Option<Uuid>,
 }
 /// Locked CRM requests and the associated consent check.
 pub trait CrmOutboxTransaction: OutboxTransaction {
@@ -76,7 +84,12 @@ pub trait CrmOutboxTransaction: OutboxTransaction {
     fn next(&mut self) -> impl Future<Output = anyhow::Result<Option<CrmOutboxRow>>> + Send;
     /// Read whether this request still has a consented primary mailbox.
     fn enabled(&mut self, row: &CrmOutboxRow) -> impl Future<Output = anyhow::Result<bool>> + Send;
-    /// Delete a successfully handled request.
+    /// Legacy publication is retired; modern work keeps a delayed recovery signal
+    /// until conditional page completion, even if a queue message reaches a DLQ.
+    fn published(&mut self, row: &CrmOutboxRow) -> impl Future<Output = anyhow::Result<()>> + Send {
+        self.delete(row)
+    }
+    /// Delete only the claimed request, never a replacement generation.
     fn delete(&mut self, row: &CrmOutboxRow) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 /// Open the existing transaction for each outbox family.
@@ -193,16 +206,41 @@ pub async fn drain_crm<R: BackfillOutboxRepository, Q: BackfillOutboxPublisher>(
         async {
             let enabled = tx.enabled(&row).await?;
             if enabled {
+                let macro_id = MacroUserIdStr::try_from(row.user_id.clone())?;
+                let operation = match (
+                    row.link_id,
+                    row.consent_incarnation,
+                    row.policy_version,
+                    row.work_id,
+                ) {
+                    (
+                        Some(link_id),
+                        Some(consent_incarnation),
+                        Some(policy_version),
+                        Some(work_id),
+                    ) => BackfillOperation::PopulateCrmPolicy(PopulateCrmPolicyPayload {
+                        team_id: row.team_id,
+                        macro_id,
+                        link_id,
+                        work_id,
+                        consent_incarnation,
+                        policy_version,
+                    }),
+                    (None, None, None, None) => {
+                        BackfillOperation::PopulateCrmForUser(PopulateCrmForUserPayload {
+                            macro_id,
+                        })
+                    }
+                    _ => anyhow::bail!("partial CRM history generation"),
+                };
                 sqs.publish(BackfillPubsubMessage {
-                    backfill_operation: BackfillOperation::PopulateCrmForUser(
-                        PopulateCrmForUserPayload {
-                            macro_id: MacroUserIdStr::try_from(row.user_id.clone())?,
-                        },
-                    ),
+                    backfill_operation: operation,
                 })
                 .await?;
+                tx.published(&row).await?;
+            } else {
+                tx.delete(&row).await?;
             }
-            tx.delete(&row).await?;
             tx.commit().await?;
             anyhow::Ok(())
         }

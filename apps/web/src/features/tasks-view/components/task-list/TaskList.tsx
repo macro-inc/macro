@@ -110,6 +110,7 @@ export function TaskList(props: TaskListProps) {
     openTask,
     scopeKey,
     filterByTag,
+    filterByAssignee,
   } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -460,7 +461,7 @@ export function TaskList(props: TaskListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pb-2 pt-1 outline-none"
+        class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pb-2 pt-1 touch:pb-0 touch:pt-0 outline-none"
         style={{
           '--task-updated-header-width':
             timestampHeaderWidth() === undefined
@@ -470,7 +471,7 @@ export function TaskList(props: TaskListProps) {
       >
         <div class="flex size-full min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1">
           <ListLayoutProvider ref={grid}>
-            <Show when={!isMobile()}>
+            <Show when={!isMobile() && !isTouchDevice()}>
               <TaskListHeader
                 columns={columns()}
                 onTimestampWidthChange={setTimestampHeaderWidth}
@@ -555,7 +556,18 @@ export function TaskList(props: TaskListProps) {
                     items={visibleRows()}
                     isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
-                    start={props.listStart}
+                    touchInset
+                    start={
+                      <>
+                        <Show when={isTouchDevice() && !isMobile()}>
+                          <TaskListHeader
+                            columns={columns()}
+                            onTimestampWidthChange={setTimestampHeaderWidth}
+                          />
+                        </Show>
+                        {props.listStart}
+                      </>
+                    }
                     onScroll={() => {
                       recordScrollAnchor();
                       checkNearEnd();
@@ -617,6 +629,7 @@ export function TaskList(props: TaskListProps) {
                                   entityRow().id
                                 )}
                                 onFilterByTag={filterByTag}
+                                onFilterByAssignee={filterByAssignee}
                                 onMouseMove={() =>
                                   list.focus.set(entityRow().id, {
                                     reason: 'hover',

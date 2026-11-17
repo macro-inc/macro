@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                page.document_id AS \"document_id!\",\n                live.id IS NOT NULL AS \"is_live!\"\n            FROM (\n                SELECT DISTINCT de.document_id\n                FROM document_email de\n                WHERE de.document_id > COALESCE($1, '')\n                ORDER BY de.document_id\n                LIMIT $2\n            ) page\n            LEFT JOIN LATERAL (\n                SELECT d.id\n                FROM \"Document\" d\n                WHERE d.id = page.document_id AND d.\"deletedAt\" IS NULL\n                LIMIT 1\n            ) live ON true\n            ORDER BY page.document_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_live!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "01f40b57784fef64cbd00a580668d13c09b0dad04a45fecaf1117d15c8a902ab"
+}

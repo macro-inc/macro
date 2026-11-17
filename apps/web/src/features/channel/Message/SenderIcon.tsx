@@ -7,6 +7,7 @@ import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useLiveBotSender } from '@queries/bots/profiles';
 import {
   getBotDisplayName,
   senderFromStorageId,
@@ -26,8 +27,10 @@ type SenderIconProps = {
 export function SenderIcon(props: SenderIconProps) {
   const message = useMessage();
 
-  const sender = (): MessageSender =>
-    message().sender ?? senderFromStorageId(message().sender_id);
+  const sender = useLiveBotSender(
+    (): MessageSender =>
+      message().sender ?? senderFromStorageId(message().sender_id)
+  );
 
   // A post a user made through a client is that client's, so it shows the
   // client's mark (or initial, for clients without one) rather than the mark

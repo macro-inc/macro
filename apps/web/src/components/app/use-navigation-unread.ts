@@ -7,12 +7,8 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-facet';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
-import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
-import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { queryReadyGate } from '@queries/gate';
 import { useNotificationTypePreferencesQuery } from '@queries/notification/type-preferences';
@@ -30,7 +26,6 @@ const signalInsertFilter: SoupApiItemFilter = (item) =>
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useNavigationUnread() {
   const notificationSource = useGlobalNotificationSource();
-  const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const isTypeDisabled = (type: string) =>
     queryReadyGate(preferencesQuery) &&
@@ -47,10 +42,9 @@ export function useNavigationUnread() {
           })
         )
       ),
-    }),
-    () => graphqlFlag().enabled
+    })
   );
-  const homeUnread = useHomeUnreadQuery(() => graphqlFlag().enabled);
+  const homeUnread = useHomeUnreadQuery();
   const email = useSoupAstItemsQuery(
     () =>
       buildEmailQuery({
@@ -75,26 +69,16 @@ export function useNavigationUnread() {
     );
   });
   const channelsUnread = createMemo(() => {
-    if (graphqlFlag().enabled) {
-      if (!channels.isEnabled || !queryReadyGate(channels)) return false;
-      return channels.data.some((notification) => {
-        const state = notificationStateFromGraphql(notification.state);
-        return (
-          (notificationSource.withLocalState?.({
-            id: notification.id,
-            state,
-          }) ?? state) === 'unseen'
-        );
-      });
-    }
-    return notificationSource
-      .notifications()
-      .some(
-        (notification) =>
-          notification.entity_type === 'channel' &&
-          !notificationIsRead(notification) &&
-          isUnreadChannelMessageNotification(notification)
+    if (!channels.isEnabled || !queryReadyGate(channels)) return false;
+    return channels.data.some((notification) => {
+      const state = notificationStateFromGraphql(notification.state);
+      return (
+        (notificationSource.withLocalState?.({
+          id: notification.id,
+          state,
+        }) ?? state) === 'unseen'
       );
+    });
   });
 
   return (id: string): boolean => {

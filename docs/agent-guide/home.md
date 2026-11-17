@@ -11,12 +11,13 @@ Access requests, grants and removals on a paired machine appear as rows about
 that machine; opening one goes to Settings → Machines with the machine pointed out.
 Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail; touch devices show none. It sits outside the virtualized rows, so list keyboard focus skips it.
 
-On a cold launch, notification transport follows the GraphQL Soup flag reactively:
-if the flag arrives after REST starts, the GraphQL notification query must actually
-start too. Verify a reload with delayed flags retains non-email notifications once
-loading settles, including when the list itself uses REST (notified-at sorting).
-Email alone is not sufficient verification: its inbox membership does not require
-the global notification feed.
+At 720px or narrower on touch, Notifications fills the pane with floating
+Signal/Noise pills and opens items as standalone pages. Above 720px, including
+unfolded Duo, the notification list docks on the left with the selected item's
+preview on the right, using Chat's width check. Collapse sits beside the
+Notifications title; the leading preview control restores the list. The Home
+composer remains desktop-only. Restored detail URLs stay inline when wide and
+redirect to standalone pages when folded.
 
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
@@ -45,7 +46,7 @@ Noise-only email activity. Each entity appears once, ordered by its latest
 notification or own action. On desktop, the funnel button to the right of **Home**
 opens **Filter Home**.
 
-With the GraphQL Soup flag on, desktop Signal reads
+Desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise and touch devices keep
 the merged feed.
@@ -185,13 +186,13 @@ composer uses the same topbar offset and 24/64 padding as the Agents
 new-conversation page so the two inputs share a baseline. With
 `enable-suggestions` on, today and the top priorities appear below the
 composer; otherwise the space below it is empty. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Home uses the shared 256px sidebar and collapses
+the composer with its preview. Desktop Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
 arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
 **Home** clears the preview and returns to the starting pane without changing
-sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
-show the activity list alone.
+sidebar visibility. Use the hamburger to reopen the feed. Narrow touch shows
+the notification feed alone; wide touch keeps the feed beside its preview.
 
 Project rows, including unread discussion notifications, open the project Overview
 inside Home on desktop. The preview keeps the Home return breadcrumb, project
@@ -204,7 +205,7 @@ project row, switching tabs, returning Home, and reopening the same comment.
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch previews and standalone pages retain their compact headers.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture

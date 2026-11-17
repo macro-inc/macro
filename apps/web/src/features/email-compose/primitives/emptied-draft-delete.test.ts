@@ -35,10 +35,6 @@ vi.mock('@queries/client', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
   NOOP_SPAN: {},
   Telemetry: { error: vi.fn() },

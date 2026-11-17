@@ -541,6 +541,7 @@ async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours(
             BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                 link_id: LINK,
                 payload: PopulateCrmContactPayload {
+                    live_mail: true,
                     contact_email: email.into(),
                     contact_name: Some(name.into()),
                     first_at: at,
