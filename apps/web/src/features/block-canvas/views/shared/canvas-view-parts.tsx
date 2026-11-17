@@ -238,8 +238,14 @@ function createCanvasView(props: CanvasViewProps) {
     selectAt(clientX: number, clientY: number, reach = 3) {
       if (state.embeds.active() || state.text.draft()) return;
       focus();
-      const id = editor.hitTest(worldPoint(clientX, clientY), false, reach);
-      if (id && !state.session().selectedIds.includes(id)) {
+      const world = worldPoint(clientX, clientY);
+      const selected = state.session().selectedIds;
+      // An item selected on its own inside a group is the subject already:
+      // picking its group again would act on more than was chosen.
+      const inside = editor.hitTest(world, true, reach);
+      if (inside && selected.includes(inside)) return;
+      const id = editor.hitTest(world, false, reach);
+      if (id && !selected.includes(id)) {
         state.chooseTool('select');
         editor.select(id);
       }

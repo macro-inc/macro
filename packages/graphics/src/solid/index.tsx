@@ -65,18 +65,6 @@ import {
 /** How far from a connector's endpoint a finger still takes it, on screen. */
 const TOUCH_ENDPOINT_REACH = 16;
 
-/**
- * A surface that leaves one finger to the page lets it pan and scroll on;
- * otherwise every touch is the canvas's.
- */
-const touchStyle = (yieldsToPage: boolean | undefined) =>
-  yieldsToPage
-    ? ({
-        'touch-action': 'pan-x pan-y',
-        'overscroll-behavior': 'auto',
-      } as const)
-    : ({ 'touch-action': 'none', 'overscroll-behavior': 'contain' } as const);
-
 const CONNECTOR_ENDS = ['start', 'end'] as const;
 
 type ConnectorEndProps = {
@@ -182,7 +170,11 @@ export function GraphicsSurface(props: {
     () => projection.session().transform?.nodes ?? emptyOverrides
   );
   const cameraScale = createMemo(() => projection.camera().scale);
+  // A surface that leaves one finger to the page lets it pan and scroll on;
+  // otherwise every touch is the canvas's.
   const yieldsToPage = () => props.input?.yieldToPage?.();
+  const touchAction = () => (yieldsToPage() ? 'pan-x pan-y' : 'none');
+  const overscroll = () => (yieldsToPage() ? 'auto' : 'contain');
   const selected = createMemo(
     () => roots(scene(), projection.session().selectedIds),
     undefined,
@@ -342,7 +334,8 @@ export function GraphicsSurface(props: {
         overflow: 'hidden',
         width: '100%',
         height: '100%',
-        ...touchStyle(yieldsToPage()),
+        'touch-action': touchAction(),
+        'overscroll-behavior': overscroll(),
         'user-select': 'none',
         cursor: isShapeKind(props.input?.tool?.())
           ? 'crosshair'
