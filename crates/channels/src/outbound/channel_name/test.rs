@@ -363,11 +363,11 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
         .map(|bot| format!(r#""{}""#, bot.name))
         .collect::<Vec<_>>()
         .join(",");
-    let viewer_channels = 600;
+    let viewer_channels = 600.0;
     let seeded_tables = [
         "comms_channels",
         "comms_channel_participants",
-        r#""User""#,
+        "User",
         "macro_user_info",
         "bots",
     ];
@@ -381,44 +381,56 @@ async fn every_table_is_read_by_key_and_work_stays_within_the_viewers_channels(
             vec!["%zzz%"],
             vec!["%zzz%", "%person%", "%plan%"],
         ] {
-            let rows = sqlx::raw_sql(&format!(
-                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{}}', NULL, NULL, '{{{}}}', false, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51)",
+            let row = sqlx::raw_sql(&format!(
+                "EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT JSON) EXECUTE match_channel_names('{VIEWER}', '{{}}', '{{}}', NULL, NULL, '{{{}}}', false, '{{{system_bot_ids}}}', '{{{system_bot_names}}}', 51)",
                 patterns.join(",")
             ))
-            .fetch_all(&mut *connection)
+            .fetch_one(&mut *connection)
             .await?;
-            let plan: Vec<String> = rows
-                .iter()
-                .map(|row| row.try_get::<String, _>(0))
-                .collect::<Result<_, _>>()?;
-            let plan_text = plan.join("\n");
-            let context = format!("{plan_cache_mode}, {patterns:?}:\n{plan_text}");
+            let explain: serde_json::Value =
+                serde_json::from_str(&row.try_get_unchecked::<String, _>(0)?)?;
+            let mut nodes = Vec::new();
+            plan_nodes(&explain[0]["Plan"], &mut nodes);
+            let context = format!(
+                "{plan_cache_mode}, {patterns:?}:\n{}",
+                serde_json::to_string_pretty(&explain)?
+            );
 
-            for table in seeded_tables {
+            for node in &nodes {
+                let node_type = node["Node Type"].as_str().unwrap_or_default();
+                let relation = node["Relation Name"].as_str().unwrap_or_default();
                 assert!(
-                    !plan_text.contains(&format!("Seq Scan on {table}")),
-                    "{table} is read by key, {context}"
+                    !(node_type == "Seq Scan" && seeded_tables.contains(&relation)),
+                    "{relation} is read by key, {context}"
                 );
-            }
-            assert!(
-                plan_text.contains("Index Scan using comms_channels_pkey on comms_channels"),
-                "each of the viewer's channels is looked up by id, {context}"
-            );
-            assert!(
-                !plan_text.contains("Hash") && !plan_text.contains("Merge Join"),
-                "no join builds or sorts a whole table, {context}"
-            );
-            let bound = viewer_channels * patterns.len();
-            for line in &plan {
-                if let Some(removed) = line.trim().strip_prefix("Rows Removed by Join Filter: ") {
-                    let removed: usize = removed.parse()?;
+                assert!(
+                    !matches!(node_type, "Hash" | "Hash Join" | "Merge Join"),
+                    "no join builds or sorts a whole table, {context}"
+                );
+                // EXPLAIN reports removed rows per loop, rounded to a whole row.
+                if let Some(removed_per_loop) = node["Rows Removed by Join Filter"].as_f64() {
+                    let loops = node["Actual Loops"].as_f64().unwrap_or(1.0);
+                    let bound = viewer_channels * patterns.len() as f64;
                     assert!(
-                        removed <= bound,
-                        "a join compared {removed} rows, more than {bound}, {context}"
+                        removed_per_loop * loops <= bound + loops / 2.0,
+                        "a join compared {removed_per_loop} rows in each of {loops} loops, more than {bound} in all, {context}"
                     );
                 }
             }
+            assert!(
+                nodes.iter().any(|node| {
+                    node["Node Type"] == "Index Scan" && node["Index Name"] == "comms_channels_pkey"
+                }),
+                "each of the viewer's channels is looked up by id, {context}"
+            );
         }
     }
     Ok(())
+}
+
+fn plan_nodes<'a>(node: &'a serde_json::Value, nodes: &mut Vec<&'a serde_json::Value>) {
+    nodes.push(node);
+    for child in node["Plans"].as_array().into_iter().flatten() {
+        plan_nodes(child, nodes);
+    }
 }
