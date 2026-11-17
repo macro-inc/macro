@@ -289,8 +289,15 @@ export function ListEntity(props: ListEntityProps) {
     });
 
   // A touch row's swipe surface is opaque so the swipe actions stay hidden
-  // under it; a lifted Classic row paints it with its own fill.
-  const swipeFill = () => (classic() && unread() ? 'bg-control' : undefined);
+  // under it, which covers the row's own fill; a Classic row paints the
+  // surface with its fill instead. The selection tint is translucent, so it
+  // goes over the panel color rather than replacing it.
+  const swipeFill = () => {
+    if (!classic()) return undefined;
+    if (props.checked)
+      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected';
+    return unread() ? 'bg-control' : undefined;
+  };
 
   // Classic rows run wall to wall too, square, with a line between rows.
   const fullBleed = () => isNarrowEmail() || classic();

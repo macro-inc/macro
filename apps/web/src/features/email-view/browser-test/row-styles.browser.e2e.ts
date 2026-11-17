@@ -173,15 +173,17 @@ for (const size of SIZES) {
         expect(unreadWeights.dateColor).toBe(unreadWeights.senderColor);
         expect(readWeights.dateColor).not.toBe(readWeights.senderColor);
 
-        // A selected row's fill wins over the unread one.
-        if (!size.touch) {
-          await unread.getByRole('checkbox').click();
-          expect(
-            await rowSurface(page, 'unread-1').evaluate(
-              (node) => getComputedStyle(node).backgroundColor
-            )
-          ).not.toBe(unreadFill);
-        }
+        // A selected row's fill wins over the unread one, on the swipe
+        // surface too, where touch rows show it.
+        await unread.getByRole('checkbox').click();
+        const selectedSurface = size.touch
+          ? unread.locator('[data-swipe-content]')
+          : rowSurface(page, 'unread-1');
+        const selectedFill = await selectedSurface.evaluate((node) => {
+          const style = getComputedStyle(node);
+          return `${style.backgroundColor} ${style.backgroundImage}`;
+        });
+        expect(selectedFill).not.toBe(`${unreadFill} none`);
       });
     }
 
