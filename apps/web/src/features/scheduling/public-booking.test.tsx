@@ -1,3 +1,4 @@
+import { createFlagStore } from '@app/lib/analytics/flag-store';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { PostHog } from 'posthog-js';
@@ -12,6 +13,18 @@ const posthog = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ posthog }),
 }));
+// A fresh flag store per test, connected to the PostHog stand-in.
+const store = vi.hoisted(() => ({ current: undefined as unknown }));
+vi.mock('@app/lib/analytics/flag-store', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@app/lib/analytics/flag-store')>();
+  return {
+    ...actual,
+    get flagStore() {
+      return store.current;
+    },
+  };
+});
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({ hash: '#private-receipt-token' }),
   useNavigate: () => vi.fn(),
@@ -55,13 +68,16 @@ const SCHEDULING_FLAG = 'enable-calendar-scheduling';
 
 /** Mounts the page and returns PostHog's pending answer to the flag request. */
 function openBookingLink() {
+  const flags = createFlagStore();
+  store.current = flags;
+  flags.connect({ ...posthog, reloadFeatureFlags: vi.fn() });
   render(() => (
     <PosthogProvider>
       <PublicBookingPage profile="team" />
     </PosthogProvider>
   ));
   const answer = posthog.onFeatureFlags.mock.calls[0]?.[0];
-  if (!answer) throw new Error('PostHog provider is not mounted');
+  if (!answer) throw new Error('The flag store is not connected');
   return answer;
 }
 
