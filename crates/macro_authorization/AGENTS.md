@@ -62,13 +62,16 @@ attribution) instead of sniffing request headers. A Macro API token's signed
 `agent_id` and `routine_id` reach `MacroUserAuthentication`;
 `attribution()` reads them as `CredentialAttribution`. Routes where only a
 person may decide, answer or approve (review decisions, elicitation and
-permission answers, held tool-call approvals, the email sign-in) refuse
-anything but `Person` through `is_program_run(attribution, headers)`; sign-in
-routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a program
-to confirm (email send, calendar create, call tokens) use `is_agent_run`,
+permission answers, held tool-call approvals, the email sign-in, call tokens)
+refuse anything but `Person` through `is_program_run(attribution, headers)`;
+sign-in routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a
+program to confirm (email send and schedule, calendar create) use `is_agent_run`,
 which leaves owner routine steps (`Routine`) alone so scheduled sends keep
-working. A routine step running as its owner signs only `routine_id`, so
-never test `agent_id` alone for "is this a person". `authorize_identity` retains
+working, even with `x-macro-code-execution`: the runtime marks every code
+step's request, so the header counts only for a credential that signs no
+program (`Person`), never against a signed claim. A routine step running as
+its owner signs only `routine_id`, so never test `agent_id` alone for "is
+this a person". `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 

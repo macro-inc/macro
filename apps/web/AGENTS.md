@@ -229,7 +229,11 @@ LexicalMarkdown core browser suite (see its README).
 
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
+After a pre-commit hook restores unstaged frontend files, verify the dev server serves the final source; touch affected files if its transform cache still serves an older version.
+
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
+
+Keep the view-shell browser fixture's Vite cache separate from the native preview so simultaneous servers cannot invalidate each other's optimized modules.
 
 Give browser fixtures the app's viewport metadata and assert the CSS viewport width when verifying phone layouts; mobile device emulation can otherwise retain a desktop layout viewport.
 
@@ -351,7 +355,8 @@ Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
 meter on every row except on phones, with the direction in its label while
-importance moves:
+importance moves, and a preview cut short ending in an ellipsis (its box must
+not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
@@ -1019,6 +1024,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Fence affected cache rereads against newer published results too; reconcile
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
+- Native iOS navigation follows UIKit's preferred vertical-bar edge through `tauri/layout_plugin`; place it in UIKit's bar layout region within the system column, not beyond the content safe area. Keep the same dock mounted while its axis changes, size overflow along that axis, and leave independent safe-area clearance for content and composers. Keep JS compact-width behavior and the `mobile:` CSS variant aligned with the native size class.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
 - Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
@@ -1042,14 +1048,25 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
 - Reserve the safe area plus the category row above mobile Search, and only the safe area above flag-off Channels; let the flagged Channels header own its top inset without reserving it again in the list.
 - Follow [mobile layout and chrome](../../.agents/rules/web/mobile.md#layout-and-chrome) for full-frame views and record tabs; verify their first controls below the navigation with a nonzero safe area on phones and tablets.
+- Keep the floating entity split header 0.5rem below the safe-area edge on touch, matching collection controls; include that gutter in its measured height so content clears the controls.
+- Keep Email's touch filter row inside its list pane with the explicit 0.5rem top gutter used by Drive; reserve the row and its following gap in the list inset.
+- Keep selected Mail routes in the workspace when folding. Use `CollectionPanes.onBack` for the narrow detail's top-left Back button and interactive left-edge swipe over the mounted, inert list.
+- Use `ViewShell`'s shared 720px container breakpoint: list-aside workspaces keep their list beside details on wide touch; collection workspaces opt into `contentLayout="collection"` and compose `CollectionPanes` so their list stays left, an empty or selected preview stays right, and sub-view navigation opens through the list's Show sidebar button in a shared sheet that slides from the left over the list pane. Host touch collection navigation in the global modal layer at every width so it covers floating chrome. Keep selection/query state in the host and desktop/narrow item navigation unchanged; sheet visibility must not overwrite desktop sidebar preferences. Chat at 720px or narrower has no sidebar or navigation row.
+- Keep the Home composer desktop-only; Notifications uses a full-frame feed and standalone item navigation on touch at 720px or narrower, and docks its feed beside inline previews above that breakpoint.
+- Show the desktop 1px pane dividers between docked navigation, lists, and inline details on wide touch layouts.
+- Scale docked wide-touch workspace sidebar widths and bounds to 1.57421875 times their base sizes; preserve the wider navigation while space permits and normalize saved manual widths across desktop and narrow overlays.
+- Keep wide touch channel previews on `ChannelDetailLayout` with floating title/menu and call/invite islands, measured message clearance, and interactive navigation controls.
+- Anchor mobile floating page chrome to its owning workspace pane (`ViewShell.Main`, `ViewShell.Detail`, or a `CollectionPanes` frame), including composers and action bars; keep app navigation global and preserve mounted editors while resizing or collapsing navigation.
+- Use `MobileListLayout` for floating touch collection controls and their list-local fade; reserve its measured inset inside the scroller so sidebars stay clear and rows scroll behind the chrome. Give the outer wide-touch collection header twice the standard left chrome gutter to clear the bezel curve; retain the standard right gutter and narrow-touch spacing.
+- Limit whole-surface glass press scaling to nearly square controls; give horizontal and vertical navigation pills the bounded paint expansion in `glassPress.ts`.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Agent-opened panes (`features/agent-navigation`) open with `router.open` beside the agent's pane and never replace one; keep the person's active pane and focused element, the Undo toast, and the read hold (`useReadsHeldByAgentArrival` in read markers) when changing split opening, read markers or `TiledSplits` (its `data-split-pane` attribute drives the arrival motion). Undo keeps the read hold until the pane is gone, and plays the departure back when a leave guard keeps the pane. The tab id (`core/agent-session/ui-client.ts`) lives in sessionStorage, which a duplicated tab copies, so live pages compare ids over a BroadcastChannel and the one that took it later mints its own; the app shell takes it at startup. Agent navigation never runs on mobile: `agentNavigationRunsHere()` there is the one predicate that keeps the tab id off prompts, the id and its channel from starting, and the frame handler idle.
 - Routes are closed to agents (`macro.ui.open`) unless they set `info: OPEN_TO_AGENTS` in `routes/routes.ts`; open one only when showing it has no side effect (no call joins, auth or OAuth callbacks, prefilled composers, credential settings, debug views), then run `UPDATE_AGENT_ROUTE_TABLE=1 bun run test -- src/features/agent-navigation` so the server's copy in `agent_code_mode` matches.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
-- Keep flag-off mobile Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
-  Show all loaded channel favorites in saved order in the sectioned phone layout's horizontal scroller; apply the six-pin limit only to the legacy three-column grid.
+- Use the same Channels feed at every touch width, docking it beside inline previews on wide panes. Keep flag-off touch Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
+  Show all loaded channel favorites in saved order in the sectioned touch layout's horizontal scroller; apply the six-pin limit only to the legacy three-column grid.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
@@ -1754,6 +1771,11 @@ people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
+Order assignee menus and @ mention People rows with `@core/user/people-before-agents`:
+you, other people, then agents with Macro first. While searching, rank with
+`NAME_MATCH_RANKING`; an agent needs the typed words, not scattered letters, and never ranks
+above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
+don't boost bots in a menu's search score.
 
 ### Tag picker selection and creation
 
