@@ -41,7 +41,8 @@ CREATE INDEX crm_population_requests_due_idx
     ON crm_population_requests (link_id, due_at)
     WHERE parked_at IS NULL;
 
--- Counts one mailbox's attempts in flight.
+-- Counts one mailbox's attempts in flight. Settling an attempt can also reach
+-- its request here, by mailbox and lease, instead of through the primary key.
 CREATE INDEX crm_population_requests_claimed_idx
     ON crm_population_requests (link_id, claimed_until)
     WHERE claimed_until IS NOT NULL;
