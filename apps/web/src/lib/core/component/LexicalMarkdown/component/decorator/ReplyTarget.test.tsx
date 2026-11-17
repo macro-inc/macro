@@ -27,11 +27,8 @@ vi.mock('@core/user', () => ({
 vi.mock('@core/util/openInNewSplit', () => ({
   openInNewSplitForMention: () => true,
 }));
-vi.mock('@queries/bots/bots', () => ({
-  useBotsQuery: () => ({ isSuccess: true, data: [] }),
-}));
-vi.mock('@queries/channel/channel-bots', () => ({
-  useChannelBotsQuery: () => ({ isSuccess: true, data: [] }),
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: () => ({ data: () => undefined, isError: () => false }),
 }));
 vi.mock('@queries/messages/message-sender', () => ({
   getBotDisplayName: () => undefined,

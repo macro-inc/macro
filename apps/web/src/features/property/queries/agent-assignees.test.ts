@@ -11,6 +11,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fixture = vi.hoisted(() => ({
   agents: [] as Agent[],
   bots: [] as Bot[],
+  identities: {} as Record<
+    string,
+    { name: string; handle: string; avatarUrl?: string }
+  >,
   pending: false,
   agentRollout: false,
   codexRollout: false,
@@ -54,6 +58,10 @@ vi.mock('@queries/bots/bots', () => ({
   }),
 }));
 
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentities: () => (id: string) => fixture.identities[id],
+}));
+
 import { useAgentAssignees } from './agent-assignees';
 
 function agent(id: string, overrides: Partial<Bot> = {}): Agent {
@@ -81,6 +89,7 @@ function agent(id: string, overrides: Partial<Bot> = {}): Agent {
 beforeEach(() => {
   fixture.agents = [];
   fixture.bots = [];
+  fixture.identities = {};
   fixture.pending = false;
   fixture.agentRollout = false;
   fixture.codexRollout = false;
@@ -107,6 +116,30 @@ describe('task agent assignees', () => {
         email: '@research',
         photoUrl: 'https://example.com/avatar.png',
       });
+      dispose();
+    });
+  });
+
+  it('names an agent and shows its picture as they are now', () => {
+    const owned = agent('owned');
+    fixture.agents = [owned];
+    fixture.bots = [owned.bot];
+    fixture.identities = {
+      owned: {
+        name: 'Renamed agent',
+        handle: 'renamed',
+        avatarUrl: 'https://example.com/new.png',
+      },
+    };
+    createRoot((dispose) => {
+      expect(useAgentAssignees(() => true)()).toEqual([
+        {
+          id: 'bot|owned',
+          name: 'Renamed agent',
+          email: '@renamed',
+          photoUrl: 'https://example.com/new.png',
+        },
+      ]);
       dispose();
     });
   });
