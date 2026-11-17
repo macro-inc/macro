@@ -1,7 +1,7 @@
 import { requestBotDetail } from '@app/features/channel/Bots/botSettingsState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { UserCardAction } from '@core/component/userCardActions';
-import { botManagement, enableChatV3Agents } from '@core/constant/featureFlags';
+import { botManagement } from '@core/constant/featureFlags';
 import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -28,38 +28,33 @@ type BotSettingsDestination =
 export function createBotSettingsUserCardAction(
   principalId: Accessor<string | undefined>
 ): Accessor<UserCardAction | undefined> {
-  const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const botsFlag = useFeatureFlag(botManagement);
   const { openSettings } = useSettingsState();
   const currentUserId = useUserId();
   const isBot = () => isBotPrincipalId(principalId());
   // Only a bot's card needs these lists, so a person's card never fetches
   // them. Guarded reads: an unguarded `data` suspends the card.
-  const agentsQuery = useAgentsQuery(() => isBot() && agentsFlag().enabled);
+  const agentsQuery = useAgentsQuery(isBot);
   const botsQuery = useBotsQuery(() => isBot() && botsFlag().enabled);
-  const currentTeamQuery = useCurrentTeamQuery(
-    () => isBot() && agentsFlag().enabled
-  );
+  const currentTeamQuery = useCurrentTeamQuery(isBot);
 
   const destination = (): BotSettingsDestination | undefined => {
     const id = principalId();
     if (!id || !isBot()) return undefined;
     const botId = id.startsWith('bot|') ? id.slice('bot|'.length) : id;
 
-    if (agentsFlag().enabled) {
-      if (isMacroAgentId(botId) || isMacroNewId(botId)) {
-        return { type: 'agents' };
-      }
-      const agents = agentsQuery.isSuccess ? agentsQuery.data : [];
-      const teamId = currentTeamQuery.isSuccess
-        ? currentTeamQuery.data?.team.id
+    if (isMacroAgentId(botId) || isMacroNewId(botId)) {
+      return { type: 'agents' };
+    }
+    const agents = agentsQuery.isSuccess ? agentsQuery.data : [];
+    const teamId = currentTeamQuery.isSuccess
+      ? currentTeamQuery.data?.team.id
+      : undefined;
+    const agent = agents.find((candidate) => candidate.bot.id === botId);
+    if (agent) {
+      return canManageAgent(agent.bot, currentUserId(), teamId)
+        ? { type: 'agent', agentId: botId }
         : undefined;
-      const agent = agents.find((candidate) => candidate.bot.id === botId);
-      if (agent) {
-        return canManageAgent(agent.bot, currentUserId(), teamId)
-          ? { type: 'agent', agentId: botId }
-          : undefined;
-      }
     }
 
     const bots =

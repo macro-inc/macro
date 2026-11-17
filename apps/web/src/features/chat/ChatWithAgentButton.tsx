@@ -10,10 +10,6 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
@@ -81,8 +77,7 @@ async function createAndOpenAgent(seed: {
     seed.input !== undefined &&
     !seed.message &&
     !seed.model &&
-    !seed.instructions &&
-    isFeatureEnabled(enableChatV3Agents)
+    !seed.instructions
   ) {
     openAgentComposer(manager, !seed.replaceSplit, {
       draft: seed.input,

@@ -635,9 +635,8 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout decides
-whether it answers in the thread as the classic bot or opens an agent session. Without the
-rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+The mention menu offers a single `@Macro`, which opens an agent session. The classic
+in-channel bot, which the menu no longer offers, answers in the thread. Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
 event without attendees creates the event right away (unlike an agent session, where
 creation waits for the session owner to review it). For an event with attendees the bot is prompted to
@@ -727,8 +726,7 @@ collapse control. The card never expands in place.
 
 Built-in provider agents are offered before account setup, each within its own
 rollout: `@cursor` requires the `enable-cursor-agents` flag (local override:
-`VITE_ENABLE_CURSOR_AGENTS`), and `@codex` requires both
-`enable-chat-v3-agents` and `enable-codex-agents` (local override:
+`VITE_ENABLE_CURSOR_AGENTS`), and `@codex` requires `enable-codex-agents` (local override:
 `VITE_ENABLE_CODEX_AGENTS`). Outside a rollout the entry is absent from
 the mention menu and from task agent assignees, even when that bot is already a
 channel participant. Custom agents keep their channel visibility rules

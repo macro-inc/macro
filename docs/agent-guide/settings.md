@@ -1167,8 +1167,7 @@ desktop and mobile and contains:
 
 - **Agent → Enable AI agent**: makes the bot available in the model selector
   and lets it respond to mentions, using a chat agent or a connected external
-  runtime. Saving an agent configuration enables it regardless of harness. This
-  section remains gated by the agents rollout.
+  runtime. Saving an agent configuration enables it regardless of harness.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.
   Only team admins and owners can enable this option.

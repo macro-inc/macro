@@ -29,7 +29,7 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isDesktopPlatform, isPlatform } from '../util/platform';
+import { isPlatform } from '../util/platform';
 import {
   botManagement,
   DEV_MODE_ENV,
@@ -37,7 +37,6 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
   enableCalendarScheduling,
-  enableChatV3Agents,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -359,7 +358,6 @@ export const settingsSlugToTab = (
 export const useSettingsTabAvailable = () => {
   const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
   const botManagementFlag = useFeatureFlag(botManagement);
-  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -400,16 +398,13 @@ export const useSettingsTabAvailable = () => {
         );
       case 'Agent':
         return !isNativeMobilePlatform();
-      // The bundled desktop runtime can be set up from Home even while the
-      // configurable Agents view is still rolling out.
       case 'Harness':
-        return isDesktopPlatform() || chatV3AgentsFlag().enabled;
       case 'Agents':
-        return chatV3AgentsFlag().enabled;
+        return true;
       // Touch hides the Agents sidebar that lists Routines on desktop, so
       // phones and tablets reach the list here, beside Agents.
       case 'Routines':
-        return chatV3AgentsFlag().enabled && isTouchDevice();
+        return isTouchDevice();
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':

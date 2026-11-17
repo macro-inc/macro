@@ -262,7 +262,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines` | Routines list in the Agents workspace |
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro`, `@coder` or `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |

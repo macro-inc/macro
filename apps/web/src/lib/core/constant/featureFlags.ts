@@ -876,16 +876,6 @@ export const enableAgentUpdates = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the folded agent-session view in channels, and which bot the
-// single `@macro` mention targets — the agent session when on, the classic
-// in-channel reply when off.
-// Override with VITE_ENABLE_CHAT_V3_AGENTS.
-export const enableChatV3Agents = defineFlag({
-  key: 'enable-chat-v3-agents',
-  env: 'ENABLE_CHAT_V3_AGENTS',
-  default: onInDev,
-});
-
 /** Enables Universal Input in Command K and mobile Search. */
 export const enableUniversalInput = defineFlag({
   key: 'enable-universal-input',

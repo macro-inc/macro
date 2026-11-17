@@ -1053,8 +1053,7 @@ their full history, including tool cards, but nothing can be sent to them. The
 composer is replaced by a notice headed **Macro Chats are now Agents.**, the
 text **This chat is read-only. Continue it in Agents to keep going.**, and a
 **Continue in Agents** button that opens
-the new-conversation composer (or, without `enable-chat-v3-agents`, a new
-agent session) with the unsent draft **Continue this chat:** followed by a
+the new-conversation composer with the unsent draft **Continue this chat:** followed by a
 mention of the chat; no history is copied into it. A response that was
 already streaming when the chat opened shows **Stop** beside it; Ctrl+C also
 stops it. Pending email drafts render read-only with **Email not sent**, and
@@ -1752,12 +1751,10 @@ supported edits and retry behavior.
 
 ## In channels
 
-Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
-the classic in-channel reply; with it, the same mention opens an **agent session** — a
+Mention `@Macro` in any channel message to open an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
 `@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
-suggestions. There is only ever one Macro entry in the mention menu; which of the
-two answers is the rollout's decision, not a second choice in the menu.
+suggestions. There is only ever one Macro entry in the mention menu.
 
 ## Agent sessions
 
