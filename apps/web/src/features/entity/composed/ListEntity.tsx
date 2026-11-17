@@ -65,6 +65,7 @@ import {
 import { WideLayout } from './list-entity/wide-layout';
 
 export {
+  type EmailRowStyle,
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from './list-entity/shared';
@@ -113,6 +114,8 @@ export function ListEntity(props: ListEntityProps) {
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
+  const classic = () =>
+    props.rowStyle === 'classic' && isEmailEntity(props.entity);
   const isShared = useIsShared(props.entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
@@ -214,6 +217,9 @@ export function ListEntity(props: ListEntityProps) {
     },
     get unread() {
       return unread();
+    },
+    get classic() {
+      return classic();
     },
     get isShared() {
       return isShared();
@@ -318,6 +324,20 @@ export function ListEntity(props: ListEntityProps) {
         // Keep avatar-group separators in sync with the row background so they
         // blend into it instead of creating visible rings.
         '[--avatar-group-separator:var(--color-panel)]',
+        // Classic rows reserve the lifted surface's border, so an unread row is
+        // as tall as a read one. Wide read rows draw the line between rows
+        // here; the stacked layouts already end in one (`InboxDivider`), and a
+        // lifted row's own edge separates it.
+        classic() && 'border border-transparent',
+        classic() &&
+          isWide() &&
+          !unread() &&
+          'after:pointer-events-none after:absolute after:inset-x-2 after:-bottom-px after:h-px after:bg-edge-divider',
+        // The lifted surface of the sidebar's Accounts section. State fills
+        // below (selected, highlighted, hover) still win over it.
+        classic() &&
+          unread() &&
+          'bg-control touch:border-edge-button not-touch:elevated [--avatar-group-separator:var(--color-control)]',
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),

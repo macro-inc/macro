@@ -1,4 +1,9 @@
+import {
+  emailRowStyle,
+  setEmailRowStyle,
+} from '@app/features/email-view/primitives/email-row-style';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableEmailReadReceipts,
@@ -11,7 +16,7 @@ import { useEmailLinks } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, Tabs, ToggleSwitch } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import {
@@ -45,6 +50,13 @@ export function EmailSettings() {
         >
           <EmailCard />
         </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title={t('settingsEmail.displayOptions')}
+        target="Display options"
+        description={t('settingsEmail.displayOptionsDescription')}
+      >
+        <EmailDisplayOptions />
       </SettingsSection>
       <Show when={signatures().enabled}>
         <SettingsSection
@@ -115,6 +127,30 @@ export function EmailSettings() {
         </SettingsSection>
       </Show>
     </SettingsPage>
+  );
+}
+
+function EmailDisplayOptions() {
+  return (
+    <SettingsCard>
+      <SettingsRow
+        stackOnNarrow
+        label={t('settingsEmail.rowStyle')}
+        description={t('settingsEmail.rowStyleDescription')}
+      >
+        <Tabs
+          aria-label={t('settingsEmail.rowStyle')}
+          touch="segmented"
+          size="sm"
+          options={[
+            { value: 'minimalist', label: t('settingsEmail.minimalist') },
+            { value: 'classic', label: t('settingsEmail.classic') },
+          ]}
+          value={emailRowStyle()}
+          onChange={setEmailRowStyle}
+        />
+      </SettingsRow>
+    </SettingsCard>
   );
 }
 

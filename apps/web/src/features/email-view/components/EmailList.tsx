@@ -83,6 +83,7 @@ import {
   type EmailListStateSnapshot,
 } from '../persistence';
 import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
+import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -881,6 +882,7 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      rowStyle={emailRowStyle()}
                                       onFilterByTag={filterByTag}
                                       meta={
                                         <EmailFocusReason

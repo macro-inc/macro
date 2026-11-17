@@ -36,7 +36,7 @@ export function NarrowEmailLayout(
         class="group/check grid place-items-center self-center pt-2.5"
       >
         <Show
-          when={!props.hideCheckbox && props.checked}
+          when={!props.hideCheckbox && (props.checked || props.classic)}
           fallback={
             <>
               <UnreadIndicator
@@ -60,6 +60,7 @@ export function NarrowEmailLayout(
           <MultiSelectCheckbox
             checked={props.checked}
             onChecked={props.onChecked}
+            showBorder={props.classic}
           />
         </Show>
       </Entity.Slot>
@@ -77,7 +78,10 @@ export function NarrowEmailLayout(
 
       <Entity.Slot
         placement="timestamp"
-        class="flex items-center justify-end pt-2.5 pr-3 pl-2 text-xs text-ink-extra-muted"
+        class={cn(
+          'flex items-center justify-end pt-2.5 pr-3 pl-2 text-xs text-ink-extra-muted',
+          props.classic && weight()
+        )}
       >
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
           <span class="flex items-center gap-1">
@@ -104,7 +108,8 @@ export function NarrowEmailLayout(
         setContainerRef={props.setSnippetContainerRef}
         previewLeading={props.previewLeading}
       />
-      <InboxDivider />
+      {/* A lifted Classic row's own edge already separates it. */}
+      <InboxDivider hidden={props.classic && props.unread} />
     </Entity.Layout>
   );
 }

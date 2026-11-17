@@ -72,6 +72,13 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Email',
+    title: 'Email row style',
+    target: 'Display options',
+    keywords:
+      'display options minimalist classic list rows unread bold divider checkbox density',
+  },
+  {
+    tab: 'Email',
     title: 'Email signatures',
     target: 'Signatures',
     keywords: 'signature footer signoff formatting image replies forwards',
