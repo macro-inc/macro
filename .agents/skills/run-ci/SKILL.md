@@ -44,6 +44,12 @@ releases fail on a Projects (classic) error before adding the label.
 - Only PRs into `main` run. A stacked PR, based on another branch, gets no
   `CI gate` and the label does nothing until its base is `main`.
 - Other labels never start or cancel CI.
+- The email end-to-end suites are not in `PR CI`. For a PR that changes
+  email, calendar or those suites, also run them on the branch by hand:
+  `gh workflow run email_e2e_browser.yml --ref <branch>` and
+  `gh workflow run email_e2e.yml --ref <branch>`, then read the runs with
+  `gh run list --workflow email_e2e_browser.yml --branch <branch>`
+  (`apps/web/tests/email-e2e/README.md`, CI).
 - A stacked PR, whose base is another PR's branch, gets no run: `PR CI` only
   listens to PRs into `main`, and the label stays on. Set its base to `main`
   (`gh api -X PATCH repos/macro-inc/macro/pulls/<pr> -f base=main`), wait

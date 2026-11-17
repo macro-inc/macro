@@ -9,26 +9,9 @@ env:
   RUST_BACKTRACE: '1'
   RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
 'on':
-  push:
-    branches:
-    - main
-    paths:
-    - services/**
-    - crates/**
-    - apps/web/**
-    - packages/**
-    - infra/local/**
-    - tooling/xtask/crates/xtask_local/**
-    - Cargo.toml
-    - Cargo.lock
-    - bun.lock
-    - rust-toolchain.toml
-    - flake.nix
-    - flake.lock
-    - '.github/workflows/email_e2e_full_stack.yml'
   schedule:
-  - cron: '0 3 * * *'
-  workflow_call: {}
+  # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
+  - cron: '0 21 * * *'
   workflow_dispatch: {}
 jobs:
   email-e2e-full-stack:
@@ -252,5 +235,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}
+  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true

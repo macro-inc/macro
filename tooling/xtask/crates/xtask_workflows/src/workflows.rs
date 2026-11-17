@@ -199,17 +199,17 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "email_e2e",
         file_name: "email_e2e.yml",
-        render_yaml: || render_gh_workflow(email_e2e::email_e2e)(),
+        render_yaml: || email_e2e::render(email_e2e::email_e2e),
     },
     WorkflowFile {
         slug: "email_e2e_browser",
         file_name: "email_e2e_browser.yml",
-        render_yaml: || render_gh_workflow(email_e2e_browser::email_e2e_browser)(),
+        render_yaml: || email_e2e::render(email_e2e_browser::email_e2e_browser),
     },
     WorkflowFile {
         slug: "email_e2e_full_stack",
         file_name: "email_e2e_full_stack.yml",
-        render_yaml: || render_gh_workflow(email_e2e_full_stack::email_e2e_full_stack)(),
+        render_yaml: || email_e2e::render(email_e2e_full_stack::email_e2e_full_stack),
     },
     WorkflowFile {
         slug: "code_check_infra",

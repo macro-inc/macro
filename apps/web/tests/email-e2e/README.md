@@ -87,8 +87,8 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
 - Say in a comment above the test what goes wrong when it fails.
 - A test for a bug that is not fixed yet asserts the right behaviour and is
   tagged `{ tag: '@known-bug' }`. The suite leaves it out;
-  `EMAIL_E2E_KNOWN_BUGS=1` runs only those (a non-gating CI step, on each
-  stack). Once it passes, the coverage step fails until the tag and the
+  `EMAIL_E2E_KNOWN_BUGS=1` runs only those (a non-gating CI step of the daily sweep,
+  on each stack). Once it passes, the coverage step fails until the tag and the
   bug's line in `ledger/waivers.tsv` are removed. A bug that shows only in
   some runs is tagged `['@known-bug', '@sometimes']`, with its rate in the
   comment: a pass of that test fails nothing.
@@ -170,17 +170,46 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   after moving a test between the stacks, run both and
   `just apps/web/email-e2e-ledger --record`.
 
-CI: `Email end-to-end (full stack)` (`email_e2e_full_stack.rs`) runs the tier
-on pushes to `main` and nightly, not in `PR CI`, then its `@known-bug`
-tests (non-gating) and the coverage check.
+## CI
 
-CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
-`email_e2e_browser.rs`) runs on pushes to `main` that change the web app or
-backend code and, within `PR CI`, on pull requests that touch email or
-calendar code on either side. It splits the suite over three machines
-(Playwright's `--shard`, `SHARDS` in that file); each uploads what it
-recorded, and the job `Email end-to-end (browser) coverage` reads all of it
-as one run. Raise `SHARDS` when a shard passes about fifteen minutes.
+The suite is not part of `PR CI` and does not count towards `CI gate`. Three
+workflows run it (`xtask_workflows`' `email_e2e.rs`, `email_e2e_browser.rs`
+and `email_e2e_full_stack.rs`):
+
+| Job | Push to `main` | Daily sweep, 21:00 UTC | By hand |
+| --- | --- | --- | --- |
+| `Email end-to-end`: the Rust scenarios | when backend code changed | yes | yes |
+| `Email end-to-end (browser)`: this suite, on three machines | when the web app or backend code changed | yes | yes |
+| `Email end-to-end (browser) coverage`: `email-e2e-ledger --enforce` | with the suite | yes | yes |
+| `Email end-to-end (full stack)`: the tier, its `@known-bug` tests and its coverage check | no | yes | yes |
+| The `@known-bug` report of the first two (non-gating) | no | yes | with `known_bugs` |
+
+- A push to `main` runs once per commit, with no waiting for later pushes. A
+  failure is a red run on that commit; nothing is reverted or blocked by it.
+- The sweep runs `main`'s head whether or not it changed. Cron is UTC and
+  does not follow daylight saving: 21:00 UTC is 4pm EST and 5pm EDT.
+- The coverage check fails the run wherever the suite runs: on every push to
+  `main` and in the sweep (the tier's own in the sweep). That a test for a
+  known bug now passes is found by the sweep, where those tests run.
+- The browser workflow splits the suite over three machines (Playwright's
+  `--shard`, `SHARDS` in `email_e2e_browser.rs`); each uploads what it
+  recorded, and the coverage job reads all of it as one run. Raise `SHARDS`
+  when a shard passes about fifteen minutes.
+
+A pull request that changes email, calendar or the suite is run by hand
+before it is merged, since `PR CI` no longer does:
+
+```sh
+gh workflow run email_e2e_browser.yml --ref <branch>                  # what a push to main runs
+gh workflow run email_e2e.yml --ref <branch>
+gh workflow run email_e2e_browser.yml --ref <branch> -f known_bugs=true   # as the sweep
+gh workflow run email_e2e_full_stack.yml --ref <branch>
+gh run list --workflow email_e2e_browser.yml --branch <branch> --limit 1
+```
+
+The run is of the branch as it is, not of its merge with `main`: merge
+`main` in first when that matters. GitHub starts a workflow by hand only
+once its file is on `main`.
 
 ## What the suite covers
 

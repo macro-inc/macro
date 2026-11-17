@@ -101,7 +101,9 @@ proved and waived by kind beside the same numbers for functions.
 
 ## What fails the job
 
-Both CI jobs run the report with `--enforce`. It fails when
+Both CI jobs run the report with `--enforce`: the browser suite's on every
+push to `main` and in the daily sweep, the full-stack tier's in the sweep
+(`../README.md`, CI). It fails when
 
 - a function on a provider, or a row, has no passing test on its stack and
   no line in `waivers.tsv`: a covered function that lost its test on Gmail
@@ -110,7 +112,9 @@ Both CI jobs run the report with `--enforce`. It fails when
 - a function waived on no provider has no line in `proofs.tsv`;
 - a row without a line in `waivers.tsv` has no line in `proofs.tsv`: a
   new row comes with a test and with the break that made the test fail;
-- the tests tagged `@known-bug` were not run, or one of them passes:
+- the tests tagged `@known-bug` were not run (unless the run left them out
+  on purpose, `--without-known-bugs`: CI on a push to `main`), or one of
+  them passes:
   remove the tag, and the waiver that stood for the bug. A bug that shows only in some runs is also tagged
   `@sometimes`, and a pass of its test fails nothing: one run cannot tell
   that it is gone;

@@ -5,43 +5,22 @@
 //! (`apps/web/tests/email-e2e/README.md`). Generated into
 //! `email_e2e_full_stack.yml`.
 //!
-//! It runs on every push to `main` that changes what the stack or the web
-//! bundle is built from, and nightly. It is not part of `PR CI`: the stack
-//! is every service, built from the commit under test. A failure is a red
-//! run on that commit; nothing is reverted or blocked by it.
+//! It runs in the daily sweep ([`email_e2e::SWEEP`]) only, with its tests
+//! kept for known bugs and its coverage check, and by hand
+//! (`workflow_dispatch`). It is not part of `PR CI` and does not run on
+//! pushes to `main`: the stack is every service, built from the commit under
+//! test. A failure is a red run on that commit; nothing is reverted or
+//! blocked by it.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Schedule, Step, Use, Workflow, WorkflowCall,
-    WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
-use xtask_paths::RepoGlob;
 
 use crate::workflows::{
-    code_check_cloud_storage, runners,
+    code_check_cloud_storage, email_e2e, runners,
     steps::{self, FluentBuilder},
     vars, web_app_check_main,
 };
-
-/// Files whose change on `main` runs the tier: anything the stack's
-/// services, its orchestration or the web bundle are built from.
-const MAIN_PATHS: &[RepoGlob<'static>] = &[
-    xtask_paths::repo_glob!("services/**"),
-    xtask_paths::repo_glob!("crates/**"),
-    xtask_paths::repo_glob!("apps/web/**"),
-    xtask_paths::repo_glob!("packages/**"),
-    xtask_paths::repo_glob!("infra/local/**"),
-    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_local/**"),
-    xtask_paths::repo_glob!("Cargo.toml"),
-    xtask_paths::repo_glob!("Cargo.lock"),
-    xtask_paths::repo_glob!("bun.lock"),
-    xtask_paths::repo_glob!("rust-toolchain.toml"),
-    xtask_paths::repo_glob!("flake.nix"),
-    xtask_paths::repo_glob!("flake.lock"),
-    xtask_paths::repo_glob!(".github/workflows/email_e2e_full_stack.yml"),
-];
-
-/// 03:00 UTC, when little else is building.
-const NIGHTLY: &str = "0 3 * * *";
 
 /// The stack instance the job starts: its own Compose project and ports.
 const INSTANCE: &str = "email-e2e";
@@ -61,27 +40,19 @@ const LEDGER: xtask_paths::RuntimePath<'static> =
 
 /// Build the workflow.
 pub fn email_e2e_full_stack() -> Workflow {
-    let push = MAIN_PATHS
-        .iter()
-        .fold(Push::default().add_branch("main"), |push, path| {
-            push.add_path(path.as_str())
-        });
-
     Workflow::new("Email end-to-end (full stack)")
         .on(Event::default()
-            .push(push)
-            .add_schedule(Schedule::new(NIGHTLY))
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .add_schedule(Schedule::new(email_e2e::SWEEP))
+            .workflow_dispatch(WorkflowDispatch::default()))
         .concurrency(concurrency())
         .map(vars::with_global_env)
         .add_job("email-e2e-full-stack", tier())
 }
 
-/// Every commit on `main` keeps its own result.
+/// Every commit keeps its own result, per event.
 fn concurrency() -> Concurrency {
     Concurrency::new(Expression::new(
-        "email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}",
+        "email-e2e-full-stack-${{ github.event_name }}-${{ github.sha }}",
     ))
     .cancel_in_progress(true)
 }

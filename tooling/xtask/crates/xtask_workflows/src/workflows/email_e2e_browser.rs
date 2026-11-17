@@ -4,13 +4,15 @@
 //! Generated into `email_e2e_browser.yml`.
 //!
 //! It runs on every push to `main` that changes the web app or backend code,
-//! and as part of `PR CI` for pull requests that touch email on either side
-//! ([`PATHS`]), where it counts towards `CI gate`. A failure on `main` is a
-//! red run on the merge commit; nothing is reverted or blocked by it.
+//! and in the daily sweep ([`email_e2e::SWEEP`]), which also reports the
+//! tests kept for known bugs. Both check the coverage of the email UI. It is
+//! not part of `PR CI`: a pull request branch is run by hand
+//! (`workflow_dispatch`, `apps/web/tests/email-e2e/README.md`). A failure on
+//! `main` is a red run on the merge commit; nothing is reverted or blocked
+//! by it.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Strategy, Use, Workflow, WorkflowCall,
-    WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Push, Run, Schedule, Step, Strategy, Use, Workflow,
 };
 use xtask_paths::RepoGlob;
 
@@ -19,34 +21,6 @@ use crate::workflows::{
     steps::{self, FluentBuilder},
     vars, web_app_check_main,
 };
-
-/// Files whose change makes `PR CI` call this workflow: what
-/// [`email_e2e::PATHS`] names, and the web app's email and calendar code.
-pub const PATHS: &[RepoGlob<'static>] = &[
-    xtask_paths::repo_glob!("services/email_service/**"),
-    xtask_paths::repo_glob!("services/email_scheduled_handler/**"),
-    xtask_paths::repo_glob!("crates/email/**"),
-    xtask_paths::repo_glob!("crates/email_*/**"),
-    xtask_paths::repo_glob!("crates/graphql_email/**"),
-    xtask_paths::repo_glob!("crates/gmail_*/**"),
-    xtask_paths::repo_glob!("crates/outlook_*/**"),
-    xtask_paths::repo_glob!("crates/macro_db_client/migrations/**"),
-    xtask_paths::repo_glob!("apps/web/tests/email-e2e/**"),
-    xtask_paths::repo_glob!("apps/web/src/features/email-*/**"),
-    xtask_paths::repo_glob!("apps/web/src/features/block-email/**"),
-    xtask_paths::repo_glob!("apps/web/src/features/calendar*/**"),
-    xtask_paths::repo_glob!("apps/web/src/features/block-calendar/**"),
-    xtask_paths::repo_glob!("apps/web/src/lib/queries/email/**"),
-    xtask_paths::repo_glob!("apps/web/src/lib/queries/calendar/**"),
-    xtask_paths::repo_glob!("apps/web/src/lib/core/email-link/**"),
-    xtask_paths::repo_glob!("apps/web/src/features/settings/browser-test/signatures/**"),
-    xtask_paths::repo_glob!(
-        "apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**"
-    ),
-    xtask_paths::repo_glob!("packages/email-renderer/**"),
-    xtask_paths::repo_glob!("apps/web/justfile"),
-    xtask_paths::repo_glob!(".github/workflows/email_e2e_browser.yml"),
-];
 
 /// Files whose change on `main` runs the suite: anything the services or
 /// the web bundle are built from.
@@ -101,18 +75,18 @@ pub fn email_e2e_browser() -> Workflow {
     Workflow::new("Email end-to-end (browser)")
         .on(Event::default()
             .push(push)
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .add_schedule(Schedule::new(email_e2e::SWEEP))
+            .workflow_dispatch(email_e2e::dispatch()))
         .concurrency(concurrency())
         .map(vars::with_global_env)
         .add_job(SUITE_JOB, suite())
         .add_job("email-e2e-browser-coverage", coverage())
 }
 
-/// As the Rust suite: every commit on `main` keeps its own result.
+/// As the Rust suite: every commit on `main` keeps its own result, per event.
 fn concurrency() -> Concurrency {
     Concurrency::new(Expression::new(
-        "email-e2e-browser-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}",
+        "email-e2e-browser-${{ github.event_name }}-${{ github.sha }}",
     ))
     .cancel_in_progress(true)
 }
@@ -237,7 +211,9 @@ fn run_suite() -> Step<Run> {
 /// fails the job: its output says which still fail and which now pass. A
 /// test that is expected to fail is not retried. One that passes fails the
 /// ledger step below, until its tag is removed. Its traces go beside the
-/// suite's, which a second run into the same directory would delete.
+/// suite's, which a second run into the same directory would delete. Only
+/// where [`email_e2e::REPORTS_KNOWN_BUGS`] holds: a push to `main` runs the
+/// suite alone.
 fn known_bugs() -> Step<Run> {
     Step::new("report tests for known bugs")
         .run(
@@ -247,18 +223,26 @@ fn known_bugs() -> Step<Run> {
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
-        .if_condition(Expression::new("!cancelled()"))
+        .if_condition(Expression::new(format!(
+            "!cancelled() && ({})",
+            email_e2e::REPORTS_KNOWN_BUGS
+        )))
 }
 
-/// What the suite covers of the email UI, from what the two runs of every
-/// shard recorded: the job summary and the `email-e2e-browser-coverage` artifact.
+/// What the suite covers of the email UI, from what every shard recorded
+/// (the suite and, in the sweep, the known-bug run): the job summary and the `email-e2e-browser-coverage` artifact.
 /// It fails the job when a function or a row of the manifest has neither a
 /// passing test on this stack nor a waiver, when a waived one is covered, and
-/// when a test for a known bug passes (`ledger/README.md`). It runs after a
-/// failed suite too, where it says what the tests that passed cover.
+/// when a test for a known bug passes (`ledger/README.md`). A run that left
+/// the known-bug tests out says so (`--without-known-bugs`), or their absence
+/// would fail the check. It runs on every push to `main` and in the sweep,
+/// after a failed suite too, where it says what the tests that passed cover.
 fn ledger() -> Step<Run> {
     Step::new("check the coverage of the email UI")
-        .run("just email-e2e-ledger --enforce")
+        .run(format!(
+            "just email-e2e-ledger --enforce ${{{{ !({}) && '--without-known-bugs' || '' }}}}",
+            email_e2e::REPORTS_KNOWN_BUGS
+        ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .if_condition(Expression::new("!cancelled()"))
 }

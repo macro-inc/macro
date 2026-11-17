@@ -19,6 +19,16 @@ what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
 
+## Email end-to-end suites
+
+`PR CI` does not run the email end-to-end suites, and `CI gate` does not
+wait for them. The Rust scenarios and the browser suite run on pushes to `main`; a daily
+sweep at 21:00 UTC runs those and the full-stack tier. Before merging a pull request that changes email, calendar or the
+suites, run them on its branch by hand: `gh workflow run
+email_e2e_browser.yml --ref <branch>` and `gh workflow run email_e2e.yml
+--ref <branch>`. The [suite's README](../../apps/web/tests/email-e2e/README.md)
+has the trigger table and the other commands.
+
 ## RustSec advisories
 
 `cargo deny` reads the live RustSec advisory database. On a PR it fails only

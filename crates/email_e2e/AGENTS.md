@@ -73,7 +73,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   when it fails.
 - A scenario for a bug that is not fixed yet asserts the right behaviour and
   is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
-  email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
+  email-e2e-known-bugs` (a non-gating CI step of the daily sweep) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
 - Sending the way the web composer does (a stack with `document_storage`):
   `inbox.send_attempt(attempt_id, &message, &extra)` with the GraphQL draft
@@ -126,8 +126,10 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   `EMAIL_E2E_SQS_URL=http://127.0.0.1:9324`.
 - A new or changed scenario: `just email-e2e --stress-count 20 <name>` passes.
 - CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
-  runs the suite on pushes to `main` that change backend code and, within
-  `PR CI`, on pull requests that touch email, the emulators or the schema.
+  runs the suite on pushes to `main` that change backend code and in the
+  daily sweep (21:00 UTC), which also reports the known bugs. It is not part
+  of `PR CI`: run a pull request branch by hand with `gh workflow run
+  email_e2e.yml --ref <branch>` (`apps/web/tests/email-e2e/README.md`, CI).
   `Email end-to-end (browser)` (`email_e2e_browser.rs`) runs the browser suite.
 - A change to `src/stack_server.rs`: `just email-e2e-browser`.
 

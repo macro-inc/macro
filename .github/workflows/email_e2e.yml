@@ -22,8 +22,14 @@ env:
     - flake.lock
     - '.config/nextest.toml'
     - '.github/workflows/email_e2e.yml'
-  workflow_call: {}
-  workflow_dispatch: {}
+  schedule:
+  # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
+  - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      known_bugs:
+        description: Also report the tests kept for known bugs, as the daily sweep does
+        type: boolean
 jobs:
   email-e2e:
     name: Email end-to-end
@@ -251,6 +257,7 @@ jobs:
         cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"
         echo "Email end-to-end suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
     - name: report scenarios for known bugs
+      if: github.event_name == 'schedule' || inputs.known_bugs == true
       run: crates/email_e2e/scripts/known_bugs.sh
       continue-on-error: true
     - name: Upload email-e2e-logs artifact
@@ -268,5 +275,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: email-e2e-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}
+  group: email-e2e-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true

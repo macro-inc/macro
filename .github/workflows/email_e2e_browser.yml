@@ -24,8 +24,14 @@ env:
     - flake.nix
     - flake.lock
     - '.github/workflows/email_e2e_browser.yml'
-  workflow_call: {}
-  workflow_dispatch: {}
+  schedule:
+  # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
+  - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      known_bugs:
+        description: Also report the tests kept for known bugs, as the daily sweep does
+        type: boolean
 jobs:
   email-e2e-browser:
     name: Email end-to-end (browser) (${{ matrix.shard }}/3)
@@ -310,7 +316,7 @@ jobs:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
         WASM_PKG_HTTP_CACHE: '1'
     - name: report tests for known bugs
-      if: '!cancelled()'
+      if: '!cancelled() && (github.event_name == ''schedule'' || inputs.known_bugs == true)'
       run: just test-email-e2e-browser --pass-with-no-tests --retries 0 --shard "$EMAIL_E2E_SHARD" --output tests/email-e2e/test-results/known-bugs
       env:
         EMAIL_E2E_KNOWN_BUGS: '1'
@@ -386,7 +392,7 @@ jobs:
         merge-multiple: 'true'
     - name: check the coverage of the email UI
       if: '!cancelled()'
-      run: just email-e2e-ledger --enforce
+      run: just email-e2e-ledger --enforce ${{ !(github.event_name == 'schedule' || inputs.known_bugs == true) && '--without-known-bugs' || '' }}
       working-directory: apps/web
     - name: Upload email-e2e-browser-coverage artifact
       if: '!cancelled()'
@@ -401,5 +407,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: email-e2e-browser-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}
+  group: email-e2e-browser-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true

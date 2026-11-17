@@ -1,6 +1,6 @@
 // The coverage report of the email browser suite:
 //
-//   bun tests/email-e2e/ledger/report.ts [--enforce | --record]
+//   bun tests/email-e2e/ledger/report.ts [--enforce [--without-known-bugs] | --record]
 //
 // reads the last run (`ledger-results/`) and writes `ledger-results/report/`:
 // `ledger.json`, `summary.md` (appended to the CI job summary), `index.html`
@@ -8,6 +8,9 @@
 // unless `--enforce` or EMAIL_E2E_LEDGER_ENFORCE=1 is given: then what
 // `enforce.ts` finds, or a manifest that differs from the source, fails it.
 // `--record` writes `full-stack-only.tsv` from a run of both stacks.
+// `--without-known-bugs` is for a run that left the tests kept for known
+// bugs out on purpose (CI on a push to `main`): their absence then fails
+// nothing, and the daily sweep is where a fixed bug's test is found passing.
 
 import {
   appendFileSync,
@@ -187,8 +190,14 @@ const WAIVER_KINDS: Record<Waiver['kind'], string> = {
     'Not tested itself, and reported as open; most are another way into a function that is covered',
 };
 
+/** The run left the tests kept for known bugs out on purpose. */
+const WITHOUT_KNOWN_BUGS = process.argv.includes('--without-known-bugs');
+
 const ENFORCED =
-  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.' +
+  (WITHOUT_KNOWN_BUGS
+    ? ' This run left the tests tagged @known-bug out (--without-known-bugs), so it cannot tell that one passes: the daily sweep does.'
+    : '');
 
 function waiverTable(): Table {
   return {
@@ -477,7 +486,11 @@ function render(
     ]),
   };
   const tests = ledger.tests;
-  const testsLine = `${tests.total} tests (${tests.onBothStacks} of them run on both the per-test stack and the full-stack tier, and are counted once): ${tests.passed} passed, ${tests.flaky.length} passed only on a retry, ${tests.failed} failed, ${tests.skipped} skipped; ${tests.seconds} s of test time. ${tests.knownBugs} tests for known bugs are run apart and do not count.`;
+  const testsLine = `${tests.total} tests (${tests.onBothStacks} of them run on both the per-test stack and the full-stack tier, and are counted once): ${tests.passed} passed, ${tests.flaky.length} passed only on a retry, ${tests.failed} failed, ${tests.skipped} skipped; ${tests.seconds} s of test time. ${
+    WITHOUT_KNOWN_BUGS
+      ? 'The tests for known bugs were left out of this run; the daily sweep runs them.'
+      : `${tests.knownBugs} tests for known bugs are run apart and do not count.`
+  }`;
   const fromLine =
     runs.length > 1
       ? `Counted from the runs on ${runs.join(' and ')}.`
@@ -710,7 +723,7 @@ function report(mode: Mode): void {
         .map((test) => `${test.file}:${test.line} ${test.title}`),
     }),
     // A run that left no result cannot say that no such test passes.
-    ...(knownBugs.found && knownBugParts >= suiteParts
+    ...(WITHOUT_KNOWN_BUGS || (knownBugs.found && knownBugParts >= suiteParts)
       ? []
       : [
           'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',
