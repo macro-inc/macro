@@ -7774,6 +7774,13 @@
       "crates/generic_email_domains",
       "crates/workspace-hack"
     ],
+    "gh_workflow": [
+      "tooling/xtask/crates/gh_workflow",
+      "tooling/xtask/crates/gh_workflow_macros"
+    ],
+    "gh_workflow_macros": [
+      "tooling/xtask/crates/gh_workflow_macros"
+    ],
     "git_patch": [
       "crates/git_patch",
       "crates/workspace-hack"
@@ -17277,6 +17284,8 @@
       "tooling/xtask/crates/xtask_ports"
     ],
     "xtask_workflows": [
+      "tooling/xtask/crates/gh_workflow",
+      "tooling/xtask/crates/gh_workflow_macros",
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_workflows"
     ]

@@ -1,0 +1,15 @@
+[package]
+description = "Derive macros for the vendored gh_workflow crate"
+edition = "2021"
+license = "Apache-2.0"
+name = "gh_workflow_macros"
+publish = false
+version = "0.8.1"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+heck = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

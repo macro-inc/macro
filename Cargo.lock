@@ -9048,28 +9048,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "gh-workflow"
+name = "gh_workflow"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389296a8f9ebed67f6f49f3ee7fb5870d34b1f134d6033727de8caac3a6336a1"
 dependencies = [
- "async-trait",
  "derive_more 2.1.1",
  "derive_setters",
- "gh-workflow-macros",
+ "gh_workflow_macros",
  "indexmap 2.14.0",
  "merge",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "serde_yml",
- "strum_macros 0.27.2",
 ]
 
 [[package]]
-name = "gh-workflow-macros"
+name = "gh_workflow_macros"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b8281789edecfe1c6dab6312577f5ec0f7f8b860cad70156b8fc70ebedc786d"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -24198,7 +24193,7 @@ name = "xtask_workflows"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gh-workflow",
+ "gh_workflow",
  "indoc",
  "serde_json",
  "serde_yaml",

@@ -15,6 +15,8 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
 - A new workflow is a module in `tooling/xtask/crates/xtask_workflows/src/workflows/`
   registered in `WORKFLOWS` (`workflows.rs`). Reuse `runners`, `vars`, and
   `steps` instead of inlining labels, env, or step definitions.
+- The workflow model is our vendored `tooling/xtask/crates/gh_workflow`. When it
+  can't express something, extend it there instead of patching rendered YAML.
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
 - `cargo x workflows` also writes `tooling/xtask/crates/xtask_workflows/checks.lock`:
