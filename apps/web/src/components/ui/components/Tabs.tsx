@@ -282,7 +282,7 @@ function PillOption<T extends string>(props: {
             ? iconControlSizes[props.size]
             : labeledControlFrames[props.size]),
         props.joined && square() && joinedIconSizes[props.size],
-        'touch:min-h-8',
+        !props.choices && 'touch:min-h-8',
         square() && 'touch:min-w-8',
         props.fullWidth && !square() && 'flex-1'
       )}
