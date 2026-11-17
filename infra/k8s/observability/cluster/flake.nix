@@ -40,10 +40,15 @@
           # The tree committed under manifests/prod. The app of apps
           # (Application-apps.yaml) goes into apps/ with the Applications it
           # syncs, so after `scripts/bootstrap.sh` applies it once it manages
-          # itself too.
+          # itself too. File names are kind-name; `:` in a name (RBAC objects)
+          # becomes `_`, which no Kubernetes name contains, because CI's
+          # changed-files tooling and some filesystems can't handle it.
           prod = pkgs.runCommand "observability-cluster-prod" { } ''
             cp -rL --no-preserve=mode ${prod.environmentPackage}/. $out/
             cp -L --no-preserve=mode ${prod.bootstrapPackage}/*.yaml $out/apps/
+            find $out -name '*:*' -type f | while IFS= read -r file; do
+              mv "$file" "$(dirname "$file")/$(basename "$file" | tr : _)"
+            done
           '';
           inherit (tools)
             render
