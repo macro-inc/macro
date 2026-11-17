@@ -8,7 +8,14 @@ import { useBotProfile } from '@queries/bots/profiles';
 import { queryReadyGate } from '@queries/gate';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import { Avatar, cn } from '@ui';
-import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  type JSX,
+  Match,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
 import { botOwnerName, type Owner, parseOwner } from './owner';
 
 function IconAndName(
@@ -117,6 +124,25 @@ function BotFace(props: {
   );
 }
 
+type BotProfileQuery = ReturnType<typeof useBotProfile>;
+
+function profileBotName(profile: BotProfileQuery): string {
+  const found = queryReadyGate(profile) ? profile.data : undefined;
+  if (found) return botOwnerName(found);
+  return found === null || profile.isError ? 'Bot' : '';
+}
+
+/**
+ * A bot's display name, by bare UUID: first-party bots by constant, others
+ * from their profile. Empty while the profile loads.
+ */
+export function useBotName(botId: Accessor<string>): Accessor<string> {
+  const profile = useBotProfile(() =>
+    firstPartyBotName(botId()) ? '' : botId()
+  );
+  return () => firstPartyBotName(botId()) ?? profileBotName(profile);
+}
+
 function ProfileBot(props: {
   botId: string;
   textOnly?: boolean;
@@ -125,11 +151,7 @@ function ProfileBot(props: {
 }): JSX.Element {
   const profile = useBotProfile(() => props.botId);
   const settled = () => (queryReadyGate(profile) ? profile.data : undefined);
-  const name = () => {
-    const found = settled();
-    if (found) return botOwnerName(found);
-    return found === null || profile.isError ? 'Bot' : '';
-  };
+  const name = () => profileBotName(profile);
   return (
     <BotFace
       principal={`bot|${props.botId}`}

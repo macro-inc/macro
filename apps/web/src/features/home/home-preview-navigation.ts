@@ -1,4 +1,5 @@
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
+import { artifactSearch } from '@app/features/block-artifact/artifact-route';
 import { callDetailSearch } from '@app/features/block-call/call-route';
 import { markdownDetailSearch } from '@app/features/block-md/markdown-route';
 import { pdfDetailSearch } from '@app/features/block-pdf/pdf-route';
@@ -56,6 +57,7 @@ export function homeDetailSearch(
 ): DetailSearch {
   return {
     [agentDetailSearch.namespace]: undefined,
+    [artifactSearch.namespace]: undefined,
     [callDetailSearch.namespace]: undefined,
     [markdownDetailSearch.namespace]: undefined,
     [pdfDetailSearch.namespace]: undefined,

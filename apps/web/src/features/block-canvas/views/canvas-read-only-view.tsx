@@ -16,10 +16,11 @@ import {
   TextView,
 } from '@macro-inc/graphics/solid';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { CanvasArtifactEmbed } from '../block-embed-adapter';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
-import { CanvasMediaView } from './embedded-items';
+import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
 import { CanvasTextContent } from './text-content';
 
 /** Viewers get navigation without mounting editing handlers or embedded editors. */
@@ -32,6 +33,7 @@ export function CanvasReadOnlyView(props: {
   const [activeArtifact, setActiveArtifact] = createSignal<string>();
   const [presenting, setPresenting] = createSignal<string>();
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
+  const [activeEmbed, setActiveEmbed] = createSignal<string>();
   const [scale, setScale] = createSignal(props.editor.getCamera().scale);
   const [hasSelection, setHasSelection] = createSignal(
     props.editor.getSession().selectedIds.length > 0
@@ -140,14 +142,28 @@ export function CanvasReadOnlyView(props: {
             <CanvasMediaView {...p} playing={false} onStop={() => {}} />
           ),
           document: (p) => (
-            <DocumentPreviewContent
-              documentInfo={{
-                id: p.item.geometry.documentId,
-                type: fileTypeToBlockName(p.item.geometry.fileType),
-                params: {},
-                isOpenable: true,
-              }}
-            />
+            // Artifact pages are for viewing, so viewers get them live too.
+            <Show
+              when={p.item.geometry.fileType === 'artifact'}
+              fallback={
+                <DocumentPreviewContent
+                  documentInfo={{
+                    id: p.item.geometry.documentId,
+                    type: fileTypeToBlockName(p.item.geometry.fileType),
+                    params: {},
+                    isOpenable: true,
+                  }}
+                />
+              }
+            >
+              <CanvasDocumentView
+                {...p}
+                embedView={CanvasArtifactEmbed}
+                active={activeEmbed() === p.item.id}
+                onEnter={() => setActiveEmbed(p.item.id)}
+                onExit={() => setActiveEmbed(undefined)}
+              />
+            </Show>
           ),
         }}
       />

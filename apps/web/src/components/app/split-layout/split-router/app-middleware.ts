@@ -1,3 +1,5 @@
+import { artifactSearch } from '@app/features/block-artifact/artifact-route';
+import { SCENE_PARAM } from '@app/features/block-artifact/core/scenes';
 import {
   DATABASE_LINK_PARAMS,
   databaseDetailSearch,
@@ -223,6 +225,13 @@ function migrateLegacySearch({
         return PDF_URL_PARAMS.annotationId;
     }
   })();
+  const routeType = routeParams(to.location.route);
+  const artifactType =
+    leafId === 'home-preview'
+      ? routeType.blockType
+      : leafId === 'legacy-content'
+        ? routeType.type
+        : undefined;
   const homeDocumentMapping = commentKey
     ? {
         namespace: driveSearch.namespace,
@@ -248,6 +257,14 @@ function migrateLegacySearch({
           [CHANNEL_URL_PARAMS.message, 'messageId'],
           [CHANNEL_URL_PARAMS.thread, 'threadId'],
         ] as const,
+      })
+    )
+    // A shared artifact link names its scene as `?scene=`.
+    .when(
+      () => artifactType === 'artifact',
+      () => ({
+        namespace: artifactSearch.namespace,
+        fields: [[SCENE_PARAM, SCENE_PARAM]] as const,
       })
     )
     .when(

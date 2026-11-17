@@ -2,6 +2,8 @@ import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
+import { artifactSearch } from '@app/features/block-artifact/artifact-route';
+import { SCENE_PARAM } from '@app/features/block-artifact/core/scenes';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { isCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
@@ -342,6 +344,24 @@ function withCrmCommentTarget(
   };
 }
 
+/** An artifact opened at a scene (a canvas node, a mention) keeps it. */
+function withArtifactScene(
+  content: SplitContent,
+  search: SplitSearchState | undefined
+): SplitSearchState | undefined {
+  const params: Record<string, unknown> | undefined =
+    content.type === 'artifact' && isRecord(content.params)
+      ? content.params
+      : undefined;
+  const scene = params?.[SCENE_PARAM];
+  if (typeof scene !== 'string' || !scene) return search;
+
+  return {
+    ...search,
+    [artifactSearch.namespace]: { [SCENE_PARAM]: [scene] },
+  };
+}
+
 /** Resolve legacy/persisted metadata before it reaches router state. */
 export function resolveContentLocation(
   routes: SplitRoutesManifest,
@@ -381,7 +401,10 @@ export function resolveContentLocation(
       : undefined;
   const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
   const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
-  let contentSearch = withCrmCommentTarget(content, savedSearch);
+  let contentSearch = withArtifactScene(
+    content,
+    withCrmCommentTarget(content, savedSearch)
+  );
   if (typeof messageId === 'string') {
     const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
     // Message and thread identify one target; never combine two saved opens.

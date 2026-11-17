@@ -11,6 +11,7 @@ const DOCUMENT_KINDS: Record<string, string> = {
   doc: 'Word document',
   pptx: 'Presentation',
   canvas: 'Canvas',
+  artifact: 'Artifact',
   psd: 'Photoshop file',
   fig: 'Figma file',
   png: 'Image',

@@ -1,5 +1,11 @@
 import type { MediaGeometry } from '@macro-inc/graphics';
-export type CanvasAsset = { id: string; name: string; fileType: string };
+export type CanvasAsset = {
+  id: string;
+  name: string;
+  fileType: string;
+  /** The host navigation state to open it at, such as an artifact scene. */
+  subpath?: string;
+};
 export type PreparedMedia = {
   type: 'image' | 'video';
   geometry: MediaGeometry;

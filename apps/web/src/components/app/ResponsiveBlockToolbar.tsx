@@ -10,6 +10,7 @@ import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
   BlockSplitFileMenu,
   type FileOperation,
+  type SplitFileMenuViews,
 } from './split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -62,6 +63,8 @@ interface BlockToolbarProps {
   entity?: EntityData;
   /** Feature-owned access when the session loads outside legacy Block state. */
   permissions?: Permissions;
+  /** View tabs that have no room on touch devices; see {@link SplitFileMenuViews}. */
+  mobileViews?: SplitFileMenuViews;
 }
 
 /**
@@ -140,6 +143,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
           tools={fileMenuTools()}
           entity={props.entity}
           permissions={props.permissions}
+          mobileViews={props.mobileViews}
           buttonClass="order-last"
         />
       </SplitTitleFileMenu>

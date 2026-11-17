@@ -1,3 +1,4 @@
+import { SCENE_PARAM } from '@app/features/block-artifact/core/scenes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -6,6 +7,7 @@ import {
   fileTypeToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { enableArtifacts, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
@@ -147,11 +149,14 @@ function EditableCanvasNext(props: {
   const editor = props.editor;
   const state = createCanvasState(editor, props.measureText);
   observeObjectSnapping(editor, props.documentId);
-  const assets = createAssetState(state, canvasAssetSource);
+  const assets = createAssetState(state, canvasAssetSource, {
+    artifactsEnabled: () => isFeatureEnabled(enableArtifacts),
+  });
   const insert = createCanvasInsertState(editor.getCamera);
   const { openWithSplit } = useSplitLayout();
   const resolveAppLink = useMacroMentionLinkResolver();
   let viewport: HTMLElement | undefined;
+  let disposed = false;
   const center = () =>
     screenToWorld(editor.getCamera(), {
       x: (viewport?.clientWidth ?? 800) / 2,
@@ -163,9 +168,23 @@ function EditableCanvasNext(props: {
     (text, html) => {
       const link = resolvePastedMacroAppUrl(text, resolveAppLink);
       if (link?.id && link.block) {
-        assets.document(
-          { id: link.id, name: 'Document', fileType: link.block },
-          center()
+        const id = link.id;
+        const fileType = link.block;
+        const point = center();
+        const subpath =
+          fileType === 'artifact' ? link.params?.[SCENE_PARAM] : undefined;
+        fireAndForget(
+          (async () => {
+            // The card titles itself from its preview; an embed shows this
+            // name. One the viewer can't read still lands, as a no-access card.
+            let name = 'Document';
+            try {
+              name = (await fetchDocumentMetadata(id)).documentName;
+            } catch {}
+            if (disposed) return;
+            assets.document({ id, name, fileType, subpath }, point);
+          })(),
+          'canvas-paste'
         );
         return;
       }
@@ -187,6 +206,7 @@ function EditableCanvasNext(props: {
   );
   props.onFinishReady(state.text.finish);
   onCleanup(() => {
+    disposed = true;
     state.text.finish();
     state.inspector.cancel();
     state.text.cancel();
@@ -220,6 +240,9 @@ function EditableCanvasNext(props: {
             {
               id: item.documentId,
               type: resolveBlockAlias(fileTypeToBlockName(fileType)),
+              ...(fileType === 'artifact' && item.subpath
+                ? { params: { [SCENE_PARAM]: item.subpath } }
+                : {}),
             },
             { activate: true }
           );

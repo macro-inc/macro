@@ -1,3 +1,4 @@
+import { artifactSearch } from '@app/features/block-artifact/artifact-route';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   DRIVE_DOCUMENT_TYPES,
@@ -64,6 +65,7 @@ export const homeProjectSearch = {
 
 /** Search the inline Home item owns; the channel namespace is shared with the channels view. */
 export const HOME_PREVIEW_SEARCH_NAMESPACES = [
+  artifactSearch.namespace,
   channelsSearch.namespace,
   driveSearch.namespace,
   homeProjectSearch.namespace,

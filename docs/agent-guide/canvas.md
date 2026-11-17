@@ -14,7 +14,9 @@ as gray rather than transparent.
 
 Pasting a supported routed Macro app link onto the canvas creates a document
 reference card. Routed links retain compatible block targets, but not workspace
-paths or pane-local search state; unsupported links remain text.
+paths or pane-local search state; unsupported links remain text. An artifact
+link (`/app/artifact/<id>?scene=<scene>`) places a live embed of that scene
+instead; see [artifacts.md](artifacts.md#on-a-canvas).
 
 ## Copying and saving images
 
