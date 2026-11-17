@@ -142,10 +142,10 @@ export class CrmNamespace {
   }
 
   /**
-   * Block a domain (like `acme.com`): email sync skips it, and the company
-   * that owns it, that company's contacts, and contacts without a company at
-   * the domain are hidden. A contact attached to another company follows that
-   * company's domains. Requires a team admin or owner.
+   * Block a domain and its subdomains from CRM email contributions; refuses a
+   * domain covering any team member's connected primary mailbox.
+   * Preserves company/contact records and archive state. Requires a team admin
+   * or owner. A refused block throws the server's explanation.
    *
    * @destructive
    * @idempotent
@@ -155,11 +155,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Unblock a domain: email sync resumes for addresses the team's
-   * personal-email and generic-provider filters allow. Contacts without a
-   * company at this domain are shown again. Its company and attached contacts
-   * stay hidden until the company's last blocked domain is removed, then are
-   * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   * Remove a team domain exclusion and schedule eligible email backfill.
+   * Consent and other exclusions still apply; company/contact records and
+   * archive state remain unchanged. Requires a team admin or owner.
    *
    * @write
    * @idempotent
