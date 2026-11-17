@@ -49,6 +49,16 @@ pub struct ColumnPlan {
 impl ColumnPlan {
     /// The columns `source` becomes in the database `namespace` names.
     pub fn new(source: &NotionDataSource, namespace: Uuid) -> Self {
+        Self::new_with_date_ranges(source, namespace, &HashSet::new())
+    }
+
+    /// Plan date properties named by stable Notion id as date-range columns.
+    /// The caller unions timeline usage with `date_range_properties` from rows.
+    pub fn new_with_date_ranges(
+        source: &NotionDataSource,
+        namespace: Uuid,
+        range_properties: &HashSet<String>,
+    ) -> Self {
         let names = ColumnNames::new(&source.properties);
         let title = source
             .properties
@@ -58,7 +68,15 @@ impl ColumnPlan {
         let columns = source
             .properties
             .iter()
-            .filter_map(|property| planned_column(property, &names, namespace))
+            .filter_map(|property| {
+                let mut column = planned_column(property, &names, namespace)?;
+                if property.kind == NotionPropertyKind::Date
+                    && range_properties.contains(&property.id)
+                {
+                    column.shape = ColumnShape::DateRange;
+                }
+                Some(column)
+            })
             .collect();
         Self { title, columns }
     }
@@ -123,6 +141,25 @@ impl ColumnPlan {
     }
 }
 
+/// Stable property ids whose rows contain date end values. Union this set
+/// with properties used by timeline views before planning columns.
+pub fn date_range_properties(source: &NotionDataSource, rows: &[NotionPage]) -> HashSet<String> {
+    source
+        .properties
+        .iter()
+        .filter(|property| {
+            property.kind == NotionPropertyKind::Date
+                && rows.iter().any(|row| {
+                    matches!(
+                        row.properties.get(&property.name),
+                        Some(NotionValue::Date { end: Some(_), .. })
+                    )
+                })
+        })
+        .map(|property| property.id.clone())
+        .collect()
+}
+
 /// A Macro column planned for a Notion property.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedColumn {
@@ -159,6 +196,8 @@ pub enum ColumnShape {
     Boolean,
     /// A date.
     Date,
+    /// A date with its end preserved, also used by timeline views.
+    DateRange,
     /// URLs.
     Link,
     /// Options declared up front.
@@ -183,6 +222,7 @@ impl ColumnShape {
             Self::Number => ColumnKind::Number,
             Self::Boolean => ColumnKind::Boolean,
             Self::Date => ColumnKind::Date,
+            Self::DateRange => ColumnKind::DateRange,
             Self::Link => ColumnKind::Link,
             Self::Select { multi, .. } => ColumnKind::Select { multi: *multi },
             Self::People { multi } => ColumnKind::Entity {
@@ -206,6 +246,7 @@ impl ColumnShape {
             | Self::Number
             | Self::Boolean
             | Self::Date
+            | Self::DateRange
             | Self::Link
             | Self::People { .. } => Vec::new(),
         }
@@ -284,12 +325,29 @@ impl ColumnNames {
     pub fn new(properties: &[NotionPropertySchema]) -> Self {
         let mut taken: HashSet<String> = properties
             .iter()
-            .map(|property| capped_name(&property.name).to_lowercase())
+            .map(|property| snapshot_column_name(property).to_lowercase())
             .collect();
+        let mut assigned = HashSet::new();
         let names = properties
             .iter()
             .map(|property| {
-                let mut name = capped_name(&property.name);
+                let mut name = snapshot_column_name(property);
+                if !name.is_empty() && !assigned.insert(name.to_lowercase()) {
+                    let original = name.clone();
+                    for index in 2.. {
+                        let suffix = format!(" {index}");
+                        name = original
+                            .chars()
+                            .take(MAX_NAME - suffix.len())
+                            .collect::<String>()
+                            + &suffix;
+                        if !taken.contains(&name.to_lowercase()) {
+                            break;
+                        }
+                    }
+                    taken.insert(name.to_lowercase());
+                    assigned.insert(name.to_lowercase());
+                }
                 if name.is_empty() {
                     name = std::iter::once(Self::UNTITLED.to_string())
                         .chain((2..).map(|index| format!("{} {index}", Self::UNTITLED)))
@@ -308,8 +366,27 @@ impl ColumnNames {
         self.0
             .get(&property.id)
             .cloned()
-            .unwrap_or_else(|| capped_name(&property.name))
+            .unwrap_or_else(|| snapshot_column_name(property))
     }
+}
+
+// Keep the snapshot marker inside the name limit even for long source names.
+fn snapshot_column_name(property: &NotionPropertySchema) -> String {
+    let suffix = match property.kind {
+        NotionPropertyKind::Formula => " (Notion formula snapshot)",
+        NotionPropertyKind::Rollup => " (Notion rollup snapshot)",
+        _ => return capped_name(&property.name),
+    };
+    let name = property.name.trim();
+    let name = if name.is_empty() {
+        ColumnNames::UNTITLED
+    } else {
+        name
+    };
+    name.chars()
+        .take(MAX_NAME - suffix.len())
+        .collect::<String>()
+        + suffix
 }
 
 /// Options with usable, distinct labels, ids minted.
@@ -351,6 +428,18 @@ pub fn cell(value: &NotionValue, column: &PlannedColumn, people: &PeopleMap) -> 
             _ => None,
         },
         ColumnShape::Date => date(value).map(CellValue::Date),
+        ColumnShape::DateRange => {
+            let NotionValue::Date { start, end } = value else {
+                return None;
+            };
+            let start = parse_instant(start)?;
+            let end = match end {
+                Some(end) => parse_instant(end)?,
+                None => start,
+            };
+            let range = models_databases::DateRange { start, end };
+            range.is_ordered().then_some(CellValue::DateRange(range))
+        }
         ColumnShape::Link => match value {
             NotionValue::Url(url) if is_web_url(url) => Some(CellValue::Link(vec![url.clone()])),
             _ => None,
