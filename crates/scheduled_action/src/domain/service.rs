@@ -15,11 +15,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
+use routine_program::{CodeIdentity, RoutineProgram};
 use tokio::sync::mpsc::Sender;
 
 use super::appearance::ChangeAppearance;
 use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
-use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
+use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -493,6 +494,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
     {
         let was_enabled = action.enabled;
@@ -501,6 +503,53 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             self.follow_parent(&updated).await;
         }
         Ok(updated)
+    }
+
+    /// Refuse switching a routine to write as its owner while its code is a
+    /// model's rewrite the owner hasn't reviewed (an upgrade saved it while
+    /// the routine wrote as Macro, however many releases ago): that code
+    /// would then act under their name. Changing the code lifts it.
+    async fn refuse_owner_identity_over_a_rewrite(
+        &self,
+        action: &ScheduledAction,
+        task: &serde_json::Value,
+    ) -> Result<()>
+    where
+        Upgrades: CodeUpgrades,
+    {
+        let (Ok(next), Ok(stored), Some(id)) = (
+            RoutineProgram::from_task(task),
+            RoutineProgram::from_task(&action.task),
+            action.id,
+        ) else {
+            return Ok(());
+        };
+        if next.code_identity() != CodeIdentity::Owner
+            || stored.code_identity() == CodeIdentity::Owner
+        {
+            return Ok(());
+        }
+        let sources = |program: &RoutineProgram| -> Vec<String> {
+            program
+                .code_steps()
+                .into_iter()
+                .map(|step| step.source.clone())
+                .collect()
+        };
+        let code = sources(&next);
+        let unreviewed = self
+            .upgrades
+            .list_upgrades(id)
+            .await?
+            .into_iter()
+            .filter(|upgrade| upgrade.outcome == UpgradeOutcome::Rewritten)
+            .filter_map(|upgrade| upgrade.task)
+            .filter_map(|rewrite| RoutineProgram::from_task(&rewrite).ok())
+            .any(|rewrite| sources(&rewrite) == code);
+        if unreviewed {
+            return Err(ActionPolicyError::UnreviewedRewrite.into());
+        }
+        Ok(())
     }
 
     /// Replace one routine's configuration. `with_parent` marks a
@@ -515,6 +564,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
     {
         require_explicit_selection(&action.task, &input.task)?;
@@ -546,6 +596,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if !disable_only {
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
+                .await?;
+            self.refuse_owner_identity_over_a_rewrite(&action, &input.task)
                 .await?;
             input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {

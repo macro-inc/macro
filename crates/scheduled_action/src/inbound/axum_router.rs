@@ -831,9 +831,9 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
-                ActionPolicyError::UpdateConflict | ActionPolicyError::TooManySubRoutines => {
-                    StatusCode::CONFLICT
-                }
+                ActionPolicyError::UpdateConflict
+                | ActionPolicyError::TooManySubRoutines
+                | ActionPolicyError::UnreviewedRewrite => StatusCode::CONFLICT,
                 ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled

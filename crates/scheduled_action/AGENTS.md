@@ -293,7 +293,10 @@ each run.
   `scheduled_action_code_upgrade`); a
   failed rewrite pauses the routine. A routine whose code writes as its
   owner (`dangerously_operate_as_user`) is never rewritten: it is paused for
-  the owner with its code as it was. `sweep` does the same for every
+  the owner with its code as it was. Nor can a model's rewrite, saved
+  unreviewed while the routine wrote as Macro, start writing as the owner:
+  switching it on is refused (`UnreviewedRewrite`, 409) until the code
+  changes. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.

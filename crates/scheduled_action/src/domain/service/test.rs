@@ -1823,3 +1823,153 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
         created.configuration_revision
     );
 }
+
+/// Every routine's upgrades, newest first: a later release that found the
+/// code still checks, over a model's rewrite of the task it holds, saved
+/// with nobody reviewing it.
+struct Rewritten(serde_json::Value);
+
+impl crate::domain::ports::CodeUpgrades for Rewritten {
+    async fn record_checked(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn claim_rewrite(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+    ) -> Result<bool> {
+        Ok(false)
+    }
+
+    async fn save_rewrite(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+        _: &serde_json::Value,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn needs_update(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+        _: &str,
+        _: Option<&serde_json::Value>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn stale_routines(
+        &self,
+        _: &routine_program::SdkFingerprint,
+        _: Option<Uuid>,
+        _: u16,
+    ) -> Result<Vec<Uuid>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
+        Ok(vec![
+            CodeUpgrade {
+                id: Uuid::from_u128(2),
+                from_sdk: Some("0.3.0+current".into()),
+                to_sdk: "0.4.0+next".into(),
+                outcome: crate::domain::code_upgrade::UpgradeOutcome::Checked,
+                reason: None,
+                previous_task: self.0.clone(),
+                task: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            },
+            CodeUpgrade {
+                id: Uuid::from_u128(1),
+                from_sdk: Some("0.2.0+old".into()),
+                to_sdk: "0.3.0+current".into(),
+                outcome: crate::domain::code_upgrade::UpgradeOutcome::Rewritten,
+                reason: None,
+                previous_task: json!({}),
+                task: Some(self.0.clone()),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            },
+        ])
+    }
+}
+
+/// A model's rewrite saved unreviewed while the routine wrote as Macro
+/// must not start writing as its owner: switching it to their identity is
+/// refused until its code changes. Other edits still save.
+#[tokio::test]
+async fn an_unreviewed_rewrite_cannot_start_writing_as_the_owner() {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let daily = json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" });
+    let rewritten = json!([
+        { "type": "code", "title": "Create a task", "source": "export async function main() { /* rewritten */ }" },
+    ]);
+    let config = program_configuration(daily.clone(), rewritten.clone());
+    let created = ScheduledActionServiceImpl::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx.clone(),
+        grants(&repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(crate::domain::code_upgrade::NoCodeUpgrades),
+    )
+    .create_action(&user_principal(), config.clone())
+    .await
+    .unwrap();
+    let svc = ScheduledActionServiceImpl::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(Rewritten(created.task.clone())),
+    );
+    let id = created.id.unwrap();
+
+    let mut as_owner = config.clone();
+    as_owner.task["dangerously_operate_as_user"] = json!(true);
+    assert_policy(
+        svc.update_action(edit_receipt(id), update(as_owner.clone()))
+            .await,
+        ActionPolicyError::UnreviewedRewrite,
+    );
+    // Renaming the step leaves the model's code as it was.
+    let mut retitled = as_owner.clone();
+    retitled.task["steps"][0]["title"] = json!("Make a task");
+    assert_policy(
+        svc.update_action(edit_receipt(id), update(retitled)).await,
+        ActionPolicyError::UnreviewedRewrite,
+    );
+
+    let mut renamed = config.clone();
+    renamed.name = "Renamed".into();
+    let saved = svc
+        .update_action(edit_receipt(id), update(renamed))
+        .await
+        .unwrap();
+    assert_eq!(saved.name, "Renamed");
+
+    let mut edited = as_owner;
+    edited.task["steps"][0]["source"] = json!("export async function main() { /* reviewed */ }");
+    let saved = svc
+        .update_action(edit_receipt(id), update(edited))
+        .await
+        .unwrap();
+    assert_eq!(saved.task["dangerously_operate_as_user"], true);
+}

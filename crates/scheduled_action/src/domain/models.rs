@@ -295,6 +295,11 @@ pub enum ActionPolicyError {
     InvalidKey,
     #[error("this routine was not created by another routine")]
     NotSubRoutine,
+    #[error(
+        "Macro rewrote this routine's code and you haven't reviewed it yet: \
+         edit its code before it can write as you"
+    )]
+    UnreviewedRewrite,
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones

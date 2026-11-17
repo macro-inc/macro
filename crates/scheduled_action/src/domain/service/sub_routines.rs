@@ -16,6 +16,7 @@ where
     Targets: TaskTargetValidator,
     Github: GithubInstallationClaims,
     Code: RoutineCode,
+    Upgrades: CodeUpgrades,
     Rollout: EventRoutineRollout,
 {
     /// The routine run in progress that a create comes from, when its
