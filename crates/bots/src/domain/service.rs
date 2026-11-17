@@ -4,7 +4,10 @@ mod agent_dm;
 mod harness_agents;
 
 use super::{
-    events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
+    events::{
+        BotChannelChange, BotChannelChangedMetadata, BotCreatedMetadata, BotDeletedMetadata,
+        BotMacroEvent, BotUpdatedMetadata,
+    },
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotIdentity, BotKind, BotOwner, BotOwnerProfile,
@@ -265,6 +268,23 @@ where
     fn publish_bot_event(&self, event: &BotMacroEvent) {
         drop(self.event_broker.send_event(event).inspect_err(|error| {
             tracing::error!(error=?error, "failed to schedule bot lifecycle event");
+        }));
+    }
+
+    /// Announce that `bot_id` joined or left `channel_id`, so the channel's
+    /// members can reread the bots they may mention there.
+    fn publish_channel_change(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+        change: BotChannelChange,
+        actor_user_id: MacroUserIdStr<'static>,
+    ) {
+        self.publish_bot_event(&BotMacroEvent::channel_changed(BotChannelChangedMetadata {
+            bot_id,
+            channel_id,
+            change,
+            actor_user_id,
         }));
     }
 
@@ -911,11 +931,13 @@ where
             .get_authenticated_user()
             .cloned()
             .map_err(|_| BotError::Unauthorized)?;
-        self.ensure_manageable(caller, bot_id).await?;
+        self.ensure_manageable(caller.clone(), bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
             .await
-            .map_err(|err| BotError::Repo(err.into()))
+            .map_err(|err| BotError::Repo(err.into()))?;
+        self.publish_channel_change(bot_id, channel_id, BotChannelChange::Joined, caller);
+        Ok(())
     }
 
     async fn remove_bot_from_channel(
@@ -924,13 +946,14 @@ where
         channel_id: Uuid,
         bot_id: BotId,
     ) -> Result<(), BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        self.ensure_manageable(caller.clone(), bot_id).await?;
         if self
             .repo
             .remove_bot_from_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
+            self.publish_channel_change(bot_id, channel_id, BotChannelChange::Left, caller);
             Ok(())
         } else {
             Err(BotError::NotFound("channel bot not found".to_string()))

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id\n            FROM comms_channel_participants\n            WHERE channel_id = $1\n              AND left_at IS NULL\n              AND user_id NOT LIKE 'bot|%'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a748b41761011df20e45dbe78dc7fb5023e410146f3da7d6baa236650b0451d3"
+}

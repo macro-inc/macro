@@ -10,6 +10,9 @@ use crate::domain::models::{BotId, BotIdentity};
 
 const ALICE: &str = "macro|alice@example.com";
 const BOB: &str = "macro|bob@example.com";
+const CAROL: &str = "macro|carol@example.com";
+/// The channel Carol is in, which Scout has just left.
+const LEFT_CHANNEL: Uuid = Uuid::from_u128(0x10);
 const SCOUT: BotId = BotId::new_from_uuid(Uuid::from_u128(1));
 const HERALD: BotId = BotId::new_from_uuid(Uuid::from_u128(2));
 const GHOST: BotId = BotId::new_from_uuid(Uuid::from_u128(3));
@@ -30,12 +33,13 @@ fn identity(id: BotId, name: &str) -> BotIdentity {
     }
 }
 
-/// Changes the test sends, in order.
-struct Changes(Mutex<mpsc::UnboundedReceiver<BotId>>);
+/// Changes the test sends, in order: a bot, and the channel it joined or
+/// left, if any.
+struct Changes(Mutex<mpsc::UnboundedReceiver<(BotId, Option<Uuid>)>>);
 
 impl BotChangeSource for Changes {
     async fn recv(&self) -> Result<BotChange, Report> {
-        let bot_id = self
+        let (bot_id, channel_id) = self
             .0
             .lock()
             .await
@@ -44,6 +48,7 @@ impl BotChangeSource for Changes {
             .expect("test keeps sending");
         Ok(BotChange {
             bot_id,
+            channel_id,
             span: tracing::Span::none(),
         })
     }
@@ -72,11 +77,31 @@ impl BotUpdateReads for Reads {
         ]);
         Ok(audiences.get(&bot_id).cloned().unwrap_or_default())
     }
+
+    async fn channel_members(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(if channel_id == LEFT_CHANNEL {
+            vec![user(ALICE), user(CAROL)]
+        } else {
+            Vec::new()
+        })
+    }
+}
+
+/// The subscriber's next update, or `None` when none arrives within five
+/// seconds: a missing delivery fails the test instead of hanging it.
+async fn next(subscription: &mut super::BotUpdateSubscription) -> Option<BotIdentity> {
+    tokio::time::timeout(std::time::Duration::from_secs(5), subscription.recv())
+        .await
+        .ok()
+        .flatten()
 }
 
 fn start() -> (
     Arc<BotUpdates<Reads, Changes>>,
-    mpsc::UnboundedSender<BotId>,
+    mpsc::UnboundedSender<(BotId, Option<Uuid>)>,
 ) {
     let (sender, receiver) = mpsc::unbounded_channel();
     let updates = Arc::new(BotUpdates::new(Reads, Changes(Mutex::new(receiver))));
@@ -93,13 +118,13 @@ async fn a_changed_bot_reaches_only_the_subscribers_who_see_it() {
     let mut alice = updates.subscribe(user(ALICE));
     let mut bob = updates.subscribe(user(BOB));
 
-    changes.send(SCOUT).unwrap();
-    changes.send(HERALD).unwrap();
+    changes.send((SCOUT, None)).unwrap();
+    changes.send((HERALD, None)).unwrap();
 
-    assert_eq!(alice.recv().await, Some(identity(SCOUT, "Scout")));
-    assert_eq!(alice.recv().await, Some(identity(HERALD, "Herald")));
+    assert_eq!(next(&mut alice).await, Some(identity(SCOUT, "Scout")));
+    assert_eq!(next(&mut alice).await, Some(identity(HERALD, "Herald")));
     // Bob does not see Scout, so Herald is the first update he gets.
-    assert_eq!(bob.recv().await, Some(identity(HERALD, "Herald")));
+    assert_eq!(next(&mut bob).await, Some(identity(HERALD, "Herald")));
 }
 
 #[tokio::test]
@@ -107,9 +132,29 @@ async fn changes_that_cannot_be_read_are_skipped_and_delivery_continues() {
     let (updates, changes) = start();
     let mut bob = updates.subscribe(user(BOB));
 
-    changes.send(GHOST).unwrap();
-    changes.send(BROKEN).unwrap();
-    changes.send(HERALD).unwrap();
+    changes.send((GHOST, None)).unwrap();
+    changes.send((BROKEN, None)).unwrap();
+    changes.send((HERALD, None)).unwrap();
 
-    assert_eq!(bob.recv().await, Some(identity(HERALD, "Herald")));
+    assert_eq!(next(&mut bob).await, Some(identity(HERALD, "Herald")));
+}
+
+#[tokio::test]
+async fn a_bot_leaving_a_channel_reaches_that_channels_members() {
+    let (updates, changes) = start();
+    let mut alice = updates.subscribe(user(ALICE));
+    let mut carol = updates.subscribe(user(CAROL));
+
+    // Carol sees neither bot otherwise: Herald does not reach her.
+    changes.send((HERALD, None)).unwrap();
+    changes.send((SCOUT, Some(LEFT_CHANNEL))).unwrap();
+
+    changes.send((HERALD, None)).unwrap();
+
+    assert_eq!(next(&mut carol).await, Some(identity(SCOUT, "Scout")));
+    // Alice is in Scout's audience and in the channel; she hears it once, so
+    // the next change is her next update.
+    assert_eq!(next(&mut alice).await, Some(identity(HERALD, "Herald")));
+    assert_eq!(next(&mut alice).await, Some(identity(SCOUT, "Scout")));
+    assert_eq!(next(&mut alice).await, Some(identity(HERALD, "Herald")));
 }

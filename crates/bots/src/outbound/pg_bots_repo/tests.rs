@@ -1994,14 +1994,10 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
     service.list_bots(user_id(USER_OWNER)).await?;
     service.get_bot(user_id(USER_OWNER), bot.id).await?;
     service.list_channel_bots(channel_id).await?;
-    service
-        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), bot.id)
-        .await?;
+    // Adding a bot to a channel or removing it publishes
+    // `bot.channel_changed` (see `tests/audience.rs`).
     service
         .list_bot_channels(BotChannelListCaller::User(user_id(USER_OWNER)), bot.id)
-        .await?;
-    service
-        .remove_bot_from_channel(user_id(USER_OWNER), channel_id, bot.id)
         .await?;
 
     let token = service

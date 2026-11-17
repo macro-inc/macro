@@ -116,6 +116,13 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
+    /// Users taking part in a channel now, without bots: who hears that a bot
+    /// joined or left it.
+    fn channel_member_user_ids(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id. Its channels are the ones it
     /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(

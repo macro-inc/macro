@@ -12,6 +12,7 @@ use std::future::Future;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, prelude::IntoRootcause as _};
+use uuid::Uuid;
 
 use super::{
     models::{BotId, BotIdentity},
@@ -21,8 +22,12 @@ use super::{
 /// One bot change read off the bot topic.
 #[derive(Debug)]
 pub struct BotChange {
-    /// The bot that was created, updated or deleted.
+    /// The bot that was created, updated, deleted, or added to or removed
+    /// from a channel.
     pub bot_id: BotId,
+    /// The channel the bot joined or left, whose members hear the change
+    /// even when the bot no longer takes part in it.
+    pub channel_id: Option<Uuid>,
     /// The processing span for the change, parented on the trace that
     /// published it, so delivery joins that trace.
     pub span: tracing::Span,
@@ -47,6 +52,13 @@ pub trait BotUpdateReads: Send + Sync + 'static {
         &self,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// The users taking part in a channel now: see
+    /// [`BotRepo::channel_member_user_ids`].
+    fn channel_members(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 impl<R: BotRepo + Send + Sync + 'static> BotUpdateReads for R {
@@ -60,6 +72,15 @@ impl<R: BotRepo + Send + Sync + 'static> BotUpdateReads for R {
 
     async fn audience(&self, bot_id: BotId) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         self.bot_audience(bot_id)
+            .await
+            .map_err(|error| error.into().into_rootcause())
+    }
+
+    async fn channel_members(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.channel_member_user_ids(channel_id)
             .await
             .map_err(|error| error.into().into_rootcause())
     }
@@ -137,7 +158,7 @@ pub use realtime::BotUpdates;
 
 #[cfg(feature = "realtime")]
 mod realtime {
-    use std::{num::NonZeroUsize, time::Duration};
+    use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
 
     use broadcast::{BroadcastManager, GlobalSpawner};
     use macro_user_id::user_id::MacroUserIdStr;
@@ -149,6 +170,8 @@ mod realtime {
         BotChangeSource, BotUpdateReads, BotUpdateSubscription, BotUpdateSubscriptions,
         BotUpdatesExit,
     };
+    use uuid::Uuid;
+
     use crate::domain::models::{BotId, BotIdentity};
 
     /// Updates retained by each user's shared channel.
@@ -196,23 +219,34 @@ mod realtime {
                     ))?;
                 let span = change.span;
                 // A failed delivery is logged on its span; later changes still go out.
-                let _ = self.deliver(change.bot_id).instrument(span).await;
+                let _ = self
+                    .deliver(change.bot_id, change.channel_id)
+                    .instrument(span)
+                    .await;
             }
         }
 
-        /// Hands `bot_id`'s current identity to its audience's subscribers here.
+        /// Hands `bot_id`'s current identity to its audience's subscribers
+        /// here, and to `channel_id`'s members when it joined or left one.
         #[tracing::instrument(
             name = "bots.deliver_update",
             skip(self),
-            fields(%bot_id, audience, delivered),
+            fields(%bot_id, channel_id = ?channel_id, audience, delivered),
             err
         )]
-        async fn deliver(&self, bot_id: BotId) -> Result<(), Report> {
+        async fn deliver(&self, bot_id: BotId, channel_id: Option<Uuid>) -> Result<(), Report> {
             let Some(identity) = self.reads.identity(bot_id).await? else {
                 tracing::warn!("changed bot has no identity");
                 return Ok(());
             };
-            let audience = self.reads.audience(bot_id).await?;
+            let mut audience = self.reads.audience(bot_id).await?;
+            if let Some(channel_id) = channel_id {
+                // A bot that left a channel is no longer in its audience
+                // there, but the channel's members must still hear it.
+                audience.extend(self.reads.channel_members(channel_id).await?);
+                let mut seen = HashSet::new();
+                audience.retain(|user| seen.insert(user.clone()));
+            }
             let span = tracing::Span::current();
             span.record("audience", audience.len());
             let delivered = audience

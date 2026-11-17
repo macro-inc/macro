@@ -1179,6 +1179,32 @@ impl BotRepo for PgBotsRepo {
             .collect()
     }
 
+    async fn channel_member_user_ids(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let user_ids = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM comms_channel_participants
+            WHERE channel_id = $1
+              AND left_at IS NULL
+              AND user_id NOT LIKE 'bot|%'
+            "#,
+            channel_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the channel's members")?;
+
+        user_ids
+            .into_iter()
+            .map(|user_id| {
+                MacroUserIdStr::try_from(user_id).context("channel holds an invalid user id")
+            })
+            .collect()
+    }
+
     async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {
         let row = sqlx::query_as!(
             AgentRow,
