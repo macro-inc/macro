@@ -181,6 +181,11 @@ export function createEmailPrivacyMutation(
               mailboxLinkId: data.mailboxLinkId,
             });
           }
+          if (threadChange) {
+            // Invalidation can reuse a pending initial read with no cached data.
+            // Abort pre-write reads so every owner page refreshes after the write.
+            await deps.client.cancelQueries({ queryKey: excludedThreadsKey });
+          }
           await span.span('crm.email_privacy.refresh', async (refresh) => {
             let graphqlFailed = false;
             try {

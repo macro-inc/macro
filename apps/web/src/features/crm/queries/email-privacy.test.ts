@@ -494,6 +494,61 @@ it('looks up one thread and refreshes the header and settings list together', as
   }
 });
 
+it('removes an exclusion while the header’s first status read is pending', async () => {
+  const h = mount();
+  await signIn(h);
+  const previous = ok({
+    threads: [
+      {
+        thread_id: 'thread',
+        link_id: 'mailbox',
+        subject: 'Private subject',
+      },
+    ],
+    next_cursor: null,
+  });
+  const held =
+    Promise.withResolvers<
+      Awaited<ReturnType<PrivacyClient['excludedThreads']>>
+    >();
+  cleanups.push(() => held.resolve(previous));
+  h.privacy.excludedThreads
+    .mockResolvedValueOnce(previous)
+    .mockReturnValueOnce(held.promise)
+    .mockResolvedValue(ok({ threads: [], next_cursor: null }));
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  let status!: ReturnType<typeof h.createStatus>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(list.data?.threads).toHaveLength(1));
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    status = h.createStatus(() => 'thread');
+  });
+  await waitFor(() =>
+    expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2)
+  );
+  const signal = h.privacy.excludedThreads.mock.calls[1][1];
+
+  const removal = h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: false,
+  });
+  await waitFor(() => {
+    expect(status.data?.threads).toEqual([]);
+    expect(list.data?.threads).toEqual([]);
+  });
+  expect(signal?.aborted).toBe(true);
+  held.resolve(previous);
+  await removal;
+  expect(status.data?.threads).toEqual([]);
+  expect(list.data?.threads).toEqual([]);
+  expect(h.feedback.failure).not.toHaveBeenCalled();
+});
+
 it('cancels a private-subject read across login and never caches it for the previous session', async () => {
   const h = mount();
   await signIn(h);

@@ -102,7 +102,9 @@ messages, documents, or agent transcripts is not retroactively redacted.
   The same controls are available in the phone menu and settings drawer.
   `GET /crm/email-privacy/threads?thread_id=<uuid>` returns zero or one own
   exclusion for the header, with no continuation; `after` and `thread_id` are
-  mutually exclusive. Header and settings readers share cache invalidation.
+  mutually exclusive. Header and settings readers share cache invalidation;
+  successful thread changes cancel pending owner reads before refreshing them,
+  so a response from before the write cannot restore a removed exclusion.
 - Thread exceptions do not immediately recompute first/last interaction dates,
   matching personal blocked domains. Existing company/contact records, archive
   state, sources and prior interaction metadata remain. Normal population uses
