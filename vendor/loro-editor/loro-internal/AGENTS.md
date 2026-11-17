@@ -18,7 +18,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Check for a nonempty remote diff before scanning an undo group's touched containers; an empty remote row cannot conflict.
 - Keep the optional undo clock defaulting to the system timestamp; invoke it and drop replaced callbacks outside history borrows, preserving the original interval/group rule and timestamp update sites.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
-- Reconstruct cached shallow roots only through bounded forward prefixes; preserve exact replay-path snapshot bytes, empty future-container headers and live logical state/frontiers/attachment.
+- Reconstruct cached shallow roots only through bounded forward prefixes; preserve the replay path's decoded snapshot (bytes may differ only in text fragmentation; see ../README.md), empty future-container headers and live logical state/frontiers/attachment.
 
 ## Checks
 
@@ -29,3 +29,4 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - `cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml --lib undo::` checks local merge scans and remote-conflict semantics; use the direct manifest because this dependency is excluded from workspace test membership.
 - Consumer projection/session/server suites and exact sim replay.
 - Fresh sync-service re-record and 155 zero normalized differences.
+- `cd vendor/loro-editor/differential && cargo test --offline -j2` compares this crate with `native-editor` against crates.io 1.17.1 on seeded scripts.
