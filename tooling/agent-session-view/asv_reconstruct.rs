@@ -40,7 +40,9 @@ impl Cognition for Recorded {
         _: &MacroUserIdStr<'static>,
         _: GenerateObjectRequest,
     ) -> Result<GenerateObjectResponse, Report> {
-        Err(rootcause::report!("documentation selection does not generate"))
+        Err(rootcause::report!(
+            "documentation selection does not generate"
+        ))
     }
 
     async fn decide(
@@ -126,7 +128,10 @@ fn main() {
         .as_array()
         .into_iter()
         .flatten()
-        .map(|names| prompt::connected_toolsets::render(&strings(names)).map(|section| format!("\n\n{section}")))
+        .map(|names| {
+            prompt::connected_toolsets::render(&strings(names))
+                .map(|section| format!("\n\n{section}"))
+        })
         .collect();
 
     let output = json!({
