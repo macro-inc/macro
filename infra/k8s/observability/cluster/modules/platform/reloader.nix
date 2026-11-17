@@ -18,6 +18,12 @@ in
         # Restarts through a pod template annotation instead of an
         # environment variable, which Argo CD would see as drift and undo.
         reloadStrategy = "annotations";
+        # A Secret can appear after its pod started: an ExternalSecret whose
+        # key is added to Secrets Manager later creates it then (Grafana's
+        # optional ones). Not again for every Secret when Reloader restarts:
+        # `syncAfterRestart` stays off.
+        reloadOnCreate = true;
+        syncAfterRestart = false;
         ignoreConfigMaps = true;
         readOnlyRootFileSystem = true;
         deployment = {

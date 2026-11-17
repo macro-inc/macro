@@ -1,8 +1,6 @@
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    secret.reloader.stakater.com/reload: grafana,grafana-db,grafana-goalert,grafana-watchdog
   labels:
     app.kubernetes.io/instance: grafana
     app.kubernetes.io/name: grafana

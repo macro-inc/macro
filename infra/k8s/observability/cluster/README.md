@@ -89,7 +89,7 @@ The repository is public, so Argo CD clones it over HTTPS without a deploy key
   | --- | --- | --- |
   | `kube-system` | `aws-load-balancer-controller` | the controller's IAM policy |
   | `kube-system` | `ebs-csi-controller-sa` | EBS CSI |
-  | `external-secrets` | `external-secrets` | read `observability/prod` |
+  | `external-secrets` | `external-secrets` | read `observability/prod` and Grafana's RDS-managed database secret |
   | `observability` | `loki`, `tempo`, `mimir` | their buckets |
   | `observability` | `grafana` | CloudWatch read, `sns:Publish` on the alerts topic |
 
@@ -143,7 +143,7 @@ before cutover.
 
 | Key | Used by | Missing means |
 | --- | --- | --- |
-| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`) | ingest and remote write don't start |
+| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`) | neither starts: no ingest, and no Grafana either, since it is behind the edge |
 | `google_client_id`, `google_client_secret`, `grafana_secret_key` | `grafana` | Grafana doesn't start |
 | `goalert_grafana_integration_key`, `goalert_grafana_notify_integration_key` | `grafana` contact points | they fail once unmuted |
 | `goalert_cluster_heartbeat_id` | the watchdog | it pings a URL that doesn't exist, and GoAlert never pages for it |

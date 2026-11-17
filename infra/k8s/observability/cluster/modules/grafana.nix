@@ -20,7 +20,6 @@
   charts,
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -199,13 +198,15 @@ let
     grafana-rds-ca = {
       mountPath = "/etc/grafana/rds";
       # RDS's CA bundle for the region, so the database connection verifies
-      # the server's name and certificate.
-      data."ca.pem" = builtins.readFile (
-        pkgs.fetchurl {
-          url = "https://truststore.pki.rds.amazonaws.com/${cluster.region}/${cluster.region}-bundle.pem";
-          hash = "sha256-1G4b39oFyOdkTlCTCAahmxOaIiVCvwNICC+1ns4rX6U=";
-        }
-      );
+      # the server's name and certificate. Committed rather than fetched:
+      # AWS republishes the file when it adds CAs, which would break every
+      # render. From
+      # https://truststore.pki.rds.amazonaws.com/us-east-2/us-east-2-bundle.pem
+      data."ca.pem" =
+        assert lib.assertMsg (
+          cluster.region == "us-east-2"
+        ) "rds-ca-us-east-2.pem is us-east-2's RDS CA bundle; add ${cluster.region}'s";
+        builtins.readFile ./rds-ca-us-east-2.pem;
     };
   }
   // builtins.listToAttrs (
@@ -391,9 +392,6 @@ in
         podAnnotations."checksum/provisioning" = workload.checksum (
           builtins.toJSON (builtins.mapAttrs (_: map: map.data) configMaps)
         );
-        annotations."secret.reloader.stakater.com/reload" = lib.concatStringsSep "," (
-          builtins.attrNames secrets
-        );
 
         # enforce_domain redirects any other Host; probes come by pod IP.
         readinessProbe = {
@@ -431,6 +429,10 @@ in
 
     resources = {
       configMaps = builtins.mapAttrs (_: map: { inherit (map) data; }) configMaps;
+
+      # Only on the Deployment (the chart's `annotations` go on everything).
+      deployments.grafana.metadata.annotations."secret.reloader.stakater.com/reload" =
+        lib.concatStringsSep "," (builtins.attrNames secrets);
 
       networkPolicies.grafana.spec = {
         podSelector.matchLabels = selector;

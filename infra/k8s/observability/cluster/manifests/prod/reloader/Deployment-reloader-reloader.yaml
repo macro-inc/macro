@@ -46,6 +46,7 @@ spec:
         - args:
             - --log-level=info
             - --resources-to-ignore=configmaps
+            - --reload-on-create=true
             - --reload-strategy=annotations
           env:
             - name: GOMAXPROCS
