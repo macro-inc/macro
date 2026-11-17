@@ -16,12 +16,18 @@ use uuid::Uuid;
 use crate::api::{
     context::SearchHandlerState,
     search::simple::{
-        SearchError, simple_calendar_event::filter_calendar_events,
-        simple_call_record::filter_calls, simple_channel::filter_channels,
-        simple_chat::filter_chats, simple_document::filter_documents,
+        SearchError,
+        simple_calendar_event::filter_calendar_events,
+        simple_call_record::filter_calls,
+        simple_channel::filter_channels,
+        simple_chat::filter_chats,
+        simple_document::{FilterDocumentResponse, filter_documents},
         simple_project::filter_projects,
     },
 };
+
+#[cfg(test)]
+mod test;
 
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
@@ -51,13 +57,23 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
         } else {
             let filter_document_response = filter_documents(ctx, user_id, self).await?;
 
-            Ok(UnifiedDocumentSearchArgs {
-                document_ids: filter_document_response.document_ids,
-                ids_only: filter_document_response.ids_only,
-                sub_types: self.sub_types.clone(),
-                ..Default::default()
-            })
+            Ok(document_search_args(self, filter_document_response))
         }
+    }
+}
+
+/// The document search for `filters`: the ids their database filters left,
+/// and the filters OpenSearch applies on the indexed parent itself.
+fn document_search_args(
+    filters: &item_filters::DocumentFilters,
+    filtered: FilterDocumentResponse,
+) -> UnifiedDocumentSearchArgs {
+    UnifiedDocumentSearchArgs {
+        document_ids: filtered.document_ids,
+        ids_only: filtered.ids_only,
+        sub_types: filters.sub_types.clone(),
+        is_email_attachment: filters.is_email_attachment,
+        ..Default::default()
     }
 }
 

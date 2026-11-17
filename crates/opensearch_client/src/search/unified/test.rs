@@ -967,6 +967,32 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_build_unified_search_request_carries_the_email_attachment_filter() -> anyhow::Result<()> {
+    let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![OpenSearchEntityType::Documents].into_iter().collect(),
+        user_id: "user".to_string(),
+        page: 1,
+        page_size: 20,
+        match_type: "exact".to_string(),
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
+            is_email_attachment: Some(false),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let json = build_unified_search_request(&unified_search_args)?.to_json();
+
+    assert_eq!(
+        json["query"]["bool"]["should"][0]["bool"]["must_not"],
+        serde_json::json!([{"term": {"is_email_attachment": true}}])
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_build_unified_search_request_empty_indices() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![].into_iter().collect(),

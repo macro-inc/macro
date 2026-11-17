@@ -90,6 +90,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            is_email_attachment: args.document_search_args.is_email_attachment,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
@@ -237,6 +238,9 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// `Some(true)` keeps only email attachments, `Some(false)` leaves them
+    /// out, `None` doesn't filter on it.
+    pub is_email_attachment: Option<bool>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,

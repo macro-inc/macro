@@ -132,6 +132,63 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_build_bool_query_keeps_only_email_attachments() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .email_attachment(Some(true));
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        filter.contains(&serde_json::json!({"term": {"is_email_attachment": true}})),
+        "attachments-only should filter the parent on the flag: {filter:?}"
+    );
+    assert!(json["bool"].get("must_not").is_none(), "{json:?}");
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_leaves_out_email_attachments_with_a_must_not() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .email_attachment(Some(false));
+
+    let json = builder.build_bool_query()?.build().to_json();
+    // must_not on true, never a filter on false: a parent indexed before the
+    // flag existed has no field and must still match.
+    assert_eq!(
+        json["bool"]["must_not"],
+        serde_json::json!([{"term": {"is_email_attachment": true}}])
+    );
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter.iter().any(|f| f
+            .get("term")
+            .and_then(|t| t.get("is_email_attachment"))
+            .is_some()),
+        "no filter on the flag itself: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_without_the_attachment_filter_ignores_the_flag() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice");
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert!(
+        !json.to_string().contains("is_email_attachment"),
+        "no clause on the flag: {json:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")

@@ -121,6 +121,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
+    is_email_attachment: Option<bool>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
     tag_option_ids: Vec<String>,
@@ -133,6 +134,7 @@ impl DocumentQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
+            is_email_attachment: None,
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
             tag_option_ids: Vec::new(),
@@ -162,6 +164,11 @@ impl DocumentQueryBuilder {
         self
     }
 
+    pub fn email_attachment(mut self, is_email_attachment: Option<bool>) -> Self {
+        self.is_email_attachment = is_email_attachment;
+        self
+    }
+
     pub fn property_filters(mut self, property_filters: Vec<PropertyFilterArg>) -> Self {
         self.property_filters = property_filters;
         self
@@ -185,8 +192,8 @@ impl DocumentQueryBuilder {
     /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must`, or a single passage clause under
     /// [`DocumentTermMatching::Dynamic`]. Parent metadata filters (owner, ids,
-    /// sub_type) sit on `bool.filter` directly because they live on
-    /// the parent doc.
+    /// sub_type, email attachment) sit on `bool.filter` (or `bool.must_not`)
+    /// directly because they live on the parent doc.
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
@@ -215,6 +222,19 @@ impl DocumentQueryBuilder {
         // Optional sub_type filter (parent field).
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
+        }
+
+        // Optional email attachment filter (parent field). Excluding
+        // attachments is a must_not on `true` rather than a filter on `false`,
+        // so a parent indexed before the field existed still matches.
+        match self.is_email_attachment {
+            Some(true) => {
+                bool_query.filter(QueryType::term("is_email_attachment", true));
+            }
+            Some(false) => {
+                bool_query.must_not(QueryType::term("is_email_attachment", true));
+            }
+            None => {}
         }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
@@ -545,6 +565,9 @@ pub struct DocumentSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// `Some(true)` keeps only email attachments, `Some(false)` leaves them
+    /// out, `None` doesn't filter on it.
+    pub is_email_attachment: Option<bool>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
@@ -563,6 +586,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
+            .email_attachment(args.is_email_attachment)
             .mode(args.mode)
             .property_filters(args.property_filters)
             .tag_option_ids(args.tag_option_ids)
