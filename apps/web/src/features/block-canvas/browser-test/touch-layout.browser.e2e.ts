@@ -1,4 +1,10 @@
-import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import {
+  type CDPSession,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from '@playwright/test';
 
 type Point = { x: number; y: number };
 
@@ -30,6 +36,19 @@ async function filledShape(page: Page): Promise<Point> {
   const box = await page.locator('[data-graphics-item="filled"]').boundingBox();
   if (!box) throw new Error('The filled rectangle is not rendered');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** Wait until a sheet has stopped sliding. */
+async function settle(sheet: Locator) {
+  let lastTop: number | undefined;
+  await expect
+    .poll(async () => {
+      const top = (await sheet.boundingBox())?.y;
+      const settled = top !== undefined && top === lastTop;
+      lastTop = top;
+      return settled;
+    })
+    .toBe(true);
 }
 
 test.beforeEach(async ({ page, isMobile }) => {
@@ -128,15 +147,7 @@ test('Style opens the inspector under the shape and a tap on the canvas closes i
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText('Fill', { exact: true })).toBeAttached();
   // The sheet slides up; a tap during the slide is not yet a dismissal.
-  let lastTop: number | undefined;
-  await expect
-    .poll(async () => {
-      const top = (await sheet.boundingBox())?.y;
-      const settled = top !== undefined && top === lastTop;
-      lastTop = top;
-      return settled;
-    })
-    .toBe(true);
+  await settle(sheet);
   // It rests below the selected shape and its handles.
   const [sheetBox, boundsBox] = await Promise.all([
     sheet.boundingBox(),
@@ -278,4 +289,249 @@ test('the zoom button offers fit and the grid', async ({ page }) => {
   await sheet.getByRole('button', { name: 'Zoom to fit' }).tap();
   await expect(sheet).toHaveCount(0);
   expect((await canvas(page)).scale).not.toBe(1);
+});
+
+test('a finger takes a corner from outside it and moves the shape from its middle', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const shape = await filledShape(page);
+  await page.touchscreen.tap(shape.x, shape.y);
+  const size = () =>
+    page.evaluate(() => {
+      const item = window.canvasTouchFixture.editor.document.items.filled;
+      if (item?.type !== 'rectangle') return undefined;
+      return {
+        width: Math.round(item.geometry.width),
+        height: Math.round(item.geometry.height),
+      };
+    });
+  const box = await page.locator('[data-graphics-item="filled"]').boundingBox();
+  if (!box) throw new Error('The filled rectangle is not rendered');
+
+  // 12px outside the bottom-right corner, where a cursor would find nothing.
+  const corner = { x: box.x + box.width + 9, y: box.y + box.height + 8 };
+  await touch(cdp, 'touchStart', [corner]);
+  await touch(cdp, 'touchMove', [{ x: corner.x + 20, y: corner.y + 15 }]);
+  await touch(cdp, 'touchMove', [{ x: corner.x + 40, y: corner.y + 30 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await size()).toEqual({ width: 180, height: 130 });
+
+  const middle = await filledShape(page);
+  await touch(cdp, 'touchStart', [middle]);
+  await touch(cdp, 'touchMove', [{ x: middle.x + 15, y: middle.y + 10 }]);
+  await touch(cdp, 'touchMove', [{ x: middle.x + 30, y: middle.y + 20 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await size()).toEqual({ width: 180, height: 130 });
+  const moved = await filledShape(page);
+  expect(moved.x).toBeCloseTo(middle.x + 30, 0);
+});
+
+test('a tap beside the end of a selected connector leaves it, and a drag from there moves it', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  // Arrow, Line and Connector share a button: the second tap opens the group.
+  const lines = page.getByRole('button', { name: 'Arrow tool' });
+  await lines.tap();
+  await lines.tap();
+  await page.getByRole('menuitem', { name: 'Connector' }).tap();
+  // Drawn across empty canvas, to the right of the fixture's shapes.
+  await touch(cdp, 'touchStart', [{ x: 250, y: 120 }]);
+  await touch(cdp, 'touchMove', [{ x: 300, y: 150 }]);
+  await touch(cdp, 'touchMove', [{ x: 350, y: 180 }]);
+  await touch(cdp, 'touchEnd', []);
+
+  const connector = () =>
+    page.evaluate(() => {
+      const { editor } = window.canvasTouchFixture;
+      const item = Object.values(editor.document.items).find(
+        (candidate) => candidate.type === 'connector'
+      );
+      if (!item) return undefined;
+      editor.select(item.id);
+      return JSON.stringify(item.geometry);
+    });
+  const drawn = await connector();
+  expect(drawn).toBeDefined();
+
+  const handle = await page
+    .getByRole('img', { name: 'Connector end' })
+    .boundingBox();
+  if (!handle) throw new Error("The connector's end is not rendered");
+  // 11px from the middle of the end's handle: beside it, within a finger's reach.
+  const beside = {
+    x: handle.x + handle.width / 2 + 9,
+    y: handle.y + handle.height / 2 + 6,
+  };
+  await page.touchscreen.tap(beside.x, beside.y);
+  expect(await connector()).toBe(drawn);
+
+  await touch(cdp, 'touchStart', [beside]);
+  await touch(cdp, 'touchMove', [{ x: beside.x + 20, y: beside.y + 15 }]);
+  await touch(cdp, 'touchMove', [{ x: beside.x + 40, y: beside.y + 30 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await connector()).not.toBe(drawn);
+});
+
+test('a tap near the stroke of an outlined shape selects it', async ({
+  page,
+}) => {
+  const box = await page
+    .locator('[data-graphics-item="outline"]')
+    .boundingBox();
+  if (!box) throw new Error('The outlined ellipse is not rendered');
+
+  // 8px inside the ellipse's leftmost point: no paint under the finger.
+  await page.touchscreen.tap(box.x + 8, box.y + box.height / 2);
+
+  expect((await canvas(page)).selectedIds).toEqual(['outline']);
+});
+
+/** The smallest valid PNG: one transparent pixel. */
+const PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+test('Attach is a sheet of finger-sized rows, and Upload media reaches the file picker', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Attach' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Attach' });
+  for (const name of ['Media', 'Upload media', 'Reference']) {
+    const row = await sheet
+      .getByRole('button', { name, exact: true })
+      .boundingBox();
+    expect(row?.height, name).toBeGreaterThanOrEqual(44);
+  }
+
+  const opened = page.waitForEvent('filechooser');
+  await sheet.getByRole('button', { name: 'Upload media' }).tap();
+  const picker = await opened;
+  expect(picker.isMultiple()).toBe(true);
+
+  // The sheet is gone while the picker is open, and the files still arrive.
+  await expect(sheet).toBeHidden();
+  await picker.setFiles({
+    name: 'photo.png',
+    mimeType: 'image/png',
+    buffer: PIXEL_PNG,
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.canvasTouchFixture.uploads))
+    .toEqual(['photo.png']);
+});
+
+test('Attach starts from its rows again after a picker was dismissed', async ({
+  page,
+}) => {
+  const attach = page.getByRole('button', { name: 'Attach' });
+  const rows = page.getByRole('dialog', { name: 'Attach' });
+  const picker = page.getByRole('dialog', { name: 'Insert media' });
+  await attach.tap();
+  await rows.getByRole('button', { name: 'Media', exact: true }).tap();
+  await expect(picker).toBeVisible();
+  await expect(rows).toBeHidden();
+
+  // The picker slides up; a tap during the slide is not yet a dismissal.
+  await settle(picker);
+  await page.touchscreen.tap(200, 40);
+  await expect(picker).toBeHidden();
+  await expect(attach).toHaveAttribute('aria-expanded', 'false');
+  // The keyboard is back on the canvas, for its shortcuts.
+  await expect(page.getByLabel('Graphics canvas')).toBeFocused();
+
+  await attach.tap();
+  await expect(rows).toBeVisible();
+  await expect(picker).toBeHidden();
+});
+
+/** The box around every item of the scene, on screen. */
+const sceneBox = (page: Page) =>
+  page.evaluate(() => {
+    const boxes = [...document.querySelectorAll('[data-graphics-item]')].map(
+      (item) => item.getBoundingClientRect()
+    );
+    return {
+      left: Math.min(...boxes.map((box) => box.left)),
+      top: Math.min(...boxes.map((box) => box.top)),
+      right: Math.max(...boxes.map((box) => box.right)),
+      bottom: Math.max(...boxes.map((box) => box.bottom)),
+    };
+  });
+
+/**
+ * The scene point in the middle of the canvas that no chrome covers, and that
+ * middle on screen.
+ */
+const middleOfView = (page: Page) =>
+  page.evaluate(() => {
+    const covered = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--mobile-content-inset-bottom'
+      )
+    );
+    const screen = { x: innerWidth / 2, y: (innerHeight - covered) / 2 };
+    const { x, y, scale } = window.canvasTouchFixture.editor.getCamera();
+    return {
+      screen,
+      scene: { x: (screen.x - x) / scale, y: (screen.y - y) / scale },
+      scale,
+    };
+  });
+
+test('Zoom to fit shows the whole scene clear of the bottom chrome', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Zoom options' }).tap();
+  await page.getByRole('button', { name: 'Zoom to fit' }).tap();
+
+  const viewport = page.viewportSize();
+  const chrome = await page
+    .getByRole('button', { name: 'Zoom options' })
+    .boundingBox();
+  if (!viewport || !chrome) throw new Error('The chrome is not rendered');
+  // The fit leaves 24px clear all round and fills the room one way or the
+  // other; strokes reach a little past their shapes.
+  const room = (await middleOfView(page)).screen.y * 2;
+  await expect
+    .poll(async () => {
+      const scene = await sceneBox(page);
+      return (
+        scene.right - scene.left > viewport.width - 48 - 12 ||
+        scene.bottom - scene.top > room - 48 - 12
+      );
+    })
+    .toBe(true);
+  const scene = await sceneBox(page);
+  expect(scene.left).toBeGreaterThanOrEqual(24 - 4);
+  expect(scene.right).toBeLessThanOrEqual(viewport.width - 24 + 4);
+  expect(scene.top).toBeGreaterThanOrEqual(24 - 4);
+  expect(scene.bottom).toBeLessThanOrEqual(chrome.y - 24 + 4);
+});
+
+test('turning the device keeps what was in the middle in the middle', async ({
+  page,
+}) => {
+  const before = await middleOfView(page);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('No viewport');
+
+  await page.setViewportSize({
+    width: viewport.height,
+    height: viewport.width,
+  });
+
+  // The chrome is laid out again after the turn, so allow for its change.
+  await expect
+    .poll(async () => {
+      const after = await middleOfView(page);
+      return Math.hypot(
+        (after.scene.x - before.scene.x) * after.scale,
+        (after.scene.y - before.scene.y) * after.scale
+      );
+    })
+    .toBeLessThan(48);
+  expect((await middleOfView(page)).scale).toBe(before.scale);
 });

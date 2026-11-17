@@ -250,19 +250,30 @@ describe('suggestions feed', () => {
     );
   });
 
-  it('lists an opened suggestion as done once the server says so, and opens it again without accepting', async () => {
-    const opened = { ...draftedReplySuggestion, status: 'done' as const };
+  it('lists an answered reply suggestion as done once the server says so, and opens it again without accepting', async () => {
+    const answered = { ...draftedReplySuggestion, status: 'done' as const };
     await withFeed(
-      [replySuggestion, opened],
+      [replySuggestion, answered],
       async (feed, { source, actions }) => {
-        expect(shownIds(feed)).toEqual(['suggestion-reply', opened.id]);
+        expect(shownIds(feed)).toEqual(['suggestion-reply', answered.id]);
         expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
 
-        feed.open(opened);
+        feed.open(answered);
         expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
         expect(source.accept).not.toHaveBeenCalled();
       }
     );
+  });
+
+  it('keeps an opened reply suggestion open while the server does, and accepts it again on the next open', async () => {
+    await withFeed([replySuggestion], async (feed, { source, actions }) => {
+      await feed.accept(replySuggestion);
+      await feed.accept(replySuggestion);
+
+      expect(source.accept).toHaveBeenCalledTimes(2);
+      expect(actions.openItem).toHaveBeenCalledTimes(2);
+      expect(feed.counts()).toEqual({ all: 1, running: 0, open: 1, done: 0 });
+    });
   });
 
   it('opens nothing when the account changed while the accept was out', async () => {

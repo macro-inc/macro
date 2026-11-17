@@ -80,6 +80,37 @@ describe('fit selection', () => {
     expect(editor.getCamera()).toEqual({ x: 100, y: 200, scale: 2 });
   });
 
+  it('fits into the part of the view that nothing covers', () => {
+    const editor = editorWithRectangles();
+    editor.select('0');
+    editor.toggleSelection('1');
+    // The same 1000 x 800 of room as above, under a 60px header, above 140px
+    // of toolbars and beside a 200px panel.
+    editor.fitSelection({
+      width: 1200,
+      height: 1000,
+      inset: { top: 60, bottom: 140, right: 200 },
+    });
+    expect(editor.getCamera()).toEqual({ x: 100, y: 260, scale: 2 });
+  });
+
+  it('keeps the margin it is asked for, up to a quarter of the room', () => {
+    const editor = editorWithRectangles();
+    editor.select('0');
+    editor.toggleSelection('1');
+    const selection = { width: 400, height: 200 };
+    const fitted = (viewport: Parameters<typeof editor.fitSelection>[0]) => {
+      editor.fitSelection(viewport);
+      return selection.width * editor.getCamera().scale;
+    };
+
+    // A phone: 100px a side would leave half the width; 24px leaves most.
+    expect(fitted({ width: 400, height: 800 })).toBeCloseTo(200);
+    expect(fitted({ width: 400, height: 800, padding: 24 })).toBeCloseTo(352);
+    // A sliver of room gives up a quarter of it at most, whatever was asked.
+    expect(fitted({ width: 80, height: 800, padding: 24 })).toBeCloseTo(40);
+  });
+
   it('does nothing without a selection or a valid viewport', () => {
     const editor = editorWithRectangles();
     editor.panBy({ x: 34, y: 56 });
@@ -91,5 +122,8 @@ describe('fit selection', () => {
       editor.fitSelection({ width, height: 800 });
       expect(editor.getCamera()).toEqual(camera);
     }
+    // Controls that cover the whole view leave nothing to fit into.
+    editor.fitSelection({ width: 300, height: 800, inset: { right: 300 } });
+    expect(editor.getCamera()).toEqual(camera);
   });
 });

@@ -670,6 +670,44 @@ async fn bot_message_posted_sends_channel_message_notification() {
 }
 
 #[tokio::test]
+async fn an_agent_post_for_a_user_notifies_unless_silent() {
+    let recipient = user("recipient@example.com");
+    for (policy, notifies) in [
+        (PostMessageNotificationPolicy::Default, true),
+        (PostMessageNotificationPolicy::Silent, false),
+    ] {
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext::default(),
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeContacts::default(),
+        );
+        let mut event =
+            bot_message_posted_event(Uuid::new_v4(), Uuid::new_v4(), None, &[recipient.as_ref()]);
+        if let ChannelEvent::MessagePosted {
+            message,
+            mentions,
+            notification_policy,
+            ..
+        } = &mut event
+        {
+            message.triggered_by = Some("macro|sender@example.com".to_string());
+            *mentions = vec![SimpleMention::user(&recipient)];
+            *notification_policy = policy;
+        }
+
+        service.handle(event).await;
+
+        assert_eq!(
+            !notifications.effects.lock().unwrap().is_empty(),
+            notifies,
+            "{policy:?}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn bot_message_without_profile_skips_notifications() {
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -1358,6 +1396,42 @@ async fn handle_publishes_no_channel_topic_facts_for_posted_messages() {
             .iter()
             .all(|event| event.topic != "macro.channels")
     );
+}
+
+#[tokio::test]
+async fn silent_message_posted_notifies_no_mention_but_still_publishes_it() {
+    let broker = TestEventBroker::default();
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    )
+    .with_macro_event_broker(broker.clone());
+    let mut event = bot_message_posted_event(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        None,
+        &["macro|alice@example.com"],
+    );
+    if let ChannelEvent::MessagePosted {
+        mentions,
+        notification_policy,
+        ..
+    } = &mut event
+    {
+        *mentions = vec![SimpleMention::user(&user("alice@example.com"))];
+        *notification_policy = PostMessageNotificationPolicy::Silent;
+    }
+
+    service.handle(event).await;
+
+    assert!(notifications.effects.lock().unwrap().is_empty());
+    let published = broker.published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.mentions");
+    assert_eq!(published[0].key, "macro|alice@example.com");
 }
 
 #[test]

@@ -186,6 +186,10 @@ and `email_e2e_full_stack.rs`):
 
 - A push to `main` runs once per commit, with no waiting for later pushes. A
   failure is a red run on that commit; nothing is reverted or blocked by it.
+- Each workflow's last job, `Tell Macro Alerts`, posts to the Macro Alerts
+  channel when its pushes to `main` or its sweep turn red, and when they pass
+  again; never for a run by hand. What the alert says, and what to do about
+  it: [CI on pull requests](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires).
 - The sweep runs `main`'s head whether or not it changed. Cron is UTC and
   does not follow daylight saving: 21:00 UTC is 4pm EST and 5pm EDT.
 - The coverage check fails the run wherever the suite runs: on every push to
