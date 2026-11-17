@@ -1,0 +1,73 @@
+# Everything Grafana provisions, as plain data: datasources, dashboards, alert
+# rules, contact points and the notification policy. The NixOS host
+# (`../services.nix`) and the cluster's Grafana both import it, so the two
+# show the same dashboards and evaluate the same rules.
+#
+# Only what differs between them is a parameter:
+# - `goalertUrl`: GoAlert's base URL, without a trailing slash.
+# - `datasourceUrls`: the `prometheus`, `loki` and `tempo` query endpoints.
+{
+  lib,
+  goalertUrl,
+  datasourceUrls,
+}:
+let
+  dashboard = file: import file { inherit lib; };
+  dev = dashboard ./dashboards.nix;
+  provider = name: files: {
+    inherit name files;
+    folder = "Macro";
+  };
+in
+{
+  datasources = import ./datasources.nix { urls = datasourceUrls; };
+
+  # Grafana `alerting` provisioning documents: `contactPoints`, `policies`, `rules`.
+  alerting = import ./alerting.nix { inherit lib goalertUrl; };
+
+  # One dashboard provider each, in the order the host has always listed them
+  # (its system's store path depends on it). `files` is a list of
+  # { name = "<file>.json"; dashboard = <dashboard JSON>; }.
+  dashboards = [
+    (provider "macro-prod-alerts" [
+      {
+        name = "prod-alerts.json";
+        dashboard = dashboard ./prod-alerts-dashboard.nix;
+      }
+    ])
+    (provider "macro-postgres-queries" [
+      {
+        name = "postgres-queries.json";
+        dashboard = dashboard ./database-queries-dashboard.nix;
+      }
+    ])
+    (provider "macro-postgres" [
+      {
+        name = "postgres.json";
+        dashboard = dashboard ./database-dashboard.nix;
+      }
+    ])
+    (provider "macro-run-local" [
+      {
+        name = "run-local.json";
+        dashboard = dashboard ./local-dashboard.nix;
+      }
+    ])
+    (provider "macro-ci" [
+      {
+        name = "ci.json";
+        dashboard = dashboard ./ci-dashboard.nix;
+      }
+    ])
+    (provider "macro" [
+      {
+        name = "dev.json";
+        dashboard = dev.dev;
+      }
+      {
+        name = "database.json";
+        dashboard = dev.database;
+      }
+    ])
+  ];
+}

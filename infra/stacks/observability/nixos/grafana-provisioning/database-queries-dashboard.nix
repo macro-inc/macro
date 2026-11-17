@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   prometheus = {
     type = "prometheus";
@@ -436,21 +436,4 @@ let
     ];
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-postgres-queries";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-postgres-queries-dashboard" [
-        {
-          name = "postgres-queries.json";
-          path = pkgs.writeText "postgres-queries.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard

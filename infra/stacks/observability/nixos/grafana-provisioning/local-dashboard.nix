@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   # Shared with scripts/ci-report.ts --spec local, so the report and these panels agree.
   report = builtins.fromJSON (builtins.readFile ./local-report.json);
@@ -691,21 +691,4 @@ let
     ++ map ({ start, title }: runPicker start title) starts;
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-run-local";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-run-local-dashboard" [
-        {
-          name = "run-local.json";
-          path = pkgs.writeText "run-local.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard
