@@ -38,9 +38,17 @@ const CONTEXT: Context = {
 };
 
 describe('failedJobs', () => {
-  test('names each failed job and the step it failed at, and leaves out the rest', () => {
+  test('names each failed job and the step it failed at, in the order the run started them', () => {
     const jobs = failedJobs([
       {
+        id: 5,
+        name: 'Email end-to-end (coverage)',
+        status: 'completed',
+        conclusion: 'failure',
+        steps: [{ name: 'report the coverage', conclusion: 'failure' }],
+      },
+      {
+        id: 2,
         name: 'Email end-to-end (2/3)',
         status: 'completed',
         conclusion: 'failure',
@@ -50,15 +58,16 @@ describe('failedJobs', () => {
           { name: 'show sccache stats', conclusion: 'success' },
         ],
       },
-      { name: 'Email end-to-end (1/3)', status: 'completed', conclusion: 'cancelled', steps: [] },
-      { name: 'Email end-to-end (3/3)', status: 'completed', conclusion: 'success' },
-      { name: 'Email end-to-end (known bugs)', status: 'completed', conclusion: 'skipped' },
-      { name: 'Tell Macro Alerts', status: 'in_progress', conclusion: null },
+      { id: 1, name: 'Email end-to-end (1/3)', status: 'completed', conclusion: 'cancelled', steps: [] },
+      { id: 3, name: 'Email end-to-end (3/3)', status: 'completed', conclusion: 'success' },
+      { id: 4, name: 'Email end-to-end (known bugs)', status: 'completed', conclusion: 'skipped' },
+      { id: 6, name: 'Tell Macro Alerts', status: 'in_progress', conclusion: null },
     ]);
 
     assert.deepEqual(jobs, [
       { name: 'Email end-to-end (1/3)', step: null },
       { name: 'Email end-to-end (2/3)', step: 'run the email end-to-end scenarios' },
+      { name: 'Email end-to-end (coverage)', step: 'report the coverage' },
     ]);
   });
 });
@@ -159,7 +168,7 @@ describe('decide', () => {
       });
 
       assert.equal(decision.post, null);
-      assert.match(decision.post === null ? decision.why : '', /run 11/);
+      assert.match(decision.post === null ? decision.why : '', /run #11/);
     }
   });
 

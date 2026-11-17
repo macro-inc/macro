@@ -311,6 +311,7 @@ jobs:
 
         /** A job of this run, as the jobs API lists it. */
         export type Job = {
+          id: number;
           name: string;
           status: string;
           conclusion: string | null;
@@ -356,20 +357,22 @@ jobs:
         }
 
         /**
-         * The run's jobs that failed, each with the first step that failed. A job that
-         * was cancelled counts: this job runs only in a run that was not cancelled, so
-         * such a job ran out of time. Jobs still running, this one, are left out.
+         * The run's jobs that failed, each with the first step that failed, in the
+         * order the run started them: the suite's before the coverage job that reads
+         * their results. A job that was cancelled counts: this job runs only in a run
+         * that was not cancelled, so such a job ran out of time. Jobs still running,
+         * this one, are left out.
          */
         export function failedJobs(jobs: Job[]): FailedJob[] {
           const failed = (conclusion: string | null) =>
             RED.has(conclusion ?? '') || conclusion === 'cancelled';
           return jobs
             .filter((job) => job.status === 'completed' && failed(job.conclusion))
+            .sort((a, b) => a.id - b.id)
             .map((job) => ({
               name: job.name,
               step: job.steps?.find((step) => failed(step.conclusion))?.name ?? null,
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name));
+            }));
         }
 
         /**
@@ -397,7 +400,7 @@ jobs:
             const latest = Math.max(...newer.map((each) => each.run_number));
             return {
               post: null,
-              why: `run ${latest}, which is newer, has already ended, so this result is not the branch's latest`,
+              why: `run #${latest}, which is newer, has already ended, so this result is not the branch's latest`,
             };
           }
           const attempt =
