@@ -60,6 +60,10 @@ identity, and native apps take an OTA bundle only from a newer commit. The
 deploy workflow checks the built bundle is stamped from the commit it deploys
 (`bundle-stamp verify`).
 
+Because the identity follows the commit, redeploying the same commit (say with
+a fixed build secret) reaches web users but no native app that already took the
+first build of it; ship the fix as a new commit instead.
+
 Retained-build pruning names each record after `builtAt`, when that build ran:
 re-running the deploy of one commit publishes new chunks under the same
 `bundleBuild`, and the earlier run's open tabs still need theirs.
@@ -79,6 +83,16 @@ rule to the authentication service's bundle update policy
 range, with bounds from `cargo run -p bundle_stamp -- number <sha>`. Revoked
 apps clear their OTA bundle, fall back to the embedded one, and then take the
 redeployed bundle if it is newer than their embedded build.
+
+Never roll production back to a commit from before `bundle-stamp`: its manifest
+is numbered by build time, which outranks every stamped bundle, and updaters
+that read only stamped manifests are never offered it.
+
+The first stamped production deploy compares its commit time with the live
+legacy manifest's build time, so it must come from a commit made after the last
+legacy production build ran; otherwise the verify step fails. Apps on that
+legacy bundle likewise take the first stamped bundle whose commit is newer than
+its build.
 
 ## CDN policy
 

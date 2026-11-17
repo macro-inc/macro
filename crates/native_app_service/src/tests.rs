@@ -145,6 +145,7 @@ fn request(
         native_build,
         manifest_schema: Some(3),
         current_git_sha: None,
+        stamped_manifests: false,
     }
 }
 
@@ -812,4 +813,60 @@ fn live_manifests_are_read_strictly_once_stamped() {
         r#"{{"schemaVersion":2,"bundleBuild":1794871234567,"commitTime":1794870406,"gitSha":"{COMMIT_X}","minNativeBuild":0,"appVersion":"2.5.0"}}"#
     ));
     assert!(inconsistent.is_err());
+}
+
+#[tokio::test]
+async fn updaters_that_need_stamped_manifests_are_not_offered_legacy_ones() {
+    let legacy = service(20, 0, BundleUpdatePolicy::default());
+    let stamped_only = |current: u64| domain::models::BundleUpdateRequest {
+        stamped_manifests: true,
+        ..request(
+            AllTargets::Mobile(MobileTarget::Ios),
+            Arch::Aarch64,
+            current,
+            1,
+        )
+    };
+    assert_matches!(legacy.get_bundle_update(stamped_only(10)).await, Ok(None));
+
+    let stamped = deploying(stamped(
+        COMMIT_X,
+        COMMIT_X_SECS,
+        (COMMIT_X_SECS + 60) * 1000,
+    ));
+    assert_matches!(
+        stamped.get_bundle_update(stamped_only(10)).await,
+        Ok(Some(BundleAction::Update(_)))
+    );
+}
+
+#[tokio::test]
+async fn route_reads_the_stamped_manifests_capability() {
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service(20, 0, BundleUpdatePolicy::default())),
+    });
+    let status = |query: &'static str| {
+        let app = app.clone();
+        async move {
+            app.oneshot(
+                Request::builder()
+                    .uri(format!("/update/bundle/ios/aarch64?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+        }
+    };
+
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3&stamped_manifests=true")
+            .await,
+        StatusCode::NO_CONTENT
+    );
 }

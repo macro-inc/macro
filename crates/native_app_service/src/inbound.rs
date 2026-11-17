@@ -68,6 +68,7 @@ async fn bundle_update_handler<S: NativeAppService>(
             native_build: query.native_build,
             manifest_schema: query.manifest_schema,
             current_git_sha: query.current_git_sha,
+            stamped_manifests: query.stamped_manifests,
         })
         .await
     {
@@ -84,6 +85,8 @@ struct BundleUpdateQuery {
     manifest_schema: Option<u64>,
     #[serde(default)]
     current_git_sha: Option<String>,
+    #[serde(default)]
+    stamped_manifests: bool,
 }
 
 #[derive(Debug)]

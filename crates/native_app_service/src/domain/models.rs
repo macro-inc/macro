@@ -272,6 +272,9 @@ pub struct BundleUpdateRequest {
     /// Short git SHA of the commit the running bundle was built from, when the
     /// app knows it. Older apps send none.
     pub current_git_sha: Option<String>,
+    /// The updater reads only manifests stamped from a commit, so a legacy
+    /// live manifest is never offered to it. Older apps send none.
+    pub stamped_manifests: bool,
 }
 
 /// Server-side compatibility and revocation rules for JS bundle updates.

@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         AllTargets, BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction,
-        BundleUpdate, BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier,
-        UpdateErr,
+        BundleUpdate, BundleUpdatePolicy, BundleUpdateRequest, DeployedManifest, PlatformData,
+        PlatformVerifier, UpdateErr,
     },
     ports::{GetJsBundleManifest, NativeAppService},
 };
@@ -37,6 +37,7 @@ where
             native_build,
             manifest_schema,
             current_git_sha,
+            stamped_manifests,
         } = req;
 
         let manifest = self.bundle_fetcher.get_app_bundle_manifest().await?;
@@ -51,6 +52,12 @@ where
                     .clone()
                     .unwrap_or_else(|| "bundle_revoked".to_string()),
             })));
+        }
+
+        // An updater that reads only stamped manifests would download a legacy
+        // bundle, reject it, and download it again on every check.
+        if stamped_manifests && matches!(manifest, DeployedManifest::Legacy(_)) {
+            return Ok(None);
         }
 
         let bundle_build = manifest.bundle_build();
