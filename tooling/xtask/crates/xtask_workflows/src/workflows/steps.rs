@@ -394,6 +394,30 @@ pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
         .add_with(("path", paths.join("\n")))
 }
 
+/// [`mount_web_check_cache_volume`] with Rust, plus cargo's `target` directory.
+/// Only for a job on its own cache tag ([`vars::WEB_CODEGEN_CACHE_TAG`]), followed
+/// by [`reuse_cargo_target`] before anything builds.
+pub fn mount_web_codegen_cache_volume() -> Step<Use> {
+    let paths = [
+        vars::BUN_CACHE_VOLUME_DIR,
+        vars::NODE_MODULES_VOLUME_DIR,
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        vars::CARGO_TARGET_VOLUME_DIR,
+    ];
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
+}
+
+/// Date the checkout's files by when their contents first appeared, so cargo
+/// rebuilds only the workspace crates whose sources differ from the builds the
+/// kept `target` directory holds (`scripts/cargo_target_reuse.ts`).
+pub fn reuse_cargo_target() -> Step<Run> {
+    Step::new("Reuse the kept cargo target")
+        .run(node_script(include_str!("scripts/cargo_target_reuse.ts")))
+}
+
 /// [`mount_web_check_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {

@@ -25,7 +25,7 @@ fn web_runner() -> String {
 
 /// The mid-size (16x32) profile on the web CI cache volume and remote sccache,
 /// for the jobs that scale with cores: the generated-code job compiles the
-/// schema binaries, the app build compiles the browser wasm packages and runs
+/// schema binaries (on its own cache tag), the app build compiles the browser wasm packages and runs
 /// Vite, typechecking runs the TS 7 compiler, and vitest runs about 1.9x faster
 /// on 16 cores than on the small profile's 8.
 fn mid_web_runner() -> String {
@@ -247,7 +247,9 @@ fn generated_code() -> Job {
         ))
         .name("Generated Code Check")
         .timeout_minutes(25u32)
-        .runs_on(mid_web_runner())
+        // Its own volume, so the `target` directory it keeps is the one its
+        // last build left: the last job to finish on a tag replaces the volume.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CODEGEN_CACHE_TAG))
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
         // so every cargo call here (the build step, gen-api, the docs and DCS
@@ -259,7 +261,8 @@ fn generated_code() -> Job {
         // the same reason: RUSTFLAGS is part of every unit's fingerprint.
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_check_cache_volume(true))
+        .add_step(steps::mount_web_codegen_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
