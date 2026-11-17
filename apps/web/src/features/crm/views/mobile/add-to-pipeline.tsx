@@ -56,7 +56,12 @@ export function AddToPipelineMenu(props: {
                       }
                     >
                       <PipelineChoiceLabel choice={choice} />
-                      <Show when={ADD_TO_PIPELINE_FLOW === 'stage'}>
+                      <Show
+                        when={
+                          ADD_TO_PIPELINE_FLOW === 'stage' &&
+                          choice.state === 'available'
+                        }
+                      >
                         <CaretRightIcon class="size-4 shrink-0 text-ink-muted" />
                       </Show>
                     </Dropdown.Item>

@@ -24,8 +24,9 @@ export function AddToPipelineTrigger() {
       finish="flat"
       class="shrink-0 gap-1 focus-visible:ring-2 focus-visible:ring-accent/20 touch:min-h-6 touch:min-w-11 touch:my-2.5 touch:before:absolute touch:before:-inset-x-px touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']"
     >
-      <PlusIcon class="size-3" />
-      {t('crm.addToPipeline')}
+      <PlusIcon class="size-3 mobile:size-4" />
+      {/* Phones keep the row for the record's name. */}
+      <span class="mobile:sr-only">{t('crm.addToPipeline')}</span>
     </Dropdown.Trigger>
   );
 }
