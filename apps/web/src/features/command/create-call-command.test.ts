@@ -3,20 +3,18 @@ import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { setActiveScope, setPressedKeys } from '@core/hotkey/state';
 import { registerScope, removeScope } from '@core/hotkey/utils';
 import { fireEvent } from '@solidjs/testing-library';
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCallCommand } from './create-call-command';
 
-const flags = vi.hoisted(() => ({ calls: true }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 
 const disposers: (() => void)[] = [];
 const scope = 'test-create-call';
 
-function setup(enabled = () => flags.calls) {
+function setup() {
   const actions = { close: vi.fn(), navigate: vi.fn() };
-  const command = createCallCommand({ ...actions, enabled });
-  const closeWithoutCall = vi.fn(() => true);
+  const command = createCallCommand(actions);
   registerScope({
     scopeId: scope,
     parentScopeId: 'global',
@@ -33,18 +31,10 @@ function setup(enabled = () => flags.calls) {
       activateCommandScopeId: scope,
       keyDownHandler: () => true,
     });
-    registerHotkey({ ...command, scopeId: scope, condition: command.enabled });
-    registerHotkey({
-      scopeId: scope,
-      hotkey: 'c',
-      description: 'Close Create',
-      registrationType: 'add',
-      condition: () => !enabled(),
-      keyDownHandler: closeWithoutCall,
-    });
+    registerHotkey({ ...command, scopeId: scope });
   });
   setActiveScope('global');
-  return { ...actions, command, closeWithoutCall };
+  return actions;
 }
 
 function pressC(target: Element | Document = document) {
@@ -58,7 +48,6 @@ afterEach(() => {
   setActiveScope('global');
   setPressedKeys(new Set<string>());
   document.body.replaceChildren();
-  flags.calls = true;
 });
 
 it('uses the C C sequence to close Create and navigate to call setup once', () => {
@@ -81,31 +70,4 @@ it('does not start a call while typing, including inside an active create scope'
   pressC(input);
   expect(actions.navigate).not.toHaveBeenCalled();
   expect(actions.close).not.toHaveBeenCalled();
-});
-
-it('disables both keyboard and direct menu action when calls are unavailable', () => {
-  flags.calls = false;
-  const actions = setup();
-  expect(actions.command.enabled?.()).toBe(false);
-  pressC();
-  pressC();
-  expect(actions.command.keyDownHandler()).toBe(false);
-  expect(actions.navigate).not.toHaveBeenCalled();
-  expect(actions.closeWithoutCall).toHaveBeenCalledOnce();
-});
-
-it('enables C C after the flag resolves and blocks a stale action when revoked', () => {
-  const [enabled, setEnabled] = createSignal(false);
-  const actions = setup(enabled);
-  pressC();
-  pressC();
-  expect(actions.navigate).not.toHaveBeenCalled();
-  setEnabled(true);
-  setActiveScope('global');
-  pressC();
-  pressC();
-  expect(actions.navigate).toHaveBeenCalledExactlyOnceWith('/meet/new');
-  setEnabled(false);
-  expect(actions.command.keyDownHandler()).toBe(false);
-  expect(actions.navigate).toHaveBeenCalledOnce();
 });

@@ -1,8 +1,8 @@
 //! `Deploy on Push` — the single push-to-main dev deploy pipeline. Mirrors the
-//! production release flow: cloud storage first, then the sync service, then the
-//! web app, with every stage deploying unconditionally. The web app *builds* in
-//! parallel with the backend; only its upload waits, so the frontend still
-//! goes live last.
+//! production release flow: cloud storage first, then the sync service and the
+//! ChatGPT MCP worker, then the web app, with every stage deploying
+//! unconditionally. The web app *builds* in parallel with the backend; only its
+//! upload waits, so the frontend still goes live last.
 //!
 //! Nothing is path-gated, deliberately. The pipeline serializes on one
 //! concurrency group, and GitHub cancels a *pending* run as soon as a newer one
@@ -27,8 +27,9 @@
 //!
 //! NOTE: the top-level concurrency group deliberately differs from the called
 //! workflows' literal groups (`deploy-all-services-dev`, `deploy-web-app-dev`,
-//! `deploy-sync-service-dev`) — declaring the *same* group in a wrapper and
-//! its called workflow makes GitHub detect a self-deadlock and cancel the run.
+//! `deploy-sync-service-dev`, `deploy-mcp-chatgpt-worker-dev`) — declaring the
+//! *same* group in a wrapper and its called workflow makes GitHub detect a
+//! self-deadlock and cancel the run.
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
@@ -79,6 +80,7 @@ pub fn deploy_on_push() -> Workflow {
         )
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
         .add_job("build-web-app", build_web_app())
         .add_job("deploy-web-app", deploy_web_app())
 }
@@ -111,6 +113,19 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         crate::workflows::yaml_fragment("environment: dev")?,
     );
     sync_service.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        "#})?,
+    );
+
+    let mcp_chatgpt_worker = crate::workflows::job_mut(root, "deploy-mcp-chatgpt-worker")?;
+    mcp_chatgpt_worker.remove("runs-on");
+    mcp_chatgpt_worker.insert(
+        "with".into(),
+        crate::workflows::yaml_fragment("environment: dev")?,
+    );
+    mcp_chatgpt_worker.insert(
         "secrets".into(),
         crate::workflows::yaml_fragment(indoc::indoc! {r#"
             CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -170,6 +185,16 @@ fn deploy_sync_service() -> Job {
         .name("Deploy Sync Service")
         .needs(vec!["deploy-cloud-storage".to_string()])
         .uses("./.github/workflows/deploy_sync_service.yml")
+}
+
+/// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
+/// from the MCP auth broker, so it ships behind them, like the sync worker.
+/// Nothing waits on it: the web app doesn't talk to it.
+fn deploy_mcp_chatgpt_worker() -> Job {
+    Job::default()
+        .name("Deploy MCP ChatGPT Worker")
+        .needs(vec!["deploy-cloud-storage".to_string()])
+        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
 }
 
 /// No `needs`: the build only reads the commit, so it overlaps the backend's

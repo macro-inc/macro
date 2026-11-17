@@ -4,6 +4,7 @@ import {
   ChangesSplit,
   ReviewNotesDock,
 } from '@app/features/changes/changes';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
@@ -55,6 +56,7 @@ function AgentBlockHeader(props: {
   title: Accessor<string | undefined>;
 }) {
   const header = useAgentSessionHeader(props);
+  useBlockEntityCommands({ resolveEntity: header.entity });
 
   return (
     <Show

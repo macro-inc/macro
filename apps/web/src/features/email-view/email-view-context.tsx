@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import type {
   SavedViewSource,
@@ -42,7 +43,6 @@ import {
 } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { listTagOptions } from '@property/tags/list-tag-options';
@@ -105,7 +105,6 @@ import type {
 type EmailViewProviderProps = ContextProviderProps & {
   initialState?: EmailViewStateOptions;
   /** Saved-view sources; absent where the host has no saved views. */
-  savedViewsEnabled?: Accessor<boolean>;
   savedViewsSource?: () => SavedViewsSource;
   savedViewSource?: (id: Accessor<string | undefined>) => SavedViewSource;
 };
@@ -171,6 +170,7 @@ export type EmailViewContext = {
     }
   ) => boolean;
   closeThread: () => void;
+  navigateToList: () => Promise<void>;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
   /** Open threads beside the list instead of in its place (desktop). */
@@ -201,6 +201,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   EmailViewProviderProps
 >('EmailView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useRouteParams(emailThreadRoute);
   const matches = useMatches();
@@ -246,8 +247,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const state = persistedState;
 
   // Saved views: the URL names the open view; its definition fills the All tab.
-  const savedViewsEnabled = () =>
-    Boolean(props.savedViewSource && props.savedViewsEnabled?.());
+  const savedViewsEnabled = () => Boolean(props.savedViewSource);
   const selectedSavedViewId = () =>
     savedViewsEnabled() ? tabSearch.savedView : undefined;
   const savedViewsList = props.savedViewsSource?.();
@@ -339,7 +339,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         }
         if (state.beforeSavedView) clearSavedViewState();
         // Another account's view is not this one's: leave its URL too.
-        if (id && accountChanged) navigateToList(undefined);
+        if (id && accountChanged)
+          fireAndForget(navigateToList(undefined), 'email-view');
       }
     )
   );
@@ -423,9 +424,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         return 'scope' in filters ? filters.scope : undefined;
       },
       enabled: savedViewQueryReady,
-      // Desktop only: the phone list has no search of its own to wait on.
-      keepRowsWhileSearching: () =>
-        !isTouchDevice() && isFeatureEnabled(enableEmailWideSearch),
+      keepRowsWhileSearching: () => isFeatureEnabled(enableEmailWideSearch),
     })
   );
   withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
@@ -483,29 +482,27 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
-  const navigateToList = (savedView: string | undefined) => {
-    fireAndForget(
-      navigate(
-        { route: emailSplitRoute, params: {} },
-        {
-          search: {
-            // A new email's draft stays with its own entry.
-            [composeDraftSearch.namespace]: {},
-            [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-              tab: state.tab,
-              savedView,
-            }),
-          },
-        }
-      ),
-      'email-view'
+  const navigateToList = async (savedView: string | undefined) => {
+    await navigate(
+      { route: emailSplitRoute, params: {} },
+      {
+        search: {
+          // A new email's draft stays with its own entry.
+          [composeDraftSearch.namespace]: {},
+          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+            tab: state.tab,
+            savedView,
+          }),
+        },
+      }
     );
   };
-  const closeThread = () => navigateToList(tabSearch.savedView);
+  const closeThread = () =>
+    fireAndForget(navigateToList(tabSearch.savedView), 'email-view');
   const notificationSource = useGlobalNotificationSource();
   const openThread = (
     thread: EmailThreadTarget,
@@ -603,7 +600,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       batch(() => {
         setSavedViewNavigation({});
         clearSavedViewState(tab);
-        navigateToList(undefined);
+        fireAndForget(navigateToList(undefined), 'email-view');
       });
       return;
     }
@@ -643,14 +640,14 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           draft.search = '';
         })
       );
-      navigateToList(id);
+      fireAndForget(navigateToList(id), 'email-view');
     });
   };
   const leaveSavedView = () =>
     batch(() => {
       setSavedViewNavigation({});
       clearSavedViewState();
-      navigateToList(undefined);
+      fireAndForget(navigateToList(undefined), 'email-view');
     });
 
   const setInboxIds = (ids: string[] | undefined) => {
@@ -768,6 +765,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     composing,
     openThread,
     closeThread,
+    navigateToList: () => navigateToList(tabSearch.savedView),
     isSidebarSectionOpen,
     setSidebarSectionOpen,
     readingPane,

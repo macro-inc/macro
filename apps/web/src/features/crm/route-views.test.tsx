@@ -22,7 +22,6 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => ({ handle: { captureEntryState: vi.fn() } }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: 'crm',
   isFeatureEnabled: () => true,
 }));
 vi.mock('./route-adapter', () => ({

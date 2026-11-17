@@ -253,7 +253,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   host.githubLinked = true;
   host.flags = new Set([
-    'enable-routine-conditions',
     'enable-event-routines',
     'enable-routine-starter-templates',
   ]);
