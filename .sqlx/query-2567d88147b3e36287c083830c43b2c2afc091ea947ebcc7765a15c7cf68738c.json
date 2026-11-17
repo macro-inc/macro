@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) SELECT $1,$2,n,$3 FROM generate_series(1,205)n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2567d88147b3e36287c083830c43b2c2afc091ea947ebcc7765a15c7cf68738c"
+}

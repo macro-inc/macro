@@ -85,6 +85,19 @@ async fn matching_edits_record_only_referenced_sources_and_noop_or_failed_edits_
         events(&pool, team).await?,
         vec![("contact".into(), contact); 4]
     );
+    repo.set_contact_hidden(&team, &contact, true).await?;
+    assert_eq!(
+        events(&pool, team).await?.len(),
+        4,
+        "repeated hide is a no-op"
+    );
+    repo.set_contact_hidden(&team, &contact, false).await?;
+    repo.set_contact_hidden(&team, &contact, false).await?;
+    assert_eq!(
+        events(&pool, team).await?.len(),
+        5,
+        "repeated unhide is a no-op"
+    );
     Ok(())
 }
 
@@ -120,8 +133,25 @@ async fn company_hide_cascade_records_the_parent_and_only_referenced_contacts_at
         .await?,
         Some(21)
     );
+    repo.set_company_hidden(&team, &company, true).await?;
+    assert_eq!(
+        events(&pool, team).await?.len(),
+        2,
+        "repeated hide is a no-op"
+    );
     repo.set_company_hidden(&team, &company, false).await?;
     assert_eq!(events(&pool, team).await?.len(), 4);
+    repo.set_company_hidden(&team, &company, false).await?;
+    assert_eq!(
+        events(&pool, team).await?.len(),
+        4,
+        "repeated unhide is a no-op"
+    );
+    // An unchanged parent must still restore an individually hidden contact.
+    repo.set_contact_hidden(&team, &contact, true).await?;
+    repo.set_company_hidden(&team, &company, false).await?;
+    assert_eq!(events(&pool, team).await?.len(), 6);
+    assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(false));
     // The event and edit are one transaction even if durable hand-off fails.
     sqlx::query("CREATE FUNCTION reject_source_event() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic source failure'; END $$").execute(&pool).await?;
     sqlx::query("CREATE TRIGGER reject_source_event BEFORE INSERT ON crm_email_policy_source_events FOR EACH ROW EXECUTE FUNCTION reject_source_event()").execute(&pool).await?;
@@ -140,7 +170,7 @@ async fn company_hide_cascade_records_the_parent_and_only_referenced_contacts_at
         .await?,
         Some(0)
     );
-    assert_eq!(events(&pool, team).await?.len(), 4);
+    assert_eq!(events(&pool, team).await?.len(), 6);
     Ok(())
 }
 

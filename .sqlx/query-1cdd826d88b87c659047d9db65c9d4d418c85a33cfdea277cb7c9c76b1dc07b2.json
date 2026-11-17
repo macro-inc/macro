@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_rule_addresses(team_id,user_id,revision,address) VALUES($1,$2,1,'chosen@elsewhere.example.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1cdd826d88b87c659047d9db65c9d4d418c85a33cfdea277cb7c9c76b1dc07b2"
+}

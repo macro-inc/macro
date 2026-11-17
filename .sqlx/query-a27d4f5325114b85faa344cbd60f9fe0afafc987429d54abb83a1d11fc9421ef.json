@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM crm_contact_sources s JOIN crm_contacts ct ON ct.id=s.contact_id WHERE ct.team_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a27d4f5325114b85faa344cbd60f9fe0afafc987429d54abb83a1d11fc9421ef"
+}

@@ -177,34 +177,35 @@ where
             return Ok(false);
         };
         let source = event.event().clone();
-        let span = tracing::info_span!("crm.email_history.source", team_id = %source.team_id, event_id = %source.event_id);
+        let span = tracing::info_span!("crm.email_history.source", team_id = %source.team_id, event_id = %source.event_id, outcome = tracing::field::Empty);
         event.adopt_trace(&span);
         async {
-            let references = event.references().await?;
-            for candidate in event.source_candidates(&references).await? {
-                let Some(mut tx) = self
-                    .companies_repository
-                    .open_source_policy(source.team_id, &candidate)
-                    .await?
-                else {
-                    continue;
-                };
-                let state = tx.state();
-                if state.generation == candidate.generation
-                    && state.mode == EmailContributionMode::Selected
-                    && state.selected_enabled
-                    && state.active_rule_revision == Some(candidate.reference.revision)
-                    && tx.history_mailbox().await?.is_some()
-                {
-                    // The event UUIDv7 is scoped by member/incarnation. A later
-                    // version already owns its own history or the old job's
-                    // durable transfer; replaying this event must not reset it.
-                    let work_id = source.event_id;
-                    let first_delivery = tx.idempotency(work_id).await?.is_none();
-                    if first_delivery {
-                        tx.request_work(work_id, source.traceparent.as_deref())
-                            .await?;
-                        tx.record_audit(&NewEmailPolicyAudit {
+            let result: Result<bool, CrmError> = async {
+                let references = event.references().await?;
+                for candidate in event.source_candidates(&references).await? {
+                    let Some(mut tx) = self
+                        .companies_repository
+                        .open_source_policy(source.team_id, &candidate)
+                        .await?
+                    else {
+                        continue;
+                    };
+                    let state = tx.state();
+                    if state.generation == candidate.generation
+                        && state.mode == EmailContributionMode::Selected
+                        && state.selected_enabled
+                        && state.active_rule_revision == Some(candidate.reference.revision)
+                        && tx.history_mailbox().await?.is_some()
+                    {
+                        // The event UUIDv7 is scoped by member/incarnation. A later
+                        // version already owns its own history or the old job's
+                        // durable transfer; replaying this event must not reset it.
+                        let work_id = source.event_id;
+                        let first_delivery = tx.idempotency(work_id).await?.is_none();
+                        if first_delivery {
+                            tx.request_work(work_id, source.traceparent.as_deref())
+                                .await?;
+                            tx.record_audit(&NewEmailPolicyAudit {
                             event_id: Uuid::now_v7(),
                             action: EmailPolicyAuditAction::LiveTargetsChanged,
                             actor_kind: EmailPolicyActorKind::System,
@@ -218,13 +219,21 @@ where
                             }}),
                         })
                         .await?;
+                        }
                     }
+                    tx.commit().await?;
                 }
-                tx.commit().await?;
+                event.advance(references.last()).await?;
+                event.commit().await?;
+                Ok(true)
             }
-            event.advance(references.last()).await?;
-            event.commit().await?;
-            Ok(true)
+            .await;
+            tracing::Span::current()
+                .record("outcome", if result.is_ok() { "success" } else { "error" });
+            if let Err(error) = &result {
+                tracing::error!(error = ?error, "failed to reconcile CRM email policy source page");
+            }
+            result
         }
         .instrument(span)
         .await

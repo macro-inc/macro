@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_recipients(message_id,contact_id,recipient_type) SELECT id,$2,'CC' FROM email_messages WHERE thread_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e65b206a8a077174e7dc1225669844028a440d18f3841a56a9e54a8e484cd46d"
+}

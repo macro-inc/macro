@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM crm_email_consent) AS consent,\n                  (SELECT count(*) FROM crm_email_policy_work) AS work,\n                  (SELECT count(*) FROM crm_email_policy_previews) AS previews,\n                  (SELECT count(*) FROM crm_email_policy_idempotency) AS retries,\n                  (SELECT count(*) FROM crm_email_policy_audit) AS audit",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "consent",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "work",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "previews",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "retries",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "audit",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "4442bf4e1d9043142dea3370a522a87bb1262835b765243a46ac97a4f85f6ee1"
+}

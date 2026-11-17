@@ -48,18 +48,23 @@ impl CompaniesRepositoryImpl {
         conn: &mut PgConnection,
         team: Uuid,
         company: Uuid,
+        parent_changed: bool,
+        hidden: bool,
     ) -> Result<(), CrmError> {
         if !Self::has_contact_rule_references(conn, team).await? {
             return Ok(());
         }
-        // The same parent's contacts were just updated by the hide cascade.
-        // No lookup or fan-out over members occurs inside this source edit.
+        // Capture matching changes before the cascade. Lock the parent's rows
+        // so a concurrent individual hide cannot invalidate this decision.
+        // Fence the reverse probe too: stale statistics can otherwise rescan
+        // all of the team's references for each contact. No member fan-out
+        // occurs inside this source edit.
         let ids = sqlx::query_scalar!(
             r#"SELECT ct.id FROM (
-                   SELECT id,team_id FROM crm_contacts WHERE company_id=$2 OFFSET 0
-               ) ct WHERE ct.team_id=$1
-                 AND EXISTS (SELECT 1 FROM crm_email_rule_contacts r WHERE r.contact_id=ct.id AND r.team_id=$1)"#,
-            team,company
+                   SELECT id,team_id,hidden FROM crm_contacts WHERE company_id=$2 OFFSET 0 FOR UPDATE
+               ) ct WHERE ct.team_id=$1 AND ($3 OR ct.hidden IS DISTINCT FROM $4)
+                 AND EXISTS (SELECT 1 FROM crm_email_rule_contacts r WHERE r.contact_id=ct.id AND r.team_id=$1 OFFSET 0)"#,
+            team,company,parent_changed,hidden
         ).fetch_all(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Self::record_matching_changes(conn, team, "contact", &ids).await
     }

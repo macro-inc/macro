@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_contacts(id,link_id,email_address) SELECT gen_random_uuid(),$1,lpad(n::text,4,'0')||'@example.org' FROM generate_series(1,103)n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb8fc64a63a63d67fe62c3a3999b7148a35704a03d80da1c25129c8d73d0a724"
+}

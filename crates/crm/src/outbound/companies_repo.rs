@@ -2139,10 +2139,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             // callers as NotFound.
             let updated = sqlx::query_scalar!(
                 r#"
-                UPDATE crm_companies
+                WITH previous AS MATERIALIZED (
+                    SELECT id, hidden FROM (
+                        SELECT id, team_id, hidden FROM crm_companies
+                        WHERE id = $1 OFFSET 0 FOR UPDATE
+                    ) scoped WHERE team_id = $2
+                )
+                UPDATE crm_companies co
                 SET hidden = TRUE, email_sync = FALSE
-                WHERE id = $1 AND team_id = $2
-                RETURNING id
+                FROM previous WHERE co.id = previous.id
+                RETURNING previous.hidden IS DISTINCT FROM TRUE AS "matching_changed!"
                 "#,
                 company_id,
                 team_id,
@@ -2151,9 +2157,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-            if updated.is_none() {
-                return Err(CrmError::CompanyNotFoundForTeam);
+            let changed = updated.ok_or(CrmError::CompanyNotFoundForTeam)?;
+            if changed {
+                Self::record_company_matching_change(&mut tx, *team_id, *company_id).await?;
             }
+            Self::record_company_contacts_matching_change(
+                &mut tx,
+                *team_id,
+                *company_id,
+                changed,
+                hidden,
+            )
+            .await?;
 
             // Soft-hide every contact under this company so un-hide can
             // restore them verbatim. Sources are preserved too — they
@@ -2174,10 +2189,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             // Un-hide leaves email_sync alone; re-enable is separate.
             let updated = sqlx::query_scalar!(
                 r#"
-                UPDATE crm_companies
+                WITH previous AS MATERIALIZED (
+                    SELECT id, hidden FROM (
+                        SELECT id, team_id, hidden FROM crm_companies
+                        WHERE id = $1 OFFSET 0 FOR UPDATE
+                    ) scoped WHERE team_id = $2
+                )
+                UPDATE crm_companies co
                 SET hidden = FALSE
-                WHERE id = $1 AND team_id = $2
-                RETURNING id
+                FROM previous WHERE co.id = previous.id
+                RETURNING previous.hidden IS DISTINCT FROM FALSE AS "matching_changed!"
                 "#,
                 company_id,
                 team_id,
@@ -2186,9 +2207,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-            if updated.is_none() {
-                return Err(CrmError::CompanyNotFoundForTeam);
+            let changed = updated.ok_or(CrmError::CompanyNotFoundForTeam)?;
+            if changed {
+                Self::record_company_matching_change(&mut tx, *team_id, *company_id).await?;
             }
+            Self::record_company_contacts_matching_change(
+                &mut tx,
+                *team_id,
+                *company_id,
+                changed,
+                hidden,
+            )
+            .await?;
 
             // Cascade: every contact under the now-visible company
             // becomes visible. Wipes individual hides — see the hide
@@ -2202,8 +2232,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         }
 
-        Self::record_company_matching_change(&mut tx, *team_id, *company_id).await?;
-        Self::record_company_contacts_matching_change(&mut tx, *team_id, *company_id).await?;
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -2264,14 +2292,20 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
-        // Scope via the contact's team; cross-team = NotFound.
+        // Scope via the contact's team; cross-team = NotFound. Fence the ID
+        // before the team predicate so stale statistics cannot scan the team
+        // while reading the old visibility value.
         let updated = sqlx::query_scalar!(
             r#"
-            UPDATE crm_contacts ct
-            SET hidden = $3
-            WHERE ct.id = $1
-              AND ct.team_id = $2
-            RETURNING ct.id
+            WITH previous AS MATERIALIZED (
+                SELECT id, hidden FROM (
+                    SELECT id, team_id, hidden FROM crm_contacts
+                    WHERE id = $1 OFFSET 0 FOR UPDATE
+                ) scoped WHERE team_id = $2
+            )
+            UPDATE crm_contacts ct SET hidden = $3
+            FROM previous WHERE ct.id = previous.id
+            RETURNING previous.hidden IS DISTINCT FROM $3 AS "matching_changed!"
             "#,
             contact_id,
             team_id,
@@ -2281,11 +2315,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        if updated.is_none() {
-            return Err(CrmError::ContactNotFoundForTeam);
+        if updated.ok_or(CrmError::ContactNotFoundForTeam)? {
+            Self::record_contact_matching_change(&mut tx, *team_id, *contact_id).await?;
         }
-
-        Self::record_contact_matching_change(&mut tx, *team_id, *contact_id).await?;
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
