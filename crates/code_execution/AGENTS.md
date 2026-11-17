@@ -55,6 +55,9 @@ other built-in outside `NODE_ALLOWED` goes to `unavailable.mjs`. Bumping
 `DENO_VERSION` means running `every_node_builtin_but_the_allowed_ones_is_unavailable`
 and adding any new built-in to `NODE_BUILTINS`. The bundled SDK's only timer is
 the SSE reconnect delay, so a reconnecting event stream fails the same way.
+Keep both timer errors explicit about unsupported deadline guards, the host's
+execution deadline, and bounded `Promise.allSettled` batches for partial results;
+`Promise.allSettled` itself does not impose a timeout.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
