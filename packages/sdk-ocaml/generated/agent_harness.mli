@@ -2824,6 +2824,16 @@ val make_recorded_tool_call :
   recorded_tool_call
 (** A real inner call, recorded by trusted dispatch for the existing renderers. *)
 
+(** The language of a session program. OCaml is offered only to sessions
+whose owner has the OCaml rollout (\[[OcamlRollout]\](super::OcamlRollout)). *)
+type nonrec program_language =
+  | Javascript
+  | Ocaml
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val program_language_of_yojson : Yojson.Safe.t -> program_language
+val yojson_of_program_language : program_language -> Yojson.Safe.t
+
 (** The recorded outcome of a program. *)
 type nonrec execution_status =
   | Running
@@ -2846,9 +2856,17 @@ type nonrec execution_record = {
       (** Historical bridge calls. Direct HTTP executions leave this empty. *)
   error : string option;  (** Safe execution failure text. *)
   execution_id : execution_id;  (** Execution identity. *)
+  language : program_language option;
+      (** The language [source] is written in; historical records are JavaScript.
+JavaScript, the default, is left out, so records of sessions without
+OCaml serialize as they did before languages. *)
   result : Yojson.Safe.t option;
       (** JSON returned by the program, if successful. *)
-  source : string;  (** The submitted JavaScript module. *)
+  sdk_fingerprint : string option;
+      (** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+against (SDK version plus a hash of its interfaces). *)
+  source : string;
+      (** The submitted program: a JavaScript module or an OCaml [main.ml]. *)
   status : execution_status;  (** Overall execution state. *)
   turn_id : string option;
       (** Original turn, preventing another requester from replaying a saved result. *)
@@ -2866,7 +2884,9 @@ val make_execution_record :
   calls:recorded_tool_call list ->
   ?error:string ->
   execution_id:execution_id ->
+  ?language:program_language ->
   ?result:Yojson.Safe.t ->
+  ?sdk_fingerprint:string ->
   source:string ->
   status:execution_status ->
   ?turn_id:string ->

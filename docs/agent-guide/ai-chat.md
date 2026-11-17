@@ -1339,6 +1339,16 @@ tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
+When the session owner has the backend flag `enable-ocaml-code-mode` and the
+harness build has the OCaml bundle, `ExecuteCode` also takes
+`language: "ocaml"` (an OCaml `main.ml` calling `Code_mode.run`); otherwise its
+schema and description are unchanged and an OCaml call is refused. An OCaml run
+renders in the session exactly like a JavaScript one (its SDK calls as rows), and
+its execution record carries `language: "ocaml"` and the bundle's
+`sdkFingerprint`. Locally, build the harness with
+`CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
+and answer the flag on from a PostHog stand-in (`POSTHOG_HOST` in `--env-file`).
+
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user

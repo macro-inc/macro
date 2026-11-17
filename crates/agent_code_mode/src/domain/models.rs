@@ -55,6 +55,45 @@ pub struct ExecutionIdentity {
     pub turn: Uuid,
 }
 
+/// The language of a session program. OCaml is offered only to sessions
+/// whose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramLanguage {
+    /// A JavaScript ES module exporting `main`.
+    #[default]
+    Javascript,
+    /// An OCaml program (`main.ml`) that calls `Code_mode.run` with the OCaml SDK.
+    Ocaml,
+}
+
+impl ProgramLanguage {
+    /// Whether this is the default, JavaScript.
+    pub fn is_javascript(&self) -> bool {
+        *self == Self::Javascript
+    }
+}
+
+impl From<ProgramLanguage> for code_execution::domain::Language {
+    fn from(language: ProgramLanguage) -> Self {
+        match language {
+            ProgramLanguage::Javascript => Self::Javascript,
+            ProgramLanguage::Ocaml => Self::Ocaml,
+        }
+    }
+}
+
+impl From<code_execution::domain::Language> for ProgramLanguage {
+    fn from(language: code_execution::domain::Language) -> Self {
+        match language {
+            code_execution::domain::Language::Javascript => Self::Javascript,
+            code_execution::domain::Language::Ocaml => Self::Ocaml,
+        }
+    }
+}
+
 /// The recorded outcome of a program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -118,8 +157,17 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted JavaScript module.
+    /// The submitted program: a JavaScript module or an OCaml `main.ml`.
     pub source: String,
+    /// The language `source` is written in; historical records are JavaScript.
+    /// JavaScript, the default, is left out, so records of sessions without
+    /// OCaml serialize as they did before languages.
+    #[serde(default, skip_serializing_if = "ProgramLanguage::is_javascript")]
+    pub language: ProgramLanguage,
+    /// For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+    /// against (SDK version plus a hash of its interfaces).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sdk_fingerprint: Option<String>,
     /// Overall execution state.
     pub status: ExecutionStatus,
     /// JSON returned by the program, if successful.

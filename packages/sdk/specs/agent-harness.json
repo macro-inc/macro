@@ -6795,12 +6795,20 @@
             "$ref": "#/components/schemas/ExecutionId",
             "description": "Execution identity."
           },
+          "language": {
+            "$ref": "#/components/schemas/ProgramLanguage",
+            "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of sessions without\nOCaml serialize as they did before languages."
+          },
           "result": {
             "description": "JSON returned by the program, if successful."
           },
+          "sdkFingerprint": {
+            "type": ["string", "null"],
+            "description": "For an OCaml program, the fingerprint of the OCaml SDK bundle it ran\nagainst (SDK version plus a hash of its interfaces)."
+          },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted program: a JavaScript module or an OCaml `main.ml`."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
@@ -7494,6 +7502,11 @@
             "description": "What the caller may see of each requested session."
           }
         }
+      },
+      "ProgramLanguage": {
+        "type": "string",
+        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).",
+        "enum": ["javascript", "ocaml"]
       },
       "PromptAttachment": {
         "type": "object",

@@ -73,6 +73,7 @@ impl ExecutionCredentials for Credentials {
         &self,
         identity: &ExecutionIdentity,
         _: &str,
+        _: ProgramLanguage,
         _: CancellationToken,
     ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
         self.0
@@ -286,6 +287,8 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: id,
         source: request().source,
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,
@@ -488,6 +491,8 @@ fn activity_rejects_unknown_operations_and_is_bounded() {
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: ExecutionId::mint(),
         source: String::new(),
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,
@@ -680,4 +685,129 @@ async fn a_delayed_call_cannot_adopt_a_new_turn_or_receive_credentials() {
     assert!(matches!(result, Err(CodeModeError::Forbidden)));
     assert!(credentials.0.lock().unwrap().is_empty());
     assert!(store.0.lock().unwrap().is_empty());
+}
+
+struct Rollout(bool);
+#[async_trait]
+impl OcamlRollout for Rollout {
+    async fn enabled(&self, _: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
+fn with_ocaml(service: CodeModeService, on: bool) -> CodeModeService {
+    service.with_ocaml(OcamlPrograms {
+        fingerprint: "0.1.0+fixture".into(),
+        rollout: Arc::new(Rollout(on)),
+    })
+}
+
+fn ocaml_request() -> ExecuteRequest {
+    ExecuteRequest {
+        source: "let () = Code_mode.run (fun _ -> `Assoc [(\"data\", `Int 42)])".into(),
+        timeout_ms: 1000,
+        language: code_execution::domain::Language::Ocaml,
+    }
+}
+
+async fn run(
+    service: &CodeModeService,
+    session: &AgentSession,
+    id: ExecutionId,
+    request: ExecuteRequest,
+) -> Result<ExecutionReceipt, CodeModeError> {
+    service
+        .execute(
+            session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request,
+            CancellationToken::new(),
+        )
+        .await
+}
+
+#[tokio::test]
+async fn ocaml_is_refused_before_credentials_without_the_bundle_or_the_rollout() {
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let (no_bundle, credentials, _, _) = service();
+    assert!(!no_bundle.ocaml_enabled(&session).await);
+    let refused = run(&no_bundle, &session, ExecutionId::mint(), ocaml_request()).await;
+    assert!(
+        matches!(refused, Err(CodeModeError::Invalid(message)) if message.contains("OCaml programs are not available"))
+    );
+    let off = with_ocaml(no_bundle, false);
+    assert!(!off.ocaml_enabled(&session).await);
+    assert!(matches!(
+        run(&off, &session, ExecutionId::mint(), ocaml_request()).await,
+        Err(CodeModeError::Invalid(_))
+    ));
+    assert!(credentials.0.lock().unwrap().is_empty());
+    // JavaScript is unaffected by the rollout.
+    let receipt = run(&off, &session, ExecutionId::mint(), request())
+        .await
+        .unwrap();
+    assert_eq!(receipt.status, ExecutionStatus::Succeeded);
+
+    let (service, _, _, _) = service();
+    let no_runner = CodeModeService::new(
+        None,
+        Arc::clone(&service.0.credentials),
+        Arc::clone(&service.0.store),
+        Arc::clone(&service.0.turns),
+    );
+    assert!(!with_ocaml(no_runner, true).ocaml_enabled(&session).await);
+}
+
+#[tokio::test]
+async fn ocaml_runs_record_language_and_fingerprint_and_retries_match_language() {
+    let (service, credentials, store, _) = service();
+    let service = with_ocaml(service, true);
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    assert!(service.ocaml_enabled(&session).await);
+    let id = ExecutionId::mint();
+    let receipt = run(&service, &session, id, ocaml_request()).await.unwrap();
+    assert_eq!(receipt.execution_id, id);
+    let record = store.get(session.id, id).await.unwrap();
+    assert_eq!(record.language, ProgramLanguage::Ocaml);
+    assert_eq!(record.sdk_fingerprint.as_deref(), Some("0.1.0+fixture"));
+    let stored = serde_json::to_value(&record).unwrap();
+    assert_eq!(stored["language"], "ocaml");
+    assert_eq!(stored["sdkFingerprint"], "0.1.0+fixture");
+
+    // The same ID and source is the saved run only in the same language.
+    let retry = run(&service, &session, id, ocaml_request()).await.unwrap();
+    assert_eq!(retry.execution_id, id);
+    assert_eq!(credentials.0.lock().unwrap().len(), 1);
+    let mut javascript = ocaml_request();
+    javascript.language = code_execution::domain::Language::Javascript;
+    let other = run(&service, &session, id, javascript).await.unwrap();
+    assert_ne!(other.execution_id, id);
+    assert_eq!(credentials.0.lock().unwrap().len(), 2);
+    let record = store.get(session.id, other.execution_id).await.unwrap();
+    assert_eq!(record.language, ProgramLanguage::Javascript);
+    assert_eq!(record.sdk_fingerprint, None);
+    // A JavaScript record serializes as before languages: no language, no
+    // fingerprint.
+    let stored = serde_json::to_value(&record).unwrap();
+    assert!(stored.get("sdkFingerprint").is_none());
+    assert!(stored.get("language").is_none(), "{stored}");
+    let read: ExecutionRecord = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.language, ProgramLanguage::Javascript);
+}
+
+#[test]
+fn records_saved_before_languages_read_as_javascript() {
+    let record: ExecutionRecord = serde_json::from_value(json!({
+        "executionId": ExecutionId::mint(),
+        "source": "export async function main() {}",
+        "status": "succeeded",
+        "result": null,
+        "error": null,
+        "calls": [],
+    }))
+    .unwrap();
+    assert_eq!(record.language, ProgramLanguage::Javascript);
+    assert_eq!(record.sdk_fingerprint, None);
 }
