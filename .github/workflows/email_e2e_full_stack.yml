@@ -235,5 +235,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.sha }}
+  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}
   cancel-in-progress: true

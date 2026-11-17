@@ -122,10 +122,10 @@ pub(crate) fn render(build: fn() -> Workflow) -> anyhow::Result<String> {
 /// Every commit on `main` gets its own result: a later merge does not cancel
 /// the run of an earlier one, so a break can be traced to its commit. The
 /// event is in the group so the sweep and a run by hand do not cancel the
-/// push's run of the same commit.
+/// push's run of the same commit; runs by hand never cancel each other.
 fn concurrency() -> Concurrency {
     Concurrency::new(Expression::new(
-        "email-e2e-${{ github.event_name }}-${{ github.sha }}",
+        "email-e2e-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
     ))
     .cancel_in_progress(true)
 }

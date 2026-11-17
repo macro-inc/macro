@@ -86,7 +86,7 @@ pub fn email_e2e_browser() -> Workflow {
 /// As the Rust suite: every commit on `main` keeps its own result, per event.
 fn concurrency() -> Concurrency {
     Concurrency::new(Expression::new(
-        "email-e2e-browser-${{ github.event_name }}-${{ github.sha }}",
+        "email-e2e-browser-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
     ))
     .cancel_in_progress(true)
 }

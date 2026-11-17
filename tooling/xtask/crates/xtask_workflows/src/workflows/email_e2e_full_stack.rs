@@ -52,7 +52,7 @@ pub fn email_e2e_full_stack() -> Workflow {
 /// Every commit keeps its own result, per event.
 fn concurrency() -> Concurrency {
     Concurrency::new(Expression::new(
-        "email-e2e-full-stack-${{ github.event_name }}-${{ github.sha }}",
+        "email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
     ))
     .cancel_in_progress(true)
 }
