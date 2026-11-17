@@ -26,6 +26,11 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 `split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
+Bring-to-front activates the split at once and leaves the order to the
+router's move: `splits()` follows the router only when the layout's
+computations run, which inside an effect, a `batch`, or a router commit is
+after the activation returns, so never wait on the new order there
+(`tests/stacked-panes.test.ts`).
 Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
 tiles, not the pane order: `split-direction.ts` returns to the previously
 active split when it borders that side, else the one level with the focused
