@@ -2,7 +2,7 @@ import { ChannelView, conversations } from './harness/channel';
 import {
   closeRecorded,
   expect,
-  failsSometimesWithSoup,
+  failsSometimes,
   recorded,
   test,
 } from './harness/fixtures';
@@ -192,11 +192,11 @@ test('ACC-06 a teammate finds a team channel they are not in by its name and joi
     });
     await expect(found).toBeVisible();
     await found.getByRole('button', { name: 'Join', exact: true }).click();
-    // Known defect with VITE_ENABLE_GRAPHQL_SOUP, on some machines in every
+    // Known defect, on some machines in every
     // run and on others in none: the join works, but the row stays under
     // "Not joined" with its Join button until the page is reloaded.
     const join = benPage.getByRole('button', { name: 'Join', exact: true });
-    await failsSometimesWithSoup(async () => {
+    await failsSometimes(async () => {
       await expect(join).toHaveCount(0);
     });
 

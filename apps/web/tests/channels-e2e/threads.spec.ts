@@ -446,7 +446,7 @@ test('THR-10 “Reply” on a message puts the keyboard in the reply box, so typ
   // Product defect: the reply box opens, but the keyboard stays on the
   // “Reply” button, so what is typed next does not go into the box until
   // the person clicks it.
-  knownDefect('both');
+  knownDefect();
   const channel = await ada.createChannel({ members: [people.ben] });
   const root = await ben.post(channel.id, 'a question');
   const view = new Conversation(page, channel.id);

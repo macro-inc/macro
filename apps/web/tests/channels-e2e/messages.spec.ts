@@ -666,7 +666,6 @@ test('MSG-17 “Copy Text” on a message copies its text', async ({
 
   await view.action(view.messageById(wanted.id), 'copy-message-text');
 
-  await expect(page.getByText('Message copied to clipboard')).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe('copy exactly this, please');

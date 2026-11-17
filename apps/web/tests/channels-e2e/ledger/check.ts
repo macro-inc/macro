@@ -16,7 +16,6 @@ type InventoryRow = {
   reason: string;
 };
 type DefectRow = { test: string; defect: string };
-type KnownDefectRow = DefectRow & { builds: string };
 type ReportSpec = {
   title: string;
   ok: boolean;
@@ -100,16 +99,9 @@ const inventory: InventoryRow[] = rows('inventory.tsv', 4).map(
     reason,
   })
 );
-const defects: KnownDefectRow[] = rows('known-defects.tsv', 3).map(
-  ([test, builds, defect]) => ({ test, builds, defect })
+const defects: DefectRow[] = rows('known-defects.tsv', 2).map(
+  ([test, defect]) => ({ test, defect })
 );
-for (const row of defects) {
-  if (!['off', 'on', 'both'].includes(row.builds)) {
-    throw new Error(
-      `known-defects.tsv: ${row.test} has builds "${row.builds}"`
-    );
-  }
-}
 const sometimes: DefectRow[] = rows('intermittent-defects.tsv', 2).map(
   ([test, defect]) => ({ test, defect })
 );

@@ -1,12 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import {
-  expect,
-  failsSometimesWithSoup,
-  knownDefect,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,
@@ -179,11 +174,11 @@ test('UNR-04 scrolled up in an open channel, a new message shows “1 unread …
   const chip = page.getByRole('button', {
     name: '1 unread notification stack below',
   });
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP, in about 1 run in 10: the
+  // Known defect, in about 1 run in 10: the
   // notice never appears, or appears and is gone again before it can be
   // clicked. The click is bounded so that the second form is recorded here
   // rather than running out the test's time.
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(chip).toBeVisible();
     await expect(view.message('came in below')).not.toBeInViewport();
     await chip.click({ timeout: 15_000 });
@@ -204,7 +199,7 @@ test('UNR-05 a mention of me in a channel I do not have open shows a count of me
   // Product defect: the row of a channel shows only the plain unread dot
   // for a mention, never the "1 unread mention" count the list has for it,
   // although the service holds the unseen mention.
-  knownDefect('both');
+  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'other');
   await ada.post(made.other, 'earlier');
   await new ChannelView(page, made.open).open();
@@ -338,10 +333,10 @@ test('UNR-08 a channel I am added to appears in my list at once, and opens', asy
   });
   await ada.post(added.id, 'welcome');
 
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP, in some runs: the rows shown
+  // Known defect, in some runs: the rows shown
   // while "Search conversations" is open do not take in a new channel (the
   // defect UNR-10 is about), so it is missing until the search is run again.
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(row).toBeVisible();
   });
   if (!(await row.isVisible())) {
@@ -364,7 +359,7 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
 }) => {
   // Product defect: the first message ever posted in a channel puts no
   // unread mark on the other member's row; the second message does.
-  knownDefect('both');
+  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'fresh', 'used');
   await ada.post(made.used, 'earlier');
   await new ChannelView(page, made.open).open();
@@ -390,9 +385,9 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
   ben,
   people,
 }) => {
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP: rows shown while the list
+  // Known defect: rows shown while the list
   // is being searched are not marked until the search is closed.
-  knownDefect('on');
+  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'found');
   await ada.post(made.found, 'read before');
   await new ChannelView(page, made.open).open();

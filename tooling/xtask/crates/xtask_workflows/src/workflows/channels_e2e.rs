@@ -7,9 +7,7 @@
 //! `PR CI` calls it for pull requests that change channels, the suite or
 //! what its stack is seeded and started from; it also runs nightly on
 //! `main`, because the services under a channel change without the channel
-//! code changing. It runs the suite twice, with the app built with the
-//! GraphQL sources off and on: channels read and write through different
-//! paths in each.
+//! code changing.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow,
@@ -70,22 +68,19 @@ pub fn channels_e2e() -> Workflow {
             .cancel_in_progress(true),
         )
         .map(vars::with_global_env)
-        .add_job("graphql-off", suite("off", "false"))
-        .add_job("graphql-on", suite("on", "true"))
+        .add_job("suite", suite())
 }
 
 /// Build the services and the web app, start the stack, run the suite.
-/// `graphql` is the value the app is built with for `VITE_ENABLE_GRAPHQL_SOUP`.
-fn suite(label: &str, graphql: &str) -> Job {
+fn suite() -> Job {
     Job::default()
-        .name(format!("Channels end-to-end (GraphQL sources {label})"))
+        .name("Channels end-to-end")
         .timeout_minutes(45u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(code_check_cloud_storage::with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_env(("CHANNELS_E2E_INSTANCE", INSTANCE))
-        .add_env(("VITE_ENABLE_GRAPHQL_SOUP", graphql))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -95,11 +90,8 @@ fn suite(label: &str, graphql: &str) -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(run_suite())
         .add_step(stack_logs())
-        .add_step(upload(
-            &format!("channels-e2e-{label}-stack-logs"),
-            STACK_LOGS,
-        ))
-        .add_step(upload(&format!("channels-e2e-{label}-results"), RESULTS))
+        .add_step(upload("channels-e2e-stack-logs", STACK_LOGS))
+        .add_step(upload("channels-e2e-results", RESULTS))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }

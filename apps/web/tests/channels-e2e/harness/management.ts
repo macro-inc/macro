@@ -18,8 +18,16 @@ export async function chooseChannelAction(
   page: Page,
   name: string
 ): Promise<void> {
-  await page.getByRole('button', { name: 'Channel actions' }).click();
-  await channelAction(page, name).click();
+  // The menu closes by itself when the bar above the channel is drawn again,
+  // as it is just after a favorite or a rename: open it again until the
+  // entry takes the click.
+  const entry = channelAction(page, name);
+  await expect(async () => {
+    if (!(await entry.isVisible())) {
+      await page.getByRole('button', { name: 'Channel actions' }).click();
+    }
+    await entry.click({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 /** An entry of the open "Channel actions" menu. */

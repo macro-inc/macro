@@ -1,7 +1,7 @@
 set -euo pipefail
 
 # Builds every service and the web app, starts the stack and returns once it
-# answers. The app is built with the job's VITE_ENABLE_GRAPHQL_SOUP.
+# answers.
 # A service built without optimization exhausts a worker thread's default stack
 # on a Soup request (docs/development/running-locally.md), which every page of
 # the suite makes.
