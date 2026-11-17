@@ -636,7 +636,6 @@ F-196	unblocking a sender does nothing
 STC-001	not shown as the row says (Loading draft…): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx, src/features/email-compose/views/reply-input.tsx
 STC-002	not shown as the row says (Unable to load this draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
 STC-003	not shown as the row says (Unable to load local draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
-STC-004	not shown as the row says (header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
 STC-005	not shown as the row says (Macro users or email addresses): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
 STC-006	not shown as the row says (From control reads Select sending inbox): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
 STC-007	not shown as the row says (Use `@` to reference files): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
