@@ -114,6 +114,10 @@ pub async fn shared_email_threads(
         thread_count = tracing::field::Empty,
     )
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is one bind of the folder query"
+)]
 pub async fn project_email_threads(
     pool: &PgPool,
     source_ids: &SourceIds,

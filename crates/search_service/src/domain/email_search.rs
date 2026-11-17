@@ -171,6 +171,10 @@ pub(crate) trait EmailSearchSource {
     /// thread in a folder granted to them, and with `include_thread_shares`
     /// threads in a folder a thread grant shares with them. Non-empty
     /// `requested` narrows them before `limit` applies. At most `limit`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is one input of the folder query"
+    )]
     fn project_threads(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
