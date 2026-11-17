@@ -88,7 +88,9 @@ const grant = await macro.accountManagers.askToManage(person);
 const token = await grant.claimToken();
 ```
 
-A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+An agent's program (ExecuteCode, a routine) can't ask, approve or claim: those return 403,
+so an agent account uses its own API key. A person can ask instead, with
+`macro.accountManagers.askToBeManagedBy(agent)`. Only the
 manager can claim, so the agent approves and claims with its own client, using the grant id
 from the card in the DM: `macro.accountManagers.byId(id)`.
 
@@ -841,9 +843,10 @@ takes typed source/target references and returns a deletable mention handle.
 `macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
 
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
-the handle only retains metadata. `list()` and `key.delete()` manage keys.
+the handle only retains metadata. It and `bot.createToken()` are refused to an
+agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
 `tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
-an agent's program (ExecuteCode, a routine) is refused.
+an agent's program is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use

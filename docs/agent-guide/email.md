@@ -55,9 +55,14 @@ and `Reminders` (when reminders are enabled), followed by a **Library** section 
 [Saved email views](#saved-email-views)). Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
-While the email list itself has focus, `Tab` moves browser focus instead; use
-`g i` or `g o`. Calendar mail remains available through the calendar filter and
-existing Calendar route. Mobile keeps its original tabs and order, including
+This holds while the email list itself has focus, as it does after `Escape`
+closes a thread; only on a control inside the list (a row's sender name,
+checkbox or actions, Load more) does `Tab` move browser focus to the next
+control. Leaving the
+search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
+hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
+remains available through
+the calendar filter and existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
 (`TutorialRow` from `features/video-tutorials`, shared by every block). No block shows a tutorial entry on a touch device (`isTouchDevice()`: phones,
@@ -70,7 +75,7 @@ focus) hides it on that device for good (`localStorage`
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface: both focus the list header's search field. When a thread or a new email has replaced the list, `/` returns to the list, as Back does, and focuses that field, and `Ctrl+F` is left to the browser's find. The Email sidebar has no search field.
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
 
 ### Wide search (flagged)
 
@@ -79,7 +84,8 @@ widens the field across the list header; Filters, the view actions and New are
 hidden until the search is closed (the X, `Escape` on an empty field, or
 `Escape` in the list). Results still update as you type. While a new query
 loads, the rows already on screen stay, dimmed, instead of a blank list and a
-spinner. With the field focused, up to five recent searches containing the
+spinner. Once its own results arrive, a new search starts at the top of the list,
+wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
 result. A search is remembered when the field is left with it, at most eight
@@ -87,6 +93,21 @@ per person, in this browser only and not per inbox. Check with a slow search
 that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.
+
+On a phone (and any touch device) the same flag adds a search pill at the start
+of Email's pill row, before Filters. Tapping it opens Email's search page: the
+field and **Cancel** replace the pills in the header, the keyboard comes up in
+the tap, recent searches are listed while the field has focus, and the list
+below shows the results as ordinary email rows, updating as you type and
+keeping the previous rows dimmed while a new query loads. The keyboard's Search
+key drops the keyboard to show the results; the field's X clears the text and
+keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+the mailbox. Opening a result and coming back returns to the search page with
+its results. If the flag turns off or the tab changes to one that cannot be
+searched while the page is open, the page closes and its search ends. The
+dock's app-wide search is unchanged. Check at 390px with touch
+emulation: the pill row scrolls, so the search pill can start off screen on a
+tab far to the right.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
@@ -287,11 +308,21 @@ your inbox** opens Signal.
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
 All mailbox with Done applied, excluding threads teammates shared with you. It
-respects the selected inboxes and filters. The search service cannot filter
-archive state, so search within the tab keeps only archived hits on the client.
-Rows offer **Unarchive email**;
+respects the selected inboxes and filters, and search within the tab finds only
+done threads. Rows offer **Unarchive email**;
 unarchiving removes the row at once. The tab persists across reloads. An empty
 list shows `No archived email`.
+
+Search within a tab or facet finds the threads the list would show: Shared finds
+threads shared with you through a grant to you, a channel or a team, and none of
+your own; Calendar finds only threads with an invitation; Read status and Done
+filter by the thread's read and inbox state, as the list does (Done is not the
+notification's state); Sent finds threads with a message you sent and Drafts
+threads holding a draft; the attachment filters find threads with an attachment
+of any selected kind on any message. Check each with a search term that also
+matches threads the tab leaves out. A draft that never synced to the provider
+is not in the search index, so Drafts finds it only by its subject among the
+drafts this browser holds.
 
 A thread carrying a sent file shows a muted paperclip immediately before its
 date, in every list layout. Inline images (an image with a Content-ID, such as

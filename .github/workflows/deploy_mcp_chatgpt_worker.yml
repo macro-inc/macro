@@ -2,6 +2,15 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker.rs
 name: Deploy MCP ChatGPT Worker
 on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to deploy to. e.g. (dev, prod)
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       environment:
@@ -30,12 +39,18 @@ jobs:
         node-version: '22'
     - name: Install dependencies
       run: bun install --frozen-lockfile && (cd packages/sdk && bun install --frozen-lockfile)
+    - name: Check required secrets
+      run: node scripts/check-deploy-secrets.mjs ${{ inputs.environment || 'dev' }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: services/mcp-chatgpt-worker
     - name: Deploy with wrangler
-      run: bunx wrangler deploy --env ${{ inputs.environment }}
+      run: bunx wrangler deploy --env ${{ inputs.environment || 'dev' }}
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       working-directory: services/mcp-chatgpt-worker
 concurrency:
-  group: deploy-mcp-chatgpt-worker-${{ inputs.environment }}
+  group: deploy-mcp-chatgpt-worker-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
