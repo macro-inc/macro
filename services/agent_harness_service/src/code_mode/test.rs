@@ -651,3 +651,54 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
     }
 }
+
+/// The scope can't be read.
+struct UnreadableScopes;
+
+#[async_trait]
+impl SessionScopes for UnreadableScopes {
+    async fn scope(&self, _: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
+        Err(rootcause::report!("database unavailable"))
+    }
+}
+
+/// A scoped session calls no connected app's tool directly, read or write:
+/// the egress proxy that carries the call doesn't know the scope. A session
+/// with no scope is left to the proxy, and one whose scope can't be read
+/// calls nothing.
+#[tokio::test]
+async fn a_scoped_session_calls_no_connected_apps_tool_directly() {
+    let session = AgentSessionId::new();
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        let gate = ScopedToolGate {
+            inner: Arc::new(Open),
+            scopes: Arc::new(Scopes(Some(scope))),
+        };
+        for tool in ["mcp__slack__send_message", "mcp__linear__list_issues"] {
+            assert!(
+                gate.refuse_remote_mcp(session, tool).await.is_some(),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    let unscoped = ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(None)),
+    };
+    assert_eq!(
+        unscoped
+            .refuse_remote_mcp(session, "mcp__slack__send_message")
+            .await,
+        None
+    );
+    let unreadable = ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(UnreadableScopes),
+    };
+    assert!(
+        unreadable
+            .refuse_remote_mcp(session, "mcp__slack__send_message")
+            .await
+            .is_some()
+    );
+}

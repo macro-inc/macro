@@ -40,6 +40,10 @@ names, and routes calls back to the right server.
 
 ## Gotchas
 
+- A mangled server segment belongs to the first server registered under it;
+  a later server whose name sanitizes or truncates to the same segment has
+  those tools skipped. `agent_inmem` trusts `mcp__macro_internal__` by that
+  segment, so keep the rule.
 - `dispatch_tool_call` races the call against `request_context.cancel`: the
   agent loop waits for running tools on cancel, and a server may hold a call
   (owner approval). Dropping the rmcp call sends `notifications/cancelled`.

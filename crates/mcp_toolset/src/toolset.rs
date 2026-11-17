@@ -114,10 +114,12 @@ impl RemoteMcpToolSet {
         .await;
 
         let mut tools = BTreeMap::new();
+        let mut segments = BTreeMap::new();
         let mut connections = Vec::new();
         for (server_name, client, server_tools) in listings.into_iter().flatten() {
             register_server(
                 &mut tools,
+                &mut segments,
                 &mut connections,
                 &server_name,
                 Arc::new(client),
@@ -140,10 +142,12 @@ impl RemoteMcpToolSet {
     /// session to every turn without another handshake.
     pub fn from_listed(servers: Vec<ListedServer>, subject: Option<String>) -> Self {
         let mut tools = BTreeMap::new();
+        let mut segments = BTreeMap::new();
         let mut connections = Vec::new();
         for server in servers {
             register_server(
                 &mut tools,
+                &mut segments,
                 &mut connections,
                 &server.name,
                 server.client,
@@ -227,8 +231,14 @@ impl RemoteMcpToolSet {
     }
 }
 
+/// Registers `server_tools` under `server_name`. A mangled server segment
+/// belongs to the first server that produces it: a later server whose name
+/// sanitizes or truncates to the same segment (`macro_internal_` to
+/// `macro_internal`) has those tools skipped, so a tool's name always says
+/// which server it reaches. Callers decide trust by that segment.
 fn register_server(
     tools: &mut BTreeMap<MangledName, RegisteredTool>,
+    segments: &mut BTreeMap<String, String>,
     connections: &mut Vec<Arc<McpServer>>,
     server_name: &str,
     client: Arc<McpServer>,
@@ -249,6 +259,23 @@ fn register_server(
                 %mangled,
                 "sanitized tool name to satisfy the provider tool-name pattern"
             );
+        }
+
+        if let Some((segment, _)) = MangledName::parse(mangled.as_str()) {
+            let owner = segments
+                .entry(segment.to_owned())
+                .or_insert_with(|| server_name.to_owned());
+            if owner != server_name {
+                tracing::warn!(
+                    subject = ?subject,
+                    server = %server_name,
+                    owner = %owner,
+                    tool = %tool.name,
+                    %mangled,
+                    "skipping a tool whose server segment belongs to another server"
+                );
+                continue;
+            }
         }
 
         if tools.contains_key(&mangled) {

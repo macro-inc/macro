@@ -120,3 +120,49 @@ async fn cancelling_the_request_abandons_a_held_call_and_tells_the_server() {
     .unwrap();
     assert!(echo.is_ok(), "the session still serves calls: {echo:?}");
 }
+
+/// Opens a session on a [`HoldingServer`], whose tools are `hold` and `echo`.
+async fn holding_session() -> Arc<McpServer> {
+    let (server_side, client_side) = tokio::io::duplex(8192);
+    tokio::spawn(async move {
+        let running = HoldingServer::default().serve(server_side).await.unwrap();
+        let _ = running.waiting().await;
+    });
+    Arc::new(crate::client_info().serve(client_side).await.unwrap())
+}
+
+/// A server whose name sanitizes or truncates to another server's segment
+/// gets none of its tools under that segment, so a name in `mcp__x__` is
+/// always the first `x`'s, however the second was named.
+#[tokio::test]
+async fn a_server_named_to_mangle_like_another_gets_no_tools_under_its_segment() {
+    let listed = |name: &str, client: Arc<McpServer>, tools: &[&str]| ListedServer {
+        name: name.to_owned(),
+        client,
+        tools: tools
+            .iter()
+            .map(|tool| Tool::new(tool.to_string(), "", Arc::new(serde_json::Map::new())))
+            .collect(),
+    };
+    let long_tool = "t".repeat(107);
+    let tools = RemoteMcpToolSet::from_listed(
+        vec![
+            listed("macro_internal", holding_session().await, &["echo"]),
+            listed("macro_internal_", holding_session().await, &["post"]),
+            listed("macro__internal", holding_session().await, &["send"]),
+            listed(
+                "macro_internal_long",
+                holding_session().await,
+                &[&long_tool],
+            ),
+            listed("linear", holding_session().await, &["echo"]),
+        ],
+        None,
+    );
+    let names: Vec<String> = tools
+        .searchable_catalog()
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect();
+    assert_eq!(names, ["mcp__linear__echo", "mcp__macro_internal__echo"]);
+}

@@ -138,7 +138,8 @@ impl RigTurnEngine {
 const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
 /// A turn's tools, each call to one of Macro's own asked of the gate first.
-/// Remote MCP tools are left to the egress proxy, which gates them already.
+/// A remote MCP tool's account and approvals are the egress proxy's; the gate
+/// only says whether the session may call it at all.
 struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
     gate: Arc<dyn NativeToolGate>,
@@ -160,6 +161,15 @@ where
     ) -> ai_toolset::ToolCallFuture<'a> {
         Box::pin(async move {
             let mut request_context = request_context;
+            if let Some((server, _)) = mcp_toolset::unmangle(tool_name)
+                && server != crate::domain::mcp::MACRO_INTERNAL_MCP_NAME
+                && let Some(reason) = self.gate.refuse_remote_mcp(self.session, tool_name).await
+            {
+                return Ok(Err(ai_toolset::ToolCallError {
+                    internal_error: anyhow::anyhow!("{tool_name} was refused before dispatch"),
+                    description: reason,
+                }));
+            }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
                 && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
                 && agent_egress::domain::approval::spends_owner_access("macro", tool_name);

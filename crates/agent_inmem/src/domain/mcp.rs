@@ -23,6 +23,11 @@ mod test;
 /// it would give the model every Macro tool twice.
 pub const MACRO_MCP_NAME: &str = "macro";
 
+/// The name the harness gives its internal MCP server (code mode, reviews),
+/// which gates its own tools; every other server (connected apps, custom
+/// servers, previews) is reached through the egress proxy.
+pub const MACRO_INTERNAL_MCP_NAME: &str = "macro_internal";
+
 /// The servers this runtime should dial out of an ACP server list: HTTP
 /// entries other than Macro's own. SSE and stdio entries are not something an
 /// in-process runtime can serve and are dropped with a warning.
