@@ -35,6 +35,11 @@ near its stroke. The long-press cases advance Playwright's clock rather than
 waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 
+The same spec checks that the lift of a long press presses no row of the menu
+that opened under the finger. That takes the browser's own click, which
+Chromium sends only for a finger that lifts within its tap time, so the test
+turns the sheet's slide off and lifts at once.
+
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)
 
 

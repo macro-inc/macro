@@ -67,7 +67,8 @@ export type GraphicsInputOptions = {
   /**
    * What a finger held still on the surface does, given where it is in client
    * coordinates. Return nothing while a long press has no meaning (a drawing
-   * tool, say) and the press stays with the tool.
+   * tool, say) and the press stays with the tool. The finger's lift clicks
+   * nothing, so a menu may open under it.
    */
   longPress?: () => ((point: Point) => void) | undefined;
   /**

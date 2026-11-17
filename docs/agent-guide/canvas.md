@@ -24,7 +24,8 @@ while it is selected to choose another. **Style** opens the inspector in a
 bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
-under the finger first. Check that nothing sits under the dock or the home
+under the finger first, and lifting the finger leaves the sheet open without
+pressing the row under it. Check that nothing sits under the dock or the home
 indicator, that every button answers a real tap, and that closing a sheet
 leaves the selection as it was.
 

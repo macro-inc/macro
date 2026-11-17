@@ -174,6 +174,79 @@ test('a long press selects what is under the finger and its menu outlives the li
   ).toBeEnabled();
 });
 
+test('the lift of a long press presses nothing in the menu that opened under it', async ({
+  page,
+}) => {
+  // The sheet slides up in real time, and this finger has to lift at once for
+  // the browser to count it a tap. Without the slide the sheet is under the
+  // finger by then, as it is for a person, who lifts later.
+  await page.addStyleTag({
+    content: '[data-corvu-drawer-content] { transition: none !important; }',
+  });
+  await page.clock.install();
+  const cdp = await page.context().newCDPSession(page);
+  const sheet = page.getByRole('dialog', { name: 'Canvas actions' });
+  const selectAll = sheet.getByRole('button', { name: 'Select all' });
+
+  // More opens the same sheet, which shows where Select all comes to rest.
+  const shape = await filledShape(page);
+  await page.touchscreen.tap(shape.x, shape.y);
+  await page.getByRole('button', { name: 'More actions' }).tap();
+  await page.clock.runFor(800);
+  await expect(selectAll).toBeInViewport();
+  const row = await selectAll.boundingBox();
+  if (!row) throw new Error('Select all is not rendered');
+  const finger = { x: row.x + row.width / 2, y: row.y + row.height / 2 };
+  await page.touchscreen.tap(shape.x + 180, 40);
+  await page.clock.runFor(800);
+  await expect(sheet).toBeHidden();
+
+  // What the browser clicks, read ahead of whoever handles the click.
+  await page.evaluate(() =>
+    window.addEventListener(
+      'click',
+      (event) => {
+        const button =
+          event.target instanceof Element && event.target.closest('button');
+        document.documentElement.dataset.clicked = button
+          ? (button.textContent ?? '').trim()
+          : 'elsewhere';
+      },
+      true
+    )
+  );
+
+  // A finger held on the canvas where that row will be. The sheet takes its
+  // place over a few frames of the page's clock.
+  await touch(cdp, 'touchStart', [finger]);
+  await page.clock.runFor(600);
+  const rowUnderFinger = () =>
+    selectAll.evaluate(
+      (button, point) =>
+        button.contains(document.elementFromPoint(point.x, point.y)),
+      finger
+    );
+  for (let tick = 0; tick < 40 && !(await rowUnderFinger()); tick++)
+    await page.clock.runFor(50);
+  expect(await rowUnderFinger()).toBe(true);
+  const held = await canvas(page);
+  await touch(cdp, 'touchEnd', []);
+
+  // The browser clicks the row as the finger lifts, and the row is not pressed.
+  await expect(
+    page.locator('html'),
+    'The browser clicks for a lift that comes soon enough to be a tap'
+  ).toHaveAttribute('data-clicked', 'Select all');
+  expect(await canvas(page)).toEqual(held);
+  await expect(sheet).toBeVisible();
+
+  // A tap on the row straight afterwards is its own, and presses it.
+  await selectAll.tap();
+  await page.clock.runFor(800);
+  await expect(sheet).toBeHidden();
+  expect((await canvas(page)).selectedIds).toContain('outline');
+});
+
 test('a press that becomes a drag moves the shape and opens no menu', async ({
   page,
 }) => {
