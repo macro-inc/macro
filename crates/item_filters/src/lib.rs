@@ -260,6 +260,12 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
 
+    /// Filter by whether the thread is done: true for threads out of the
+    /// inbox (archived), false for threads still in it. This is the mailbox
+    /// state the Email view's Done filter uses, independent of notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done: Option<bool>,
+
     /// Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
     /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -313,6 +319,7 @@ impl IsEmpty for EmailFilters {
             importance,
             is_read,
             notification_filters,
+            done,
             include_labels,
             exclude_labels,
             shared,
@@ -330,6 +337,7 @@ impl IsEmpty for EmailFilters {
             && importance.is_none()
             && is_read.is_none()
             && notification_filters.is_empty()
+            && done.is_none()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()

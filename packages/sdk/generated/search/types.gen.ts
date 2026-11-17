@@ -1112,6 +1112,12 @@ export type EmailFilters = {
      */
     crm_domains?: Array<string>;
     /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
+    /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
     email_thread_ids?: Array<string>;
