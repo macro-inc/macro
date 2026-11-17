@@ -37,16 +37,18 @@ has the trigger table and the other commands.
 The last job of each of the three workflows, `Tell Macro Alerts`
 (`xtask_workflows`' `email_e2e_alert.rs`), posts to the Macro Alerts channel
 through the webhook the `cargo deny advisories` run uses. It posts for pushes
-to `main` and for the sweep, never for a run by hand, and only when the
-result changes: the first red run after a green one, and the first green run
-after red ones (`✅ Resolved`). Pushes and the sweep are counted apart, since
-only the sweep runs the tests kept for known bugs. A red run after a red
-one, a run that ends after a newer one has ended, and a cancelled run post
-nothing; the job's summary says why. A run is red when one of its jobs
-failed or ran out of time; the alert job's own result does not count, so a
-failed post fails that job without turning the stream red. A re-run is
-compared with its earlier attempts, so a flaky failure that passes on a re-run
-posts that it passes again.
+to `main` and for the sweep, never for a run by hand, and only when a run's
+result differs from what the channel was last told: a red run posts the
+failure when the channel shows the workflow passing, and a green run posts
+`✅ Resolved` when it shows it failing. Pushes and the sweep are counted
+apart, since only the sweep runs the tests kept for known bugs. The job's last
+step records what the channel then shows, and the next run's job reads it; a
+workflow's alert jobs run one at a time. A red run while the channel already
+shows it failing, a run whose alert job comes after a newer run's, and a
+cancelled run post nothing; the job's summary says why. A run is red when one
+of its jobs failed or ran out of time. A failed post records nothing, so
+re-running the alert job, or the next run, posts it again. A flaky failure
+that passes on a re-run posts that it passes again.
 
 The alert names the commit and its pull request, the failed jobs with the
 step each failed at, the failed tests the coverage report names, the tests

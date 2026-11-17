@@ -419,6 +419,9 @@ jobs:
     permissions:
       actions: read
       contents: read
+    concurrency:
+      group: email-e2e-alert-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: false
     timeout-minutes: 10
     steps:
     - name: download the coverage report
@@ -437,42 +440,48 @@ jobs:
         // other job, on a push to `main` and in the daily sweep; never on a run by
         // hand.
         //
-        // A run posts at most one message, and only when it changes the state of its
-        // stream: the workflow's runs on the same branch for the same event (the
-        // pushes, or the sweep). The first red run after a green one posts the
-        // failure; the first green run after a red one posts that it passes again. A
-        // red run after a red one posts nothing, since one broken test fails every run
-        // after it until it is fixed. Pushes and the sweep are apart because only the
-        // sweep runs the tests kept for known bugs: one of those that passes would
-        // otherwise turn the stream red at every sweep and green at the next push.
+        // A run posts only when its result differs from what the channel was last
+        // told about its stream: the workflow's runs on the same branch for the same
+        // event (the pushes, or the sweep). A red run posts the failure when the
+        // channel shows the stream passing; a green run posts that it passes again
+        // when the channel shows it failing; any other run posts nothing. Pushes and
+        // the sweep are apart because only the sweep runs the tests kept for known
+        // bugs: one of those that passes would otherwise turn the stream red at every
+        // sweep and green at the next push.
         //
-        // Runs of different commits run side by side, so the order is the order in
-        // which their jobs ended, and every run's alert job reaches the same answer
-        // whenever it runs. A run ends when every job but this one has; it is red when
-        // one of them failed, timed out or was cancelled (its time ran out), and a run
-        // that was cancelled does not count. A run counts only when no newer run ended
-        // before it: a result that arrives after a newer one is not the branch's
-        // latest, so it posts nothing and later runs pass it over. A re-run is compared
-        // with its own earlier attempts. This job's own result is left out, so that a
-        // failed post does not turn the stream red.
+        // The job records what the channel shows in its last step, "the channel shows
+        // it failing" or "the channel shows it passing", which runs only once a post
+        // succeeded or none was needed. The newest such step among the stream's recent
+        // runs, read through the jobs API, is what the channel shows; with none, it
+        // shows the stream passing. A stream's alert jobs run one at a time (a
+        // concurrency group), so each reads what the one before it left. A failed post
+        // records nothing, so a re-run of this job, or the next run, posts again. A run
+        // whose alert job comes after a newer run's posts nothing, since its result is
+        // not the branch's latest.
         //
         // A failure names the commit, each failed job with the step it failed at, and
         // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says
         // failed: gating tests, tests kept for known bugs that now pass, or the
         // coverage check itself. The step writes the message to
-        // EMAIL_E2E_ALERT_MESSAGE and `post=true` to its outputs, and the next step
-        // posts it. The message, or why there is none, goes to the job summary.
+        // EMAIL_E2E_ALERT_MESSAGE, `post=true` when there is one, and `shows=failing`
+        // or `shows=passing` to its outputs; the next steps post the message and record
+        // what the channel then shows. The message, or why there is none, goes to the
+        // job summary.
 
         import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-        /** Conclusions of a finished job that mean it failed. */
+        /**
+         * Conclusions of a finished job that mean it failed. A cancelled job counts:
+         * this job runs only in a run that was not cancelled, so such a job ran out of
+         * time.
+         */
         const RED = new Set(['failure', 'timed_out', 'cancelled']);
 
-        /** Statuses of a run whose jobs have not started. */
-        const NOT_STARTED = new Set(['queued', 'waiting', 'pending', 'requested']);
+        /** The most runs of the stream the job reads. */
+        const LOOK_BACK = 30;
 
-        /** How many runs before this one a decision looks at, at most. */
-        const LOOK_BACK = 15;
+        /** How many runs' jobs the job reads at once. */
+        const BATCH = 5;
 
         /** How many failed tests a message names before it counts the rest. */
         const NAMED = 8;
@@ -490,13 +499,7 @@ jobs:
         const FAILED_SCENARIO = /^scenario `.+` failed$/;
 
         /** A run of the workflow, as the runs API lists it. */
-        export type StreamRun = {
-          id: number;
-          run_number: number;
-          head_sha: string;
-          status: string;
-          conclusion: string | null;
-        };
+        export type StreamRun = { id: number; run_number: number; head_sha: string };
 
         /** A job of a run, as the jobs API lists it. */
         export type Job = {
@@ -504,24 +507,36 @@ jobs:
           name: string;
           status: string;
           conclusion: string | null;
-          completed_at: string | null;
-          steps?: { name: string; conclusion: string | null }[];
+          run_attempt?: number;
+          steps?: { name: string; conclusion: string | null; completed_at?: string | null }[];
         };
+
+        /** A run and the jobs of all its attempts. */
+        export type Entry = { run: StreamRun; jobs: Job[] };
+
+        /** The names of the alert job and of its steps the script reads. */
+        export type Names = {
+          job: string;
+          post: string;
+          /** The step that records that the channel shows the stream failing. */
+          failing: string;
+          /** The step that records that the channel shows the stream passing. */
+          passing: string;
+        };
+
+        /** What one alert job recorded. */
+        export type Told = { run: StreamRun; failing: boolean; posted: boolean; at: string };
 
         export type FailedJob = { name: string; step: string | null };
 
-        /** Where a run stands, judged by its jobs other than this one. */
-        export type Outcome =
-          | { ended: false; why: 'running' | 'cancelled' }
-          | { ended: true; red: boolean; endedAt: string };
-
-        /** A run, or an earlier attempt of this one, that counts in the stream. */
-        export type Point = { id: number; run_number: number; head_sha: string; red: boolean };
-
-        export type Decision =
-          | { post: 'failure'; lastGreen: Point | null }
-          | { post: 'recovery'; failingSince: Point; redRuns: number; atLeast: boolean }
-          | { post: null; why: string };
+        export type Decision = (
+          | { post: 'failure'; lastGreen: StreamRun | null }
+          | { post: 'recovery'; failingSince: StreamRun | null }
+          | { post: null; why: string }
+        ) & {
+          /** Whether the channel shows the stream failing once this job is done. */
+          failing: boolean;
+        };
 
         /** What the run's coverage report says failed. */
         export type Findings = {
@@ -558,9 +573,7 @@ jobs:
         /**
          * The jobs that failed, each with the first step that failed, in the order the
          * run started them: the suite's before the coverage job that reads their
-         * results. A cancelled job counts: this job runs only in a run that was not
-         * cancelled, so such a job ran out of time. Jobs still running, this one among
-         * them, are left out.
+         * results. Jobs still running, this one among them, are left out.
          */
         export function failedJobs(jobs: Job[]): FailedJob[] {
           const failed = (conclusion: string | null) => RED.has(conclusion ?? '');
@@ -573,151 +586,104 @@ jobs:
             }));
         }
 
+        /** What each alert job of a run, in any attempt, recorded. */
+        export function records(entry: Entry, names: Names): Told[] {
+          const done = (job: Job, name: string) =>
+            job.steps?.find((step) => step.name === name && step.conclusion === 'success');
+          return entry.jobs.flatMap((job) => {
+            const shown = job.name === names.job ? (done(job, names.failing) ?? done(job, names.passing)) : undefined;
+            return shown?.completed_at
+              ? [
+                  {
+                    run: entry.run,
+                    failing: shown.name === names.failing,
+                    posted: done(job, names.post) !== undefined,
+                    at: shown.completed_at,
+                  },
+                ]
+              : [];
+          });
+        }
+
         /**
-         * Where a run stands, from its jobs other than `alertJob`. A job of it that was
-         * cancelled means its time ran out when its alert job ran, which happens only
-         * in a run that was not cancelled; otherwise the run was cancelled, or is
-         * being, and does not count.
+         * Whether a run passed, from the latest attempt of each of its jobs but the
+         * alert job; null while one of them is still going.
          */
-        export function outcome(run: StreamRun, jobs: Job[], alertJob: string): Outcome {
-          const suite = jobs.filter((job) => job.name !== alertJob);
-          const alert = jobs.find((job) => job.name === alertJob);
-          const unsettled: Outcome = { ended: false, why: run.status === 'completed' ? 'cancelled' : 'running' };
+        export function passed(entry: Entry, alertJob: string): boolean | null {
+          const latest = new Map<string, Job>();
+          for (const job of entry.jobs) {
+            const seen = latest.get(job.name);
+            if (job.name !== alertJob && (!seen || (job.run_attempt ?? 1) > (seen.run_attempt ?? 1))) {
+              latest.set(job.name, job);
+            }
+          }
+          const suite = [...latest.values()];
           if (suite.length === 0 || suite.some((job) => job.status !== 'completed')) {
-            return unsettled;
+            return null;
           }
-          const alertRan =
-            alert?.status === 'in_progress' ||
-            (alert?.status === 'completed' && (alert.conclusion === 'success' || alert.conclusion === 'failure'));
-          if (suite.some((job) => job.conclusion === 'cancelled') && !alertRan) {
-            return unsettled;
-          }
-          return {
-            ended: true,
-            red: failedJobs(suite).length > 0,
-            endedAt: suite.map((job) => job.completed_at ?? '').sort().at(-1) ?? '',
-          };
+          return failedJobs(suite).length === 0;
         }
 
         const short = (sha: string) => sha.slice(0, 7);
 
-        const point = (run: StreamRun, red: boolean): Point => ({
-          id: run.id,
-          run_number: run.run_number,
-          head_sha: run.head_sha,
-          red,
-        });
+        const newestFirst = (a: { run: StreamRun }, b: { run: StreamRun }) => b.run.run_number - a.run.run_number;
 
         /**
-         * Whether this run posts, from its result and the stream around it.
-         * `attempts` are the outcomes of this run's earlier attempts, newest first;
-         * `stream` the workflow's other runs of the branch and event; `outcomes` what
-         * is known of them. When it needs a run's outcome it does not have, it asks
-         * for that run, and is called again once the outcome is known.
+         * Whether this run posts, from its result and the stream's recent runs
+         * (`entries`, which may hold this run's earlier attempts).
          */
         export function decide({
           run,
-          result,
-          attempts,
-          stream,
-          outcomes,
+          red,
+          entries,
+          names,
         }: {
           run: StreamRun;
-          result: { red: boolean; endedAt: string };
-          attempts: Outcome[];
-          stream: StreamRun[];
-          outcomes: Map<number, Outcome>;
-        }): Decision | { need: StreamRun } {
-          const known = (each: StreamRun): Outcome | undefined =>
-            outcomes.get(each.id) ?? (NOT_STARTED.has(each.status) ? { ended: false, why: 'running' } : undefined);
-          const others = stream
-            .filter((each) => each.id !== run.id)
-            .sort((a, b) => b.run_number - a.run_number);
+          red: boolean;
+          entries: Entry[];
+          names: Names;
+        }): Decision {
+          const recorded = entries.flatMap((entry) => records(entry, names)).sort((a, b) => b.at.localeCompare(a.at));
+          const shown = recorded[0];
+          const failing = shown?.failing ?? false;
 
-          for (const each of others.filter((other) => other.run_number > run.run_number)) {
-            const other = known(each);
-            if (other === undefined) {
-              return { need: each };
-            }
-            if (other.ended && other.endedAt < result.endedAt) {
-              return {
-                post: null,
-                why: `run #${each.run_number}, which is newer, ended first, so this result is not the branch's latest`,
-              };
-            }
+          const newer = recorded.filter((record) => record.run.run_number > run.run_number).sort(newestFirst)[0];
+          if (newer) {
+            return {
+              post: null,
+              failing,
+              why: `run #${newer.run.run_number}, which is newer, has already told the channel, so this result is not the branch's latest`,
+            };
           }
-
-          // The points before this one, newest first: its earlier attempts, then the
-          // older runs that count, found as they are needed.
-          const ended = attempts.filter((attempt) => attempt.ended);
-          const points: Point[] = ended.map((attempt) => point(run, attempt.red));
-          const older = others.filter((other) => other.run_number < run.run_number);
-          let next = 0;
-          let firstEnd = ended.at(-1)?.endedAt ?? result.endedAt;
-          let cutShort = false;
-          const pointAt = (index: number): Point | null | { need: StreamRun } => {
-            while (points.length <= index) {
-              if (next >= older.length) {
-                return null;
-              }
-              if (next >= LOOK_BACK) {
-                cutShort = true;
-                return null;
-              }
-              const each = older[next];
-              const other = known(each);
-              if (other === undefined) {
-                return { need: each };
-              }
-              next++;
-              // One still running ends after this run, so it will not count.
-              if (other.ended) {
-                if (other.endedAt < firstEnd) {
-                  points.push(point(each, other.red));
-                  firstEnd = other.endedAt;
-                }
-              }
-            }
-            return points[index];
-          };
-
-          const previous = pointAt(0);
-          if (previous !== null && 'need' in previous) {
-            return previous;
+          if (red && !failing) {
+            const lastGreen = entries
+              .filter((entry) => entry.run.run_number < run.run_number && passed(entry, names.job) === true)
+              .sort(newestFirst)[0];
+            return { post: 'failure', failing: true, lastGreen: lastGreen?.run ?? null };
           }
-          const label =
-            previous === null
-              ? 'no run before it ended'
-              : previous.id === run.id
-                ? 'its previous attempt'
-                : `run #${previous.run_number} (at ${short(previous.head_sha)})`;
-          if (result.red) {
-            return previous?.red
-              ? { post: null, why: `${label} failed too, and only the first red run of a streak posts` }
-              : { post: 'failure', lastGreen: previous };
+          if (!red && failing) {
+            const since = recorded.find((record) => record.failing && record.posted);
+            return { post: 'recovery', failing: false, failingSince: since?.run ?? null };
           }
-          if (!previous?.red) {
-            return { post: null, why: previous ? `it passed, as ${label} did` : `it passed, and ${label}` };
-          }
-          let last = 0;
-          for (;;) {
-            const before = pointAt(last + 1);
-            if (before !== null && 'need' in before) {
-              return before;
-            }
-            if (before === null || !before.red) {
-              break;
-            }
-            last++;
-          }
-          const streak = points.slice(0, last + 1);
+          const as = shown ? ` (since run #${shown.run.run_number}, at ${short(shown.run.head_sha)})` : '';
           return {
-            post: 'recovery',
-            failingSince: streak[last],
-            // A run that failed in two attempts is one run.
-            redRuns: new Set(streak.map((point) => point.id)).size,
-            atLeast: cutShort && points.length === last + 1,
+            post: null,
+            failing,
+            why: red
+              ? `the channel already shows it failing${as}`
+              : shown
+                ? `it passed, and the channel already shows it passing${as}`
+                : 'it passed, and the channel was never told otherwise',
           };
+        }
+
+        /** Whether a decision would change if the job read more runs. */
+        export function readMore(decision: Decision, entries: Entry[], names: Names): boolean {
+          return (
+            !entries.some((entry) => records(entry, names).length > 0) ||
+            (decision.post === 'failure' && decision.lastGreen === null) ||
+            (decision.post === 'recovery' && decision.failingSince === null)
+          );
         }
 
         type PlaywrightSpec = { title: string; file: string; line: number; tests: { status: string }[] };
@@ -824,11 +790,12 @@ jobs:
           return pr ? `push of ${commit} ([#${pr}](${context.repoUrl}/pull/${pr}))` : `push of ${commit}`;
         }
 
+
         export function failureMessage(
           context: Context,
           jobs: FailedJob[],
           findings: Findings | null,
-          lastGreen: Point | null,
+          lastGreen: StreamRun | null,
         ): string {
           const lines = [`🚨 · **${context.workflow} failed on ${context.branch}** · ${which(context)}`];
           lines.push(`Failed jobs: ${jobsLine(context.workflow, jobs)}`);
@@ -852,9 +819,7 @@ jobs:
               );
             }
           }
-          if (lastGreen?.id === context.runId) {
-            lines.push('An earlier attempt of this run passed: the failure may be flaky.');
-          } else if (lastGreen?.head_sha === context.sha) {
+          if (lastGreen?.head_sha === context.sha) {
             lines.push('This commit passed in an earlier run: the failure may be flaky.');
           } else if (lastGreen) {
             lines.push(
@@ -865,85 +830,81 @@ jobs:
           return lines.join('\n');
         }
 
-        export function recoveryMessage(
-          context: Context,
-          failingSince: Point,
-          redRuns: number,
-          atLeast: boolean,
-        ): string {
-          const runs = redRuns === 1 ? '1 run' : `${redRuns} runs`;
+        export function recoveryMessage(context: Context, failingSince: StreamRun | null): string {
           const since =
-            failingSince.id === context.runId
-              ? 'It failed on an earlier attempt of this run.'
-              : atLeast
-                ? `It had failed for at least ${runs}, since ${code(short(failingSince.head_sha))} or earlier.`
-                : `It had failed since ${code(short(failingSince.head_sha))}, in ${runs}.`;
+            failingSince === null
+              ? ''
+              : failingSince.id === context.runId
+                ? 'It failed on an earlier attempt of this run. '
+                : `It had failed since ${code(short(failingSince.head_sha))}. `;
           return [
             `✅ Resolved · **${context.workflow} passes again on ${context.branch}** · ${which(context)}`,
-            `${since} [Run](${context.runUrl})`,
+            `${since}[Run](${context.runUrl})`,
           ].join('\n');
         }
 
         async function github(path: string): Promise<any> {
           for (let attempt = 1; ; attempt++) {
-            const response = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
-              headers: {
-                accept: 'application/vnd.github+json',
-                authorization: `Bearer ${env('GH_TOKEN')}`,
-                'x-github-api-version': '2022-11-28',
-              },
-            });
-            if (response.ok) {
+            let response: Response | null = null;
+            try {
+              response = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
+                headers: {
+                  accept: 'application/vnd.github+json',
+                  authorization: `Bearer ${env('GH_TOKEN')}`,
+                  'x-github-api-version': '2022-11-28',
+                },
+              });
+            } catch (error) {
+              if (attempt === 3) {
+                throw error;
+              }
+            }
+            if (response?.ok) {
               return response.json();
             }
-            const retryAfter = Number(response.headers.get('retry-after'));
+            const retryAfter = Number(response?.headers.get('retry-after'));
+            const reset = Number(response?.headers.get('x-ratelimit-reset')) - Date.now() / 1000;
             const limited =
-              response.status === 429 ||
-              (response.status === 403 && (retryAfter > 0 || response.headers.get('x-ratelimit-remaining') === '0'));
-            if (attempt === 3 || !(response.status >= 500 || limited)) {
+              response?.status === 429 ||
+              (response?.status === 403 && (retryAfter > 0 || response.headers.get('x-ratelimit-remaining') === '0'));
+            if (response && (attempt === 3 || !(response.status >= 500 || limited))) {
               throw new Error(`GET ${path}: HTTP ${response.status} ${await response.text()}`);
             }
-            const seconds = Math.min(retryAfter > 0 ? retryAfter : 5 * attempt, 60);
+            const seconds = retryAfter > 0 ? retryAfter : limited && reset > 0 ? reset : 5 * attempt;
+            // The job's own time limit is ten minutes; a longer wait would not end in time.
+            if (seconds > 120) {
+              throw new Error(`GET ${path}: rate limited for ${Math.round(seconds)}s`);
+            }
             await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
           }
         }
 
-        /** The jobs of a run, or of one attempt of it (`<id>/attempts/<n>`). */
-        async function jobsOf(repo: string, run: string): Promise<Job[]> {
-          return (await github(`/repos/${repo}/actions/runs/${run}/jobs?filter=latest&per_page=100`)).jobs;
+        async function jobsOf(repo: string, run: number, filter: 'latest' | 'all'): Promise<Job[]> {
+          return (await github(`/repos/${repo}/actions/runs/${run}/jobs?filter=${filter}&per_page=100`)).jobs;
         }
 
         export async function main() {
           const repo = env('GITHUB_REPOSITORY');
           const id = Number(env('GITHUB_RUN_ID'));
-          const attempt = Number(env('GITHUB_RUN_ATTEMPT'));
-          const alertJob = env('EMAIL_E2E_ALERT_JOB');
-          const [run, jobs, attempts] = await Promise.all([
-            github(`/repos/${repo}/actions/runs/${id}`),
-            jobsOf(repo, `${id}`),
-            Promise.all(
-              Array.from({ length: attempt - 1 }, (_, index) =>
-                jobsOf(repo, `${id}/attempts/${attempt - 1 - index}`).then((each) =>
-                  outcome({ status: 'completed' } as StreamRun, each, alertJob),
-                ),
-              ),
-            ),
-          ]);
-          const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: '30' });
-          const stream: StreamRun[] = (
-            await github(`/repos/${repo}/actions/workflows/${run.workflow_id}/runs?${query}`)
-          ).workflow_runs;
-          const suite = jobs.filter((job) => job.name !== alertJob);
-          const failed = failedJobs(suite);
-          const result = {
-            red: failed.length > 0,
-            endedAt: suite.map((job) => job.completed_at ?? '').sort().at(-1) ?? '',
+          const names: Names = {
+            job: env('EMAIL_E2E_ALERT_JOB'),
+            post: env('EMAIL_E2E_ALERT_POST_STEP'),
+            failing: env('EMAIL_E2E_ALERT_FAILING_STEP'),
+            passing: env('EMAIL_E2E_ALERT_PASSING_STEP'),
           };
-          const outcomes = new Map<number, Outcome>();
-          let decision = decide({ run, result, attempts, stream, outcomes });
-          while ('need' in decision) {
-            outcomes.set(decision.need.id, outcome(decision.need, await jobsOf(repo, `${decision.need.id}`), alertJob));
-            decision = decide({ run, result, attempts, stream, outcomes });
+          const [run, jobs] = await Promise.all([github(`/repos/${repo}/actions/runs/${id}`), jobsOf(repo, id, 'latest')]);
+          const failed = failedJobs(jobs.filter((job) => job.name !== names.job));
+
+          // Newest first; read a few at a time, until the decision would not change.
+          const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LOOK_BACK}` });
+          const stream: StreamRun[] = (await github(`/repos/${repo}/actions/workflows/${run.workflow_id}/runs?${query}`))
+            .workflow_runs;
+          const entries: Entry[] = [];
+          let decision = decide({ run, red: failed.length > 0, entries, names });
+          for (let start = 0; start < stream.length && readMore(decision, entries, names); start += BATCH) {
+            const batch = stream.slice(start, start + BATCH);
+            entries.push(...(await Promise.all(batch.map(async (each) => ({ run: each, jobs: await jobsOf(repo, each.id, 'all') })))));
+            decision = decide({ run, red: failed.length > 0, entries, names });
           }
 
           const context: Context = {
@@ -956,22 +917,24 @@ jobs:
             repoUrl: `${env('GITHUB_SERVER_URL')}/${repo}`,
             runUrl: run.html_url,
           };
+          const outputs = [`shows=${decision.failing ? 'failing' : 'passing'}`];
           let summary: string;
           if (decision.post === null) {
             summary = `Nothing posted to Macro Alerts: ${decision.why}.`;
-            appendFileSync(env('GITHUB_OUTPUT'), 'post=false\n');
+            outputs.push('post=false');
           } else {
             const message =
               decision.post === 'failure'
                 ? failureMessage(context, failed, readFindings(env('EMAIL_E2E_REPORTS')), decision.lastGreen)
-                : recoveryMessage(context, decision.failingSince, decision.redRuns, decision.atLeast);
+                : recoveryMessage(context, decision.failingSince);
             writeFileSync(env('EMAIL_E2E_ALERT_MESSAGE'), message);
-            appendFileSync(env('GITHUB_OUTPUT'), 'post=true\n');
+            outputs.push('post=true');
             summary = `Posting to Macro Alerts:\n\n${message
               .split('\n')
               .map((line) => `> ${line}`)
               .join('\n')}`;
           }
+          appendFileSync(env('GITHUB_OUTPUT'), `${outputs.join('\n')}\n`);
           console.log(summary);
           appendFileSync(env('GITHUB_STEP_SUMMARY'), `### Macro Alerts\n\n${summary}\n`);
         }
@@ -984,6 +947,9 @@ jobs:
         EMAIL_E2E_REPORTS: ${{ runner.temp }}/email-e2e-reports
         EMAIL_E2E_ALERT_MESSAGE: ${{ runner.temp }}/email-e2e-alert.md
         EMAIL_E2E_ALERT_JOB: Tell Macro Alerts
+        EMAIL_E2E_ALERT_POST_STEP: post to Macro Alerts
+        EMAIL_E2E_ALERT_FAILING_STEP: the channel shows it failing
+        EMAIL_E2E_ALERT_PASSING_STEP: the channel shows it passing
     - name: post to Macro Alerts
       if: steps.decide.outputs.post == 'true'
       run: |
@@ -1003,6 +969,12 @@ jobs:
         MACRO_WEBHOOK_URL: ${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}
         MACRO_BOT_TOKEN: ${{ secrets.MACRO_BUILD_ALERT_BOT_TOKEN }}
         EMAIL_E2E_ALERT_MESSAGE: ${{ runner.temp }}/email-e2e-alert.md
+    - name: the channel shows it failing
+      if: steps.decide.outputs.shows == 'failing'
+      run: echo 'Macro Alerts now shows this workflow failing on this branch.'
+    - name: the channel shows it passing
+      if: steps.decide.outputs.shows == 'passing'
+      run: echo 'Macro Alerts now shows this workflow passing on this branch.'
 concurrency:
   group: email-e2e-browser-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}
   cancel-in-progress: true

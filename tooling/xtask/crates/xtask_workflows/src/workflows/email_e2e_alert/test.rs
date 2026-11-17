@@ -26,6 +26,16 @@ fn workflows() -> Vec<(&'static str, serde_yaml::Value)> {
         .collect()
 }
 
+/// A step of the alert job, by name.
+fn step<'a>(workflow: &'a serde_yaml::Value, name: &str) -> &'a serde_yaml::Value {
+    workflow["jobs"][JOB]["steps"]
+        .as_sequence()
+        .expect("steps")
+        .iter()
+        .find(|step| step["name"].as_str() == Some(name))
+        .unwrap_or_else(|| panic!("no step {name}"))
+}
+
 /// A job it does not wait for could fail after it decided the run passed.
 #[test]
 fn the_alert_waits_for_every_other_job() {
@@ -53,17 +63,68 @@ fn the_alert_waits_for_every_other_job() {
 #[test]
 fn only_pushes_to_main_and_the_sweep_post() {
     for (name, workflow) in workflows() {
-        let job = &workflow["jobs"][JOB];
-        assert_eq!(job["if"].as_str(), Some(POSTS), "{name}");
-        let post = job["steps"]
-            .as_sequence()
-            .and_then(|steps| steps.last())
-            .expect("steps");
+        assert_eq!(workflow["jobs"][JOB]["if"].as_str(), Some(POSTS), "{name}");
         assert_eq!(
-            post["if"].as_str(),
+            step(&workflow, POST)["if"].as_str(),
             Some(posts_when_decided().as_str()),
             "{name}"
         );
+    }
+}
+
+/// Two alert jobs of a stream at once would both read what the channel
+/// showed before either posted.
+#[test]
+fn a_streams_alert_jobs_run_one_at_a_time() {
+    for (name, workflow) in workflows() {
+        let concurrency = &workflow["jobs"][JOB]["concurrency"];
+        assert_eq!(concurrency["group"].as_str(), Some(ONE_AT_A_TIME), "{name}");
+        assert_eq!(
+            concurrency["cancel-in-progress"].as_bool(),
+            Some(false),
+            "{name}"
+        );
+    }
+}
+
+/// The script reads the job and its steps by the names the workflow gives
+/// them, and the steps that record what the channel shows come last.
+#[test]
+fn the_script_reads_the_names_the_workflow_gives() {
+    for (name, workflow) in workflows() {
+        let job = &workflow["jobs"][JOB];
+        let env = &step(&workflow, "decide what to post")["env"];
+        assert_eq!(
+            job["name"].as_str(),
+            env["EMAIL_E2E_ALERT_JOB"].as_str(),
+            "{name}"
+        );
+        let steps: Vec<&str> = job["steps"]
+            .as_sequence()
+            .expect("steps")
+            .iter()
+            .filter_map(|step| step["name"].as_str())
+            .collect();
+        assert_eq!(
+            steps[steps.len() - 3..],
+            [
+                env["EMAIL_E2E_ALERT_POST_STEP"].as_str().expect("post"),
+                env["EMAIL_E2E_ALERT_FAILING_STEP"]
+                    .as_str()
+                    .expect("failing"),
+                env["EMAIL_E2E_ALERT_PASSING_STEP"]
+                    .as_str()
+                    .expect("passing"),
+            ],
+            "{name}"
+        );
+        for (record, shows) in [(SHOWS_FAILING, "failing"), (SHOWS_PASSING, "passing")] {
+            assert_eq!(
+                step(&workflow, record)["if"].as_str(),
+                Some(records_when(shows).as_str()),
+                "{name}"
+            );
+        }
     }
 }
 
