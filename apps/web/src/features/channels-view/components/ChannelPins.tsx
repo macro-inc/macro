@@ -4,7 +4,7 @@ import type { ParentProps } from 'solid-js';
 import { Match, Switch } from 'solid-js';
 import { ChannelMentionCount } from './rail/ChannelCountPill';
 
-/** How many favorites the mobile Channels list pins above its conversations. */
+/** How many favorites the legacy mobile Channels grid pins above its conversations. */
 export const MAX_PINNED_CHANNELS = 6;
 
 /**

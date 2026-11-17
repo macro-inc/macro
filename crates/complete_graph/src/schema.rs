@@ -46,6 +46,7 @@ use graphql_initiative::{
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
+    resolve_active_notification_ids,
 };
 use graphql_notification_inbox::{
     GraphqlNotificationInboxClear, GraphqlNotificationInboxPage, NotificationInboxInput,
@@ -1024,6 +1025,19 @@ where
             input.unwrap_or_default(),
         )
         .await
+    }
+
+    /// Ids of the authenticated user's active (unseen or seen) notifications
+    /// whose event type is one of `eventTypes`, newest first: at most `limit`,
+    /// 100 by default and 500 at most. For acting on every notification of a
+    /// type without reading a notification list.
+    async fn active_notification_ids(
+        &self,
+        ctx: &Context<'_>,
+        event_types: Vec<String>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<ID>> {
+        resolve_active_notification_ids(ctx, self.user_id.clone(), event_types, limit).await
     }
 
     /// The authenticated user's clears of their notifications inbox: the

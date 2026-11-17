@@ -17,6 +17,7 @@ import {
 import { type UnifiedNotification, unifiedNotificationSchema } from '../types';
 
 const mocks = vi.hoisted(() => ({
+  fetchActiveNotificationIds: vi.fn(),
   graphqlCacheEnabled: true,
   graphqlEnabled: false,
   documentMentionsEnabled: true,
@@ -59,6 +60,14 @@ vi.mock('@macro-inc/collaboration/websocket', () => ({
   ),
 }));
 
+vi.mock(
+  '@queries/notification/graphql/active-notification-ids',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    fetchActiveNotificationIds: mocks.fetchActiveNotificationIds,
+  })
+);
+
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: mocks.updateSoupForNotification,
 }));
@@ -86,9 +95,19 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   useUnmuteItemMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => ({
+    userId: 'macro|viewer@example.com',
+    session: 1,
+  }),
+  isCurrentQueryAccount: () => true,
+  queryAccountSessionPending: () => false,
+}));
+
 vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: () => mocks.graphqlCacheEnabled,
   mapGraphqlNotification: (notification: UnifiedNotification) => notification,
+  subscribeGraphqlSoupReconnected: () => () => {},
 }));
 
 vi.mock('@service-storage/graphql-soup-websocket', () => ({
@@ -132,6 +151,7 @@ describe('createNotificationSource', () => {
     mocks.documentMentionsEnabled = true;
     mocks.graphqlPatchCallback = undefined;
     mocks.socketCallback = undefined;
+    mocks.fetchActiveNotificationIds.mockReset().mockResolvedValue([]);
     mocks.optimisticInsertNotification.mockReset();
     mocks.updateSoupForNotification.mockReset();
     mocks.seenMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
@@ -214,63 +234,100 @@ describe('createNotificationSource', () => {
     }
   );
 
-  it.each(['rest', 'graphql'] as const)(
-    'cleans up disabled document mentions only once the %s feed is active',
-    async (transport) => {
-      mocks.documentMentionsEnabled = false;
-      const [started, setStarted] = createSignal(transport === 'rest');
-      const mention = {
-        ...notification(`disabled-mention-${transport}`, 'document', 'doc'),
-        notification_event_type: 'document_mention',
-      };
-      const [rows, setRows] = createSignal([
-        mention,
-        { ...mention, id: 'already-done', state: 'done' as const },
-        notification('ordinary', 'document', 'doc'),
-      ]);
-      const readData = vi.fn(() => rows());
-      mocks.notificationsQuery = {
-        transport,
-        get isStarted() {
-          return started();
-        },
-        isLoading: false,
-        get data() {
-          return readData();
-        },
-        isFetching: false,
-      };
-      const { source, dispose } = createRoot((dispose) => ({
-        source: createNotificationSource({} as ConnectionGatewayWebsocket),
-        dispose,
-      }));
-      try {
-        if (transport === 'graphql') {
-          expect(readData).not.toHaveBeenCalled();
-          expect(mocks.doneMutation.mutateAsync).not.toHaveBeenCalled();
-          setStarted(true);
-        }
-        expect(mocks.doneMutation.mutateAsync).toHaveBeenCalledExactlyOnceWith({
-          notificationIds: [mention.id],
-        });
-        expect(source.notifications()).toHaveLength(3);
-        setRows([{ ...mention, id: `later-${transport}` }]);
-        expect(mocks.doneMutation.mutateAsync).toHaveBeenLastCalledWith({
-          notificationIds: [`later-${transport}`],
-        });
-        await Promise.resolve();
-      } finally {
-        dispose();
-      }
+  it('cleans up disabled document mentions from the REST feed', async () => {
+    mocks.documentMentionsEnabled = false;
+    const mention = {
+      ...notification('disabled-mention-rest', 'document', 'doc'),
+      notification_event_type: 'document_mention',
+    };
+    const [rows, setRows] = createSignal([
+      mention,
+      { ...mention, id: 'already-done', state: 'done' as const },
+      notification('ordinary', 'document', 'doc'),
+    ]);
+    mocks.notificationsQuery = {
+      transport: 'rest',
+      isStarted: true,
+      isLoading: false,
+      get data() {
+        return rows();
+      },
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      expect(mocks.doneMutation.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+        notificationIds: [mention.id],
+      });
+      expect(source.notifications()).toHaveLength(3);
+      setRows([{ ...mention, id: 'later-rest' }]);
+      expect(mocks.doneMutation.mutateAsync).toHaveBeenLastCalledWith({
+        notificationIds: ['later-rest'],
+      });
+      await Promise.resolve();
+      expect(mocks.fetchActiveNotificationIds).not.toHaveBeenCalled();
+    } finally {
+      dispose();
     }
-  );
+  });
 
-  it('handles document-mention cleanup failures without an unhandled rejection', async () => {
+  it('cleans up disabled document mentions by id in GraphQL mode, never through the feed, even once it starts', async () => {
+    mocks.documentMentionsEnabled = false;
+    mocks.fetchActiveNotificationIds.mockResolvedValue(['outside-feed']);
+    const [started, setStarted] = createSignal(false);
+    const mention = {
+      ...notification('in-feed', 'document', 'doc'),
+      notification_event_type: 'document_mention',
+    };
+    const [rows, setRows] = createSignal([mention]);
+    const readData = vi.fn(() => rows());
+    mocks.notificationsQuery = {
+      transport: 'graphql',
+      get isStarted() {
+        return started();
+      },
+      isLoading: false,
+      get data() {
+        return readData();
+      },
+      isFetching: false,
+    };
+    const dispose = createRoot((dispose) => {
+      createNotificationSource({} as ConnectionGatewayWebsocket);
+      return dispose;
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(mocks.doneMutation.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+          notificationIds: ['outside-feed'],
+        })
+      );
+      expect(mocks.fetchActiveNotificationIds).toHaveBeenCalledExactlyOnceWith(
+        ['document_mention'],
+        500
+      );
+
+      // Another reader starting the feed must not turn the cleanup into one.
+      setStarted(true);
+      setRows([{ ...mention, id: 'later-graphql' }]);
+      await Promise.resolve();
+      expect(readData).not.toHaveBeenCalled();
+      expect(mocks.doneMutation.mutateAsync).toHaveBeenCalledOnce();
+      expect(mocks.fetchActiveNotificationIds).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('handles REST document-mention cleanup failures without an unhandled rejection', async () => {
     mocks.documentMentionsEnabled = false;
     const failure = new Error('offline');
     mocks.doneMutation.mutateAsync.mockRejectedValueOnce(failure);
     mocks.notificationsQuery = {
-      transport: 'graphql',
+      transport: 'rest',
       isStarted: true,
       isLoading: false,
       data: [
@@ -291,6 +348,7 @@ describe('createNotificationSource', () => {
         'Failed to discard document mention notifications',
         failure
       );
+      expect(mocks.fetchActiveNotificationIds).not.toHaveBeenCalled();
     } finally {
       dispose();
       error.mockRestore();

@@ -1,32 +1,16 @@
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 /**
  * The pptx block: app chrome (header, file menu, sharing) around the
  * presentation editor, wired to the worker engine and document storage.
  */
 
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { FileTypeChip } from '@core/component/FileTypeChip';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useAuthor, useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { watchPresentationChanges } from '@core/pptx-engine/changes';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
@@ -37,7 +21,6 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import { LoroDoc } from 'loro-crdt';
@@ -73,7 +56,9 @@ import {
   initializePresentationSync,
   presentationSyncExists,
 } from './queries/presentation-sync';
+import { MobilePptxHeader } from './views/mobile/pptx-header';
 import { PptxEditor } from './views/pptx-editor';
+import { PptxHeader } from './views/pptx-header';
 
 /** Every save stores the whole file as a new version, so big decks save less often. */
 const LARGE_DECK_BYTES = 5 * 1024 * 1024;
@@ -293,56 +278,24 @@ export default function PptxBlock(props: { share?: string }) {
   return (
     <DocumentBlockContainer>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <SplitHeaderLeft>
-          <BlockItemSplitLabel badges={<FileTypeChip />} />
-        </SplitHeaderLeft>
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-        </SplitHeaderRight>
-        <SplitHeaderRight>
-          <div class="order-[999] flex items-center">
-            <HeaderActionGroup label="Presentation actions">
-              <ChatWithAgentButton
-                grouped
-                label="Ask Macro"
-                entity={{
-                  type: 'document',
-                  id: documentId,
-                  name: name(),
-                  fileType: 'pptx',
-                }}
-              />
-            </HeaderActionGroup>
-          </div>
-        </SplitHeaderRight>
-        <ResponsivePermissionsBadge />
-        <ResponsiveBlockToolbar
-          id={documentId}
-          itemType="document"
-          name={name()}
-          ops={[
-            { op: 'rename' },
-            { op: 'copy' },
-            { op: 'moveToProject' },
-            {
-              group: 'file',
-              label: 'Download',
-              icon: DownloadSimple,
-              action: () => fireAndForget(downloadCurrent(), 'pptx-download'),
-            },
-            { op: 'delete' },
-          ]}
-          tools={[
-            {
-              group: 'sharing',
-              label: 'Share',
-              icon: IconShared,
-              action: openShare,
-              buttonComponent: () => <ShareTrigger onClick={openShare} />,
-              focusTarget: getShareDrawerRecipientInput,
-            },
-          ]}
-        />
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <PptxHeader
+              documentId={documentId}
+              name={name}
+              openShare={openShare}
+              download={downloadCurrent}
+            />
+          }
+        >
+          <MobilePptxHeader
+            documentId={documentId}
+            name={name}
+            openShare={openShare}
+            download={downloadCurrent}
+          />
+        </Show>
         <div class="min-h-0 flex-1">
           <Show when={data()} keyed>
             {(d) => (
