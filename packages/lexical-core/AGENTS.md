@@ -62,3 +62,10 @@ element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a
 list to its last item. Add it to any new transformer set that has image
 transformers.
+
+Notion database blocks resolve through `NotionLinks.databases`, a page-local
+array keyed by dashless container ID from the URL path and zero-based ordinal
+per container. Each target selects a database/table/optional view for the
+existing `DocumentCardNode`; absent or failed targets remain named Notion links
+with a typed reason. Database mentions remain compact references. Keep the
+ordinal counter shared across recursive container imports and ignore code.

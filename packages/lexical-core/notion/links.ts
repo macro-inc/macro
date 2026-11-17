@@ -1,11 +1,13 @@
 /**
  * What a Notion import already knows about the objects a page refers to:
- * the Macro documents its pages became and the Macro users its people are.
- * Keys are Notion ids in their dashless, lowercase form.
+ * the Macro documents its pages became, its database placements, and its users.
+ * Page/user keys and database container IDs use dashless, lowercase Notion ids.
  */
 export type NotionLinks = {
   pages: Record<string, NotionPageLink>;
   users: Record<string, NotionUserLink>;
+  /** Page-local placements, counted per container in body order. */
+  databases?: NotionDatabaseOccurrence[];
 };
 
 /** The Macro document a Notion page became. */
@@ -52,3 +54,19 @@ export function findNotionUser(
     .map((id) => links.users[id])
     .find((user) => user !== undefined);
 }
+
+/** Why an occurrence remains a named link back to Notion. */
+export type NotionDatabaseFallbackReason =
+  | 'noAccess'
+  | 'notFound'
+  | 'notImported'
+  | 'unresolved';
+
+/** A resolved database placement or an explicit import loss. */
+export type NotionDatabaseOccurrence = {
+  containerId: string;
+  ordinal: number;
+  target:
+    | { databaseId: string; tableId: string; viewId?: string }
+    | { reason: NotionDatabaseFallbackReason };
+};

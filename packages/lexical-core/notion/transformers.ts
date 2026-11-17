@@ -45,6 +45,10 @@ import {
   DateMentionNode,
 } from '../nodes/DateMentionNode';
 import {
+  $createDocumentCardNode,
+  DocumentCardNode,
+} from '../nodes/DocumentCardNode';
+import {
   $createDocumentMentionNode,
   DocumentMentionNode,
 } from '../nodes/DocumentMentionNode';
@@ -54,7 +58,12 @@ import {
   UserMentionNode,
 } from '../nodes/UserMentionNode';
 import { ALL_TRANSFORMERS } from '../transformers';
-import { findNotionPage, findNotionUser, type NotionLinks } from './links';
+import {
+  findNotionPage,
+  findNotionUser,
+  type NotionLinks,
+  notionIdsIn,
+} from './links';
 
 type Attributes = Record<string, string>;
 
@@ -217,16 +226,67 @@ function textMatch(
   };
 }
 
+function databaseTransformer(links: NotionLinks): ElementTransformer {
+  const ordinals = new Map<string, number>();
+  return {
+    dependencies: [DocumentCardNode],
+    type: 'element',
+    regExp: /^\s*<database\b([^>]*?)(?:\/>|>(.*?)<\/database>)\s*$/,
+    export: () => null,
+    replace: (parent, _children, [, raw, label]) => {
+      const attrs = attributes(raw);
+      // A view UUID in ?v= selects presentation; only the path identifies the container.
+      const path = (attrs.url ?? '').split(/[?#]/, 1)[0];
+      const containerId = notionIdsIn(path)[0] ?? '';
+      const ordinal = ordinals.get(containerId) ?? 0;
+      ordinals.set(containerId, ordinal + 1);
+      const occurrence = links.databases?.find(
+        (entry) =>
+          entry.containerId === containerId && entry.ordinal === ordinal
+      );
+      const title =
+        withoutTags(label ?? '') || attrs.title?.trim() || 'Notion database';
+      if (occurrence && 'databaseId' in occurrence.target) {
+        const target = occurrence.target;
+        const card = $createDocumentCardNode({
+          documentId: target.databaseId,
+          documentName: title,
+          blockName: 'database',
+          blockParams: {
+            tableId: target.tableId,
+            ...(target.viewId ? { viewId: target.viewId } : {}),
+          },
+        });
+        parent.replace(card);
+        return;
+      }
+      const reason =
+        occurrence && 'reason' in occurrence.target
+          ? occurrence.target.reason
+          : 'unresolved';
+      const explanation = match(reason)
+        .with('noAccess', () => 'no access')
+        .with('notFound', () => 'not found')
+        .with('notImported', () => 'not imported')
+        .with('unresolved', () => 'unresolved database')
+        .exhaustive();
+      const node = $createTextNode('');
+      parent.clear().append(node);
+      $replaceWithLink(node, attrs.url, `${title} (${explanation})`);
+    },
+  };
+}
+
 function inlineTransformers(links: NotionLinks): TextMatchTransformer[] {
   return [
     textMatch(
-      /<(mention-page|page|database|mention-database|mention-data-source)\b([^>]*)>(.*?)<\/\1>/,
+      /<(mention-page|page|mention-database|mention-data-source)\b([^>]*)>(.*?)<\/\1>/,
       [DocumentMentionNode],
       (node, [, , attrs, label]) =>
         $replaceWithPageReference(node, links, attributes(attrs), label)
     ),
     textMatch(
-      /<(?:mention-page|page|database|mention-database|mention-data-source)\b([^>]*?)\/>/,
+      /<(?:mention-page|page|mention-database|mention-data-source)\b([^>]*?)\/>/,
       [DocumentMentionNode],
       (node, [, attrs]) =>
         $replaceWithPageReference(node, links, attributes(attrs), '')
@@ -631,6 +691,7 @@ export function notionTransformers(links: NotionLinks): Transformer[] {
     EMPTY_BLOCK,
     DROPPED_BLOCK,
     IMAGE_BLOCK,
+    databaseTransformer(links),
     ...inlineTransformers(links),
     ...ALL_TRANSFORMERS
   );
