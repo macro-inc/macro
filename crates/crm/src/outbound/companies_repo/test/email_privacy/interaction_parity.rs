@@ -107,6 +107,164 @@ fn at(month: u32) -> DateTime<Utc> {
     format!("2025-{month:02}-01T00:00:00Z").parse().unwrap()
 }
 
+/// Switch the owner's consent from `all` to `selected` on rule revision 1,
+/// mirroring the two-statement write the legacy trigger requires.
+async fn activate_selected(pool: &PgPool, team: Uuid, link: Uuid) -> anyhow::Result<()> {
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_revisions (team_id, user_id, revision, link_id, schema_version, definition) VALUES ($1, $2, 1, $3, 1, '{\"schema_version\":1,\"include\":[]}'::jsonb)",
+        team, OWNER, link
+    ).execute(pool).await?;
+    let mut tx = pool.begin().await?;
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1 AND user_id = $2",
+        team,
+        OWNER
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE crm_email_consent SET mode = 'selected', selected_enabled = TRUE, active_rule_revision = 1 WHERE team_id = $1 AND user_id = $2",
+        team, OWNER
+    ).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Every `selected` inclusion kind — thread, address, contact, domain, and
+/// company — must admit exactly the threads `crm_email_thread_allowed` admits,
+/// and blocking and exclusion must still override inclusion.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_based_selected_inclusion_matches_thread_allowed(pool: PgPool) -> anyhow::Result<()> {
+    let (repo, team, link) = setup(&pool).await?;
+    consent_to_mailbox(&pool, team, link).await?;
+
+    // One correspondent per inclusion kind, each in its own thread, plus a
+    // correspondent that no rule names.
+    let by_thread = insert_interaction(&pool, link, "ivan@threadrule.example", at(1), true).await?;
+    insert_interaction(&pool, link, "ada@addressrule.example", at(2), true).await?;
+    insert_interaction(&pool, link, "cleo@contactrule.example", at(3), false).await?;
+    insert_interaction(&pool, link, "dina@domainrule.example", at(4), true).await?;
+    insert_interaction(&pool, link, "eve@companyrule.example", at(5), true).await?;
+    insert_interaction(&pool, link, "nan@excluded.example", at(6), true).await?;
+
+    // A CRM contact and company the contact/company rules point at.
+    let contact_company = insert_company(&pool, team, true, &["contactrule.example"]).await?;
+    let crm_contact = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO crm_contacts (id, team_id, company_id, email, first_interaction, last_interaction) VALUES ($1, $2, $3, $4, now(), now())",
+        crm_contact, team, contact_company, "cleo@contactrule.example"
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        crm_contact,
+        "cleo@contactrule.example"
+    )
+    .execute(&pool)
+    .await?;
+    let rule_company = insert_company(&pool, team, true, &["companyrule.example"]).await?;
+
+    activate_selected(&pool, team, link).await?;
+
+    // With no inclusion rules yet, a selected mailbox admits nothing.
+    for email in [
+        "ivan@threadrule.example",
+        "ada@addressrule.example",
+        "cleo@contactrule.example",
+        "dina@domainrule.example",
+        "eve@companyrule.example",
+        "nan@excluded.example",
+    ] {
+        assert_eq!(
+            scan(&pool, team, link, email).await?,
+            (None, None, None),
+            "selected mailbox with no rules excludes {email}"
+        );
+    }
+
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_threads (team_id, user_id, revision, thread_id) VALUES ($1, $2, 1, $3)",
+        team, OWNER, by_thread
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_addresses (team_id, user_id, revision, address) VALUES ($1, $2, 1, $3)",
+        team, OWNER, "ada@addressrule.example"
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_contacts (team_id, user_id, revision, contact_id) VALUES ($1, $2, 1, $3)",
+        team, OWNER, crm_contact
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_domains (team_id, user_id, revision, domain) VALUES ($1, $2, 1, $3)",
+        team, OWNER, "domainrule.example"
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_companies (team_id, user_id, revision, company_id) VALUES ($1, $2, 1, $3)",
+        team, OWNER, rule_company
+    ).execute(&pool).await?;
+
+    assert_eq!(
+        scan(&pool, team, link, "ivan@threadrule.example").await?,
+        (Some(at(1)), Some(at(1)), Some(true)),
+        "thread rule includes its thread"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "ada@addressrule.example").await?,
+        (Some(at(2)), Some(at(2)), Some(true)),
+        "address rule includes the matching participant"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "cleo@contactrule.example").await?,
+        (Some(at(3)), Some(at(3)), Some(false)),
+        "contact rule includes the contact's address"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "dina@domainrule.example").await?,
+        (Some(at(4)), Some(at(4)), Some(true)),
+        "domain rule includes the matching domain"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "eve@companyrule.example").await?,
+        (Some(at(5)), Some(at(5)), Some(true)),
+        "company rule includes the company's domain"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "nan@excluded.example").await?,
+        (None, None, None),
+        "an unnamed correspondent stays excluded under selected mode"
+    );
+
+    // Blocking a domain and excluding a thread each override inclusion.
+    repo.change_email_privacy(
+        team,
+        OWNER,
+        EmailPrivacyChange::AddDomain {
+            scope: EmailBlockScope::Team,
+            domain: "domainrule.example".into(),
+        },
+    )
+    .await?;
+    assert_eq!(
+        scan(&pool, team, link, "dina@domainrule.example").await?,
+        (None, None, None),
+        "a blocked domain overrides a domain inclusion rule"
+    );
+    repo.change_email_privacy(
+        team,
+        OWNER,
+        EmailPrivacyChange::SetThreadExclusion {
+            thread_id: by_thread,
+            excluded: true,
+        },
+    )
+    .await?;
+    assert_eq!(
+        scan(&pool, team, link, "ivan@threadrule.example").await?,
+        (None, None, None),
+        "an excluded thread overrides a thread inclusion rule"
+    );
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_based_scan_applies_every_privacy_rule_like_thread_allowed(
     pool: PgPool,
