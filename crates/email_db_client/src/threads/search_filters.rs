@@ -37,6 +37,10 @@ pub async fn thread_ids_matching_states(
     if thread_ids.is_empty() {
         return Ok(Vec::new());
     }
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
     let ids = sqlx::query_scalar!(
         r#"
         SELECT ids.id AS "id!"
@@ -77,8 +81,9 @@ pub async fn thread_ids_matching_states(
         &filter.notification_states,
         viewer,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(ids)
 }
 
