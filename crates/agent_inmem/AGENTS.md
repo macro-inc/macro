@@ -40,6 +40,16 @@ milliseconds instead of waiting on container provisioning.
   Every usage row a turn records carries the session id
   (`ai_usage.agent_session_id`); its tools record through
   `ai_usage::for_agent_session`.
+- `src/rig_engine.rs` `GatedToolSet`: every MCP tool of a server other than
+  `macro_internal` (connected apps, custom servers, previews) is first put to
+  `NativeToolGate::refuse_remote_mcp`; the harness's gate refuses it in every
+  scoped session (suggestion generations and runs that send nothing), since
+  the egress proxy that carries it knows no scope. The internal server is
+  told by the server a tool was registered under
+  (`RemoteMcpToolSet::server_of`), never by the name's server segment, which
+  a custom server's name can mangle to (`macro_internal_`), and
+  `dialable_servers` dials each name once, as its first (the harness's own)
+  entry.
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.

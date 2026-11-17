@@ -7,8 +7,9 @@ mod pg_access_repo;
 mod pg_explain_access_repo;
 
 pub use pg_access_repo::{
-    PgAccessRepository, SourceIds, accessible_session_ids, get_team_scope_source_ids,
-    get_user_source_ids,
+    PgAccessRepository, SharedEmailThread, SourceIds, accessible_session_ids,
+    get_team_scope_source_ids, get_user_source_ids, project_email_threads,
+    project_shared_email_threads, shared_email_threads,
 };
 #[cfg(feature = "explain_binary")]
 pub use pg_explain_access_repo::PgExplainAccessRepository;

@@ -71,6 +71,22 @@ fn maps_domain_errors_to_status_codes() {
 }
 
 #[test]
+fn token_routes_refuse_a_program_by_its_signed_claims() {
+    use macro_authorization::CredentialAttribution;
+    let browser = axum::http::HeaderMap::new();
+    for program in [CredentialAttribution::Agent, CredentialAttribution::Routine] {
+        assert!(
+            matches!(
+                super::refuse_program_token(program, &browser),
+                Err(CallError::Forbidden(_))
+            ),
+            "{program:?}"
+        );
+    }
+    assert!(super::refuse_program_token(CredentialAttribution::Person, &browser).is_ok());
+}
+
+#[test]
 fn token_routes_refuse_code_execution_header() {
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(
@@ -79,6 +95,10 @@ fn token_routes_refuse_code_execution_header() {
     );
     assert!(matches!(
         super::refuse_code_execution_token(&headers),
+        Err(CallError::Forbidden(_))
+    ));
+    assert!(matches!(
+        super::refuse_program_token(macro_authorization::CredentialAttribution::Person, &headers),
         Err(CallError::Forbidden(_))
     ));
 }
@@ -266,7 +286,9 @@ mod authenticated_join_routes {
             jwt: &str,
         ) -> Result<UserContext, Report<MacroAuthorizationError>> {
             let user_id = match jwt {
-                "member" | "program" | "api-jwt" | "agent-session" => "macro|member@example.com",
+                "member" | "program" | "api-jwt" | "agent-session" | "agent-jwt" | "routine" => {
+                    "macro|member@example.com"
+                }
                 "viewer" => "macro|viewer@example.com",
                 _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
             };
@@ -289,6 +311,16 @@ mod authenticated_join_routes {
                     "api-jwt" => credential.origin = CredentialOrigin::MacroApiJwt,
                     "agent-session" => {
                         credential.identity.agent_id = Some(bot_id::MACRO_NEW_BOT_ID);
+                    }
+                    // What a code-mode run carries: a Macro API JWT signed for
+                    // an agent, or for a routine run as its owner.
+                    "agent-jwt" => {
+                        credential.origin = CredentialOrigin::MacroApiJwt;
+                        credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
+                    }
+                    "routine" => {
+                        credential.origin = CredentialOrigin::MacroApiJwt;
+                        credential.identity.routine_id = Some(Uuid::nil());
                     }
                     _ => {}
                 }
@@ -345,14 +377,13 @@ mod authenticated_join_routes {
 
     #[tokio::test]
     async fn join_route_preserves_programmatic_access_when_enabled() {
-        for actor in ["program", "api-jwt", "agent-session"] {
+        for actor in ["program", "api-jwt"] {
             let mut service = MockCallService::new();
-            let is_program = actor != "agent-session";
             service
                 .expect_join_call()
                 .times(1)
                 .returning(move |_, _, _, credential_is_program| {
-                    assert_eq!(credential_is_program, is_program);
+                    assert!(credential_is_program);
                     Box::pin(async { Err(CallError::Ended) })
                 });
 
@@ -364,16 +395,43 @@ mod authenticated_join_routes {
         }
     }
 
+    /// A program can drop the code-execution header with a raw `fetch`; its
+    /// credential's signed agent or routine claim still refuses the token.
     #[tokio::test]
-    async fn join_route_keeps_agent_attributed_sessions_gated() {
-        let mut service = MockCallService::new();
-        service.expect_join_call().never();
+    async fn token_routes_refuse_a_programs_signed_credential_without_the_header() {
+        for actor in ["agent-jwt", "agent-session", "routine"] {
+            // The channel start routes run the same `refuse_program_token`;
+            // this router's entity access can't admit a channel, so they are
+            // covered by the unit test above.
+            let requests = [
+                join(Uuid::now_v7(), actor),
+                Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                    .header("authorization", format!("Bearer {actor}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            ];
+            for request in requests {
+                let route = format!("{} {}", request.method(), request.uri());
+                let mut service = MockCallService::new();
+                service.expect_join_call().never();
+                service.expect_start_call().never();
+                service.expect_join_meeting().never();
+                service.expect_join_meeting_with_options().never();
+                // Refused before the feature-flag lookup.
+                service.expect_programmatic_calls_enabled().never();
 
-        let response = router_with_flag(service, false)
-            .oneshot(join(Uuid::now_v7(), "agent-session"))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+                let response = call_router(CallRouterState::new(
+                    Arc::new(service),
+                    Arc::new(NoOpEntityAccessService),
+                    MacroAuthorizationState::new(Arc::new(Auth)),
+                ))
+                .oneshot(request)
+                .await
+                .unwrap();
+                assert_eq!(response.status(), StatusCode::FORBIDDEN, "{actor} {route}");
+            }
+        }
     }
 
     #[tokio::test]
