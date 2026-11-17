@@ -14,9 +14,10 @@
     FROM selected_companies selected
     CROSS JOIN LATERAL unnest(selected.ids) target(company_id)
     CROSS JOIN LATERAL (
-        SELECT domain FROM crm_domains
-        WHERE company_id = target.company_id AND team_id = selected.team_id OFFSET 0
+        SELECT domain, team_id FROM crm_domains
+        WHERE company_id = target.company_id OFFSET 0
     ) d
+    WHERE d.team_id = selected.team_id
 ), domain_mailboxes AS MATERIALIZED (
     SELECT DISTINCT link_id FROM candidate_domains
 ), selected_email_contacts AS MATERIALIZED (
@@ -26,7 +27,9 @@
         SELECT id FROM email_contacts
         WHERE link_id = a.link_id AND lower(email_address) = a.address OFFSET 0
     ) ec
-    UNION
+    -- Duplicate contacts only inflate the conservative probe count; the page
+    -- deduplicates thread IDs after the probe proves this stream is small.
+    UNION ALL
     -- Stream each selected mailbox once; do not store its whole domain set
     -- before the capped positive-thread probe can read any candidates.
     SELECT mailbox.link_id, ec.id

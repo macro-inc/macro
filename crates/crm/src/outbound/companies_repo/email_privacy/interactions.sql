@@ -162,10 +162,11 @@ WITH matching_messages AS (
     ) r
     JOIN crm_companies co ON co.id = r.company_id AND co.team_id = cb.team_id
     CROSS JOIN LATERAL (
-        SELECT domain FROM crm_domains
-        WHERE company_id = co.id AND team_id = cb.team_id OFFSET 0
+        SELECT domain, team_id FROM crm_domains
+        WHERE company_id = co.id OFFSET 0
     ) d
-    WHERE cb.mode = 'selected' AND (NOT co.hidden OR cb.team_role <> 'member')
+    WHERE cb.mode = 'selected' AND d.team_id = cb.team_id
+      AND (NOT co.hidden OR cb.team_role <> 'member')
 )
 
 , selected_participants AS MATERIALIZED (

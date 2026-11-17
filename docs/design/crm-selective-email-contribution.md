@@ -518,8 +518,18 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    rollback checks, operational counters and rollout runbook. Measure the
    **1m-thread mailbox tier before activation**, including sparse selections,
    large live targets and fresh/stale custom/generic plans; the eligibility
-   phase does not establish that tier's budget. Depends on all prior PRs.
-   Enabling flags or deployment requires separate authorization.
+   phase does not establish that tier's budget. Bound work examining unmatched
+   live addresses/domains and mailbox contacts before activation: a 99-selected-
+   mailbox seed with about 2,000 live addresses per contact required 198,297
+   address probes, 740,236 shared buffer accesses and 2,522 temporary blocks
+   written by the original eager-distinct probe (1.55 seconds; 4.45 seconds for
+   the request).
+   Streaming duplicates removes that eager sort but does not bound misses.
+   An overflow must never authorize a truncated target set, and falling back
+   to a dense record stream is not a sufficient bound. Retain the deterministic
+   all-mail/selected snapshot-transition regressions added in PR 2.
+   Depends on all prior PRs. Enabling flags or deployment requires separate
+   authorization.
 
 ## Remaining implementation questions
 

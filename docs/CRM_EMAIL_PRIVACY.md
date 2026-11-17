@@ -214,8 +214,10 @@ new binaries roll out, while older Team and ingestion queries still require the
 legacy bit. That window is safe because every existing consent is all-mail and
 no deployed operation can activate selected mode. Activation must wait for all
 three readers, the policy API, generation-safe historical work and the PR 5
-performance gate, including the 1m-thread mailbox tier. The remote flag controls
-future writes, never enforcement of stored restrictions.
+performance gate, including the 1m-thread mailbox tier and a work bound for
+unmatched live target expansions and mailbox-contact discovery. The positive-
+thread probe's result cap alone does not bound that discovery work. The remote
+flag controls future writes, never enforcement of stored restrictions.
 
 The optimized Team reader resolves contribution modes inside its read snapshot.
 When none of the requested contributors uses selected mode, it emits the existing
@@ -230,8 +232,12 @@ resolve against each selected mailbox's contacts in one indexed pass per page;
 contact-address targets use direct indexed lookups. Per-thread eligibility keeps
 only the bounded live target IDs and probes their indexed addresses or domains,
 so it does not repeat that expansion for each thread. Selected-policy target
-resolution fences mailbox contact and participant lookups. Record probes and
-sparse pages reuse the shared indexed sender/recipient branches, without adding
+resolution fences mailbox contact and participant lookups. Company domains are
+fenced by company ID before checking team membership, so stale estimates cannot
+substitute a whole-team domain scan. Candidate contacts stream with `UNION ALL`;
+duplicates only make the probe conservatively choose another stream, while the
+page deduplicates thread IDs. Record probes and sparse pages reuse the shared
+indexed sender/recipient branches, without adding
 index maintenance to ordinary contact ingestion.
 All-mail-only reads retain their existing candidate path. Ingestion has a
 fifteen-second statement bound, including admission before enrichment, and
