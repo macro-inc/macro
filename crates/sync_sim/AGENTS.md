@@ -68,7 +68,9 @@ Observe snapshot statistics through the same pure real-document port as producti
   Compare them modulo only the root state the editor sync policy retains live
   (`invariants::without_retained_root_state`): a remote root id or metadata write
   reaches the persisted root before the live model's next local write, as in Source.
-  This composition installs no application root-id pass, so native live roots have no id.
+  This composition installs no application root-id pass, so native live roots have no
+  id (C-SYNCSIM-APP-COMPOSITION-01). Compare a TS creator's editor JSON with a native
+  importer through `invariants::as_importer_reads` (the policy's storage-null keys).
   Exempt projection consistency only after an actual injected-write receipt for the
   exact client session incarnation. Keep all healthy projection, convergence and
   loss checks; reopening never inherits an exemption.

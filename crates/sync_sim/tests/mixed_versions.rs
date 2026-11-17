@@ -7,7 +7,7 @@ mod peer_protocol;
 mod ts_child;
 use mixed::Mixed;
 use peer_protocol::*;
-use sync_sim::invariants::without_retained_root_state;
+use sync_sim::invariants::{as_importer_reads, without_retained_root_state};
 use sync_sim::*;
 
 #[test]
@@ -425,13 +425,15 @@ fn editor_native_and_shipping_worker(seed: u64) -> (Outcome, Vec<String>) {
         .as_ref()
         .unwrap();
     // Each live model keeps its own retained root state (root id, metadata), and the
-    // persisted root keeps the one the TS peer wrote; everything else must be equal.
+    // persisted root keeps the one the TS peer wrote. The TS peer created these nodes,
+    // so native, an importer, holds its absent storage-null keys as null (Source
+    // loroSyncState); everything else must be equal.
     assert_eq!(
-        without_retained_root_state(&editor),
+        without_retained_root_state(&as_importer_reads(&editor).unwrap()),
         without_retained_root_state(&native.synced_json)
     );
     assert_eq!(
-        without_retained_root_state(&editor),
+        without_retained_root_state(&as_importer_reads(&editor).unwrap()),
         without_retained_root_state(&native.reconstructed)
     );
     assert_eq!(
@@ -536,13 +538,15 @@ fn markdown_native_and_shipping_worker(seed: u64, snippet: u8) -> (Outcome, Vec<
         .as_ref()
         .unwrap();
     // Each live model keeps its own retained root state (root id, metadata), and the
-    // persisted root keeps the one the TS peer wrote; everything else must be equal.
+    // persisted root keeps the one the TS peer wrote. The TS peer created these nodes,
+    // so native, an importer, holds its absent storage-null keys as null (Source
+    // loroSyncState); everything else must be equal.
     assert_eq!(
-        without_retained_root_state(&editor),
+        without_retained_root_state(&as_importer_reads(&editor).unwrap()),
         without_retained_root_state(&native.synced_json)
     );
     assert_eq!(
-        without_retained_root_state(&editor),
+        without_retained_root_state(&as_importer_reads(&editor).unwrap()),
         without_retained_root_state(&native.reconstructed)
     );
     assert!(peer.rows.iter().all(|row| row.delivered));

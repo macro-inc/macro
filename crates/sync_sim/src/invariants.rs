@@ -302,6 +302,21 @@ pub(crate) fn projection_matches(editor: &EditorFinal) -> bool {
 fn projection_json_matches(live: &serde_json::Value, persisted: &serde_json::Value) -> bool {
     without_retained_root_state(live) == without_retained_root_state(persisted)
 }
+/// A creating peer's editor JSON as an importer of the same document holds it: the
+/// editor sync policy's storage-null keys the creator's export left absent read back as
+/// null (lexical_loro::read_back_storage_nulls); present values are unchanged.
+pub fn as_importer_reads(
+    json: &serde_json::Value,
+) -> Result<serde_json::Value, lexical_loro::ProjectionError> {
+    let mut json = json.clone();
+    if let Some(root) = json.get_mut("root") {
+        lexical_loro::read_back_storage_nulls(
+            root,
+            crate::client::application::EDITOR_SYNC_POLICY,
+        )?;
+    }
+    Ok(json)
+}
 /// Editor JSON without the root state slots the editor sync policy retains live, for
 /// comparing a live model with a persisted reconstruction.
 pub fn without_retained_root_state(json: &serde_json::Value) -> serde_json::Value {
