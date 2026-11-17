@@ -2388,6 +2388,7 @@
     ],
     "artifacts": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/artifacts",
@@ -2427,6 +2428,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
+      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "attachment": [
