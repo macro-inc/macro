@@ -680,6 +680,53 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('keeps a reply open whose schedule another view cancelled while the thread was marked done', async () => {
+    const composeContext = createComposeContext();
+    let markDone: (() => void) | undefined;
+    vi.mocked(composeContext.delivery.archive).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          markDone = resolve;
+        })
+    );
+    const sideEffectOnSend = vi.fn();
+    const state = mountReplyComposer(
+      composeContext,
+      undefined,
+      { sideEffectOnSend },
+      { inboxVisible: true }
+    );
+    state.edit('Schedule a reply and mark done');
+    state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+    const send = state.sendEmail();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(composeContext.delivery.archive).toHaveBeenCalledOnce();
+    // The thread open in another split cancels the schedule meanwhile.
+    const beside = mountEmailComposer(composeContext, undefined, {
+      draft: message('draft', { is_draft: true }),
+    });
+    try {
+      expect(await beside.state.context.schedule.onCancel()).toBe(true);
+      composeContext.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      markDone?.();
+      await send;
+      expect(state.scheduleState().type).toBe('editing');
+      expect(sideEffectOnSend).not.toHaveBeenCalled();
+    } finally {
+      markDone?.();
+      beside.dispose();
+      state.dispose();
+    }
+  });
+
   it('leaves a done thread done when a reply is scheduled and undone', async () => {
     const composeContext = createComposeContext();
     const state = mountReplyComposer(composeContext);
