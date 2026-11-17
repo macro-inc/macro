@@ -14,6 +14,9 @@ maps a data source onto Macro database columns and cells
   `NotionConnections`, `NotionError`).
 - `src/domain/inventory.rs`: walking the workspace; scope, row draining,
   markdown splicing.
+- `src/domain/databases.rs`: ordered body occurrences (`container_id` plus
+  per-page ordinal), source ownership, and separate external dependencies
+  for review; `databases/markdown.rs` skips code, comments and escaped tags.
 - `src/domain/macro_cells.rs`: a data source's `ColumnPlan` (column kinds,
   options, UUIDv5 ids derived from the database), its column-create ops, and
   each row's `CellWrite`s.
@@ -59,6 +62,15 @@ maps a data source onto Macro database columns and cells
   than failing the page; fixtures in `fixtures/` cover every property type.
 - Unknown property and value types map to `Unsupported` / `Empty`, never an
   error.
+- `databases::discover_database_dependencies` reads standalone page bodies
+  without expanding `Inventory` or querying dependency rows. Its cache and
+  source deduplication belong to one workspace client; import mappings must
+  also include workspace identity. Read row bodies with `read_page_databases`.
+- Database occurrences retain their original tags and byte ranges, including
+  unresolved placements. A container returning no sources is `NeedsViews`,
+  not empty: resolve linked views before declaring `EmptyContainer`. View
+  selection and translation belong to the caller; a multi-source container
+  retains every source, and a URL fragment never supplies the selected view.
 
 ## Related
 
