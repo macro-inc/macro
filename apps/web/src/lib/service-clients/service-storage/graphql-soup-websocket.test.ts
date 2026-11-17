@@ -221,6 +221,111 @@ describe('GraphQL Soup subscription lifecycle', () => {
     }
   });
 
+  function scriptedClient() {
+    const receive = new Map<
+      unknown,
+      (result: { data?: unknown; error?: unknown; hasNext?: boolean }) => void
+    >();
+    const unsubscribes = new Map<unknown, ReturnType<typeof vi.fn>[]>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (
+          next: (result: {
+            data?: unknown;
+            error?: unknown;
+            hasNext?: boolean;
+          }) => void
+        ) => {
+          receive.set(document, next);
+          const unsubscribe = vi.fn();
+          unsubscribes.set(document, [
+            ...(unsubscribes.get(document) ?? []),
+            unsubscribe,
+          ]);
+          return { unsubscribe };
+        },
+      })),
+    };
+    const subscribed = (document: unknown) =>
+      client.subscription.mock.calls.filter(([called]) => called === document)
+        .length;
+    return { client, receive, unsubscribes, subscribed };
+  }
+
+  it('recovers bots on a reconnect, not on the first connection', () => {
+    const { client } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    botRecoveries.mockClear();
+
+    lifecycle.connected();
+    expect(botRecoveries).not.toHaveBeenCalled();
+    lifecycle.connected();
+    expect(botRecoveries).toHaveBeenCalledOnce();
+    lifecycle.dispose();
+  });
+
+  it('resubscribes botUpdates alone, soon, after it falls behind, and recovers', () => {
+    vi.useFakeTimers();
+    const { client, receive, unsubscribes, subscribed } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    botRecoveries.mockClear();
+    const fellBehind = {
+      error: {
+        graphQLErrors: [
+          { message: 'bot updates fell behind; resubscribe and refetch' },
+        ],
+      },
+      hasNext: false,
+    };
+
+    receive.get(BotUpdatesDocument)?.(fellBehind);
+    expect(subscribed(BotUpdatesDocument)).toBe(1);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(2);
+    expect(botRecoveries).toHaveBeenCalledOnce();
+    // The other streams were never torn down.
+    expect(subscribed(NotificationUpdatesDocument)).toBe(1);
+    expect(
+      unsubscribes.get(NotificationUpdatesDocument)?.[0]
+    ).not.toHaveBeenCalled();
+
+    // Falling behind again backs off further.
+    receive.get(BotUpdatesDocument)?.(fellBehind);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(2);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(3);
+    lifecycle.dispose();
+  });
+
+  it('leaves the other streams alone when a server without botUpdates refuses it', () => {
+    vi.useFakeTimers();
+    const { client, receive, subscribed } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+
+    receive.get(BotUpdatesDocument)?.({
+      error: {
+        graphQLErrors: [
+          {
+            message:
+              'Unknown field "botUpdates" on type "CompleteSubscriptionRoot".',
+          },
+        ],
+      },
+      hasNext: false,
+    });
+    setVisibility('visible');
+    vi.advanceTimersByTime(120_000);
+
+    expect(subscribed(BotUpdatesDocument)).toBe(1);
+    expect(subscribed(NotificationUpdatesDocument)).toBe(1);
+    lifecycle.dispose();
+  });
+
   it('keeps notification and activity updates active with or without a cache host', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
