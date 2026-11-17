@@ -1,6 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { ActiveNotificationIdsTimeoutError } from '@queries/notification/graphql/active-notification-ids';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
@@ -16,8 +15,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 type Account = { userId: string; session: number };
-const [transport, setTransport] = createSignal<'rest' | 'graphql'>('graphql');
-const [restFeed, setRestFeed] = createSignal<UnifiedNotification[]>([]);
 // The query account, as `account-scope` reports it: a login bumps the session
 // and holds it pending until the new identity arrives.
 const [account, setAccount] = createSignal<Account | undefined>();
@@ -25,8 +22,6 @@ const [accountPending, setAccountPending] = createSignal(false);
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: false,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
 }));
 vi.mock(
   '@queries/notification/graphql/active-notification-ids',
@@ -46,24 +41,18 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: new Proxy({}, { get: () => mocks.toastShown }),
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
-  // The facade's GraphQL feed is never started here; reading `data` would be
-  // what starts it.
+  // The feed is never started here; reading `data` would be what starts it.
   useUserNotificationsQuery: () => ({
-    get isStarted() {
-      return transport() === 'rest';
-    },
+    isStarted: false,
     get data() {
       mocks.feedReads += 1;
-      return transport() === 'rest' ? restFeed() : undefined;
+      return undefined;
     },
     error: null,
     isLoading: false,
     isFetching: false,
     isFetchingNextPage: false,
     hasNextPage: false,
-    get transport() {
-      return transport();
-    },
     fetchNextPage: vi.fn(),
     refetch: vi.fn(),
   }),
@@ -75,7 +64,6 @@ vi.mock('@queries/notification/user-notifications', () => ({
     isPending: false,
     mutateAsync: vi.fn(),
   }),
-  optimisticInsertNotification: vi.fn(),
 }));
 vi.mock('../queries/muted-entities-query', () => ({
   createMutedEntitiesQuery: () => ({
@@ -108,9 +96,6 @@ vi.mock('@service-storage/graphql-soup-websocket', () => ({
     };
   },
 }));
-vi.mock('@macro-inc/collaboration/websocket', () => ({
-  createSocketEffect: vi.fn(),
-}));
 
 function notification(
   id: string,
@@ -138,11 +123,7 @@ let spanAttributes: Map<string, unknown>[] = [];
 function mountSource() {
   createRoot((disposeRoot) => {
     dispose = disposeRoot;
-    createNotificationSource(
-      {} as ConnectionGatewayWebsocket,
-      undefined,
-      signedIn
-    );
+    createNotificationSource(undefined, signedIn);
   });
 }
 
@@ -181,8 +162,6 @@ beforeEach(() => {
       error: (error: unknown) => attributes.set('status', `error: ${error}`),
     } as unknown as Span);
   }) as typeof Telemetry.span);
-  setTransport('graphql');
-  setRestFeed([]);
   setSignedIn(true);
   setAccount({ userId: 'macro|first@example.com', session: 1 });
   setAccountPending(false);
@@ -194,7 +173,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('discards active document mentions read by id in GraphQL mode, never through the feed', async () => {
+it('discards active document mentions read by id, never through the feed', async () => {
   mocks.fetchActiveNotificationIds.mockResolvedValue(['older', 'newer']);
   mountSource();
 
@@ -228,20 +207,14 @@ it('discards active document mentions read by id in GraphQL mode, never through 
   expect(mocks.feedReads).toBe(0);
 });
 
-it('waits for a signed-in session with settled GraphQL flags, then reads once per session', async () => {
+it('waits for a signed-in session, then reads once per session', async () => {
   mocks.fetchActiveNotificationIds.mockResolvedValue([]);
   setSignedIn(false);
   mountSource();
   await settle();
   expect(mocks.fetchActiveNotificationIds).not.toHaveBeenCalled();
 
-  // Flags still loading report the REST transport.
-  setTransport('rest');
   setSignedIn(true);
-  await settle();
-  expect(mocks.fetchActiveNotificationIds).not.toHaveBeenCalled();
-
-  setTransport('graphql');
   await settle();
   expect(mocks.fetchActiveNotificationIds).toHaveBeenCalledTimes(1);
 
@@ -268,23 +241,6 @@ it('drops a read that lands after the session ended', async () => {
   await settle();
 
   expect(mocks.markDone).not.toHaveBeenCalled();
-});
-
-it('keeps discarding feed document mentions in REST mode without the id read', async () => {
-  setTransport('rest');
-  setRestFeed([
-    notification('active', 'document_mention'),
-    notification('discarded', 'document_mention', 'done'),
-    notification('message', 'channel_message_send'),
-  ]);
-  mountSource();
-
-  await vi.waitFor(() =>
-    expect(mocks.markDone).toHaveBeenCalledWith({
-      notificationIds: ['active'],
-    })
-  );
-  expect(mocks.fetchActiveNotificationIds).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -319,7 +275,6 @@ it.each([
     );
 
     // Nothing else in the same session retries it, a reconnect included.
-    setRestFeed([notification('message', 'channel_message_send')]);
     mocks.patchListener?.({
       __typename: 'GraphqlNewNotification',
       notification: notification('message', 'channel_message_send'),
@@ -369,7 +324,7 @@ it("reruns for an account that replaces the session in place, and drops the old 
   );
 });
 
-it('reads once more after each websocket reconnect while signed in under GraphQL', async () => {
+it('reads once more after each websocket reconnect while signed in', async () => {
   mocks.fetchActiveNotificationIds
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce(['missed-while-offline']);
@@ -386,9 +341,6 @@ it('reads once more after each websocket reconnect while signed in under GraphQL
   expect(mocks.fetchActiveNotificationIds).toHaveBeenCalledTimes(2);
 
   setSignedIn(false);
-  reconnect();
-  setTransport('rest');
-  setSignedIn(true);
   reconnect();
   await settle();
   expect(mocks.fetchActiveNotificationIds).toHaveBeenCalledTimes(2);
