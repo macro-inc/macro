@@ -55,5 +55,16 @@ in
       apply_immediately = false;
       lifecycle.prevent_destroy = true;
     };
+
+    # The RDS-managed secret keeps managed rotation (no Lambda); this only
+    # sets its schedule, without rotating now.
+    aws_secretsmanager_secret_rotation.grafana_db = {
+      secret_id = ref "aws_db_instance.grafana.master_user_secret[0].secret_arn";
+      rotate_immediately = false;
+      rotation_rules = {
+        schedule_expression = db.passwordRotation.schedule;
+        duration = db.passwordRotation.window;
+      };
+    };
   };
 }

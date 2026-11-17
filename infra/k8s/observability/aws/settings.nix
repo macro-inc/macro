@@ -116,6 +116,14 @@ rec {
     storageGiB = 20;
     name = "grafana";
     username = "grafana";
+    # RDS rotates its managed password every 7 days by default, and Grafana
+    # loses new connections until it reads the new one. Once a year, the first
+    # Sunday of January in the database's maintenance hour (UTC). cron, not
+    # rate(): a changed rate() schedule can still run the old rotation.
+    passwordRotation = {
+      schedule = "cron(0 4 ? 1 SUN#1 *)";
+      window = "1h";
+    };
   };
 
   # The ALB forwards to the edge nginx pods (IP targets) on this port; the

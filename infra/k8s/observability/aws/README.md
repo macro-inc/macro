@@ -1,4 +1,4 @@
-# Observability cluster: AWS layer
+reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 04:00–05:00 UTC) instead of every 7 days. |# Observability cluster: AWS layer
 
 The AWS resources for the observability EKS cluster in Ohio (us-east-2), in
 OpenTofu written in Nix with [terranix](https://terranix.org). It is the first
@@ -68,7 +68,8 @@ removed first.
   `grafana`, password from the RDS-managed secret. Connect with TLS
   (`ssl_mode = require`, or `verify-full` with the RDS CA bundle): Postgres 17
   on RDS refuses unencrypted connections. RDS rotates that password
-  every 7 days, so Grafana must pick up a changed Secret (restart on change).
+  once a year (`settings.grafanaDb.passwordRotation`, not the 7-day default),
+  so Grafana must pick up a changed Secret (refresh it often, restart on change).
 
 ## Secrets
 
@@ -118,7 +119,7 @@ Multi-AZ database up to 20.
    export TF_VAR_admin_principal_arns='["arn:aws:iam::569036502058:role/<path>/<role>"]'
    export TF_VAR_public_access_cidrs='["<your public IP>/32"]'
    ```
-4. Plan and review. Expect only additions (81) and no change or
+4. Plan and review. Expect only additions (82) and no change or
    destroy:
    ```sh
    nix run .#tofu -- main init
