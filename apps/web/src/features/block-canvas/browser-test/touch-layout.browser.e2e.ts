@@ -556,3 +556,39 @@ test('a long press on an item in a group offers to select it alone', async ({
     sheet.getByRole('button', { name: 'Select inside group' })
   ).toHaveCount(0);
 });
+
+test('with the tool kept, one choice of Rectangle draws several', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const rectangle = page.getByRole('button', { name: 'Rectangle tool' });
+  const before = (await canvas(page)).items;
+  /** One finger dragged across empty canvas, to the right of the fixture's shapes. */
+  const draw = async (y: number) => {
+    await touch(cdp, 'touchStart', [{ x: 250, y }]);
+    await touch(cdp, 'touchMove', [{ x: 300, y: y + 30 }]);
+    await touch(cdp, 'touchMove', [{ x: 350, y: y + 60 }]);
+    await touch(cdp, 'touchEnd', []);
+  };
+
+  // As it comes: one shape, and Select is back.
+  await rectangle.tap();
+  await draw(120);
+  await expect(rectangle).toHaveAttribute('aria-pressed', 'false');
+  expect((await canvas(page)).items).toBe(before + 1);
+
+  await page.getByRole('button', { name: 'Zoom options' }).tap();
+  const keep = page
+    .getByRole('dialog', { name: 'View' })
+    .getByRole('menuitemcheckbox', { name: 'Keep tool after drawing' });
+  await keep.tap();
+  await expect(keep).toHaveAttribute('aria-checked', 'true');
+  await page.touchscreen.tap(380, 40);
+  await expect(page.getByRole('dialog', { name: 'View' })).toBeHidden();
+
+  await rectangle.tap();
+  await draw(240);
+  await draw(360);
+  await expect(rectangle).toHaveAttribute('aria-pressed', 'true');
+  expect((await canvas(page)).items).toBe(before + 3);
+});

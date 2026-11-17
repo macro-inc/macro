@@ -237,7 +237,7 @@ function MobileCanvasLayout() {
     const draft = state.text.draft();
     if (!draft) return;
     state.text.finish();
-    state.chooseTool('select');
+    state.toolDone();
     if (editor.document.items[draft.id]) editor.select(draft.id);
   };
   // A phone's Done button takes the focus from the text, to nowhere. Focus
@@ -330,6 +330,8 @@ function MobileCanvasLayout() {
           onSnapToObjects: state.setSnapToObjects,
           snapMode: state.snapMode(),
           onSnapMode: state.setSnapMode,
+          toolLocked: state.toolLocked(),
+          onToolLocked: state.setToolLocked,
         }}
       />
       <MobileCanvasActionsSheet

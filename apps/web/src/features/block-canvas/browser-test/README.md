@@ -46,7 +46,8 @@ project: the tools above the dock, uncovered and at least 44px; the grouped
 tools; the selection's actions and their undo steps; the inspector sheet
 resting under the shape and closing with the selection kept; the long-press
 menu outliving the lift (and a drag not opening it), with Select inside group
-for an item in a group; the zoom sheet; the
+for an item in a group; the zoom sheet, and its Keep tool after drawing
+switch drawing several rectangles from one choice of the tool; the
 in-canvas placement without the app's chrome; a corner taken from 12px outside
 it and the shape moved from its middle; an outlined shape selected by a tap
 near its stroke; the Attach sheet, whose Upload media row reaches the file

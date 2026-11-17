@@ -138,6 +138,9 @@ export function MobileCanvasViewSheet(props: {
     onSnapToObjects: (enabled: boolean) => void;
     snapMode: CanvasSnapMode;
     onSnapMode: (mode: CanvasSnapMode) => void;
+    /** A drawing tool stays chosen after it has drawn. */
+    toolLocked: boolean;
+    onToolLocked: (locked: boolean) => void;
   };
 }) {
   const percent = () => Math.round(props.scale * 100);
@@ -194,6 +197,13 @@ export function MobileCanvasViewSheet(props: {
                   />
                 )}
               </For>
+            </MobileDrawer.Section>
+            <MobileDrawer.Section>
+              <SheetRow
+                label="Keep tool after drawing"
+                checked={editing().toolLocked}
+                onClick={() => editing().onToolLocked(!editing().toolLocked)}
+              />
             </MobileDrawer.Section>
           </>
         )}

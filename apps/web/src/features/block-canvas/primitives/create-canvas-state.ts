@@ -36,6 +36,9 @@ export function createCanvasState(
   const projection = createGraphicsProjection(editor);
   const inspector = createInspectorPreview(editor, measureText);
   const [tool, setTool] = createSignal<CanvasTool>('select');
+  // A drawing tool hands back to Select once it has drawn. Locked, it stays,
+  // for drawing several of a kind without choosing the tool each time.
+  const [toolLocked, setToolLocked] = createSignal(false);
   const eraser = createEraserState(editor, () => tool() === 'eraser');
   const [defaults, setDefaults] = createSignal(initialAppearance);
   const text = createTextState(editor, measureText, defaults);
@@ -186,8 +189,14 @@ export function createCanvasState(
       if (canGroup()) editor.groupSelection(crypto.randomUUID());
     },
     ungroup: () => editor.ungroupSelection(),
+    toolLocked,
+    setToolLocked,
+    /** A tool has finished what it draws: back to Select, unless it is locked. */
+    toolDone() {
+      if (!toolLocked()) chooseTool('select');
+    },
     shapeCreated(id: string) {
-      if (tool() === 'pencil') return;
+      if (tool() === 'pencil' || toolLocked()) return;
       editor.select(id);
       setTool('select');
     },

@@ -134,7 +134,10 @@ app's bottom chrome (a public link opened signed out) there is no float region,
 and the same islands sit at the bottom of the canvas instead.
 
 The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
-to selection, zoom levels, the dot grid and snapping. More, and a long press on
+to selection, zoom levels, the dot grid and snapping. It also holds **Keep tool
+after drawing** (`toolLocked` in the canvas state): a drawing tool normally hands
+back to Select after one shape, line or text, which costs a finger a trip to the
+toolbar for every further one; kept, it stays and nothing is selected. More, and a long press on
 the canvas with Select or Hand, open a sheet with every context-menu action:
 clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
 sheet open and confirms with a check, as copy actions do in other menus. A long press

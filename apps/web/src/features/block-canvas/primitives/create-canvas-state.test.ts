@@ -122,3 +122,48 @@ it('shows a canvas radius drag in the inspector before committing and restores i
     }
   });
 });
+
+it('hands a drawing tool back to Select once it has drawn, unless the tool is locked', () => {
+  createRoot((dispose) => {
+    const editor = createGraphicsEditor([
+      {
+        id: 'first',
+        type: 'rectangle',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: [1, 0, 0, 1, 0, 0],
+        geometry: { width: 40, height: 40 },
+        appearance: initialAppearance,
+      },
+    ]);
+    try {
+      const state = createCanvasState(editor, (geometry) => ({
+        width: geometry.width,
+        height: 20,
+      }));
+
+      state.chooseTool('rectangle');
+      state.shapeCreated('first');
+      expect(state.tool()).toBe('select');
+      expect(editor.getSession().selectedIds).toEqual(['first']);
+
+      // Locked, the tool stays for the next shape and nothing is selected.
+      editor.selectMany([]);
+      state.setToolLocked(true);
+      state.chooseTool('rectangle');
+      state.shapeCreated('first');
+      expect(state.tool()).toBe('rectangle');
+      expect(editor.getSession().selectedIds).toEqual([]);
+
+      // The same goes for tools that report they are done: lines and text.
+      state.chooseTool('arrow');
+      state.toolDone();
+      expect(state.tool()).toBe('arrow');
+      state.setToolLocked(false);
+      state.toolDone();
+      expect(state.tool()).toBe('select');
+    } finally {
+      dispose();
+      editor.dispose();
+    }
+  });
+});

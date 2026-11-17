@@ -44,7 +44,9 @@ tablet, commits the text and leaves it selected with the Select tool.
 
 **Zoom to fit** in the zoom sheet shows the whole scene between the header and
 the bottom chrome, 24px clear of both and of the screen's sides, and left of the
-inspector panel when it is open. Turn the device: a canvas nobody has moved since
+inspector panel when it is open. The same sheet has **Keep tool after
+drawing**: switch it on, choose Rectangle once, and each further drag draws
+another rectangle instead of selecting the last one. Turn the device: a canvas nobody has moved since
 the fit is fitted again, and one that was moved keeps what was in the middle of
 the view in the middle.
 

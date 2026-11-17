@@ -228,7 +228,7 @@ function createCanvasView(props: CanvasViewProps) {
     },
     finishText() {
       state.text.finish();
-      state.chooseTool('select');
+      state.toolDone();
       focus();
     },
     /**
@@ -396,7 +396,7 @@ function Surface(props: {
             active: state.isConnectorTool,
             appearance: state.defaults,
             style: state.connector.defaults,
-            onCommit: () => state.chooseTool('select'),
+            onCommit: state.toolDone,
           });
           return () => {
             detachEraser();
