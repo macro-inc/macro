@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH requested AS MATERIALIZED (\n            SELECT DISTINCT p.project_id\n            FROM unnest($3::text[]) AS p(project_id)\n        ),\n        granted AS MATERIALIZED (\n            SELECT r.project_id\n            FROM requested r\n            WHERE EXISTS (\n                SELECT 1\n                FROM unnest($1::text[]) AS sources(source_id)\n                CROSS JOIN LATERAL (\n                    SELECT 1\n                    FROM entity_access ea\n                    WHERE ea.source_id = sources.source_id\n                      AND ea.entity_type = 'project'\n                      AND ea.entity_id::text = r.project_id\n                    LIMIT 1\n                ) g\n            )\n        ),\n        in_folders AS (\n            SELECT t.id, t.link_id\n            FROM requested r\n            CROSS JOIN LATERAL (\n                SELECT t.id, t.link_id\n                FROM email_threads t\n                WHERE t.project_id = r.project_id\n                OFFSET 0\n            ) t\n            WHERE CASE\n                WHEN t.link_id = ANY($2) THEN $4\n                ELSE r.project_id IN (SELECT g.project_id FROM granted g)\n            END\n        ),\n        thread_shares AS (\n            SELECT t.id, t.link_id\n            FROM unnest($1::text[]) AS sources(source_id)\n            CROSS JOIN LATERAL (\n                SELECT ea.entity_id\n                FROM entity_access ea\n                WHERE ea.source_id = sources.source_id\n                  AND ea.entity_type = 'email_thread'\n                OFFSET 0\n            ) ea\n            CROSS JOIN LATERAL (\n                SELECT t.id, t.link_id, t.project_id\n                FROM email_threads t\n                WHERE t.id = ea.entity_id\n                OFFSET 0\n            ) t\n            WHERE $5\n              AND t.link_id <> ALL($2)\n              AND t.project_id IN (SELECT r.project_id FROM requested r)\n        )\n        SELECT x.id AS \"thread_id!\", x.link_id AS \"link_id!\"\n        FROM (\n            SELECT f.id, f.link_id FROM in_folders f\n            UNION\n            SELECT s.id, s.link_id FROM thread_shares s\n        ) x\n        LIMIT $6\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "TextArray",
+        "Bool",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "aeb0a837202c860cf968c5fed38af510ac64c8299a86cf8d259f384d731d0e73"
+}

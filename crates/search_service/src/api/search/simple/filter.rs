@@ -23,6 +23,9 @@ use crate::api::{
     },
 };
 
+#[cfg(test)]
+mod test;
+
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
     type Output;
@@ -157,6 +160,22 @@ pub(super) struct EmailSearch {
     pub args: UnifiedEmailSearchArgs,
     pub hit_states: ThreadStates,
     pub shared_capped: bool,
+    pub project_capped: bool,
+}
+
+/// Email filters search cannot apply, rejected instead of ignored: the CRM
+/// filters widen a list to the team's mailboxes under per-mailbox consent,
+/// which only listing email implements.
+pub(super) fn reject_unsupported_email_filters(
+    filters: &item_filters::EmailFilters,
+) -> Result<(), SearchError> {
+    if !filters.crm_domains.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_domains"));
+    }
+    if !filters.crm_addresses.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_addresses"));
+    }
+    Ok(())
 }
 
 /// Resolves the email threads `filters` reach for the caller, or `None` when
@@ -170,6 +189,7 @@ pub(super) async fn email_search(
     if !should_include {
         return Ok(None);
     }
+    reject_unsupported_email_filters(filters)?;
     // Every inbox the caller can reach (their own plus delegated). Connected
     // secondary inboxes share the owner's user_id; delegated inboxes index
     // under their own, so collect the distinct macro_ids the caller can search.
@@ -215,6 +235,7 @@ pub(super) async fn email_search(
         },
         hit_states: threads.hit_states,
         shared_capped: threads.shared_capped,
+        project_capped: threads.project_capped,
     }))
 }
 

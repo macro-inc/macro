@@ -63,6 +63,9 @@ pub enum SearchError {
     /// A channel type filter is not a known channel type.
     #[error("invalid channel type: {0}")]
     InvalidChannelType(String),
+    /// An email filter search cannot apply, rejected rather than ignored
+    #[error("email_filters.{0} is not supported by search")]
+    UnsupportedEmailFilter(&'static str),
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -88,6 +91,7 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidAgentSessionId(_)
             | SearchError::InvalidChannelId(_)
             | SearchError::InvalidChannelType(_)
+            | SearchError::UnsupportedEmailFilter(_)
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
