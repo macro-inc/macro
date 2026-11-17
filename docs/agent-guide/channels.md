@@ -151,10 +151,11 @@ Team channels are always discoverable to the team. Private channels can only be 
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
 The channel header's Invite dialog and Participants add controls use paged personal
-suggestions, not a complete address book. Next options (or PageDown) replaces the
-window; selected people and typed external addresses remain independent. Existing
-members are excluded, including anyone who joins while selected. A large roster
-can leave a short or empty page with more options available. Add all teammates
+suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
+the next page below the earlier ones, up to 500 people; selected people and typed
+external addresses remain independent. Existing members are excluded, including
+anyone who joins while selected. A large roster can leave a short or empty page;
+the picker reads on until a page matches or the directory ends. Add all teammates
 uses the current team roster, never just the visible suggestion page.
 
 The first message in a DM to an unregistered recipient sends an email saying

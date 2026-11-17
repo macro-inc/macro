@@ -1418,6 +1418,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       loadMore: async () => {
         await Promise.all([personList.loadMore(), projected?.loadMore()]);
       },
+      // Each failed source reads its page again; the projected list retries
+      // through its ordinary pagination.
+      retry: async () => {
+        await Promise.all([
+          personList.error() ? personList.retry?.() : undefined,
+          projected?.error() ? projected.loadMore() : undefined,
+        ]);
+      },
     };
   }) as QuickAccessContextValue['useList'];
 

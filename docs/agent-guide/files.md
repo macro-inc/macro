@@ -193,7 +193,7 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 Created by uses a bounded searchable contact window on desktop and in the mobile
 drawer, with Me and persisted selections resolved independently of that window.
-Next options replaces the page; selected and unavailable IDs remain selected,
+Further pages load as the list scrolls; selected and unavailable IDs remain selected,
 and Only clears off-page selections in this group without changing other facets.
 Partial/offline cache data is labeled rather than treated as an empty directory.
 The source stays idle until the creator submenu/drawer section opens. Regression:
