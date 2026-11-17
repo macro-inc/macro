@@ -735,9 +735,22 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
-        self.authorize(jwt)
-            .await
-            .map(macro_authorization::ValidatedCredential::session)
+        // `agent` and `routine` stand for a Macro API JWT signed for an agent
+        // or a routine run, acting as the same user as `valid`.
+        let (credential, agent, routine) = match jwt {
+            "agent" => ("valid", Some(bot_id::MACRO_AI_BOT_ID), None),
+            "routine" => ("valid", None, Some(uuid::Uuid::nil())),
+            other => (other, None, None),
+        };
+        self.authorize(credential).await.map(|context| {
+            let mut credential = macro_authorization::ValidatedCredential::session(context);
+            if agent.is_some() || routine.is_some() {
+                credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+            }
+            credential.identity.agent_id = agent;
+            credential.identity.routine_id = routine;
+            credential
+        })
     }
 
     async fn authorize_internal(
@@ -1005,4 +1018,57 @@ async fn get_team_invites_reads_the_named_current_team() {
             role: TeamRole::Admin,
         }]
     );
+}
+
+/// Inviting people, minting a lasting join link, changing roles or plans,
+/// and opening the team to a domain or to members' invites grant outsiders
+/// access: only a person does those, whatever the program's credential or
+/// the code-mode header says. The fake service panics if any is reached.
+#[tokio::test]
+async fn a_program_cannot_invite_or_change_who_is_on_the_team() {
+    for (program, bearer, code_execution) in [
+        ("an agent run", "agent", false),
+        ("an owner-identity routine run", "routine", false),
+        ("the code-mode runtime", "valid", true),
+    ] {
+        let routes: [(&str, &str, &str); 6] = [
+            (
+                "POST",
+                "/invite",
+                r#"{"invites": [{"email": "new@example.com"}]}"#,
+            ),
+            ("POST", "/invite-link", ""),
+            ("PATCH", "/", r#"{"name": "Renamed"}"#),
+            (
+                "PATCH",
+                "/members/macro%7Cother%40example.com/plan",
+                r#"{"plan": "max"}"#,
+            ),
+            ("POST", "/auto-join-domain/toggle", ""),
+            ("POST", "/non-admin-invites/toggle", ""),
+        ];
+        for (method, uri, body) in routes {
+            let mut request = Request::builder()
+                .method(method)
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {bearer}"))
+                .header(header::CONTENT_TYPE, "application/json");
+            if code_execution {
+                request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+            }
+            let response = router(
+                FakeTeamService::default(),
+                FakeEntityAccessService::with_membership(USER_ID, TeamRole::Owner),
+            )
+            .oneshot(request.body(Body::from(body)).unwrap())
+            .await
+            .expect("router should respond");
+
+            assert_eq!(
+                response.status(),
+                StatusCode::FORBIDDEN,
+                "{program} {method} {uri}"
+            );
+        }
+    }
 }
