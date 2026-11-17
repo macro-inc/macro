@@ -126,7 +126,7 @@ pub struct StepValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[setters(skip)]
     #[merge(strategy = merge::option::overwrite_none)]
-    pub uses: Option<String>,
+    pub uses: Option<Uses>,
 
     /// Input parameters for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -175,20 +175,70 @@ impl StepValue {
     }
 
     /// Creates a new `StepValue` that uses an action.
-    pub fn uses<Owner: ToString, Repo: ToString, Version: ToString>(
-        owner: Owner,
-        repo: Repo,
-        version: Version,
-    ) -> Self {
+    pub fn uses(uses: Uses) -> Self {
         Self {
-            uses: Some(format!(
-                "{}/{}@{}",
-                owner.to_string(),
-                repo.to_string(),
-                version.to_string()
-            )),
+            uses: Some(uses),
             ..Default::default()
         }
+    }
+}
+
+/// What a step's `uses:` points at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Uses {
+    /// A published action, `owner/repo[/path]@version`.
+    Action {
+        owner: String,
+        repo: String,
+        version: String,
+    },
+    /// An action in this repository, rendered `./<path>`.
+    Local(String),
+    /// A Docker Hub or registry image, rendered `docker://<image>`.
+    Docker(String),
+}
+
+impl std::fmt::Display for Uses {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Action {
+                owner,
+                repo,
+                version,
+            } => write!(f, "{owner}/{repo}@{version}"),
+            Self::Local(path) => write!(f, "./{path}"),
+            Self::Docker(image) => write!(f, "docker://{image}"),
+        }
+    }
+}
+
+impl Serialize for Uses {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for Uses {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if let Some(path) = text.strip_prefix("./") {
+            return Ok(Self::Local(path.to_string()));
+        }
+        if let Some(image) = text.strip_prefix("docker://") {
+            return Ok(Self::Docker(image.to_string()));
+        }
+
+        let (action, version) = text
+            .split_once('@')
+            .ok_or_else(|| serde::de::Error::custom(format!("`{text}` has no @version")))?;
+        let (owner, repo) = action
+            .split_once('/')
+            .ok_or_else(|| serde::de::Error::custom(format!("`{text}` has no owner/repo")))?;
+        Ok(Self::Action {
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            version: version.to_string(),
+        })
     }
 }
 
@@ -212,13 +262,27 @@ impl Step<()> {
         }
     }
 
+    /// Uses the action `owner/repo[/path]@version`.
     pub fn uses<Owner: ToString, Repo: ToString, Version: ToString>(
-        mut self,
+        self,
         owner: Owner,
         repo: Repo,
         version: Version,
     ) -> Step<Use> {
-        self.value.merge(StepValue::uses(owner, repo, version));
+        self.uses_ref(Uses::Action {
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            version: version.to_string(),
+        })
+    }
+
+    /// Uses the action defined in this repository at `path` (no leading `./`).
+    pub fn uses_local(self, path: impl ToString) -> Step<Use> {
+        self.uses_ref(Uses::Local(path.to_string()))
+    }
+
+    fn uses_ref(mut self, uses: Uses) -> Step<Use> {
+        self.value.merge(StepValue::uses(uses));
         Step {
             value: self.value,
             marker: Default::default(),

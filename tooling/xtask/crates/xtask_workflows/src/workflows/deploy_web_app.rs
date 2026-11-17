@@ -6,21 +6,73 @@
 //! dispatch identity is the workflow *name*, so the rename doesn't affect
 //! anyone's dispatch habits).
 
-use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall,
-    WorkflowDispatch,
+    CallJob, Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{build_web_app, runners, steps, vars};
 
-/// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
-/// are filled in by [`patch`] (choice options + ordered maps).
+/// Build the workflow.
 pub fn deploy_web_app() -> Workflow {
     Workflow::new("Deploy Web App")
         .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .workflow_dispatch(
+                WorkflowDispatch::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::choice(["dev", "prod"])
+                            .description("The environment to build for")
+                            .required(true),
+                    )
+                    .add_input(
+                        "notify",
+                        WorkflowInput::boolean()
+                            .description(
+                                "Whether to notify the Slack channel of the deployment completion",
+                            )
+                            .required(false),
+                    ),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::string()
+                            .description("The environment to build for. e.g. (dev, prod)")
+                            .required(true),
+                    )
+                    .add_input("notify", WorkflowInput::boolean().required(false))
+                    .add_input(
+                        "prebuilt",
+                        WorkflowInput::boolean()
+                            .description("The caller already ran build_web_app.yml in this run")
+                            .required(false)
+                            .default(false),
+                    )
+                    .add_secret(
+                        "AWS_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "AWS_SECRET_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "PULUMI_ACCESS_TOKEN",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
+                    .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true))
+                    .add_secret(
+                        "SEGMENT_WRITE_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "POSTHOG_API_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    ),
+            ))
         .concurrency(
             // Serialize deploys per *environment*, with a literal prefix: for
             // workflow_call runs `github.workflow` expands to the caller's
@@ -36,86 +88,14 @@ pub fn deploy_web_app() -> Workflow {
         .add_job("deploy", deploy())
 }
 
-/// Fill in the ordered dispatch/call input blocks and the build call's
-/// `with:`/`secrets:`.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: choice
-                options:
-                  - dev
-                  - prod
-                description: The environment to build for
-              notify:
-                required: false
-                type: boolean
-                description: Whether to notify the Slack channel of the deployment completion
-        "#})?,
-    );
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to build for. e.g. (dev, prod)
-              notify:
-                required: false
-                type: boolean
-              prebuilt:
-                required: false
-                type: boolean
-                default: false
-                description: The caller already ran build_web_app.yml in this run
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-              DD_APP_KEY:
-                required: true
-              DD_API_KEY:
-                required: true
-              SEGMENT_WRITE_KEY:
-                required: true
-              POSTHOG_API_KEY:
-                required: true
-        "#})?,
-    );
-
-    let build = crate::workflows::job_mut(root, "build")?;
-    build.remove("runs-on");
-    build.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: ${{ inputs.environment }}")?,
-    );
-    build.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
-            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        "#})?,
-    );
-    Ok(())
-}
-
 /// `inputs.prebuilt` is unset under workflow_dispatch, so dispatches build.
-fn build() -> Job {
-    Job::default()
+fn build() -> CallJob {
+    CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build")
         .cond(Expression::new("${{ !inputs.prebuilt }}"))
-        .uses("./.github/workflows/build_web_app.yml")
+        .add_with("environment", "${{ inputs.environment }}")
+        .add_secret("SEGMENT_WRITE_KEY", "${{ secrets.SEGMENT_WRITE_KEY }}")
+        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
 }
 
 /// Runs after either this run's build or the caller's: a skipped build means

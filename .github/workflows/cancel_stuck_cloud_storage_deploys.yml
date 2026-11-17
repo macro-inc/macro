@@ -1,21 +1,21 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cancel_stuck_cloud_storage_deploys.rs
 name: Cancel Stuck Cloud Storage Deploys
-on:
+'on':
   schedule:
-  - cron: 0 * * * *
+  - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       max-age-minutes:
         description: Cancel active runs older than this many minutes
         required: false
-        default: '90'
         type: string
+        default: '90'
       dry-run:
         description: Log what would be cancelled without doing it
         required: false
-        default: false
         type: boolean
+        default: false
 permissions:
   actions: write
   contents: read

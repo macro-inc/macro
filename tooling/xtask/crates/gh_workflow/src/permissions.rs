@@ -12,6 +12,14 @@ pub struct Permissions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actions: Option<Level>,
 
+    /// Permissions for artifact metadata storage records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_metadata: Option<Level>,
+
+    /// Permissions for artifact attestations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestations: Option<Level>,
+
     /// Permissions for repository contents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contents: Option<Level>,
@@ -23,6 +31,10 @@ pub struct Permissions {
     /// Permissions for pull requests.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pull_requests: Option<Level>,
+
+    /// Permissions for discussions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discussions: Option<Level>,
 
     /// Permissions for deployments.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,6 +59,18 @@ pub struct Permissions {
     /// Permissions for ID tokens.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id_token: Option<Level>,
+
+    /// Permissions for GitHub Models inference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub models: Option<Level>,
+
+    /// Permissions for classic repository projects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repository_projects: Option<Level>,
+
+    /// Permissions for code scanning and other security events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub security_events: Option<Level>,
 }
 
 /// Represents the level of permissions.

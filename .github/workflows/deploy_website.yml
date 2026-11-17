@@ -1,21 +1,21 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website.rs
 name: Deploy Website
-on:
+'on':
   push:
     branches:
     - main
     paths:
-    - .github/workflows/deploy_website.yml
+    - '.github/workflows/deploy_website.yml'
     - bun.lock
     - apps/marketing/**
     - infra/stacks/website/**
   workflow_call:
     inputs:
       environment:
+        description: The environment to deploy to. e.g. (dev, prod, both)
         required: true
         type: string
-        description: The environment to deploy to. e.g. (dev, prod, both)
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -26,18 +26,18 @@ on:
   workflow_dispatch:
     inputs:
       environment:
+        description: The environment to deploy to (both deploys dev, then prod)
         required: true
         type: choice
-        default: dev
         options:
         - dev
         - prod
         - both
-        description: The environment to deploy to (both deploys dev, then prod)
+        default: dev
       preview_only:
+        description: Preview resource changes without publishing
         type: boolean
         default: false
-        description: Preview resource changes without publishing
 jobs:
   build-deploy:
     name: Build and Deploy Website
@@ -71,9 +71,9 @@ jobs:
         path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Setup
-      uses: ./.github/actions/setup-reqs-web
+      uses: './.github/actions/setup-reqs-web'
       with:
         playwright: 'true'
     - name: Build
@@ -96,9 +96,9 @@ jobs:
       with:
         command: ${{ inputs.preview_only && 'preview' || 'up' }}
         stack-name: macro-inc/${{ matrix.environment }}
-        work-dir: ./infra/stacks/website
+        work-dir: './infra/stacks/website'
       env:
         PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'

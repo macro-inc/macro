@@ -4,7 +4,7 @@ use super::*;
 
 fn rendered() -> serde_yaml::Value {
     serde_yaml::from_str(
-        &crate::workflows::render_patched(build_web_app, patch).expect("workflow yaml"),
+        &crate::workflows::render_gh_workflow(build_web_app)().expect("workflow yaml"),
     )
     .expect("parse workflow")
 }

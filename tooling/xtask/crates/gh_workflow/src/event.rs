@@ -1,12 +1,9 @@
 #![allow(clippy::needless_update)]
 
-use std::collections::HashMap;
-
 use derive_setters::Setters;
+use indexmap::IndexMap;
 use merge::Merge;
 use serde::{Deserialize, Serialize};
-
-use crate::is_default;
 
 /// Represents all possible webhook events that can trigger a workflow
 /// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
@@ -831,40 +828,149 @@ impl Watch {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
 #[setters(strip_option, into)]
 pub struct WorkflowCall {
-    /// Inputs for the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub inputs: HashMap<String, WorkflowCallInput>,
+    /// Inputs for the workflow call, in declaration order.
+    #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
+    pub inputs: IndexMap<String, WorkflowInput>,
     /// Outputs from the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub outputs: HashMap<String, WorkflowCallOutput>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
+    pub outputs: IndexMap<String, WorkflowCallOutput>,
     /// Secrets for the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub secrets: HashMap<String, WorkflowCallSecret>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
+    pub secrets: IndexMap<String, WorkflowCallSecret>,
 }
 
 impl WorkflowCall {
-    pub fn add_input(mut self, name: impl Into<String>, input: WorkflowCallInput) -> Self {
+    pub fn add_input(mut self, name: impl Into<String>, input: WorkflowInput) -> Self {
         self.inputs.insert(name.into(), input);
+        self
+    }
+
+    pub fn add_secret(mut self, name: impl Into<String>, secret: WorkflowCallSecret) -> Self {
+        self.secrets.insert(name.into(), secret);
+        self
+    }
+
+    pub fn add_output(mut self, name: impl Into<String>, output: WorkflowCallOutput) -> Self {
+        self.outputs.insert(name.into(), output);
         self
     }
 }
 
-/// Configuration for workflow call input
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Setters, Eq)]
-#[setters(strip_option, into)]
-pub struct WorkflowCallInput {
-    /// Description of the input
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub description: String,
-    /// Indicates if the input is required
-    #[serde(skip_serializing_if = "is_default")]
-    pub required: bool,
-    /// Type of the input
-    #[serde(rename = "type")]
-    pub input_type: String,
-    /// Default value for the input
+/// An input of a `workflow_call` or `workflow_dispatch` trigger. Build one
+/// with the constructor for its type, so a `choice` always has its options.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkflowInput {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
+    #[serde(rename = "type")]
+    pub input_type: InputType,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub options: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<InputDefault>,
+}
+
+/// The `type` of a workflow input.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InputType {
+    String,
+    Boolean,
+    Number,
+    /// `workflow_dispatch` only.
+    Choice,
+    /// `workflow_dispatch` only.
+    Environment,
+}
+
+/// The `default` of a workflow input, rendered as a YAML string, boolean or
+/// number to match the input's type.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum InputDefault {
+    Bool(bool),
+    Number(i64),
+    String(String),
+}
+
+impl From<bool> for InputDefault {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i64> for InputDefault {
+    fn from(value: i64) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl From<&str> for InputDefault {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+impl From<String> for InputDefault {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl WorkflowInput {
+    fn of_type(input_type: InputType) -> Self {
+        Self {
+            description: None,
+            required: None,
+            input_type,
+            options: Vec::new(),
+            default: None,
+        }
+    }
+
+    pub fn string() -> Self {
+        Self::of_type(InputType::String)
+    }
+
+    pub fn boolean() -> Self {
+        Self::of_type(InputType::Boolean)
+    }
+
+    pub fn number() -> Self {
+        Self::of_type(InputType::Number)
+    }
+
+    pub fn environment() -> Self {
+        Self::of_type(InputType::Environment)
+    }
+
+    /// A `choice` input offering `options` in this order.
+    pub fn choice<Option: ToString>(options: impl IntoIterator<Item = Option>) -> Self {
+        Self {
+            options: options
+                .into_iter()
+                .map(|option| option.to_string())
+                .collect(),
+            ..Self::of_type(InputType::Choice)
+        }
+    }
+
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn required(mut self, required: bool) -> Self {
+        self.required = Some(required);
+        self
+    }
+
+    pub fn default(mut self, default: impl Into<InputDefault>) -> Self {
+        self.default = Some(default.into());
+        self
+    }
 }
 
 /// Configuration for workflow call output
@@ -872,10 +978,10 @@ pub struct WorkflowCallInput {
 #[setters(strip_option, into)]
 pub struct WorkflowCallOutput {
     /// Description of the output
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub description: String,
     /// Value of the output
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub value: String,
 }
 
@@ -884,40 +990,28 @@ pub struct WorkflowCallOutput {
 #[setters(strip_option, into)]
 pub struct WorkflowCallSecret {
     /// Description of the secret
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Indicates if the secret is required
-    #[serde(skip_serializing_if = "is_default")]
-    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
 }
 
 /// Configuration for workflow dispatch events
 /// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_dispatch
-
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
 #[setters(strip_option, into)]
 pub struct WorkflowDispatch {
-    /// Inputs for the workflow dispatch
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub inputs: HashMap<String, WorkflowDispatchInput>,
+    /// Inputs for the workflow dispatch, in declaration order.
+    #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
+    pub inputs: IndexMap<String, WorkflowInput>,
 }
 
-/// Configuration for workflow dispatch input
-#[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
-#[setters(strip_option, into)]
-pub struct WorkflowDispatchInput {
-    /// Description of the input
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub description: String,
-    /// Indicates if the input is required
-    #[serde(skip_serializing_if = "is_default")]
-    pub required: bool,
-    /// Type of the input
-    #[serde(rename = "type")]
-    pub input_type: String,
-    /// Default value for the input
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
+impl WorkflowDispatch {
+    pub fn add_input(mut self, name: impl Into<String>, input: WorkflowInput) -> Self {
+        self.inputs.insert(name.into(), input);
+        self
+    }
 }
 
 /// Types of workflow run events

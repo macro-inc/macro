@@ -24183,6 +24183,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gh_workflow",
+ "indexmap 2.14.0",
  "indoc",
  "serde_json",
  "serde_yaml",

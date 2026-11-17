@@ -11,10 +11,9 @@
 //! Replaces the `deploy-dev.yml` / `deploy-prod.yml` workflows in the old
 //! `macro-inc/solid-site` repository.
 
-use anyhow::Result;
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Push, Run, Step, Strategy, Use, Workflow,
-    WorkflowCall, WorkflowDispatch,
+    WorkflowCall, WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -29,8 +28,7 @@ const ENVIRONMENTS: &str = r#"${{ fromJSON(inputs.environment == 'both' && '["de
 /// The environment of the current matrix leg.
 const ENVIRONMENT: &str = "${{ matrix.environment }}";
 
-/// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
-/// are filled in by [`patch`].
+/// Build the workflow.
 pub fn deploy_website() -> Workflow {
     Workflow::new("Deploy Website")
         .on(Event::default()
@@ -44,55 +42,46 @@ pub fn deploy_website() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("apps/marketing/**"))
                     .add_path(xtask_paths::repo_glob!("infra/stacks/website/**")),
             )
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .workflow_dispatch(
+                WorkflowDispatch::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::choice(["dev", "prod", "both"])
+                            .description(
+                                "The environment to deploy to (both deploys dev, then prod)",
+                            )
+                            .required(true)
+                            .default("dev"),
+                    )
+                    .add_input(
+                        "preview_only",
+                        WorkflowInput::boolean()
+                            .description("Preview resource changes without publishing")
+                            .default(false),
+                    ),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::string()
+                            .description("The environment to deploy to. e.g. (dev, prod, both)")
+                            .required(true),
+                    )
+                    .add_secret(
+                        "AWS_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "AWS_SECRET_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "PULUMI_ACCESS_TOKEN",
+                        WorkflowCallSecret::default().required(true),
+                    ),
+            ))
         .add_job("build-deploy", build_deploy())
-}
-
-/// Input blocks `gh_workflow` cannot express: a `choice` dispatch input, and the
-/// `workflow_call` contract `release-production` deploys prod through.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to deploy to. e.g. (dev, prod, both)
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-        "#})?,
-    );
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: choice
-                default: 'dev'
-                options:
-                  - dev
-                  - prod
-                  - both
-                description: The environment to deploy to (both deploys dev, then prod)
-              preview_only:
-                type: boolean
-                default: false
-                description: Preview resource changes without publishing
-        "#})?,
-    );
-    Ok(())
 }
 
 fn build_deploy() -> Job {

@@ -33,8 +33,7 @@
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
-use anyhow::Result;
-use gh_workflow::{Concurrency, Event, Expression, Job, Push, Workflow};
+use gh_workflow::{CallJob, Concurrency, Event, Expression, Push, Workflow};
 
 #[cfg(test)]
 mod test;
@@ -67,8 +66,7 @@ pub const NOTICE: &str = indoc::indoc! {"
     #
 "};
 
-/// Build the workflow. The caller jobs' `with:`/`secrets:` are filled in by
-/// [`patch`].
+/// Build the workflow.
 pub fn deploy_on_push() -> Workflow {
     Workflow::new("Deploy on Push")
         .on(Event::default().push(Push::default().add_branch("main")))
@@ -85,135 +83,89 @@ pub fn deploy_on_push() -> Workflow {
         .add_job("deploy-web-app", deploy_web_app())
 }
 
-/// Add the caller jobs' `with:` and explicit `secrets:` maps, and drop the
-/// `runs-on` that `Job::default()` injects (invalid alongside `uses:`).
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let cloud_storage = crate::workflows::job_mut(root, "deploy-cloud-storage")?;
-    cloud_storage.remove("runs-on");
-    cloud_storage.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    cloud_storage.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-            DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
-        "#})?,
-    );
-
-    let sync_service = crate::workflows::job_mut(root, "deploy-sync-service")?;
-    sync_service.remove("runs-on");
-    sync_service.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    sync_service.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        "#})?,
-    );
-
-    let mcp_chatgpt_worker = crate::workflows::job_mut(root, "deploy-mcp-chatgpt-worker")?;
-    mcp_chatgpt_worker.remove("runs-on");
-    mcp_chatgpt_worker.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    mcp_chatgpt_worker.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        "#})?,
-    );
-
-    let web_build = crate::workflows::job_mut(root, "build-web-app")?;
-    web_build.remove("runs-on");
-    web_build.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    web_build.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        "#})?,
-    );
-
-    let web_app = crate::workflows::job_mut(root, "deploy-web-app")?;
-    web_app.remove("runs-on");
-    web_app.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            notify: false
-            environment: dev
-            prebuilt: true
-        "#})?,
-    );
-    web_app.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-            DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        "#})?,
-    );
-    Ok(())
-}
-
-fn deploy_cloud_storage() -> Job {
-    Job::default()
+fn deploy_cloud_storage() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_all_services.yml")
         .name("Deploy Cloud Storage Services")
-        .uses("./.github/workflows/deploy_all_services.yml")
+        .add_with("environment", "dev")
+        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
+        .add_secret(
+            "AWS_SECRET_ACCESS_KEY",
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+        )
+        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
+        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
+        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
+        .add_secret(
+            "NIX_CACHE_SIGNING_KEY",
+            "${{ secrets.NIX_CACHE_SIGNING_KEY }}",
+        )
 }
 
 /// The worker calls DSS/SPS, so don't ship it ahead of them — same ordering as
 /// the production release. The implicit `success()` on `needs` is what holds it
 /// back when the backend deploy fails.
-fn deploy_sync_service() -> Job {
-    Job::default()
+fn deploy_sync_service() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_sync_service.yml")
         .name("Deploy Sync Service")
         .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_sync_service.yml")
+        .add_with("environment", "dev")
+        .add_secret(
+            "CLOUDFLARE_API_TOKEN",
+            "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+        )
 }
 
 /// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
 /// from the MCP auth broker, so it ships behind them, like the sync worker.
 /// Nothing waits on it: the web app doesn't talk to it.
-fn deploy_mcp_chatgpt_worker() -> Job {
-    Job::default()
+fn deploy_mcp_chatgpt_worker() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
         .name("Deploy MCP ChatGPT Worker")
         .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+        .add_with("environment", "dev")
+        .add_secret(
+            "CLOUDFLARE_API_TOKEN",
+            "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+        )
 }
 
 /// No `needs`: the build only reads the commit, so it overlaps the backend's
 /// ~15 minutes instead of adding ~4 after them.
-fn build_web_app() -> Job {
-    Job::default()
+fn build_web_app() -> CallJob {
+    CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build Web App")
-        .uses("./.github/workflows/build_web_app.yml")
+        .add_with("environment", "dev")
+        .add_secret(
+            "SEGMENT_WRITE_KEY",
+            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
+        )
+        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
 }
 
 /// Publish only after the worker supports the frontend's sync protocol. The
 /// build remains parallel, but a failed worker deploy must block new clients.
-fn deploy_web_app() -> Job {
-    Job::default()
+fn deploy_web_app() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_web_app.yml")
         .name("Deploy Web App")
         .needs(vec![
             "deploy-cloud-storage".to_string(),
             "deploy-sync-service".to_string(),
             "build-web-app".to_string(),
         ])
-        .uses("./.github/workflows/deploy_web_app.yml")
+        .add_with("notify", false)
+        .add_with("environment", "dev")
+        .add_with("prebuilt", true)
+        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
+        .add_secret(
+            "AWS_SECRET_ACCESS_KEY",
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+        )
+        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
+        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
+        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
+        .add_secret(
+            "SEGMENT_WRITE_KEY",
+            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
+        )
+        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
 }

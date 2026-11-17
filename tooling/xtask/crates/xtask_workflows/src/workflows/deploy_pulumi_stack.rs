@@ -2,17 +2,17 @@
 //! folder under `infra/stacks`, to dev or prod. Generated into
 //! `deploy-pulumi-stack.yml`.
 
-use anyhow::Result;
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowDispatch,
+    WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
 
-/// Build the workflow. The dispatch input block is filled in by [`patch`].
+/// Build the workflow.
 pub fn deploy_pulumi_stack() -> Workflow {
     Workflow::new("deploy pulumi service")
-        .on(Event::default().workflow_dispatch(WorkflowDispatch::default()))
+        .on(Event::default().workflow_dispatch(WorkflowDispatch::default().add_input("environment", WorkflowInput::choice(["dev", "prod"]).description("The environment we are deploying to.").required(true).default("dev")).add_input("pulumi-service-name", WorkflowInput::string().description("The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.").required(true)).add_input("cloud-storage-service-name", WorkflowInput::string().description("Optional service key from .github/services-config.json; set this for Lambda-backed stacks so CI can build Lambda zips before Pulumi runs.").required(false))))
         .concurrency(
             Concurrency::new(Expression::new(
                 "${{ github.workflow }}-${{ inputs.pulumi-service-name }}-${{ inputs.environment }}",
@@ -22,37 +22,6 @@ pub fn deploy_pulumi_stack() -> Workflow {
         .add_job("setup", setup())
         .add_job("check-migrations", check_migrations())
         .add_job("deploy", deploy())
-}
-
-/// Fill in the ordered dispatch input block.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                type: choice
-                required: true
-                default: dev
-                options:
-                  - dev
-                  - prod
-                description: The environment we are deploying to.
-              pulumi-service-name:
-                type: string
-                required: true
-                description: The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.
-              cloud-storage-service-name:
-                type: string
-                required: false
-                description: Optional service key from .github/services-config.json; set this for Lambda-backed stacks so CI can build Lambda zips before Pulumi runs.
-        "#})?,
-    );
-    Ok(())
 }
 
 /// Resolve whether the stack belongs to a service with binaries or Lambdas,

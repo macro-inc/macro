@@ -1,12 +1,11 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
-use std::collections::HashMap;
-
 use gh_workflow::{
-    Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
-    WorkflowCallSecret,
+    Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowInput,
 };
+use indexmap::IndexMap;
 
 use crate::workflows::{runners, steps, vars};
 
@@ -19,13 +18,12 @@ pub const DESKTOP_TAG_PATTERN: &str = "v[0-9]*";
 /// bundle is built with PostHog's key inlined, so the key has to arrive here.
 /// The parent orchestrator inlines these jobs instead, and reads the secret
 /// directly.
-pub fn desktop_build_secrets() -> HashMap<String, WorkflowCallSecret> {
-    HashMap::from([(
+pub fn desktop_build_secrets() -> IndexMap<String, WorkflowCallSecret> {
+    IndexMap::from([(
         "POSTHOG_API_KEY".to_string(),
-        WorkflowCallSecret {
-            description: "PostHog project API key inlined into the desktop bundle".into(),
-            required: true,
-        },
+        WorkflowCallSecret::default()
+            .description("PostHog project API key inlined into the desktop bundle")
+            .required(true),
     )])
 }
 
@@ -36,12 +34,9 @@ pub fn build_appimage() -> Workflow {
             WorkflowCall::default()
                 .add_input(
                     "ref",
-                    WorkflowCallInput {
-                        description: "Git ref to check out and build".into(),
-                        required: true,
-                        input_type: "string".into(),
-                        default: None,
-                    },
+                    WorkflowInput::string()
+                        .description("Git ref to check out and build")
+                        .required(true),
                 )
                 .secrets(desktop_build_secrets()),
         ))

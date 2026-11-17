@@ -10,12 +10,9 @@
 //! WebKit. The harness is `apps/web/tests/macos/qa.mjs`.
 //! Generated into `desktop_qa_macos.yml`.
 
-use std::collections::HashMap;
-
-use anyhow::Result;
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch,
-    WorkflowDispatchInput,
+    WorkflowInput,
 };
 
 use crate::workflows::{build_dmg_on_tag, runners, steps};
@@ -26,59 +23,47 @@ const TIMEOUT_MINUTES: u32 = 120;
 /// Where the harness writes, and what the artifact holds.
 const OUT: &str = "${{ runner.temp }}/qa-out";
 
-/// Build the workflow. The dispatch inputs and `run-name` are added by [`patch`].
+/// Build the workflow. The `run-name` carries the suite, ref and report key so
+/// a run is recognisable in the Actions list.
 pub fn desktop_qa_macos() -> Workflow {
     Workflow::new("Desktop QA macOS")
+        .run_name(
+            "macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}",
+        )
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default().workflow_dispatch(WorkflowDispatch {
-            inputs: HashMap::<String, WorkflowDispatchInput>::new(),
-        }))
+        .on(Event::default().workflow_dispatch(
+            WorkflowDispatch::default()
+                .add_input(
+                    "ref",
+                    WorkflowInput::string()
+                        .description(
+                            "Git ref (branch, tag or sha) of macro-inc/macro to build and test",
+                        )
+                        .required(true),
+                )
+                .add_input(
+                    "suite",
+                    WorkflowInput::choice(["smoke", "full"])
+                        .description(
+                            "smoke = launch checks; full = smoke plus DevTools probe, longer soak and cargo test",
+                        )
+                        .required(true)
+                        .default("smoke"),
+                )
+                .add_input(
+                    "report",
+                    WorkflowInput::string()
+                        .description(
+                            "Optional work item key of the factory (echoed into the run name and summary)",
+                        )
+                        .required(false)
+                        .default(""),
+                ),
+        ))
         .add_job("qa-macos", qa_macos_job())
-}
-
-/// What `gh_workflow` cannot express: ordered dispatch inputs with a `choice`,
-/// and a `run-name` that carries the suite, ref and report key so a run is
-/// recognisable in the Actions list.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let mapping = root
-        .as_mapping_mut()
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow is not a mapping"))?;
-    let on = mapping
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              ref:
-                description: Git ref (branch, tag or sha) of macro-inc/macro to build and test
-                required: true
-                type: string
-              suite:
-                description: smoke = launch checks; full = smoke plus DevTools probe, longer soak and cargo test
-                required: true
-                type: choice
-                default: smoke
-                options:
-                  - smoke
-                  - full
-              report:
-                description: Optional work item key of the factory (echoed into the run name and summary)
-                required: false
-                type: string
-                default: ''
-        "#})?,
-    );
-    mapping.insert(
-        "run-name".into(),
-        "macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}"
-            .into(),
-    );
-    Ok(())
 }
 
 fn qa_macos_job() -> Job {

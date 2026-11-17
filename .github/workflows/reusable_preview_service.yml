@@ -1,35 +1,35 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/reusable_preview_service.rs
 name: Reusable Preview Service
-on:
+'on':
   workflow_call:
     inputs:
       environment:
-        required: true
-        type: string
         description: The environment to preview
-      service-name:
         required: true
         type: string
+      service-name:
         description: The name of the service to preview
+        required: true
+        type: string
       pulumi-stack-name:
+        description: Override pulumi stack name (defaults to service-name)
         required: false
         type: string
-        description: Override pulumi stack name (defaults to service-name)
       use-docker:
+        description: Whether to setup docker
         required: false
         type: boolean
         default: true
-        description: Whether to setup docker
       use-lfs:
+        description: Whether to checkout LFS content
         required: false
         type: boolean
         default: false
-        description: Whether to checkout LFS content
       github-token:
+        description: GitHub token for PR comments
         required: false
         type: string
-        description: GitHub token for PR comments
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -53,7 +53,7 @@ jobs:
         cache: nix
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
       with:
         nix-cache-url: ${{ vars.NIX_CACHE_URL }}
         nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
@@ -61,11 +61,11 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - id: project-name
       name: Get project name
-      uses: ./.github/actions/get-project-name
+      uses: './.github/actions/get-project-name'
       with:
         service-name: ${{ inputs.service-name }}
     - name: Preview pulumi stack
-      uses: ./.github/actions/preview-cloud-storage-pulumi
+      uses: './.github/actions/preview-cloud-storage-pulumi'
       with:
         environment: ${{ inputs.environment }}
         aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
@@ -80,4 +80,4 @@ jobs:
         cloud-storage-service-name: ${{ inputs.service-name }}
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'

@@ -1,31 +1,31 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/reusable_deploy_service.rs
 name: Reusable Deploy Service
-on:
+'on':
   workflow_call:
     inputs:
       environment:
-        required: true
-        type: string
         description: The environment to deploy to
-      service-name:
         required: true
         type: string
+      service-name:
         description: The name of the service to deploy
+        required: true
+        type: string
       pulumi-stack-name:
+        description: Override pulumi stack name (defaults to service-name)
         required: false
         type: string
-        description: Override pulumi stack name (defaults to service-name)
       use-docker:
+        description: Whether to setup docker
         required: false
         type: boolean
         default: true
-        description: Whether to setup docker
       use-lfs:
+        description: Whether to checkout LFS content
         required: false
         type: boolean
         default: false
-        description: Whether to checkout LFS content
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -49,7 +49,7 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         persist-credentials: 'false'
-        sparse-checkout: .github/
+        sparse-checkout: '.github/'
     - id: check
       name: Check artifact config
       run: |
@@ -82,14 +82,14 @@ jobs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
-        bun-version: 1.3.13
+        bun-version: '1.3.13'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Build prebuilt binaries
       run: |
         set -euo pipefail
@@ -117,7 +117,7 @@ jobs:
       timeout-minutes: 20
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'
   build-lambda-artifacts:
     needs:
     - setup
@@ -133,16 +133,16 @@ jobs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
-        bun-version: 1.3.13
+        bun-version: '1.3.13'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Build Lambda artifacts
-      run: .github/scripts/build-cloud-storage-lambdas-nix.sh
+      run: '.github/scripts/build-cloud-storage-lambdas-nix.sh'
       env:
         SERVICE: ${{ inputs.service-name }}
     - name: Log handoff receipt
@@ -160,7 +160,7 @@ jobs:
       timeout-minutes: 20
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'
   check-migrations:
     needs:
     - setup
@@ -172,9 +172,9 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         persist-credentials: 'false'
-        sparse-checkout: .github/
+        sparse-checkout: '.github/'
     - name: Check migrations
-      uses: ./.github/actions/check-macro-db-migrations
+      uses: './.github/actions/check-macro-db-migrations'
       with:
         environment: ${{ inputs.environment }}
   deploy:
@@ -196,7 +196,7 @@ jobs:
     - id: project-name
       name: Get project name
       if: ${{ inputs.pulumi-stack-name == '' }}
-      uses: ./.github/actions/get-project-name
+      uses: './.github/actions/get-project-name'
       with:
         service-name: ${{ inputs.service-name }}
     - name: Download handoff artifacts
@@ -231,7 +231,7 @@ jobs:
         if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
       shell: bash
     - name: Deploy ${{ inputs.service-name }}
-      uses: ./.github/actions/deploy-cloud-storage-pulumi
+      uses: './.github/actions/deploy-cloud-storage-pulumi'
       with:
         environment: ${{ inputs.environment }}
         aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}

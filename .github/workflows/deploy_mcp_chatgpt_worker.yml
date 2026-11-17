@@ -1,26 +1,26 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker.rs
 name: Deploy MCP ChatGPT Worker
-on:
+'on':
   workflow_call:
     inputs:
       environment:
+        description: The environment to deploy to. e.g. (dev, prod)
         required: true
         type: string
-        description: The environment to deploy to. e.g. (dev, prod)
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: true
   workflow_dispatch:
     inputs:
       environment:
+        description: The environment to deploy to
         required: true
         type: choice
-        default: dev
         options:
         - dev
         - prod
-        description: The environment to deploy to
+        default: dev
 jobs:
   deploy:
     name: Deploy to Cloudflare

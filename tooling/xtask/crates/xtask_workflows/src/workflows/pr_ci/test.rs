@@ -1,7 +1,7 @@
 use super::*;
 
 fn rendered() -> serde_yaml::Value {
-    let yaml = crate::workflows::render_patched(pr_ci, patch).expect("PR CI should render");
+    let yaml = crate::workflows::render_gh_workflow(pr_ci)().expect("PR CI should render");
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
 }
 

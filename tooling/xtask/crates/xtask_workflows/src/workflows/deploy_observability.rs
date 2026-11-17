@@ -10,9 +10,9 @@
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
 //! stack's README ("Deploying") describes them.
 
-use anyhow::Result;
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
+    WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -27,38 +27,15 @@ pub(crate) const CACHE_TAG: &str = "observability-image";
 const STAGE: &str = "steps.find.outputs.stage";
 const AMI: &str = "${{ steps.publish.outputs.ami || steps.find.outputs.ami }}";
 
-/// Build the workflow. The ordered dispatch input is filled in by [`patch`].
+/// Build the workflow.
 pub fn deploy_observability() -> Workflow {
     Workflow::new("Deploy Observability")
-        .on(Event::default().workflow_dispatch(WorkflowDispatch::default()))
+        .on(Event::default().workflow_dispatch(WorkflowDispatch::default().add_input("dry_run", WorkflowInput::boolean().description("Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes Grafana, Loki, Tempo and GoAlert down for several minutes.").required(true).default(true))))
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
         })
         .add_job("deploy", deploy_job())
-}
-
-/// The `dry_run` input: a boolean defaulting to true, so a deploy is a choice.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              dry_run:
-                type: boolean
-                required: true
-                default: true
-                description: >-
-                  Build, publish and smoke-boot the image and preview the rollout,
-                  but leave production alone. Untick to replace the host, which
-                  takes Grafana, Loki, Tempo and GoAlert down for several minutes.
-        "#})?,
-    );
-    Ok(())
 }
 
 /// `nix build` of the image. Its builder boots a VM and requires the `kvm`

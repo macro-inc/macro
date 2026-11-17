@@ -22,10 +22,9 @@
 //! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes
 //! their label and sets their status.
 
-use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType,
+    Run, Step, Use, Workflow,
 };
 use xtask_paths::RepoGlob;
 
@@ -164,16 +163,6 @@ pub fn pr_ci() -> Workflow {
         .add_job("gate", gate())
 }
 
-/// Fill in what gh-workflow can't express on a reusable-workflow call.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    for call in CALLS {
-        let job = crate::workflows::job_mut(root, call.id)?;
-        job.remove("runs-on");
-        job.insert("secrets".into(), "inherit".into());
-    }
-    Ok(())
-}
-
 /// The output that says whether a path-filtered call runs.
 fn output_name(call: &Call) -> String {
     call.id.replace('-', "_")
@@ -260,11 +249,11 @@ fn paths_filter() -> Step<Use> {
         .add_with(("filters", filters))
 }
 
-fn call_job(call: &Call) -> Job {
-    let job = Job::default()
+fn call_job(call: &Call) -> CallJob {
+    let job = CallJob::new(format!("./.github/workflows/{}", call.file))
         .name(call.name)
         .needs(vec!["start".to_string()])
-        .uses(format!("./.github/workflows/{}", call.file));
+        .inherit_secrets();
 
     match call.paths {
         Some(_) => job.cond(Expression::new(format!(

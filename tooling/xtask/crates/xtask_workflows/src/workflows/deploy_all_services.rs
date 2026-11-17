@@ -7,10 +7,9 @@
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
 
-use anyhow::Result;
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
-    WorkflowDispatch,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -18,13 +17,46 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-/// Build the workflow. The dispatch/call input blocks are filled in by
-/// [`patch`].
+/// Build the workflow.
 pub fn deploy_all_services() -> Workflow {
     Workflow::new("Deploy All Services")
         .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .workflow_dispatch(
+                WorkflowDispatch::default().add_input(
+                    "environment",
+                    WorkflowInput::choice(["dev", "prod"])
+                        .description("The environment we are deploying to.")
+                        .required(true)
+                        .default("dev"),
+                ),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::string()
+                            .description("The environment we are deploying to.")
+                            .required(true),
+                    )
+                    .add_secret(
+                        "AWS_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "AWS_SECRET_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "PULUMI_ACCESS_TOKEN",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
+                    .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true))
+                    .add_secret(
+                        "NIX_CACHE_SIGNING_KEY",
+                        WorkflowCallSecret::default().required(false),
+                    ),
+            ))
         .concurrency(
             // Only run 1 deploy-all workflow at a time per environment.
             // Literal prefix: for workflow_call runs `github.workflow` expands
@@ -63,52 +95,6 @@ pub fn deploy_all_services() -> Workflow {
         .add_job("migrate-db", migrate_db())
         .add_job("deploy-services", deploy_services())
         .add_job("deployment-summary", deployment_summary())
-}
-
-/// Fill in the ordered dispatch/call input blocks.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                type: choice
-                required: true
-                default: 'dev'
-                options:
-                  - dev
-                  - prod
-                description: The environment we are deploying to.
-        "#})?,
-    );
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                type: string
-                required: true
-                description: The environment we are deploying to.
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-              DD_APP_KEY:
-                required: true
-              DD_API_KEY:
-                required: true
-              NIX_CACHE_SIGNING_KEY:
-                required: false
-        "#})?,
-    );
-    Ok(())
 }
 
 fn setup() -> Job {

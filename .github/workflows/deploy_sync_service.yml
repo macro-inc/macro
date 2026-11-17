@@ -1,26 +1,26 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_sync_service.rs
 name: Deploy Sync Service
-on:
+'on':
   workflow_call:
     inputs:
       environment:
+        description: The environment to deploy to. e.g. (dev, prod)
         required: true
         type: string
-        description: The environment to deploy to. e.g. (dev, prod)
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: true
   workflow_dispatch:
     inputs:
       environment:
+        description: The environment to deploy to
         required: true
         type: choice
-        default: dev
         options:
         - dev
         - prod
-        description: The environment to deploy to
+        default: dev
 jobs:
   deploy:
     name: Deploy to Cloudflare
@@ -41,7 +41,7 @@ jobs:
           /home/runner/.cache/.wasm-pack
       continue-on-error: true
     - name: Setup Rust
-      uses: ./.github/actions/setup-rust
+      uses: './.github/actions/setup-rust'
       with:
         sccache: 'false'
         rust-cache: 'false'
@@ -66,7 +66,7 @@ jobs:
       continue-on-error: true
     - id: worker-state
       name: Compare with the live worker
-      run: ../../.github/scripts/sync-worker-state.sh
+      run: '../../.github/scripts/sync-worker-state.sh'
       env:
         ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         WORKER_KEY: ${{ steps.worker-key.outputs.key }}

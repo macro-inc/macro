@@ -6,10 +6,9 @@
 //! into `release-production.yml`, the name it had when it was hand-written,
 //! which is its identity in GitHub Actions.
 
-use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
-    Workflow,
+    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run,
+    Step, Use, Workflow,
 };
 
 use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
@@ -45,105 +44,70 @@ pub fn release_production() -> Workflow {
         .add_job("upload", upload())
 }
 
-/// Add the caller jobs' `with:` and `secrets:`, and drop the `runs-on` that
-/// `Job::default()` injects (invalid alongside `uses:`).
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let callers = [
-        (
-            "deploy-cloud-storage",
-            true,
-            indoc::indoc! {r#"
-                AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-                AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-                DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-                DD_API_KEY: ${{ secrets.DD_API_KEY }}
-                NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
-            "#},
-        ),
-        ("deploy-sync-service", true, "inherit"),
-        ("deploy-ai-editing-worker", true, "inherit"),
-        ("deploy-mcp-chatgpt-worker", true, "inherit"),
-        (
-            "deploy-website",
-            true,
-            indoc::indoc! {r#"
-                AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-                AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            "#},
-        ),
-        (
-            "publish-ios",
-            false,
-            "IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}",
-        ),
-        (
-            "build",
-            true,
-            indoc::indoc! {r#"
-                SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-                POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-            "#},
-        ),
-    ];
-    for (id, takes_environment, secrets) in callers {
-        let job = crate::workflows::job_mut(root, id)?;
-        job.remove("runs-on");
-        if takes_environment {
-            job.insert(
-                "with".into(),
-                crate::workflows::yaml_fragment(&format!("environment: {ENVIRONMENT}"))?,
-            );
-        }
-        job.insert("secrets".into(), crate::workflows::yaml_fragment(secrets)?);
-    }
-    Ok(())
-}
-
-fn deploy_cloud_storage() -> Job {
-    Job::default()
+fn deploy_cloud_storage() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_all_services.yml")
         .name("Deploy Cloud Storage Services")
         .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/deploy_all_services.yml")
+        .add_with("environment", ENVIRONMENT)
+        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
+        .add_secret(
+            "AWS_SECRET_ACCESS_KEY",
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+        )
+        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
+        .add_secret("DD_APP_KEY", "${{ secrets.DD_APP_KEY }}")
+        .add_secret("DD_API_KEY", "${{ secrets.DD_API_KEY }}")
+        .add_secret(
+            "NIX_CACHE_SIGNING_KEY",
+            "${{ secrets.NIX_CACHE_SIGNING_KEY }}",
+        )
 }
 
 /// The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
-fn deploy_sync_service() -> Job {
-    Job::default()
+fn deploy_sync_service() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_sync_service.yml")
         .name("Deploy Sync Service")
         .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_sync_service.yml")
+        .add_with("environment", ENVIRONMENT)
+        .inherit_secrets()
 }
 
 /// Calls DSS/search/auth at prod URLs and opens doc sessions against the prod
 /// sync-service, so it ships behind both. It must also move in lockstep with
 /// cloud-storage's EditDocument tool, which picks the worker's model chains.
-fn deploy_ai_editing_worker() -> Job {
-    Job::default()
+fn deploy_ai_editing_worker() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_ai_editing_worker.yml")
         .name("Deploy AI Editing Worker")
         .needs(vec![
             "deploy-cloud-storage".to_string(),
             "deploy-sync-service".to_string(),
         ])
-        .uses("./.github/workflows/deploy_ai_editing_worker.yml")
+        .add_with("environment", ENVIRONMENT)
+        .inherit_secrets()
 }
 
 /// Calls the backend at prod URLs through the SDK and takes its tokens from
 /// the MCP auth broker, so it ships behind cloud storage. Nothing waits on it.
-fn deploy_mcp_chatgpt_worker() -> Job {
-    Job::default()
+fn deploy_mcp_chatgpt_worker() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
         .name("Deploy MCP ChatGPT Worker")
         .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+        .add_with("environment", ENVIRONMENT)
+        .inherit_secrets()
 }
 
 /// Also owns the macro.com CloudFront distribution in front of the web app.
-fn deploy_website() -> Job {
-    Job::default()
+fn deploy_website() -> CallJob {
+    CallJob::new("./.github/workflows/deploy_website.yml")
         .name("Deploy Website")
         .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/deploy_website.yml")
+        .add_with("environment", ENVIRONMENT)
+        .add_secret("AWS_ACCESS_KEY", "${{ secrets.AWS_ACCESS_KEY }}")
+        .add_secret(
+            "AWS_SECRET_ACCESS_KEY",
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+        )
+        .add_secret("PULUMI_ACCESS_TOKEN", "${{ secrets.PULUMI_ACCESS_TOKEN }}")
 }
 
 /// Releases the iOS version Apple approved for the native changes in this
@@ -151,12 +115,15 @@ fn deploy_website() -> Job {
 /// build never goes live while prod still serves the previous web bundle (a
 /// release request cannot be cancelled). Nothing depends on it: an App Store
 /// Connect failure must not hold back the prod deploy.
-fn publish_ios() -> Job {
-    Job::default()
+fn publish_ios() -> CallJob {
+    CallJob::new("./.github/workflows/ios-app-store-publish.yml")
         .name("Publish iOS App Store Version")
         .needs(vec!["deploy".to_string()])
         .permissions(Permissions::default().contents(Level::Read))
-        .uses("./.github/workflows/ios-app-store-publish.yml")
+        .add_secret(
+            "IOS_RELEASE_DOPPLER_TOKEN",
+            "${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}",
+        )
 }
 
 /// The same build as dev deploys and manual web deploys. It reuses unchanged
@@ -164,11 +131,16 @@ fn publish_ios() -> Job {
 /// Like them, it mounts only the Nix store and Bun's package cache from the
 /// cache volume, as the release's own build job did, and uses no shared
 /// sccache. No `needs`, so it overlaps the backend deploy.
-fn build() -> Job {
-    Job::default()
+fn build() -> CallJob {
+    CallJob::new("./.github/workflows/build_web_app.yml")
         .name("Build Web App")
         .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/build_web_app.yml")
+        .add_with("environment", ENVIRONMENT)
+        .add_secret(
+            "SEGMENT_WRITE_KEY",
+            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
+        )
+        .add_secret("POSTHOG_API_KEY", "${{ secrets.POSTHOG_API_KEY }}")
 }
 
 /// New clients require the worker's sync protocol support before publication,

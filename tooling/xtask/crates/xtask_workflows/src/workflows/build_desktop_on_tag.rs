@@ -5,11 +5,9 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`].
 
-use std::collections::HashMap;
-
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
-    WorkflowDispatch, WorkflowDispatchInput,
+    WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
@@ -112,18 +110,12 @@ fn desktop_events() -> Event {
 }
 
 fn workflow_dispatch() -> WorkflowDispatch {
-    let mut inputs = HashMap::new();
-    inputs.insert(
-        "ref".into(),
-        WorkflowDispatchInput {
-            description: "Optional release tag override (v* or refs/tags/v*). Leave empty to build the branch or tag selected for this workflow run.".into(),
-            required: false,
-            input_type: "string".into(),
-            default: None,
-        },
-    );
-
-    WorkflowDispatch { inputs }
+    WorkflowDispatch::default().add_input(
+        "ref",
+        WorkflowInput::string().description(
+            "Optional release tag override (v* or refs/tags/v*). Leave empty to build the branch or tag selected for this workflow run.",
+        ),
+    )
 }
 
 fn resolve_ref() -> Job {

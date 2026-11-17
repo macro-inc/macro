@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::concurrency::Concurrency;
+use crate::step::Input;
 use crate::step::{Step, StepType, StepValue};
-use crate::{Container, Defaults, Env, Expression, Permissions, Secret, Strategy};
+use crate::{Container, Defaults, Env, Expression, Permissions, Strategy};
 
 /// Represents the environment in which a job runs.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -63,10 +64,6 @@ pub struct Job {
     pub strategy: Option<Strategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub steps: Option<Vec<StepValue>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub uses: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secrets: Option<IndexMap<String, Secret>>,
 }
 
 impl Default for Job {
@@ -89,8 +86,6 @@ impl Default for Job {
             services: None,
             strategy: None,
             steps: None,
-            uses: None,
-            secrets: None,
         }
     }
 }
@@ -148,12 +143,121 @@ impl Job {
         self.services = Some(services);
         self
     }
+}
 
-    /// Adds a secret to the job.
-    pub fn add_secret<K: ToString, V: Into<Secret>>(mut self, key: K, secret: V) -> Self {
-        let mut secrets = self.secrets.take().unwrap_or_default();
-        secrets.insert(key.to_string(), secret.into());
-        self.secrets = Some(secrets);
+/// A job in a workflow: one that runs steps on a runner, or one that calls a
+/// reusable workflow. GitHub accepts a disjoint set of keys for each.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum JobKind {
+    /// Listed first so deserializing tries it first: only a call has `uses`.
+    Call(Box<CallJob>),
+    Run(Box<Job>),
+}
+
+impl From<Job> for JobKind {
+    fn from(job: Job) -> Self {
+        Self::Run(Box::new(job))
+    }
+}
+
+impl From<CallJob> for JobKind {
+    fn from(job: CallJob) -> Self {
+        Self::Call(Box::new(job))
+    }
+}
+
+/// A job that calls a reusable workflow (`jobs.<id>.uses`). It has no runner
+/// or steps; the called workflow's jobs run instead.
+#[derive(Debug, Setters, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[setters(strip_option, into)]
+pub struct CallJob {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub needs: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "if")]
+    pub cond: Option<Expression>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Permissions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<Concurrency>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<Strategy>,
+    /// The called workflow, e.g. `./.github/workflows/deploy_web_app.yml`.
+    #[setters(skip)]
+    pub uses: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[setters(skip)]
+    pub with: Option<Input>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[setters(skip)]
+    pub secrets: Option<CallSecrets>,
+}
+
+/// The secrets a call passes to the called workflow.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CallSecrets {
+    /// `secrets: inherit`: every secret the caller can read.
+    Inherit(Inherit),
+    /// Named secrets, each set to an expression.
+    Pass(IndexMap<String, String>),
+}
+
+/// The literal `inherit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Inherit {
+    Inherit,
+}
+
+impl CallJob {
+    /// A call of the reusable workflow at `uses`.
+    pub fn new(uses: impl Into<String>) -> Self {
+        Self {
+            needs: None,
+            cond: None,
+            name: None,
+            permissions: None,
+            concurrency: None,
+            strategy: None,
+            uses: uses.into(),
+            with: None,
+            secrets: None,
+        }
+    }
+
+    pub fn add_needs(mut self, job_id: impl ToString) -> Self {
+        self.needs
+            .get_or_insert_with(Vec::new)
+            .push(job_id.to_string());
+        self
+    }
+
+    /// Passes the input `name` to the called workflow.
+    pub fn add_with(mut self, name: impl ToString, value: impl Into<Value>) -> Self {
+        let with = self.with.take().unwrap_or_default();
+        self.with = Some(with.add(name, value));
+        self
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(mut self) -> Self {
+        self.secrets = Some(CallSecrets::Inherit(Inherit::Inherit));
+        self
+    }
+
+    /// Passes the secret `name` to the called workflow, set to `value`.
+    /// Replaces `inherit` if it was set.
+    pub fn add_secret(mut self, name: impl ToString, value: impl ToString) -> Self {
+        let mut secrets = match self.secrets.take() {
+            Some(CallSecrets::Pass(secrets)) => secrets,
+            _ => IndexMap::new(),
+        };
+        secrets.insert(name.to_string(), value.to_string());
+        self.secrets = Some(CallSecrets::Pass(secrets));
         self
     }
 }
@@ -174,5 +278,42 @@ mod tests {
                 serde_json::Value::String("ubuntu-latest".to_string())
             );
         }
+    }
+
+    #[test]
+    fn a_call_job_has_no_runner_and_passes_with_and_secrets() {
+        let workflow = crate::Workflow::new("Release").add_job(
+            "deploy",
+            CallJob::new("./.github/workflows/deploy.yml")
+                .name("Deploy")
+                .add_with("environment", "prod")
+                .add_with("notify", false)
+                .inherit_secrets(),
+        );
+
+        assert_eq!(
+            serde_json::to_value(&workflow).unwrap()["jobs"]["deploy"],
+            serde_json::json!({
+                "name": "Deploy",
+                "uses": "./.github/workflows/deploy.yml",
+                "with": { "environment": "prod", "notify": false },
+                "secrets": "inherit",
+            })
+        );
+    }
+
+    #[test]
+    fn dispatch_inputs_keep_their_order_and_typed_defaults() {
+        let dispatch = crate::WorkflowDispatch::default()
+            .add_input(
+                "suite",
+                crate::WorkflowInput::choice(["smoke", "full"]).default("smoke"),
+            )
+            .add_input("dry-run", crate::WorkflowInput::boolean().default(false));
+
+        assert_eq!(
+            serde_json::to_string(&dispatch).unwrap(),
+            r#"{"inputs":{"suite":{"type":"choice","options":["smoke","full"],"default":"smoke"},"dry-run":{"type":"boolean","default":false}}}"#
+        );
     }
 }

@@ -105,35 +105,6 @@ fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
     move || build().to_string().map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
-/// Render a `gh_workflow::Workflow`, then apply a structural patch to the YAML
-/// for constructs gh-workflow 0.8 cannot express: reusable-workflow caller
-/// `with:` / `secrets: inherit`, and `workflow_call`/`workflow_dispatch` input
-/// blocks (the crate models those as unordered `HashMap`s, which would
-/// serialize in nondeterministic order and trip the drift guard).
-fn render_patched(
-    build: fn() -> Workflow,
-    patch: fn(&mut serde_yaml::Value) -> Result<()>,
-) -> Result<String> {
-    let yaml = render_gh_workflow(build)()?;
-    let mut root: serde_yaml::Value =
-        serde_yaml::from_str(&yaml).context("re-parsing generated workflow YAML")?;
-    patch(&mut root)?;
-    serde_yaml::to_string(&root).context("serializing patched workflow YAML")
-}
-
-/// Parse a YAML fragment (used by workflow `patch` fns to build ordered blocks).
-fn yaml_fragment(s: &str) -> Result<serde_yaml::Value> {
-    serde_yaml::from_str(s).context("parsing YAML fragment")
-}
-
-/// Look up `jobs.<id>` in a rendered workflow as a mutable mapping.
-fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serde_yaml::Mapping> {
-    root.get_mut("jobs")
-        .and_then(|jobs| jobs.get_mut(id))
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .with_context(|| format!("job `{id}` not found in rendered workflow"))
-}
-
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
@@ -144,12 +115,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "deploy_observability",
         file_name: "deploy-observability.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_observability::deploy_observability,
-                deploy_observability::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_observability::deploy_observability)(),
     },
     WorkflowFile {
         slug: "export_ci_telemetry",
@@ -184,12 +150,12 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "build_dmg_on_tag",
         file_name: "build_dmg_on_tag.yml",
-        render_yaml: || render_patched(build_dmg_on_tag::build_dmg, build_dmg_on_tag::patch),
+        render_yaml: || render_gh_workflow(build_dmg_on_tag::build_dmg)(),
     },
     WorkflowFile {
         slug: "desktop_qa_macos",
         file_name: "desktop_qa_macos.yml",
-        render_yaml: || render_patched(desktop_qa_macos::desktop_qa_macos, desktop_qa_macos::patch),
+        render_yaml: || render_gh_workflow(desktop_qa_macos::desktop_qa_macos)(),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
@@ -204,16 +170,15 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "build_web_app",
         file_name: "build_web_app.yml",
-        render_yaml: || render_patched(build_web_app::build_web_app, build_web_app::patch),
+        render_yaml: || render_gh_workflow(build_web_app::build_web_app)(),
     },
     WorkflowFile {
         slug: "cancel_stuck_cloud_storage_deploys",
         file_name: "cancel_stuck_cloud_storage_deploys.yml",
         render_yaml: || {
-            render_patched(
+            render_gh_workflow(
                 cancel_stuck_cloud_storage_deploys::cancel_stuck_cloud_storage_deploys,
-                cancel_stuck_cloud_storage_deploys::patch,
-            )
+            )()
         },
     },
     WorkflowFile {
@@ -256,32 +221,17 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "deploy_ai_editing_worker",
         file_name: "deploy_ai_editing_worker.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_ai_editing_worker::deploy_ai_editing_worker,
-                deploy_ai_editing_worker::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_ai_editing_worker::deploy_ai_editing_worker)(),
     },
     WorkflowFile {
         slug: "deploy_mcp_chatgpt_worker",
         file_name: "deploy_mcp_chatgpt_worker.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_mcp_chatgpt_worker::deploy_mcp_chatgpt_worker,
-                deploy_mcp_chatgpt_worker::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_mcp_chatgpt_worker::deploy_mcp_chatgpt_worker)(),
     },
     WorkflowFile {
         slug: "deploy_all_services",
         file_name: "deploy_all_services.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_all_services::deploy_all_services,
-                deploy_all_services::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_all_services::deploy_all_services)(),
     },
     WorkflowFile {
         slug: "deploy_cla_worker",
@@ -297,7 +247,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_on_push",
         file_name: "deploy_on_push.yml",
         render_yaml: || {
-            let yaml = render_patched(deploy_on_push::deploy_on_push, deploy_on_push::patch)?;
+            let yaml = render_gh_workflow(deploy_on_push::deploy_on_push)()?;
             Ok(format!("{}{yaml}", deploy_on_push::NOTICE))
         },
     },
@@ -305,51 +255,33 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_fusionauth_instance",
         file_name: "deploy_fusionauth_instance.yml",
         render_yaml: || {
-            render_patched(
-                deploy_fusionauth_instance::deploy_fusionauth_instance,
-                deploy_fusionauth_instance::patch,
-            )
+            render_gh_workflow(deploy_fusionauth_instance::deploy_fusionauth_instance)()
         },
     },
     WorkflowFile {
         slug: "deploy_pulumi_stack",
         file_name: "deploy-pulumi-stack.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_pulumi_stack::deploy_pulumi_stack,
-                deploy_pulumi_stack::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_pulumi_stack::deploy_pulumi_stack)(),
     },
     WorkflowFile {
         slug: "deploy_sync_service",
         file_name: "deploy_sync_service.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_sync_service::deploy_sync_service,
-                deploy_sync_service::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(deploy_sync_service::deploy_sync_service)(),
     },
     WorkflowFile {
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
-        render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+        render_yaml: || render_gh_workflow(deploy_web_app::deploy_web_app)(),
     },
     WorkflowFile {
         slug: "release_production",
         file_name: "release-production.yml",
-        render_yaml: || {
-            render_patched(
-                release_production::release_production,
-                release_production::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(release_production::release_production)(),
     },
     WorkflowFile {
         slug: "deploy_website",
         file_name: "deploy_website.yml",
-        render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
+        render_yaml: || render_gh_workflow(deploy_website::deploy_website)(),
     },
     WorkflowFile {
         slug: "build_cef_codecs",
@@ -369,7 +301,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "pr_ci",
         file_name: "pr-ci.yml",
-        render_yaml: || render_patched(pr_ci::pr_ci, pr_ci::patch),
+        render_yaml: || render_gh_workflow(pr_ci::pr_ci)(),
     },
     WorkflowFile {
         slug: "ci_gate_reminder",
@@ -464,32 +396,17 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "pulumi_preview_pr",
         file_name: "pulumi_preview_pr.yml",
-        render_yaml: || {
-            render_patched(
-                pulumi_preview_pr::pulumi_preview_pr,
-                pulumi_preview_pr::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(pulumi_preview_pr::pulumi_preview_pr)(),
     },
     WorkflowFile {
         slug: "reusable_deploy_service",
         file_name: "reusable_deploy_service.yml",
-        render_yaml: || {
-            render_patched(
-                reusable_deploy_service::reusable_deploy_service,
-                reusable_deploy_service::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(reusable_deploy_service::reusable_deploy_service)(),
     },
     WorkflowFile {
         slug: "reusable_preview_service",
         file_name: "reusable_preview_service.yml",
-        render_yaml: || {
-            render_patched(
-                reusable_preview_service::reusable_preview_service,
-                reusable_preview_service::patch,
-            )
-        },
+        render_yaml: || render_gh_workflow(reusable_preview_service::reusable_preview_service)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

@@ -14,8 +14,6 @@
 //! the committed version may be another native PR's, held for a deploy that
 //! hasn't happened, so the run refuses a branch.
 
-use std::collections::HashMap;
-
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowDispatch,
@@ -27,13 +25,14 @@ use crate::workflows::{runners, steps, vars};
 pub fn ios_app_store_publish() -> Workflow {
     Workflow::new("iOS App Store Publish")
         .on(Event::default()
-            .workflow_call(WorkflowCall::default().secrets(HashMap::from([(
-                "IOS_RELEASE_DOPPLER_TOKEN".to_string(),
-                WorkflowCallSecret {
-                    description: "Doppler service token for ios-release/prd".into(),
-                    required: true,
-                },
-            )])))
+            .workflow_call(
+                WorkflowCall::default().add_secret(
+                    "IOS_RELEASE_DOPPLER_TOKEN",
+                    WorkflowCallSecret::default()
+                        .description("Doppler service token for ios-release/prd")
+                        .required(true),
+                ),
+            )
             .workflow_dispatch(WorkflowDispatch::default()))
         .add_job("publish", publish_job())
 }

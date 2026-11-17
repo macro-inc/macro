@@ -5,8 +5,10 @@
 //! overlaps the backend deploy and only the upload waits for it. Generated into
 //! `build_web_app.yml`.
 
-use anyhow::Result;
-use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{
+    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowInput,
+};
 
 use crate::workflows::{runners, steps, vars};
 
@@ -25,31 +27,24 @@ pub fn artifact(environment: &str) -> String {
 
 pub fn build_web_app() -> Workflow {
     Workflow::new("Build Web App")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "environment",
+                    WorkflowInput::string()
+                        .description("The environment to build for. e.g. (dev, prod)")
+                        .required(true),
+                )
+                .add_secret(
+                    "SEGMENT_WRITE_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "POSTHOG_API_KEY",
+                    WorkflowCallSecret::default().required(true),
+                ),
+        ))
         .add_job("build", build_job())
-}
-
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to build for. e.g. (dev, prod)
-            secrets:
-              SEGMENT_WRITE_KEY:
-                required: true
-              POSTHOG_API_KEY:
-                required: true
-        "#})?,
-    );
-    Ok(())
 }
 
 /// Wasm packages whose inputs did not change come from a GitHub Actions cache

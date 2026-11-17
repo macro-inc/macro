@@ -3,10 +3,9 @@
 //! Generated into `pulumi_preview_pr.yml` (replaces the hand-written
 //! `pulumi-preview-pr.yml`).
 
-use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
-    Workflow,
+    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step,
+    Strategy, Use, Workflow,
 };
 
 use xtask_paths::RepoGlob;
@@ -32,8 +31,7 @@ const TRIGGER_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new(".github/scripts/build-cloud-storage-lambdas-nix.sh"),
 ];
 
-/// Build the workflow. The reusable-workflow caller job's `with:` and
-/// `secrets: inherit` are filled in by [`patch`].
+/// Build the workflow.
 pub fn pulumi_preview_pr() -> Workflow {
     Workflow::new("Pulumi Preview on PR")
         .on(
@@ -59,24 +57,6 @@ pub fn pulumi_preview_pr() -> Workflow {
         .add_job("preview-status", preview_status())
 }
 
-/// Add what gh-workflow cannot express on the caller job, and drop the
-/// `runs-on: ubuntu-latest` that `Job::default()` injects — a job that `uses`
-/// a reusable workflow must not declare a runner.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let job = crate::workflows::job_mut(root, "preview-services")?;
-    job.remove("runs-on");
-    job.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            environment: dev
-            service-name: ${{ matrix.service }}
-            github-token: ${{ github.token }}
-        "#})?,
-    );
-    job.insert("secrets".into(), "inherit".into());
-    Ok(())
-}
-
 fn detect_changes() -> Job {
     Job::default()
         .name("Detect Changed Services")
@@ -88,8 +68,8 @@ fn detect_changes() -> Job {
         .add_step(detect_affected_services())
 }
 
-fn preview_services() -> Job {
-    Job::default()
+fn preview_services() -> CallJob {
+    CallJob::new("./.github/workflows/reusable_preview_service.yml")
         .name("Preview ${{ matrix.service }}")
         .needs(vec!["detect-changes".to_string()])
         .cond(Expression::new(
@@ -102,7 +82,10 @@ fn preview_services() -> Job {
             })),
             max_parallel: None,
         })
-        .uses("./.github/workflows/reusable_preview_service.yml")
+        .add_with("environment", "dev")
+        .add_with("service-name", "${{ matrix.service }}")
+        .add_with("github-token", "${{ github.token }}")
+        .inherit_secrets()
 }
 
 fn preview_status() -> Job {

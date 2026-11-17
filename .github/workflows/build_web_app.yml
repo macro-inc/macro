@@ -1,13 +1,13 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_web_app.rs
 name: Build Web App
-on:
+'on':
   workflow_call:
     inputs:
       environment:
+        description: The environment to build for. e.g. (dev, prod)
         required: true
         type: string
-        description: The environment to build for. e.g. (dev, prod)
     secrets:
       SEGMENT_WRITE_KEY:
         required: true
@@ -32,9 +32,9 @@ jobs:
         path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Setup
-      uses: ./.github/actions/setup-reqs-web
+      uses: './.github/actions/setup-reqs-web'
     - id: restore-wasm
       name: Restore wasm packages
       uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae
@@ -112,4 +112,4 @@ jobs:
         overwrite: 'true'
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'

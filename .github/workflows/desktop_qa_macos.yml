@@ -1,7 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/desktop_qa_macos.rs
 name: Desktop QA macOS
-on:
+run-name: macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}
+'on':
   workflow_dispatch:
     inputs:
       ref:
@@ -12,10 +13,10 @@ on:
         description: smoke = launch checks; full = smoke plus DevTools probe, longer soak and cargo test
         required: true
         type: choice
-        default: smoke
         options:
         - smoke
         - full
+        default: smoke
       report:
         description: Optional work item key of the factory (echoed into the run name and summary)
         required: false
@@ -46,7 +47,7 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         ref: ${{ github.sha }}
-        path: .qa-harness
+        path: '.qa-harness'
         sparse-checkout: apps/web/tests/macos
         persist-credentials: 'false'
     - name: Record tested commit
@@ -192,4 +193,3 @@ jobs:
         path: ${{ runner.temp }}/qa-out
         if-no-files-found: warn
         retention-days: '14'
-run-name: macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}

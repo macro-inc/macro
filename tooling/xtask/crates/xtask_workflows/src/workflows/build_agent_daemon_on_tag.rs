@@ -14,13 +14,10 @@
 //! holding it back.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch,
-    WorkflowDispatchInput,
+    Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
-
-use std::collections::HashMap;
 
 #[cfg(test)]
 mod test;
@@ -140,18 +137,12 @@ fn daemon_events() -> Event {
 }
 
 fn workflow_dispatch() -> WorkflowDispatch {
-    let mut inputs = HashMap::new();
-    inputs.insert(
-        "ref".into(),
-        WorkflowDispatchInput {
-            description: "Optional release tag override (v* or refs/tags/v*). Leave empty to build the branch or tag selected for this workflow run.".into(),
-            required: false,
-            input_type: "string".into(),
-            default: None,
-        },
-    );
-
-    WorkflowDispatch { inputs }
+    WorkflowDispatch::default().add_input(
+        "ref",
+        WorkflowInput::string().description(
+            "Optional release tag override (v* or refs/tags/v*). Leave empty to build the branch or tag selected for this workflow run.",
+        ),
+    )
 }
 
 /// Resolve the ref once, so every target job checks out the same commit even

@@ -11,15 +11,15 @@ use crate::defaults::Defaults;
 // Import the moved types
 use crate::env::Env;
 use crate::error::Result;
-use crate::job::Job;
+use crate::job::JobKind;
 use crate::permissions::Permissions;
 use crate::Event;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
-pub struct Jobs(pub(crate) IndexMap<String, Job>);
+pub struct Jobs(pub(crate) IndexMap<String, JobKind>);
 impl Jobs {
-    pub fn add(mut self, key: String, value: Job) -> Self {
+    pub fn add(mut self, key: String, value: JobKind) -> Self {
         self.0.insert(key, value);
         self
     }
@@ -32,8 +32,8 @@ impl Jobs {
     ///
     /// # Returns
     ///
-    /// Returns `Some(&Job)` if the job exists, `None` otherwise.
-    pub fn get(&self, key: &str) -> Option<&Job> {
+    /// Returns `Some(&JobKind)` if the job exists, `None` otherwise.
+    pub fn get(&self, key: &str) -> Option<&JobKind> {
         self.0.get(key)
     }
 }
@@ -100,7 +100,7 @@ impl Workflow {
     }
 
     /// Adds a job to the workflow with the specified ID and job configuration.
-    pub fn add_job<T: ToString, J: Into<Job>>(mut self, id: T, job: J) -> Self {
+    pub fn add_job<T: ToString, J: Into<JobKind>>(mut self, id: T, job: J) -> Self {
         let key = id.to_string();
         let jobs = self.jobs.take().unwrap_or_default().add(key, job.into());
 

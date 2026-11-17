@@ -10,69 +10,70 @@
 //! amortise, so the per-service build realises its own closure directly (the
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
 
-use anyhow::Result;
-use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{
+    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowInput,
+};
 
 use crate::workflows::{runners, steps, vars};
 
-/// Build the workflow. The `workflow_call` input/secret block is filled in by
-/// [`patch`].
+/// Build the workflow.
 pub fn reusable_deploy_service() -> Workflow {
     Workflow::new("Reusable Deploy Service")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "environment",
+                    WorkflowInput::string()
+                        .description("The environment to deploy to")
+                        .required(true),
+                )
+                .add_input(
+                    "service-name",
+                    WorkflowInput::string()
+                        .description("The name of the service to deploy")
+                        .required(true),
+                )
+                .add_input(
+                    "pulumi-stack-name",
+                    WorkflowInput::string()
+                        .description("Override pulumi stack name (defaults to service-name)")
+                        .required(false),
+                )
+                .add_input(
+                    "use-docker",
+                    WorkflowInput::boolean()
+                        .description("Whether to setup docker")
+                        .required(false)
+                        .default(true),
+                )
+                .add_input(
+                    "use-lfs",
+                    WorkflowInput::boolean()
+                        .description("Whether to checkout LFS content")
+                        .required(false)
+                        .default(false),
+                )
+                .add_secret(
+                    "AWS_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "AWS_SECRET_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "PULUMI_ACCESS_TOKEN",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
+                .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true)),
+        ))
         .add_job("setup", setup())
         .add_job("build-service-binaries", build_service_binaries())
         .add_job("build-lambda-artifacts", build_lambda_artifacts())
         .add_job("check-migrations", check_migrations())
         .add_job("deploy", deploy())
-}
-
-/// Fill in the ordered `workflow_call` inputs/secrets block.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to deploy to
-              service-name:
-                required: true
-                type: string
-                description: The name of the service to deploy
-              pulumi-stack-name:
-                required: false
-                type: string
-                description: Override pulumi stack name (defaults to service-name)
-              use-docker:
-                required: false
-                type: boolean
-                default: true
-                description: Whether to setup docker
-              use-lfs:
-                required: false
-                type: boolean
-                default: false
-                description: Whether to checkout LFS content
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-              DD_APP_KEY:
-                required: true
-              DD_API_KEY:
-                required: true
-        "#})?,
-    );
-    Ok(())
 }
 
 /// Resolve which artifact kinds this service produces so the heavy nix build

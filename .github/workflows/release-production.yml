@@ -3,7 +3,7 @@
 name: Deploy Production Release
 env:
   MODE: production
-on:
+'on':
   release:
     types:
     - released
@@ -11,7 +11,7 @@ jobs:
   deploy-cloud-storage:
     if: github.event_name == 'release'
     name: Deploy Cloud Storage Services
-    uses: ./.github/workflows/deploy_all_services.yml
+    uses: './.github/workflows/deploy_all_services.yml'
     with:
       environment: prod
     secrets:
@@ -25,7 +25,7 @@ jobs:
     needs:
     - deploy-cloud-storage
     name: Deploy Sync Service
-    uses: ./.github/workflows/deploy_sync_service.yml
+    uses: './.github/workflows/deploy_sync_service.yml'
     with:
       environment: prod
     secrets: inherit
@@ -34,7 +34,7 @@ jobs:
     - deploy-cloud-storage
     - deploy-sync-service
     name: Deploy AI Editing Worker
-    uses: ./.github/workflows/deploy_ai_editing_worker.yml
+    uses: './.github/workflows/deploy_ai_editing_worker.yml'
     with:
       environment: prod
     secrets: inherit
@@ -42,14 +42,14 @@ jobs:
     needs:
     - deploy-cloud-storage
     name: Deploy MCP ChatGPT Worker
-    uses: ./.github/workflows/deploy_mcp_chatgpt_worker.yml
+    uses: './.github/workflows/deploy_mcp_chatgpt_worker.yml'
     with:
       environment: prod
     secrets: inherit
   deploy-website:
     if: github.event_name == 'release'
     name: Deploy Website
-    uses: ./.github/workflows/deploy_website.yml
+    uses: './.github/workflows/deploy_website.yml'
     with:
       environment: prod
     secrets:
@@ -60,15 +60,15 @@ jobs:
     needs:
     - deploy
     name: Publish iOS App Store Version
-    uses: ./.github/workflows/ios-app-store-publish.yml
     permissions:
       contents: read
+    uses: './.github/workflows/ios-app-store-publish.yml'
     secrets:
       IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
   build:
     if: github.event_name == 'release'
     name: Build Web App
-    uses: ./.github/workflows/build_web_app.yml
+    uses: './.github/workflows/build_web_app.yml'
     with:
       environment: prod
     secrets:
@@ -95,9 +95,9 @@ jobs:
         path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
-      uses: ./.github/actions/setup-reqs-web
+      uses: './.github/actions/setup-reqs-web'
     - name: Download dist
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
@@ -117,7 +117,7 @@ jobs:
       with:
         command: up
         stack-name: macro-inc/prod
-        work-dir: ./infra/stacks/web-app
+        work-dir: './infra/stacks/web-app'
       env:
         PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
@@ -132,7 +132,7 @@ jobs:
       working-directory: apps/web
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'
   upload:
     needs:
     - build

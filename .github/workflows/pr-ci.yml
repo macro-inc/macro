@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
 name: PR CI
-on:
+'on':
   pull_request:
     types:
     - labeled
@@ -546,81 +546,81 @@ jobs:
     needs:
     - start
     name: Cloud Storage
-    uses: ./.github/workflows/code_check_cloud_storage.yml
+    uses: './.github/workflows/code_check_cloud_storage.yml'
     secrets: inherit
   web-app:
     needs:
     - start
     name: Web App
-    uses: ./.github/workflows/web-app-check-main.yml
+    uses: './.github/workflows/web-app-check-main.yml'
     secrets: inherit
   infra:
     needs:
     - start
     name: Infra
-    uses: ./.github/workflows/code_check_infra.yml
+    uses: './.github/workflows/code_check_infra.yml'
     secrets: inherit
   conventions:
     needs:
     - start
     name: Conventions
-    uses: ./.github/workflows/code_check_conventions.yml
+    uses: './.github/workflows/code_check_conventions.yml'
     secrets: inherit
   cargo-deny:
     needs:
     - start
     if: needs.start.outputs.cargo_deny == 'true'
     name: cargo deny
-    uses: ./.github/workflows/cargo_deny.yml
+    uses: './.github/workflows/cargo_deny.yml'
     secrets: inherit
   workspace-dependencies:
     needs:
     - start
     if: needs.start.outputs.workspace_dependencies == 'true'
     name: Workspace dependencies
-    uses: ./.github/workflows/cargo_workspace_dependency_check.yml
+    uses: './.github/workflows/cargo_workspace_dependency_check.yml'
     secrets: inherit
   generated-workflows:
     needs:
     - start
     if: needs.start.outputs.generated_workflows == 'true'
     name: Generated workflows
-    uses: ./.github/workflows/check_generated.yml
+    uses: './.github/workflows/check_generated.yml'
     secrets: inherit
   node-modules-nix:
     needs:
     - start
     if: needs.start.outputs.node_modules_nix == 'true'
     name: node_modules nix
-    uses: ./.github/workflows/check_node_modules_nix.yml
+    uses: './.github/workflows/check_node_modules_nix.yml'
     secrets: inherit
   tauri-lockfiles:
     needs:
     - start
     if: needs.start.outputs.tauri_lockfiles == 'true'
     name: Tauri lockfiles
-    uses: ./.github/workflows/check_tauri_lockfiles.yml
+    uses: './.github/workflows/check_tauri_lockfiles.yml'
     secrets: inherit
   sdk:
     needs:
     - start
     if: needs.start.outputs.sdk == 'true'
     name: SDK
-    uses: ./.github/workflows/sdk-check.yml
+    uses: './.github/workflows/sdk-check.yml'
     secrets: inherit
   observability-image:
     needs:
     - start
     if: needs.start.outputs.observability_image == 'true'
     name: Observability image
-    uses: ./.github/workflows/observability_image.yml
+    uses: './.github/workflows/observability_image.yml'
     secrets: inherit
   macrod-update:
     needs:
     - start
     if: needs.start.outputs.macrod_update == 'true'
     name: macrod update
-    uses: ./.github/workflows/test_macrod_update.yml
+    uses: './.github/workflows/test_macrod_update.yml'
     secrets: inherit
   gate:
     needs:

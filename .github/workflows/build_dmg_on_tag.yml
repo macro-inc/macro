@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_dmg_on_tag.rs
 name: Build macOS DMG
-on:
+'on':
   workflow_call:
     inputs:
       ref:

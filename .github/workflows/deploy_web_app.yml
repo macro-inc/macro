@@ -1,21 +1,21 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
 name: Deploy Web App
-on:
+'on':
   workflow_call:
     inputs:
       environment:
+        description: The environment to build for. e.g. (dev, prod)
         required: true
         type: string
-        description: The environment to build for. e.g. (dev, prod)
       notify:
         required: false
         type: boolean
       prebuilt:
+        description: The caller already ran build_web_app.yml in this run
         required: false
         type: boolean
         default: false
-        description: The caller already ran build_web_app.yml in this run
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -34,21 +34,21 @@ on:
   workflow_dispatch:
     inputs:
       environment:
+        description: The environment to build for
         required: true
         type: choice
         options:
         - dev
         - prod
-        description: The environment to build for
       notify:
+        description: Whether to notify the Slack channel of the deployment completion
         required: false
         type: boolean
-        description: Whether to notify the Slack channel of the deployment completion
 jobs:
   build:
     if: ${{ !inputs.prebuilt }}
     name: Build
-    uses: ./.github/workflows/build_web_app.yml
+    uses: './.github/workflows/build_web_app.yml'
     with:
       environment: ${{ inputs.environment }}
     secrets:
@@ -74,9 +74,9 @@ jobs:
         path: /home/runner/.bun/install/cache
       continue-on-error: true
     - name: Setup Nix
-      uses: ./.github/actions/setup-nix
+      uses: './.github/actions/setup-nix'
     - name: Setup
-      uses: ./.github/actions/setup-reqs-web
+      uses: './.github/actions/setup-reqs-web'
     - name: Download dist
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
@@ -96,7 +96,7 @@ jobs:
       with:
         command: up
         stack-name: macro-inc/${{ inputs.environment }}
-        work-dir: ./infra/stacks/web-app
+        work-dir: './infra/stacks/web-app'
       env:
         PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
@@ -118,7 +118,7 @@ jobs:
         overwrite: 'true'
     - name: Teardown Nix
       if: always()
-      uses: ./.github/actions/teardown-nix
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: deploy-web-app-${{ inputs.environment }}
   cancel-in-progress: false
