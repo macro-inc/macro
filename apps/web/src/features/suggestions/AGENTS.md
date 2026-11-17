@@ -27,6 +27,15 @@ only, behind `enable-suggestions`.
   or draft; a routine suggestion saves its drafted routine.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
+- `draft-origin.tsx` is the footer the email thread draws under a reply
+  draft a session wrote (`rendering.renderDraftOrigin`, supplied in
+  `features/email-thread/email-thread.tsx`). `draftOrigin` in
+  `core/suggestion.ts` finds the feed's suggestion, open or done, whose draft
+  is that message; `queries/draft-origin.ts` reads the feed's own entry and
+  never polls. The bar links the suggestion's other `about` items, and
+  Rewrite opens the agent composer with the thread mentioned and the request
+  typed, unsent. A send time takes the card's footer instead, and a draft
+  whose suggestion has left the feed (done over a day ago) has none.
 - The first generation starts in onboarding, not here: connecting an inbox
   calls `/suggestions/generate` once when either the person's suggestions or
   routine suggestions are on (`features/onboarding`,

@@ -307,7 +307,10 @@ On For you, each card has one main action for its kind: **Open in chat** opens
 the composer with the prompt, unsent; **Run in background** starts the run at
 once (the card says what it will post or send first), then shows Running and,
 when done, a row with **Open result**; **Open** or **Open draft** opens the
-item or the drafted reply; **Turn on** saves a routine suggestion and
+item or the drafted reply (the thread, with the draft in its reply composer
+and a footer under it that reads **Drafted by Macro**, links what else the
+suggestion cites, and offers **Rewrite**, which opens the agent composer with
+the thread mentioned and the request typed, unsent); **Turn on** saves a routine suggestion and
 **Review** opens it in the routine editor. The `x` (shown on hover or focus)
 dismisses at once and leaves an Undo row for the visit; Undo restores the
 suggestion, which the server allows for a few minutes. Dismissing a running

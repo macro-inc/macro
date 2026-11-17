@@ -99,6 +99,40 @@ export type SuggestionFeed = {
   counts: FeedCounts;
 };
 
+/** Where a saved reply draft came from: its thread, and what else its suggestion cites. */
+export type DraftOrigin = {
+  thread: SuggestionTarget;
+  /** The suggestion's other items, without the draft's own thread. */
+  sources: SuggestionTarget[];
+};
+
+/**
+ * The origin of the draft `draftId` when a session wrote it for one of the
+ * feed's suggestions, open or done; undefined for any other draft.
+ */
+export function draftOrigin(
+  feed: SuggestionFeed,
+  draftId: string
+): DraftOrigin | undefined {
+  for (const suggestion of feed.suggestions) {
+    if (suggestion.kind !== 'entity') continue;
+
+    const draft = suggestion.draft;
+    if (draft?.partId !== draftId) continue;
+
+    return {
+      thread: { entityType: draft.entityType, entityId: draft.entityId },
+      sources: suggestion.about.filter(
+        (target) =>
+          target.entityType !== draft.entityType ||
+          target.entityId !== draft.entityId
+      ),
+    };
+  }
+
+  return undefined;
+}
+
 export type FeedFilter = 'all' | 'running' | 'open' | 'done';
 
 export function matchesFilter(status: SuggestionStatus, filter: FeedFilter) {
