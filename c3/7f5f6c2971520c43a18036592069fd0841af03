@@ -1,0 +1,32 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
+  s_358a0656ff17a9::t_06f68fa07a9826 61-65,84-88,111-114
+.github/workflows/deploy_web_app.yml
+  s_358a0656ff17a9::t_06f68fa07a9826 19-23,52-56,64
+tooling/xtask/crates/xtask_workflows/src/workflows/build_web_app.rs
+  s_358a0656ff17a9::t_06f68fa07a9826 45-49,85,176-186
+  s_358a0656ff17a9::t_69749b648fd6f6 187-188
+tooling/xtask/crates/xtask_workflows/src/workflows/build_web_app/test.rs
+  s_358a0656ff17a9::t_06f68fa07a9826 282-313
+infra/stacks/web-app/README.md
+  s_358a0656ff17a9::t_26cd2cc5c1e738 54-82
+.github/workflows/build_web_app.yml
+  s_358a0656ff17a9::t_06f68fa07a9826 11-15,107-127
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/verify_bundle_identity.sh
+  s_358a0656ff17a9::t_06f68fa07a9826 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c37f5f6c2971520c43a18036592069fd0841af03",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
