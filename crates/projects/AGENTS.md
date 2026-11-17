@@ -59,7 +59,8 @@ soft delete/restore/purge, and bulk upload into a project tree.
 - Folder duplication copies at most `MAX_PROJECT_DUPLICATE_ENTRIES` subfolders,
   documents, and chats, and discards the whole copy if any part fails.
   Email threads are filed by a link on the thread, not owned by the folder,
-  so they stay with the source.
+  so they stay with the source. Artifacts are skipped: a document copy can't
+  carry their version history.
 - The bulk-upload extractor registers a whole folder in one request through
   `internal_upload_router`, which DSS mounts only on its internal router with
   a 32 MiB body limit; the user-facing `/projects/upload` keeps axum's 2 MiB

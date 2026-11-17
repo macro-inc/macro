@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"fileType\") VALUES ($1, 'Onboarding', $2, 'artifact')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "229c36279122df01bfdf698612840ad728a002c2ec0622923705504e8cb41d4a"
+}

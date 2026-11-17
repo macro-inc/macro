@@ -281,6 +281,12 @@ where
                         })?,
                     )
                 }
+                Some(FileAssociation::Artifact(_)) => {
+                    return Err(ToolCallError {
+                        description: "artifacts are web pages served from their own origin; open them in Macro instead of reading them as text".to_string(),
+                        internal_error: anyhow::anyhow!("artifact content is not readable as text"),
+                    });
+                }
                 _ => get_document_inline_text_or_download(
                     service_context.clone(),
                     &document_context,

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT\n                file.value->>'sha256' AS \"sha256!\",\n                (file.value->>'size')::bigint AS \"size!\"\n            FROM artifact_versions version, jsonb_each(version.files) file\n            WHERE version.document_id = $1 AND file.value->>'sha256' = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha256!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "size!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "412b253c6d6177a0a3db62ba066bd44f902f2dd791e5995a45b8ccfae18e67e9"
+}

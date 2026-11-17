@@ -13,3 +13,6 @@ version = "0.1.0"
 derive_more = { version = "2", features = ["display", "from"] }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -17,6 +17,8 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 
 Document sync: [DSS sync router](architecture/sync-router.md).
 
+Artifacts (agent-published web pages): [architecture](architecture/artifacts.md).
+
 Email: [frontend architecture](architecture/email.md) and
 [backend composition and boundaries](architecture/email-backend.md).
 

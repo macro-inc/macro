@@ -231,6 +231,7 @@ define_file_associations!(
     (Pdf, "pdf", "PDF viewer file association"),
     (Md, "md", "Markdown editor file association"),
     (Canvas, "canvas", "Canvas editor file association"),
+    (Artifact, "artifact", "Artifact viewer file association"),
     (Code, "code", "Code editor file association"),
     (Image, "image", "Image viewer file association"),
     (Archive, "archive", "Archive file association"),
@@ -263,6 +264,12 @@ generate_file_types!(
         Document
     ),
     (Canvas, "canvas", "application/x-macro-canvas", Canvas),
+    (
+        Artifact,
+        "artifact",
+        "application/x-macro-artifact",
+        Artifact
+    ),
     // Code block: generated from VS Code extensions {
     (Coffee, "coffee", "text/plain", Code),
     (Cson, "cson", "text/plain", Code),

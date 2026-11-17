@@ -127,6 +127,9 @@ pub struct ProjectTreeFolder {
 pub enum ProjectItemKind {
     /// A document, tasks included.
     Document,
+    /// An artifact document. Its body is its version history, which a
+    /// document copy does not carry, so folder duplication skips it.
+    Artifact,
     /// A chat.
     Chat,
 }
@@ -148,7 +151,7 @@ impl ProjectTreeItem {
     /// The item as an entity reference.
     pub fn entity(&self) -> Entity<'static> {
         let entity_type = match self.kind {
-            ProjectItemKind::Document => EntityType::Document,
+            ProjectItemKind::Document | ProjectItemKind::Artifact => EntityType::Document,
             ProjectItemKind::Chat => EntityType::Chat,
         };
         entity_type.with_entity_string(self.id.clone())

@@ -9,8 +9,8 @@ use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use model_file_type::{
-    Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
-    Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
+    Archive, Artifact, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation,
+    FileType, Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
 };
 use model_owner::Owner;
 use nom::{
@@ -94,6 +94,7 @@ fn file_association(s: &str) -> IResult<&str, FileAssociation> {
         assotiation::<Pdf>("pdf").map(FileAssociation::from),
         assotiation::<Md>("md").map(FileAssociation::from),
         assotiation::<Canvas>("canvas").map(FileAssociation::from),
+        assotiation::<Artifact>("artifact").map(FileAssociation::from),
         assotiation::<Code>("code").map(FileAssociation::from),
         assotiation::<Image>("image").map(FileAssociation::from),
         assotiation::<Archive>("archive").map(FileAssociation::from),
@@ -121,6 +122,7 @@ fn expand_file_association(association: FileAssociation) -> impl Iterator<Item =
 /// not pdf,
 /// not md,
 /// not canvas,
+/// not artifact,
 /// not native spreadsheets,
 /// not code,
 /// not video
@@ -137,6 +139,7 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
                             | FileAssociation::Pdf(_)
                             | FileAssociation::Md(_)
                             | FileAssociation::Canvas(_)
+                            | FileAssociation::Artifact(_)
                             | FileAssociation::Code(_)
                             | FileAssociation::Video(_)
                     )

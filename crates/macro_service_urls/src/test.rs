@@ -833,6 +833,11 @@ fn connect_api_url_parses() {
 }
 
 #[test]
+fn artifact_content_url_parses() {
+    assert_parses_for_all_environments(ArtifactContentUrl::default_for_environment);
+}
+
+#[test]
 fn google_oauth_token_info_url_is_google_in_every_environment() {
     with_mock_override_env(missing_override, || {
         for environment in ENVS {

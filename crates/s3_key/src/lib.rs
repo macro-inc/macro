@@ -2,6 +2,8 @@
 
 //! S3 key building and parsing for cloud storage buckets.
 
+mod artifact_key;
+pub use artifact_key::{build_artifact_document_prefix, build_artifact_object_key};
 mod document_key;
 pub use document_key::{
     CONVERTED_DOCUMENT_FILE_NAME, DOCX_EXTENSION, DocumentKey, PDF_EXTENSION,
