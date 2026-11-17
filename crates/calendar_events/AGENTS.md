@@ -417,8 +417,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   window finishes, so every coverage reader (sync health and booking, team
   availability, the syncing banner) still sees a first import in progress.
   Google needs no such order: its first import writes each calendar's whole
-  window from one snapshot within seconds. A delta round lists only changes, so it also reads again the
-  members with no stored copy that an older `READER_REVISION` read (stamped
+  window from one snapshot within seconds. A delta round lists only changes,
+  so it also reads again the members with no stored copy that an older `READER_REVISION` read (stamped
   in `calendar_outlook_members.reader_revision`, NULL from builds before
   it; a member found with a stored copy is stamped instead): a parser fix brings skipped events back without anyone touching
   them, and a skip costs no read until the event changes or the revision
