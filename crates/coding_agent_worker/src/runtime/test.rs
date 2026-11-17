@@ -148,27 +148,31 @@ fn retry_policy_distinguishes_temporary_refusals_from_invalid_credentials() {
     }
 }
 
+/// Whether `delay` is within a quarter of `expected`, the jitter bound.
+fn near(delay: Duration, expected: Duration) -> bool {
+    delay >= expected.mul_f64(0.75) && delay <= expected.mul_f64(1.25)
+}
+
 #[test]
 fn a_healthy_connection_is_redialed_at_once_and_failures_back_off() {
     let mut backoff = reconnect_strategy();
-    assert_eq!(
-        redial_delay(None, &mut backoff),
-        std::time::Duration::from_secs(1)
-    );
-    assert_eq!(
-        redial_delay(None, &mut backoff),
-        std::time::Duration::from_secs(2)
-    );
-    assert_eq!(
-        redial_delay(Some(std::time::Duration::from_secs(1)), &mut backoff),
-        std::time::Duration::from_secs(4)
-    );
+    let ms = Duration::from_millis;
+    let first = redial_delay(None, &mut backoff);
+    assert!(near(first, ms(250)), "first redial after {first:?}");
+    let second = redial_delay(None, &mut backoff);
+    assert!(near(second, ms(500)), "second redial after {second:?}");
+    // A connection that dropped quickly is still a failure.
+    let third = redial_delay(Some(Duration::from_secs(1)), &mut backoff);
+    assert!(near(third, ms(1_000)), "third redial after {third:?}");
+    for _ in 0..10 {
+        redial_delay(None, &mut backoff);
+    }
+    let capped = redial_delay(None, &mut backoff);
+    assert!(near(capped, MAX_RECONNECT_DELAY), "capped redial after {capped:?}");
     assert_eq!(
         redial_delay(Some(HEALTHY_CONNECTION), &mut backoff),
-        std::time::Duration::ZERO
+        Duration::ZERO
     );
-    assert_eq!(
-        redial_delay(None, &mut backoff),
-        std::time::Duration::from_secs(1)
-    );
+    let after_reset = redial_delay(None, &mut backoff);
+    assert!(near(after_reset, ms(250)), "redial after a healthy connection: {after_reset:?}");
 }

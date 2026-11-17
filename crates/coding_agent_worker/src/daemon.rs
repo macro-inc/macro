@@ -17,6 +17,7 @@ use crate::harness::{HandoffSender, Handoffs};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
 use crate::outbound::stream::EventStreamClient;
+use crate::retry_delay::RetryDelays;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
@@ -141,20 +142,17 @@ impl Daemon {
 
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
-            let mut failures = 0u32;
+            let mut delays = reconnect_delays();
             loop {
                 if shutdown.is_cancelled() {
                     return Ok(());
                 }
                 match serve_once(&client, &executor, &shutdown).await {
                     ServeOutcome::Stopped => return Ok(()),
-                    ServeOutcome::Idle => {
-                        failures = 0;
-                    }
+                    ServeOutcome::Idle => delays.reset(),
                     ServeOutcome::Ended(error) => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
-                        failures = failures.saturating_add(1);
-                        let delay = reconnect_delay(failures);
+                        let delay = delays.next_delay();
                         tokio::select! {
                             () = shutdown.cancelled() => return Ok(()),
                             () = tokio::time::sleep(delay) => {}
@@ -310,9 +308,9 @@ fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<
     }
 }
 
-fn reconnect_delay(failures: u32) -> Duration {
-    let secs = 1u64.checked_shl(failures.min(5)).unwrap_or(30).min(30);
-    Duration::from_secs(secs)
+/// The event stream's reconnect delays: doubling from the first to the cap.
+fn reconnect_delays() -> RetryDelays {
+    RetryDelays::new(Duration::from_secs(2), Duration::from_secs(30))
 }
 
 enum ServeOutcome {

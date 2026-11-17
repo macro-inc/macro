@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use tokio::sync::watch;
 use tokio::time::Instant;
-use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -18,6 +17,7 @@ use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
+use crate::retry_delay::RetryDelays;
 use crate::turns::ActiveTurns;
 
 #[cfg(test)]
@@ -29,6 +29,8 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// A connection that lasted this long was healthy: its loss is redialed at
 /// once rather than after a backoff step.
 const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
+/// The first redial after a failure; later ones double up to the cap.
+const FIRST_RECONNECT_DELAY: Duration = Duration::from_secs(1);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.
@@ -219,16 +221,14 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
 
 /// How long to wait before the next dial, given how long the last
 /// connection lasted (`None` when the dial itself failed).
-fn redial_delay(lasted: Option<Duration>, backoff: &mut ExponentialBackoff) -> Duration {
+fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration {
     if lasted.is_some_and(|lasted| lasted >= HEALTHY_CONNECTION) {
-        *backoff = reconnect_strategy();
+        backoff.reset();
         return Duration::ZERO;
     }
-    backoff.next().unwrap_or(MAX_RECONNECT_DELAY)
+    backoff.next_delay()
 }
 
-fn reconnect_strategy() -> ExponentialBackoff {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .max_delay(MAX_RECONNECT_DELAY)
+fn reconnect_strategy() -> RetryDelays {
+    RetryDelays::new(FIRST_RECONNECT_DELAY, MAX_RECONNECT_DELAY)
 }

@@ -31,6 +31,7 @@ mod herdr;
 mod outbound;
 mod profiles;
 mod repository;
+mod retry_delay;
 mod runtime;
 mod self_knowledge;
 mod service;

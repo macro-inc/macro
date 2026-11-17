@@ -4789,6 +4789,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pairing_id",
+ "rand 0.9.4",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",

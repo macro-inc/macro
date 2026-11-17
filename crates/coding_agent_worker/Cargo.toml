@@ -46,6 +46,7 @@ opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
 # The gateway dial is `wss` on every deployment but a local stack, and

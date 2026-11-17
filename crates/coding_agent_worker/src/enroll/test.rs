@@ -23,6 +23,20 @@ fn enrollment() -> Enrollment {
     serde_json::from_str(ENROLLMENT_JSON).expect("the literal is a valid enrollment")
 }
 
+#[test]
+fn the_claim_retries_about_every_250_ms_with_jitter() {
+    let mut delays = claim_retry_delays();
+    let drawn: Vec<Duration> = (0..50).map(|_| delays.next_delay()).collect();
+    assert!(
+        drawn.iter().all(|delay| {
+            (Duration::from_micros(187_500)..=Duration::from_micros(312_500)).contains(delay)
+        }),
+        "{drawn:?}"
+    );
+    // Jittered, so computers booting together do not claim in lockstep.
+    assert!(drawn.iter().any(|delay| *delay != drawn[0]), "{drawn:?}");
+}
+
 #[derive(Default)]
 struct FakeHost {
     calls: RefCell<Vec<String>>,

@@ -24,6 +24,7 @@ use rootcause::prelude::ResultExt as _;
 use crate::computer::ENROLLED_MARKER;
 use crate::config::{Config, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::retry_delay::RetryDelays;
 use crate::service::ServiceOptions;
 use crate::tui::config_form::ConfigForm;
 
@@ -37,6 +38,11 @@ const CLAIM_DEADLINE: Duration = Duration::from_secs(300);
 /// The pairing is pre-approved, so a claim only waits for the network or
 /// service to come up: retry quickly.
 const CLAIM_RETRY: Duration = Duration::from_millis(250);
+
+/// The claim's retry delays: every [`CLAIM_RETRY`], jittered.
+fn claim_retry_delays() -> RetryDelays {
+    RetryDelays::every(CLAIM_RETRY)
+}
 const INCUS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Where the enrollment JSON comes from.
@@ -344,6 +350,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     }
     let client = PairingClient::new(&config).with_trace_parent(enrollment.traceparent.clone());
     let started = Instant::now();
+    let mut delays = claim_retry_delays();
     let mut attempts: i64 = 0;
     loop {
         attempts += 1;
@@ -375,7 +382,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         if started.elapsed() >= CLAIM_DEADLINE {
             rootcause::bail!("the enrollment's pairing was not claimable in time");
         }
-        tokio::time::sleep(CLAIM_RETRY).await;
+        tokio::time::sleep(delays.next_delay()).await;
     }
 }
 
