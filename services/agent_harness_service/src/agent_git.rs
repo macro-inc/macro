@@ -95,7 +95,7 @@ where
     // No compression layer: pack streams are already compressed.
     Ok(Router::new().nest(GATEWAY_PATH_PREFIX, routes).layer(
         TraceLayer::new_for_http()
-            .make_span_with(macro_tower_layers::MakeSpanWithRemoteParent)
+            .make_span_with(macro_tower_layers::MakeSpanWithRemoteParent::default())
             .on_request(())
             .on_response(macro_tower_layers::CustomOnResponse::new_with_threshold(
                 std::time::Duration::from_millis(200),
