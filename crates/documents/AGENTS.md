@@ -131,6 +131,10 @@ word docs, Illustrator/Photoshop files).
   `src/bin/backfill_markdown_content_location.rs` if existing documents need
   migrating (run via `just backfill_markdown_content_location_dev` from this
   crate's `justfile`).
+- Queue email attachments that lost their links before the released-attachment
+  queue existed: `src/bin/enqueue_orphaned_email_attachments.rs` over
+  `src/domain/released_attachments/orphans.rs`; see
+  [Orphaned email attachment scan](#orphaned-email-attachment-scan).
 
 Appearance writes use `activity::AppearanceUpdate` in the repository transaction;
 realtime appearance events do not re-ingest history.
@@ -167,7 +171,8 @@ realtime appearance events do not re-ingest history.
   Link an existing document to an attachment with
   `create::link_live_document_email`: its key-share lock orders the link with
   the drain's `FOR UPDATE`, so a document the drain trashed after a reuse
-  lookup is never linked.
+  lookup is never linked. The orphan scan (`released_attachments/orphans.rs`)
+  previews the drain through the same `classify` query; keep it shared.
 - `edit_document.rs` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
   field that isn't a grant joins that check. Grants are checked where they are
@@ -178,6 +183,54 @@ realtime appearance events do not re-ingest history.
   `project_grants::refuse_unregistered_filing` instead, before the write.
   Under such a scope a task defaults to unshared but
   keeps its team number (`CreateTaskRequest::share_with_team`).
+
+## Orphaned email attachment scan
+
+`enqueue_orphaned_email_attachments` finds documents that lost their email link
+before the released-attachment queue existed: a live document whose Source
+property names an email thread, with no `document_email` row. It queues them in
+`released_email_attachment_documents`, so the drain's checks trash or keep each
+one as they do a document released today.
+
+- Run it only once #10948 (the queue and its drain) and #10942 (bounded trash
+  expiry) are both in the production release. Without the drain the queue only
+  grows; without bounded expiry, everything it trashes comes due for purge in
+  the same few hours 30 days later.
+- The rollout's coordinator runs it, through this crate's `just` recipes, with
+  an absolute `--state-file` path.
+- Dry run first (`enqueue_orphaned_email_attachments_prod`). It writes only
+  the state file and reports the orphans by cause (mailbox gone, mailbox
+  connected again after the import, thread gone, message gone, attachment
+  replaced) and what the drain would do with them: trash, keep as adopted,
+  keep as already in the Trash, or skip as linked again. Then run
+  `enqueue_orphaned_email_attachments_prod_apply` with a new state file.
+- Rate: at most `--per-second` (default 100) orphans are queued a second, and
+  the scan waits while more than `--max-queue-depth` (default 10,000, one drain
+  round) are queued. The drain runs a round of 20 batches of 500 per
+  notification and one a minute without any, so 10,000 a minute is its floor
+  even if notifications are lost; 100 a second is 6,000 a minute and leaves
+  the rest of each round to documents released by mail deleted now. The scan
+  notifies once per 500 queued, so its rounds drain whole batches: each batch
+  publishes one `document.email_attachments_released` event, which Soup
+  realtime turns into one removal per trashed document in open lists.
+- Resume: the cursor and counts are saved to the state file after every page;
+  rerun with the same file to continue. `--after <entity id>` starts elsewhere
+  with fresh counts. A state file belongs to one mode, dry run or `--apply`.
+  Any error stops the scan with its last cursor printed; nothing retries. A
+  rerun is safe: queuing skips documents already queued, a trashed document is
+  no longer an orphan, and only adopted ones are queued again, to be kept again.
+- A page reads `--page-size` (default 500) `entity_properties` rows through
+  `idx_entity_properties_entity_id`, then probes each entity in them by
+  `(entity_id, entity_type)` and picks its Source row outside an `OFFSET 0`
+  fence. A range over the window, or a probe naming the definition, lets stale
+  statistics read every Source row through
+  `idx_entity_properties_property_definition_id`. Each page is one
+  `document.orphaned_attachments.page` span with its cursor and counts, and a
+  progress line is logged every 30 seconds. A page is about ten round trips
+  to the database, which dominate from outside AWS; a larger `--page-size`
+  (5,000 rows measured at about 25 ms a page) shortens a dry run.
+- A document whose owner set a thread Source by hand, without importing it,
+  matches too; the dry run's counts are the check before applying.
 
 ## Related
 
