@@ -2,14 +2,17 @@ import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import {
   type BotFieldsFragment,
   BotIdentitiesDocument,
+  MentionableBotsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
   type Accessor,
   createComputed,
+  createMemo,
   createRoot,
   createSignal,
+  mapArray,
   onCleanup,
 } from 'solid-js';
 import { createLivePreviewBatcher } from '../preview/live-batcher';
@@ -36,32 +39,61 @@ export type BotIdentitySeed = { name: string; avatarUrl?: string | null };
 /** `user.bots` takes at most 100 ids. */
 const MAX_BOT_IDS = 100;
 
+/**
+ * Bots pushed to a client. `shown` means mounted reads already show them: the
+ * normalized cache applied the push, or (without the websocket) the gateway
+ * bridge holds them.
+ */
+export type BotPush = {
+  bots: readonly Pick<BotFieldsFragment, 'id' | 'deletedAt'>[];
+  shown: boolean;
+};
+
 type Revalidator = {
-  client: Client;
-  ids: readonly string[];
+  client: () => Client;
+  /** Whether a push changes what this read returns. */
+  affected: (push: BotPush) => boolean;
   refresh: () => Promise<unknown>;
 };
 const revalidators = new Set<Revalidator>();
 
 /**
- * Refetch the mounted identity batches on `client` that hold any of `ids`,
- * or all of them when `ids` is null (pushes may have been missed).
+ * Refetch the mounted bot reads on `client` that `push` changes, or all of
+ * them when `push` is null (pushes may have been missed).
  */
-export async function revalidateBotIdentities(
+export async function revalidateBotReads(
   client: Pick<Client, 'query'>,
-  ids: ReadonlySet<string> | null
+  push: BotPush | null
 ): Promise<void> {
   await Promise.all(
     [...revalidators].map(async (entry) => {
-      if (entry.client !== client) return;
-      if (ids && !entry.ids.some((id) => ids.has(id))) return;
+      if (entry.client() !== client) return;
+      if (push && !entry.affected(push)) return;
       try {
         await entry.refresh();
       } catch (error) {
-        console.warn('Bot identity revalidation failed', error);
+        console.warn('Bot read revalidation failed', error);
       }
     })
   );
+}
+
+function registerRevalidator(
+  client: () => Client,
+  affected: Revalidator['affected'],
+  refetch: () => Promise<unknown>
+) {
+  let disposed = false;
+  const revalidator: Revalidator = {
+    client,
+    affected,
+    refresh: createTrailingRefetch(() => !disposed, refetch),
+  };
+  revalidators.add(revalidator);
+  onCleanup(() => {
+    disposed = true;
+    revalidators.delete(revalidator);
+  });
 }
 
 function startBatch(client: Client, ids: string[]) {
@@ -75,20 +107,12 @@ function startBatch(client: Client, ids: string[]) {
         keepPreviousData: false,
       })
     );
-    let disposed = false;
-    const revalidator: Revalidator = {
-      client,
-      ids,
-      refresh: createTrailingRefetch(
-        () => !disposed,
-        () => query.refetch({ requestPolicy: 'network-only' })
-      ),
-    };
-    revalidators.add(revalidator);
-    onCleanup(() => {
-      disposed = true;
-      revalidators.delete(revalidator);
-    });
+    // A push the cache applied already shows; otherwise read the bots again.
+    registerRevalidator(
+      () => client,
+      (push) => !push.shown && push.bots.some((bot) => ids.includes(bot.id)),
+      () => query.refetch({ requestPolicy: 'network-only' })
+    );
     return { value: query, dispose };
   });
 }
@@ -111,7 +135,7 @@ function batcher(client: Client) {
   return value;
 }
 
-function toIdentity(bot: BotFieldsFragment): BotIdentity {
+function fromRecord(bot: BotFieldsFragment): BotIdentity {
   return {
     id: bot.id,
     name: bot.name,
@@ -135,6 +159,12 @@ function withPushed(
     deleted: pushed.deletedAt != null,
     isSystem: found?.isSystem ?? false,
   };
+}
+
+/** A read bot, under the gateway bridge's newer profile when it has one. */
+function toIdentity(bot: BotFieldsFragment): BotIdentity {
+  const pushed = gatewayBotProfile(bot.id);
+  return pushed ? withPushed(bot, pushed) : fromRecord(bot);
 }
 
 /**
@@ -178,7 +208,7 @@ export function createBotIdentity(
     const query = batch();
     const found = query?.data?.user.bots.find((bot) => bot.id === current);
     if (pushed) return withPushed(found, pushed);
-    if (found) return toIdentity(found);
+    if (found) return fromRecord(found);
     if (query?.data && !query.isFetching) return null;
     return fromSeed();
   };
@@ -187,5 +217,57 @@ export function createBotIdentity(
     data,
     /** The read failed and nothing is known about the bot. */
     isError: () => Boolean(batch()?.error) && data() === undefined,
+  };
+}
+
+/**
+ * Identities for many bot ids, each read as `createBotIdentity` reads one;
+ * for a list whose membership comes from elsewhere (REST, config).
+ */
+export function createBotIdentities(ids: Accessor<readonly string[]>) {
+  const readers = mapArray(
+    () => [...new Set(ids())],
+    (id) => ({ id, reader: createBotIdentity(() => id) })
+  );
+  const byId = createMemo(() =>
+    Object.fromEntries(readers().map(({ id, reader }) => [id, reader]))
+  );
+  return (id: string): BotIdentity | null | undefined => byId()[id]?.data();
+}
+
+/**
+ * The bots the viewer can `@` mention, live. `channelId` scopes it to a
+ * channel's bots plus agents available everywhere; null means every agent the
+ * viewer can start; undefined reads nothing. A rename or new picture
+ * re-renders from the cache; a pushed bot this list lacks, or a deletion,
+ * reads the list again.
+ */
+export function createMentionableBots(
+  channelId: Accessor<string | null | undefined>
+) {
+  const query = createLiveQuery(
+    MentionableBotsDocument,
+    () => {
+      const scope = channelId();
+      return scope === undefined ? undefined : { channelId: scope };
+    },
+    () => ({
+      client: getGraphqlSoupClient(),
+      requestPolicy: 'cache-and-network',
+    })
+  );
+  const listed = () => query.data?.user.mentionableBots ?? [];
+  registerRevalidator(
+    getGraphqlSoupClient,
+    (push) =>
+      push.bots.some((bot) => {
+        const present = listed().some((row) => row.id === bot.id);
+        return bot.deletedAt != null || !present || !push.shown;
+      }),
+    () => query.refetch({ requestPolicy: 'network-only' })
+  );
+  return {
+    bots: (): BotIdentity[] => listed().map(toIdentity),
+    isPending: () => query.data === undefined && !query.error,
   };
 }

@@ -10,7 +10,7 @@ import {
 } from '@service-storage/graphql-soup';
 import { ReactiveMap } from '@solid-primitives/map';
 import { invalidateRestBotLists } from './bot-updates';
-import { revalidateBotIdentities } from './graphql-bots';
+import { revalidateBotReads } from './graphql-bots';
 
 /** Connection-gateway message carrying a bot's current profile. */
 export const BOT_PROFILE_CHANGED_EVENT = 'bot_profile_changed';
@@ -44,13 +44,20 @@ export function handleBotProfileChanged(payload: unknown): void {
   const parsed = getBotOwnerProfilesResponseItem.safeParse(payload);
   if (!parsed.success) return;
   const profile = parsed.data;
-  PUSHED.set(profile.id, {
+  const pushed = {
     id: profile.id,
     name: profile.name,
     avatarUrl: profile.avatar_url ?? null,
     deletedAt: profile.deleted_at ?? null,
-  });
+  };
+  PUSHED.set(profile.id, pushed);
   invalidateRestBotLists([profile.id]);
+  // Mounted reads show the profile from here; lists lacking the bot, or
+  // holding a deleted one, read again.
+  fireAndForget(
+    revalidateBotReads(getGraphqlSoupClient(), { bots: [pushed], shown: true }),
+    'bot-profile-bridge'
+  );
 }
 
 /**
@@ -61,7 +68,7 @@ export function recoverGatewayBotProfiles(): void {
   if (graphqlSoupRealtimeActive()) return;
   PUSHED.clear();
   fireAndForget(
-    revalidateBotIdentities(getGraphqlSoupClient(), null),
+    revalidateBotReads(getGraphqlSoupClient(), null),
     'bot-profile-bridge'
   );
   invalidateRestBotLists(null);

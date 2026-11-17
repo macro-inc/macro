@@ -24,3 +24,14 @@ subscription BotUpdates {
 		...BotFields
 	}
 }
+
+# The `@` menu's bots: in a channel its installed bots, then the viewer's
+# agents available in every channel; elsewhere every agent they can start.
+query MentionableBots($channelId: ID) {
+	user {
+		id
+		mentionableBots(channelId: $channelId) {
+			...BotFields
+		}
+	}
+}
