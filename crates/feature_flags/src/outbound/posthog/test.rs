@@ -416,3 +416,40 @@ async fn dev_only_service_flag_stays_off_in_prod_for_the_same_service_context() 
         assert!(body.get("group_properties").is_none());
     }
 }
+
+#[tokio::test]
+async fn client_runtime_requests_the_web_clients_flags_with_the_same_pool() {
+    let server = MockServer::start().await;
+    Mock::given(body_partial_json(json!({"evaluation_runtime": "client"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({
+            "web-only": {"key": "web-only", "enabled": true}
+        }))))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(body_partial_json(json!({"evaluation_runtime": "server"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({}))))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let server_flags = loader(&server);
+    let client_flags = server_flags
+        .clone()
+        .with_evaluation_runtime(EvaluationRuntime::Client);
+    let snapshot = client_flags.load(&user()).await.unwrap();
+    assert!(snapshot.is_enabled("web-only"));
+    assert_eq!(
+        snapshot.iter().collect::<Vec<_>>(),
+        vec![("web-only", &FlagValue::Boolean(true))]
+    );
+    assert!(
+        server_flags
+            .load(&user())
+            .await
+            .unwrap()
+            .iter()
+            .next()
+            .is_none()
+    );
+}

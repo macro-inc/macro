@@ -24,7 +24,8 @@ for authenticated Macro users or explicit global service contexts; one load retu
 - Depends on: `macro_user_id`, `macro_env` (the `environment` person property
   every load sends).
 - Used by: `agent_harness_service` (agent modes, routine templates),
-  `authentication_service` (`enable-outlook`, `enable-agent-teammates`),
+  `authentication_service` (`enable-outlook`, `enable-agent-teammates`, and
+  `/user/feature_flags`, the web client's client-runtime bootstrap),
   `document_storage_service` (calls, Canvas artifacts, search term matching),
   `hosted_runtimes` (`ComputerRollout`, `enable-macro-computers`; failures and
   missing flags disable new surfaces), `team_agents`, `agent_credentials` (agent

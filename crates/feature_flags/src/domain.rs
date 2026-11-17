@@ -44,6 +44,12 @@ impl FlagSnapshot {
         self.flags.get(key)
     }
 
+    /// Every evaluated flag, for callers that hand the whole snapshot on (the
+    /// web client's bootstrap). Order is unspecified.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &FlagValue)> {
+        self.flags.iter().map(|(key, value)| (key.as_str(), value))
+    }
+
     /// Read a variant; boolean and missing flags return `None`.
     pub fn variant(&self, key: &str) -> Option<&str> {
         match self.get(key) {

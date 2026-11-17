@@ -68,6 +68,8 @@ configuration is loaded from the environment by this crate.
 
 Each load makes one POST to `/flags/?v=2` with the project token and exact Macro
 user ID. `evaluation_runtime: "server"` requests server/all-runtime flags;
+`with_evaluation_runtime(EvaluationRuntime::Client)` requests client/all-runtime
+flags instead, for serving the web client's bootstrap;
 `geoip_disable: true` prevents targeting by the backend's IP. Person targeting
 uses PostHog's stored properties plus one override, `environment` (`prod`,
 `dev`, or `local`), from the environment passed at construction; nothing

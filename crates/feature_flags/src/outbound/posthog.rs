@@ -24,6 +24,26 @@ fn environment_value(environment: Environment) -> &'static str {
     }
 }
 
+/// Which flags a load evaluates, by the runtime each flag is configured for in
+/// PostHog. Flags set to "all" come back for either.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EvaluationRuntime {
+    /// Flags for backend decisions. The default.
+    #[default]
+    Server,
+    /// Flags for the web client, evaluated on its behalf (its bootstrap).
+    Client,
+}
+
+impl EvaluationRuntime {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Server => "server",
+            Self::Client => "client",
+        }
+    }
+}
+
 /// Remote loader with one reusable HTTP connection pool.
 ///
 /// Construct once per service and clone to share the pool. Each load makes one
@@ -35,6 +55,7 @@ pub struct PostHogFeatureFlags {
     project_key: String,
     timeout: Duration,
     environment: Environment,
+    runtime: EvaluationRuntime,
 }
 
 impl PostHogFeatureFlags {
@@ -92,7 +113,15 @@ impl PostHogFeatureFlags {
             project_key,
             timeout,
             environment,
+            runtime: EvaluationRuntime::Server,
         })
+    }
+
+    /// The same loader, sharing the connection pool, evaluating the flags
+    /// configured for `runtime`.
+    pub fn with_evaluation_runtime(mut self, runtime: EvaluationRuntime) -> Self {
+        self.runtime = runtime;
+        self
     }
 
     async fn evaluate(&self, distinct_id: &str) -> Result<FlagSnapshot, Report> {
@@ -102,7 +131,7 @@ impl PostHogFeatureFlags {
             .json(&serde_json::json!({
                 "api_key": self.project_key,
                 "distinct_id": distinct_id,
-                "evaluation_runtime": "server",
+                "evaluation_runtime": self.runtime.as_str(),
                 "geoip_disable": true,
                 "person_properties": {ENVIRONMENT_PROPERTY: environment_value(self.environment)},
             }))
