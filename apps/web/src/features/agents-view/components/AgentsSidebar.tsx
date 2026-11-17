@@ -488,9 +488,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <CollapsibleSection.Header>
                 <CollapsibleSection.Trigger>
                   <span class="min-w-0 truncate">Archived</span>
-                  <span class="text-ink-extra-muted tabular-nums">
-                    {archived().length}
-                  </span>
                   <CollapsibleSection.Indicator />
                 </CollapsibleSection.Trigger>
               </CollapsibleSection.Header>

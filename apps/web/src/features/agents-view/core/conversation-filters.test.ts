@@ -118,7 +118,16 @@ describe('groupConversations', () => {
     ]);
   });
 
-  it('leaves a list that is all one status without a heading', () => {
+  it('keeps the Needs you heading when it is the only group', () => {
+    const waiting = [{ id: 'review', facts: reviewFix }];
+    expect(
+      groupConversations(waiting, (item) => item.facts, 'status').map(
+        (group) => group.label
+      )
+    ).toEqual(['Needs you']);
+  });
+
+  it('leaves a list that is all Recent without a heading', () => {
     const idleOnly = [
       { id: 'kanban', facts: kanbanDrag },
       { id: 'idle', facts: { ...hiringPlan, state: 'dormant' as const } },

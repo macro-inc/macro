@@ -101,8 +101,9 @@ export type ConversationGroup<Item> = {
   /** Undefined when the list is not grouped and needs no heading. */
   label: string | undefined;
   /**
-   * Whether the heading shows how many rows the group holds. The catch-all
-   * group grows with every page the list loads, so its count says nothing.
+   * Whether the heading shows how many rows the group holds. Counts cover the
+   * loaded pages only: active sessions are recent, so their groups are whole on
+   * the first page, but the catch-all grows with every page, so it has none.
    */
   counted: boolean;
   items: Item[];
@@ -143,7 +144,7 @@ function ungrouped<Item>(items: readonly Item[]): ConversationGroup<Item>[] {
 
 /**
  * Splits an ordered list into headed sections, dropping empty ones. A list
- * that falls into one section needs no heading, so it stays ungrouped.
+ * that is all Recent needs no heading, so it stays ungrouped.
  */
 export function groupConversations<Item>(
   items: readonly Item[],
@@ -157,5 +158,6 @@ export function groupConversations<Item>(
     counted: definition.counted,
     items: items.filter((item) => definition.contains(factsOf(item))),
   })).filter((group) => group.items.length > 0);
-  return groups.length > 1 ? groups : ungrouped(items);
+  const onlyRecent = groups.length === 1 && !groups[0]?.counted;
+  return onlyRecent ? ungrouped(items) : groups;
 }
