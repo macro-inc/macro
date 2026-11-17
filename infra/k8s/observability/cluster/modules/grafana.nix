@@ -226,7 +226,7 @@ let
     # Required: Grafana doesn't start without them.
     grafana = "/etc/grafana/secrets";
     # The RDS-managed database secret: `username`, `password`. RDS rotates
-    # the password every 7 days; Reloader restarts Grafana when it changes.
+    # the password (yearly, ../aws/); Reloader then rolls Grafana.
     grafana-db = "/etc/grafana/database";
     # Optional, each its own ExternalSecret so a missing key leaves the rest.
     grafana-goalert = null;
@@ -512,8 +512,9 @@ in
       workload.externalSecret cluster {
         name = "grafana-db";
         extract = cfg.database.secret;
-        # Soon after RDS rotates it.
-        refreshInterval = "5m";
+        # A rotation invalidates the old password at once: new database
+        # connections fail until this refresh and the rollout it triggers.
+        refreshInterval = "1m";
       }
     );
   };

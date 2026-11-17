@@ -136,7 +136,8 @@ notification route, so rules evaluate and show state here but nothing reaches
 GoAlert, SNS or anyone. The one exception is the watchdog: an always-firing
 rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages if
 this Grafana, its alerting or its path to GoAlert stops. Cutover sets
-`notify = true`. Contact points' **Test** button still sends; don't press it
+`notify = true`. Muting covers notification policies only: a contact point's
+**Test** button in the UI sends for real even while muted; don't press it
 before cutover.
 
 **Secrets.** From `observability/prod` (values in Doppler `observability/prd`):
@@ -149,7 +150,12 @@ before cutover.
 | `goalert_cluster_heartbeat_id` | the watchdog | it pings a URL that doesn't exist, and GoAlert never pages for it |
 
 The database secret is the RDS-managed one (`macro.grafana.database.secret`);
-RDS rotates it every 7 days and Reloader restarts Grafana when it changes.
+RDS rotates it yearly (`../aws/`). The old password stops working at once,
+so until Grafana has the new one, existing pooled connections keep working
+but new connections fail. The ExternalSecret refreshes every minute and
+Reloader then rolls Grafana surge-first; each old pod fails new connections
+until it is replaced. So a rotation costs up to a minute plus the rolling
+restart of failed new connections, once a year.
 
 ### Before Grafana runs
 

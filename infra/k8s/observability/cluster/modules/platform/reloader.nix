@@ -1,6 +1,6 @@
 # Reloader rolls a Deployment when a Secret it names changes. Grafana needs
-# it: RDS rotates its database password every 7 days and Grafana reads the
-# password only at startup. It acts only on workloads annotated
+# it: RDS rotates its database password and Grafana reads the password only
+# at startup. It acts only on workloads annotated
 # `secret.reloader.stakater.com/reload: <secret>,...` and only in
 # `observability`.
 { charts, config, ... }:
