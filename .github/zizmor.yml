@@ -1,9 +1,9 @@
 # zizmor findings kept on purpose (`check generated workflows` / lint-workflows).
 # One rule and workflow file per entry, each with its reason. Fixing one means
-# changing what a job runs, so it lands as its own reviewed change. zizmor can't
-# ignore composite-action findings here; those use inline `# zizmor: ignore[...]`
-# comments in .github/actions. Entries cover whole files because generated line
-# numbers move with every generator change.
+# changing what a job runs, so it lands as its own reviewed change. Entries cover
+# whole files because generated line numbers move with every generator change.
+# Step-level findings in generated YAML are kept inline instead, with
+# `Step::zizmor_ignore`, so they cover one step.
 rules:
   artipacked:
     ignore:

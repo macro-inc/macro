@@ -1,25 +1,21 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/migrate_cloud_storage_db.rs
 name: Migrate Cloud Storage Database
 description: Run database migrations for cloud storage services
-
 inputs:
   environment:
-    description: 'Environment to run migrations for (dev, prod)'
+    description: Environment to run migrations for (dev, prod)
     required: true
-
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      with: # zizmor: ignore[artipacked] the calling deploy job may use the persisted token; dropping it needs that job audited
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] the calling deploy job may use the persisted token
+      with:
         sparse-checkout: |
           .github/
           crates/macro_db_client
-    
-    - name: Get database URL from Secrets Manager
-      id: get-db-url
-      shell: bash
-      env:
-        MIGRATION_ENVIRONMENT: ${{ inputs.environment }}
+    - id: get-db-url
+      name: Get database URL from Secrets Manager
       run: |
         if [ "$MIGRATION_ENVIRONMENT" = "prod" ]; then
           SECRET_NAME="macro-db-prod"
@@ -43,13 +39,10 @@ runs:
 
         echo "::add-mask::$DATABASE_URL"
         echo "database_url=$DATABASE_URL" >> $GITHUB_OUTPUT
-
-    - name: Run database migrations
       shell: bash
-      working-directory: crates/macro_db_client
       env:
-        DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
         MIGRATION_ENVIRONMENT: ${{ inputs.environment }}
+    - name: Run database migrations
       run: |
         echo "Running migrations for $MIGRATION_ENVIRONMENT environment..."
         if [ "$MIGRATION_ENVIRONMENT" = "dev" ]; then
@@ -57,3 +50,8 @@ runs:
         else
           cargo sqlx migrate run
         fi
+      shell: bash
+      env:
+        DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
+        MIGRATION_ENVIRONMENT: ${{ inputs.environment }}
+      working-directory: crates/macro_db_client

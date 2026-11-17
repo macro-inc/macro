@@ -256,6 +256,12 @@ impl<'de> Deserialize<'de> for Uses {
 
 /// Represents a step in the workflow.
 impl<T> Step<T> {
+    /// Drops the step's `name:`, so the job log labels it with what it runs.
+    pub fn without_name(mut self) -> Self {
+        self.value.name = None;
+        self
+    }
+
     /// Keeps the zizmor finding `rule` on this step, for `reason` (one line).
     pub fn zizmor_ignore(mut self, rule: ZizmorRule, reason: impl ToString) -> Self {
         self.value.zizmor_ignores.push(ZizmorIgnore {

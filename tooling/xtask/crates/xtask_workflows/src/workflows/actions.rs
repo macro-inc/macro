@@ -942,6 +942,168 @@ impl From<DenolandSetupDeno> for Step<Use> {
     }
 }
 
+/// `docker/setup-buildx-action` v3.12.0: Set up Docker Buildx
+#[must_use]
+pub struct DockerSetupBuildxAction(Step<Use>);
+
+impl DockerSetupBuildxAction {
+    /// A step named `name` that runs `docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses("docker", "setup-buildx-action", "8d2750c68a42422c14e847fe6c8ac0403b4cbd6f");
+        Self(step)
+    }
+
+    /// Buildx version. (eg. v0.3.0)
+    pub fn version(self, value: impl ToString) -> Self {
+        self.with("version", value)
+    }
+
+    /// Sets the builder driver to be used
+    ///
+    /// Default: `docker-container`.
+    pub fn driver(self, value: impl ToString) -> Self {
+        self.with("driver", value)
+    }
+
+    /// List of additional driver-specific options. (eg. image=moby/buildkit:master)
+    pub fn driver_opts(self, value: impl ToString) -> Self {
+        self.with("driver-opts", value)
+    }
+
+    /// BuildKit daemon flags
+    pub fn buildkitd_flags(self, value: impl ToString) -> Self {
+        self.with("buildkitd-flags", value)
+    }
+
+    /// BuildKit daemon config file
+    pub fn buildkitd_config(self, value: impl ToString) -> Self {
+        self.with("buildkitd-config", value)
+    }
+
+    /// Inline BuildKit daemon config
+    pub fn buildkitd_config_inline(self, value: impl ToString) -> Self {
+        self.with("buildkitd-config-inline", value)
+    }
+
+    /// Switch to this builder instance
+    ///
+    /// Default: `true`.
+    pub fn r#use(self, value: impl ToString) -> Self {
+        self.with("use", value)
+    }
+
+    /// Name of the builder. If not specified, one will be generated or if it already exists, it will be used instead of creating a new one.
+    pub fn name(self, value: impl ToString) -> Self {
+        self.with("name", value)
+    }
+
+    /// Optional address for docker socket or context from `docker context ls`
+    pub fn endpoint(self, value: impl ToString) -> Self {
+        self.with("endpoint", value)
+    }
+
+    /// Fixed platforms for current node. If not empty, values take priority over the detected ones
+    pub fn platforms(self, value: impl ToString) -> Self {
+        self.with("platforms", value)
+    }
+
+    /// Append additional nodes to the builder
+    pub fn append(self, value: impl ToString) -> Self {
+        self.with("append", value)
+    }
+
+    /// Keep BuildKit state on cleanup. This is only useful on persistent self-hosted runners.
+    ///
+    /// Default: `false`.
+    pub fn keep_state(self, value: impl ToString) -> Self {
+        self.with("keep-state", value)
+    }
+
+    /// Cache buildx binary to GitHub Actions cache backend
+    ///
+    /// Default: `true`.
+    pub fn cache_binary(self, value: impl ToString) -> Self {
+        self.with("cache-binary", value)
+    }
+
+    /// Cleanup temp files and remove builder at the end of a job
+    ///
+    /// Default: `true`.
+    pub fn cleanup(self, value: impl ToString) -> Self {
+        self.with("cleanup", value)
+    }
+
+    /// BuildKit daemon config file
+    #[deprecated = "Use buildkitd-config instead"]
+    pub fn config(self, value: impl ToString) -> Self {
+        self.with("config", value)
+    }
+
+    /// Inline BuildKit daemon config
+    #[deprecated = "Use buildkitd-config-inline instead"]
+    pub fn config_inline(self, value: impl ToString) -> Self {
+        self.with("config-inline", value)
+    }
+
+    /// Sets up docker build command as an alias to docker buildx build
+    ///
+    /// Default: `false`.
+    #[deprecated = "\"docker buildx install\" command is deprecated and will be removed in a future release, use BUILDX_BUILDER environment variable instead"]
+    pub fn install(self, value: impl ToString) -> Self {
+        self.with("install", value)
+    }
+
+    /// Output `name` of the step with id `step`: Builder name
+    pub const fn name_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "name")
+    }
+
+    /// Output `driver` of the step with id `step`: Builder driver
+    pub const fn driver_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "driver")
+    }
+
+    /// Output `platforms` of the step with id `step`: Builder node platforms (preferred or available)
+    pub const fn platforms_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "platforms")
+    }
+
+    /// Output `nodes` of the step with id `step`: Builder nodes metadata
+    pub const fn nodes_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "nodes")
+    }
+
+    /// Output `endpoint` of the step with id `step`: Builder node endpoint (deprecated, use nodes output instead)
+    pub const fn endpoint_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "endpoint")
+    }
+
+    /// Output `status` of the step with id `step`: Builder node status (deprecated, use nodes output instead)
+    pub const fn status_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "status")
+    }
+
+    /// Output `flags` of the step with id `step`: Builder node flags (deprecated, use nodes output instead)
+    pub const fn flags_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "flags")
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<DockerSetupBuildxAction> for Step<Use> {
+    fn from(action: DockerSetupBuildxAction) -> Self {
+        action.0
+    }
+}
+
 /// `dorny/paths-filter` v3.0.3: Execute your workflow steps only if relevant files are modified.
 #[must_use]
 pub struct DornyPathsFilter(Step<Use>);
@@ -1896,6 +2058,117 @@ impl From<R0adkllUploadGooglePlay> for Step<Use> {
     }
 }
 
+/// `runs-on/cache/restore` v4: Restore Cache artifacts like dependencies and build outputs to improve workflow execution time
+#[must_use]
+pub struct RunsOnCacheRestore(Step<Use>);
+
+impl RunsOnCacheRestore {
+    /// A step named `name` that runs `runs-on/cache/restore@a5f51d6f3fece787d03b7b4e981c82538a0654ed`, with its required inputs set.
+    pub fn new(name: &str, path: impl ToString, key: impl ToString) -> Self {
+        let step = Step::new(name).uses("runs-on", "cache/restore", "a5f51d6f3fece787d03b7b4e981c82538a0654ed");
+        Self(step)
+            .with("path", path)
+            .with("key", key)
+    }
+
+    /// An ordered multiline string listing the prefix-matched keys, that are used for restoring stale cache if no cache hit occurred for key. Note `cache-hit` returns false in this case.
+    pub fn restore_keys(self, value: impl ToString) -> Self {
+        self.with("restore-keys", value)
+    }
+
+    /// An optional boolean when enabled, allows windows runners to restore caches that were saved on other platforms
+    ///
+    /// Default: `false`.
+    pub fn enable_cross_os_archive(self, value: impl ToString) -> Self {
+        self.with("enableCrossOsArchive", value)
+    }
+
+    /// Fail the workflow if cache entry is not found
+    ///
+    /// Default: `false`.
+    pub fn fail_on_cache_miss(self, value: impl ToString) -> Self {
+        self.with("fail-on-cache-miss", value)
+    }
+
+    /// Check if a cache entry exists for the given input(s) (key, restore-keys) without downloading the cache
+    ///
+    /// Default: `false`.
+    pub fn lookup_only(self, value: impl ToString) -> Self {
+        self.with("lookup-only", value)
+    }
+
+    /// Output `cache-hit` of the step with id `step`: A boolean value to indicate an exact match was found for the primary key
+    pub const fn cache_hit_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "cache-hit")
+    }
+
+    /// Output `cache-primary-key` of the step with id `step`: A resolved cache key for which cache match was attempted
+    pub const fn cache_primary_key_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "cache-primary-key")
+    }
+
+    /// Output `cache-matched-key` of the step with id `step`: Key of the cache that was restored, it could either be the primary key on cache-hit or a partial/complete match of one of the restore keys
+    pub const fn cache_matched_key_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "cache-matched-key")
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<RunsOnCacheRestore> for Step<Use> {
+    fn from(action: RunsOnCacheRestore) -> Self {
+        action.0
+    }
+}
+
+/// `runs-on/cache/save` v4: Save Cache artifacts like dependencies and build outputs to improve workflow execution time
+#[must_use]
+pub struct RunsOnCacheSave(Step<Use>);
+
+impl RunsOnCacheSave {
+    /// A step named `name` that runs `runs-on/cache/save@a5f51d6f3fece787d03b7b4e981c82538a0654ed`, with its required inputs set.
+    pub fn new(name: &str, path: impl ToString, key: impl ToString) -> Self {
+        let step = Step::new(name).uses("runs-on", "cache/save", "a5f51d6f3fece787d03b7b4e981c82538a0654ed");
+        Self(step)
+            .with("path", path)
+            .with("key", key)
+    }
+
+    /// The chunk size used to split up large files during upload, in bytes
+    pub fn upload_chunk_size(self, value: impl ToString) -> Self {
+        self.with("upload-chunk-size", value)
+    }
+
+    /// An optional boolean when enabled, allows windows runners to save caches that can be restored on other platforms
+    ///
+    /// Default: `false`.
+    pub fn enable_cross_os_archive(self, value: impl ToString) -> Self {
+        self.with("enableCrossOsArchive", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<RunsOnCacheSave> for Step<Use> {
+    fn from(action: RunsOnCacheSave) -> Self {
+        action.0
+    }
+}
+
 /// `softprops/action-gh-release` v2.6.2: Github Action for creating Github Releases
 #[must_use]
 pub struct SoftpropsActionGhRelease(Step<Use>);
@@ -2040,6 +2313,145 @@ impl SoftpropsActionGhRelease {
 
 impl From<SoftpropsActionGhRelease> for Step<Use> {
     fn from(action: SoftpropsActionGhRelease) -> Self {
+        action.0
+    }
+}
+
+/// `Swatinem/rust-cache` v2.9.3: A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults.
+#[must_use]
+pub struct SwatinemRustCache(Step<Use>);
+
+impl SwatinemRustCache {
+    /// A step named `name` that runs `Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses("Swatinem", "rust-cache", "d1527c8f67ef9af357290475d4af4b0fab8f12e0");
+        Self(step)
+    }
+
+    /// The prefix cache key, this can be changed to start a new cache manually.
+    ///
+    /// Default: `v0-rust`.
+    pub fn prefix_key(self, value: impl ToString) -> Self {
+        self.with("prefix-key", value)
+    }
+
+    /// A cache key that is used instead of the automatic `job`-based key, and is stable over multiple jobs.
+    pub fn shared_key(self, value: impl ToString) -> Self {
+        self.with("shared-key", value)
+    }
+
+    /// An additional cache key that is added alongside the automatic `job`-based cache key and can be used to further differentiate jobs.
+    pub fn key(self, value: impl ToString) -> Self {
+        self.with("key", value)
+    }
+
+    /// If the automatic `job`-based cache key should include the job id. Defaults to true.
+    ///
+    /// Default: `true`.
+    pub fn add_job_id_key(self, value: impl ToString) -> Self {
+        self.with("add-job-id-key", value)
+    }
+
+    /// Weather the a hash of the rust environment should be included in the cache key. This includes a hash of all Cargo.toml/Cargo.lock files, rust-toolchain files, and .cargo/config.toml files (if present), as well as the specified 'env-vars'. Defaults to true.
+    ///
+    /// Default: `true`.
+    pub fn add_rust_environment_hash_key(self, value: impl ToString) -> Self {
+        self.with("add-rust-environment-hash-key", value)
+    }
+
+    /// Additional environment variables to include in the cache key, separated by spaces.
+    pub fn env_vars(self, value: impl ToString) -> Self {
+        self.with("env-vars", value)
+    }
+
+    /// Paths to multiple Cargo workspaces and their target directories, separated by newlines.
+    pub fn workspaces(self, value: impl ToString) -> Self {
+        self.with("workspaces", value)
+    }
+
+    /// Additional non workspace directories to be cached, separated by newlines.
+    pub fn cache_directories(self, value: impl ToString) -> Self {
+        self.with("cache-directories", value)
+    }
+
+    /// Determines whether workspace targets are cached. If `false`, only the cargo registry will be cached.
+    ///
+    /// Default: `true`.
+    pub fn cache_targets(self, value: impl ToString) -> Self {
+        self.with("cache-targets", value)
+    }
+
+    /// Cache even if the build fails. Defaults to false.
+    pub fn cache_on_failure(self, value: impl ToString) -> Self {
+        self.with("cache-on-failure", value)
+    }
+
+    /// Determines which crates are cached. If `true` all crates will be cached, otherwise only dependent crates will be cached.
+    ///
+    /// Default: `false`.
+    pub fn cache_all_crates(self, value: impl ToString) -> Self {
+        self.with("cache-all-crates", value)
+    }
+
+    /// Similar to cache-all-crates. If `true` the workspace crates will be cached.
+    ///
+    /// Default: `false`.
+    pub fn cache_workspace_crates(self, value: impl ToString) -> Self {
+        self.with("cache-workspace-crates", value)
+    }
+
+    /// Determiners whether the cache should be saved. If `false`, the cache is only restored.
+    ///
+    /// Default: `true`.
+    pub fn save_if(self, value: impl ToString) -> Self {
+        self.with("save-if", value)
+    }
+
+    /// Determines which provider to use for caching. Options are github, or warpbuild. Defaults to github.
+    ///
+    /// Default: `github`.
+    pub fn cache_provider(self, value: impl ToString) -> Self {
+        self.with("cache-provider", value)
+    }
+
+    /// Determines whether to cache ${CARGO_HOME}/bin.
+    ///
+    /// Default: `true`.
+    pub fn cache_bin(self, value: impl ToString) -> Self {
+        self.with("cache-bin", value)
+    }
+
+    /// Check if a cache entry exists without downloading the cache
+    ///
+    /// Default: `false`.
+    pub fn lookup_only(self, value: impl ToString) -> Self {
+        self.with("lookup-only", value)
+    }
+
+    /// A format string used to format commands to be run, i.e. `rustc` and `cargo`.
+    ///
+    /// Default: `{0}`.
+    pub fn cmd_format(self, value: impl ToString) -> Self {
+        self.with("cmd-format", value)
+    }
+
+    /// Output `cache-hit` of the step with id `step`: A boolean value that indicates an exact match was found.
+    pub const fn cache_hit_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "cache-hit")
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<SwatinemRustCache> for Step<Use> {
+    fn from(action: SwatinemRustCache) -> Self {
         action.0
     }
 }
@@ -2719,6 +3131,492 @@ impl TjActionsChangedFiles {
 
 impl From<TjActionsChangedFiles> for Step<Use> {
     fn from(action: TjActionsChangedFiles) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/check-macro-db-migrations`, defined in `workflows/composite/check_macro_db_migrations.rs`: Fail unless every migration in the checked-out commit is applied to the environment's database. Applies nothing.
+#[must_use]
+pub struct LocalCheckMacroDbMigrations(Step<Use>);
+
+impl LocalCheckMacroDbMigrations {
+    /// A step named `name` that runs `./.github/actions/check-macro-db-migrations`, with its required input set.
+    pub fn new(name: &str, environment: impl ToString) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/check-macro-db-migrations");
+        Self(step)
+            .with("environment", environment)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalCheckMacroDbMigrations> for Step<Use> {
+    fn from(action: LocalCheckMacroDbMigrations) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/deploy-cloud-storage-pulumi`, defined in `workflows/composite/deploy_cloud_storage_pulumi.rs`: Deploy a pulumi stack from cloud-storage pulumi
+#[must_use]
+pub struct LocalDeployCloudStoragePulumi(Step<Use>);
+
+impl LocalDeployCloudStoragePulumi {
+    /// A step named `name` that runs `./.github/actions/deploy-cloud-storage-pulumi`, with its required inputs set.
+    pub fn new(name: &str, aws_access_key: impl ToString, aws_secret_key: impl ToString, pulumi_access_token: impl ToString, pulumi_service_name: impl ToString, dd_app_key: impl ToString, dd_api_key: impl ToString) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/deploy-cloud-storage-pulumi");
+        Self(step)
+            .with("aws-access-key", aws_access_key)
+            .with("aws-secret-key", aws_secret_key)
+            .with("pulumi-access-token", pulumi_access_token)
+            .with("pulumi-service-name", pulumi_service_name)
+            .with("dd-app-key", dd_app_key)
+            .with("dd-api-key", dd_api_key)
+    }
+
+    /// Whether to setup docker
+    ///
+    /// Default: `true`.
+    pub fn use_docker(self, value: impl ToString) -> Self {
+        self.with("use-docker", value)
+    }
+
+    /// Use a Namespace remote Docker builder (persistent layer cache, so heavy bases like LibreOffice/Collabora stay warm across deploys). Requires the nsc CLI (preinstalled on Namespace runners); defaults to the stock docker/setup-buildx-action.
+    ///
+    /// Default: `false`.
+    pub fn use_namespace_builder(self, value: impl ToString) -> Self {
+        self.with("use-namespace-builder", value)
+    }
+
+    /// Whether to checkout LFS content
+    ///
+    /// Default: `false`.
+    pub fn use_lfs(self, value: impl ToString) -> Self {
+        self.with("use-lfs", value)
+    }
+
+    /// Environment to deploy to
+    ///
+    /// Default: `dev`.
+    pub fn environment(self, value: impl ToString) -> Self {
+        self.with("environment", value)
+    }
+
+    /// AWS region
+    ///
+    /// Default: `us-east-1`.
+    pub fn aws_region(self, value: impl ToString) -> Self {
+        self.with("aws-region", value)
+    }
+
+    /// Datadog host
+    ///
+    /// Default: `https://api.us5.datadoghq.com/`.
+    pub fn dd_host(self, value: impl ToString) -> Self {
+        self.with("dd-host", value)
+    }
+
+    /// Optional GitHub artifact containing prebuilt service binaries to copy into Docker images
+    ///
+    /// Default: ``.
+    pub fn prebuilt_binaries_artifact(self, value: impl ToString) -> Self {
+        self.with("prebuilt-binaries-artifact", value)
+    }
+
+    /// Optional GitHub artifact containing built Lambda artifacts under target/lambda
+    ///
+    /// Default: ``.
+    pub fn lambda_artifacts(self, value: impl ToString) -> Self {
+        self.with("lambda-artifacts", value)
+    }
+
+    /// Optional path to a prebuilt-binaries.tar.gz already present on disk (e.g. downloaded from Namespace artifact storage). When set, takes precedence over prebuilt-binaries-artifact and skips the GitHub artifact download.
+    ///
+    /// Default: ``.
+    pub fn prebuilt_binaries_tar(self, value: impl ToString) -> Self {
+        self.with("prebuilt-binaries-tar", value)
+    }
+
+    /// Optional path to a lambda-artifacts.tar.gz already present on disk (e.g. downloaded from Namespace artifact storage). When set, takes precedence over lambda-artifacts and skips the GitHub artifact download.
+    ///
+    /// Default: ``.
+    pub fn lambda_artifacts_tar(self, value: impl ToString) -> Self {
+        self.with("lambda-artifacts-tar", value)
+    }
+
+    /// Optional service key from .github/services-config.json; builds Lambda artifacts inline when lambda-artifacts is not provided
+    ///
+    /// Default: ``.
+    pub fn cloud_storage_service_name(self, value: impl ToString) -> Self {
+        self.with("cloud-storage-service-name", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalDeployCloudStoragePulumi> for Step<Use> {
+    fn from(action: LocalDeployCloudStoragePulumi) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/get-project-name`, defined in `workflows/composite/get_project_name.rs`: Get the Pulumi project name for a service from services-config.json
+#[must_use]
+pub struct LocalGetProjectName(Step<Use>);
+
+impl LocalGetProjectName {
+    /// A step named `name` that runs `./.github/actions/get-project-name`, with its required input set.
+    pub fn new(name: &str, service_name: impl ToString) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/get-project-name");
+        Self(step)
+            .with("service-name", service_name)
+    }
+
+    /// Output `project-name` of the step with id `step`: The Pulumi project directory name
+    pub const fn project_name_output(step: &'static str) -> StepOutput<Str> {
+        StepOutput::new(step, "project-name")
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalGetProjectName> for Step<Use> {
+    fn from(action: LocalGetProjectName) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/migrate-cloud-storage-db`, defined in `workflows/composite/migrate_cloud_storage_db.rs`: Run database migrations for cloud storage services
+#[must_use]
+pub struct LocalMigrateCloudStorageDb(Step<Use>);
+
+impl LocalMigrateCloudStorageDb {
+    /// A step named `name` that runs `./.github/actions/migrate-cloud-storage-db`, with its required input set.
+    pub fn new(name: &str, environment: impl ToString) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/migrate-cloud-storage-db");
+        Self(step)
+            .with("environment", environment)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalMigrateCloudStorageDb> for Step<Use> {
+    fn from(action: LocalMigrateCloudStorageDb) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/preview-cloud-storage-pulumi`, defined in `workflows/composite/preview_cloud_storage_pulumi.rs`: Run pulumi preview (dry run) for a pulumi stack from cloud-storage
+#[must_use]
+pub struct LocalPreviewCloudStoragePulumi(Step<Use>);
+
+impl LocalPreviewCloudStoragePulumi {
+    /// A step named `name` that runs `./.github/actions/preview-cloud-storage-pulumi`, with its required inputs set.
+    pub fn new(name: &str, aws_access_key: impl ToString, aws_secret_key: impl ToString, pulumi_access_token: impl ToString, pulumi_service_name: impl ToString, dd_app_key: impl ToString, dd_api_key: impl ToString) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/preview-cloud-storage-pulumi");
+        Self(step)
+            .with("aws-access-key", aws_access_key)
+            .with("aws-secret-key", aws_secret_key)
+            .with("pulumi-access-token", pulumi_access_token)
+            .with("pulumi-service-name", pulumi_service_name)
+            .with("dd-app-key", dd_app_key)
+            .with("dd-api-key", dd_api_key)
+    }
+
+    /// Whether to setup docker
+    ///
+    /// Default: `true`.
+    pub fn use_docker(self, value: impl ToString) -> Self {
+        self.with("use-docker", value)
+    }
+
+    /// Whether to checkout LFS content
+    ///
+    /// Default: `false`.
+    pub fn use_lfs(self, value: impl ToString) -> Self {
+        self.with("use-lfs", value)
+    }
+
+    /// Environment to preview
+    ///
+    /// Default: `dev`.
+    pub fn environment(self, value: impl ToString) -> Self {
+        self.with("environment", value)
+    }
+
+    /// AWS region
+    ///
+    /// Default: `us-east-1`.
+    pub fn aws_region(self, value: impl ToString) -> Self {
+        self.with("aws-region", value)
+    }
+
+    /// Datadog host
+    ///
+    /// Default: `https://api.us5.datadoghq.com/`.
+    pub fn dd_host(self, value: impl ToString) -> Self {
+        self.with("dd-host", value)
+    }
+
+    /// GitHub token for PR comments
+    ///
+    /// Default: ``.
+    pub fn github_token(self, value: impl ToString) -> Self {
+        self.with("github-token", value)
+    }
+
+    /// Optional service key from .github/services-config.json; used to build Lambda artifacts before preview
+    ///
+    /// Default: ``.
+    pub fn cloud_storage_service_name(self, value: impl ToString) -> Self {
+        self.with("cloud-storage-service-name", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalPreviewCloudStoragePulumi> for Step<Use> {
+    fn from(action: LocalPreviewCloudStoragePulumi) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/setup-nix`, defined in `workflows/composite/setup_nix.rs`: Ensure a working Nix (flakes enabled, daemon running) is available on a runner that does not ship Nix preinstalled. Idempotent: when /nix is already populated from a cache volume it only re-initialises the daemon and config rather than reinstalling the store. Init-agnostic: uses systemd units when systemd is active (full VMs), otherwise starts nix-daemon directly as a background process (e.g. Namespace runners, where systemd is not active). Optionally configures a private S3 binary cache as a substituter: the daemon performs substitution, so it is started with the AWS credentials in its environment. All four cache inputs must be set for the substituter to be configured; otherwise the action behaves exactly as before.
+#[must_use]
+pub struct LocalSetupNix(Step<Use>);
+
+impl LocalSetupNix {
+    /// A step named `name` that runs `./.github/actions/setup-nix`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/setup-nix");
+        Self(step)
+    }
+
+    /// S3 store URL of the private nix binary cache (e.g. s3://macro-nix-cache?region=us-east-1). Empty disables.
+    ///
+    /// Default: ``.
+    pub fn nix_cache_url(self, value: impl ToString) -> Self {
+        self.with("nix-cache-url", value)
+    }
+
+    /// Public signing key the daemon should trust for that cache.
+    ///
+    /// Default: ``.
+    pub fn nix_cache_public_key(self, value: impl ToString) -> Self {
+        self.with("nix-cache-public-key", value)
+    }
+
+    /// AWS access key id for reading the private cache bucket.
+    ///
+    /// Default: ``.
+    pub fn aws_access_key_id(self, value: impl ToString) -> Self {
+        self.with("aws-access-key-id", value)
+    }
+
+    /// AWS secret access key for reading the private cache bucket.
+    ///
+    /// Default: ``.
+    pub fn aws_secret_access_key(self, value: impl ToString) -> Self {
+        self.with("aws-secret-access-key", value)
+    }
+
+    /// Namespace cache name holding a copy of /nix with the dev shell, restored when the volume is empty. Its writers are PR jobs, so only PR check jobs pass this, never jobs that deploy or hold deploy secrets. Empty disables.
+    ///
+    /// Default: ``.
+    pub fn seed_cache(self, value: impl ToString) -> Self {
+        self.with("seed-cache", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalSetupNix> for Step<Use> {
+    fn from(action: LocalSetupNix) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/setup-nix-dev-shell`, defined in `workflows/composite/setup_nix_dev_shell.rs`: Enter a repository Nix dev shell without configuring a cache provider.
+#[must_use]
+pub struct LocalSetupNixDevShell(Step<Use>);
+
+impl LocalSetupNixDevShell {
+    /// A step named `name` that runs `./.github/actions/setup-nix-dev-shell`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/setup-nix-dev-shell");
+        Self(step)
+    }
+
+    /// Flake `devShells` attribute to enter (e.g. `default`, `agent-daemon`).
+    ///
+    /// Default: `default`.
+    pub fn shell(self, value: impl ToString) -> Self {
+        self.with("shell", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalSetupNixDevShell> for Step<Use> {
+    fn from(action: LocalSetupNixDevShell) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/setup-reqs-web`, defined in `workflows/composite/setup_reqs_web.rs`: Checkout and Setup Prerequisite Dependencies for web app
+#[must_use]
+pub struct LocalSetupReqsWeb(Step<Use>);
+
+impl LocalSetupReqsWeb {
+    /// A step named `name` that runs `./.github/actions/setup-reqs-web`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/setup-reqs-web");
+        Self(step)
+    }
+
+    /// Install Playwright and cache
+    ///
+    /// Default: ``.
+    pub fn playwright(self, value: impl ToString) -> Self {
+        self.with("playwright", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalSetupReqsWeb> for Step<Use> {
+    fn from(action: LocalSetupReqsWeb) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/setup-rust`, defined in `workflows/composite/setup_rust.rs`: Installs Rust and configures cargo/sccache caching.
+#[must_use]
+pub struct LocalSetupRust(Step<Use>);
+
+impl LocalSetupRust {
+    /// A step named `name` that runs `./.github/actions/setup-rust`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/setup-rust");
+        Self(step)
+    }
+
+    /// Configure sccache as RUSTC_WRAPPER
+    ///
+    /// Default: `true`.
+    pub fn sccache(self, value: impl ToString) -> Self {
+        self.with("sccache", value)
+    }
+
+    /// Restore Swatinem/rust-cache Cargo target cache
+    ///
+    /// Default: `false`.
+    pub fn rust_cache(self, value: impl ToString) -> Self {
+        self.with("rust-cache", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalSetupRust> for Step<Use> {
+    fn from(action: LocalSetupRust) -> Self {
+        action.0
+    }
+}
+
+/// `./.github/actions/setup-sccache`, defined in `workflows/composite/setup_sccache.rs`: Install sccache and configure it as RUSTC_WRAPPER.
+#[must_use]
+pub struct LocalSetupSccache(Step<Use>);
+
+impl LocalSetupSccache {
+    /// A step named `name` that runs `./.github/actions/setup-sccache`.
+    pub fn new(name: &str) -> Self {
+        let step = Step::new(name).uses_local(".github/actions/setup-sccache");
+        Self(step)
+    }
+
+    /// sccache release version to install
+    ///
+    /// Default: `v0.15.0`.
+    pub fn version(self, value: impl ToString) -> Self {
+        self.with("version", value)
+    }
+
+    /// The step, to set its id, condition or env.
+    pub fn step(self) -> Step<Use> {
+        self.0
+    }
+
+    fn with(self, name: &str, value: impl ToString) -> Self {
+        Self(self.0.add_with(Input::default().add(name, value.to_string())))
+    }
+}
+
+impl From<LocalSetupSccache> for Step<Use> {
+    fn from(action: LocalSetupSccache) -> Self {
         action.0
     }
 }
