@@ -57,7 +57,10 @@ export interface MobileComposerProps {
 export function MobileComposer(props: ParentProps<MobileComposerProps>) {
   const model = useCalendarComposer();
   const [title, setTitle] = createSignal<HTMLElement>();
-  const compact = createComposerTitleVisibility(props.scrollElement, title);
+  const titleProgress = createComposerTitleVisibility(
+    props.scrollElement,
+    title
+  );
   const fields = createComposerOptionalFields({
     value: (field) => model.state()[field],
     disabled: model.fieldIsDisabled,
@@ -92,16 +95,15 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
       <Show when={props.headerMount}>
         {(mount) => (
           <Portal mount={mount()}>
-            <Show when={compact()}>
-              <MobileComposerCompactTitle />
-            </Show>
+            <MobileComposerCompactTitle progress={titleProgress()} />
           </Portal>
         )}
       </Show>
       <div class="flex min-w-0 flex-col gap-4 px-5 pb-1">
-        <div ref={setTitle}>
-          <MobileComposerTitle agentDraft={props.agentDraft} />
-        </div>
+        <MobileComposerTitle
+          inputRef={setTitle}
+          agentDraft={props.agentDraft}
+        />
         <MobileComposerWhen />
         <Show when={!model.isOutOfOffice()}>
           <Show when={fields.visible('description')}>

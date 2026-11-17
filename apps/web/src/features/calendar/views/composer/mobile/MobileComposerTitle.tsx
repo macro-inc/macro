@@ -1,12 +1,15 @@
 import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
 import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
+import type { Ref } from 'solid-js';
 import { CalendarSwatch } from '../../../components/calendar-swatch/CalendarSwatch';
 import { ComposerKind } from '../../../components/composer/kind/ComposerKind';
 import { ComposerTitle } from '../../../components/composer/title/ComposerTitle';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { DEFAULT_CALENDAR_SOURCE } from '../../../types';
 
-export function MobileComposerTitle(props: { agentDraft?: boolean } = {}) {
+export function MobileComposerTitle(
+  props: { agentDraft?: boolean; inputRef?: Ref<HTMLTextAreaElement> } = {}
+) {
   const model = useCalendarComposer();
   return (
     <SheetGroup>
@@ -20,7 +23,11 @@ export function MobileComposerTitle(props: { agentDraft?: boolean } = {}) {
           />
         }
       >
-        <ComposerTitle autofocus={false} submitOnEnter={false} />
+        <ComposerTitle
+          autofocus={false}
+          submitOnEnter={false}
+          inputRef={props.inputRef}
+        />
       </SheetRow>
       <SheetRow>
         <ComposerKind agentDraft={props.agentDraft} />

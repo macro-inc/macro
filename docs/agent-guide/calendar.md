@@ -73,8 +73,11 @@ A start past a fixed end shows the end-before-start error.
 The phone composer orders title and one event-kind dropdown chip, When, people,
 call/calendar, optional-field add rows, time zone, reminders, guest permissions,
 and visibility. Adding a Description or Location replaces its add row and focuses
-the field in its final position. The title becomes compact above the scroller
-after its group scrolls away. The footer stays outside the single scroll viewport;
+the field in its final position. The compact title overlays the scroller below
+the grabber without consuming height. Its left-aligned 20/26 semibold text and
+12px swatch align with the full title. Once the first title line clears the
+grabber, a reversible 24px scroll ramp fades/slides it and its 24px bottom fade
+into view. Reduced motion removes the slide. The footer stays outside the single scroll viewport;
 its fade disappears at the bottom. First tap on a time pill opens the
 keyboard-free list, a second tap enters typing, and choosing an overnight end
 advances the end date. People selection opens a staged picker: Done applies;

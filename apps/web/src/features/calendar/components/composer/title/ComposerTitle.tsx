@@ -1,9 +1,14 @@
 import { t } from '@app/lib/i18n';
 import { TextField } from '@ui';
+import type { Ref } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
 export function ComposerTitle(
-  props: { autofocus?: boolean; submitOnEnter?: boolean } = {}
+  props: {
+    autofocus?: boolean;
+    submitOnEnter?: boolean;
+    inputRef?: Ref<HTMLTextAreaElement>;
+  } = {}
 ) {
   const model = useCalendarComposer();
   return (
@@ -14,6 +19,7 @@ export function ComposerTitle(
       disabled={model.fieldIsDisabled('title')}
     >
       <TextField.TextArea
+        ref={props.inputRef}
         variant="title"
         rows={1}
         autoResize

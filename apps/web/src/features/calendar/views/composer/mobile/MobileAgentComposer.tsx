@@ -20,10 +20,10 @@ export function MobileAgentComposer(
   return (
     <div
       data-calendar-tool-composer
+      style={{ '--composer-title-surface': 'var(--color-surface)' }}
       class="flex min-h-0 max-h-[min(80dvh,42rem,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--mobile-content-inset-top,0px)-var(--mobile-content-inset-bottom,0px)-2rem))] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
     >
-      <div class="flex shrink-0 items-center justify-between px-4 pt-2">
-        <div ref={setHeader} class="min-w-0 flex-1" />
+      <div class="flex shrink-0 items-center justify-end px-4 pt-2">
         <Button
           type="button"
           variant="ghost"
@@ -36,6 +36,7 @@ export function MobileAgentComposer(
       </div>
       {props.children}
       <ComposerRoot model={props.model} class="min-h-0 flex-1">
+        <div ref={setHeader} class="relative z-10 shrink-0" />
         <div ref={setScroll} class="min-h-0 flex-1 overflow-y-auto pt-2">
           <MobileComposer
             scrollElement={scroll}

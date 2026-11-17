@@ -250,7 +250,10 @@ function PopoverSplitModal(props: {
             <MobileDrawer.Handle />
             {/* Before the scroll body so it exists when the content mounts;
                 hidden unless the content portals its pinned actions here. */}
-            <div ref={setDrawerHeader} class="shrink-0 empty:hidden" />
+            <div
+              ref={setDrawerHeader}
+              class="relative z-10 shrink-0 empty:hidden"
+            />
             <MobileDrawer.ScrollBody ref={setDrawerScrollBody}>
               {/* As in Dialog's drawer: at its natural height the body's
                   overflow-clip cannot clip the drawer's scroll body. Filling

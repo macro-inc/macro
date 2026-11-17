@@ -77,8 +77,9 @@ host lives in `../block-calendar/`.
   Its native start/end resize handles bind only to the mounted composer's range;
   only that sheet ignores outside dismissal during a draft interaction. The
   sheet requests an opaque surface through the same owned drawer-height
-  registration. Add-field visibility and compact-title observation live in
-  composer primitives.
+  registration. Add-field visibility and scroll-driven compact-title progress live
+  in composer primitives. Keep the compact title absolutely overlaid in the
+  zero-height header outlet; it never changes the scroll body's geometry.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `DesktopComposer` or `MobileAgentComposer` over that model.

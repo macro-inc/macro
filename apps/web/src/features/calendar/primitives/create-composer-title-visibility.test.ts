@@ -1,57 +1,75 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createComposerTitleVisibility } from './create-composer-title-visibility';
+import {
+  composerTitleProgress,
+  createComposerTitleVisibility,
+} from './create-composer-title-visibility';
 
 afterEach(() => vi.unstubAllGlobals());
 
-it('uses the owned scroll root, resets on replacement, and disconnects', () => {
-  const observers: ObserverStub[] = [];
-  class ObserverStub implements IntersectionObserver {
-    readonly root;
-    readonly rootMargin = '0px';
-    readonly scrollMargin = '0px';
-    readonly thresholds = [0];
-    disconnect = vi.fn();
+it('tracks forward and reverse offsets continuously over twenty-four pixels', () => {
+  const offsets = [12, 40, 46, 52, 58, 64, 90, 64, 58, 52, 46, 40, 12];
+  expect(offsets.map((offset) => composerTitleProgress(offset, 40))).toEqual([
+    0, 0, 0.25, 0.5, 0.75, 1, 1, 1, 0.75, 0.5, 0.25, 0, 0,
+  ]);
+});
+
+it('measures the title in its scroll root and removes pending work on replacement', () => {
+  const frames: FrameRequestCallback[] = [];
+  const request = vi.fn((callback: FrameRequestCallback) =>
+    frames.push(callback)
+  );
+  const cancel = vi.fn();
+  const observers: ResizeObserverStub[] = [];
+  class ResizeObserverStub {
     observe = vi.fn();
-    unobserve = vi.fn();
-    takeRecords = () => [];
-    constructor(
-      readonly callback: IntersectionObserverCallback,
-      options?: IntersectionObserverInit
-    ) {
-      this.root = options?.root ?? null;
+    disconnect = vi.fn();
+    constructor(readonly callback: ResizeObserverCallback) {
       observers.push(this);
     }
   }
-  vi.stubGlobal('IntersectionObserver', ObserverStub);
+  vi.stubGlobal('requestAnimationFrame', request);
+  vi.stubGlobal('cancelAnimationFrame', cancel);
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  const scroller = document.createElement('div');
+  const title = document.createElement('textarea');
+  scroller.getBoundingClientRect = () => new DOMRect(0, 100, 300, 400);
+  title.style.lineHeight = '30px';
+  title.getBoundingClientRect = () =>
+    new DOMRect(0, 140 - scroller.scrollTop, 200, 90);
   const state = createRoot((dispose) => {
-    const scroller = document.createElement('div');
-    const title = document.createElement('div');
     const [root, setRoot] = createSignal<HTMLElement | undefined>(scroller);
-    const compact = createComposerTitleVisibility(root, () => title);
-    return { dispose, scroller, title, setRoot, compact };
+    const progress = createComposerTitleVisibility(root, () => title);
+    return { dispose, setRoot, progress };
   });
-  const observer = observers[0];
-  const bounds = new DOMRect();
-  const entries: IntersectionObserverEntry[] = [
-    {
-      target: state.title,
-      isIntersecting: false,
-      boundingClientRect: bounds,
-      intersectionRect: bounds,
-      rootBounds: bounds,
-      intersectionRatio: 0,
-      time: 0,
-    },
-  ];
-  expect(observer.root).toBe(state.scroller);
-  observer.callback(entries, observer);
-  expect(state.compact()).toBe(false);
-  state.scroller.scrollTop = 100;
-  observer.callback(entries, observer);
-  expect(state.compact()).toBe(true);
+  frames.shift()?.(0);
+  expect(state.progress()).toBe(0);
+  expect(observers[0].observe.mock.calls).toEqual([[scroller], [title]]);
+
+  scroller.scrollTop = 82;
+  scroller.dispatchEvent(new Event('scroll'));
+  scroller.dispatchEvent(new Event('scroll'));
+  expect(frames).toHaveLength(1);
+  frames.shift()?.(0);
+  expect(state.progress()).toBe(0.5);
+
+  scroller.scrollTop = 94;
+  scroller.dispatchEvent(new Event('scroll'));
+  frames.shift()?.(0);
+  expect(state.progress()).toBe(1);
+  scroller.scrollTop = 76;
+  scroller.dispatchEvent(new Event('scroll'));
+  frames.shift()?.(0);
+  expect(state.progress()).toBe(0.25);
+
+  scroller.dispatchEvent(new Event('scroll'));
   state.setRoot(undefined);
-  expect(state.compact()).toBe(false);
-  expect(observer.disconnect).toHaveBeenCalledOnce();
+  expect(state.progress()).toBe(0);
+  expect(observers[0].disconnect).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledOnce();
+  const requestCount = request.mock.calls.length;
+  scroller.dispatchEvent(new Event('scroll'));
+  window.dispatchEvent(new Event('resize'));
+  expect(request).toHaveBeenCalledTimes(requestCount);
   state.dispose();
 });
