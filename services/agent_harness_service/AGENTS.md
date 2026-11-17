@@ -169,7 +169,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
-  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the session repo, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped

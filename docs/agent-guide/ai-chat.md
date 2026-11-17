@@ -231,8 +231,7 @@ agree to the request, grant it as the owner, then ask the agent to retry.
 
 ## Agents opening items for you
 
-With `enable-agent-navigation` (PostHog on the web and the harness; on in dev
-builds), an agent's program can open an item in the tab you typed the prompt
+An agent's program can open an item in the tab you typed the prompt
 in (`macro.ui.open`). It arrives in a new pane beside the agent's
 conversation (a new pane at the end when no pane shows it) and slides in from
 that side while the other panes glide aside; with reduced motion it only fades
@@ -945,10 +944,7 @@ email, channel or task event adds **Open item**. Each code step has
 Runs recorded before this change have neither, and runs recorded with the
 removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine writes code and Ask AI steps. Code steps are
-behind `enable-routine-code-steps` (PostHog, on in development builds): with it
-off, Draft it, the add-step box and the built-in templates write Ask AI steps
-only, and code steps a routine already has still show, run and change. The
+**Draft it** on a new routine writes code and Ask AI steps. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
@@ -1182,13 +1178,10 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Settings → Usage is visible for every plan. In production,
-`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
-until then Usage shows the October 8, 2026 announcement and disabled controls.
-Dev and local remain active regardless of the flag.
+Settings → Usage is visible for every plan, with its controls and the AI
+usage-limit dialog active.
 Usage displays the current period as a **Monthly limit** percentage; its info
 button explains that AI agent chat and AI document editing count toward the limit.
-Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
 Model pickers have no usage multipliers. Normal paid-model access rules still
 apply. Backend enforcement and credit collection remain independent policies.
 

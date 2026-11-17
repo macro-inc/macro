@@ -906,9 +906,6 @@ pub async fn run() -> anyhow::Result<()> {
             store: Arc::clone(&execution_store),
             active: Arc::clone(&execution_turns),
             turns: Arc::new(code_mode::ui_commands::SessionUiTurns(session_repo.clone())),
-            flag: Arc::new(code_mode::ui_commands::NavigationFlag(
-                feature_flags.clone(),
-            )),
             budgets: Arc::new(code_mode::ui_commands::RedisUiBudgets(
                 rate_limit::RateLimitServiceImpl {
                     repo: rate_limit::RedisRateLimitAdapter {
