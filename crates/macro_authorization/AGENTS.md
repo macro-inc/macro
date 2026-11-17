@@ -81,6 +81,7 @@ managers.
 
 ## Gotchas
 
+- `rewrite_program_json` rewrites a JSON response only for a program's request (`request_is_program`: the header, or a credential signed for an agent or routine run). Layer it inside compression, so it reads the handler's JSON.
 - Both extractors reject (400) a request that combines explicit credential
   types (internal key, bot token, user API key, bearer/query user) rather
   than picking one — don't "fix" this by adding precedence logic.

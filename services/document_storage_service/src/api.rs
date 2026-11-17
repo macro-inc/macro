@@ -112,8 +112,28 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
-    soup::inbound::axum_router::soup_router(state.soup_router_state.clone())
-        .merge(graphql_soup::router())
+    hide_sign_in_emails_from_programs(
+        soup::inbound::axum_router::soup_router(state.soup_router_state.clone())
+            .merge(graphql_soup::router()),
+        &state,
+    )
+}
+
+/// A program reads Macro's own sign-in emails in workspace items and search
+/// results only redacted: one that read the code could sign in as the user.
+fn hide_sign_in_emails_from_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    state: &ApiContext,
+) -> Router<S> {
+    let authorization = state.authorization_state.clone();
+    router.layer(axum::middleware::from_fn(move |request, next| {
+        macro_authorization::rewrite_program_json(
+            authorization.clone(),
+            request,
+            next,
+            models_email::sign_in_email::hide_sign_in_emails,
+        )
+    }))
 }
 
 fn api_router(state: ApiContext) -> Router {
@@ -238,7 +258,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/search",
-            search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+            hide_sign_in_emails_from_programs(
+                search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+                &state,
+            ),
         )
         .nest(
             "/sync_service",
@@ -439,8 +462,11 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .nest(
                     "/search",
-                    search_service::search_router()
-                        .with_state(SearchHandlerState::from_ref(&state)),
+                    hide_sign_in_emails_from_programs(
+                        search_service::search_router()
+                            .with_state(SearchHandlerState::from_ref(&state)),
+                        &state,
+                    ),
                 )
                 .nest(
                     "/sync_service",

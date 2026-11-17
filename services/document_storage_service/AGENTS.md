@@ -103,6 +103,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- `/items` (soup and GraphQL) and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits.
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
 

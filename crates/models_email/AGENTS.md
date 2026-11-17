@@ -41,3 +41,5 @@ the email domain and use normalized mailbox facts, not Gmail-only label names.
 - Rules: `.agents/rules/rust/architecture.md`
 
 - Scheduled-message models retain optional agent correlation for delayed delivery; older rows decode without attribution.
+
+- `sign_in_email` recognises Macro's own sign-in emails by FusionAuth's sender addresses and template subjects; its tests read the FusionAuth stack, its per-environment config and the local kickstart, so a changed sender or subject fails them. Update `SIGN_IN_SENDERS` or the subjects with the template.
