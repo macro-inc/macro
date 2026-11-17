@@ -37,7 +37,6 @@ type Edges = Record<string, UnifiedNotification[]>;
 
 const mocks = vi.hoisted(() => ({
   source: undefined as NotificationSource | undefined,
-  graphqlSoup: () => ({ enabled: true, loading: false }),
   createQuery: vi.fn(),
   subscribe: vi.fn(
     (_listener: (patch: GraphqlNotificationPatch) => void) => () => {}
@@ -48,9 +47,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@components/app/GlobalAppState', () => ({
   useOptionalGlobalNotificationSource: () => mocks.source,
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.graphqlSoup(),
 }));
 vi.mock('@app/lib/urql-solid', () => ({ createUrqlQuery: mocks.createQuery }));
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -125,7 +121,6 @@ describe('MessageNotificationIndexProvider', () => {
     queries = [];
     const [edges, set] = createSignal<Edges>({});
     setEdges = set;
-    mocks.graphqlSoup = () => ({ enabled: true, loading: false });
     mocks.cacheHost = true;
     mocks.source = {
       notificationsByEntity,
@@ -305,46 +300,6 @@ describe('MessageNotificationIndexProvider', () => {
     await waitFor(() =>
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([channelReply])
     );
-    expect(notificationsByEntity).not.toHaveBeenCalled();
-  });
-
-  it('keeps each message on the notification feed in REST mode', async () => {
-    mocks.graphqlSoup = () => ({ enabled: false, loading: false });
-    const fromFeed = notification('from-feed', { messageId: 'root' });
-    notificationsByEntity.mockReturnValue({
-      'document@document-1': [
-        fromFeed,
-        notification('other-message', { messageId: 'reply' }),
-      ],
-    });
-    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
-
-    intersect();
-    await waitFor(() =>
-      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([fromFeed])
-    );
-    expect(queries).toHaveLength(0);
-  });
-
-  it('reads neither source until the flags say which mode applies', async () => {
-    const [flag, setFlag] = createSignal({ enabled: false, loading: true });
-    mocks.graphqlSoup = flag;
-    const unread = notification('unread', { messageId: 'root' });
-    setEdges({ 'document-1': [unread] });
-    notificationsByEntity.mockReturnValue({ 'document@document-1': [unread] });
-    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
-
-    intersect();
-    expect(queries).toHaveLength(0);
-    expect(notificationsByEntity).not.toHaveBeenCalled();
-    expect(bulkMarkAsRead).not.toHaveBeenCalled();
-
-    setFlag({ enabled: true, loading: false });
-    intersect();
-    await waitFor(() =>
-      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread])
-    );
-    expect(queries).toHaveLength(1);
     expect(notificationsByEntity).not.toHaveBeenCalled();
   });
 

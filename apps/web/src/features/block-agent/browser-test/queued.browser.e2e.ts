@@ -195,3 +195,30 @@ test('tapping a queued message edits it in place and saves on leaving', async ({
     queue(page).getByRole('button', { name: `${FIRST} please` })
   ).toBeVisible();
 });
+
+test('a long queued message is cut to one line inside its card', async ({
+  page,
+}) => {
+  await page.goto('/queued.html?count=3');
+  const preview = queue(page).getByRole('button', {
+    name: /^Finally, a haiku/,
+  });
+  await expect(preview).toBeVisible({ timeout: 30_000 });
+  const layout = await preview.evaluate((button) => {
+    const row = button.closest('.rounded-lg') as HTMLElement;
+    const status = Array.from(row.querySelectorAll('span')).find(
+      (span) => span.textContent?.trim() === 'Queued'
+    ) as HTMLElement;
+    // The markdown paragraph is the box that clips with an ellipsis.
+    const text = button.querySelector('p') as HTMLElement;
+    return {
+      previewRight: button.getBoundingClientRect().right,
+      statusLeft: status.getBoundingClientRect().left,
+      rowRight: row.getBoundingClientRect().right,
+      ellipsized: text.scrollWidth > text.clientWidth,
+    };
+  });
+  expect(layout.previewRight).toBeLessThanOrEqual(layout.statusLeft);
+  expect(layout.previewRight).toBeLessThanOrEqual(layout.rowRight);
+  expect(layout.ellipsized).toBe(true);
+});

@@ -94,7 +94,7 @@ export type DocumentMentionLocation = NonNullable<
 >;
 const commentRef = z.union([z.number(), z.string()]);
 
-export const documentMentionMetadata = z.object({
+const documentMentionMetadata = z.object({
   mention_id: z.string(),
   location: z
     .discriminatedUnion('type', [
