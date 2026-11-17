@@ -300,6 +300,7 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   await failsSometimes(async () => {
     await page.getByRole('button', { name: 'Channel actions' }).click();
     await entry.click({ timeout: 5_000 });
+    await expect(confirm).toBeVisible({ timeout: 5_000 });
   });
   if (!(await confirm.isVisible())) {
     if (!(await entry.isVisible())) {
@@ -466,4 +467,7 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
     await expect(view.composer).toHaveCount(0);
     await expect(page.getByText('soon gone')).toHaveCount(0);
   });
+  await page.reload();
+  await expect(view.composer).toHaveCount(0);
+  await expect(page.getByText('soon gone')).toHaveCount(0);
 });

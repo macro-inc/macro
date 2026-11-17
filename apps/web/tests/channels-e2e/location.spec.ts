@@ -142,6 +142,8 @@ test('NAV-07 “Copy link” on a message gives a link that opens the channel on
   await view.noteMarkedMessages();
   await view.open();
   const target = history.messages[HISTORY_LENGTH - 4];
+  // The same link every run: what an earlier run copied must not pass for it.
+  await page.evaluate(() => navigator.clipboard.writeText('nothing yet'));
   await view.action(view.messageById(target.id), 'copy-link');
   const copied = () => page.evaluate(() => navigator.clipboard.readText());
   await expect.poll(copied).toContain(target.id);

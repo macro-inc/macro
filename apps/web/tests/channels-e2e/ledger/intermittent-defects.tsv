@@ -11,6 +11,6 @@ ACC-06	After a teammate joins a team channel found by name its row sometimes sta
 CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on another branch); the channel's menu, opened just after a favorite, sometimes closes by itself before an entry can be chosen (5 of 6 runs on one machine, once in CI)
 UNR-08	A channel a person is added to is sometimes missing from the rows shown by "Search conversations" until the search is run again (3 of 4 whole-suite runs on a much-used stack, none in CI)
 DM-01	A new direct message is sometimes missing from the other person's open list until reload (on one machine in about half the runs, in CI in none)
-DM-02	A new direct message is sometimes missing from the other person's open list until reload
-DM-03	A new direct message is sometimes missing from the other person's open list until reload
+DM-02	A new direct message is sometimes missing from the other person's open list until reload (2 of 4 runs on one machine, in CI in none)
+DM-03	A new direct message is sometimes missing from the other person's open list until reload (2 of 4 runs on one machine, in CI in none)
 MEM-03	A person removed from a channel sometimes keeps it open, with a composer, until reload (on one machine in every run, in CI in none)
