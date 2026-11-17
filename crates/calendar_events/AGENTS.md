@@ -413,7 +413,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `OutlookCalendarLease::near_window` set), then the whole window in a scan of
   its own (`calendar_outlook_work.whole_window_scan_id`), so what the user
   looks at first arrives first, and an event deleted between the two is still
-  retired. The near window's events are read twice. Nothing marks the
+  retired. The near window reads its events closest to now first
+  (`nearest_first`, from the start and end each `OutlookPageMember` carries
+  from the listing), so this week comes before the rest of the two months;
+  every other page reads in ID order. A near-window page's span records
+  `untimed_members`, which read last. Each listing page is ordered on its
+  own, so a near window longer than a page (the listing asks for 1,000
+  occurrences a page) is ordered page by page. The near
+  window's events are read twice. Nothing marks the
   calendar synced or materialized, or its account ready, before the whole
   window finishes, so every coverage reader (sync health and booking, team
   availability, the syncing banner) still sees a first import in progress.

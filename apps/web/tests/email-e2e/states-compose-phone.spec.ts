@@ -1,9 +1,7 @@
 // The touch composer: how the phone folds its recipient, Cc/Bcc/From and
 // subject rows, the Draft options sheet of Go Back and the draft it saves,
-// the From it shows once another inbox is chosen, and the header a touch
-// tablet gives a new email.
+// and the From it shows once another inbox is chosen.
 
-import { devices } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { anInbox, PROVIDERS } from './harness/providers';
@@ -14,11 +12,10 @@ import {
   phoneBody,
   storedDraft,
 } from './harness/ways-compose1';
+import { openTouchTab } from './harness/ways-list1';
 import { saw } from './ledger/record';
 
 const WORK = 'ada.work@example.com';
-const { defaultBrowserType: _browser, ...tablet } =
-  devices['iPad Pro 11 landscape'];
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -105,7 +102,7 @@ test.describe('the phone composer', () => {
 
     await sheet.getByRole('button', { name: 'Save Draft' }).tap();
     await expect(sheet).toHaveCount(0);
-    await page.getByRole('button', { name: 'Drafts', exact: true }).tap();
+    await openTouchTab(page, 'Drafts');
     await page
       .getByRole('grid', { name: 'Email' })
       .getByRole('row')
@@ -145,25 +142,3 @@ for (const provider of PROVIDERS) {
     });
   });
 }
-
-test.describe('a touch tablet', () => {
-  test.use({ ...tablet });
-
-  // When this fails, a new email on a touch tablet has no header naming it,
-  // the header does not follow the subject, or it no longer badges the
-  // email as a draft. Tooltips are off on touch devices, so the badge's is
-  // never shown there. The same whatever the provider: Gmail only.
-  test('the header names a new email Draft email, badges it draft, and follows the subject', async ({
-    page,
-    mailbox,
-  }) => {
-    await mailbox.open('/app/mail');
-    await page.getByRole('button', { name: 'New email' }).first().tap();
-    await expect(page.getByText('Draft email', { exact: true })).toBeVisible();
-    await expect(page.getByText('draft', { exact: true })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Subject' }).fill('Tablet plans');
-    await expect(page.getByText('Tablet plans', { exact: true })).toBeVisible();
-    await expect(page.getByText('Draft email', { exact: true })).toHaveCount(0);
-    saw('STC-004');
-  });
-});

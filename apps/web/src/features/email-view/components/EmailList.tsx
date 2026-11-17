@@ -85,6 +85,7 @@ import {
   type EmailListStateSnapshot,
 } from '../persistence';
 import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
+import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -851,7 +852,7 @@ export function EmailList(props: EmailListProps) {
                         checkNearEnd();
                       }}
                     >
-                      {(row) => (
+                      {(row, index) => (
                         <Switch>
                           <Match
                             when={row.kind === 'group-header' ? row : undefined}
@@ -886,6 +887,10 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      rowStyle={emailRowStyle()}
+                                      isFirstInGroup={
+                                        rows()[index() - 1]?.kind !== 'entity'
+                                      }
                                       onFilterByTag={filterByTag}
                                       meta={
                                         <EmailFocusReason
