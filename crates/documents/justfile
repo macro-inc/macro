@@ -85,6 +85,10 @@ backfill_markdown_content_location_prod_apply *FLAGS:
 enqueue_orphaned_email_attachments_dev *FLAGS:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ " {{ FLAGS }} " == *" --apply "* ]]; then
+        echo "--apply queues documents; use enqueue_orphaned_email_attachments_dev_apply." >&2
+        exit 1
+    fi
     DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)"
     RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="dev" DATABASE_URL="$DATABASE_URL" \
         cargo run -p documents --features backfill_binary --bin enqueue_orphaned_email_attachments -- {{ FLAGS }}
@@ -112,6 +116,10 @@ enqueue_orphaned_email_attachments_dev_apply *FLAGS:
 enqueue_orphaned_email_attachments_prod *FLAGS:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ " {{ FLAGS }} " == *" --apply "* ]]; then
+        echo "--apply queues documents; use enqueue_orphaned_email_attachments_prod_apply." >&2
+        exit 1
+    fi
     echo -e "\033[31mThis reads the PRODUCTION primary page by page until the walk ends or you stop it.\033[0m"
     echo -n "Type 'prod dry run' to continue: "
     read -r response

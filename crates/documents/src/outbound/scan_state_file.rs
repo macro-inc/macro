@@ -66,7 +66,9 @@ impl ScanProgressStore for ScanStateFile {
     type Err = ScanStateFileError;
 
     /// Write beside the file and rename over it, so a scan stopped mid-write
-    /// leaves the last complete progress.
+    /// leaves the last complete progress. The file written beside it is this
+    /// process's own, so a second scan started on the same state file by
+    /// mistake can't rename a half-written one into place.
     async fn save(&self, progress: &ScanProgress) -> Result<(), Self::Err> {
         let json =
             serde_json::to_vec_pretty(progress).map_err(|source| ScanStateFileError::Invalid {
@@ -75,7 +77,7 @@ impl ScanProgressStore for ScanStateFile {
             })?;
 
         let mut written = OsString::from(self.path.as_os_str());
-        written.push(".tmp");
+        written.push(format!(".{}.tmp", std::process::id()));
         let written = PathBuf::from(written);
         std::fs::write(&written, json)
             .and_then(|()| std::fs::rename(&written, &self.path))

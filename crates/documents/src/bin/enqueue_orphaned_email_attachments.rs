@@ -14,7 +14,7 @@ use clap::Parser;
 use documents::domain::released_attachments::QUEUE_DEPTH_CAP;
 use documents::domain::released_attachments::orphans::{
     DEFAULT_MAX_QUEUE_DEPTH, DEFAULT_PAGE_SIZE, DEFAULT_PER_SECOND, MAX_PAGE_SIZE,
-    OrphanedAttachmentScan, ScanOptions, ScanProgress,
+    OrphanedAttachmentScan, ScanOptions, ScanProgress, ScanProgressStore as _,
 };
 use documents::outbound::pg_released_attachments::PgReleasedAttachmentRepo;
 use documents::outbound::scan_state_file::ScanStateFile;
@@ -96,7 +96,13 @@ async fn run(args: Args) -> Result<(), Report> {
         );
     }
     let progress = match (args.after, saved) {
-        (Some(after), _) => ScanProgress::start(args.apply, Some(after)),
+        (Some(after), _) => {
+            // Saved before any page is read, so a rerun after a failed first
+            // page resumes this restart rather than what the file held.
+            let restart = ScanProgress::start(args.apply, Some(after));
+            state_file.save(&restart).await?;
+            restart
+        }
         (None, Some(saved)) => saved,
         (None, None) => ScanProgress::start(args.apply, None),
     };

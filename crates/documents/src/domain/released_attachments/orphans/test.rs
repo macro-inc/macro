@@ -489,3 +489,43 @@ async fn documents_whose_thread_source_was_set_by_hand_are_counted_apart_and_lef
     );
 }
 
+/// Saves the first progress and fails every later save.
+#[derive(Default)]
+struct StoreFailingAfterFirstSave(Mutex<Vec<ScanProgress>>);
+
+impl ScanProgressStore for StoreFailingAfterFirstSave {
+    type Err = Unavailable;
+
+    async fn save(&self, progress: &ScanProgress) -> Result<(), Self::Err> {
+        let mut saved = self.0.lock().expect("saved lock");
+        if !saved.is_empty() {
+            return Err(Unavailable);
+        }
+        saved.push(progress.clone());
+        Ok(())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_save_stops_the_scan_at_the_cursor_the_store_holds() {
+    let page = |last: &str| {
+        Ok(OrphanPage {
+            last_entity_id: Some(last.to_string()),
+            orphans: Vec::new(),
+        })
+    };
+    let repo = ScriptedRepo::new(vec![page("e1"), page("e2")]);
+    let scan = OrphanedAttachmentScan::new(repo, StoreFailingAfterFirstSave::default());
+
+    let stopped = scan
+        .run(OPTIONS, ScanProgress::start(false, None))
+        .await
+        .expect_err("the second save fails");
+
+    assert_eq!(stopped.progress.after.as_deref(), Some("e1"));
+    assert_eq!(stopped.progress.pages, 1);
+    assert_eq!(
+        scan.store.0.lock().expect("saved lock")[0].after.as_deref(),
+        Some("e1")
+    );
+}

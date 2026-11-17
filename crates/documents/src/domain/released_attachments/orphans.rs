@@ -307,15 +307,20 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
                 .page(&after, options.page_size, progress.apply)
                 .await
                 .map_err(|error| stopped(&progress, error))?;
-            progress.pages += 1;
-            progress.counts.add(&page.counts);
+
+            // Advance only once the store holds the new cursor, so a failed
+            // save reports the cursor a rerun resumes after.
+            let mut next = progress.clone();
+            next.pages += 1;
+            next.counts.add(&page.counts);
             match page.last_entity_id {
-                Some(last) => progress.after = Some(last),
-                None => progress.finished = true,
+                Some(last) => next.after = Some(last),
+                None => next.finished = true,
             }
-            self.store.save(&progress).await.map_err(|error| {
+            self.store.save(&next).await.map_err(|error| {
                 stopped(&progress, rootcause::Report::new(error).into_dynamic())
             })?;
+            progress = next;
 
             if progress.apply {
                 unannounced += page.counts.enqueued;

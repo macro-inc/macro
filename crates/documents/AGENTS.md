@@ -198,12 +198,13 @@ one as they do a document released today.
   the same few hours 30 days later.
 - The rollout's coordinator runs it, through this crate's `just` recipes, with
   an absolute `--state-file` path.
-- Dry run first (`enqueue_orphaned_email_attachments_prod`). It writes only
-  the state file and reports the orphans by cause (mailbox gone, mailbox
-  connected again after the import, thread gone, message gone, attachment
-  replaced) and what the drain would do with them: trash, keep as adopted,
-  keep as already in the Trash, or skip as linked again. Then run
-  `enqueue_orphaned_email_attachments_prod_apply` with a new state file.
+- Dry run first (`enqueue_orphaned_email_attachments_prod`; it refuses
+  `--apply`). It writes only the state file and reports the orphans by cause
+  (mailbox gone, mailbox connected again after the import, thread gone,
+  message gone, attachment replaced) and what the drain would do with them:
+  trash, keep as adopted, keep as already in the Trash, or skip as linked
+  again. Then run `enqueue_orphaned_email_attachments_prod_apply` with a new
+  state file.
 - Only a Source the import wrote counts: the import inserts Source and
   Recipients in one statement and never updates them, so the Source row's
   `created_at` equals the Recipients row's and its `updated_at` its own
@@ -213,9 +214,10 @@ one as they do a document released today.
   are counted as `source_not_from_import` and never queued. The document's
   creation time can't tell the two apart: a backfilled import is dated by its
   mail.
-- Rate: at most `--per-second` (default 100) orphans are queued a second, and
-  the scan waits while more than `--max-queue-depth` (default 10,000, one drain
-  round) are queued. The drain runs a round of 20 batches of 500 per
+- Rate: on average at most `--per-second` (default 100) orphans are queued a
+  second; a page's orphans go in one insert and the scan then waits out their
+  share. It waits while more than `--max-queue-depth` (default 10,000, one
+  drain round) are queued. The drain runs a round of 20 batches of 500 per
   notification and one a minute without any, so 10,000 a minute is its floor
   even if notifications are lost; 100 a second is 6,000 a minute and leaves
   the rest of each round to documents released by mail deleted now. The scan
