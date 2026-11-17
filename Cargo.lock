@@ -12436,6 +12436,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro",
+ "loro-internal",
  "proptest",
  "rustc-hash 2.1.2",
  "serde_json",

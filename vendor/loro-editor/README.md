@@ -11,6 +11,27 @@ cache markers, standalone lockfiles and the redundant unnormalized manifest are
 omitted. Trailing whitespace is trimmed in Encoding.md. The exact upstream dev-utils helper is restored as a development-only
 dependency for standalone tracker tests; it is absent from production dependency trees.
 
+## The `native-editor` feature
+
+Every local runtime change below compiles only with loro-internal's
+`native-editor` feature, which is off by default. Off, this crate compiles from
+exactly the crates.io 1.17.1 Rust source and manifest (bar the declared manifest
+keys): each change is a whole item, statement, field or match arm gated on the
+feature beside the untouched upstream code it replaces, gated on its negation.
+`just check-loro-editor-vendor` strips the feature-off source and compares its
+tokens with the downloaded release.
+
+Only document_session enables the feature (through lexical_loro's optional
+`native-editor` feature for event-suppressed commits), so the native editor
+session, its WASM and FFI builds and sync_sim run these changes. Servers that
+link this crate through the workspace patch run upstream behaviour;
+`just check-loro-native-editor-features` fails if any other workspace package's
+own dependency graph enables it. The shallow-export fast path duplicates
+upstream's forward-replay block under the feature instead of editing it, so the
+feature-off branch stays verbatim.
+
+## Local changes
+
 Local runtime change: assign each dense text-tracker update range through a
 checked slice fill instead of repeated checked SmallVec indexing. LeafIndex is
 Copy; input order, bounds/debug checks and resulting leaf assignment remain the

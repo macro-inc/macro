@@ -176,8 +176,14 @@ impl InternalDocDiff<'_> {
         InternalDocDiff {
             origin: self.origin,
             by: self.by,
+            #[cfg(feature = "native-editor")]
             diff: Cow::Owned(self.diff.into_owned()),
+            #[cfg(not(feature = "native-editor"))]
+            diff: Cow::Owned((*self.diff).to_owned()),
+            #[cfg(feature = "native-editor")]
             new_version: Cow::Owned(self.new_version.into_owned()),
+            #[cfg(not(feature = "native-editor"))]
+            new_version: Cow::Owned((*self.new_version).to_owned()),
         }
     }
 
@@ -554,6 +560,7 @@ mod test {
 
     use crate::{cursor::PosType, ApplyDiff, LoroDoc};
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn owned_internal_diff_keeps_its_allocation() {
         use super::*;
@@ -577,6 +584,7 @@ mod test {
         assert_eq!(owned.origin.as_str(), "local");
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn borrowed_internal_diff_owns_its_data_after_conversion() {
         use super::*;

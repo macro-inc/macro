@@ -461,7 +461,12 @@ mod insert_set {
             for &(from, to, leaf) in updates {
                 debug_assert!(from <= to);
                 debug_assert!(to <= len);
+                #[cfg(feature = "native-editor")]
                 dense[from..to].fill(leaf);
+                #[cfg(not(feature = "native-editor"))]
+                for i in from..to {
+                    dense[i] = leaf;
+                }
             }
 
             let mut new_set: SmallVec<[Insert; 1]> = SmallVec::new();
@@ -1218,6 +1223,7 @@ mod test {
         }
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn dense_batch_matches_ordered_updates_with_overlaps_and_empty_ranges() {
         // Push enough elements to obtain genuinely different B-tree leaves.

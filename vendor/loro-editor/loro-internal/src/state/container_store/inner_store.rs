@@ -518,6 +518,7 @@ impl InnerStore {
         self.kv.set_all(updates);
     }
 
+    #[cfg(feature = "native-editor")]
     pub(crate) fn kv_content_bytes_capped(&self, cap: usize) -> usize {
         self.kv.content_bytes_capped(cap)
     }

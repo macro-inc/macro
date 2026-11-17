@@ -26,6 +26,9 @@ repository = "https://github.com/loro-dev/loro/"
 counter = ["loro-common/counter"]
 jsonpath = []
 logging = ["loro-common/logging"]
+# Local editor runtime changes (../README.md). Off, this crate compiles as upstream 1.17.1;
+# only document_session enables it.
+native-editor = []
 test_utils = [
     "arbitrary",
     "tabled",

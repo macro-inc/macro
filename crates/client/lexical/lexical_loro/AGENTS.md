@@ -11,7 +11,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - `reconstruct_initial_state`: one read-only walk reports persisted transparent wrappers; `mirror::set_synced_state` performs explicit full cleanup with protected local fields retained.
 - `src/policy.rs`: synced editor view and application exclusions.
 - `src/schema.rs`: fresh/existing container inference and text splicing.
-- `src/local.rs`, `child_index.rs`: dirty projection, stable direct-child insertion anchors and corrected list moves; local_commit_without_events suppresses materialization only at the final commit, and its owner must checkpoint undo from local operations.
+- `src/local.rs`, `child_index.rs`: dirty projection, stable direct-child insertion anchors and corrected list moves; local_commit_without_events (optional `native-editor` feature, enabled only by document_session) suppresses materialization only at the final commit, and its owner must checkpoint undo from local operations.
 - Move paired old/new JSON capacities out of the projection before invoking model exports; keep callback order and apply the same storage normalization/undefined-field policy on every export.
 - `src/remote.rs`: buffered Loro events and id-keyed raw editor changes.
 - `src/cursor.rs`: Unicode/UTF-16 conversion and awareness cursor codec.
@@ -47,7 +47,7 @@ sync-service's own `loro-crdt` beside the workspace 1.17.1 server encoder, and t
 committed transcript bytes were recorded with 1.16.3.
 
 
-- `cargo test -p lexical_loro -j4`
+- `cargo test -p lexical_loro -j4` (servers' feature-off build) and `cargo test -p lexical_loro --features native-editor -j4` (the session's).
 - `PROPTEST_CASES=256 cargo test -p lexical_loro -j4`
 - `cargo check -p lexical_loro --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p lexical_loro --all-targets -j4 -- -D warnings`

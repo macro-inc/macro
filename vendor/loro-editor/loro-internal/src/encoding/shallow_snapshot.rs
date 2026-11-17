@@ -9,7 +9,7 @@ use crate::{
     container::{idx::ContainerIdx, list::list_op::InnerListOp},
     dag::DagUtils,
     encoding::export_fast_updates_in_range,
-    encoding::fast_snapshot::{Snapshot, _encode_snapshot},
+    encoding::fast_snapshot::{_encode_snapshot, Snapshot},
     state::{
         container_store::{ContainerWrapper, PrunedRootState, FRONTIERS_KEY},
         redact_dead_style_values, DocState,
@@ -279,6 +279,7 @@ fn forward_replay_gate(ops_num: usize, pre_root_ops: usize, pre_root_bytes: usiz
 
 /// Seed a forward replay with the cached shallow state and only its retained prefix.
 /// The live document and its requested export frontier remain unchanged.
+#[cfg(feature = "native-editor")]
 fn cached_root_prefix_seed(
     doc: &LoroDoc,
     oplog: &crate::OpLog,
@@ -440,10 +441,12 @@ pub(crate) fn export_shallow_snapshot_inner(
     .flatten();
     // A cached shallow root replaces the unavailable trimmed history. Never
     // prepare this copy for the existing exact-root path or small dirty tails.
+    #[cfg(feature = "native-editor")]
     let cached_prefix_ops: usize = root_vv
         .sub_iter_im(oplog.shallow_since_vv())
         .map(|span| span.atom_len())
         .sum();
+    #[cfg(feature = "native-editor")]
     let cached_root_updates = (state_frontiers == latest_frontiers
         && !oplog.shallow_since_vv().is_empty()
         && &start_from != oplog.shallow_since_frontiers()
@@ -535,6 +538,72 @@ pub(crate) fn export_shallow_snapshot_inner(
     }
     drop(oplog);
     let result = (|| -> Result<Snapshot, LoroEncodeError> {
+        #[cfg(not(feature = "native-editor"))]
+        if let Some(pre_root_updates) = pre_root_updates {
+            // The live state is already at the latest version: build the root
+            // state by replaying pre-root history forward into a temporary doc
+            // instead of checking the live doc out backwards. A reverse
+            // checkout (latest -> root) makes the diff calculators rebuild a
+            // full CRDT tracker from empty for every list-like container
+            // touched in the range (the `should_rebuild` path in
+            // `RichtextDiffCalculator::calculate_diff`), which costs orders of
+            // magnitude more than forward replay when the doc has many small
+            // containers. Forward replay also leaves the live doc untouched,
+            // so no state restore is needed.
+            let root_doc = LoroDoc::new();
+            root_doc
+                .import(&pre_root_updates)
+                .map_err(LoroEncodeError::from)?;
+            let mut root_state = root_doc.app_state().lock();
+            // The replay doc does not share the live doc's deleted-root set;
+            // without it a root container deleted before the root would be
+            // re-encoded as an empty entry instead of being dropped at flush.
+            // (`InnerStore::flush` only drops the entry when the value is
+            // still empty, so roots deleted *after* the root keep their
+            // at-root content even with the set mirrored.)
+            *root_state.config.deleted_root_containers.lock() =
+                doc.config().deleted_root_containers.lock().clone();
+            // Root containers exist on the live doc once they are accessed,
+            // even when they have no ops; the replay doc cannot know about
+            // those. Mirror the live store's root entries so the exported root
+            // state ships the same empty root containers the checkout path
+            // would. `existing_retention_roots` is a root-only key scan — a
+            // full `load_all` here would defeat lazily imported docs.
+            {
+                let mut live_state = doc.app_state().lock();
+                for idx in live_state.existing_retention_roots() {
+                    let cid = live_state.arena.get_container_id(idx).unwrap();
+                    root_state.store.ensure_container(&cid);
+                }
+            }
+            let alive_containers = root_state.ensure_all_alive_containers()?;
+            if has_unknown_container(alive_containers.iter().copied()) {
+                return Err(LoroEncodeError::UnknownContainer);
+            }
+            let mut alive_c_bytes = alive_indices_to_bytes(&root_state, &alive_containers);
+            root_state.store.flush();
+            let shallow_root_state_kv = root_state.store.get_kv_clone();
+            drop(root_state);
+
+            let latest_state_kv = {
+                let mut state = doc.app_state().lock();
+                latest_state_overlay_kv(
+                    &mut state,
+                    ops_num,
+                    &root_vv,
+                    &shallow_root_state_kv,
+                    &mut alive_c_bytes,
+                )?
+            };
+            return encode_shallow_sections(
+                oplog_bytes,
+                &start_from,
+                shallow_root_state_kv,
+                latest_state_kv,
+                alive_c_bytes,
+            );
+        }
+        #[cfg(feature = "native-editor")]
         let cached_root_doc = cached_root_updates.and_then(|bytes| {
             let root = LoroDoc::new();
             let imported = root.import(&bytes).ok()?;
@@ -545,7 +614,9 @@ pub(crate) fn export_shallow_snapshot_inner(
             tests::CACHED_PREFIX_SUCCESSES.with(|count| count.set(count.get() + 1));
             Some(root)
         });
+        #[cfg(feature = "native-editor")]
         let from_cached_root = cached_root_doc.is_some();
+        #[cfg(feature = "native-editor")]
         let forward_root = match (cached_root_doc, pre_root_updates) {
             (Some(root), _) => Some(root),
             (None, Some(updates)) => {
@@ -555,6 +626,7 @@ pub(crate) fn export_shallow_snapshot_inner(
             }
             (None, None) => None,
         };
+        #[cfg(feature = "native-editor")]
         if let Some(root_doc) = forward_root {
             // The live state is already at the latest version: build the root
             // state by replaying pre-root history forward into a temporary doc
@@ -1262,12 +1334,14 @@ mod tests {
     use crate::LoroDoc;
     use loro_common::LoroValue;
 
+    #[cfg(feature = "native-editor")]
     std::thread_local! {
         pub(super) static LEGACY_CACHED_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         pub(super) static CACHED_PREFIX_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         pub(super) static CACHED_PREFIX_SUCCESSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 
+    #[cfg(feature = "native-editor")]
     fn legacy_cached_export(doc: &LoroDoc, at: &Frontiers) -> Vec<u8> {
         struct Restore(bool);
         impl Drop for Restore {
@@ -1279,6 +1353,7 @@ mod tests {
         doc.export(ExportMode::shallow_snapshot(at)).unwrap()
     }
 
+    #[cfg(feature = "native-editor")]
     fn cached_prefix_fixture(prefix: usize, paragraphs: usize) -> (LoroDoc, Frontiers) {
         let seed = LoroDoc::new_auto_commit();
         seed.set_peer_id(1).unwrap();
@@ -1312,6 +1387,7 @@ mod tests {
         (doc, base)
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_forward_export_matches_replay_bytes() {
         for prefix in [1, 8, 32] {
@@ -1335,6 +1411,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_keeps_exact_root_and_small_tail_paths() {
         let (doc, _) = cached_prefix_fixture(1, 32);
@@ -1350,6 +1427,7 @@ mod tests {
         assert_eq!(bytes, legacy_cached_export(&doc, &tip));
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_rich_nested_and_deleted_tail_matches_replay() {
         for variant in 0..12 {
@@ -1405,6 +1483,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_structural_style_and_deletion_edits_match_replay() {
         let seed = LoroDoc::new_auto_commit();
@@ -1479,6 +1558,7 @@ mod tests {
             .all(|(_, value)| *value == LoroValue::Null));
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_compressed_root_decoded_cap_boundaries_fall_back() {
         for extra in [0, 1] {
@@ -1532,6 +1612,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "native-editor")]
     #[test]
     fn cached_prefix_byte_heavy_prefix_falls_back() {
         let (doc, _) = cached_prefix_fixture(1, 0);

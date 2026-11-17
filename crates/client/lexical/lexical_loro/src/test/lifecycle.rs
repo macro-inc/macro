@@ -239,6 +239,7 @@ fn explicit_reconstruction_and_reattach_recovers_an_injected_index_divergence() 
     Ok(())
 }
 
+#[cfg(feature = "native-editor")]
 #[test]
 fn event_free_local_commit_preserves_remote_undo_group_boundaries() -> Result<()> {
     use std::sync::{
@@ -345,6 +346,7 @@ fn event_free_local_commit_preserves_remote_undo_group_boundaries() -> Result<()
     Ok(())
 }
 
+#[cfg(feature = "native-editor")]
 #[test]
 fn local_event_recording_resumes_after_a_commit_callback_panics() -> Result<()> {
     use std::sync::{

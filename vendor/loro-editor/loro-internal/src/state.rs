@@ -1,5 +1,5 @@
 pub mod container_tree;
-#[cfg(test)]
+#[cfg(all(test, feature = "native-editor"))]
 mod event_recording_test;
 
 use crate::sync::{AtomicU64, Mutex, RwLock};
@@ -564,6 +564,7 @@ impl DocState {
     /// Suspend event materialization for one known local commit only when no
     /// earlier events are pending. Resume with start_recording after commit.
     /// The caller owns observer delivery and undo checkpoint bookkeeping.
+    #[cfg(feature = "native-editor")]
     pub fn suspend_recording_for_local_commit(&mut self) -> bool {
         if !self.is_recording()
             || !self.event_recorder.diffs.is_empty()

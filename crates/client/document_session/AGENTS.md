@@ -155,6 +155,8 @@ Observe checklist candidates from actual accepted/error commit arrays and derive
 
 Forward the default-off `dev-probes` feature only to `lexical_loro/dev-probes`; production native profiles must reject it.
 
+This crate alone enables loro-internal's and lexical_loro's `native-editor` feature, the editor's local Loro runtime changes (vendor/loro-editor/README.md). Never forward it to a crate a server depends on; `just check-loro-native-editor-features` and the native editor feature-graph guard enforce that.
+
 Read the preview/test stored comparison from the current surface core and configured sync policy; do not substitute ordinary JSON queries or a pending read scope.
 
 Forward an opt-in main-commit sink and capture-only typed facts only through the designated local editor application; capture from that actual commit before follow-ups and retain known publication through projection/recovery errors without observing prefix, remote or resync applications. Keep typed Database authority beside the id-only outcome; admission remains in the existing session path.

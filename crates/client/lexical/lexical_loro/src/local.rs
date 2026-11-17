@@ -59,6 +59,7 @@ impl LoroProjection {
     /// Project a known local output without duplicating its changes as Loro events.
     /// The owner must manually checkpoint undo when events_suppressed is true;
     /// imports, history and callers with other local observers use local_commit.
+    #[cfg(feature = "native-editor")]
     pub fn local_commit_without_events(
         &mut self,
         doc: &LoroDoc,
@@ -741,8 +742,15 @@ impl LoroProjection {
         }
         // Defer suppression until the infallible commit boundary: fallible
         // projection writes retain their normal events and recovery behavior.
+        #[cfg(feature = "native-editor")]
         let events_suppressed =
             suppress_events && doc.with_state(|state| state.suspend_recording_for_local_commit());
+        // Only local_commit_without_events requests suppression, and it needs the feature.
+        #[cfg(not(feature = "native-editor"))]
+        let events_suppressed = {
+            debug_assert!(!suppress_events);
+            false
+        };
         let recording = LocalEventRecording {
             doc,
             suspended: events_suppressed,

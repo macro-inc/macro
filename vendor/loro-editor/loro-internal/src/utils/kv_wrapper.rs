@@ -63,6 +63,7 @@ impl KvWrapper {
     }
 
     /// Bound a copied snapshot by decoded KV payloads, without cloning those payloads.
+    #[cfg(feature = "native-editor")]
     pub(crate) fn content_bytes_capped(&self, cap: usize) -> usize {
         let kv = self.kv.lock();
         let mut bytes = 0usize;

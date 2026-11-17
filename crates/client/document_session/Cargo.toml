@@ -12,9 +12,9 @@ lexical_model.workspace = true
 lexical_html.workspace = true
 lexical_markdown.workspace = true
 lexical_rich_nodes.workspace = true
-lexical_loro.workspace = true
+lexical_loro = { workspace = true, features = ["native-editor"] }
 loro.workspace = true
-loro-internal.workspace = true
+loro-internal = { workspace = true, features = ["native-editor"] }
 imbl.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

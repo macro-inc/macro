@@ -20,12 +20,12 @@ use crate::{
 
 #[cfg(test)]
 mod atomicity_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "native-editor"))]
 mod clock_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "native-editor"))]
 mod performance_tests;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native-editor"))]
 thread_local! {
     static GROUP_SCAN_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -280,6 +280,7 @@ struct UndoManagerInner {
     processing_undo: bool,
     paused: bool,
     last_undo_time: i64,
+    #[cfg(feature = "native-editor")]
     time_source: Option<Arc<dyn Fn() -> i64 + Send + Sync>>,
     merge_interval_in_ms: i64,
     max_stack_size: usize,
@@ -457,8 +458,23 @@ impl Stack {
         let last = self.stack.back_mut().unwrap();
         let last_remote_diff = last.1.lock();
 
+        // Check if the remote diff is disjoint with the current undo group
+        #[cfg(not(feature = "native-editor"))]
+        let is_disjoint_group = group.is_some_and(|g| {
+            g.affected_cids.iter().all(|cid| {
+                last_remote_diff
+                    .cid_to_events
+                    .get(cid)
+                    .is_none_or(|diff| diff.is_empty())
+            })
+        });
+
         // Can't merge if remote diffs exist and it's not disjoint with the current undo group
+        #[cfg(not(feature = "native-editor"))]
+        let should_create_new_entry =
+            !last_remote_diff.cid_to_events.is_empty() && !is_disjoint_group;
         // An empty remote row cannot conflict, regardless of the group's size.
+        #[cfg(feature = "native-editor")]
         let should_create_new_entry = !last_remote_diff.cid_to_events.is_empty()
             && !group.is_some_and(|g| {
                 g.affected_cids.iter().all(|cid| {
@@ -607,6 +623,7 @@ impl UndoManagerInner {
             paused: false,
             merge_interval_in_ms: 0,
             last_undo_time: 0,
+            #[cfg(feature = "native-editor")]
             time_source: None,
             max_stack_size: usize::MAX,
             exclude_origin_prefixes: vec![],
@@ -647,7 +664,11 @@ impl UndoManagerInner {
             });
         }
 
+        #[cfg(not(feature = "native-editor"))]
+        let now = get_sys_timestamp() as Timestamp;
+        #[cfg(feature = "native-editor")]
         let time_source = this.borrow().time_source.clone();
+        #[cfg(feature = "native-editor")]
         let now = match time_source {
             Some(source) => source(),
             None => get_sys_timestamp() as Timestamp,
@@ -663,6 +684,9 @@ impl UndoManagerInner {
         let mut this = this.borrow_mut();
         let this: &mut Self = &mut this;
         // Wether the change is within the accepted merge interval
+        #[cfg(not(feature = "native-editor"))]
+        let in_merge_interval = now - this.last_undo_time < this.merge_interval_in_ms;
+        #[cfg(feature = "native-editor")]
         let in_merge_interval = i128::from(now) - i128::from(this.last_undo_time)
             < i128::from(this.merge_interval_in_ms);
 
@@ -838,6 +862,7 @@ impl UndoManager {
     /// `None` uses the system timestamp. Replacing the source does not rebase
     /// previously recorded timestamps. The callback runs without an inner
     /// history borrow and must return time in the same domain as prior records.
+    #[cfg(feature = "native-editor")]
     pub fn set_time_source(&self, source: Option<Arc<dyn Fn() -> i64 + Send + Sync>>) {
         let previous = {
             let lock = self.inner.lock();
@@ -866,6 +891,7 @@ impl UndoManager {
     /// Whether a known local projection may provide a metadata-only checkpoint.
     /// Its on_push callback must accept None, as with record_new_checkpoint.
     /// Paused, excluded and undo-generated edits still require their full diffs.
+    #[cfg(feature = "native-editor")]
     pub fn accepts_projected_checkpoint(&self, origin: &str) -> bool {
         let lock = self.inner.lock();
         let inner = lock.borrow();
@@ -880,6 +906,7 @@ impl UndoManager {
     /// Record a committed local projection without constructing document diffs.
     /// Derive the group's touched containers from only the new local op span so
     /// remote changes retain the same group-boundary and cursor semantics.
+    #[cfg(feature = "native-editor")]
     pub fn record_projected_checkpoint(&self) -> LoroResult<()> {
         let peer = self.peer();
         let counter = get_counter_end(&self.doc, peer);
