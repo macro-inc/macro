@@ -150,7 +150,7 @@ fn path_check() -> Job {
         )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::checkout_action(false, false).fetch_depth(2))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(compute_changed_files().if_condition(FILTER.outputs.should_run.read().is_set()))
@@ -214,7 +214,7 @@ fn doppler_config() -> Job {
         )
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::checkout_action(false, false).fetch_depth(2))
         // Before the dev shell: its LD_LIBRARY_PATH points the runner's
         // git-remote-https at Nix's glibc, which aborts `git fetch`.
         .add_step(compute_changed_files())
@@ -241,7 +241,7 @@ fn graphql_schema_compat() -> Job {
                 .and(PATH_CHECK.outputs.graphql_schema.read().is_set()),
         )
         .runs_on(runners::Runner::Small.to_string())
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::checkout_action(false, false).fetch_depth(2))
         .add_step(steps::setup_rust_light())
         .add_step(
             Step::new("Check GraphQL schema compatibility").run(

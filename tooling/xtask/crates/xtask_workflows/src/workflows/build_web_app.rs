@@ -103,9 +103,6 @@ pub fn checkout() -> Step<Use> {
 /// wasm-pack directories, which pull requests write.
 const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v2-";
 
-/// actions/cache v5.0.5.
-const ACTIONS_CACHE_SHA: &str = "27d5ce7f107fe9357f9df03efb73ab90386fccae";
-
 /// The packages are tens of megabytes. A transfer that stalls gives up and the
 /// build goes on without them rather than holding the deploy.
 const WASM_CACHE_TIMEOUT_MINUTES: u32 = 3;

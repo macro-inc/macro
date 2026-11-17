@@ -1,9 +1,8 @@
 //! Reusable workflow building blocks: a small fluent-builder trait plus typed
 //! helpers that return `Step`s and `Job`s, composed by the workflow files.
 //!
-//! Third-party actions are pinned to a SHA with the human-readable version in a
-//! trailing comment, or in the doc of a `*_SHA` const when several workflows
-//! use the action.
+//! Third-party actions come from the typed steps in [`super::actions`],
+//! generated from their pins in `actions.lock`.
 
 use gh_workflow::expr::typed::{
     Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, github, input,
@@ -20,20 +19,6 @@ use crate::workflows::{runners, vars};
 
 #[cfg(test)]
 mod test;
-
-/// `actions/checkout` v6.0.3. Every checkout uses this one pin. v6.1.0
-/// changes how `pull_request_target` runs check out a PR, so moving past
-/// v6.0.3 needs its own review.
-pub(crate) const CHECKOUT_SHA: &str = "df4cb1c069e1874edd31b4311f1884172cec0e10";
-
-/// `actions/download-artifact` v5.0.0.
-pub(crate) const DOWNLOAD_ARTIFACT_SHA: &str = "634f93cb2916e3fdff6788551b99b062d0335ce0";
-
-/// `actions/setup-node` v4.4.0.
-pub(crate) const SETUP_NODE_SHA: &str = "49933ea5288caeca8642d1e84afbd3f7d6820020";
-
-/// `oven-sh/setup-bun` v2.2.0.
-pub(crate) const SETUP_BUN_SHA: &str = "0c5077e51419868618aeaa5fe8019c62421857d6";
 
 /// Namespace's sccache setup mints a short-lived workspace credential. GitHub
 /// withholds repository secrets from fork PRs, but this runner-minted token is
@@ -85,13 +70,17 @@ pub fn setup_namespace_buildx() -> Step<Use> {
 /// the path-filter diff in `path-check` needs. `persist_credentials` controls
 /// whether checkout leaves the token in git config for later steps.
 pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
+    checkout_action(full_history, persist_credentials).step()
+}
+
+/// [`checkout`], before it becomes a step, for callers that set more inputs.
+pub fn checkout_action(full_history: bool, persist_credentials: bool) -> ActionsCheckout {
     ActionsCheckout::new("Checkout")
         .clean(false)
         .when(full_history, |checkout| checkout.fetch_depth(0))
         .when(!persist_credentials, |checkout| {
             checkout.persist_credentials(false)
         })
-        .step()
 }
 
 /// `oven-sh/setup-bun` — installs the Bun version the action picks.
