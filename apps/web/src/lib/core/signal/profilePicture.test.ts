@@ -10,6 +10,7 @@ import {
   getProfilePictureUrl,
   handleUserPictureChanged,
   refreshCachedProfilePictures,
+  refreshCachedProfilePicturesOnReconnect,
   refreshProfilePicture,
 } from './profilePicture';
 
@@ -17,6 +18,9 @@ const picturesFor = (url?: string) => (args: { user_id_list: string[] }) =>
   Promise.resolve(
     ok({ pictures: args.user_id_list.map((id) => ({ id, url })) })
   );
+
+/** Like the real server: users without a picture are left out. */
+const noPictures = () => Promise.resolve(ok({ pictures: [] }));
 
 describe('profile picture refresh', () => {
   beforeEach(() => {
@@ -101,5 +105,70 @@ describe('profile picture refresh', () => {
     );
     await refreshCachedProfilePictures();
     expect(await getProfilePictureUrl(id)).toBe('https://x/file/1');
+  });
+
+  it('loads users the server returns no picture for', async () => {
+    const id = 'macro|no-picture@example.com';
+    postProfilePictures.mockImplementation(noPictures);
+    expect(await getProfilePictureUrl(id)).toBeUndefined();
+  });
+
+  it('picks up a picture set while a reconnect missed the frame', async () => {
+    const id = 'macro|new-agent@example.com';
+    postProfilePictures.mockImplementation(noPictures);
+    await getProfilePictureUrl(id);
+
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/set'));
+    await refreshCachedProfilePictures();
+    expect(await getProfilePictureUrl(id)).toBe('https://x/file/set');
+  });
+
+  it('does not overwrite an entry written after the batch was sent', async () => {
+    const id = 'macro|race@example.com';
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+    await getProfilePictureUrl(id);
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let sent!: () => void;
+    const batchSent = new Promise<void>((resolve) => (sent = resolve));
+    // The sweep's batch for this user answers only after the live refetch.
+    postProfilePictures.mockImplementation(
+      async (args: { user_id_list: string[] }) => {
+        if (args.user_id_list.length === 1) {
+          return picturesFor('https://x/file/new')(args);
+        }
+        if (args.user_id_list.includes(id)) {
+          sent();
+          await gate;
+        }
+        return picturesFor('https://x/file/stale')(args);
+      }
+    );
+    const sweep = refreshCachedProfilePictures();
+
+    await batchSent;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await refreshProfilePicture(id);
+    release();
+    await sweep;
+    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
+  });
+
+  it('coalesces overlapping reconnects into one extra pass', async () => {
+    const id = 'macro|coalesce@example.com';
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+    await getProfilePictureUrl(id);
+    postProfilePictures.mockClear();
+
+    refreshCachedProfilePicturesOnReconnect();
+    refreshCachedProfilePicturesOnReconnect();
+    refreshCachedProfilePicturesOnReconnect();
+    await vi.waitFor(() => {
+      const sweeps = postProfilePictures.mock.calls.filter(([args]) =>
+        args.user_id_list.includes(id)
+      );
+      expect(sweeps).toHaveLength(2);
+    });
   });
 });
