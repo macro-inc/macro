@@ -1040,7 +1040,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. `wide` lets the open field take the rest of
+  row with no code in the view; when that command finds no row (a search with
+  no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
   results; Email's wide search uses both. It registers the
@@ -1051,12 +1052,17 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search slot: the same keys (`list-search-keys.ts`), with `focusResults`
   pointing at the sidebar's list, and an emptied field collapses through the
   header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
+  A sidebar that leaves the open state to the header would hide a live query,
+  so pass `searchOpen` (open while a query is set) and clear the query in
+  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  another list shares the split (Chat's rail beside a conversation's calls):
+  the "go to first item" lookup answers for whichever list registered last.
   Its search clears only on an Escape pressed inside the sidebar
   (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
   conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
   a keyboard list. Covered by `ViewSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
-- Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
+- Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
