@@ -36,9 +36,11 @@ stacks. Process isolation belongs to
   Submit refuses incomplete drafts (no recipients, no title, ends before it
   starts) before claiming the batch.
   `decide_for_session` (the `DecideReview` tool, `inbound/reviews.rs`) is the
-  agent deciding on the account holder's word in chat: a turn they prompted,
-  never a System turn (per `ReviewSession::prompter`), and a Submit only once
-  the action is `approvable`.
+  agent deciding on the account holder's word in chat: a turn they prompted
+  (`PrompterKind::User`), never a System turn or a Program turn (a program
+  prompted it, or rewrote the queued prompt, or a routine step ran it; per
+  `ReviewSession::prompter`), and a Submit only once the action is
+  `approvable`.
   An import review only starts its write: its `review.decided` is quiet, and
   its `review.settled` comes from the import when the write ends; only an
   import that could not start settles here.

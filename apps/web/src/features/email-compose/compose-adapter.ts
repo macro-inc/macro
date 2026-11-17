@@ -12,7 +12,6 @@ import {
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { trackMention } from '@core/signal/mention';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -244,7 +243,9 @@ export function createEmailComposeContext(): EmailComposeContext {
       prepareSignatureLinks: interceptMailtoLinks,
       onUpgrade: () => paywall.showPaywall(PaywallKey.REMOVE_SIGNATURE),
       isTouch: isTouchDevice,
-      isMobile,
+      // Touch composes with its header actions at every width, so a new
+      // email in Mail's preview pane matches the phone composer.
+      isMobile: isTouchDevice,
       scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
       signaturesEnabled: () => signatures().enabled,
     },

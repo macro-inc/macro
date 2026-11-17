@@ -89,11 +89,24 @@ messages, documents, or agent transcripts is not retroactively redacted.
 - Sales Email currently reads the viewer's own mailbox, not teammates'
   contributed copies. Their own copy remains visible there, matching personal
   blocked-domain behavior; thread exceptions do not change that mailbox access.
-- Owners add an exception from their thread's **Keep this thread out of CRM** menu
-  action. **Email settings → Threads kept out of CRM** lists only their own
-  exceptions, fifty per page, and lets them remove one. Removing an exception
-  restores eligibility only if consent and every other exclusion still allow it.
+- Owners add an exception from their thread's **Exclude thread from CRM**
+  action beside sharing in its menu, or the desktop icon before the reminder
+  bell. Both explain when ownership or mailbox consent prevents exclusion.
+  A failed background check preserves the last known exclusion state while
+  disabling the action until a successful read.
+  **Email settings → Excluded threads** lists only their own exclusions, fifty
+  per page. Each thread uses the existing email mention (icon, subject, hover
+  preview, and split navigation). Inline titles come from the owner-scoped list;
+  full previews load only when opened. **Remove** clears the exclusion without
+  opening the thread, including after mailbox sharing is turned off. Removing
+  an exception restores eligibility only if consent and every other exclusion
+  still allow it.
   The same controls are available in the phone menu and settings drawer.
+  `GET /crm/email-privacy/threads?thread_id=<uuid>` returns zero or one own
+  exclusion for the header, with no continuation; `after` and `thread_id` are
+  mutually exclusive. Header and settings readers share cache invalidation;
+  successful thread changes cancel pending owner reads before refreshing them,
+  so a response from before the write cannot restore a removed exclusion.
 - Thread exceptions do not immediately recompute first/last interaction dates,
   matching personal blocked domains. Existing company/contact records, archive
   state, sources and prior interaction metadata remain. Normal population uses
@@ -133,7 +146,12 @@ contributor's mailbox-local copy is evaluated independently.
 
 `EmailPrivacyService` in the CRM domain validates domains and authorizes typed team
 receipts. The Axum GET/PUT `/crm/email-privacy` adapters extract identity,
-forward a command, and map the response. `set_thread_exclusion` takes `thread_id`
+forward a command, and map the response. Thread controls use
+`GET /crm/email-privacy?consent_only=true`: only the effective `enabled` bit and
+current `mailbox_email`/`mailbox_link_id`, without any domain queries. Its
+owner/session CRM cache key is separate from the full settings response; privacy
+mutations update both and refresh thread-exclusion queries.
+`set_thread_exclusion` takes `thread_id`
 and `excluded`; identity always comes from the authenticated team receipt, and
 both setting and clearing require ownership of that thread's mailbox. It is
 idempotent and can be set before consent. `GET /crm/email-privacy/threads?after=…`

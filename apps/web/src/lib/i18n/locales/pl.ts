@@ -737,8 +737,6 @@ export default {
     create: 'Utwórz',
     getMobileApp: 'Pobierz aplikację mobilną',
     signedInAs: 'Zalogowano jako {{name}}',
-    commandMenu: 'Menu poleceń',
-    searchEverything: 'Szukaj wszędzie',
     customizeSidebar: 'Dostosuj pasek boczny',
     customizeSidebarDescription:
       'Wybierz aplikacje widoczne na pasku bocznym i przeciągnij, aby zmienić ich kolejność. Strona główna jest zawsze pierwsza.',
