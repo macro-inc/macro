@@ -128,7 +128,10 @@ fn refuse_program_forward(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), ForwardCalendarEventError> {
-    Ok(())
+    refuse_program_send(attribution, headers, None).map_err(|_| ForwardCalendarEventError {
+        code: ForwardCalendarEventErrorCode::ConfirmationRequired,
+        message: PROGRAM_SEND_REFUSAL.to_owned(),
+    })
 }
 
 /// Email one of the viewer's events to people the organizer's guest list
@@ -150,7 +153,7 @@ fn refuse_program_forward(
         (status = 202, description = "The email is queued to send", body = ForwardCalendarEventResponse),
         (status = 400, description = "No, too many, or invalid recipients", body = ForwardCalendarEventError),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "The inbox holding the copy cannot send for the viewer", body = ForwardCalendarEventError),
+        (status = 403, description = "The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward", body = ForwardCalendarEventError),
         (status = 404, description = "No such event on one of the viewer's own inboxes", body = ForwardCalendarEventError),
         (status = 502, description = "The email could not be sent", body = ForwardCalendarEventError),
     ))]
@@ -158,8 +161,10 @@ pub(crate) async fn handler(
     State(state): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(event_id): Path<Uuid>,
+    headers: HeaderMap,
     Json(request): Json<ForwardCalendarEventRequest>,
 ) -> Result<(StatusCode, Json<ForwardCalendarEventResponse>), ForwardCalendarEventError> {
+    refuse_program_forward(authorization.authorization.user.attribution(), &headers)?;
     let actor = authorization.authorization.user.macro_user_id.clone();
     let email = state.email_service.service();
     let sent = forward_event(
