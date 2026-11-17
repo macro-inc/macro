@@ -7,14 +7,15 @@ use super::context::{ApiContext, AuthorizationService};
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use email::domain::{
     event_forward::{EventForwardError, EventForwardRequest, forward_event},
     models::ContactInfo,
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use email::inbound::axum::send_router::{PROGRAM_SEND_REFUSAL, refuse_program_send};
+use macro_authorization::{CredentialAttribution, MacroAuthorizationExtractor, UserOrInternal};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -66,6 +67,9 @@ pub(crate) enum ForwardCalendarEventErrorCode {
     InboxUnavailable,
     /// The email could not be sent; trying again may work.
     SendFailed,
+    /// An agent's program asked to forward; it must go through a review or
+    /// a confirmed send, as the send route requires.
+    ConfirmationRequired,
 }
 
 /// A refused or failed forward.
@@ -84,6 +88,7 @@ impl IntoResponse for ForwardCalendarEventError {
             ForwardCalendarEventErrorCode::InvalidRecipients => StatusCode::BAD_REQUEST,
             ForwardCalendarEventErrorCode::InboxUnavailable => StatusCode::FORBIDDEN,
             ForwardCalendarEventErrorCode::SendFailed => StatusCode::BAD_GATEWAY,
+            ForwardCalendarEventErrorCode::ConfirmationRequired => StatusCode::FORBIDDEN,
         };
         (status, Json(self)).into_response()
     }
@@ -114,6 +119,16 @@ impl From<EventForwardError> for ForwardCalendarEventError {
         };
         Self { code, message }
     }
+}
+
+/// Refuse a forward from an agent's program, by the send route's rule
+/// ([`refuse_program_send`]): the route takes no confirmation, so every
+/// program is refused, while a person in the app and an owner routine send.
+fn refuse_program_forward(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> Result<(), ForwardCalendarEventError> {
+    Ok(())
 }
 
 /// Email one of the viewer's events to people the organizer's guest list
