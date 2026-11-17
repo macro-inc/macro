@@ -771,6 +771,64 @@ it('reads the draft afresh long after a notice that never reported closing', asy
   later.dispose();
 });
 
+it('starts a composer from what it reads once the schedule moved elsewhere', async () => {
+  const composeContext = createComposeContext();
+  const moved = new Date('2026-12-02T14:30:00Z');
+  const { host } = await scheduleAndShowThread(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  // Another device moves the schedule while the notice shows.
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: moved.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(moved);
+  threadView.dispose();
+  vi.mocked(composeContext.notices.feedback.alert).mockClear();
+
+  // Starting from the schedule this tab made, it would take the move for news.
+  const later = mountEmailComposer(composeContext, host, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: moved.toISOString(),
+    }),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(later.state.context.schedule.confirmedTime()).toEqual(moved);
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+  later.dispose();
+});
+
+it('does not give its own schedule the delivery status of an older one', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { host } = await scheduleAndShowThread(composeContext, sendTime);
+
+  // The thread's read still holds an earlier schedule that failed.
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', {
+      is_draft: true,
+      scheduled_send_time: '2026-11-30T09:00:00Z',
+      scheduled_send_status: 'failed',
+    }),
+  });
+  expect(threadView.state.context.schedule.state()).toEqual({
+    type: 'scheduled',
+    confirmedTime: sendTime,
+    deliveryStatus: undefined,
+  });
+  threadView.dispose();
+});
+
 /** Schedules a new message whose thread is marked done only on `markDone`. */
 async function scheduleWhileMarkingDone(
   composeContext: ReturnType<typeof createComposeContext>,
@@ -821,6 +879,14 @@ it('announces no schedule that another view cancelled while the thread was marke
     draft: message('draft', { is_draft: true }),
   });
   expect(await beside.state.context.schedule.onCancel()).toBe(true);
+  composeContext.setDraftLifecycle({
+    type: 'editing',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
 
   markDone();
   await vi.advanceTimersByTimeAsync(1);
@@ -828,6 +894,8 @@ it('announces no schedule that another view cancelled while the thread was marke
     'Email scheduled',
     expect.anything()
   );
+  // The cancel it observed while marking the thread done unlocks it.
+  expect(root.state.context.schedule.state().type).toBe('editing');
   beside.dispose();
   root.dispose();
 });

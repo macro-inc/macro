@@ -130,16 +130,23 @@ export function createEmailSendSchedule(options: {
   const seed = initialDraftId
     ? scheduledNotices.get(initialDraftId)
     : undefined;
+  const seededTime =
+    seed && Date.now() < seed.seedUntil ? seed.sendTime : undefined;
   // This tab's own schedule is newer than a read of the draft made before it.
-  const initialScheduledTime =
-    (seed && Date.now() < seed.seedUntil ? seed.sendTime : undefined) ??
-    options.initialScheduledTime;
+  const initialScheduledTime = seededTime ?? options.initialScheduledTime;
+  // A read of another schedule says nothing about how this one is delivering.
+  const readDescribesSchedule =
+    !seededTime ||
+    (options.initialScheduledTime !== undefined &&
+      sameTime(seededTime, options.initialScheduledTime));
   const [state, setState] = createSignal<EmailScheduleState>(
     initialScheduledTime
       ? {
           type: 'scheduled',
           confirmedTime: initialScheduledTime,
-          deliveryStatus: options.initialDeliveryStatus,
+          deliveryStatus: readDescribesSchedule
+            ? options.initialDeliveryStatus
+            : undefined,
         }
       : { type: 'editing', intent: { type: 'immediate' } }
   );
@@ -211,6 +218,14 @@ export function createEmailSendSchedule(options: {
       return;
     }
     scheduledDraftId = options.draftId() ?? scheduledDraftId;
+    // Seen at another time, the schedule this tab announced has moved since:
+    // composers mounted from now on start from what they read.
+    const recorded = scheduledDraftId
+      ? scheduledNotices.get(scheduledDraftId)
+      : undefined;
+    if (recorded && !sameTime(recorded.sendTime, sendTime)) {
+      dismissScheduledNotice();
+    }
     selectionRevision += 1;
     setState({ type: 'scheduled', confirmedTime: sendTime, deliveryStatus });
   };
@@ -444,12 +459,18 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
-      ignoredLifecycleObservation =
-        deferredLifecycleObservation ?? options.lifecycleState?.();
       const result = action === 'update' ? 'updated' : 'scheduled';
       // Meanwhile a composer for the draft in another view may have cancelled
       // or moved the schedule; a notice would then announce one that is gone.
-      if (scheduledNotices.get(draftId) !== notice) return result;
+      // What this composer observed meanwhile may be that change, so it reads
+      // the draft afresh instead of ignoring it.
+      if (scheduledNotices.get(draftId) !== notice) {
+        ignoredLifecycleObservation = undefined;
+        await options.reconcile?.().catch(notices.reportError);
+        return result;
+      }
+      ignoredLifecycleObservation =
+        deferredLifecycleObservation ?? options.lifecycleState?.();
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
