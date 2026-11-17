@@ -241,6 +241,8 @@ const initializePosthog = (instance: PostHog) => {
       return cr;
     },
   });
+  // Before any `/flags` answer can arrive: see `flagStore.connect`.
+  flagStore.connect(instance);
 };
 
 const tryInitialize = (callback: VoidFunction) => {
@@ -270,8 +272,6 @@ const createAnalytics = () => {
   };
 
   initializeProviders();
-  // Before any `/flags` answer can arrive: see `flagStore.connect`.
-  flagStore.connect(posthog);
 
   const sendEvent = (
     provider: AnalyticsProvider,
