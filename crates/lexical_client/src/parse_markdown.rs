@@ -35,8 +35,11 @@ struct MarkdownResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MentionsRequest<'a> {
     markdown: &'a str,
+    /// Count links to Macro entities as mentions.
+    app_links: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -609,11 +612,26 @@ impl LexicalClient {
     /// mentions it contains.
     #[tracing::instrument(skip(self, markdown), err)]
     pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
+        self.mentions(markdown, false).await
+    }
+
+    /// Like [`Self::extract_mentions`], but links to Macro entities count as
+    /// mentions too, matching the chips a document created from `markdown`
+    /// gets. Not for channel messages, whose references share their targets.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn extract_document_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
+        self.mentions(markdown, true).await
+    }
+
+    async fn mentions(&self, markdown: &str, app_links: bool) -> Result<Vec<ExtractedMention>> {
         let url = format!("{}/mentions", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&MentionsRequest { markdown })
+                .json(&MentionsRequest {
+                    markdown,
+                    app_links,
+                })
                 .send()
                 .await?,
         )

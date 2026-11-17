@@ -44,6 +44,13 @@ name, and agents routinely omit it. A date mention body is the JSON object or,
 as models sometimes write it, a bare ISO date or timestamp;
 `parseDateMentionBody` in `nodes/DateMentionNode.ts` reads both.
 
+Markdown imported into a new document (`markdownToSerializedEditorStateWithIds`,
+behind lexical-service's markdown snapshot) turns links to one Macro entity
+(`/app/<type>/<uuid>`, see `utils/app-link-mentions.ts`) into mention chips,
+because agents often write an item's URL instead of its tag. Document mention
+tracking asks `/mentions` for the same with `appLinks`; channel messages don't,
+since a message reference shares its target with the channel.
+
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs; escapes of `*`, `_`, `` ` `` and `~` alone don't make a URL

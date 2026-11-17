@@ -10,6 +10,7 @@ import {
   type NodeIdMappings,
 } from '../plugins/nodeIdPlugin';
 import { ALL_TRANSFORMERS } from '../transformers';
+import { $convertMacroAppLinksToMentions } from './app-link-mentions';
 
 function createNodeIdMappings(): NodeIdMappings {
   return {
@@ -21,7 +22,8 @@ function createNodeIdMappings(): NodeIdMappings {
 /**
  * Converts markdown to a serialized Lexical editor state and assigns durable
  * node ids to every node. This is the headless equivalent of the markdown block
- * migration path used by the app.
+ * migration path used by the app. Links to Macro entities become mention
+ * chips, so a document created from markdown references what it links.
  */
 export function markdownToSerializedEditorStateWithIds(
   markdown: string
@@ -34,6 +36,7 @@ export function markdownToSerializedEditorStateWithIds(
   editor.update(
     () => {
       $convertFromMarkdownString(markdown, ALL_TRANSFORMERS);
+      $convertMacroAppLinksToMentions();
     },
     { discrete: true }
   );

@@ -33,7 +33,7 @@ impl DocumentMentionTrackingPort for LexicalCommsMentionTracker {
             return Ok(());
         }
 
-        let mentions = self.lexical.extract_mentions(markdown).await?;
+        let mentions = self.lexical.extract_document_mentions(markdown).await?;
         if mentions.is_empty() {
             return Ok(());
         }
