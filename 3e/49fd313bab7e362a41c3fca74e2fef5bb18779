@@ -1,0 +1,25 @@
+apps/web/src/features/agents-view/core/conversation-filters.ts
+  s_7eb83d47cc9269::t_2172f915222b90 104-106,147,161-162
+apps/web/src/features/agents-view/primitives/conversation-list-view.test.ts
+  s_7eb83d47cc9269::t_d8adf5445e9a16 1-23
+docs/agent-guide/ai-chat.md
+  s_7eb83d47cc9269::t_2172f915222b90 532-534
+apps/web/src/features/agents-view/core/conversation-filters.test.ts
+  s_7eb83d47cc9269::t_2172f915222b90 121-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3e49fd313bab7e362a41c3fca74e2fef5bb18779",
+  "prompts": {},
+  "sessions": {
+    "s_7eb83d47cc9269": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bf207c25-42b2-42ad-9693-c8cd82a5479a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
