@@ -1020,9 +1020,9 @@ Disable the flag and confirm the original task-button behavior remains unchanged
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
 search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
-The collection header puts Filters before the saved-view picker and built-in
-project tabs on desktop and phones. Individual project names remain content
-titles. In project detail, the phone title island shows the project appearance
+The collection header keeps its title/navigation on the left and search/filter
+controls on the right. Built-in scopes and saved views stay in the shared Tasks
+sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
 Projects use the same list rows, property cells, selection, group headers, and

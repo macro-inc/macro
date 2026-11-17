@@ -25,7 +25,7 @@ main Tasks screen.
 | Navigation | Leaving discards temporary edits without a confirmation prompt. |
 | Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
 | Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
-| Mobile | Shared picker pill after Filters and before built-in tabs; its drawer browses/manages views, while the filter drawer owns save/create/reset actions. |
+| Mobile | Shared Tasks sidebar opened by the hamburger; the filter drawer owns save/create/reset actions. |
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
 | Owner departure | Team sharing stops while the owner is absent and resumes if they rejoin the shared team. |
 
@@ -102,19 +102,19 @@ The Tasks host owns navigation and account/task lifecycle. Task actions capture 
 writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.
 Compose the list through compound components and reuse styled menu items across
-its context and overflow menus. The mobile picker shows rows without a duplicate
-section heading or general create button. The compact sidebar and picker empty
-state show the heading “Your go-to views”, the muted description “Save your setup
+its context and overflow menus. Tasks and Projects use sidebar rows on desktop
+and touch. The compact sidebar empty
+state shows the heading “Your go-to views”, the muted description “Save your setup
 for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without
 a separate illustration. A subtly bordered, rounded container uses 12px padding,
 inherits the surrounding background, and has no shadow. The sidebar header's
 icon-only plus remains available in every section state, including when the
 empty-state button is visible. The empty-state button starts the existing draft
-flow after closing the picker. Changes from the
+flow. Changes from the
 built-in settings expose creation in the filter drawer's overlay banner above the
 footer and existing-view save/reset actions at its footer's right.
-Starting a new view from the desktop sidebar expands the section and shows one
-local, selected New view row labeled Draft in the sidebar and mobile picker.
+Starting a new view from the sidebar expands the section and shows one
+local, selected New view row labeled Draft on desktop and touch.
 Confirmed creation replaces the draft with the named record, including while the
 list refresh is pending. Canceling the draft or leaving its view removes the row;
 closing only the naming dialog retains it. Draft rows never enter the query cache.
@@ -431,11 +431,10 @@ not mistaken for the visible search results.
 
 ### Mobile
 
-Tasks has navigation pills and a filter drawer, not a mobile sidebar. The shared
-`MobileDrawer` picker shows the named list and active saved-view name without a
-duplicate section heading or `+` button. Keep the active name in the picker pill
-without repeating a title/menu or action row below the tabs. Preserve built-in
-navigation and existing mobile list-only behavior.
+Tasks and Projects share the sidebar opened by the hamburger button on touch.
+Choose built-in scopes and named saved views there; section-header plus buttons
+start drafts. Neither collection adds a saved-view picker or project tabs to the
+header. Search and filters stay on the right, and mobile retains its list fallback.
 
 Show a filled Save view button with a leading bookmark icon in a borderless,
 edge-to-edge info banner overlaying filter content immediately above the footer
@@ -450,10 +449,9 @@ actions available when all filters are cleared or only sorting changes. Preserve
 the stored desktop layout.
 
 Provide management through each saved-view row's visible overflow button in the
-picker. Use existing dialog/drawer conventions for naming, sharing, conflicts,
-and delete confirmation. Keep row menus inside the picker's portal scope for
-keyboard access. Close the picker and restore its trigger focus before opening
-a management dialog; discard queued actions when the account changes. Saving
+sidebar. Use existing dialog/drawer conventions for naming, sharing, conflicts,
+and delete confirmation. Keep row menus in their sidebar portal scope for keyboard
+access and discard queued actions when the account changes. Saving
 from the filter drawer closes it before opening the name dialog. Cancel or Escape
 reopens the current filters only if the navigation scope is unchanged; a confirmed
 creation selects the new view without reopening the drawer. No hover-only controls
