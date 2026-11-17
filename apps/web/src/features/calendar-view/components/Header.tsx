@@ -170,11 +170,11 @@ export function Header(props: {
   );
   const headerCreateMenu = () => (
     <CalendarCreateMenu
-      presentation={!isTouchDevice() ? 'toolbar' : undefined}
+      presentation="toolbar"
       size={breakpoints.labeledNew() ? 'md' : 'icon-md'}
       label="New"
       class={cn(
-        'shrink-0 rounded-full touch:h-11',
+        'shrink-0 rounded-full',
         breakpoints.labeledNew() &&
           'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset)'
       )}
@@ -286,7 +286,7 @@ export function Header(props: {
               </Button>
             </Show>
             <MonthDrawer month={currentDate()} />
-            {todayButton(isTouchDevice())}
+            {todayButton(true)}
           </HeaderIsland>
         </SplitHeaderLeft>
 

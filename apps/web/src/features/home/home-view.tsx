@@ -232,18 +232,13 @@ function HomeCalendarRouteContent() {
     <div class="flex size-full min-h-0">
       <PreviewFrame
         splitPanelContext={panel}
-        headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
-        hideHeader={!isTouchDevice()}
+        hideHeader
         locationKey={() => `${search.eventId}:${search.occurrenceKey}`}
       >
         <CalendarView
           route={homeCalendarRoute}
           refocus={calendarRefocus}
-          headerLeading={
-            <Show when={!isTouchDevice()}>
-              <HomeReturnBreadcrumb onReturn={closePreview} />
-            </Show>
-          }
+          headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
         />
       </PreviewFrame>
     </div>

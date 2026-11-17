@@ -13,6 +13,8 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
+pub(super) mod selected;
+
 const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
 const TEAMMATE: Uuid = Uuid::from_u128(2);
@@ -354,7 +356,7 @@ async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, 
     );
     builder.push_bind(team);
     builder.push(", t.id) AS allowed, (TRUE");
-    builder.push(ALLOWED);
+    read.push_allowed(&mut builder);
     // The page runs the rule over a thread's id and inbox alone.
     builder.push(") AS inline FROM (SELECT id, link_id FROM email_threads) AS t) AS verdict");
     Ok(builder.build_query_as().fetch_one(pool).await?)
@@ -758,5 +760,53 @@ async fn a_mid_request_exclusion_applies_to_the_next_request(
     let next = sparse_page(&pool).await?;
     assert!(next.iter().all(|row| row.id != thread));
     assert!(!next.is_empty(), "other threads stay visible");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../../fixtures",
+        scripts("email_crm_team_read", "email_sender_probe_cap")
+    )
+)]
+async fn sender_probe_caps_message_rows(pool: sqlx::PgPool) -> anyhow::Result<()> {
+    let team = Uuid::parse_str(GAMMA)?;
+    let own = Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000);
+    let view = all_mail();
+    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("@probe.test".into())));
+    let resolved = resolve_filters(&pool, &[own], Some(team), &filter).await?;
+    let make_params = || QueryParams {
+        link_ids: vec![own],
+        query_limit: 3,
+        user_id: GAMMA_CALLER.to_owned(),
+        team_id: Some(team),
+        resolved: resolved.clone(),
+        ..params(SimpleSortMethod::UpdatedAt)
+    };
+    let expected = super::super::read_team_page(&pool, &view, &filter, make_params(), None).await?;
+    assert_eq!(expected.len(), 3);
+
+    // Thirteen message rows fit at cap 13, exceed cap 12 by one, and exceed
+    // cap 6 while still belonging to only three distinct threads.
+    for cap in [13, 12, 6] {
+        let tuning = TeamReadTuning {
+            superset_limit: cap,
+            window_per_row: 1,
+        };
+        let read = TeamRead::new(&view, &filter, make_params(), tuning)
+            .ok()
+            .unwrap();
+        let branch_rows: i64 = read.probe().build_query_scalar().fetch_one(&pool).await?;
+        assert_eq!(branch_rows, 13.min(cap + 1), "probe at cap {cap}");
+        let actual =
+            super::super::read_team_page(&pool, &view, &filter, make_params(), Some(tuning))
+                .await?;
+        assert_eq!(
+            format!("{actual:?}"),
+            format!("{expected:?}"),
+            "page at cap {cap}"
+        );
+    }
     Ok(())
 }

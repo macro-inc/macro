@@ -1634,3 +1634,135 @@ pub(super) async fn shared_email_threads(
     tx.commit().await?;
     Ok(threads)
 }
+
+/// `email_thread_shares::project_email_threads` as main had it at 4535770eb3.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is one bind of the folder query"
+)]
+pub(super) async fn project_email_threads(
+    pool: &PgPool,
+    source_ids: &SourceIds,
+    own_link_ids: &[Uuid],
+    project_ids: &[String],
+    requested_ids: &[Uuid],
+    include_own: bool,
+    include_thread_shares: bool,
+    limit: i64,
+) -> Result<Vec<super::email_thread_shares::SharedEmailThread>, sqlx::Error> {
+    if project_ids.is_empty() || limit <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    let threads = sqlx::query_as!(
+        super::email_thread_shares::SharedEmailThread,
+        r#"
+        WITH requested AS MATERIALIZED (
+            SELECT DISTINCT p.project_id
+            FROM unnest($3::text[]) AS p(project_id)
+        ),
+        granted AS MATERIALIZED (
+            SELECT r.project_id
+            FROM requested r
+            WHERE EXISTS (
+                SELECT 1
+                FROM unnest($1::text[]) AS sources(source_id)
+                CROSS JOIN LATERAL (
+                    SELECT 1
+                    FROM entity_access ea
+                    WHERE ea.source_id = sources.source_id
+                      AND ea.entity_type = 'project'
+                      AND ea.entity_id::text = r.project_id
+                    LIMIT 1
+                ) g
+            )
+        )
+        SELECT f.id AS "thread_id!", f.link_id AS "link_id!"
+        FROM requested r
+        CROSS JOIN LATERAL (
+            SELECT t.id, t.link_id
+            FROM email_threads t
+            WHERE t.project_id = r.project_id
+              AND (cardinality($7::uuid[]) = 0 OR t.id = ANY($7))
+              AND CASE
+                  WHEN t.link_id = ANY($2) THEN $4
+                  WHEN r.project_id IN (SELECT g.project_id FROM granted g) THEN TRUE
+                  ELSE $5 AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id = t.id
+                        AND ea.entity_type = 'email_thread'
+                        AND ea.source_id = ANY($1)
+                  )
+              END
+            LIMIT $6
+        ) f
+        LIMIT $6
+        "#,
+        &source_ids.0,
+        own_link_ids,
+        project_ids,
+        include_own,
+        include_thread_shares,
+        limit,
+        requested_ids,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(threads)
+}
+
+/// `email_thread_shares::project_shared_email_threads` as main had it at
+/// 4535770eb3.
+pub(super) async fn project_shared_email_threads(
+    pool: &PgPool,
+    source_ids: &SourceIds,
+    own_link_ids: &[Uuid],
+    thread_ids: &[Uuid],
+) -> Result<Vec<super::email_thread_shares::SharedEmailThread>, sqlx::Error> {
+    if source_ids.0.is_empty() || thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    let threads = sqlx::query_as!(
+        super::email_thread_shares::SharedEmailThread,
+        r#"
+        SELECT t.id AS "thread_id!", t.link_id AS "link_id!"
+        FROM unnest($3::uuid[]) AS ids(id)
+        CROSS JOIN LATERAL (
+            SELECT t.id, t.link_id, t.project_id
+            FROM email_threads t
+            WHERE t.id = ids.id
+            OFFSET 0
+        ) t
+        WHERE t.project_id IS NOT NULL
+          AND t.link_id <> ALL($2)
+          AND EXISTS (
+              SELECT 1
+              FROM unnest($1::text[]) AS sources(source_id)
+              CROSS JOIN LATERAL (
+                  SELECT 1
+                  FROM entity_access ea
+                  WHERE ea.source_id = sources.source_id
+                    AND ea.entity_type = 'project'
+                    AND ea.entity_id::text = t.project_id
+                  LIMIT 1
+              ) g
+          )
+        "#,
+        &source_ids.0,
+        own_link_ids,
+        thread_ids,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(threads)
+}
