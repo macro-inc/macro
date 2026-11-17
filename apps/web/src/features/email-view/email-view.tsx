@@ -79,7 +79,10 @@ import {
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
-import { EmailMobileSearch } from './views/mobile/email-search';
+import {
+  EmailMobileRecentSearches,
+  EmailMobileSearchField,
+} from './views/mobile/email-search';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -366,62 +369,49 @@ function EmailMobileLayout(props: ParentProps) {
   return (
     <MobileListLayout
       header={
-        <Show when={!searching()}>
-          <PillTabs
-            scrollable
-            class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-            contentClass="px-(--mobile-chrome-gutter)"
-            leading={
-              <>
-                <ViewSidebar.Toggle action="expand" presentation="pill" />
-                <Show
-                  when={
-                    wideSearchFlag().enabled && canSearchEmailTab(state.tab)
-                  }
-                >
-                  <PillButton
-                    active={false}
-                    iconOnly
-                    aria-label={t('emailViews.searchEmail')}
-                    onClick={openSearch}
+        <Show
+          when={searching()}
+          fallback={
+            <PillTabs
+              scrollable
+              class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+              contentClass="px-(--mobile-chrome-gutter)"
+              leading={
+                <>
+                  <ViewSidebar.Toggle action="expand" presentation="pill" />
+                  <Show
+                    when={
+                      wideSearchFlag().enabled && canSearchEmailTab(state.tab)
+                    }
                   >
-                    <SearchIcon class="size-5" />
-                  </PillButton>
-                </Show>
-                <EmailFilterDrawer />
-              </>
-            }
-            items={tabs()}
-            trailing={
-              <Show when={!inboxSelected()}>
-                <HeaderIsland>
-                  <span class="truncate text-sm font-medium">
-                    {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
-                  </span>
-                </HeaderIsland>
-              </Show>
-            }
-            value={savedViewActive() ? undefined : state.tab}
-            onChange={setTab}
-          />
-        </Show>
-      }
-    >
-      {/* The search page's field takes the pane header, so the list then
-          reserves that header's height instead of the pill row's. */}
-      <div
-        class="flex min-h-0 min-w-0 flex-1 flex-col"
-        style={
-          searching()
-            ? {
-                '--mobile-content-inset-top':
-                  'calc(var(--safe-top, 0px) + 3.75rem)',
+                    <PillButton
+                      active={false}
+                      iconOnly
+                      aria-label={t('emailViews.searchEmail')}
+                      onClick={openSearch}
+                    >
+                      <SearchIcon class="size-5" />
+                    </PillButton>
+                  </Show>
+                  <EmailFilterDrawer />
+                </>
               }
-            : undefined
-        }
-      >
-        <Show when={searching()}>
-          <EmailMobileSearch
+              items={tabs()}
+              trailing={
+                <Show when={!inboxSelected()}>
+                  <HeaderIsland>
+                    <span class="truncate text-sm font-medium">
+                      {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
+                    </span>
+                  </HeaderIsland>
+                </Show>
+              }
+              value={savedViewActive() ? undefined : state.tab}
+              onChange={setTab}
+            />
+          }
+        >
+          <EmailMobileSearchField
             ref={(input) => {
               searchInput = input;
             }}
@@ -431,14 +421,22 @@ function EmailMobileLayout(props: ParentProps) {
             onCancel={closeSearch}
           />
         </Show>
-        <div
-          class="min-h-0 flex-1"
-          style={
-            listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
-          }
-        >
-          {props.children}
-        </div>
+      }
+    >
+      <Show when={searching()}>
+        <EmailMobileRecentSearches
+          suggestions={suggestions}
+          onPicked={() => searchInput?.blur()}
+        />
+      </Show>
+      {/* Recent searches already sit below the header. */}
+      <div
+        class="min-h-0 flex-1"
+        style={
+          listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
+        }
+      >
+        {props.children}
       </div>
     </MobileListLayout>
   );
