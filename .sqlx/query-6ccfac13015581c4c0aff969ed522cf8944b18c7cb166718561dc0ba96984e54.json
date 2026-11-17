@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_population_pauses AS p (link_id, failures, paused_until, last_error)\n            VALUES ($1, $2, now() + make_interval(secs => $3), $4)\n            ON CONFLICT (link_id) DO UPDATE SET\n                failures = GREATEST(p.failures, EXCLUDED.failures),\n                paused_until = GREATEST(p.paused_until, EXCLUDED.paused_until),\n                last_error = EXCLUDED.last_error,\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ccfac13015581c4c0aff969ed522cf8944b18c7cb166718561dc0ba96984e54"
+}

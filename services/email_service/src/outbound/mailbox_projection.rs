@@ -15,9 +15,7 @@ use models_email::{
     api::refresh::RefreshEmailEvent,
     service::{
         attachment::{AttachmentUploadArgs, AttachmentUploadDestination},
-        backfill::{
-            BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-        },
+        backfill::PopulateCrmContactPayload,
     },
 };
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
@@ -32,7 +30,6 @@ pub struct MailboxEffects<A, I, B, N, C> {
     pub broker: B,
     pub notification: Arc<N>,
     pub contacts: Arc<C>,
-    pub queue: sqs_client::SQS,
     pub gateway: connection_gateway_client::client::ConnectionGatewayClient,
     pub dss: document_storage_service_client::DocumentStorageServiceClient,
     pub sfs: static_file_service_client::StaticFileServiceClient,
@@ -174,23 +171,26 @@ where
                 .await
                 .map_err(failed)?;
         }
-        for contact in correspondence.contacts {
-            self.queue
-                .enqueue_email_backfill_message(BackfillPubsubMessage {
-                    backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                        link_id: correspondence.link_id,
-                        payload: PopulateCrmContactPayload {
-                            contact_email: contact.email,
-                            contact_name: contact.name,
-                            first_at: contact.at,
-                            last_at: contact.at,
-                            is_sent: correspondence.is_sent,
-                        },
-                    }),
-                })
-                .await
-                .map_err(failed)?;
-        }
+        let requests: Vec<_> = correspondence
+            .contacts
+            .into_iter()
+            .map(|contact| PopulateCrmContactPayload {
+                contact_email: contact.email,
+                contact_name: contact.name,
+                first_at: contact.at,
+                last_at: contact.at,
+                is_sent: correspondence.is_sent,
+            })
+            .collect();
+        let traceparent = sqs_client::email::trace_context::current();
+        email::outbound::crm_population_pg::request(
+            &self.db,
+            correspondence.link_id,
+            &requests,
+            traceparent.as_deref(),
+        )
+        .await
+        .map_err(|report| database_failed(&report, report.downcast_current_context()))?;
         Ok(())
     }
     async fn invitations(

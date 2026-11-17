@@ -43,3 +43,7 @@ pub mod label_state_pg;
 /// Statement adapters for durable delivery and retained deletion.
 #[cfg(all(feature = "outbound", feature = "mailbox"))]
 pub mod scheduled_delivery_pg;
+
+/// The durable ledger of CRM population requests.
+#[cfg(all(feature = "outbound", feature = "mailbox"))]
+pub mod crm_population_pg;

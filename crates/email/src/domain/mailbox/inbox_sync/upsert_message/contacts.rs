@@ -1,7 +1,6 @@
 use super::*;
-use models_email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-};
+use models_email::service::backfill::PopulateCrmContactPayload;
+/// A correspondent's address, display name, and first and last interaction.
 pub type CrmContactRecipient = (
     String,
     Option<String>,
@@ -78,12 +77,11 @@ pub fn build_contact_connections<'a>(
         .collect()
 }
 
-pub(super) async fn enqueue_populate_crm_contacts<L, R, G, Q, E>(
+/// Records the CRM population requests a stored message implies.
+pub(super) async fn request_crm_population<L, R, G, Q, E>(
     ctx: &InboxSyncService<L, R, G, Q, E>,
     link_id: Uuid,
-    self_email: &str,
-    contacts: impl IntoIterator<Item = CrmContactRecipient>,
-    is_sent: bool,
+    requests: &[PopulateCrmContactPayload],
 ) -> Result<(), ProcessingError>
 where
     L: GmailOpsLinks,
@@ -92,60 +90,18 @@ where
     Q: InboxSyncQueue,
     E: MacroEventBroker + InboxSyncRefresher + InboxSyncImportEffects,
 {
-    enqueue_crm_contacts(link_id, self_email, contacts, is_sent, |message| async {
-        ctx.queue
-            .enqueue_backfill(message)
-            .await
-            .map_err(ConnectionSourceError::into_original)
-    })
-    .await
-}
-
-/// Normalize and publish distinct, non-self CRM contacts in input order.
-pub async fn enqueue_crm_contacts<F, Fut>(
-    link_id: Uuid,
-    self_email: &str,
-    contacts: impl IntoIterator<Item = CrmContactRecipient>,
-    is_sent: bool,
-    mut enqueue: F,
-) -> Result<(), ProcessingError>
-where
-    F: FnMut(BackfillPubsubMessage) -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name, first_at, last_at) in contacts {
-        let contact_email = raw_email.trim().to_ascii_lowercase();
-        let Some((local, domain)) = contact_email.split_once('@') else {
-            continue;
-        };
-        if local.is_empty() || domain.is_empty() || domain.contains('@') {
-            continue;
-        }
-        if contact_email == self_email || !seen.insert(contact_email.clone()) {
-            continue;
-        }
-
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: PopulateCrmContactPayload {
-                    contact_email,
-                    contact_name,
-                    first_at,
-                    last_at,
-                    is_sent,
-                },
-            }),
-        };
-
-        enqueue(ps_message).await.map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context("Failed to enqueue PopulateCrmContact message"),
-            })
-        })?;
+    if requests.is_empty() {
+        return Ok(());
     }
-
-    Ok(())
+    ctx.repository
+        .request_crm_population(link_id, requests)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to record CRM population requests"),
+            })
+        })
 }

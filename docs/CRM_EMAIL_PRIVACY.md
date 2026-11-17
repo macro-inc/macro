@@ -187,21 +187,24 @@ writers already own the mailbox row and revoke consent without taking a privacy
 lock. This preserves mailbox-before-consent ordering and prevents an opt-in racing
 a disconnect from reviving sharing.
 
-Historical fan-out resolves the consented primary mailbox first. Each queued contact
-job is admitted before metadata enrichment and rechecked inside its write transaction.
+The historical seed resolves the consented primary mailbox first. Seeded and newly
+ingested correspondents are recorded as population requests, one pending row per
+mailbox and address, and only while the mailbox's consent is enabled. A request is
+admitted before any metadata enrichment and rechecked inside its write transaction.
 Interaction ranges are recomputed from eligible stored messages, rather than trusting
-the old job's timestamps or direction. Only eligible sent history creates companies;
+the request's timestamps or direction. Only eligible sent history creates companies;
 received-only history can update an existing company. Personal-provider contacts use the same consent and interaction checks, preserve the team’s personal-email filter, and are created without a company only from eligible sent history. Email bodies remain in the
 email store; CRM grants access to eligible existing threads.
 
 The email-service outbox worker publishes retryable historical jobs, then deletes
 the outbox row in its transaction. Publication may duplicate after a crash; consumers
 are idempotent and revalidate current consent and exclusions. After opt-out, pending
-outbox requests are discarded by the publisher and already-published jobs no-op.
+outbox requests are discarded by the publisher, and already-published jobs and
+recorded population requests no-op.
 Withdrawing consent does not wait for an outbox row locked by a publisher's network
 request. Other publishers skip locked requests and retry after a failed publication. Optional
 W3C trace context is persisted with each request, adopted by the publisher, and
-carried through queue delivery, retries, and contact fan-out without logging
+carried through queue delivery, retries, and population requests without logging
 mailbox identities or message payloads.
 
 ## Rollout

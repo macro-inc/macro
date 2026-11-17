@@ -27,6 +27,12 @@ struct StubRepo {
     association: Option<crate::domain::association::CrmRecordAssociation>,
     created_contact_emails: Arc<Mutex<Vec<String>>>,
     contact_detail_calls: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, bool)>>>,
+    /// The repository steps a population took, in order.
+    population_steps: Arc<Mutex<Vec<&'static str>>>,
+    /// Whether the mailbox may contribute the populated address.
+    admitted: bool,
+    /// Whether the populated domain already has a directory entry.
+    in_directory: bool,
 }
 
 impl EmailPrivacyRepository for StubRepo {
@@ -53,7 +59,8 @@ impl EmailPrivacyRepository for StubRepo {
         _: uuid::Uuid,
         _: &str,
     ) -> Result<bool, CrmError> {
-        Ok(false)
+        self.population_steps.lock().unwrap().push("admission");
+        Ok(self.admitted)
     }
 
     async fn email_privacy(
@@ -180,7 +187,8 @@ impl CompaniesRepository for StubRepo {
         _last_at: DateTime<Utc>,
         _is_sent: bool,
     ) -> Result<(), CrmError> {
-        unimplemented!()
+        self.population_steps.lock().unwrap().push("populate");
+        Ok(())
     }
 
     async fn create_company_for_team(
@@ -220,7 +228,11 @@ impl CompaniesRepository for StubRepo {
         _last_at: DateTime<Utc>,
         _is_sent: bool,
     ) -> Result<(), CrmError> {
-        unimplemented!()
+        self.population_steps
+            .lock()
+            .unwrap()
+            .push("populate_unfiled");
+        Ok(())
     }
 
     async fn create_contact_for_team(
@@ -252,7 +264,8 @@ impl CompaniesRepository for StubRepo {
         &self,
         _domain: &str,
     ) -> Result<Option<crate::domain::model::DomainMetadata>, CrmError> {
-        unimplemented!()
+        self.population_steps.lock().unwrap().push("directory");
+        Ok(self.in_directory.then(Default::default))
     }
 
     async fn upsert_domain_metadata(
@@ -264,7 +277,8 @@ impl CompaniesRepository for StubRepo {
     }
 
     async fn insert_pending_domain(&self, _domain: &str) -> Result<(), CrmError> {
-        unimplemented!()
+        self.population_steps.lock().unwrap().push("pending_entry");
+        Ok(())
     }
 
     async fn claim_pending_domains(
@@ -613,22 +627,103 @@ async fn invalid_blocklist_domains_are_rejected_before_persistence() {
     );
 }
 
+/// The repository steps of populating `email` for a stub in the given state.
+async fn population_steps(repo: StubRepo, email: &str, is_sent: bool) -> Vec<&'static str> {
+    let svc = CrmServiceImpl::new(repo, NoOpCompanyMetadataResolver);
+    svc.populate_contact(
+        &uuid::Uuid::now_v7(),
+        &uuid::Uuid::now_v7(),
+        "owner@example.com",
+        email,
+        None,
+        Utc::now(),
+        Utc::now(),
+        is_sent,
+    )
+    .await
+    .unwrap();
+    let steps = svc.companies_repository.population_steps.lock().unwrap();
+    steps.clone()
+}
+
 #[tokio::test]
 async fn unconsented_ingestion_stops_before_metadata_or_contact_writes() {
-    // All metadata/write methods on this stub panic; only admission returns false.
-    service()
-        .populate_contact(
-            &uuid::Uuid::now_v7(),
-            &uuid::Uuid::now_v7(),
-            "owner@example.com",
-            "person@acme.example.com",
-            None,
-            Utc::now(),
-            Utc::now(),
-            true,
+    assert_eq!(
+        population_steps(StubRepo::default(), "person@acme.example.com", true).await,
+        ["directory", "admission"]
+    );
+}
+
+#[tokio::test]
+async fn an_unknown_domain_is_admitted_before_its_metadata_is_requested() {
+    let repo = StubRepo {
+        admitted: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        population_steps(repo, "person@acme.example.com", true).await,
+        ["directory", "admission", "pending_entry", "populate"]
+    );
+}
+
+#[tokio::test]
+async fn populations_that_request_no_metadata_leave_admission_to_the_write() {
+    let known = StubRepo {
+        in_directory: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        population_steps(known, "person@acme.example.com", true).await,
+        ["directory", "populate"]
+    );
+    assert_eq!(
+        population_steps(StubRepo::default(), "person@acme.example.com", false).await,
+        ["populate"]
+    );
+    assert_eq!(
+        population_steps(
+            StubRepo::default(),
+            &format!("person@{}", "gmail.com"),
+            true
         )
-        .await
-        .unwrap();
+        .await,
+        ["populate_unfiled"]
+    );
+}
+
+#[tokio::test]
+async fn own_domain_and_generic_domain_contacts_touch_no_storage() {
+    for email in [
+        "colleague@example.com",
+        &format!("noreply@{}", "github.com"),
+    ] {
+        assert!(
+            population_steps(StubRepo::default(), email, true)
+                .await
+                .is_empty(),
+            "{email}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_malformed_address_is_an_invalid_request() {
+    for email in ["nobody", "@acme.example.com", "person@"] {
+        let error = service()
+            .populate_contact(
+                &uuid::Uuid::now_v7(),
+                &uuid::Uuid::now_v7(),
+                "owner@example.com",
+                email,
+                None,
+                Utc::now(),
+                Utc::now(),
+                true,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, CrmError::InvalidRequest(_)), "{email}");
+    }
 }
 
 fn receipt_with_role(role: TeamRole) -> CrmTeamReceipt<MemberTeamRole> {

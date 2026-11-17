@@ -277,7 +277,7 @@ async fn thread_provider_failure_precedes_admission_and_write() {
 }
 
 #[tokio::test]
-async fn busy_thread_slot_defers_before_crm_fanout() {
+async fn busy_thread_slot_defers_before_crm_requests() {
     let (svc, f) = setup();
     {
         let mut s = f.0.lock().unwrap();
@@ -309,7 +309,7 @@ async fn busy_thread_slot_defers_before_crm_fanout() {
 }
 
 #[tokio::test]
-async fn thread_crm_fanout_precedes_write_and_its_failure_releases_without_writing() {
+async fn thread_crm_requests_bracket_the_write_and_a_failed_first_one_releases_without_writing() {
     for fail in [false, true] {
         let (svc, f) = setup();
         let mut m = fetched("one", false);
@@ -321,20 +321,30 @@ async fn thread_crm_fanout_precedes_write_and_its_failure_releases_without_writi
         }];
         f.0.lock().unwrap().import.thread = Ok(vec![m]);
         if fail {
-            f.fail("enqueue");
+            f.fail("request_crm");
         }
         let outcome = svc.process(&thread(false)).await;
         if fail {
-            failure(outcome, true, FailureReason::SqsEnqueueFailed);
+            failure(outcome, true, FailureReason::DatabaseQueryFailed);
             assert_eq!(f.calls().last(), Some(&"release"));
             assert!(!f.calls().contains(&"insert_thread"));
         } else {
             assert!(matches!(outcome, BackfillDisposition::DoneDelete));
             let c = f.calls();
-            assert!(
-                c.iter().position(|x| *x == "enqueue").unwrap()
-                    < c.iter().position(|x| *x == "insert_thread").unwrap()
-            );
+            let requested = c
+                .iter()
+                .enumerate()
+                .filter_map(|(at, call)| (*call == "request_crm").then_some(at))
+                .collect::<Vec<_>>();
+            let written = c.iter().position(|x| *x == "insert_thread").unwrap();
+            let [before, after] = requested.as_slice() else {
+                panic!("requested before and after the write")
+            };
+            assert!(*before < written && written < *after);
+            assert!(f.0.lock().unwrap().sent.iter().all(|(sent, _)| !matches!(
+                sent.backfill_operation,
+                BackfillOperation::PopulateCrmContact(_)
+            )));
         }
     }
 }
@@ -550,8 +560,8 @@ async fn invitation_guards_are_independent_and_lookup_failure_does_not_block_com
 }
 
 #[tokio::test]
-async fn committed_single_message_sends_contacts_before_completion_and_keeps_queue_error_retryable()
-{
+async fn committed_single_message_requests_contacts_before_completion_and_keeps_a_failure_retryable()
+ {
     let (svc, f) = setup();
     let mut m = fetched("message", false);
     m.message.is_sent = true;
@@ -561,16 +571,16 @@ async fn committed_single_message_sends_contacts_before_completion_and_keeps_que
         photo_url: None,
     }];
     f.0.lock().unwrap().provider = Ok(Some(m));
-    f.fail("enqueue");
+    f.fail("request_crm");
     failure(
         svc.process(&message()).await,
         true,
-        FailureReason::SqsEnqueueFailed,
+        FailureReason::DatabaseQueryFailed,
     );
     let c = f.calls();
     assert!(
         c.iter().position(|x| *x == "release").unwrap()
-            < c.iter().position(|x| *x == "enqueue").unwrap()
+            < c.iter().position(|x| *x == "request_crm").unwrap()
     );
     assert!(!c.contains(&"completed_message"));
 }
@@ -602,17 +612,15 @@ async fn crm_direction_guards_choose_sent_recipients_and_received_sender_in_orde
             name: None,
             photo_url: None,
         });
-        super::super::message::enqueue_crm_contacts(&svc, &link(), &m)
+        super::super::message::request_crm_population(&svc, &link(), std::slice::from_ref(&m))
             .await
             .unwrap();
         let s = f.0.lock().unwrap();
+        assert!(s.sent.is_empty());
         let emails = s
-            .sent
+            .requests
             .iter()
-            .map(|(msg, _)| match &msg.backfill_operation {
-                BackfillOperation::PopulateCrmContact(p) => p.payload.contact_email.as_str(),
-                _ => panic!("contact"),
-            })
+            .map(|request| request.contact_email.as_str())
             .collect::<Vec<_>>();
         assert_eq!(
             emails,
@@ -628,10 +636,12 @@ async fn crm_direction_guards_choose_sent_recipients_and_received_sender_in_orde
 }
 
 #[tokio::test]
-async fn received_message_without_sender_has_no_contact_send() {
+async fn received_message_without_sender_requests_nothing() {
     let (svc, f) = setup();
-    super::super::message::enqueue_crm_contacts(&svc, &link(), &fetched("message", false).message)
+    let message = fetched("message", false).message;
+    super::super::message::request_crm_population(&svc, &link(), std::slice::from_ref(&message))
         .await
         .unwrap();
-    assert!(f.0.lock().unwrap().sent.is_empty());
+    assert!(f.0.lock().unwrap().requests.is_empty());
+    assert!(!f.calls().contains(&"request_crm"));
 }

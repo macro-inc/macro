@@ -16,6 +16,8 @@ pub mod composition;
 pub mod config;
 /// Periodic enrichment of pending CRM company directory entries.
 pub mod crm_enrichment_worker;
+/// Lanes that work off the CRM population ledger.
+pub mod crm_population_worker;
 /// Durable provider-neutral mailbox worker scheduling.
 pub mod mailbox_sync_worker;
 /// Outbound infrastructure adapters for email provider capabilities.

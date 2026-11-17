@@ -1,32 +1,18 @@
 use super::*;
-use ::crm::domain::model::CrmError;
+use crate::domain::crm_population::population_requests;
+use crate::domain::mailbox::connection::ConnectionSourceError;
 use models_email::service::{
     backfill::*,
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
-/// Records a CRM interaction for one `(link, contact_email)` —
-/// possibly inserting new `crm_companies` / `crm_contacts` /
-/// `crm_contact_sources` rows.
+/// Moves a queued population of one `(link, contact_email)` to the CRM
+/// population ledger, where the population workers attempt it.
 ///
-/// Fanned out one-per-address from `backfill_message`, `upsert_message`,
-/// and `populate_crm_for_user`. Every non-draft message contributes:
-/// sent-direction populates fan out per to/cc/bcc recipient and may
-/// insert new company rows; received-direction populates fan out for
-/// the sender and only touch already-tracked companies. The consumer
-/// resolves the team for the link (no-op if no team), then delegates
-/// to [`crm::domain::service::CrmService::populate_contact`] which
-/// applies the full insert / update matrix.
-///
-/// `first_at` / `last_at` come from the producer pre-computed. Per-
-/// message paths set both to the message's `internal_date_ts` (with
-/// `Utc::now()` fallback at the producer when Gmail returned none).
-/// The historical seed aggregates MIN/MAX per contact in SQL.
-///
-/// Each population holds one of its team's CRM population slots, so one
-/// team's consent backfill can't occupy a database connection per worker.
-/// A refused slot, or a population that timed out waiting for a CRM lock,
-/// is deferred like a busy backfill write instead of spending a delivery.
+/// Nothing publishes this operation any more: producers record their requests
+/// in the ledger directly. The step drains operations published before that,
+/// and by workers of the previous release during a deploy. It does no CRM
+/// work, so it cannot hold a backfill worker.
 #[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
 pub(super) async fn populate_crm_contact<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
@@ -40,36 +26,43 @@ where
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    let macro_user_id = link.macro_id.to_string();
+    let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+    let contact = (
+        p.contact_email.clone(),
+        p.contact_name.clone(),
+        p.first_at,
+        p.last_at,
+    );
+    let requests = population_requests(&self_email, [contact], p.is_sent);
+    record_crm_population(ctx, link.id, &requests).await
+}
 
-    let team_id = ctx
-        .crm
-        .get_team_id_for_user(&macro_user_id)
+/// Records population requests in the ledger; a failure is retried with the
+/// operation that implied them.
+pub(super) async fn record_crm_population<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
+    link_id: uuid::Uuid,
+    requests: &[PopulateCrmContactPayload],
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+{
+    if requests.is_empty() {
+        return Ok(());
+    }
+    ctx.repository
+        .request_crm_population(link_id, requests)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::from(e).context("Failed to look up team for link.macro_id"),
+                source: e
+                    .into_original()
+                    .context("Failed to record CRM population requests"),
             })
-        })?;
-
-    let Some(team_id) = team_id else {
-        return Ok(());
-    };
-
-    let slot = super::admit_write_slot(ctx.effects.acquire_crm(team_id).await)?;
-    slot.hold(ctx.crm.populate_contact(&team_id, link, p))
-        .await
-        .map_err(|e| {
-            let reason = match e {
-                CrmError::Contended => FailureReason::BackfillWritesBusy,
-                _ => FailureReason::DatabaseQueryFailed,
-            };
-            ProcessingError::Retryable(DetailedError {
-                reason,
-                source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
-            })
-        })?;
-
-    Ok(())
+        })
 }

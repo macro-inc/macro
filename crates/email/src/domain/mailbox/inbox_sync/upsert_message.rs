@@ -25,7 +25,7 @@ mod persistence;
 mod test;
 use attachments::handle_attachment_upload;
 pub use attachments::upload_claimed_attachments;
-use contacts::{CrmContactRecipient, enqueue_populate_crm_contacts, handle_contacts_sync};
+use contacts::{handle_contacts_sync, request_crm_population};
 use notifications::notify_for_new_message;
 use persistence::fetch_and_insert_thread;
 pub use persistence::process_and_insert_message;
@@ -174,36 +174,12 @@ where
     .filter(|e| !email_utils::is_generic_email(e))
     .collect::<Vec<_>>();
 
-    // Snapshot `(email, name, first_at, last_at)` tuples for the CRM
-    // populate fan-out below. Captured here (before `message` is moved
-    // into `process_and_insert_message`) so the consumer can write
-    // `crm_contacts.name` without a separate email_contacts lookup.
-    //
-    // Single message → single timestamp covers both endpoints; the
-    // consumer merges with the stored range over time. Sent: enumerate
-    // to/cc/bcc. Received: enumerate `from`. Drafts are skipped — they
-    // don't represent real correspondence. No producer-side filtering
-    // of addresses — the crm crate is the single source of truth.
+    // The CRM populations the message implies, captured before `message`
+    // is moved into `process_and_insert_message` and recorded once it is
+    // stored. No producer-side filtering of domains: the crm crate is the
+    // single source of truth.
     let is_draft = message.is_draft;
-    // `Utc::now()` fallback when Gmail returned no internal_date_ts.
-    let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
-    let crm_recipients: Vec<CrmContactRecipient> = if is_draft {
-        Vec::new()
-    } else if is_sent {
-        message
-            .to
-            .iter()
-            .chain(&message.cc)
-            .chain(&message.bcc)
-            .map(|c| (c.email.clone(), c.name.clone(), at, at))
-            .collect()
-    } else {
-        message
-            .from
-            .iter()
-            .map(|c| (c.email.clone(), c.name.clone(), at, at))
-            .collect()
-    };
+    let crm_requests = crate::domain::crm_population::message_requests(link, &message);
 
     // Snapshot header-level fields for the macro.email event before
     // `message` is moved into the insert path. Bodies, snippets, and bcc
@@ -346,14 +322,7 @@ where
     )
     .await?;
 
-    // Fan out a PopulateCrmContact job per address. Mirrors
-    // `backfill_message.rs`: sent → to/cc/bcc, received → from,
-    // drafts → skipped. The consumer branches on `is_sent` for the
-    // company-insert gate.
-    if !crm_recipients.is_empty() {
-        let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
-    }
+    request_crm_population(ctx, link.id, &crm_requests).await?;
 
     // trigger FE inbox refresh
     ctx.effects

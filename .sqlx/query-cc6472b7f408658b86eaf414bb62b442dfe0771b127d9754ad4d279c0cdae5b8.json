@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE crm_population_requests\n            SET claimed_until = NULL,\n                last_error = $4,\n                due_at = COALESCE(now() + make_interval(secs => $5), due_at),\n                parked_at = CASE WHEN $5::float8 IS NULL THEN now() END\n            WHERE link_id = $1 AND contact_email = $2 AND claimed_until = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc6472b7f408658b86eaf414bb62b442dfe0771b127d9754ad4d279c0cdae5b8"
+}

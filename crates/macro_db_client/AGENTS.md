@@ -171,6 +171,14 @@ and kind constraints expand without rewriting existing rows and validate separat
 column, option and required column IDs. Foreign-key cascades remove rules when
 any referenced stage, field or pipeline is explicitly deleted; renames preserve them.
 
+`crm_population_requests` is a work ledger, not a record: one row per mailbox
+and correspondent whose CRM population is outstanding, deleted when an attempt
+settles it, so it is small between backlogs and churns heavily during one.
+Its queries belong to `email::outbound::crm_population_pg`, and a claim must
+keep reading a bounded number of rows however many are pending.
+`crm_population_pauses` holds one row per mailbox whose populations are
+failing. Both cascade from `email_links`.
+
 `mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
 refresh token bindings, pending authorizations, issued codes); their queries and
 expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no

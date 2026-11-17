@@ -180,7 +180,12 @@ tools/HTTP/GraphQL surfaces over them.
   then the domain advisory lock and entity rows. Never run the mailbox scan
   under a domain lock: a team backfill queues every population of the domain
   behind it. Population transactions set a five-second `lock_timeout` and
-  return `CrmError::Contended` so their job is deferred, not held. Privacy changes
+  return `CrmError::Contended` so their request is retried later, not held.
+  `CrmServiceImpl::populate_contact` runs the service-level admission scan
+  (`may_contribute_contact`) only before it would request metadata for a
+  domain the directory does not know; every other path leaves admission to
+  the write transaction, which scans only when it has something to change.
+  Don't add a scan ahead of the cheap skips: most populations change nothing. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through
   commit; never wait on a domain or privacy lock after acquiring CRM entity
   rows. Only shared team, mailbox and member row locks may precede a domain lock,

@@ -1,5 +1,5 @@
 use super::email_api_error::map_email_api_error;
-use super::message::{enqueue_crm_contacts, save_invitations};
+use super::message::{request_crm_population, save_invitations};
 use super::metadata::map_db_error;
 use super::*;
 use crate::domain::mailbox::inbox_sync::InboxSyncPreparation;
@@ -56,7 +56,10 @@ where
     let slot = admit_write_slot(ctx.effects.acquire_write().await)?;
     let inserted = slot
         .hold(async {
-            enqueue_threads_crm_contacts(ctx, link, &messages).await?;
+            // Before the write, while a failure can still retry the thread:
+            // after the commit a retry skips it. Held under the write slot, so
+            // an operation deferred for a busy slot doesn't repeat it.
+            request_crm_population(ctx, link, &messages).await?;
             ctx.repository
                 .insert_thread(link.id, &thread_provider_id, &mut messages)
                 .await
@@ -140,7 +143,10 @@ where
     let slot = admit_write_slot(ctx.effects.acquire_write().await)?;
     let skipped = slot
         .hold(async {
-            enqueue_threads_crm_contacts(ctx, link, &messages).await?;
+            // Before the write, while a failure can still retry the thread:
+            // after the commit a retry skips it. Held under the write slot, so
+            // an operation deferred for a busy slot doesn't repeat it.
+            request_crm_population(ctx, link, &messages).await?;
             ctx.repository
                 .insert_messages(link.id, thread_db_id, &mut messages)
                 .await
@@ -209,34 +215,12 @@ async fn prepare_messages<E: InboxSyncPreparation>(
     (messages, calendar_parts)
 }
 
-/// Enqueues the CRM contact updates of every message in the thread. This runs
-/// just before the thread is written, while a failure can still be retried:
-/// after the commit a retry would skip the thread. It runs once a write slot is
-/// held, so an operation deferred for a busy slot doesn't repeat it each time.
-/// The rare duplicate from a retried write is harmless.
-async fn enqueue_threads_crm_contacts<R, G, Q, E, C>(
-    ctx: &BackfillService<R, G, Q, E, C>,
-    link: &link::Link,
-    messages: &[Message],
-) -> Result<(), ProcessingError>
-where
-    R: BackfillRepository,
-    G: BackfillGmail,
-    Q: BackfillQueue,
-    E: BackfillEffects,
-    C: BackfillCrm,
-{
-    for message in messages {
-        enqueue_crm_contacts(ctx, link, message).await?;
-    }
-    Ok(())
-}
-
 /// Finishes a thread whose messages are committed.
 ///
 /// A retried BackfillThread finds the thread written and skips it, so nothing
 /// here may ask for a retry. Messages the write skipped are logged. The
-/// invitation and attachment fan-outs only log their failures; the metadata
+/// invitation and attachment fan-outs and the repeated CRM population requests
+/// only log their failures; the metadata
 /// step goes last and is the only one that can fail the operation, as a
 /// non-retryable error that counts the thread once.
 async fn finish_written_thread<R, G, Q, E, C>(
@@ -268,6 +252,12 @@ where
         if !skipped.iter().any(|skipped| skipped.index == index) {
             save_invitations(ctx, link, message, parts).await;
         }
+    }
+    // Requested again now that the messages are stored: the request made
+    // before the write may have been attempted, or dropped for a mailbox that
+    // was not contributing yet, while the write was still in flight.
+    if let Err(error) = request_crm_population(ctx, link, messages).await {
+        tracing::warn!(error = ?error, %thread_provider_id, "Skipped a backfilled thread's repeated CRM population requests");
     }
     if let Err(error) =
         super::followups::handle_thread_attachment_upload(ctx, link, scope.job_id, thread_db_id)
