@@ -100,15 +100,39 @@ impl NativeToolGate for ScopedToolGate {
                 Ok(_) => self.inner.check(session, tool, arguments).await,
                 Err(error) => {
                     tracing::error!(?error, "could not read a session's scope");
-                    NativeToolVerdict::Refuse(
-                        "Whether this tool may run could not be checked; nothing was done."
-                            .to_owned(),
-                    )
+                    NativeToolVerdict::Refuse(SCOPE_UNREAD.to_owned())
+                }
+            }
+        })
+    }
+
+    /// A scoped session calls no remote MCP server's tool directly
+    /// (connected apps, custom servers, previews): the egress proxy that
+    /// carries the call knows nothing of the scope, and a tool's read-only
+    /// hint is its server's own claim. Its code's route to connected apps is
+    /// refused by the scope too.
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        session: agent_session::domain::model::AgentSessionId,
+        tool: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async move {
+            match self.scopes.scope(session.as_uuid()).await {
+                Ok(Some(_)) => Some(format!(
+                    "This session can't use {tool}; it reaches no app outside Macro."
+                )),
+                Ok(None) => self.inner.refuse_remote_mcp(session, tool).await,
+                Err(error) => {
+                    tracing::error!(?error, "could not read a session's scope");
+                    Some(SCOPE_UNREAD.to_owned())
                 }
             }
         })
     }
 }
+
+/// What the model hears when a session's scope can't be read.
+const SCOPE_UNREAD: &str = "Whether this tool may run could not be checked; nothing was done.";
 
 #[async_trait]
 impl ExecutionCredentials for RunCredentials {

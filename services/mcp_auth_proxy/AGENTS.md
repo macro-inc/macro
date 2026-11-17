@@ -78,6 +78,7 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 
 ## Gotchas
 
+- Every OAuth broker route refuses a request carrying `x-macro-code-execution` (403): a program that drives the email sign-in and reads the code from the user's inbox would hold an MCP grant for the account.
 - Never refuse an unrecognized `resource`: deployed clients send whatever they
   derive from their configured URL, and refusing it breaks live grants on
   refresh.

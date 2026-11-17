@@ -1657,13 +1657,20 @@ use the same paged personal directory. Channel people remain participant-scoped,
 and CRM discussions remain team-scoped; an empty or loading roster never opens
 personal-directory search. Available agents are added to the current window or
 scope with the existing rollout rules. Group mentions remain channel-only.
+Within a scoped people list, an exact full-name or first-name match comes before
+prefixes, literal contains matches, and scattered-letter matches. Recent interaction
+history only orders people within those name tiers. Phones choose their two pinned
+people after this ranking. To verify, search for a person's first name when that
+person has no interaction history and other recently contacted participants match
+only scattered letters: the named person must lead and be selected by Enter or tap.
+The controlled composer regression is `people-ranking.browser.e2e.ts` in
+`apps/web/src/features/channel/Input/browser-test/`.
 People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
-browsing lists you, then other people, then agents with Macro first; a search
-uses the shared name-match ranking, lists an agent only when its name or handle
-holds every typed word, and never above a person whose name matches as well.
-Typing `@eve` lists Eve before anyone whose name merely holds e, v and e in
-order, and no agent whose name only scatters those letters. Phone rows keep that People order in the slots the blended
-ranking gives people.
+browsing lists you, then other people, then agents with Macro first; while
+searching, an agent is listed only when its name or handle holds the typed words,
+not just their letters scattered, and never above a person whose name matches as
+well; bots get no score boost. Phone rows keep that People order in the slots the
+blended ranking gives people.
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
