@@ -305,20 +305,22 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
 
 For you is up to four cards under **Today** and the date. **Suggestions** is work
 Macro can do: each row says what Macro will do on one line, cut where the
-row ends (hover shows the rest), and has one button. **Run**
+row ends (hover shows the rest), with how long it has waited on the right.
+Every row's buttons, and the `x` in the age's place, show only while the row
+is pointed at or focused. **Run**
 starts a background run at once (a run that posts or sends something says
 so at the start of its line); the row moves to **Running**, where it reads
 "Running." with **View**, which opens its session, and a failed run turns
 red with **Retry**. **Open chat**
 opens the composer with a prompt typed, unsent, and **Turn on** saves a
-routine. Pointing at a row shows **Open chat** beside **Run**, or **Review**
-beside **Turn on**, which look without taking it up: a run's prompt opens in
+routine. **Open chat** beside **Run**, and **Review** beside **Turn on**,
+look without taking it up: a run's prompt opens in
 the composer, unsent, and a routine opens for review. Pressing the row's
 text does the same. **To do**
 is the person's own mail and documents: each row names the item it is about,
 who wrote, whether a reply is drafted, and how long it has waited. Its circle
 marks it done without opening anything; pressing its text, or **Open** /
-**Open draft** shown on hover or focus, opens the item. **Open draft** opens
+**Open draft**, opens the item. **Open draft** opens
 the thread with the draft in its reply composer and a footer under it that
 reads **Drafted by Macro**, links what else the suggestion cites, and offers
 **Rewrite**, which opens the agent composer with the thread mentioned and the

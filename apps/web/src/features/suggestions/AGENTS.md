@@ -109,9 +109,9 @@ only, behind `enable-suggestions`.
   sparkle, an orange repeat for a routine, a spinner while running, a red
   mark once failed), says what Macro will do, and has one secondary button:
   Run, Open chat, Turn on, Retry, or View while it runs. Running and failed
-  runs are the same row in the Running card. Pointing at the row or
-  focusing in it adds a ghost Open chat (a run) or Review (a routine)
-  beside the button, and pressing the row's text does the same. Both look
+  runs are the same row in the Running card. Beside the button sits a ghost
+  Open chat (a run) or Review (a routine), and pressing the row's text does
+  the same. Both look
   without taking it up (`feed.look`): a routine opens for review, a run
   under way opens its session, and a prompt opens in the composer.
 - A To do row (`ToDoRow`) leads with a circle that marks it done without
@@ -119,16 +119,16 @@ only, behind `enable-suggestions`.
   like Open). Its line names the item it is about (`SuggestionItemParts`'
   `Source`, supplied by `suggestion-items.tsx`, the one part that reads the
   app's items; the summary where the viewer can't read the item), who wrote,
-  and that a reply is drafted. The right side shows how long it has waited;
-  pointing at the row or focusing in it swaps that for Open or Open draft
-  and dismiss, in a slot wide enough that the row doesn't change size.
-  Pressing the text opens it too. Rows don't open in place.
+  and that a reply is drafted. Its button is Open or Open draft; pressing
+  the text opens it too. Rows don't open in place.
 - A Done today row (`DoneRow`) is a green check, a quieter title, what was
   done and when; pressing its text opens what it left (`feed.open`).
-- Every row ends in a slot one icon button wide (`EndSlot`): dismiss, shown
-  on hover or focus, and empty on rows that can't be dismissed. So ages,
-  times and buttons share one right edge down the page, and no button moves
-  when dismiss appears. Don't put dismiss before a row's button.
+- A row that waits or runs shows only its age at rest, right-aligned
+  (`RowEnd`; a running one shows when its run started). Pointing at the row
+  or focusing in it shows its buttons, and dismiss takes the age's place at
+  the row's end. The buttons keep their room while hidden, so nothing in the
+  row moves; don't size or show them conditionally. Done today rows show
+  their time and nothing else, and a dismissed row keeps Undo in view.
 - Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
   `primary`), and colour is left to the kind's mark and a failed run.
 - The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,

@@ -191,29 +191,37 @@ test('pointing at a run offers Open chat beside Run, and a routine Review', asyn
   await expect(requests(page)).toContainText('review routine-draft-1');
 });
 
-test('dismiss sits at the end of the row, and Run stays where it was', async ({
+test('a row shows its age at rest, and its buttons with dismiss in the age’s place when pointed at', async ({
   page,
 }) => {
   await page.goto('/');
   const run = row(page, 'suggestion-background');
   const button = run.getByRole('button', { name: 'Run', exact: true });
+  const time = run.locator('[data-suggestion-time]');
+  // Run is hidden until the row is pointed at; only the age shows.
+  await expect(button.locator('..')).toHaveCSS('opacity', '0');
+  await expect(time).toHaveCSS('opacity', '1');
   const before = await button.boundingBox();
+  const age = await time.boundingBox();
+  const height = (await run.boundingBox())?.height;
 
   await run.hover();
+  await expect(button.locator('..')).toHaveCSS('opacity', '1');
+  await expect(time).toHaveCSS('opacity', '0');
   const dismiss = await run
     .getByRole('button', { name: 'Dismiss “Post the weekly status summary”' })
     .boundingBox();
   const after = await button.boundingBox();
-  if (!before || !after || !dismiss) throw new Error('expected both buttons');
+  if (!before || !after || !dismiss || !age) {
+    throw new Error('expected the buttons and the age');
+  }
+  // Nothing moves, and dismiss ends where the age ended.
   expect(after.x).toBe(before.x);
+  expect((await run.boundingBox())?.height).toBe(height);
   expect(dismiss.x).toBeGreaterThan(after.x + after.width);
-
-  // What stands before the slot lines up down the page.
-  const age = await row(page, 'suggestion-reply')
-    .locator('[data-suggestion-time]')
-    .boundingBox();
-  if (!age) throw new Error('expected the age');
-  expect(Math.round(age.x + age.width)).toBe(Math.round(after.x + after.width));
+  expect(Math.round(dismiss.x + dismiss.width)).toBe(
+    Math.round(age.x + age.width)
+  );
 });
 
 test('a failed run says so and Retry runs it again', async ({ page }) => {
