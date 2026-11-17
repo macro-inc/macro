@@ -304,9 +304,10 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   For you** opens the page.
 
 For you is up to four cards under **Today** and the date. **Suggestions** is work
-Macro can do: each row says what Macro will do and has one button. **Run**
-starts a background run at once (the row says what it posts or sends first,
-or that nothing is sent); the row moves to **Running**, where it reads
+Macro can do: each row says what Macro will do on one line, cut where the
+row ends (hover shows the rest), and has one button. **Run**
+starts a background run at once (a run that posts or sends something says
+so at the start of its line); the row moves to **Running**, where it reads
 "Running." with **View**, which opens its session, and a failed run turns
 red with **Retry**. **Open chat**
 opens the composer with a prompt typed, unsent, and **Turn on** saves a

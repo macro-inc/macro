@@ -64,8 +64,10 @@ only, behind `enable-suggestions`.
 
 ## Gotchas
 
-- Clicking Run on a background suggestion is the approval: the row must show
-  `sends` (or that it sends nothing) before Run, and there is no approval UI.
+- Clicking Run on a background suggestion is the approval, and there is no
+  approval UI: a run that posts or sends something leads its line with
+  `sends`, so it is read before Run and is never the part a long line cuts
+  off. A run that sends nothing doesn't say so.
 - The server decides and the page shows: each suggestion's `status`, the
   feed's order (what waits or runs, then what is done), `isNew`, what a
   finished one left (`result`, absent until its run
@@ -96,7 +98,9 @@ only, behind `enable-suggestions`.
   finished one is listed. Refresh sits in the bar above the page
   (`ForYouRefresh`).
 - The cards are `Card variant="filled" depth={3}` and the rows `Item
-  size="sm"` with `border-0`, a medium `text-sm` title and one 13px line.
+  size="sm"` with `border-0`, a medium `text-sm` title and one 13px line,
+  cut where the row ends so every row is the same height; pointing at a cut
+  line shows all of it (`RowLine`).
   Don't give them local surfaces, borders, counts or descriptions beside
   the card's title. `for-you.browser.e2e.ts` holds the row's height and type
   sizes.
@@ -104,9 +108,7 @@ only, behind `enable-suggestions`.
   sparkle, an orange repeat for a routine, a spinner while running, a red
   mark once failed), says what Macro will do, and has one secondary button:
   Run, Open chat, Turn on, Retry, or View while it runs. Running and failed
-  runs are the same row in the Running card. A background run's line ends
-  with what it sends, or that nothing is sent, since pressing Run is the
-  approval. Pressing the row's text looks without taking it up
+  runs are the same row in the Running card. Pressing the row's text looks without taking it up
   (`feed.look`): a routine opens for review, a run under way opens its
   session, and a prompt opens in the composer.
 - A To do row (`ToDoRow`) leads with a circle that marks it done without

@@ -25,7 +25,6 @@ export default {
   dismissedAndStopped: 'Dismissed, and its run was stopped',
   dismissed: 'Dismissed',
   undo: 'Undo',
-  sendsNothing: 'Nothing is sent to anyone.',
   runningNow: 'Running.',
   openInChat: 'Open chat',
   ageDays: {

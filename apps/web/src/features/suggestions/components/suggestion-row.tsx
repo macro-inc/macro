@@ -7,8 +7,8 @@ import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import RepeatIcon from '@icon/system/regular/repeat.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, cn, Hotkey, Item, Spinner } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { Button, cn, Hotkey, Item, Spinner, Tooltip } from '@ui';
+import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import type { SuggestionItemParts } from '../context/suggestions-source';
 import type { Suggestion, SuggestionStatus } from '../core/suggestion';
 import { ageLabel } from './waiting';
@@ -126,13 +126,51 @@ function DismissButton(props: RowState) {
   );
 }
 
-/** What a background run will post or send, or that it sends nothing. */
+/** What a background run will post or send; undefined when nothing. */
 function sendsText(suggestion: Suggestion): string | undefined {
   if (suggestion.kind !== 'prompt' || suggestion.runMode !== 'background') {
     return undefined;
   }
 
-  return suggestion.sends ?? t('suggestions.sendsNothing');
+  return suggestion.sends;
+}
+
+/**
+ * One line of a row that is cut where the row ends; pointing at a cut line
+ * shows all of it.
+ */
+function RowLine(props: {
+  /** The whole line, for when it is cut. */
+  text: string;
+  class?: string;
+  children: JSX.Element;
+}) {
+  const [cut, setCut] = createSignal(false);
+
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger as="span" class="flex min-w-0">
+        <Item.Description
+          class={cn('truncate text-[13px] leading-[18px]', props.class)}
+          onPointerEnter={(event) =>
+            setCut(
+              event.currentTarget.scrollWidth > event.currentTarget.clientWidth
+            )
+          }
+        >
+          {props.children}
+        </Item.Description>
+      </Tooltip.Trigger>
+      {/* Measured as the pointer arrives, before the tooltip's delay ends. */}
+      <Show when={cut()}>
+        <Tooltip.Portal>
+          <Tooltip.Content>
+            <span class="block max-w-80 text-left">{props.text}</span>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Show>
+    </Tooltip.Root>
+  );
 }
 
 /** A routine's sentence as plain text; undefined once its routine is gone. */
@@ -174,37 +212,37 @@ function MacroLead(props: MacroRowProps) {
 }
 
 /**
- * The line under the title: what Macro will do. A run says what it sends
- * before Run, since pressing Run is the approval.
+ * The line under the title: what Macro will do, on one line. A run that
+ * posts or sends something leads with that, so it is read before Run, which
+ * is the approval.
  */
 function MacroSentence(props: MacroRowProps) {
+  const sends = () => sendsText(props.suggestion);
+  const text = () => {
+    if (props.status === 'failed') return t('suggestions.runFailed');
+    if (props.status === 'running') {
+      return [t('suggestions.runningNow'), sends()].filter(Boolean).join(' ');
+    }
+
+    const body = routineSentence(props.suggestion) ?? props.suggestion.summary;
+    return [sends(), body].filter(Boolean).join(' · ');
+  };
+
   return (
-    <Item.Description
-      class={cn(
-        'text-[13px] leading-[18px]',
-        props.status === 'failed' && 'text-failure'
-      )}
+    <RowLine
+      text={text()}
+      class={props.status === 'failed' ? 'text-failure' : undefined}
     >
-      <Switch fallback={props.suggestion.summary}>
-        <Match when={props.status === 'failed'}>
-          {t('suggestions.runFailed')}
-        </Match>
-        <Match when={props.status === 'running'}>
-          {t('suggestions.runningNow')} {sendsText(props.suggestion)}
-        </Match>
-        <Match when={routineSentence(props.suggestion)}>
-          {(sentence) => sentence()}
-        </Match>
-        <Match when={sendsText(props.suggestion)}>
-          {(sends) => (
-            <>
-              {props.suggestion.summary}{' '}
-              <span data-suggestion-sends>{sends()}</span>
-            </>
-          )}
-        </Match>
-      </Switch>
-    </Item.Description>
+      <Show when={props.status === 'open' && sends()} fallback={text()}>
+        {(line) => (
+          <>
+            <span data-suggestion-sends>{line()}</span>
+            {' · '}
+            {props.suggestion.summary}
+          </>
+        )}
+      </Show>
+    </RowLine>
   );
 }
 
@@ -393,9 +431,9 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
           onPress={props.onOpen}
         >
           <Show when={line()}>
-            <Item.Description class="text-[13px] leading-[18px] text-ink-extra-muted">
+            <RowLine text={line()} class="text-ink-extra-muted">
               {line()}
-            </Item.Description>
+            </RowLine>
           </Show>
         </RowText>
       </Item.Content>

@@ -31,9 +31,10 @@ for (const theme of ['dark', 'light']) {
     await expect(
       row(page, 'suggestion-background').locator('[data-suggestion-sends]')
     ).toHaveText('Posts the weekly status summary in #ops');
+    // A run that sends nothing doesn't say so.
     await expect(
       row(page, 'suggestion-quiet').locator('[data-suggestion-sends]')
-    ).toHaveText('Nothing is sent to anyone.');
+    ).toHaveCount(0);
     // A to-do names the item it is about, and how long its sender has waited.
     const reply = row(page, 'suggestion-reply');
     await expect(reply.locator('[data-suggestion-source]')).toHaveText(
@@ -81,6 +82,18 @@ test('a row is two lines: a medium title over a smaller line', async ({
 
   const box = await reply.boundingBox();
   expect(box?.height).toBe(56);
+  // A long line is cut where the row ends, so every row is the same height.
+  for (const each of await page.locator('[data-suggestion]').all()) {
+    expect((await each.boundingBox())?.height).toBe(56);
+  }
+  const line = row(page, 'suggestion-background').locator(
+    '[data-slot="item-description"]'
+  );
+  await expect(line).toHaveCSS('text-overflow', 'ellipsis');
+  // What a run sends leads its line, so it is never the part cut off.
+  await expect(line).toHaveText(
+    'Posts the weekly status summary in #ops · The team posts one every Friday; this week has none.'
+  );
   const title = reply.locator('[data-slot="item-title"]');
   await expect(title).toHaveCSS('font-size', '14px');
   await expect(title).toHaveCSS('font-weight', '500');
