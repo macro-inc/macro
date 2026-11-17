@@ -136,7 +136,7 @@ fn test_build_bool_query_keeps_only_email_attachments() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .is_email_attachment(Some(true));
+        .email_attachment(Some(true));
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
@@ -153,7 +153,7 @@ fn test_build_bool_query_leaves_out_email_attachments_with_a_must_not() -> anyho
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .is_email_attachment(Some(false));
+        .email_attachment(Some(false));
 
     let json = builder.build_bool_query()?.build().to_json();
     // must_not on true, never a filter on false: a parent indexed before the

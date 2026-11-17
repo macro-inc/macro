@@ -82,7 +82,7 @@ projects.
   It both adds and removes matches (terms scattered over several chunks no
   longer match), so callers opt in per request.
 - Document search filters on the parent's `is_email_attachment`
-  (`DocumentQueryBuilder::is_email_attachment`): `Some(true)` is a filter on
+  (`DocumentQueryBuilder::email_attachment`): `Some(true)` is a filter on
   `true`, `Some(false)` a `must_not` on `true`, never a filter on `false`, so a
   parent indexed before the field existed counts as not an attachment. Its
   results are right only once `search_processing_service`'s attachment status

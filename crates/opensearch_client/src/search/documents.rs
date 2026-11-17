@@ -164,7 +164,7 @@ impl DocumentQueryBuilder {
         self
     }
 
-    pub fn is_email_attachment(mut self, is_email_attachment: Option<bool>) -> Self {
+    pub fn email_attachment(mut self, is_email_attachment: Option<bool>) -> Self {
         self.is_email_attachment = is_email_attachment;
         self
     }
@@ -586,7 +586,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
-            .is_email_attachment(args.is_email_attachment)
+            .email_attachment(args.is_email_attachment)
             .mode(args.mode)
             .property_filters(args.property_filters)
             .tag_option_ids(args.tag_option_ids)
