@@ -16,6 +16,11 @@ on:
         type: boolean
         default: false
         description: The caller already ran build_web_app.yml in this run
+      rollback:
+        required: false
+        type: boolean
+        default: false
+        description: Deploy a prod bundle older than the live one
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -44,6 +49,11 @@ on:
         required: false
         type: boolean
         description: Whether to notify the Slack channel of the deployment completion
+      rollback:
+        required: false
+        type: boolean
+        default: false
+        description: Deploy a prod bundle older than the live one (infra/stacks/web-app/README.md#rolling-back)
 jobs:
   build:
     if: ${{ !inputs.prebuilt }}
@@ -51,6 +61,7 @@ jobs:
     uses: ./.github/workflows/build_web_app.yml
     with:
       environment: ${{ inputs.environment }}
+      rollback: ${{ inputs.rollback || false }}
     secrets:
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}

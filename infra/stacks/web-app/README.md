@@ -51,6 +51,35 @@ The existing `sync-assets-command` and `index-html-object-metadata-command`
 resource identities are retained even though publication now copies entrypoint
 bytes with their final headers instead of patching metadata afterward.
 
+## Bundle identity and retention
+
+`bundle-stamp` (`tooling/bundle_stamp`) writes `bundle-manifest.json` in every
+build. Its `bundleBuild` is the source commit's time in milliseconds, so every
+build of one commit, including the bundle a native release embeds, has the same
+identity, and native apps take an OTA bundle only from a newer commit. The
+deploy workflow checks the built bundle is stamped from the commit it deploys
+(`bundle-stamp verify`).
+
+Retained-build pruning names each record after `builtAt`, when that build ran:
+re-running the deploy of one commit publishes new chunks under the same
+`bundleBuild`, and the earlier run's open tabs still need theirs.
+
+## Rolling back
+
+Roll back forward: revert the bad commit on `main` and cut a release. Native
+apps refuse a bundle from an older commit than the one they run, so redeploying
+an older commit reaches web users but not apps that already took the bad bundle.
+
+A production deploy whose bundle is older than the live one fails at the
+`Verify bundle identity` step. To redeploy an older commit anyway, dispatch
+**Deploy Web App** with `environment: prod` and `rollback: true`; a release
+event cannot skip the check. To move native apps back as well, add a `revoke`
+rule to the authentication service's bundle update policy
+(`BUNDLE_UPDATE_POLICY_JSON`, see `crates/native_app_service`) covering the bad
+range, with bounds from `cargo run -p bundle_stamp -- number <sha>`. Revoked
+apps clear their OTA bundle, fall back to the embedded one, and then take the
+redeployed bundle if it is newer than their embedded build.
+
 ## CDN policy
 
 [The website stack](../website/README.md#app-cache-policy) owns browser and edge
