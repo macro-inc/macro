@@ -28,6 +28,7 @@ export type SplitFileMenuAction = {
   /** Stable identity for a row while its metadata changes. */
   id?: string;
   label: string | JSX.Element;
+  disabledReason?: string;
   icon?: Component;
   action?: (e?: MouseEvent) => void | Promise<unknown>;
   /** Clipboard actions acknowledge completion inline without dismissing the menu. */

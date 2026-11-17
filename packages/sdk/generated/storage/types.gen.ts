@@ -9285,6 +9285,24 @@ export type EmailAttachmentsReleasedMetadata = {
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Current mailbox consent without loading domain exclusion lists.
+ */
+export type EmailContributionConsent = {
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute, if connected.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary mailbox connection.
+     */
+    mailbox_link_id?: string | null;
+};
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -9515,6 +9533,11 @@ export type EmailPrivacyChange = {
      */
     scope: EmailBlockScope;
 };
+
+/**
+ * Full settings by default, or mailbox consent when explicitly requested.
+ */
+export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConsent;
 
 /**
  * Current consent and exclusions, readable by any team member.
@@ -28534,12 +28557,17 @@ export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmC
 export type GetCrmEmailPrivacyData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Return only consent and mailbox fields, without querying domain lists.
+         */
+        consent_only?: boolean;
+    };
     url: '/crm/email-privacy';
 };
 
 export type GetCrmEmailPrivacyResponses = {
-    200: EmailPrivacySettings;
+    200: EmailPrivacyResponse;
 };
 
 export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
@@ -28565,6 +28593,10 @@ export type ListCrmExcludedEmailThreadsData = {
          * Read entries after this thread ID.
          */
         after?: string | null;
+        /**
+         * Look up one thread instead of paging. Cannot be combined with `after`.
+         */
+        thread_id?: string | null;
     };
     url: '/crm/email-privacy/threads';
 };

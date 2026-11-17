@@ -1,5 +1,4 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -9,19 +8,7 @@ import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance'
  */
 
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { HeaderActionButton } from '@components/app/HeaderActionButton';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitTitleFileMenu,
-} from '@components/app/split-layout/components/SplitLabel';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   returnSplitToRecentListView,
@@ -29,9 +16,6 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { getPermissions } from '@core/component/SharePermissions';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
@@ -40,11 +24,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
-import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
-import Eye from '@icon/system/regular/eye.svg';
-import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { useFormSharePermissionsQuery } from '@queries/storage/forms';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import type { FormTab } from './components/form-tabs';
 import { FormProvider } from './context/form-context';
 import { primaryAction } from './core/form-status';
@@ -53,9 +34,12 @@ import { createAppFormContext } from './form-context-production';
 import { createFormShareInput } from './form-global-sharing';
 import { reservePreviewTab } from './form-preview-tab';
 import { createPreview } from './primitives/create-preview';
+import { FormBlockHeader } from './views/form-block-header';
 import { FormCardView } from './views/form-card-view';
 import { type FormHeaderProps, FormPageView } from './views/form-page-view';
+import { MobileFormBlockHeader } from './views/mobile/form-block-header';
 import { RespondView } from './views/respond-view';
+import type { FormBlockHeaderProps } from './views/shared/form-block-header-parts';
 
 function FormHeader(props: FormHeaderProps) {
   return (
@@ -138,117 +122,28 @@ function FormBlockContent(props: {
     );
   };
   const name = () => source.detail()?.form.name ?? 'Form';
-  const primary = (): JSX.Element => (
-    <Show
-      when={published()}
-      fallback={
-        <HeaderActionButton
-          grouped
-          label="Publish"
-          icon={
-            <PaperPlaneTilt class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          }
-          onClick={openShare}
-        />
-      }
-    >
-      <HeaderActionButton
-        grouped
-        label="Open form"
-        icon={<ArrowSquareOut class="size-3.5" />}
-        onClick={openRespond}
-      />
-    </Show>
-  );
+  const headerProps: FormBlockHeaderProps = {
+    formId,
+    detail: source.detail,
+    name,
+    get respondOnly() {
+      return props.respondOnly;
+    },
+    published,
+    preview,
+    openShare,
+    openRespond,
+    copyRespondLink,
+  };
   let respondScroll: HTMLDivElement | undefined;
   return (
     <FormProvider value={context}>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel
-          name={name}
-          icon={
-            <Show when={source.detail()}>
-              {(detail) => (
-                <EntityAppearanceTrigger
-                  entity={{
-                    type: 'form',
-                    id: detail().form.id,
-                    name: detail().form.name,
-                    ownerId: detail().form.ownerId,
-                    access: detail().access,
-                    appearance: detail().form.appearance,
-                  }}
-                  editable={
-                    detail().access === 'edit' || detail().access === 'owner'
-                  }
-                />
-              )}
-            </Show>
-          }
-        />
-      </SplitHeaderLeft>
-      <Show when={source.detail()}>
-        {(detail) => (
-          <SplitTitleFileMenu>
-            <SplitFileMenu
-              id={formId}
-              itemType="form"
-              entityKind="form"
-              name={detail().form.name}
-              entity={{
-                type: 'form',
-                id: formId,
-                name: detail().form.name,
-                ownerId: detail().form.ownerId,
-                access: detail().access,
-              }}
-              permissions={getPermissions(detail().access)}
-              ops={[{ op: 'moveToProject' }]}
-              buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
-            />
-          </SplitTitleFileMenu>
-        )}
+      <Show
+        when={isTouchDevice()}
+        fallback={<FormBlockHeader {...headerProps} />}
+      >
+        <MobileFormBlockHeader {...headerProps} />
       </Show>
-      <SplitHeaderRight>
-        <Show
-          when={
-            !props.respondOnly &&
-            (source.detail()?.access === 'edit' ||
-              source.detail()?.access === 'owner')
-          }
-        >
-          <BlockLiveIndicators />
-        </Show>
-        <HeaderIsland>
-          <div class="order-[1000] flex items-center gap-2 touch:gap-1.5">
-            <Show
-              when={
-                !props.respondOnly &&
-                source.detail() &&
-                source.detail()?.access !== 'view'
-              }
-            >
-              <HeaderActionGroup label="Form actions">
-                <HeaderActionButton
-                  grouped
-                  label="Preview"
-                  icon={<Eye class="size-3.5" />}
-                  disabled={preview.opening()}
-                  onClick={() => fireAndForget(preview.open(), 'form-preview')}
-                />
-                {primary()}
-              </HeaderActionGroup>
-            </Show>
-            <ShareTrigger
-              id={formId}
-              blockType="form"
-              onClick={openShare}
-              copyLink={copyRespondLink}
-            />
-          </div>
-        </HeaderIsland>
-      </SplitHeaderRight>
-      <ResponsivePermissionsBadge />
       <Show
         when={props.respondOnly}
         fallback={

@@ -1168,7 +1168,7 @@ async fn channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting
         .await
         .unwrap();
     let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(error.message, "ambiguous credentials");
+    assert_eq!(error.message, "conflicting_credentials");
     assert_eq!(authorizer.call_count(), 0);
     assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
     assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
