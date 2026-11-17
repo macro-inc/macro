@@ -1,9 +1,6 @@
 import type { MobileSearchSession } from '@app/features/command/mobile/mobileSearchState';
-import { useMobileSearchCategory } from '@app/features/command/mobile/use-mobile-search-category';
 import type { EntitySearchCategory } from '@app/features/command/queries/entity-search';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type TranslationKey, t } from '@app/lib/i18n';
-import { enableProjects } from '@core/constant/featureFlags';
 import { type PillTabItem, PillTabs } from './PillTabs';
 
 const categoryPill = (
@@ -29,8 +26,7 @@ const CATEGORIES: PillTabItem<EntitySearchCategory>[] = [
 
 /** Search categories filter entities directly without navigating between views. */
 export function MobileViewsRow(props: { session: MobileSearchSession }) {
-  const projects = useFeatureFlag(enableProjects);
-  const category = useMobileSearchCategory(() => props.session.category());
+  const category = () => props.session.category();
   return (
     <header
       aria-label="Search filters"
@@ -39,9 +35,7 @@ export function MobileViewsRow(props: { session: MobileSearchSession }) {
       <PillTabs
         scrollable
         contentClass="px-(--mobile-chrome-gutter)"
-        items={CATEGORIES.filter(
-          (item) => item.value !== 'projects' || projects().enabled
-        )}
+        items={CATEGORIES}
         value={category()}
         onChange={(value) => props.session.setCategory(value)}
       />

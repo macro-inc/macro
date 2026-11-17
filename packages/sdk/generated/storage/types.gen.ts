@@ -10746,6 +10746,13 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program; never the request that asked for the message.
+     * Not part of the send's intent: it is neither stored nor compared on a
+     * retry.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -32744,6 +32751,10 @@ export type ExternalChatSendData = {
 };
 
 export type ExternalChatSendErrors = {
+    /**
+     * An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send
+     */
+    403: unknown;
     /**
      * One send request per second per user; Retry-After: 1
      */
