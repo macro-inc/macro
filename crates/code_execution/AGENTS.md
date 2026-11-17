@@ -39,6 +39,12 @@ create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
 
+The program shares the bootstrap's realm and can rewrite built-ins, so the
+fetch wrapper and the dry-run gate call only copies of them taken before the
+program loads (`uncurry`, `getter` in `bootstrap.mjs`); a new built-in the
+wrapper reads gets a copy and a row in the `PATCHED_FETCHES` test. This is
+not a boundary: the server must not trust the header or a dry run alone.
+
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and

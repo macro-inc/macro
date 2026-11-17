@@ -408,6 +408,9 @@ export async function main() {
       await connection.write(new TextEncoder().encode(request));
     },
     "Deno internals": () => Deno[Deno.internal].core,
+    // A proxied client sends `http://host/...` to the allowed host and port,
+    // which the URL's origin doesn't name.
+    "Deno.createHttpClient": () => fetch(`${host.origin}/raw`, {headers, client: Deno.createHttpClient({proxy: {url: host.origin}})}),
     "WebSocket": () => new WebSocket(`ws://${host.host}/raw`),
     "Worker": () => new Worker("data:text/javascript,1", {type: "module"}),
     "node:net": async () => send(await load("node:net")),
@@ -467,6 +470,7 @@ fn every_raw_request_blocked(worker: &str) -> serde_json::Value {
         "results": {
             "Deno.connect": "removed",
             "Deno internals": "removed",
+            "Deno.createHttpClient": "removed",
             "WebSocket": "removed",
             "Worker": worker,
             "node:net": "unavailable",
@@ -1459,4 +1463,369 @@ export async function main() {{
     // A fetch refused before connecting fails here rather than hanging below.
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
     server.await.unwrap();
+}
+
+/// Each built-in the bootstrap's fetch wrapper once read at call time,
+/// rewritten one at a time around a fetch to HOST with METHOD. The program
+/// returns what each fetch met.
+const PATCHED_FETCHES: &str = r#"
+const decoy = "http://decoy.invalid/";
+const patches = [
+  ["Set.prototype.has", Set.prototype, "has", {value: () => false}],
+  ["Headers.prototype.set", Headers.prototype, "set", {value: function () {}}],
+  ["String.prototype.replace", String.prototype, "replace", {value: () => "decoy.invalid"}],
+  ["String.prototype.endsWith", String.prototype, "endsWith", {value: () => true}],
+  ["String.prototype.slice", String.prototype, "slice", {value: () => "decoy.invalid"}],
+  ["Request", globalThis, "Request", {value: class extends Request { get url() { return decoy; } }}],
+  ["Request.prototype.url", Request.prototype, "url", {get: () => decoy}],
+  ["Request.prototype.method", Request.prototype, "method", {get: () => "GET"}],
+  ["Request.prototype.headers", Request.prototype, "headers", {get: () => new Headers()}],
+  ["URL", globalThis, "URL", {value: class { origin = "http://decoy.invalid"; hostname = "decoy.invalid"; pathname = "/"; }}],
+  ["URL.prototype.origin", URL.prototype, "origin", {get: () => "http://decoy.invalid"}],
+  ["URL.prototype.hostname", URL.prototype, "hostname", {get: () => "decoy.invalid", set() {}}],
+  ["URL.prototype.protocol", URL.prototype, "protocol", {get: () => "decoy:", set() {}}],
+  ["URL.prototype.pathname", URL.prototype, "pathname", {get: () => "/decisions", set() {}}],
+  ["RegExp.prototype.test", RegExp.prototype, "test", {value: () => true}],
+  ["RegExp.prototype.exec", RegExp.prototype, "exec", {value: () => []}],
+  ["Array.prototype.some", Array.prototype, "some", {value: () => true}],
+  ["Object.entries", Object, "entries", {value: () => []}],
+  ["Promise.reject", Promise, "reject", {value: () => Promise.resolve(new Response("{}"))}],
+  ["Function.prototype.call", Function.prototype, "call", {value: () => true}],
+  ["Function.prototype.apply", Function.prototype, "apply", {value: () => true}],
+  ["Function.prototype.bind", Function.prototype, "bind", {value: () => () => true}],
+];
+export async function main() {
+  const results = {};
+  for (const [name, target, key, patch] of patches) {
+    const original = Object.getOwnPropertyDescriptor(target, key);
+    const writable = "value" in patch ? {writable: true} : {};
+    Object.defineProperty(target, key, {configurable: true, ...writable, ...patch});
+    let result;
+    try {
+      const response = await fetch("HOST/patched", {method: "METHOD"});
+      result = `sent ${response.status}`;
+    } catch (error) {
+      result = String(error);
+    } finally {
+      Object.defineProperty(target, key, original);
+    }
+    results[name] = result;
+  }
+  return results;
+}
+"#;
+
+/// Requests to an SDK origin stay marked, however the program rewrites the
+/// built-ins.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rewritten_built_ins_do_not_unmark_requests() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(async move {
+        let mut unmarked = Vec::new();
+        loop {
+            let (mut stream, _) = tokio::select! {
+                accepted = listener.accept() => accepted.unwrap(),
+                _ = &mut stopped => break,
+            };
+            let request = read_request(&mut stream).await;
+            if !request
+                .to_ascii_lowercase()
+                .contains("x-macro-code-execution: 1\r\n")
+            {
+                unmarked.push(request);
+            }
+            respond(&mut stream, "{}").await;
+        }
+        unmarked
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), host.clone())]),
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: PATCHED_FETCHES
+                        .replace("HOST", &host)
+                        .replace("METHOD", "GET"),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    for (name, result) in value.as_object().unwrap() {
+        if name == "Function.prototype.call" {
+            // Deno's own fetch may break before it connects; either way the
+            // server assertion below shows nothing unmarked went out.
+            let result = result.as_str().unwrap();
+            assert!(
+                result == "sent 200" || result.starts_with("TypeError"),
+                "{result}"
+            );
+        } else {
+            assert_eq!(result, "sent 200", "{name}");
+        }
+    }
+    assert_eq!(server.await.unwrap(), Vec::<String>::new());
+    service.shutdown().await;
+}
+
+/// A dry run sends no writes, however the program rewrites the built-ins.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rewritten_built_ins_do_not_let_a_dry_run_write() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(async move {
+        let mut sent = Vec::new();
+        loop {
+            let (mut stream, _) = tokio::select! {
+                accepted = listener.accept() => accepted.unwrap(),
+                _ = &mut stopped => break,
+            };
+            sent.push(read_request(&mut stream).await);
+            respond(&mut stream, "{}").await;
+        }
+        sent
+    });
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone())],
+        serde_json::json!({}),
+        true,
+    );
+    let (_, outcome) = run_unattended(
+        &service,
+        &PATCHED_FETCHES
+            .replace("HOST", &host)
+            .replace("METHOD", "POST"),
+        environment,
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    for (name, result) in value.as_object().unwrap() {
+        assert!(
+            result
+                .as_str()
+                .unwrap()
+                .contains("A dry run doesn't send changes."),
+            "{name}: {result}"
+        );
+    }
+    assert_eq!(server.await.unwrap(), Vec::<String>::new());
+    service.shutdown().await;
+}
+
+/// A dry run's write is refused whatever scheme names the allowed host and
+/// port, before anything connects.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_refuses_a_write_under_another_scheme() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let source = format!(
+        r#"
+export async function main() {{
+  try {{
+    await fetch("https://{address}/email/labels", {{method: "POST"}});
+    return "sent";
+  }} catch (error) {{
+    return String(error);
+  }}
+}}
+"#
+    );
+    let environment = unattended(
+        "fixture-run-token",
+        &[("email", format!("http://{address}"))],
+        serde_json::json!({}),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, &source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(
+        value
+            .as_str()
+            .unwrap()
+            .contains("A dry run doesn't send changes."),
+        "{value}"
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+    service.shutdown().await;
+}
+
+/// A read a dry run sends can't be redirected into a write.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_read_is_not_redirected_into_a_write() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let location = format!("{host}/email/labels");
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("POST /decisions "), "{request}");
+        let response = format!(
+            "HTTP/1.1 307 Temporary Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let source = r#"
+export async function main({ host }: { host: string }) {
+  try {
+    const response = await fetch(`${host}/decisions`, { method: "POST", body: "{}" });
+    return `sent ${response.status}`;
+  } catch (error) {
+    return String(error);
+  }
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone()), ("email", host.clone())],
+        serde_json::json!({ "host": host }),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(value.as_str().unwrap().starts_with("TypeError"), "{value}");
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+/// A write whose path ends like a read's (`/web/search` and `/search`) is
+/// still a write to a dry run.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_does_not_send_a_write_that_ends_like_a_read() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let source = r#"
+export async function main({ host }: { host: string }) {
+  const results: Record<string, string> = {};
+  for (const path of ["/web/search", "/channel-sections/preview"]) {
+    try {
+      const response = await fetch(`${host}${path}`, { method: "POST", body: "{}" });
+      results[path] = `sent ${response.status}`;
+    } catch (error) {
+      results[path] = String(error);
+    }
+  }
+  return results;
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[
+            ("cognition", host.clone()),
+            ("search", host.clone()),
+            ("storage", host.clone()),
+        ],
+        serde_json::json!({ "host": host }),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    for (path, result) in value.as_object().unwrap() {
+        assert!(
+            result
+                .as_str()
+                .unwrap()
+                .contains("A dry run doesn't send changes."),
+            "{path}: {result}"
+        );
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+    service.shutdown().await;
+}
+
+/// A dry run's read is resent with options the program can't reach through
+/// `Object.prototype`: it keeps its method and its mark.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_read_keeps_its_method_and_mark_past_object_prototype() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({ host }: { host: string }) {
+  for (const [key, value] of [["method", "DELETE"], ["headers", { authorization: "Bearer x" }]]) {
+    Object.defineProperty(Object.prototype, key, { value, configurable: true, writable: true });
+  }
+  try {
+    const response = await fetch(`${host}/decisions`, { method: "POST", body: "{}" });
+    return `sent ${response.status}`;
+  } catch (error) {
+    return String(error);
+  } finally {
+    delete (Object.prototype as Record<string, unknown>).method;
+    delete (Object.prototype as Record<string, unknown>).headers;
+  }
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone())],
+        serde_json::json!({ "host": host }),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, source, environment).await;
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /decisions "), "{request}");
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("x-macro-code-execution: 1\r\n"),
+        "{request}"
+    );
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    service.shutdown().await;
 }
