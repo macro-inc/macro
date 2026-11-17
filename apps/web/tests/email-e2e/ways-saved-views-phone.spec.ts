@@ -46,7 +46,6 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([beta.id, alpha.id]);
 
       await openSidebarSheet(page);
-      did('AL-911');
       await sheet.getByRole('button', { name: 'New saved view' }).tap();
       did('AL-106');
       await builder.getByRole('textbox', { name: 'Name' }).fill('Alpha mail');

@@ -1,6 +1,7 @@
 // What the tests of the other ways into the mail list's functions share
 // (`ways-list1-*.spec.ts`): the list's rows, its header controls, the filter
-// menu and the phone's filter drawer.
+// menu, the phone's filter drawer, and on touch the Email sidebar's sheet and
+// the header's name for the open tab.
 
 import {
   devices,
@@ -9,6 +10,7 @@ import {
   type Page,
   type Request,
 } from '@playwright/test';
+import { did } from '../ledger/record';
 import type { Mailbox } from './fixtures';
 import { rowIds } from './list';
 
@@ -25,6 +27,7 @@ export function sidebarSheet(page: Page): Locator {
 /** Opens the Email sidebar's sheet with the touch header's pill. */
 export async function openSidebarSheet(page: Page): Promise<Locator> {
   await page.getByRole('button', { name: 'Show sidebar' }).tap();
+  did('AL-911');
   const sheet = sidebarSheet(page);
   await expect(
     sheet.getByRole('navigation', { name: 'Email tabs' })
@@ -50,7 +53,9 @@ export async function openTouchTab(page: Page, name: string): Promise<void> {
  * tab's, outside the Inbox.
  */
 export function touchHeaderName(page: Page, name: string): Locator {
-  return page.getByRole('main').getByText(name, { exact: true });
+  return page
+    .locator('[data-mobile-list-header]')
+    .getByText(name, { exact: true });
 }
 
 export const GRACE = 'Grace <grace@example.com>';

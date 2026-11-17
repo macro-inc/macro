@@ -1231,7 +1231,7 @@ export const compose = {
       fn: ['F-135'],
       state:
         'header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip',
-      trigger: 'draft lifecycle state; not on phones',
+      trigger: 'draft lifecycle state; not on touch devices',
       source: ['src/features/email-compose/views/email-compose.tsx'],
       note: 'touch composes with the phone composer at every width, which has no such header, and the Mail page on a desktop shows none: see the waiver',
     },

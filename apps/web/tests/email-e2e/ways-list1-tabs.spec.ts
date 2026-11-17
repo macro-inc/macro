@@ -90,7 +90,7 @@ for (const provider of PROVIDERS) {
     // sidebar sheet does not open its tab (Noise, All, Spam or Shared lists
     // what another tab holds, or nothing), the sheet stays open over the
     // list, or the header does not name the tab chosen there.
-    test('each Inbox pill and each tab of the sidebar sheet opens its tab', async ({
+    test('the Noise pill and each tab of the sidebar sheet open their tab', async ({
       page,
       mailbox,
     }) => {
@@ -131,7 +131,6 @@ for (const provider of PROVIDERS) {
       // The other tabs are in the sidebar's sheet, which closes on the
       // choice; the header then names the tab in place of the pills.
       await openSidebarSheet(page);
-      did('AL-911');
       await sheetTab('All').tap();
       did('AL-002', 'F-030');
       await expect(sheet).toHaveCount(0);
