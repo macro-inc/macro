@@ -1,6 +1,6 @@
 # Bootstrap Argo CD on a throwaway kind cluster from this branch (pushed: Argo
 # CD reads it from GitHub) and wait until every application is synced and all
-# but the two that need AWS are healthy.
+# but those that need AWS are healthy.
 #
 #   nix run .#kind-smoke [-- --revision <branch>] [--delete]
 name=observability-smoke
@@ -31,16 +31,20 @@ nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootst
 kubectl --context "$context" -n argocd annotate applications --all \
   argocd.argoproj.io/refresh=hard --overwrite
 
-# Every application must sync this commit. Without AWS two can't become
-# healthy: the load balancer controller can't look up its VPC, and the
-# ClusterSecretStore can't authenticate.
-expected_unhealthy="aws-load-balancer-controller external-secrets"
+# Every application must sync this commit. Without AWS some can't become
+# healthy: the load balancer controller can't look up its VPC, the
+# ClusterSecretStore can't authenticate, and the applications whose pods need
+# a secret from it wait for it. The edge can't even sync: the controller's
+# webhook, which admits TargetGroupBindings, isn't running.
+expected_unhealthy="aws-load-balancer-controller external-secrets grafana edge alloy-ingest"
+expected_unsynced="edge"
 deadline=$((SECONDS + 1200))
 while :; do
   table=$(kubectl --context "$context" -n argocd get applications \
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{end}')
-  pending=$(awk -v skip=" $expected_unhealthy " -v rev="$remote" \
-    '$2 != "Synced" || $4 != rev || (index(skip, " " $1 " ") == 0 && $3 != "Healthy")' <<<"$table")
+  pending=$(awk -v skip=" $expected_unhealthy " -v unsynced=" $expected_unsynced " -v rev="$remote" '
+    index(unsynced, " " $1 " ") == 0 && ($2 != "Synced" || $4 != rev) { print; next }
+    index(skip, " " $1 " ") == 0 && $3 != "Healthy" { print }' <<<"$table")
   if [ -z "$pending" ]; then break; fi
   if [ $SECONDS -ge $deadline ]; then
     echo "Timed out; not Synced at $remote and Healthy:" >&2

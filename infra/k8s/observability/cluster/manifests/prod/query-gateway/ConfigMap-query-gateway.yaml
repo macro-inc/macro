@@ -1,0 +1,96 @@
+apiVersion: v1
+data:
+  nginx.conf: |
+    worker_processes auto;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events {
+      worker_connections 1024;
+    }
+    http {
+      client_body_temp_path /tmp/client_body;
+      proxy_temp_path /tmp/proxy;
+      fastcgi_temp_path /tmp/fastcgi;
+      uwsgi_temp_path /tmp/uwsgi;
+      scgi_temp_path /tmp/scgi;
+      server_tokens off;
+      # Backends are resolved per request, so nginx starts even before the
+      # Services it proxies to exist, and follows them if they change.
+      resolver kube-dns.kube-system.svc.cluster.local valid=30s ipv6=off;
+      log_format safe '$remote_addr $host $request_method $uri $status';
+      access_log /dev/stdout safe;
+    map $http_upgrade $connection_upgrade {
+      default upgrade;
+      "" close;
+    }
+    server {
+      listen 8081 default_server;
+      server_name _;
+      location = /healthz {
+      access_log off;
+      default_type text/plain;
+      return 200 "ok\n";
+    }
+
+      location ~ ^/prometheus/api/v1/(query|query_range|query_exemplars|series|labels|label/[^/]+/values)$ {
+        limit_except GET POST { deny all; }
+    set $backend http://mimir.observability.svc.cluster.local:8080;
+    rewrite ^/[^/]+(/.*)$ /prometheus$1 break;
+    proxy_pass $backend;
+
+
+      }
+      location ~ ^/prometheus/api/v1/(metadata|status/buildinfo|status/config|rules|alerts|targets|targets/metadata)$ {
+        limit_except GET { deny all; }
+    set $backend http://mimir.observability.svc.cluster.local:8080;
+    rewrite ^/[^/]+(/.*)$ /prometheus$1 break;
+    proxy_pass $backend;
+
+
+      }
+      location ~ ^/loki/loki/api/v1/(query|query_range)$ {
+        limit_except GET POST { deny all; }
+    set $backend http://loki.observability.svc.cluster.local:3100;
+    rewrite ^/[^/]+(/.*)$ $1 break;
+    proxy_pass $backend;
+
+
+      }
+      # Loki's limits handler requires the single-tenant ID even with auth off.
+      location = /loki/loki/api/v1/drilldown-limits {
+        limit_except GET { deny all; }
+    set $backend http://loki.observability.svc.cluster.local:3100;
+    rewrite ^/[^/]+(/.*)$ $1 break;
+    proxy_pass $backend;
+    proxy_set_header X-Scope-OrgID fake;
+
+      }
+      location ~ ^/loki/loki/api/v1/(labels|label/[^/]+/values|series|index/stats|index/volume|index/volume_range|patterns|tail|status/buildinfo|format_query|detected_fields|detected_labels|detected_field/[^/]+/values)$ {
+        limit_except GET { deny all; }
+    set $backend http://loki.observability.svc.cluster.local:3100;
+    rewrite ^/[^/]+(/.*)$ $1 break;
+    proxy_pass $backend;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+
+      }
+      location ~ ^/tempo/api/(echo|search|search/tags|search/tag/[^/]+/values|traces/[a-fA-F0-9]+|v2/traces/[a-fA-F0-9]+|v2/search/tags|v2/search/tag/[^/]+/values|metrics/query|metrics/query_range|status/buildinfo)$ {
+        limit_except GET { deny all; }
+    set $backend http://tempo-query-frontend.observability.svc.cluster.local:3200;
+    rewrite ^/[^/]+(/.*)$ $1 break;
+    proxy_pass $backend;
+
+
+      }
+      location / {
+        return 404;
+      }
+    }
+
+    }
+kind: ConfigMap
+metadata:
+  name: query-gateway
+  namespace: observability

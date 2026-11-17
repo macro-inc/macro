@@ -5,9 +5,11 @@
   imports = [
     ./cluster.nix
     ./platform
-    # Later: ./loki.nix ./tempo.nix ./mimir.nix (backends), ./grafana.nix,
-    # ./ingest.nix, ./edge.nix. Each is its own application in the
-    # `observability` namespace and brings its own NetworkPolicies (see
-    # platform/observability-namespace.nix).
+    # Later: ./backends (Loki, Tempo, Mimir). Each is its own application
+    # in the `observability` namespace and brings its own NetworkPolicies
+    # (see platform/observability-namespace.nix).
+    ./grafana.nix
+    ./ingest.nix
+    ./edge.nix
   ];
 }
