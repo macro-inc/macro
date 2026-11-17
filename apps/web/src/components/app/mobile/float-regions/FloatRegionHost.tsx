@@ -44,7 +44,9 @@ export function FloatRegionHost() {
           // (see index.css): chrome must not track the OS text-size setting.
           // Only the chrome pins itself — accessory contributions (compose /
           // reply bars) keep rem sizing.
-          'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-(--mobile-chrome-gutter) pb-(--mobile-chrome-gutter)',
+          // The side insets keep the stack off the sensor housing and the
+          // rounded corners of a phone on its side; they are zero upright.
+          'pointer-events-none absolute right-(--safe-right) bottom-0 left-(--safe-left) z-mobile-nav-bar flex flex-col gap-(--mobile-chrome-gutter) pb-(--mobile-chrome-gutter)',
           isNativeMobilePlatform() && 'pb-[28px]',
           isPlatform('android') &&
             'pb-[calc(var(--safe-bottom,0px)+var(--mobile-chrome-gutter))]',
