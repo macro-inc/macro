@@ -16,6 +16,7 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+mod artifacts;
 mod computer;
 mod config;
 mod daemon;
@@ -144,6 +145,13 @@ enum Command {
         /// Absolute directory sessions run in; created when missing.
         #[arg(long)]
         workspace: Option<std::path::PathBuf>,
+    },
+    /// Serve one of macrod's own MCP servers on stdio. Agents launch these
+    /// themselves: macrod adds them to each session it serves.
+    #[command(hide = true)]
+    Mcp {
+        #[command(subcommand)]
+        server: McpServer,
     },
     /// Join this Macro computer to Macro at first boot: write the config,
     /// and claim the pre-approved pairing.
@@ -282,6 +290,12 @@ fn relaunch_arguments(selection: &ConfigSelection, profile_flag_given: bool) -> 
     arguments
 }
 
+#[derive(clap::Subcommand)]
+enum McpServer {
+    /// `PublishArtifact`: publish files from the workspace as a Macro artifact.
+    Artifacts,
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     // Dialing a `wss` gateway needs a process-wide provider, and rustls
@@ -328,6 +342,21 @@ async fn main() -> ExitCode {
                 Err(error) => {
                     service::emit_fatal(&format!("{error}"));
                     eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Some(Command::Mcp {
+            server: McpServer::Artifacts,
+        }) => {
+            // stdout is the MCP stream: logs go to stderr.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match artifacts::serve().await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod mcp artifacts: {error:?}");
                     ExitCode::FAILURE
                 }
             };

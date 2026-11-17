@@ -23,3 +23,6 @@ pub mod tool_approvals;
 
 /// MCP tool exchanges with credentials isolated per invocation.
 pub mod actor_mcp;
+
+/// Macro's artifact endpoints, called as the person who prompted the turn.
+pub mod artifact_calls;

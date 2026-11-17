@@ -30,6 +30,7 @@ async fn unspawnable_harness_reports_failure() {
     let error = bridge(
         &harness("macro-no-such-harness-binary"),
         std::path::Path::new("/"),
+        None,
         runtime,
         None,
         &ActiveTurns::default(),
@@ -58,6 +59,7 @@ async fn harness_that_exits_immediately_disconnects() {
     let _ = bridge(
         &harness("true"),
         std::path::Path::new("/"),
+        None,
         runtime,
         None,
         &ActiveTurns::default(),
@@ -83,6 +85,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
     let error = bridge(
         &harness("true"),
         std::path::Path::new("/"),
+        None,
         runtime,
         None,
         &ActiveTurns::default(),
@@ -155,6 +158,7 @@ for line in sys.stdin:
     let bridge = bridge(
         &agent,
         std::path::Path::new("/"),
+        None,
         runtime,
         None,
         &turns,

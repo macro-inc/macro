@@ -3,11 +3,16 @@
 //! leading text block describing this runtime; loaded and resumed sessions
 //! already carry it from their first turn. General Macro guidance stays in
 //! the Macro MCP server's `SelfKnowledge` tool.
+//!
+//! The same pass adds macrod's own MCP server ([`crate::artifacts`]) to every
+//! session the agent opens, loads or resumes.
 
 use std::collections::HashMap;
 
 use agent_session::domain::model::MACRO_PERMISSION_POLICY_META_KEY;
 use serde_json::Value;
+
+use crate::artifacts::{LocalServer, SERVER_NAME, TOOL_NAME};
 
 #[cfg(test)]
 mod test;
@@ -21,6 +26,8 @@ pub(crate) struct SessionFacts {
     pub(crate) mcp_servers: Vec<String>,
     /// Whether Macro approves the agent's tool permission requests itself.
     pub(crate) permission_bypass: bool,
+    /// Whether macrod's own server, with `PublishArtifact`, was added.
+    pub(crate) artifacts: bool,
 }
 
 /// Correlates `session/new` with its answer, then rewrites that session's
@@ -28,6 +35,8 @@ pub(crate) struct SessionFacts {
 /// sessions are followed by request id until the agent names them.
 #[derive(Debug, Default)]
 pub(crate) struct SelfKnowledge {
+    /// macrod's own server, added to every session when set.
+    local_server: Option<LocalServer>,
     /// `session/new` requests awaiting their answer, by request id.
     opening: HashMap<String, SessionFacts>,
     /// Sessions created but not yet prompted, by ACP session id.
@@ -35,8 +44,17 @@ pub(crate) struct SelfKnowledge {
 }
 
 impl SelfKnowledge {
-    /// Observe a message on its way to the agent, prefixing the runtime
-    /// section to a new session's first prompt.
+    /// Follow sessions, adding `local_server` to each one.
+    pub(crate) fn new(local_server: Option<LocalServer>) -> Self {
+        Self {
+            local_server,
+            ..Self::default()
+        }
+    }
+
+    /// Observe a message on its way to the agent, adding macrod's own server
+    /// to the sessions it opens and prefixing the runtime section to a new
+    /// session's first prompt.
     pub(crate) fn outbound(&mut self, message: &mut Value) {
         match message.get("method").and_then(Value::as_str) {
             Some("session/new") => {
@@ -44,8 +62,18 @@ impl SelfKnowledge {
                     .get("id")
                     .filter(|id| !id.is_null())
                     .map(Value::to_string);
-                if let (Some(id), Some(params)) = (id, message.get("params")) {
-                    self.opening.insert(id, session_facts(params));
+                let Some(params) = message.get_mut("params") else {
+                    return;
+                };
+                let mut facts = session_facts(params);
+                facts.artifacts = self.add_local_server(params);
+                if let Some(id) = id {
+                    self.opening.insert(id, facts);
+                }
+            }
+            Some("session/load" | "session/resume") => {
+                if let Some(params) = message.get_mut("params") {
+                    self.add_local_server(params);
                 }
             }
             Some("session/prompt") => {
@@ -68,6 +96,12 @@ impl SelfKnowledge {
             }
             _ => {}
         }
+    }
+
+    fn add_local_server(&self, params: &mut Value) -> bool {
+        self.local_server
+            .as_ref()
+            .is_some_and(|server| server.add_to(params))
     }
 
     /// Observe a message from the agent, learning which session a
@@ -112,6 +146,7 @@ fn session_facts(params: &Value) -> SessionFacts {
             .and_then(|meta| meta.get(MACRO_PERMISSION_POLICY_META_KEY))
             .and_then(Value::as_str)
             == Some("autoAccept"),
+        artifacts: false,
     }
 }
 
@@ -138,6 +173,14 @@ pub(crate) fn render(facts: &SessionFacts) -> String {
             "- MCP servers forwarded from Macro: {}. Use them to read and act in the Macro workspace; \
              for questions about Macro itself, call its SelfKnowledge tool.",
             facts.mcp_servers.join(", ")
+        ));
+    }
+    if facts.artifacts {
+        lines.push(format!(
+            "- Artifacts: to show people a page, prototype or UI mock-up, write it as files in the \
+             workspace and publish them with {SERVER_NAME}'s {TOOL_NAME} tool; it uploads from disk, \
+             so never read the files back into the conversation. Its description says how to \
+             reproduce the user's own UI."
         ));
     }
     if facts.permission_bypass {

@@ -314,3 +314,66 @@ async fn an_unauthenticated_mcp_request_is_not_told_to_use_basic() {
             .contains_key(http::header::WWW_AUTHENTICATE)
     );
 }
+
+fn post(uri: &str) -> Request {
+    Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header(AUTHORIZATION, "Bearer session")
+        .body(Body::empty())
+        .expect("request")
+}
+
+/// The four artifact calls macrod makes reach the service as their endpoint;
+/// any other method, path, or storage route is not served.
+#[tokio::test]
+async fn routes_only_the_allowlisted_artifact_endpoints() {
+    let id = macro_uuid::Uuid::parse_str("0198a7b2-6c1d-7f00-8000-000000000001").expect("uuid");
+    let service = SpyService::accepting();
+
+    for request in [
+        post("/artifacts"),
+        get(&format!("/artifacts/{id}"), Some("Bearer session")),
+        post(&format!("/artifacts/{id}/uploads?next=elsewhere")),
+        post(&format!("/artifacts/{id}/versions")),
+    ] {
+        let response = call(&service, request).await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+    assert_eq!(
+        service.targets(),
+        [
+            EgressTarget::Artifacts(ArtifactEndpoint::Create),
+            EgressTarget::Artifacts(ArtifactEndpoint::Read(id)),
+            EgressTarget::Artifacts(ArtifactEndpoint::Uploads(id)),
+            EgressTarget::Artifacts(ArtifactEndpoint::Publish(id)),
+        ]
+    );
+
+    for request in [
+        get("/artifacts", Some("Bearer session")),
+        post(&format!("/artifacts/{id}/versions/1/restore")),
+        post(&format!("/artifacts/{id}/view_url")),
+        post("/artifacts/not-an-id/uploads"),
+        post(&format!("/artifacts/{id}")),
+    ] {
+        let response = call(&service, request).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+    assert_eq!(service.targets().len(), 4);
+}
+
+#[tokio::test]
+async fn an_artifact_call_without_a_token_never_reaches_the_service() {
+    let service = SpyService::accepting();
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/artifacts")
+        .body(Body::empty())
+        .expect("request");
+
+    let response = call(&service, request).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(service.targets().is_empty());
+}

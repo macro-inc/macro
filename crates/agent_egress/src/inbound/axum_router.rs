@@ -20,8 +20,8 @@ use tracing::Level;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    BoxError, CustomMcpServerKey, EgressTarget, GitEndpoint, McpDestination, McpServerSlug,
-    ProxyRequest, ProxyResponse, SessionToken,
+    ARTIFACTS_PATH, ArtifactEndpoint, BoxError, CustomMcpServerKey, EgressTarget, GitEndpoint,
+    McpDestination, McpServerSlug, ProxyRequest, ProxyResponse, SessionToken,
 };
 use crate::domain::service::EgressService;
 
@@ -68,6 +68,11 @@ where
         .route("/mcp-custom/{key}", any(custom_mcp_handler::<Service>))
         .route("/mcp-macro", any(macro_mcp_handler::<Service>))
         .route("/mcp-preview", any(preview_mcp_handler::<Service>))
+        .route(ARTIFACTS_PATH, any(artifacts_root_handler::<Service>))
+        .route(
+            &format!("{ARTIFACTS_PATH}/{{*path}}"),
+            any(artifacts_handler::<Service>),
+        )
         .route(
             "/git/{*path}",
             get(git_handler::<Service>).post(git_handler::<Service>),
@@ -150,6 +155,51 @@ where
 {
     let token = session_token(request.headers())?;
     dispatch(state, token, EgressTarget::McpServer(destination), request).await
+}
+
+/// `POST /artifacts`, which axum's wildcard does not match.
+async fn artifacts_root_handler<Service>(
+    State(state): State<EgressRouterState<Service>>,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    artifacts_proxy(state, String::new(), request).await
+}
+
+async fn artifacts_handler<Service>(
+    State(state): State<EgressRouterState<Service>>,
+    Path(path): Path<String>,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    artifacts_proxy(state, format!("/{path}"), request).await
+}
+
+/// One artifact call through the proxy. The endpoint is recognized from an
+/// allowlist and the storage URL is rebuilt from it, so neither another
+/// storage route nor a query string can ride along.
+#[tracing::instrument(skip_all, err(level = Level::INFO), fields(%path))]
+async fn artifacts_proxy<Service>(
+    state: EgressRouterState<Service>,
+    path: String,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    let token = session_token(request.headers())?;
+    let endpoint = ArtifactEndpoint::parse(request.method(), &path).ok_or_else(|| {
+        EgressError::Unroutable(format!(
+            "{} {ARTIFACTS_PATH}{path} is not served here",
+            request.method()
+        ))
+    })?;
+
+    dispatch(state, token, EgressTarget::Artifacts(endpoint), request).await
 }
 
 /// The whole git route: no repository in the path, because the session has
@@ -275,7 +325,7 @@ impl IntoResponse for EgressError {
             Self::UnknownServer(_) | Self::UnknownCustomServer(_) | Self::Unroutable(_) => {
                 StatusCode::NOT_FOUND
             }
-            Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
+            Self::RepoUnavailable(_) | Self::NoActingUser => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             // The named upstream is unusable as configured. Someone has to
@@ -302,6 +352,9 @@ impl IntoResponse for EgressError {
             }
             Self::RepoUnavailable(_) => {
                 "This session's repository is not reachable with Macro's GitHub App."
+            }
+            Self::NoActingUser => {
+                "This call acts as the person who prompted the running turn, and no person did."
             }
             Self::MethodNotAllowed(_) => "That method is not allowed here.",
             Self::RequestTooLarge => "That request body is too large.",

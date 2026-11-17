@@ -64,6 +64,11 @@ pub enum EgressError {
     #[error("no usable GitHub App installation for {0}")]
     RepoUnavailable(RepoSlug),
 
+    /// The call acts as whoever prompted the running turn, and nobody did: no
+    /// turn is running, or a system turn on nobody's behalf is.
+    #[error("no person prompted the running turn")]
+    NoActingUser,
+
     /// The destination a credential was about to be stamped for is not
     /// https. Refused rather than downgraded: an MCP server's URL is typed in
     /// by a person, and stamping the owner's OAuth token onto a cleartext

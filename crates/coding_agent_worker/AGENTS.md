@@ -37,6 +37,15 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/artifacts.rs` (`src/artifacts/`): `PublishArtifact`. The bridge's
+  `SelfKnowledge` pass adds a stdio MCP server (`macrod mcp artifacts`, name
+  `macrod`) to every `session/new|load|resume` that carries Macro's `macro`
+  server, passing the egress base and session token read off that entry in
+  the server's environment. The server reads files under the session `cwd`
+  only (symlinks resolved), hashes them, and publishes through the egress
+  `/artifacts` route; no Macro API token touches the machine. Its tool
+  description carries the UI-replication guidance. Managed herdr worktrees
+  drop the root variable so the server roots at the agent's own directory.
 - `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
   run as root by the box image's `macrod-enroll.service` on a Macro computer.
   Reads the `hosted_runtimes` `Enrollment` (Incus guest API
@@ -180,6 +189,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
   `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- The artifact wire types in `src/artifacts/publish.rs` mirror the document
+  storage service's artifact API by hand; change them with that API.
 - The musl release allocates with mimalloc (`src/main.rs`). zig's libc
   `malloc`, which cargo-zigbuild links otherwise, keeps memory freed on another
   thread, and tokio frees on any worker: resident memory grew by gigabytes over
