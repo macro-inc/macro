@@ -21,8 +21,15 @@ import {
   loadChannelPage,
   pageHasPendingWrites,
 } from './pages';
+import { PREWARM_PAGE_SIZE } from './prewarm';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
+import {
+  forgetUnheldRead,
+  noteUnheldRead,
+  type UnheldRead,
+  unheldReads,
+} from './unheld-reads';
 import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
@@ -175,12 +182,53 @@ async function holdChannelThread(
   const key = `${channelId}:${rootId}`;
   if (threadsBeingHeld.has(key)) return;
   threadsBeingHeld.add(key);
+  // The host may take seconds to start; a reload meanwhile leaves the thread
+  // to the next page.
+  noteUnheldRead({ channelId, rootId });
   try {
     await loadChannelThread(host, channelId, rootId);
   } catch (error) {
     reportDeviceFault(error);
   } finally {
     threadsBeingHeld.delete(key);
+  }
+}
+
+async function holdUnheldRead(
+  host: CacheHost,
+  { channelId, rootId }: UnheldRead
+): Promise<void> {
+  if (rootId !== undefined) {
+    await loadChannelThread(host, channelId, rootId);
+    return;
+  }
+  const loaded = await loadChannelPage(host, {
+    channelId,
+    limit: PREWARM_PAGE_SIZE,
+  });
+  if (loaded !== 'unsupported' && loaded !== 'not-ready') {
+    if (loaded.source === 'server') await loaded.stored;
+  }
+}
+
+/**
+ * Has the device hold the channel pages and threads a page that is gone
+ * showed from the server and did not see the device store.
+ */
+export async function holdUnheldReads(host: CacheHost): Promise<void> {
+  for (const read of unheldReads()) {
+    // Offline it stays noted for the pass after the reconnect.
+    if (!onlineManager.isOnline()) return;
+    try {
+      await holdUnheldRead(host, read);
+      forgetUnheldRead(read, true);
+    } catch (error) {
+      if (!onlineManager.isOnline()) return;
+      // A channel the person can no longer read, or a failed request: the
+      // prewarm keeps what is still wanted, so this is not tried again.
+      forgetUnheldRead(read, true);
+      reportDeviceFault(error);
+    }
   }
 }
 

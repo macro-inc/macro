@@ -25,6 +25,7 @@ import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
+import { holdUnheldReads } from './source';
 import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
 import { sendChannelMessage } from './writes';
 
@@ -91,8 +92,9 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * for thirty days. When the cache storage is reset under the page, the open
  * channels' pages and threads are read again so the device holds them again.
  * Each tab also sends the messages a page that is gone was still handing to
- * the device queue, and stores the pushed changes such a page had shown but
- * the device had not taken. With the flag off none of this runs; the sends an
+ * the device queue, stores the pushed changes such a page had shown but the
+ * device had not taken, and has the device hold the channel pages and threads
+ * such a page had shown from the server before the device stored them. With the flag off none of this runs; the sends an
  * earlier page left noted are posted over REST.
  */
 export function useChannelCache(userId: Accessor<string | undefined>): void {
@@ -177,6 +179,7 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     // Again after a reconnect: offline, the catch-up fails and stays noted.
     pass();
     fireAndForget(storeUnstoredPushes(cacheHost), 'channel-local-sync');
+    fireAndForget(holdUnheldReads(cacheHost), 'channel-local-sync');
   });
 
   createEffect(() => {
