@@ -2,8 +2,10 @@ set -euo pipefail
 
 bundle_log="$RUNNER_TEMP/email-e2e-bundle.log"
 
-# The bundle builds beside the stack's services.
-(cd apps/web && just build-email-e2e > "$bundle_log" 2>&1) &
+# The bundle builds beside the stack's services, without the job's RUSTFLAGS:
+# they link the services with mold, and a wasm package the wasm cache misses
+# links with rust-lld, which refuses that flag.
+(cd apps/web && unset RUSTFLAGS && just build-email-e2e > "$bundle_log" 2>&1) &
 web=$!
 trap 'kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
 

@@ -257,9 +257,12 @@ jobs:
         # The bundle builds beside the services, and the fixture suites, which need
         # the bundle's wasm packages but no service, start as soon as it is built.
         # The suite is split over machines (EMAIL_E2E_SHARD, "2/3"); the fixture
-        # suites run on the first only.
+        # suites run on the first only. The job's RUSTFLAGS link the services with
+        # mold; a wasm package links with rust-lld, which refuses that flag, so the
+        # bundle builds without them (a package the wasm cache misses is built here).
         (
           cd apps/web
+          unset RUSTFLAGS
           just build-email-e2e > "$bundle_log" 2>&1 || exit 90
           touch "$bundle_built"
           if [ "${EMAIL_E2E_SHARD%%/*}" = 1 ]; then
