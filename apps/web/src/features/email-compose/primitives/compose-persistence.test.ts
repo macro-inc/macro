@@ -748,6 +748,57 @@ it('reads the draft afresh once the scheduled notice has closed', async () => {
   threadView.dispose();
 });
 
+it('reads the draft afresh long after a notice that never reported closing', async () => {
+  const composeContext = createComposeContext();
+  // A notice dismissed before it was shown never reports closing.
+  const { host, options } = await scheduleAndShowThread(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  await vi.advanceTimersByTimeAsync(30_000);
+
+  const later = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(later.state.context.schedule.state()).toEqual({
+    type: 'editing',
+    intent: { type: 'immediate' },
+  });
+  later.dispose();
+  options?.onDismiss?.();
+});
+
+it('starts a composer mounted while the thread is marked done from the schedule', async () => {
+  const composeContext = createComposeContext();
+  let markDone: (() => void) | undefined;
+  vi.mocked(composeContext.delivery.archive).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        markDone = resolve;
+      })
+  );
+  const root = mountEmailComposer(composeContext);
+  root.edit('Schedule and mark done');
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  root.state.context.schedule.onSelect(sendTime);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.archive).toHaveBeenCalledOnce();
+
+  // The thread open in another split mounts its composer meanwhile.
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(beside.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  markDone?.();
+  await vi.advanceTimersByTimeAsync(1);
+  vi.mocked(composeContext.notices.feedback.success)
+    .mock.calls.find(([text]) => text === 'Email scheduled')?.[1]
+    ?.onDismiss?.();
+  beside.dispose();
+  root.dispose();
+});
+
 it('preserves local intent on schedule failure without falling back to send', async () => {
   const composeContext = createComposeContext();
   const root = mountEmailComposer(composeContext);

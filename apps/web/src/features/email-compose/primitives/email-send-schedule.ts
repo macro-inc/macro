@@ -70,8 +70,17 @@ const sameTime = (left: Date, right: Date) =>
 // mounts another composer for the same draft, which may cancel or deliver it.
 // That composer can read the draft from before the schedule, so while the
 // notice is open it starts from the time this tab scheduled.
-type ScheduledNotice = { toastId: number | undefined; sendTime: Date };
+type ScheduledNotice = {
+  toastId: number | undefined;
+  sendTime: Date;
+  seedUntil: number;
+};
 const scheduledNotices = new Map<string, ScheduledNotice>();
+// How long a notice's schedule seeds new composers: far longer than the
+// thread takes to refresh after a schedule. A notice dismissed before it was
+// ever shown never reports closing, and its schedule may since have been
+// cancelled elsewhere.
+const SCHEDULED_SEED_MS = 30_000;
 
 export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
@@ -113,11 +122,12 @@ export function createEmailSendSchedule(options: {
 }) {
   const { delivery, notices } = options;
   const initialDraftId = options.draftId() ?? undefined;
+  const seed = initialDraftId
+    ? scheduledNotices.get(initialDraftId)
+    : undefined;
   const initialScheduledTime =
     options.initialScheduledTime ??
-    (initialDraftId
-      ? scheduledNotices.get(initialDraftId)?.sendTime
-      : undefined);
+    (seed && Date.now() < seed.seedUntil ? seed.sendTime : undefined);
   const [state, setState] = createSignal<EmailScheduleState>(
     initialScheduledTime
       ? {
@@ -403,6 +413,15 @@ export function createEmailSendSchedule(options: {
       }
 
       applyScheduled(requested, true);
+      // In place before the thread is marked done: a composer mounted for this
+      // draft from now on starts from this schedule.
+      dismissScheduledNotice();
+      const notice: ScheduledNotice = {
+        toastId: undefined,
+        sendTime: requested,
+        seedUntil: Date.now() + SCHEDULED_SEED_MS,
+      };
+      scheduledNotices.set(draftId, notice);
       const threadId = options.threadId();
       let markedDone = false;
       const inInbox = options.threadInInbox
@@ -422,7 +441,6 @@ export function createEmailSendSchedule(options: {
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
-        let notice: ScheduledNotice | undefined;
         let undoStarted = false;
         const onViewScheduled = options.onViewScheduled;
         const viewAction = onViewScheduled
@@ -452,11 +470,7 @@ export function createEmailSendSchedule(options: {
                   kind: 'undo' as const,
                   onClick: () => {
                     // A dismissing notice stays clickable; only the live one undoes.
-                    if (
-                      undoStarted ||
-                      !notice ||
-                      scheduledNotices.get(draftId) !== notice
-                    )
+                    if (undoStarted || scheduledNotices.get(draftId) !== notice)
                       return;
                     undoStarted = true;
                     scheduledNotices.delete(draftId);
@@ -477,7 +491,6 @@ export function createEmailSendSchedule(options: {
               ]
             : [];
         const actions = [...viewAction, ...undoAction];
-        dismissScheduledNotice();
         toastId = notices.feedback.success(
           action === 'update' ? 'Email rescheduled' : 'Email scheduled',
           {
@@ -490,13 +503,12 @@ export function createEmailSendSchedule(options: {
             ...(actions.length > 0 ? { actions, duration: 8_000 } : {}),
             // A composer mounted after the notice closes reads the draft afresh.
             onDismiss: () => {
-              if (notice && scheduledNotices.get(draftId) === notice)
+              if (scheduledNotices.get(draftId) === notice)
                 scheduledNotices.delete(draftId);
             },
           }
         );
-        notice = { toastId, sendTime: requested };
-        scheduledNotices.set(draftId, notice);
+        notice.toastId = toastId;
       } catch (error) {
         // Toast rendering is post-commit UI and cannot make a successful
         // schedule retryable.
