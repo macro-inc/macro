@@ -1133,6 +1133,21 @@ impl BotRepo for PgBotsRepo {
                 SELECT owner_user_id, team_id, deleted_at
                 FROM bots
                 WHERE id = $1
+            ),
+            -- Two arms rather than one OR, so live memberships come from
+            -- the partial index on active participants. The channels a
+            -- deletion left are read only for a deleted bot.
+            bot_channels AS (
+                SELECT bot_p.channel_id
+                FROM comms_channel_participants bot_p
+                WHERE bot_p.user_id = $2
+                  AND bot_p.left_at IS NULL
+                UNION
+                SELECT bot_p.channel_id
+                FROM comms_channel_participants bot_p
+                WHERE (SELECT deleted_at FROM bot) IS NOT NULL
+                  AND bot_p.user_id = $2
+                  AND bot_p.left_at >= (SELECT deleted_at FROM bot)
             )
             SELECT owner_user_id AS "user_id!"
             FROM bot
@@ -1143,12 +1158,9 @@ impl BotRepo for PgBotsRepo {
             INNER JOIN team_user tu ON tu.team_id = bot.team_id
             UNION
             SELECT user_p.user_id
-            FROM bot
-            INNER JOIN comms_channel_participants bot_p
-              ON bot_p.user_id = $2
-             AND (bot_p.left_at IS NULL OR bot_p.left_at >= bot.deleted_at)
+            FROM bot_channels
             INNER JOIN comms_channel_participants user_p
-              ON user_p.channel_id = bot_p.channel_id
+              ON user_p.channel_id = bot_channels.channel_id
              AND user_p.left_at IS NULL
             WHERE user_p.user_id NOT LIKE 'bot|%'
             "#,
