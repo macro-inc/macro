@@ -513,14 +513,12 @@ describe('buildEmailSearchRequest', () => {
     expect(filtersFor('all')).toEqual({});
   });
 
-  it('leaves Drafts and Sent search unscoped', () => {
+  it('scopes Drafts and Sent search to their views, like the list', () => {
     const filtersFor = (tab: EmailTab) =>
       requestFor({ tab }).filters.email_filters;
 
-    // Macro-composed drafts are unindexed and unlabeled; the client trims
-    // both tabs' results instead (see tabFilters).
-    expect(filtersFor('drafts')).toEqual({});
-    expect(filtersFor('sent')).toEqual({});
+    expect(filtersFor('drafts')).toEqual({ view: 'drafts' });
+    expect(filtersFor('sent')).toEqual({ view: 'sent' });
   });
 
   it('searches archived mail as done and unshared, like the list', () => {
@@ -564,15 +562,22 @@ describe('buildEmailSearchRequest', () => {
     ).toEqual({ is_read: true, done: true });
   });
 
-  it('maps the calendar facet and ignores attachment facets', () => {
+  it('maps the calendar facet and the attachment kinds', () => {
     const filters = requestFor({
       facets: {
         calendar: ['has-calendar-invite'],
-        attachments: ['attachment-pdf'],
+        attachments: ['attachment-pdf', 'attachment-image', 'attachment-pdf'],
       },
     }).filters.email_filters;
 
-    expect(filters).toEqual({ calendar_only: true });
+    expect(filters).toEqual({
+      calendar_only: true,
+      attachments: ['pdf', 'image'],
+    });
+    expect(
+      requestFor({ facets: { attachments: ['attachment-document'] } }).filters
+        .email_filters
+    ).toEqual({ attachments: ['document'] });
   });
 
   it('sends selected tags as an entity-wide filter', () => {

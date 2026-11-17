@@ -19,6 +19,8 @@ pub(crate) enum Refusal {
     UnknownOperation,
     /// A write during a dry run.
     DryRunWrite,
+    /// Its URL doesn't parse, so nothing about it can be checked.
+    UnparseableUrl,
     /// It carries no credential: it reaches a route anyone may call, which
     /// no scope signed into the run's credential can hold.
     NoCredential,

@@ -172,7 +172,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   the session repo, the `enable-agent-navigation` flag, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
-  `macro.connectedApps` through the in-process egress service.
+  `macro.connectedApps` through the in-process egress service; a scoped
+  session's code is refused it, and its turn calls no remote MCP tool
+  directly either (`ScopedToolGate::refuse_remote_mcp`).
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document
@@ -244,14 +246,19 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Code runs (session, public MCP and routine steps) reach the SDK hosts
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
-  flag client, the flag off or the flags unreadable, they go directly.
+  flag client, the flag off or the flags unreadable, they go directly. The
+  answer is cached per user for 60 s (10 s after a failed read), so a run
+  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):
   attributed to Macro acting for them, or, when the routine sets
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
-  they never start routines.
+  they never start routines. A dry run's token (a code upgrade's check of a
+  rewritten step, at run time or in the startup sweep) also signs the
+  `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
+  even when code gets past the dry run inside its process.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected

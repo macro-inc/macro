@@ -351,9 +351,11 @@ impl DenoRunner {
             let candidate = bridge(
                 &job.environment,
                 forwarder,
-                stdin,
-                stdout,
-                stderr,
+                ChildPipes {
+                    stdin,
+                    stdout,
+                    stderr,
+                },
                 events,
                 &job.limits,
                 job.deadline,
@@ -528,16 +530,26 @@ enum ChildFrame {
     },
 }
 
+/// The child's standard streams, which the bridge owns for the run.
+struct ChildPipes {
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    stderr: tokio::process::ChildStderr,
+}
+
 async fn bridge(
     environment: &RunEnvironment,
     forwarder: Option<&std::collections::BTreeMap<String, String>>,
-    mut stdin: tokio::process::ChildStdin,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
+    pipes: ChildPipes,
     events: &mut EventSink,
     limits: &Limits,
     deadline: tokio::time::Instant,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
+    let ChildPipes {
+        mut stdin,
+        stdout,
+        stderr,
+    } = pipes;
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         forwarder,

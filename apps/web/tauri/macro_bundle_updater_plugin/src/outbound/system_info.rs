@@ -13,14 +13,20 @@ use crate::domain::{
 pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
     native_build: u64,
+    embedded_git_sha: Option<&'static str>,
 }
 
 impl<R: Runtime> SystemInfo<R> {
     /// Create a new system info query bound to the given app handle.
-    pub fn new(app_handle: tauri::AppHandle<R>, native_build: u64) -> Self {
+    pub fn new(
+        app_handle: tauri::AppHandle<R>,
+        native_build: u64,
+        embedded_git_sha: Option<&'static str>,
+    ) -> Self {
         Self {
             app_handle,
             native_build,
+            embedded_git_sha,
         }
     }
 
@@ -75,6 +81,7 @@ impl<R: Runtime> SystemQuery for SystemInfo<R> {
     async fn get_native_app_info(&self) -> Result<NativeAppInfo, rootcause::Report> {
         Ok(NativeAppInfo {
             native_build: self.native_build,
+            embedded_git_sha: self.embedded_git_sha.map(str::to_owned),
             arch: self.get_arch(),
             target: self.get_target(),
         })

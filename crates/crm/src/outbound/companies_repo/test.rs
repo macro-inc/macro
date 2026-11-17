@@ -13,6 +13,7 @@ mod contact_update;
 mod create_company;
 mod create_contact;
 mod domain_directory;
+mod email_policy;
 mod email_privacy;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
