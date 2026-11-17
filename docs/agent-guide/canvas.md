@@ -32,6 +32,11 @@ places what is chosen at the middle of the view. Check that nothing sits under
 the dock or the home indicator, that every button answers a real tap, and that
 closing a sheet leaves the selection as it was.
 
+Text made low on the screen is panned up clear of the keyboard as it appears,
+and a long line keeps its end in view; the page itself never scrolls and the
+header stays put. The keyboard's Done button on a phone, or its hide key on a
+tablet, commits the text and leaves it selected with the Select tool.
+
 **Zoom to fit** in the zoom sheet shows the whole scene between the header and
 the bottom chrome, 24px clear of both and of the screen's sides, and left of the
 inspector panel when it is open. Turn the device: a canvas nobody has moved since

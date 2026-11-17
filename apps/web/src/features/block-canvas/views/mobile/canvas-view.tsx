@@ -5,6 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { selectAllCommand } from '@macro-inc/graphics';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { onKeyboardClosed } from '../../primitives/on-keyboard-closed';
 import {
   CanvasViewParts,
   type CanvasViewProps,
@@ -214,6 +215,31 @@ function MobileCanvasLayout() {
     };
   };
 
+  // Closing the keyboard ends a text edit: nothing else would, and the text
+  // would sit there half-open until the next tap. The edit is committed and
+  // its text selected, as after a tap elsewhere.
+  const commitText = () => {
+    const draft = state.text.draft();
+    if (!draft) return;
+    state.text.finish();
+    state.chooseTool('select');
+    if (editor.document.items[draft.id]) editor.select(draft.id);
+  };
+  // A phone's Done button takes the focus from the text, to nowhere. Focus
+  // that moves to the canvas or to a control is that press's business, and it
+  // commits the text itself.
+  const commitTextLeftByKeyboard = (event: FocusEvent) => {
+    if (event.relatedTarget) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest('[data-canvas-text-editor]')
+    )
+      commitText();
+  };
+  // A tablet's hide key leaves the focus where it was, so there the keyboard
+  // going away is the only sign.
+  onKeyboardClosed(commitText);
+
   // A sheet takes the keyboard's focus with it, so each way out of the Attach
   // sheets hands it back to the canvas.
   const thenFocus = focusingAfter(view.focus);
@@ -243,6 +269,7 @@ function MobileCanvasLayout() {
           if (state.embeds.active() || state.text.draft()) return;
           event.preventDefault();
         }}
+        on:focusout={commitTextLeftByKeyboard}
       >
         <CanvasViewParts.Surface longPress={longPress} touchHandles />
       </div>

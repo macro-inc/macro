@@ -604,6 +604,19 @@ export function attachCameraControls(
       camera.scale * factor
     );
   };
+  // The browser scrolls the surface to reveal a caret that left it: text being
+  // typed past an edge, or behind an on-screen keyboard. A scrolled surface no
+  // longer matches the camera, so every press would land beside its target.
+  // Take the scroll as a pan and put the surface back.
+  const scrolled = () => {
+    const { scrollLeft, scrollTop } = element;
+    if (!scrollLeft && !scrollTop) return;
+    element.scrollLeft = 0;
+    element.scrollTop = 0;
+    if (options.navigation !== 'centered-image')
+      editor.panBy({ x: -scrollLeft, y: -scrollTop });
+  };
+  element.addEventListener('scroll', scrolled);
   element.addEventListener('pointerdown', pointerDown);
   element.addEventListener('pointermove', pointerHover);
   element.addEventListener('pointerup', pointerHover);
@@ -620,6 +633,7 @@ export function attachCameraControls(
   return () => {
     cancel();
     touchNavigation.detach();
+    element.removeEventListener('scroll', scrolled);
     element.removeEventListener('pointerdown', pointerDown);
     element.removeEventListener('pointermove', pointerHover);
     element.removeEventListener('pointerup', pointerHover);

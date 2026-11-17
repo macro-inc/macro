@@ -194,6 +194,7 @@ function createCanvasView(props: CanvasViewProps) {
     fit,
     fitSelection,
     frameWithin: framing.frameWithin,
+    keepInFrame: framing.keepInFrame,
     zoom,
     selectedItem,
     selectedImage,
@@ -531,6 +532,7 @@ function Surface(props: {
               editor={editor}
               camera={state.camera}
               onFinish={view.finishText}
+              ref={view.keepInFrame}
             />
           )}
         </Show>

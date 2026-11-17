@@ -401,6 +401,17 @@ the pen cannot take the press, and a pen takes it from a palm already resting.
 Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
+On touch the on-screen keyboard going away also commits it, returns to Select and
+selects the text: a phone's Done button takes the focus from the text to nowhere
+(`focusout` without a `relatedTarget`), and a tablet's hide key leaves the focus
+in place, so there `onKeyboardClosed` watches the app's keyboard state and the
+visual viewport growing back. While text is typed the touch views keep it inside
+the frame and the visual viewport (`keepInFrame` in `views/shared/canvas-framing.ts`):
+the canvas pans as the keyboard comes up and as the text grows, and the page
+itself is put back if the browser scrolled it to reveal the caret, so the
+header stays on screen. On every device a scroll the browser gives the canvas
+surface (a caret typed past its edge) is turned into the same pan and undone, so
+presses keep landing where they are aimed.
 
 The editing toolbar supports bold, italic, underline, strike, code, highlight,
 links, headings, quotes, and nested bulleted/numbered lists.

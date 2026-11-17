@@ -36,21 +36,25 @@ function setup() {
   ]);
   const host = box({ x: 0, y: 0, width: 400, height: 800 });
   const frame = box({ x: 0, y: 100, width: 400, height: 500 });
-  let resized = () => {};
+  // Observers in the order they were made: the frame's, then any text's.
+  const observers: (() => void)[] = [];
+  const resized = () => observers[0]?.();
   vi.stubGlobal(
     'ResizeObserver',
     class {
       constructor(callback: () => void) {
-        resized = callback;
+        observers.push(callback);
       }
       observe() {}
       disconnect() {}
     }
   );
+  let typing = (_text: ReturnType<typeof box>) => {};
   const framing = createRoot((dispose) => {
     cleanups.push(dispose, () => editor.dispose(), vi.unstubAllGlobals);
     const framing = createCanvasFraming(editor, () => host.element);
     framing.frameWithin(frame.element, 24);
+    typing = (text) => framing.keepInFrame(text.element);
     return framing;
   });
   /** Where the square is on screen: its left, top and size. */
@@ -58,7 +62,19 @@ function setup() {
     const { x, y, scale } = editor.getCamera();
     return { left: x, top: y, size: 400 * scale };
   };
-  return { editor, framing, host, frame, square, resized: () => resized() };
+  return {
+    editor,
+    framing,
+    host,
+    frame,
+    square,
+    resized,
+    /** Start keeping `text` in view; returns its own "it changed size". */
+    typing(text: ReturnType<typeof box>) {
+      typing(text);
+      return () => observers[observers.length - 1]?.();
+    },
+  };
 }
 
 it('fits into the frame, with the margin the view asked for', () => {
@@ -117,4 +133,54 @@ it('moves nothing when only the chrome changes under a canvas that was moved', (
   resized();
 
   expect(editor.getCamera()).toEqual(camera);
+});
+
+it('pans the text being typed up from behind the keyboard', () => {
+  const { editor, frame, typing, resized } = setup();
+  const before = editor.getCamera();
+  // Text low on the screen, where the keyboard is about to be.
+  const text = box({ x: 100, y: 520, width: 120, height: 30 });
+  typing(text);
+
+  // The keyboard takes the lower half: the frame now ends at 380.
+  frame.set({ x: 0, y: 100, width: 400, height: 280 });
+  resized();
+
+  // Its bottom edge was at 550 and has to clear 380 by 16px.
+  expect(editor.getCamera()).toEqual({ ...before, y: before.y - 186 });
+});
+
+it('follows a line that grows past the right edge, showing its end', () => {
+  const { editor, typing } = setup();
+  const before = editor.getCamera();
+  const text = box({ x: 300, y: 200, width: 60, height: 30 });
+  const grew = typing(text);
+  grew();
+  expect(editor.getCamera()).toEqual(before);
+
+  // Wider than the frame now: the end, where the caret is, stays in.
+  text.set({ x: 300, y: 200, width: 500, height: 30 });
+  grew();
+
+  expect(editor.getCamera()).toEqual({ ...before, x: before.x - 416 });
+});
+
+it('keeps to what the visual viewport shows where the page ignores the keyboard', () => {
+  const { editor, typing } = setup();
+  const before = editor.getCamera();
+  // A tablet browser: the frame keeps its size, the keyboard only shortens
+  // the visual viewport to 450.
+  const visual = Object.assign(new EventTarget(), {
+    offsetLeft: 0,
+    offsetTop: 0,
+    width: 400,
+    height: 450,
+  });
+  vi.stubGlobal('visualViewport', visual);
+  const text = box({ x: 100, y: 520, width: 120, height: 30 });
+  typing(text);
+
+  visual.dispatchEvent(new Event('resize'));
+
+  expect(editor.getCamera()).toEqual({ ...before, y: before.y - 116 });
 });
