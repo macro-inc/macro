@@ -1040,7 +1040,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. `wide` lets the open field take the rest of
+  row with no code in the view; when that command finds no row (a search with
+  no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
   results; Email's wide search uses both. It registers the
@@ -1051,6 +1052,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search slot: the same keys (`list-search-keys.ts`), with `focusResults`
   pointing at the sidebar's list, and an emptied field collapses through the
   header (`onSearchOpenChange(false)` when the sidebar keeps it open itself).
+  A sidebar that leaves the open state to the header would hide a live query,
+  so pass `searchOpen` (open while a query is set) and clear the query in
+  `onSearchOpenChange(false)`, as Home and Chat do. Pass `hasResults` when
+  another list shares the split (Chat's rail beside a conversation's calls):
+  the "go to first item" lookup answers for whichever list registered last.
   Its search clears only on an Escape pressed inside the sidebar
   (`[data-view-shell-aside]`, through `ownsEscape`), so the preview or
   conversation beside it keeps its own Escape. Home and Chat use it; Agents keeps a plain `SearchBar` until its sidebar has
