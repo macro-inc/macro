@@ -509,6 +509,7 @@ impl IncusClient {
                         .collect::<Result<_, _>>()?,
                     kind: parse_kind(image.type_)?,
                     size_bytes: image.size.ok_or_else(|| missing("image size"))?,
+                    properties: image.properties.unwrap_or_default(),
                 })
             })
             .collect()

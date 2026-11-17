@@ -37,6 +37,7 @@ use crate::domain::ports::{
 use crate::domain::size::ComputerResources;
 use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure, read_tail};
 
+mod boot;
 #[cfg(test)]
 mod test;
 
@@ -355,8 +356,15 @@ impl Fleet for IncusFleet {
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
                 let image = self.images.for_enrollment(&enrollment);
-                let mut body =
-                    instance_body(&self.config, image, computer, &enrollment_json, Utc::now())?;
+                let boot = boot::BootPath::Firmware(boot::FirmwareReason::NoBootFiles);
+                let mut body = instance_body(
+                    &self.config,
+                    image,
+                    computer,
+                    &enrollment_json,
+                    Utc::now(),
+                    &boot,
+                )?;
                 {
                     let config = body
                         .config
@@ -646,6 +654,7 @@ fn instance_body(
     computer: &Computer,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
+    _boot: &boot::BootPath,
 ) -> Result<types::InstancesPost, InvalidName> {
     let computer_id = computer.id;
     let resources = computer.resources;

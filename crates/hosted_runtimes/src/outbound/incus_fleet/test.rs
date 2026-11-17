@@ -151,6 +151,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         &computer,
         r#"{"x":1}"#,
         "2026-11-05T10:00:00Z".parse().unwrap(),
+        &boot::BootPath::Firmware(boot::FirmwareReason::NoBootFiles),
     )
     .unwrap();
 
@@ -260,6 +261,7 @@ fn a_remote_image_names_its_server_and_protocol() {
         &computer,
         "{}",
         "2026-11-05T10:00:00Z".parse().unwrap(),
+        &boot::BootPath::Firmware(boot::FirmwareReason::RemoteImage),
     )
     .unwrap();
 
@@ -272,6 +274,53 @@ fn a_remote_image_names_its_server_and_protocol() {
             "protocol": "simplestreams",
         })
     );
+    assert!(!body.config.unwrap().0.contains_key("raw.qemu"));
+
+    // With the image's boot files on the host: created from that
+    // fingerprint, with QEMU loading its kernel.
+    let local = images("macro-box/2026-11-17", "macro-box-agent/2026-11-17");
+    let fingerprint = "72a70af8772a410d53e151b0ff3b76638ed436d1a9685237b8717553b2d00eb1";
+    let direct = boot::choose(
+        &local.regular,
+        &[incus_client::ImageInfo {
+            fingerprint: fingerprint.to_owned(),
+            aliases: vec![incus_client::ImageAlias::try_new("macro-box/2026-11-17").unwrap()],
+            kind: InstanceKind::VirtualMachine,
+            size_bytes: 1,
+            properties: BTreeMap::from([(
+                boot::BOOT_APPEND_PROPERTY.to_owned(),
+                "init=/nix/store/abc-nixos-system-macro-computer/init quiet".to_owned(),
+            )]),
+        }],
+    );
+    let body = instance_body(
+        &config,
+        &IncusImage::new(local.regular.clone()).unwrap(),
+        &computer,
+        "{}",
+        "2026-11-05T10:00:00Z".parse().unwrap(),
+        &direct,
+    )
+    .unwrap();
+
+    assert_eq!(
+        serde_json::to_value(body.source).unwrap(),
+        serde_json::json!({
+            "type": "image",
+            "fingerprint": fingerprint,
+        })
+    );
+    let config = body.config.unwrap().0;
+    assert_eq!(
+        config["raw.qemu"],
+        format!(
+            "-kernel /var/lib/macro-box/boot/{fingerprint}/kernel \
+             -initrd /var/lib/macro-box/boot/{fingerprint}/initrd \
+             -append 'init=/nix/store/abc-nixos-system-macro-computer/init quiet'"
+        )
+    );
+    // The recorded image stays the alias the computer was bought on.
+    assert_eq!(config[IMAGE_KEY], "macro-box/2026-11-17");
 }
 
 #[test]

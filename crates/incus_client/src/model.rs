@@ -223,6 +223,8 @@ pub struct ImageInfo {
     pub kind: InstanceKind,
     /// Size in bytes.
     pub size_bytes: i64,
+    /// Descriptive properties, from the image's metadata or set on the host.
+    pub properties: BTreeMap<String, String>,
 }
 
 /// A local image alias.
