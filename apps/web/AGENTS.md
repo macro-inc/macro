@@ -88,10 +88,14 @@ membership/context tokens, not previous result IDs or a scoring clock. Contact
 changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
-further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers use explicit paging, and query-backed pages append
-to the visible options. Thread/generic pickers advance their browsed-email and
+aliases only for the listed rows. Every contact menu and picker (Cmd+K, mentions,
+mobile name search, property, recipient and filter pickers) lists further pages
+below the earlier ones as the end scrolls into view, up to 500 rows
+(`queries/contacts/directory-list.ts`); query-backed pages append to the visible
+options. A page with no matching rows reads on until one matches or the source
+ends. Never add a Next options button; a failed page offers Retry. A sentinel
+element opts out of scroll anchoring (`[overflow-anchor:none]`), or Chrome holds
+it in view and every page loads the next. Thread/generic pickers advance their browsed-email and
 server-search pages alongside Quick Access; explicit user rosters stay capped.
 A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
@@ -109,8 +113,8 @@ Keep native row timestamps and forwarding through both editor configuration and
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening
-starts at the first window. Selected chips remain caller-owned; Next options/PageDown
-can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+starts at the first page. Selected chips remain caller-owned; PageDown loads the
+next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
@@ -121,7 +125,7 @@ names to option/chip avatars instead of duplicating resolved names in the shared
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
 whole-team selection separate. Exclude up to the native IPC budget before ranking,
-filter any oversized roster remainder within each replaceable window, and retain
+filter any oversized roster remainder within each listed page, and retain
 empty continuations. Bind paging to the complete roster's reset key, including
 changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
 cancel a recipient option's pointerup default so synchronous popup removal cannot
@@ -354,6 +358,11 @@ meter on every row except on phones, with the direction in its label while
 importance moves, and a preview cut short ending in an ellipsis (its box must
 not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
+real row: Minimalist unchanged, and Classic's shared line between rows (plus
+the one above each date group's first row), lifted unread fill, weights and
+always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
+and the Settings → Email sample following the Row style tabs.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -905,7 +914,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters;
   `browser-test/team` also scrolls a 120-person company through three Team pages.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
-- Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
+- Email mounts the same saved views (`kind: "email"`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
 - Show email draft sync failure UI (the composer banner, a failure toast, a **Not synced** row) only when the user has to act: the server refused the write for good, or local storage needs a reload. A write that is in flight, queued, superseded by its own send, or failing in a way that can be retried stays silent and retries itself first; a false alarm costs more trust than a late one.
@@ -1776,9 +1785,10 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 Order assignee menus and @ mention People rows with `@core/user/people-before-agents`:
-you, other people, then agents with Macro first. While searching, rank with
-`NAME_MATCH_RANKING`; an agent needs the typed words, not scattered letters, and never ranks
-above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
+you, other people, then agents with Macro first. @ menus pass `mention: true`, which lists
+Macro above everyone and keeps it first while its name starts with the query. While
+searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
+letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
 don't boost bots in a menu's search score.
 
 ### Tag picker selection and creation

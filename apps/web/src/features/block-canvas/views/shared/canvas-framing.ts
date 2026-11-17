@@ -4,14 +4,21 @@ import { onCleanup } from 'solid-js';
 /** Screen pixels kept between what is being typed and the frame's edges. */
 const KEEP_SHOWN_MARGIN = 16;
 
-/** Where the caret is on screen, when it is inside `element`. */
+/**
+ * Where the caret is on screen, when it is inside `element`: the end of the
+ * selection that moves. A selection dragged backward has that end at the
+ * start of its range, so the range's own boxes would be those of the end left
+ * behind.
+ */
 function caretIn(element: HTMLElement) {
   const selection = document.getSelection();
-  if (!selection?.rangeCount) return undefined;
-  const range = selection.getRangeAt(0);
-  if (!element.contains(range.endContainer)) return undefined;
-  const rects = range.getClientRects();
-  const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
+  const node = selection?.focusNode;
+  if (!selection || !node || !element.contains(node)) return undefined;
+  const caret = document.createRange();
+  caret.setStart(node, selection.focusOffset);
+  caret.collapse(true);
+  const rects = caret.getClientRects();
+  const rect = rects[rects.length - 1] ?? caret.getBoundingClientRect();
   // An empty line reports no box at all.
   return rect.width || rect.height ? rect : undefined;
 }

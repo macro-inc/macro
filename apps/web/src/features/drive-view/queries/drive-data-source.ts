@@ -10,7 +10,6 @@ import {
   createSearchState,
   useOptionalSearchContext,
 } from '@app/features/soup/search';
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import {
@@ -119,7 +118,6 @@ export function createDriveDataSource(options: {
         selection: selection(),
         userId: userId(),
         facetContext: facetContext(),
-        snippetsEnabled: isFeatureEnabled(enableSnippets),
       }),
     () => {
       // Bind optimistic cache membership to this query, not a later location.
