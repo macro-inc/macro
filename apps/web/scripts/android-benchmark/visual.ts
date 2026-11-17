@@ -1,0 +1,192 @@
+/**
+ * Checks the spans against the screen: records the device's screen while the
+ * harness runs one step, finds the frame where the touch appears (Android's
+ * "show touches" dot) and the frame after which the screen stops changing,
+ * and compares that interval with the step's span-based time.
+ *
+ *   bun scripts/android-benchmark/visual.ts --serial emulator-5580 \
+ *     --step document.large.open --iterations 5
+ *
+ * Needs ffmpeg on PATH (or FFMPEG=/path/to/ffmpeg).
+ */
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
+import { Device } from './device';
+import { launchFresh, measureStep, prepare, sleep } from './harness';
+import { SCENARIOS, type Targets } from './scenarios';
+import { summarize } from './stats';
+
+const { values: options } = parseArgs({
+  options: {
+    serial: { type: 'string', default: process.env.ANDROID_SERIAL },
+    step: { type: 'string', default: 'document.large.open' },
+    variant: { type: 'string', default: 'cold' },
+    iterations: { type: 'string', default: '5' },
+    targets: {
+      type: 'string',
+      default: join(homedir(), '.config/macro-android-benchmark/targets.json'),
+    },
+    out: { type: 'string', default: 'android-benchmark-results' },
+    port: { type: 'string', default: '9333' },
+  },
+});
+if (!options.serial) {
+  console.error('Pass --serial (or set ANDROID_SERIAL): adb -s is required');
+  process.exit(2);
+}
+
+const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
+/** Frames are compared at 1/8 of the screen's resolution, in grey. */
+const SCALE = 8;
+const REMOTE = '/sdcard/macro-benchmark.mp4';
+
+const device = new Device(options.serial);
+const targets = JSON.parse(
+  await readFile(options.targets, 'utf8').catch(() => '{}')
+) as Targets;
+const scenarioId = Object.keys(SCENARIOS).find((id) =>
+  SCENARIOS[id].steps?.some((step) => step.id === options.step)
+);
+if (!scenarioId) throw new Error(`No scenario has a step ${options.step}`);
+const scenario = SCENARIOS[scenarioId];
+const steps = scenario.steps ?? [];
+const stepIndex = steps.findIndex((step) => step.id === options.step);
+
+type Frame = { time: number; pixels: Uint8Array };
+
+async function frames(video: string, width: number, height: number) {
+  const child = spawn(FFMPEG, [
+    '-loglevel', 'info', '-i', video,
+    '-vf', `scale=${width}:${height},format=gray,showinfo`,
+    '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1',
+  ]);
+  const chunks: Buffer[] = [];
+  let log = '';
+  child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+  child.stderr.on('data', (chunk: Buffer) => {
+    log += chunk.toString();
+  });
+  await new Promise((done) => child.on('close', done));
+  const raw = Buffer.concat(chunks);
+  const times = [...log.matchAll(/pts_time:([\d.]+)/g)].map((match) =>
+    Number(match[1])
+  );
+  const size = width * height;
+  return times.map((time, index) => ({
+    time: time * 1000,
+    pixels: raw.subarray(index * size, (index + 1) * size),
+  }));
+}
+
+/** Mean absolute grey difference, optionally inside or outside a box. */
+function difference(
+  a: Uint8Array,
+  b: Uint8Array,
+  width: number,
+  box: { x: number; y: number; r: number },
+  inside: boolean
+) {
+  let total = 0;
+  let count = 0;
+  for (let index = 0; index < a.length; index++) {
+    const x = index % width;
+    const y = Math.floor(index / width);
+    const within = Math.abs(x - box.x) <= box.r && Math.abs(y - box.y) <= box.r;
+    if (within !== inside) continue;
+    total += Math.abs(a[index] - b[index]);
+    count++;
+  }
+  return count ? total / count : 0;
+}
+
+/** Touch-to-settled time from the video, in milliseconds. */
+function analyse(list: Frame[], width: number, tap: { x: number; y: number }) {
+  const box = { x: Math.round(tap.x / SCALE), y: Math.round(tap.y / SCALE), r: 6 };
+  const touched = list.findIndex(
+    (frame, index) =>
+      index > 0 && difference(frame.pixels, list[index - 1].pixels, width, box, true) > 25
+  );
+  if (touched < 0) return undefined;
+  const final = list.at(-1)?.pixels;
+  if (!final) return undefined;
+  // The last frame that still differs from the final screen, outside the dot.
+  let settled = touched;
+  for (let index = touched; index < list.length; index++)
+    if (difference(list[index].pixels, final, width, box, false) > 1) settled = index + 1;
+  const end = list[Math.min(settled, list.length - 1)];
+  return { touchedAt: list[touched].time, settledMs: end.time - list[touched].time };
+}
+
+async function record(work: () => Promise<{ x: number; y: number; spanMs: number }>) {
+  const recorder = spawn('adb', ['-s', device.serial, 'shell', 'screenrecord', '--bit-rate', '16000000', REMOTE]);
+  await sleep(1500);
+  const result = await work();
+  await sleep(2000);
+  await device.shell('pkill -INT screenrecord');
+  await new Promise((done) => recorder.on('close', done));
+  await sleep(500);
+  const directory = await mkdtemp(join(tmpdir(), 'macro-benchmark-'));
+  const local = join(directory, 'step.mp4');
+  await device.adb('pull', REMOTE, local);
+  await device.shell(`rm -f ${REMOTE}`);
+  return { ...result, video: local, directory };
+}
+
+const touches = (await device.shell('settings get system show_touches')).trim();
+await device.shell('settings put system show_touches 1');
+const size = (await device.shell('wm size')).match(/(\d+)x(\d+)/);
+const width = Math.round(Number(size?.[1] ?? 1080) / SCALE);
+const height = Math.round(Number(size?.[2] ?? 2400) / SCALE);
+const rows: { iteration: number; spanMs: number; visualMs: number | undefined }[] = [];
+try {
+  for (let iteration = 0; iteration < Number(options.iterations); iteration++) {
+    const { session } = await launchFresh(device, Number(options.port));
+    try {
+      await sleep(5000);
+      await prepare(session, scenario, targets, 3000);
+      // A warm step first runs the scenario once, untimed, up to its return.
+      if (options.variant === 'warm')
+        for (const step of steps.slice(0, stepIndex + 2)) {
+          await measureStep(session, step, targets, 'warm', iteration);
+          await sleep(1500);
+        }
+      for (const step of steps.slice(0, stepIndex)) {
+        if (options.variant === 'warm') break;
+        await measureStep(session, step, targets, 'cold', iteration);
+        await sleep(1500);
+      }
+      const step = steps[stepIndex];
+      const recorded = await record(async () => {
+        const point = await session.waitFor(step.target(targets));
+        // Android draws the touch dot only while the finger is down.
+        const sample = await measureStep(session, step, targets, 'cold', iteration, 120);
+        return { ...point, spanMs: sample.readyMs };
+      });
+      const visual = analyse(await frames(recorded.video, width, height), width, recorded);
+      await rm(recorded.directory, { recursive: true, force: true });
+      rows.push({ iteration, spanMs: recorded.spanMs, visualMs: visual?.settledMs });
+      console.log(
+        `  ${iteration} span ${Math.round(recorded.spanMs)} ms, screen ${visual ? Math.round(visual.settledMs) : '-'} ms`
+      );
+    } finally {
+      await session.detach();
+    }
+  }
+} finally {
+  await device.shell(`settings put system show_touches ${touches === '1' ? 1 : 0}`);
+}
+
+const paired = rows.filter((row) => row.visualMs !== undefined);
+const span = summarize(paired.map((row) => row.spanMs));
+const screen = summarize(paired.map((row) => row.visualMs ?? 0));
+const gap = summarize(paired.map((row) => (row.visualMs ?? 0) - row.spanMs));
+console.log(
+  `${options.step} (${options.variant}), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
+);
+const file = resolve(options.out, `visual-${options.step}-${Date.now()}.json`);
+await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, rows }, null, 2)}\n`);
+console.log(`Results: ${file}`);
+process.exit(0);
