@@ -15,6 +15,7 @@ import {
   EquationNode,
 } from '../nodes/EquationNode';
 import {
+  replaceElementWithUnknownMention,
   replaceTextWithUnknownMention,
   UnknownMentionNode,
 } from './unknownFallback';
@@ -57,15 +58,19 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
 };
 
 /**
- * A display equation at the top level of the document, as a `$$` block
- * imports. Text-match transformers see only an element's children, so without
- * this it exports as its bare LaTeX. It writes the same tag as
- * `I_EQUATION_NODE`, which imports it back; this transformer imports nothing.
+ * A display equation at the top level of the document, where the editor and
+ * `$$` blocks put it. Text-match transformers see only an element's children,
+ * so without this it exports as its bare LaTeX. A line holding only a display
+ * equation's tag imports back to the top level. Lexical removes the matched
+ * line before `replace` runs, so the pattern matches display equations alone
+ * and inline ones are left to `I_EQUATION_NODE`.
  */
 export const I_BLOCK_EQUATION_NODE: ElementTransformer = {
-  dependencies: [EquationNode],
+  dependencies: [EquationNode, UnknownMentionNode],
   type: 'element',
-  regExp: /(?!)/,
+  regExp: new RegExp(
+    `^<${TAG_KATEX_EQUATION}>(\\{(?=.*"inline":false).*\\})<\\/${TAG_KATEX_EQUATION}>\\s*$`
+  ),
   export: (node) => {
     if (!$isEquationNode(node)) return null;
     const data = JSON.stringify({
@@ -74,7 +79,17 @@ export const I_BLOCK_EQUATION_NODE: ElementTransformer = {
     });
     return `<${TAG_KATEX_EQUATION}>${data}</${TAG_KATEX_EQUATION}>`;
   },
-  replace: () => false,
+  replace: (parent, _, match) => {
+    try {
+      const data = JSON.parse(match[1] ?? '');
+      if (typeof data.equation !== 'string')
+        throw new Error('Missing field equation');
+      parent.replace($createEquationNode(data.equation, false));
+    } catch (e) {
+      console.error('Error in I_BLOCK_EQUATION_NODE replace:', e);
+      replaceElementWithUnknownMention(parent, 'Unknown Equation');
+    }
+  },
 };
 
 // External Inline Equation Node

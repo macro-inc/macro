@@ -182,6 +182,49 @@ describe('internal markdown round trip of stored documents', () => {
     ).toBe(markdown);
   });
 
+  it('keeps a stored video followed by a line break', () => {
+    const markdown = exportState(
+      stateOf([
+        {
+          type: 'paragraph',
+          version: 1,
+          direction: null,
+          format: '',
+          indent: 0,
+          textFormat: 0,
+          textStyle: '',
+          children: [
+            {
+              type: 'video',
+              version: 1,
+              url: 'https://videos.example.com/v1',
+              srcType: 'embed',
+              id: '',
+              width: 0,
+              height: 0,
+              scale: 1,
+              controls: true,
+            },
+            { type: 'linebreak', version: 1 },
+          ],
+        },
+      ])
+    );
+
+    const [video] = nodesOf(markdown, $isVideoNode);
+    expect(video?.getUrl()).toBe('https://videos.example.com/v1');
+  });
+
+  it('keeps a paragraph with a display equation tag inline in prose', () => {
+    const markdown =
+      'Area <m-katex-equation>{"equation":"x^2","inline":false}</m-katex-equation> here';
+
+    expect(nodesOf(markdown, $isEquationNode)).toHaveLength(1);
+    expect(
+      exportState(importMarkdown(markdown).getEditorState().toJSON())
+    ).toBe(markdown);
+  });
+
   it('keeps a stored top-level display equation', () => {
     const markdown = exportState(
       stateOf([
@@ -189,9 +232,14 @@ describe('internal markdown round trip of stored documents', () => {
       ])
     );
 
-    const [equation] = nodesOf(markdown, $isEquationNode);
-    expect(equation?.getEquation()).toBe('x^2');
-    expect(equation?.getInline()).toBe(false);
+    const editor = importMarkdown(markdown);
+    editor.read(() => {
+      const equation = $getRoot().getFirstChild();
+      expect($isEquationNode(equation)).toBe(true);
+      if (!$isEquationNode(equation)) return;
+      expect(equation.getEquation()).toBe('x^2');
+      expect(equation.getInline()).toBe(false);
+    });
     expect(
       exportState(importMarkdown(markdown).getEditorState().toJSON())
     ).toBe(markdown);
