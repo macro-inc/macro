@@ -233,21 +233,6 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
                 }
             }),
         ),
-        (
-            TeamTopicEvent::AutoJoinDomainToggled(TeamAutoJoinDomainToggledMetadata {
-                team_id: team_id(),
-                actor_user_id: user_id("macro|admin@acme.com"),
-                auto_join_domain: None,
-            }),
-            json!({
-                "event_type": "team.auto_join_domain_toggled",
-                "metadata": {
-                    "team_id": TEAM_ID,
-                    "actor_user_id": "macro|admin@acme.com",
-                    "auto_join_domain": null
-                }
-            }),
-        ),
     ]
 }
 
@@ -265,9 +250,6 @@ fn macro_events() -> Vec<TeamMacroEvent> {
             TeamTopicEvent::MemberRemoved(metadata) => TeamMacroEvent::member_removed(metadata),
             TeamTopicEvent::MemberRoleChanged(metadata) => {
                 TeamMacroEvent::member_role_changed(metadata)
-            }
-            TeamTopicEvent::AutoJoinDomainToggled(metadata) => {
-                TeamMacroEvent::auto_join_domain_toggled(metadata)
             }
         })
         .collect()

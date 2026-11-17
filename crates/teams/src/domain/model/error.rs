@@ -257,17 +257,6 @@ pub enum JoinTeamError {
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
 }
 
-/// Errors for toggling a team's auto-join domain
-#[derive(Debug, thiserror::Error)]
-pub enum ToggleAutoJoinDomainError {
-    /// The team owner's email domain is a generic email provider domain
-    #[error("Auto-join isn't available for {0}")]
-    GenericDomainNotAllowed(String),
-    /// Underlying team error
-    #[error("Underlying team error {0}")]
-    TeamError(#[from] TeamError),
-}
-
 /// Errors for adding a user to a team without an email invite: through the
 /// team's invite link, or as a team agent.
 #[derive(Debug, thiserror::Error)]

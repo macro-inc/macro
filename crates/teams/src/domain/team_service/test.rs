@@ -62,7 +62,6 @@ use crate::domain::{
         RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
         Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
         TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
@@ -141,9 +140,6 @@ struct MockTeamRepository {
     /// The `seat_included` flag of each `rollback_remove_user_from_team` call.
     rolled_back_seat_included: Arc<Mutex<Vec<bool>>>,
     remove_user_calls: Arc<Mutex<usize>>,
-    auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
-    auto_join_toggle_result: Option<String>,
-    fail_auto_join_toggle: bool,
     allow_non_admin_invites: bool,
     caller_team_role: Option<TeamRole>,
     non_admin_invites_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
@@ -237,9 +233,6 @@ impl MockTeamRepository {
             seat_included: false,
             rolled_back_seat_included: Arc::new(Mutex::new(Vec::new())),
             remove_user_calls: Arc::new(Mutex::new(0)),
-            auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
-            auto_join_toggle_result: Some("example.com".to_string()),
-            fail_auto_join_toggle: false,
             allow_non_admin_invites: true,
             caller_team_role: Some(TeamRole::Member),
             non_admin_invites_toggle_calls: Arc::new(Mutex::new(Vec::new())),
@@ -919,24 +912,6 @@ impl TeamRepository for MockTeamRepository {
         _: TeamPlan,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         async { unimplemented!() }
-    }
-
-    fn toggle_auto_join_domain(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send {
-        self.auto_join_toggle_calls.lock().unwrap().push(*team_id);
-        let result = self.auto_join_toggle_result.clone();
-        let fail = self.fail_auto_join_toggle;
-        async move {
-            if fail {
-                Err(ToggleAutoJoinDomainError::TeamError(
-                    TeamError::StorageLayerError(anyhow::anyhow!("toggle failed")),
-                ))
-            } else {
-                Ok(result)
-            }
-        }
     }
 
     fn get_team_allow_non_admin_invites(
@@ -4924,59 +4899,6 @@ async fn test_patch_team_repository_failure_does_not_publish_updated() {
                 test_team_receipt::<AdminTeamRole>(team_id, &actor),
                 &request
             )
-            .await
-            .is_err()
-    );
-    assert!(broker.events().is_empty());
-}
-
-#[tokio::test]
-async fn test_toggle_auto_join_domain_publishes_enabled_and_disabled_states() {
-    let team_id = uuid::Uuid::from_u128(805);
-    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
-
-    for expected_domain in [Some("example.com".to_string()), None] {
-        let mut repo =
-            MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
-        repo.auto_join_toggle_result = expected_domain.clone();
-        let broker = RecordingEventBroker::default();
-        let service = build_service_with_repo_and_broker(repo, broker.clone());
-
-        let result = service
-            .toggle_auto_join_domain(test_team_receipt::<AdminTeamRole>(team_id, &actor))
-            .await
-            .unwrap();
-
-        assert_eq!(result, expected_domain);
-        let events = broker.events();
-        assert_eq!(events.len(), 1);
-        assert_eq!(
-            events[0].envelope["event_type"],
-            "team.auto_join_domain_toggled"
-        );
-        assert_eq!(
-            events[0].envelope["metadata"]["auto_join_domain"],
-            serde_json::to_value(expected_domain).unwrap()
-        );
-        assert_eq!(
-            events[0].envelope["metadata"]["actor_user_id"],
-            actor.as_ref()
-        );
-    }
-}
-
-#[tokio::test]
-async fn test_toggle_auto_join_domain_failure_does_not_publish_event() {
-    let team_id = uuid::Uuid::from_u128(806);
-    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
-    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
-    repo.fail_auto_join_toggle = true;
-    let broker = RecordingEventBroker::default();
-    let service = build_service_with_repo_and_broker(repo, broker.clone());
-
-    assert!(
-        service
-            .toggle_auto_join_domain(test_team_receipt::<AdminTeamRole>(team_id, &actor))
             .await
             .is_err()
     );

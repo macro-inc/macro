@@ -38,10 +38,10 @@ use crate::domain::{
     crm_member_access::{CrmAccessRollout, DisabledCrmAccessRollout},
     customer_repo::CustomerRepository,
     events::{
-        OwnedEntityMetadata, TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata,
-        TeamDeletedMetadata, TeamInviteCreatedMetadata, TeamInviteRejectedMetadata,
-        TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata,
-        TeamMemberRemovedMetadata, TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
+        OwnedEntityMetadata, TeamCreatedMetadata, TeamDeletedMetadata, TeamInviteCreatedMetadata,
+        TeamInviteRejectedMetadata, TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent,
+        TeamMemberJoinedMetadata, TeamMemberRemovedMetadata, TeamMemberRoleChangedMetadata,
+        TeamUpdatedMetadata,
     },
     invite_rewards::{InviteRewardEvent, InviteRewarder, NoOpInviteRewarder},
     model::{
@@ -51,7 +51,7 @@ use crate::domain::{
         RemovedTeamMember, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
         TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, team_slug_from_name,
+        team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{
@@ -2733,34 +2733,6 @@ where
             backfill_enqueued: 0,
             backfill_failed: 0,
         })
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn toggle_auto_join_domain(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
-    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
-        let actor_user_id = entity_access_receipt
-            .get_authenticated_user()
-            .map_err(TeamError::AccessError)?
-            .clone()
-            .into_owned();
-        let team_id =
-            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-
-        let auto_join_domain = self
-            .team_repository
-            .toggle_auto_join_domain(&team_id)
-            .await?;
-        self.publish_team_event(&TeamMacroEvent::auto_join_domain_toggled(
-            TeamAutoJoinDomainToggledMetadata {
-                team_id,
-                actor_user_id,
-                auto_join_domain: auto_join_domain.clone(),
-            },
-        ));
-
-        Ok(auto_join_domain)
     }
 
     #[tracing::instrument(skip(self), err)]

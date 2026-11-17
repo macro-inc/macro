@@ -36,7 +36,6 @@ pub mod reject_invitation;
 /// Remove a user from a team.
 pub mod remove_user_from_team;
 /// Toggle automatic domain joining for a team.
-pub mod toggle_auto_join_domain;
 /// Toggle whether non-admin members may invite users to a team.
 pub mod toggle_non_admin_invites;
 
@@ -63,7 +62,6 @@ use crate::domain::{
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         RemoveTeamInviteError, RemoveUserFromTeamError, SetTeamMemberPlanError, TeamError,
-        ToggleAutoJoinDomainError,
     },
     team_repo::{TeamInviteLinkService, TeamService},
 };
@@ -160,10 +158,6 @@ where
         .route(
             "/crm",
             patch(patch_team_crm_settings::handler::<T, Eas, Auth>),
-        )
-        .route(
-            "/auto-join-domain/toggle",
-            post(toggle_auto_join_domain::handler::<T, Eas, Auth>).layer(people_only.clone()),
         )
         .route(
             "/non-admin-invites/toggle",
@@ -300,21 +294,6 @@ impl IntoResponse for TeamError {
             ),
         }
         .into_response()
-    }
-}
-
-impl IntoResponse for ToggleAutoJoinDomainError {
-    fn into_response(self) -> Response {
-        match self {
-            ToggleAutoJoinDomainError::GenericDomainNotAllowed(_) => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: self.to_string().into(),
-                }),
-            )
-                .into_response(),
-            ToggleAutoJoinDomainError::TeamError(e) => e.into_response(),
-        }
     }
 }
 

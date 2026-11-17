@@ -42,7 +42,7 @@ use crate::domain::{
         RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
         TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember,
-        TeamWithMembers, ToggleAutoJoinDomainError,
+        TeamWithMembers,
     },
     owned_entity_cleanup::OwnedEntityCleanupError,
     team_repo::{TeamInviteLinkService, TeamService},
@@ -226,43 +226,6 @@ async fn remove_team_owner_validation_response_is_preserved() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body_text, r#"{"message":"cannot remove owner"}"#);
-}
-
-#[tokio::test]
-async fn toggle_auto_join_domain_generic_domain_response_is_bad_request() {
-    let (status, body_text, _) = response_parts(
-        ToggleAutoJoinDomainError::GenericDomainNotAllowed("gmail.com".to_string()),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(
-        body_text,
-        r#"{"message":"Auto-join isn't available for gmail.com"}"#
-    );
-}
-
-#[tokio::test]
-async fn toggle_auto_join_domain_storage_error_response_is_obfuscated() {
-    let (status, body_text, body_json) = response_parts(ToggleAutoJoinDomainError::TeamError(
-        TeamError::StorageLayerError(anyhow::anyhow!(CUSTOMER_ERROR_SENTINEL)),
-    ))
-    .await;
-
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(body_text, r#"{"message":"internal server error"}"#);
-    assert_eq!(body_json, json!({ "message": "internal server error" }));
-}
-
-#[tokio::test]
-async fn toggle_auto_join_domain_missing_team_response_is_not_found() {
-    let (status, body_text, _) = response_parts(ToggleAutoJoinDomainError::TeamError(
-        TeamError::TeamDoesNotExist,
-    ))
-    .await;
-
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body_text, r#"{"message":"team does not exist"}"#);
 }
 
 const USER_ID: &str = "macro|user@example.com";
@@ -506,13 +469,6 @@ impl TeamService for FakeTeamService {
         _backfill: bool,
     ) -> Result<PatchTeamCrmSettingsResponse, TeamError> {
         panic!("unexpected set_team_crm_enabled call")
-    }
-
-    async fn toggle_auto_join_domain(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
-    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
-        panic!("unexpected toggle_auto_join_domain call")
     }
 
     async fn toggle_allow_non_admin_invites(
@@ -793,6 +749,22 @@ async fn teams_router_authorizes_bearer_credentials() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(service.user_calls(), vec![USER_ID]);
+}
+
+#[tokio::test]
+async fn teams_router_offers_no_way_to_turn_on_domain_auto_join() {
+    let service = FakeTeamService::default();
+    let response = router(service, FakeEntityAccessService::default())
+        .oneshot(
+            Request::post("/auto-join-domain/toggle")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .body(Body::empty())
+                .expect("request should be valid"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

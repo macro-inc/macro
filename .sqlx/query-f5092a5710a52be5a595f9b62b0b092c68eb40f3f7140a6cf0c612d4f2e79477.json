@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                t.allow_non_admin_invites,\n                t.default_link_share as \"default_link_share: LinkShare\",\n                t.language as \"language: Language\",\n                TRUE AS \"crm_enabled!\"\n            FROM team t\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE t.id = $1\n            ",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.enterprise,\n                t.allow_non_admin_invites,\n                t.default_link_share as \"default_link_share: LinkShare\",\n                t.language as \"language: Language\",\n                TRUE AS \"crm_enabled!\"\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE tu.user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,38 +25,33 @@
       },
       {
         "ordinal": 4,
-        "name": "auto_join_domain",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
         "name": "enterprise",
         "type_info": "Bool"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "allow_non_admin_invites",
         "type_info": "Bool"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "default_link_share: LinkShare",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "language: Language",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "crm_enabled!",
         "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -64,7 +59,6 @@
       false,
       false,
       false,
-      true,
       false,
       false,
       true,
@@ -72,5 +66,5 @@
       null
     ]
   },
-  "hash": "bfd3b0c064b10ac09ad5c14efb49598826ed729819eb716be948beeccbbea985"
+  "hash": "f5092a5710a52be5a595f9b62b0b092c68eb40f3f7140a6cf0c612d4f2e79477"
 }

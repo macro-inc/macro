@@ -589,12 +589,6 @@ pub struct TeamCheckoutSessionRequest {
     pub team_plan: TeamPlan,
 }
 
-// Teams may not enable automatic domain joining for generic domains — a
-// match on e.g. `gmail.com` would auto-join complete strangers to the
-// team. The list lives in its own crate so lightweight consumers (the
-// onboarding flow's team suggestion) share the same judgment.
-pub use generic_email_domains::{GENERIC_EMAIL_DOMAINS, is_generic_email_domain};
-
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -607,9 +601,6 @@ pub struct Team {
     /// CRM record availability, always true for teams. This compatibility
     /// field does not indicate whether any mailbox contributes emails.
     pub(crate) crm_enabled: bool,
-    /// The email domain new users are automatically joined to this team
-    /// with, when automatic domain joining is enabled (None otherwise).
-    pub(crate) auto_join_domain: Option<String>,
     /// Whether this team is on an enterprise license. Enterprise teams are
     /// billed out-of-band; membership changes skip all Stripe subscription
     /// bookkeeping (no seat counts, no subscription backfill, no paying check).
@@ -627,8 +618,7 @@ pub struct Team {
 }
 
 impl Team {
-    /// Creates a new Team. New teams start without an auto-join domain;
-    /// it is toggled on later via the auto-join domain endpoint.
+    /// Creates a new Team.
     pub fn new(
         id: uuid::Uuid,
         name: String,
@@ -643,7 +633,6 @@ impl Team {
             slug,
             owner_id,
             crm_enabled,
-            auto_join_domain: None,
             enterprise,
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
@@ -676,11 +665,6 @@ impl Team {
     /// CRM record availability, independent of email contribution consent.
     pub fn crm_enabled(&self) -> bool {
         self.crm_enabled
-    }
-
-    /// The team's auto-join domain, when automatic domain joining is enabled
-    pub fn auto_join_domain(&self) -> Option<&str> {
-        self.auto_join_domain.as_deref()
     }
 
     /// Whether this team is on an enterprise license

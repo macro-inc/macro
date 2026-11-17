@@ -197,17 +197,6 @@ pub struct TeamMemberRoleChangedMetadata {
     pub previous_role: Option<TeamRole>,
 }
 
-/// Metadata for [`TeamTopicEvent::AutoJoinDomainToggled`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TeamAutoJoinDomainToggledMetadata {
-    /// Identifier of the team whose setting changed.
-    pub team_id: Uuid,
-    /// Authenticated user who changed the setting.
-    pub actor_user_id: MacroUserIdStr<'static>,
-    /// Newly enabled automatic-join domain, or `None` when disabled.
-    pub auto_join_domain: Option<String>,
-}
-
 /// Lifecycle, invite, and membership events published to [`MacroTeamsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
@@ -239,9 +228,6 @@ pub enum TeamTopicEvent {
     /// A team member's role changed.
     #[serde(rename = "team.member_role_changed")]
     MemberRoleChanged(TeamMemberRoleChangedMetadata),
-    /// A team's automatic-join domain setting changed.
-    #[serde(rename = "team.auto_join_domain_toggled")]
-    AutoJoinDomainToggled(TeamAutoJoinDomainToggledMetadata),
 }
 
 impl TopicEvent for TeamTopicEvent {
@@ -302,14 +288,6 @@ impl TeamMacroEvent {
         Self::new(
             metadata.team_id,
             TeamTopicEvent::MemberRoleChanged(metadata),
-        )
-    }
-
-    /// Build a team-auto-join-domain-toggled event.
-    pub fn auto_join_domain_toggled(metadata: TeamAutoJoinDomainToggledMetadata) -> Self {
-        Self::new(
-            metadata.team_id,
-            TeamTopicEvent::AutoJoinDomainToggled(metadata),
         )
     }
 

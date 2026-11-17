@@ -15,7 +15,7 @@ use crate::domain::model::{
     RemovedTeamMember, RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError,
     SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails,
     TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole,
-    TeamWithMembers, ToggleAutoJoinDomainError,
+    TeamWithMembers,
 };
 use crate::domain::owned_entity_cleanup::ClearedTeam;
 
@@ -313,21 +313,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_plan: TeamPlan,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Toggles the team's automatic domain joining.
-    ///
-    /// When the team currently has no auto-join domain, sets it to the
-    /// domain of the team owner's email — unless that domain is a generic
-    /// email provider domain (see
-    /// [`crate::domain::model::GENERIC_EMAIL_DOMAINS`]), which is rejected.
-    /// When a domain is already set, unsets it.
-    ///
-    /// Returns the team's auto-join domain after the toggle (None when it
-    /// was unset).
-    fn toggle_auto_join_domain(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send;
-
     /// Whether non-admin members may invite users to the team.
     fn get_team_allow_non_admin_invites(
         &self,
@@ -599,17 +584,6 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         enabled: bool,
         backfill: bool,
     ) -> impl Future<Output = Result<PatchTeamCrmSettingsResponse, TeamError>> + Send;
-
-    /// Toggles the team's automatic domain joining: sets the auto-join
-    /// domain from the team owner's email domain when unset, removes it
-    /// when set. Only team admins and above may do this.
-    ///
-    /// Returns the team's auto-join domain after the toggle (None when it
-    /// was unset).
-    fn toggle_auto_join_domain(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
-    ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send;
 
     /// Flips whether non-admin members may invite users to the team.
     /// Defaults to true (any member can invite); when off, only team

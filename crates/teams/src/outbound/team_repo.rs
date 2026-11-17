@@ -5,7 +5,7 @@ use crate::domain::{
         PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, RemovedTeamMember,
         SeatPlan, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
         TeamInviteLinkToken, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        TeamWithMembers, normalize_team_slug,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
@@ -13,10 +13,7 @@ use crate::domain::{
 };
 use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
-    cowlike::CowLike,
-    email::{Email, ReadEmailParts},
-    lowercased::Lowercase,
-    user_id::MacroUserIdStr,
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
 use model_owner::Owner;
 use model_user::Language;
@@ -92,7 +89,6 @@ impl TeamRepositoryImpl {
             )
             VALUES ($1, $2, $3, $4, 1, $5, $6)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                auto_join_domain,
                 default_link_share as "default_link_share: LinkShare",
                 language as "language: Language"
             "#,
@@ -113,7 +109,6 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: true,
-                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
@@ -190,12 +185,6 @@ impl From<sqlx::Error> for RemoveUserFromTeamError {
 impl From<sqlx::Error> for RemoveTeamInviteError {
     fn from(e: sqlx::Error) -> Self {
         Self::StorageLayerError(e.into())
-    }
-}
-
-impl From<sqlx::Error> for ToggleAutoJoinDomainError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::TeamError(e.into())
     }
 }
 
@@ -1203,7 +1192,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
@@ -1223,7 +1212,6 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
-                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
@@ -1277,7 +1265,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
@@ -1298,7 +1286,6 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
-                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
@@ -1696,61 +1683,6 @@ impl TeamRepository for TeamRepositoryImpl {
         }
 
         Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn toggle_auto_join_domain(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
-        let mut transaction = self.pool.begin().await.map_err(TeamError::from)?;
-
-        // Lock the row so concurrent toggles serialize instead of both
-        // reading the same current value.
-        let team = sqlx::query!(
-            r#"
-            SELECT auto_join_domain, owner_id
-            FROM team
-            WHERE id = $1
-            FOR UPDATE
-            "#,
-            team_id,
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
-
-        let new_domain = if team.auto_join_domain.is_some() {
-            None
-        } else {
-            let owner_id = MacroUserIdStr::parse_from_str(&team.owner_id)
-                .map_err(|e| TeamError::StorageLayerError(e.into()))?;
-            let owner_email = owner_id.email_part().lowercase();
-            let domain = owner_email.domain_part();
-
-            if is_generic_email_domain(domain) {
-                return Err(ToggleAutoJoinDomainError::GenericDomainNotAllowed(
-                    domain.to_owned(),
-                ));
-            }
-
-            Some(domain.to_owned())
-        };
-
-        sqlx::query!(
-            r#"
-            UPDATE team
-            SET auto_join_domain = $2
-            WHERE id = $1
-            "#,
-            team_id,
-            new_domain.as_deref(),
-        )
-        .execute(&mut *transaction)
-        .await?;
-
-        transaction.commit().await.map_err(TeamError::from)?;
-
-        Ok(new_domain)
     }
 
     #[tracing::instrument(skip(self), err)]

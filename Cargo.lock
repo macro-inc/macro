@@ -20919,7 +20919,6 @@ dependencies = [
  "database_env_vars",
  "entity_access",
  "entity_access_db_utils",
- "generic_email_domains",
  "macro_authorization",
  "macro_db_migrator",
  "macro_entrypoint",
