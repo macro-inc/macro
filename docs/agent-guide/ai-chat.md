@@ -484,9 +484,10 @@ the shimmer.
 
 - Open **Go to Agents** → `/app/component/agents`. The workspace uses one
   sidebar for Chat and Code.
-  **Agents** in the sidebar opens the same roster as the composer’s
-  **Create agent** action. **Connections** manages MCP integrations (including
-  app authentication and disconnection), also available under Settings → Integrations.
+  The desktop footer contains **Agents**, **Routines**, and **Archived**.
+  **Agents** opens the same roster as the composer’s **Create agent** action.
+  Connections has no desktop footer row; existing links and Settings → Integrations
+  still open its MCP integration management.
   Every agent composer's **+** button, including a session opened in a split,
   lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
@@ -528,34 +529,29 @@ the shimmer.
 
   Start a conversation with the desktop sidebar's **New** button or **Create → Agent**.
   The empty composer has no New conversation heading.
-  **Conversations** is a mixed list
-  of chats and coding sessions, with one search across both. **Group conversations**
-  switches between Status (the default), Type, and None, preserving newest-first
-  order within each group. **Filter conversations** combines Type, Status, and
-  Pull request filters; choices within a category are ORed and categories are
-  ANDed. Grouping and filters are remembered per user. Clear filters from the menu
-  or an empty filtered list.
-  With the `enable-agent-updates` flag, an **Open PRs** section sits above
-  Conversations: your non-archived coding sessions whose pull request is open or
-  draft, newest first, using the same rows (they stay in Conversations too). It
-  is hidden when empty.
-  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
-  pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. A session that is starting or
-  whose turn is still running (the agent is working, writing code, or stopping)
-  shows the same three-dot working wave as the transcript in place of the
-  leading icon; the row's accessible name appends `Starting` or `Working`.
-  The row follows each turn without a reload: it turns Working when a turn
-  starts and clears when the last turn ends. Each session update re-reads the
-  row from the primary database after the list refetch, which corrects a
-  stale replica read at that point; a later replica-backed refetch from
-  another trigger can still briefly restore an older row until the next
-  session update.
-  Sessions with a linked PR show
-  **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the pull request on GitHub (a new tab, or the
-  system browser in the desktop app), as the session header chip and Magic Chip
-  do. The click leaves the session unopened.
+  **Waiting on you** appears above the desktop conversation list only while
+  sessions await input. Its amber ring identifies the section; its rows use
+  blue unread dots and regular-weight titles. Waiting sessions do not repeat in
+  **Conversations**. Search, filters, and Show hidden routine runs apply to both.
+  **Sort conversations** offers **Last updated** (default) and **Date created**,
+  newest first. The server query follows the selected sort. **Filter conversations**
+  combines Type, Status, and Pull request filters; choices within a category are
+  ORed and categories are ANDed. Sort and filters are remembered per user;
+  previously saved grouping is ignored by the redesigned desktop list.
+  With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
+  Conversations, showing active coding sessions with open or draft PRs.
+  It stays hidden when empty and retains its existing duplicate-row behavior.
+  Desktop rows are one line: a status glyph, the title, and a PR or branch icon.
+  The working glyph is the transcript's rotating five-dot plus; idle is an outline
+  ring, unread is blue, and failed is a red five-dot ×. Unread titles are semibold
+  outside Waiting on you. Home keeps its existing row layout and indicators.
+  Rows follow persisted turn updates without a reload.
+  Hovering a desktop row swaps its code icon for its age, using the selected sort
+  timestamp. Pointing at that slot restores the icon and opens its preview.
+  PR previews reuse the existing synced card or its unsynced fallback; a synced
+  PR icon opens the PR in Macro (Shift opens a split), while an unresolved PR opens
+  GitHub. Branch previews show only the branch and repository, with Copy branch
+  name and Open on GitHub. Clicking the branch icon opens its conversation.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -565,14 +561,19 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**, a
-  section that starts collapsed; click its header (count and caret) to expand it.
+  actions. On desktop, **Archived** in the footer opens a searchable main-pane
+  list with the loaded count, code identity, and archive date. Hover or focus a
+  row for **Unarchive** and **More actions**; right-click offers the same actions.
+  Unarchive restores the row to the sidebar. The archived page reads more pages
+  while fewer than 20 matching rows are loaded, then pages near the scroll end.
+  Counts describe loaded rows, not a server total. The phone still uses its
+  existing collapsed Archived section until the phone list migration.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which counts it on the filter badge and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
-  routine run carries a clock icon after its age. The list starts without hidden
-  runs each time the Agents view opens.
+  routine run keeps its clock icon in the desktop row. The list starts without
+  hidden runs each time the Agents view opens.
 - The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
@@ -2221,9 +2222,10 @@ The pane does not create PRs or generate their descriptions.
 
 ### Failed session rows
 
-A failed agent turn shows a small red status dot in Home and Agents, including
-after reloading the list. Open the row to read the existing transcript error.
-Starting another turn clears the failure dot; unread state remains independent.
+A failed agent turn shows a red five-dot × in the redesigned desktop Agents
+list, including after reloading. Home and the legacy phone list keep their red
+status dot. Open the row to read the existing transcript error. Starting another
+turn clears the failure indicator; unread state remains independent.
 
 ### Live development previews
 

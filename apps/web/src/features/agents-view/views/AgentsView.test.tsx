@@ -192,6 +192,19 @@ vi.mock('../components/AgentsSidebar', () => ({
     </For>
   ),
 }));
+vi.mock('./agents-sidebar/agents-sidebar', async () => ({
+  DesktopAgentsSidebar: (await import('../components/AgentsSidebar'))
+    .AgentsSidebar,
+}));
+vi.mock('./archived-conversations/archived-conversations', () => ({
+  ArchivedConversations: () => null,
+}));
+vi.mock(
+  '@app/features/block-agent/queries/change-session-archive-state',
+  () => ({
+    changeSessionArchiveState: vi.fn(),
+  })
+);
 vi.mock('../components/Topbar', () => ({ Topbar: () => null }));
 vi.mock('../context/data-mode', () => ({
   DataModeProvider: state.pass,
@@ -207,6 +220,8 @@ vi.mock('../primitives/conversation-list-view', () => ({
   createConversationListView: () => ({
     filters: () => [],
     grouping: () => 'none',
+    sort: () => 'updated',
+    setSort: () => {},
     setSelected: () => {},
     clear: () => {},
     setGrouping: () => {},

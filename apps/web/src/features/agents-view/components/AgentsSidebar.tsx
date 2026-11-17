@@ -7,16 +7,9 @@ import {
 } from '@app/components/view-shell';
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
-import {
-  type EntityActionListState,
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
-import {
-  MaybeSoupEntityActionDrawerManager,
-  SoupEntityContextMenu,
-} from '@app/features/soup';
+import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -33,7 +26,7 @@ import { Key } from '@solid-primitives/keyed';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import type { AgentKind } from '../core/agent-kind';
 import {
   activeFilterCount,
@@ -53,6 +46,7 @@ import {
 } from '../core/recent-conversations';
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { ConversationContextMenu } from '../views/shared/conversation-context-menu/conversation-context-menu';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 import {
   ConversationListControls,
@@ -61,12 +55,6 @@ import {
 
 /** Rows the filtered list should fill before paging stops waiting for a scroll. */
 const FILTERED_PAGE_FILL = 20;
-
-const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  supportsOpenInNewSplit: true,
-  senderBucket: undefined,
-};
 
 export type AgentsSidebarProps = Omit<
   ConversationListControlsProps,
@@ -96,31 +84,6 @@ export type AgentsSidebarProps = Omit<
   onRetry: () => void;
   onLoadMore: () => void;
 };
-
-function ConversationContextMenu(props: {
-  conversation: AgentConversationEntity;
-  list: EntityActionListState;
-  children: JSX.Element;
-}) {
-  return (
-    <SoupEntityContextMenu
-      entity={props.conversation}
-      list={props.list}
-      selectedEntities={() => []}
-      viewContext={AGENTS_ACTION_VIEW_CONTEXT}
-      as="div"
-      // The nav is a fixed-height flex column, so the trigger's default
-      // `h-full` would split that height between the rows; keep rows content-sized.
-      class="block h-auto w-full shrink-0"
-      onOpenChange={(open) => {
-        if (!open) return;
-        props.list.focus.set(props.conversation.id);
-      }}
-    >
-      {props.children}
-    </SoupEntityContextMenu>
-  );
-}
 
 function Row(props: {
   conversation: AgentConversationEntity;

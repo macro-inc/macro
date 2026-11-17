@@ -1602,8 +1602,9 @@ The stream's JavaScript object, on the other hand, is collected while a `Respons
 
 ### Agent session failure indicators
 
-Use the existing status dot in Home and Agents rows with `bg-failure` when the
-persisted `turnState` is `failed`; open the session to inspect its error.
+Use the red five-dot × for persisted failed turns in the redesigned desktop
+Agents list; keep Home and the legacy phone list on their existing `bg-failure`
+status dot. Open the session to inspect its error.
 
 ### Agent transcript projection
 

@@ -484,7 +484,7 @@ function useGithubUrlMentionEntity(
 }
 
 /** Hover preview for a GitHub URL mention Macro has not synced. */
-function UnsyncedPullRequestPreviewCard(props: {
+export function UnsyncedPullRequestPreviewCard(props: {
   label: string;
   url?: string;
 }) {

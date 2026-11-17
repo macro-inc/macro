@@ -42,15 +42,28 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+
+import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { enableAgentUpdates } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentSessionSkeleton } from '../components/AgentSessionSkeleton';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
+import type { ConversationActions } from '../context/conversation-actions';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import { type AgentKind, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
@@ -70,6 +83,8 @@ import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
+import { DesktopAgentsSidebar } from './agents-sidebar/agents-sidebar';
+import { ArchivedConversations } from './archived-conversations/archived-conversations';
 import {
   type AgentRequest,
   NewChatPage,
@@ -126,6 +141,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // A coding agent another surface asked the composer to start with.
   const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
+  const conversationSort = () =>
+    isTouchDevice() ? ('updated' as const) : listView.sort();
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
   const isRoutinesPage = () => {
@@ -191,18 +208,32 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     () =>
       agentConversationsQuery(userId() ?? '', {
         showUnlistedRuns: showUnlistedRuns(),
+        sort: conversationSort(),
       }),
     () => ({ enabled: Boolean(userId()), keepPreviousData: true })
   );
-  const conversations = createMemo(() =>
+  usePending('agents.conversations', () => query.isPending);
+  const allConversations = createMemo(() =>
     selectRecentAgentConversations(
       // A pending REST fallback's data read would suspend the sidebar.
       (query.isPending ? [] : (query.data?.entities ?? [])).map((entity) =>
         withEntityNotifications(entity, notifications)
       ),
       userId(),
-      search()
+      '',
+      conversationSort()
     )
+  );
+  const conversations = createMemo(() =>
+    selectRecentAgentConversations(
+      allConversations(),
+      userId(),
+      search(),
+      conversationSort()
+    )
+  );
+  const allArchived = createMemo(
+    () => partitionArchived(allConversations()).archived
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
   const updateSessions = () =>
@@ -395,9 +426,107 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     if (page() === 'routines') return 'Routines';
     if (page() === 'agents') return 'Agents';
     if (page() === 'connections') return 'Integrations';
+    if (page() === 'archived') return t('viewMenus.archived');
     return undefined;
   };
 
+  const openListedConversation = (
+    conversation: AgentConversationEntity,
+    event?: MouseEvent
+  ) => {
+    markRowNotificationsSeenOnOpen(conversation, notifications);
+    openConversation(conversation, event, modeForConversation(conversation));
+  };
+  const actions: ConversationActions = {
+    openPullRequest: (pr, event) => {
+      if (pr.id) {
+        layout.openWithSplit(
+          { type: 'pr', id: pr.id },
+          { preferNewSplit: event.shiftKey, referredFrom: 'agents' }
+        );
+      } else {
+        openExternalUrl(pr.url);
+      }
+    },
+    openBranch: openExternalUrl,
+    copyBranch: async (branch) => {
+      const copied = await writeClipboardData({ 'text/plain': branch });
+      if (!copied)
+        toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
+      return copied;
+    },
+    unarchive: (id) =>
+      Telemetry.span('agents.unarchive', async (span) => {
+        span.setAttr('session.id', id);
+        const success = await changeSessionArchiveState(id, false);
+        if (!success) span.error('Unable to unarchive session');
+        return success;
+      }),
+  };
+  const openSidebarPage = (next: AgentsPage) => {
+    if (next === 'new') {
+      showComposer();
+      return;
+    }
+    if (next === 'agents') {
+      openRoster('agent');
+      return;
+    }
+    const interaction = beginInteraction('agents.page.open');
+    try {
+      openPage(next);
+    } finally {
+      interaction.end();
+    }
+  };
+  const desktopSidebar = () => (
+    <DesktopAgentsSidebar
+      ownerId={userId()}
+      sort={conversationSort()}
+      onSortChange={(sort) => {
+        const interaction = beginInteraction('agents.conversations.sort');
+        try {
+          listView.setSort(sort);
+        } finally {
+          interaction.end();
+        }
+      }}
+      filters={listView.filters()}
+      onFilterChange={listView.setSelected}
+      onClearFilters={listView.clear}
+      activePage={selected() ? undefined : page()}
+      onOpenPage={openSidebarPage}
+      onCreateAgent={(kind) => {
+        openPage('agents');
+        setCreatingKind(kind);
+      }}
+      onCreateRoutine={() =>
+        layout.popoverSplit({ type: 'component', id: 'routine-compose' })
+      }
+      modeForConversation={modeForConversation}
+      activeConversationId={selected()?.activeConversationId}
+      search={search()}
+      onSearchChange={setSearch}
+      conversations={partitioned().conversations}
+      archived={partitioned().archived}
+      loading={query.isPending}
+      error={Boolean(query.error)}
+      hasNextPage={Boolean(query.hasNextPage)}
+      loadingNextPage={query.isFetchingNextPage}
+      showOpenPullRequests={updatesFlag().enabled}
+      showUnlistedRuns={showUnlistedRuns()}
+      onShowUnlistedRunsChange={setShowUnlistedRuns}
+      onOpenConversation={openListedConversation}
+      onRetry={() =>
+        fireAndForget(
+          query.isFetchNextPageError ? query.fetchNextPage() : query.refetch(),
+          'agents-view'
+        )
+      }
+      onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
+      actions={actions}
+    />
+  );
   const sidebar = () => (
     <AgentsSidebar
       filters={listView.filters()}
@@ -432,14 +561,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
-      onOpenConversation={(conversation, event) => {
-        markRowNotificationsSeenOnOpen(conversation, notifications);
-        openConversation(
-          conversation,
-          event,
-          modeForConversation(conversation)
-        );
-      }}
+      onOpenConversation={openListedConversation}
       onRetry={() => fireAndForget(query.refetch(), 'agents-view')}
       onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
     />
@@ -460,7 +582,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           aside={{ min: 224, max: 380, preserveDuringResize: false }}
           main={{ min: 280, preferredWidth: 640 }}
         >
-          <ViewShell.Aside>{sidebar()}</ViewShell.Aside>
+          <ViewShell.Aside>
+            <Show when={isTouchDevice()} fallback={desktopSidebar()}>
+              {sidebar()}
+            </Show>
+          </ViewShell.Aside>
 
           <ViewShell.Main class="overflow-hidden">
             <ViewTour tour={agentsTour} />
@@ -489,6 +615,36 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                           </Match>
                           <Match when={page() === 'connections'}>
                             <IntegrationsPage />
+                          </Match>
+                          <Match when={page() === 'archived'}>
+                            <TraceFlow name="agents.archived">
+                              <ArchivedConversations
+                                conversations={allArchived()}
+                                ownerId={userId()}
+                                sort={conversationSort()}
+                                modeForConversation={modeForConversation}
+                                loading={query.isPending}
+                                error={Boolean(query.error)}
+                                hasNextPage={Boolean(query.hasNextPage)}
+                                loadingNextPage={query.isFetchingNextPage}
+                                onLoadMore={() =>
+                                  fireAndForget(
+                                    query.fetchNextPage(),
+                                    'agents-view'
+                                  )
+                                }
+                                onRetry={() =>
+                                  fireAndForget(
+                                    query.isFetchNextPageError
+                                      ? query.fetchNextPage()
+                                      : query.refetch(),
+                                    'agents-view'
+                                  )
+                                }
+                                onOpenConversation={openListedConversation}
+                                actions={actions}
+                              />
+                            </TraceFlow>
                           </Match>
                           <Match when={page() === 'agents'}>
                             <AgentSettings

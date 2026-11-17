@@ -1,0 +1,7 @@
+.archived-conversation .archive-actions { display: none; }
+.archived-conversation:hover .archive-date,
+.archived-conversation:has([aria-expanded='true']) .archive-date,
+.archived-conversation:focus-within .archive-date { display: none; }
+.archived-conversation:hover .archive-actions,
+.archived-conversation:has([aria-expanded='true']) .archive-actions,
+.archived-conversation:focus-within .archive-actions { display: flex; }
