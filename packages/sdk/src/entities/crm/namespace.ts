@@ -142,22 +142,26 @@ export class CrmNamespace {
   }
 
   /**
-   * Block a domain and its subdomains from CRM email contributions; refuses a
-   * domain covering any team member's connected primary mailbox.
-   * Preserves company/contact records and archive state. Requires a team admin
-   * or owner. A refused block throws the server's explanation.
+   * Block a domain from email sync without changing existing CRM records.
+   *
+   * Existing companies, contacts and their hidden states are preserved.
+   * Requires a team admin or owner.
    *
    * @destructive
    * @idempotent
+   * @throws When the domain equals or covers a member's connected primary
+   * mailbox domain. The error preserves the server's explanation.
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
   }
 
   /**
-   * Remove a team domain exclusion and schedule eligible email backfill.
-   * Consent and other exclusions still apply; company/contact records and
-   * archive state remain unchanged. Requires a team admin or owner.
+   * Resume eligible email sync for a domain without changing existing CRM records.
+   *
+   * Email sync resumes for addresses the team's personal-email and
+   * generic-provider filters allow. Existing companies, contacts and their
+   * hidden states are preserved. Requires a team admin or owner.
    *
    * @write
    * @idempotent
