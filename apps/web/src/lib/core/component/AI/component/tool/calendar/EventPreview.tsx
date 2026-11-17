@@ -1,6 +1,7 @@
 import type { CalendarGridHandle } from '@app/features/calendar/components/CalendarGrid';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import type { CalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
+import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import type { CalendarGridPeriodView } from '@app/features/calendar/types';
@@ -12,6 +13,7 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button, cn } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -158,6 +160,8 @@ interface CalendarToolEventPreviewProps {
   controller: CalendarEventFormController;
   eventId: string;
   timeZone?: string;
+  /** Optional validated draft snapshot, including explicit zone and recurrence edits. */
+  submission?: Accessor<EventEditorSubmitValues | undefined>;
   /** Whether to display the preview date's month and year above the grid. */
   showPeriodLabel?: boolean;
   /** Whether to show previous/next controls in week and month views. */
@@ -173,13 +177,19 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     buildCalendarToolPreviewEvent({
       id: props.eventId,
       values: props.controller.state(),
-      time: props.controller.eventTime(),
-      recurrenceLines: props.controller.recurrenceLines(),
+      time: props.submission
+        ? props.submission()?.time
+        : props.controller.eventTime(),
+      recurrenceLines: props.submission
+        ? props.submission()?.recurrenceLines
+        : props.controller.recurrenceLines(),
       calendar: props.controller.selectedCalendarOption(),
       timeZone: props.timeZone,
     })
   );
-  const editorStart = createMemo(() => props.controller.state().start);
+  const editorStart = createMemo(
+    () => previewEvent()?.start ?? props.controller.state().start
+  );
   const editorAllDay = createMemo(() => props.controller.state().allDay);
   const previewDay = createMemo(() => {
     const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());

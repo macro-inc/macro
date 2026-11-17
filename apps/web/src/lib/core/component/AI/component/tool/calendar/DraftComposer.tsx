@@ -248,6 +248,16 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     onReject: props.sink.onReject,
   });
 
+  const previewSubmission = createMemo(() => agent.model.submission());
+  const previewTimeZone = () => {
+    if (previewSubmission()?.changes.timeZoneChanged)
+      return agent.model.timeZone();
+    const original = props.initialData.time;
+    return original.kind === 'timed'
+      ? (original.timeZone ?? undefined)
+      : undefined;
+  };
+
   props.registerDraftReader?.(currentArgs);
   props.registerSubmitReader?.(async () => currentArgs());
 
@@ -382,13 +392,10 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             <CalendarToolEventPreview
               controller={controller}
               eventId={`calendar-tool-preview:${props.previewKey}`}
+              submission={() => previewSubmission()?.values}
               showPeriodLabel
               showNavigationControls
-              timeZone={
-                props.initialData.time.kind === 'timed'
-                  ? (props.initialData.time.timeZone ?? undefined)
-                  : undefined
-              }
+              timeZone={previewTimeZone()}
               class="h-96 shrink-0"
             />
           </ErrorBoundary>

@@ -72,6 +72,7 @@ host lives in `../block-calendar/`.
   agent host selects `MobileAgentComposer` for the same 2J fields on touch.
   Pass explicit time-zone metadata through the tool adapter and keep unsupported
   visibility read-only; the current tool accepts one time, not alternatives.
+  Feed the same validated time and recurrence snapshot to the preview and submission.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,

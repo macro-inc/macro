@@ -26,12 +26,15 @@ vi.mock(
   '@app/features/calendar/views/composer/mobile/MobileAgentComposer',
   () => ({
     MobileAgentComposer: (props: {
-      model: { submit: () => void };
+      model: { submit: () => void; setTimeZone: (zone: string) => void };
       children: JSX.Element;
     }) => (
       <div data-testid="phone-agent-draft">
         {props.children}
         <button onClick={props.model.submit}>Create event</button>
+        <button onClick={() => props.model.setTimeZone('America/New_York')}>
+          Select zone
+        </button>
       </div>
     ),
   })
@@ -71,7 +74,21 @@ vi.mock('@ui', () => ({
     <button {...props} />
   ),
 }));
-vi.mock('./EventPreview', () => ({ CalendarToolEventPreview: () => null }));
+vi.mock('./EventPreview', () => ({
+  CalendarToolEventPreview: (props: {
+    timeZone?: string;
+    submission?: () =>
+      | { time: { kind: string; startsAt?: string } }
+      | undefined;
+  }) => (
+    <>
+      <output aria-label="Preview zone">{props.timeZone}</output>
+      <output aria-label="Preview start">
+        {props.submission?.()?.time.startsAt}
+      </output>
+    </>
+  ),
+}));
 vi.mock('@app/features/calendar/views/composer/EventForm', () => ({
   EventForm: (props: EventFormProps) => (
     <>
@@ -153,7 +170,8 @@ const calendar = (id: string): VisibleCalendar => ({
 function showDraft(
   calendarId?: string,
   overrides: Partial<CreateCalendarEvent> = {},
-  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader']
+  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader'],
+  showPreview = false
 ) {
   const draft = {
     title: 'Customer demo',
@@ -170,7 +188,7 @@ function showDraft(
       initialData={draft}
       previewKey="test"
       registerSubmitReader={registerSubmitReader}
-      showPreview={false}
+      showPreview={showPreview}
       sink={{
         canAct: () => true,
         lockedNotice: () => undefined,
@@ -206,6 +224,40 @@ it('routes phone drafts through the shared agent model without mounting the desk
       calendarId: 'work-calendar',
     })
   );
+});
+
+it('previews the same explicit time zone and instant that a review submits', async () => {
+  mocks.touch = true;
+  let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-01-01T12:00:00Z',
+        endsAt: '2030-01-01T13:00:00Z',
+        timeZone: 'UTC',
+      },
+    },
+    (reader) => {
+      read = reader;
+    },
+    true
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select zone' }));
+  const submitted = await read?.();
+  expect(submitted?.time).toMatchObject({
+    kind: 'timed',
+    timeZone: 'America/New_York',
+  });
+  expect(screen.getByLabelText('Preview zone').textContent).toBe(
+    'America/New_York'
+  );
+  if (submitted?.time.kind === 'timed') {
+    expect(screen.getByLabelText('Preview start').textContent).toBe(
+      submitted.time.startsAt
+    );
+  }
 });
 
 describe('AI calendar draft account selection', () => {
