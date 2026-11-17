@@ -398,7 +398,12 @@ it('reuses cached chip identities when virtual rows remount but still fetches mi
 function controlledClient() {
   const requests: {
     operation: Operation;
-    next: (data?: unknown, error?: CombinedError, cached?: boolean) => void;
+    next: (
+      data?: unknown,
+      error?: CombinedError,
+      cached?: boolean,
+      stale?: boolean
+    ) => void;
   }[] = [];
   const exchange: Exchange = () => (source) =>
     pipe(
@@ -408,12 +413,12 @@ function controlledClient() {
         const subject = makeSubject<OperationResult>();
         requests.push({
           operation,
-          next: (data, error, cached = false) =>
+          next: (data, error, cached = false, stale = false) =>
             subject.next({
               operation,
               data,
               error,
-              stale: false,
+              stale,
               hasNext: false,
               ...(cached
                 ? {
@@ -639,8 +644,34 @@ it('shows a cached missing project as missing when asking the server fails', asy
     new CombinedError({ networkError: new Error('Offline') })
   );
   await vi.waitFor(() => expect(query.isPending).toBe(false));
-  expect(query.data).toBeUndefined();
   expect(requests).toHaveLength(2);
+});
+
+it('waits for the in-flight network read instead of asking again for a cached missing project', async () => {
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectDetailQuery(
+      () => client,
+      () => 'viewer',
+      () => 'deleted'
+    );
+  });
+  // cache-and-network: the cached null arrives stale, with the network read
+  // still in flight.
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true,
+    true
+  );
+  expect(query.isPending).toBe(true);
+  await Promise.resolve();
+  expect(requests).toHaveLength(1);
+  requests[0].next({ user: { id: 'viewer', visibleInitiative: null } });
+  expect(query.isPending).toBe(false);
+  expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(1);
 });
 
 it('reauthorizes a denied identity after remount without exposing cached data', async () => {

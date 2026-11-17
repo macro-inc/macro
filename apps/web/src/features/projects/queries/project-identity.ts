@@ -135,7 +135,8 @@ function createAuthorizedProjectQuery<
     ]);
     return createQueryAuthorization(() => key, current.client);
   });
-  // The scope whose missing project the server has confirmed during this read.
+  // The scope whose missing project the server has confirmed, or failed to
+  // answer, during this read.
   const [confirmedScope, setConfirmedScope] =
     createSignal<ReturnType<typeof scope>>();
   const query = createLiveQuery(
@@ -153,7 +154,8 @@ function createAuthorizedProjectQuery<
         keepPreviousData: false,
         onResult: (result) => {
           if (result.data && result.data.user.id !== current.viewerId) return;
-          if (isServerAnswer(result)) setConfirmedScope(() => current);
+          if (result.error || isServerAnswer(result))
+            setConfirmedScope(() => current);
           auth.onResult(result);
         },
         select: (data) => ({ viewerId: data.user.id, value: data }),
@@ -189,7 +191,8 @@ function createAuthorizedProjectQuery<
   // reads as null. The cache keeps that null, and a stored null outranks the
   // project's record when the record arrives later, as it does when the
   // project is shared with the viewer again. So a cached null is shown only
-  // after the server has said it during this read, or after asking it failed.
+  // after the server has said it during this read, or after asking it failed;
+  // a request that was cancelled confirms nothing.
   const unconfirmedMissing = createMemo(() => {
     const result = query.data;
     return (
@@ -213,13 +216,7 @@ function createAuthorizedProjectQuery<
       return;
     confirmingScope = current;
     fireAndForget(
-      (async () => {
-        try {
-          await refetch({ requestPolicy: 'network-only' });
-        } finally {
-          setConfirmedScope(() => current);
-        }
-      })(),
+      refetch({ requestPolicy: 'network-only' }),
       'project-identity.missing-confirmation'
     );
   });

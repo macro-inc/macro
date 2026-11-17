@@ -193,21 +193,26 @@ export function createProjectSoupSource(
       // urql exposes a plain store, so failed background reads may retain the
       // last authorized pages without triggering a Solid resource suspension.
       // An errored field is omitted rather than nulled, so a page from a
-      // failed first read can lack `soup` despite its generated type.
+      // failed read can lack `soup` despite its generated type. A failed
+      // first page leaves the list unloaded; a failed later page keeps the
+      // rows before it, with the error shown beside them.
       const pages = query.data?.pages;
-      if (!pages || pages.some((page) => !page.user.soup)) return undefined;
-      return projectSoupRows(pages.flatMap((page) => page.user.soup.items)).map(
-        (row) => {
-          const appearance = pendingAppearance(
-            'initiative',
-            row.project.id,
-            Boolean(query.error)
-          );
-          return appearance
-            ? { ...row, project: { ...row.project, appearance } }
-            : row;
-        }
-      );
+      if (!pages) return undefined;
+      const failed = pages.findIndex((page) => !page.user.soup);
+      if (failed === 0) return undefined;
+      const loaded = failed === -1 ? pages : pages.slice(0, failed);
+      return projectSoupRows(
+        loaded.flatMap((page) => page.user.soup.items)
+      ).map((row) => {
+        const appearance = pendingAppearance(
+          'initiative',
+          row.project.id,
+          Boolean(query.error)
+        );
+        return appearance
+          ? { ...row, project: { ...row.project, appearance } }
+          : row;
+      });
     },
     loading: () => enabled() && query.isPending,
     error: () => {
