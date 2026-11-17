@@ -75,7 +75,9 @@ pub fn channels_e2e() -> Workflow {
 }
 
 /// Build the services and the web app, start the stack, run the suite.
-/// `graphql` is the value the app is built with for `VITE_ENABLE_GRAPHQL_SOUP`.
+/// `graphql` is the value the app is built with for `VITE_ENABLE_GRAPHQL_SOUP`
+/// and for `VITE_ENABLE_CHANNEL_LOCAL_SYNC`, which keeps channels on the
+/// device and has no default: the suite's device tests need both.
 fn suite(label: &str, graphql: &str) -> Job {
     Job::default()
         .name(format!("Channels end-to-end (GraphQL sources {label})"))
@@ -86,6 +88,7 @@ fn suite(label: &str, graphql: &str) -> Job {
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_env(("CHANNELS_E2E_INSTANCE", INSTANCE))
         .add_env(("VITE_ENABLE_GRAPHQL_SOUP", graphql))
+        .add_env(("VITE_ENABLE_CHANNEL_LOCAL_SYNC", graphql))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())

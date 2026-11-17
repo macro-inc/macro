@@ -107,7 +107,13 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   of its person's newest channels (OFF-13): a test repeated thirty times in
   one run makes more than that, and the run's `history` channel then says
   "Conversation unavailable" offline (OFF-04, OFF-12). Judge those two from
-  whole runs, or from repeats short enough to stay under a hundred channels.
+  whole runs, or from repeats short enough to stay under a hundred channels,
+  and give each run a run directory of its own: a run that finds an earlier
+  run's `history` channel in its directory reads one that old.
 - Two people's first conversation exists once for the life of a stack, so
   what happens the first time (DM-02) shows once for each cast on a new
   stack and never on an old one: prove such a thing on a new stack.
+- Channels are kept on the device only by a build with
+  `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` as well as `VITE_ENABLE_GRAPHQL_SOUP`:
+  "with the flag" in this suite means both, and CI's flag job sets both. A
+  build with the second alone is not a build the suite knows.

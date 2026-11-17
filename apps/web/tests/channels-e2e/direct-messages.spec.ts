@@ -110,11 +110,10 @@ test('DM-02 writing to the same person again from “New direct message” conti
   // once for each cast in the life of a stack.
   await failsSometimesWithSoup(async () => {
     await expect(cyRow).toContainText('Ada Owner');
-    await cyRow.getByRole('treeitem').click();
-    const cyView = new ChannelView(cyPage, id);
-    await cyView.shown();
-    await cyView.expectEndsWith([first, second]);
   });
+  const cyView = new ChannelView(cyPage, id);
+  await cyView.open();
+  await cyView.expectEndsWith([first, second]);
 
   // One conversation, so one row. After a reload: the list of the person who
   // started a conversation does not show it before one (DM-07).

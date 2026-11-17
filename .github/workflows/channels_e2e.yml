@@ -27,6 +27,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
       CHANNELS_E2E_INSTANCE: channels-e2e
       VITE_ENABLE_GRAPHQL_SOUP: 'false'
+      VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'false'
     timeout-minutes: 45
     steps:
     - name: Checkout
@@ -231,6 +232,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
       CHANNELS_E2E_INSTANCE: channels-e2e
       VITE_ENABLE_GRAPHQL_SOUP: 'true'
+      VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'true'
     timeout-minutes: 45
     steps:
     - name: Checkout

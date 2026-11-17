@@ -216,6 +216,9 @@ test('OFF-06 a thread read while connected shows its replies with no connection,
   const offline = await openOffline(page, channel);
   await offline.hiddenReplies(root.id).click();
 
+  await expect
+    .poll(async () => (await offline.replies(root.id)).slice(0, 3))
+    .toEqual(replies.slice(0, 3));
   // Defect, in some runs: only the first three replies show.
   await failsSometimes(async () => {
     await expect.poll(() => offline.replies(root.id)).toEqual(replies);
