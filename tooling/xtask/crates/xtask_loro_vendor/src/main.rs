@@ -13,6 +13,8 @@
 //! upstream release.
 
 mod strip;
+#[cfg(test)]
+mod test;
 
 use clap::Parser;
 use quote::ToTokens;
@@ -110,7 +112,20 @@ fn compare_rust(upstream: &Path, vendor: &Path, feature: &str) -> Result<Option<
             "`{feature}` survives stripping; gate whole items, statements, fields or arms"
         )));
     }
-    Ok(first_difference(&expected, &actual))
+    Ok(token_difference(&expected, &actual))
+}
+
+/// None only when both token streams print identically, literals included;
+/// otherwise where they differ, located by whitespace-separated tokens.
+fn token_difference(expected: &str, actual: &str) -> Option<String> {
+    if expected == actual {
+        return None;
+    }
+    Some(
+        first_difference(expected, actual).unwrap_or_else(|| {
+            "differs only inside a token, such as whitespace in a literal".into()
+        }),
+    )
 }
 
 fn first_difference(expected: &str, actual: &str) -> Option<String> {
