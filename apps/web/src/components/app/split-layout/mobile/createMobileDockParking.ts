@@ -136,16 +136,12 @@ export function createMobileDockParking(options: {
 
   // A link, notification, or Back can open a view that is also parked; the
   // open one wins, so a view is never mounted twice.
-  createComputed(
-    on(router.panes, (open) =>
-      untrack(() => {
-        const shown = open.map(viewOfPane);
-        discard(
-          parkedPanes().filter((pane) => shown.includes(viewOfPane(pane)))
-        );
-      })
-    )
-  );
+  createComputed(() => {
+    const shown = router.panes().map(viewOfPane);
+    untrack(() =>
+      discard(parkedPanes().filter((pane) => shown.includes(viewOfPane(pane))))
+    );
+  });
 
   const show = (
     content: SplitContent,
