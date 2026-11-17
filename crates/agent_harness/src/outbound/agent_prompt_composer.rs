@@ -1,9 +1,11 @@
 //! Compose trigger context for every harness.
 
+use agent_session::domain::model::SessionBot;
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{
-    AgentContextCurrentTime, AgentContextPeople, AgentContextPerson,
+    AgentContextAgent, AgentContextCurrentTime, AgentContextPeople, AgentContextPerson,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use trigger_context::TriggerContext;
@@ -41,6 +43,7 @@ impl<TimeZones: UserTimeZones> AgentPromptComposer for LexicalAgentPromptCompose
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        agent: Option<&SessionBot>,
         people: Option<&PromptPeople>,
         trigger: Option<&TriggerContext>,
     ) -> Result<String> {
@@ -56,6 +59,14 @@ impl<TimeZones: UserTimeZones> AgentPromptComposer for LexicalAgentPromptCompose
             local: &now.local,
             time_zone: now.time_zone.as_deref(),
         };
+        let agent_id = agent.map(|agent| String::from(ChannelSender::new_from_bot(agent.id)));
+        let agent = agent
+            .zip(agent_id.as_deref())
+            .map(|(agent, id)| AgentContextAgent {
+                id,
+                name: &agent.name,
+                handle: &agent.handle,
+            });
         let people = people.map(|people| AgentContextPeople {
             owner: person(&people.owner),
             sender: people.sender.as_ref().map(person),
@@ -64,6 +75,7 @@ impl<TimeZones: UserTimeZones> AgentPromptComposer for LexicalAgentPromptCompose
             .compose_agent_context(
                 prompt_markdown,
                 instructions,
+                agent.as_ref(),
                 people.as_ref(),
                 Some(&current_time),
                 trigger,

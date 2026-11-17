@@ -18,3 +18,16 @@ The [`run-ci` skill](../../.agents/skills/run-ci/SKILL.md) has the commands,
 what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
+
+## RustSec advisories
+
+`cargo deny` reads the live RustSec advisory database. On a PR it fails only
+on advisories against packages the PR adds to `Cargo.lock`: a name and
+version the base's lockfile doesn't have. An advisory published against a
+package already on `main` doesn't fail PRs. The daily `cargo deny advisories`
+workflow fails on it instead, and a failed run posts to the Macro Alerts
+channel. The CI owner fixes it on `main`: update the crate, or ignore the
+advisory in `deny.toml` with a reason.
+
+Locally, `cargo deny check advisories` reports every advisory, as the daily
+run does.

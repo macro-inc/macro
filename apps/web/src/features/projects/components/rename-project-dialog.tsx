@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { RENAME_FIELD_ATTRIBUTE } from '@entity/utils/rename-field-focus';
 import { ActionDialogShell, Button, Dialog, TextField } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -56,6 +57,7 @@ export function RenameProjectDialog(props: {
             <TextField value={value()} onChange={setValue}>
               <TextField.Label>Name</TextField.Label>
               <TextField.Input
+                {...{ [RENAME_FIELD_ATTRIBUTE]: '' }}
                 placeholder="Project name"
                 readOnly={pending()}
                 onFocus={(event) => event.currentTarget.select()}

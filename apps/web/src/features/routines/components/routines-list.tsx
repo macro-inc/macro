@@ -178,7 +178,7 @@ export function RoutinesList(props: {
             label="Search routines"
             value={search()}
             onValueChange={setSearch}
-            onEscape={() => list?.focus()}
+            focusResults={() => list?.focus()}
             registerFocus={(focus) => props.registerSearchFocus?.(focus)}
           />
         </ListHeader>

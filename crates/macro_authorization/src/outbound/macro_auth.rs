@@ -53,11 +53,12 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
         }
         JwtToken::MacroApiToken(_) => CredentialOrigin::MacroApiJwt,
     };
-    let (user_id, fusion_user_id, organization_id, agent_id, agent_via) = match token {
+    let (user_id, fusion_user_id, organization_id, agent_id, agent_via, routine_id) = match token {
         JwtToken::MacroAccessToken(token) => (
             token.macro_user_id,
             token.root_macro_id.unwrap_or(token.fusion_user_id),
             token.macro_organization_id,
+            None,
             None,
             None,
         ),
@@ -73,6 +74,7 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
                     name,
                     kind: token.agent_via_kind,
                 }),
+            token.routine_id,
         ),
     };
 
@@ -81,6 +83,7 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
         identity: ValidatedIdentity {
             agent_id,
             agent_via,
+            routine_id,
             user_id,
             fusion_user_id,
             organization_id,

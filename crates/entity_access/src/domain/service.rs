@@ -341,6 +341,14 @@ impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
+    async fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> Result<std::collections::HashSet<(EntityType, String)>, AccessError> {
+        self.repo.visible_crm_entities(user, entities).await
+    }
+
     #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,

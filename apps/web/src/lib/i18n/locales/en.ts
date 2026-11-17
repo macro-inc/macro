@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
@@ -19,6 +20,7 @@ import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
+import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
 import mcpClients from './en/mcp-clients';
@@ -49,6 +51,7 @@ import viewMenus from './en/view-menus';
 export default {
   agentAutoArchive,
   appearance,
+  agentControls,
   agentNavigation,
   accountManager,
   agentSetup,
@@ -68,6 +71,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  importJobs,
   suggestions,
   localRuntime,
   markdownEditor,

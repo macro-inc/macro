@@ -61,6 +61,7 @@ impl Widget {
             ColumnKind::Select { multi: true } | ColumnKind::Tag => &[Widget::Checkboxes],
             ColumnKind::SelectNumber { .. } => &[Widget::Dropdown],
             ColumnKind::Number
+            | ColumnKind::Percentage
             | ColumnKind::Boolean
             | ColumnKind::DateRange
             | ColumnKind::Entity { .. }

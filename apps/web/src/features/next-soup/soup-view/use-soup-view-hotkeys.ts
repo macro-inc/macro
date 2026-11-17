@@ -1,3 +1,7 @@
+import {
+  clearListSearch,
+  hasListSearch,
+} from '@app/components/view-shell/list-search-escape';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
@@ -68,13 +72,16 @@ function registerSplitEscapeHotkey(
     if (clearMultiCondition()) {
       return 'Clear multi selection';
     }
+    if (hasListSearch(scopeId)) {
+      return 'Clear search';
+    }
     if (closeSpotlightCondition()) {
       return 'Close spotlight';
     }
     return '';
   };
 
-  // escape - Multi-purpose: Clear selection / Close spotlight
+  // escape - Multi-purpose: Clear selection / Clear search / Close spotlight
   // Deliberately outside the group and kept past this view's unmount: the
   // soup selection and split spotlight it acts on live at the split-panel
   // level, so escape keeps working after a list entity is opened in place.
@@ -85,13 +92,20 @@ function registerSplitEscapeHotkey(
     scopeId,
     hotkeyToken: TOKENS.soup.dismiss,
     description: escapeDescription,
-    condition: () => clearMultiCondition() || closeSpotlightCondition(),
+    condition: () =>
+      clearMultiCondition() ||
+      hasListSearch(scopeId) ||
+      closeSpotlightCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
         const length = selection.count();
         selection.clear();
-        return length > 1;
+        // One Escape steps back one level, so a search waits for the next.
+        if (length > 1 || hasListSearch(scopeId)) return true;
       }
+      // This override eclipses the header search field's own Escape whenever
+      // the field registered first, so the search is cleared from here.
+      if (clearListSearch(scopeId)) return true;
       if (closeSpotlightCondition()) {
         splitHandle.toggleSpotlight();
         return true;
@@ -131,7 +145,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (next) {
         virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
       }
-      return true;
+      // A search field reads an empty list from this and keeps the keys.
+      return Boolean(next);
     },
     hide: true,
   }).withGroup(group);
