@@ -4,7 +4,7 @@ import type {
   CombinedRecipientKind,
 } from './combinedRecipient';
 
-/** One picker owns one replaceable page; selected chips belong to its caller. */
+/** One picker owns one growing list of pages; selected chips belong to its caller. */
 export type RecipientSource<K extends CombinedRecipientKind> = {
   /** User rows are already query-matched and ordered; non-user scoped extras
    * are matched locally. Do not rescore or drop personal rows in the picker. */
@@ -13,7 +13,9 @@ export type RecipientSource<K extends CombinedRecipientKind> = {
   error: Accessor<Error | null>;
   incomplete: Accessor<boolean>;
   hasNext: Accessor<boolean>;
+  /** Names the list on screen; appending a page keeps it. */
   windowKey: Accessor<string | undefined>;
+  /** Lists the next page below the earlier ones. */
   next: () => Promise<void>;
   retry: () => Promise<unknown>;
 };

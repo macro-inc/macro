@@ -164,6 +164,10 @@ pub struct DenoRunner {
     binary: PathBuf,
     scratch: PathBuf,
     heap_mb: u32,
+    /// Forwards proxied runs' requests, its connections kept warm across
+    /// runs. It follows no redirects: a redirect is the host's answer to
+    /// the program.
+    egress: reqwest::Client,
 }
 
 impl DenoRunner {
@@ -182,10 +186,18 @@ impl DenoRunner {
         let binary = pinned_deno(binary).await?;
         tokio::fs::create_dir_all(&scratch).await?;
         let scratch = tokio::fs::canonicalize(scratch).await?;
+        // No overall timeout: a response may stream for as long as the run
+        // lasts, and the run's end stops its forwarder.
+        let egress = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|error| rootcause::report!("could not build the egress client: {error}"))?;
         Ok(Self {
             binary,
             scratch,
             heap_mb,
+            egress,
         })
     }
 
@@ -255,8 +267,27 @@ impl DenoRunner {
         )
         .await
         .map_err(internal)?;
+        // A proxied run reaches only its forwarder, which reaches the hosts.
+        let egress = match job.environment.egress {
+            Egress::Direct => None,
+            Egress::Proxied => Some(
+                egress::RunEgress::start(
+                    self.egress.clone(),
+                    &job.environment.endpoints.hosts,
+                    &job.environment.trace_headers,
+                )
+                .await
+                .map_err(internal)?,
+            ),
+        };
+        // The program keeps the real hosts, which its links need; its fetch
+        // sends their requests to the forwarder, the only address it reaches.
+        let forwarder = egress.as_ref().map(|egress| &egress.hosts);
         let mut destinations = std::collections::BTreeSet::new();
-        for base in job.environment.endpoints.hosts.values() {
+        for base in forwarder
+            .unwrap_or(&job.environment.endpoints.hosts)
+            .values()
+        {
             let url = url::Url::parse(base).map_err(internal)?;
             if !matches!(url.scheme(), "http" | "https")
                 || !url.username().is_empty()
@@ -315,9 +346,12 @@ impl DenoRunner {
         let execution = async {
             let candidate = bridge(
                 &job.environment,
-                stdin,
-                stdout,
-                stderr,
+                forwarder,
+                ChildPipes {
+                    stdin,
+                    stdout,
+                    stderr,
+                },
                 events,
                 &job.limits,
                 job.deadline,
@@ -351,6 +385,9 @@ impl DenoRunner {
             result = execution => result,
         };
         reap(&mut child).await;
+        if let Some(egress) = egress {
+            egress.stop().await;
+        }
         // Drop the directory only after the process is reaped.
         drop(directory);
         outcome
@@ -434,6 +471,9 @@ fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
 struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
+    /// A proxied run's forwarder, each service's base under it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    forwarder: Option<&'a std::collections::BTreeMap<String, String>>,
     max_result_bytes: usize,
     max_calls_per_operation: u32,
     /// Time left before the host stops the run, so the program can report a
@@ -486,17 +526,29 @@ enum ChildFrame {
     },
 }
 
-async fn bridge(
-    environment: &RunEnvironment,
-    mut stdin: tokio::process::ChildStdin,
+/// The child's standard streams, which the bridge owns for the run.
+struct ChildPipes {
+    stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
+}
+
+async fn bridge(
+    environment: &RunEnvironment,
+    forwarder: Option<&std::collections::BTreeMap<String, String>>,
+    pipes: ChildPipes,
     events: &mut EventSink,
     limits: &Limits,
     deadline: tokio::time::Instant,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
+    let ChildPipes {
+        mut stdin,
+        stdout,
+        stderr,
+    } = pipes;
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
+        forwarder,
         max_result_bytes: limits.max_result_bytes,
         max_calls_per_operation: limits.max_calls_per_operation,
         remaining_ms: deadline
@@ -600,6 +652,7 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
 }
 
 pub mod check;
+mod egress;
 
 #[cfg(test)]
 mod test;

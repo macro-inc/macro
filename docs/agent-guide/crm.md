@@ -26,12 +26,9 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and with
-`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. CRM supplies its task-composer preset, and creating any task shows the
+Customer / Contact pill. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
@@ -125,7 +122,7 @@ display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
-preserved across window changes. Next options replaces its page; Only changes
+preserved as further pages load on scroll. Only changes
 Owner without clearing Stage. Closed chips resolve only their selected labels,
 not the full personal directory.
 

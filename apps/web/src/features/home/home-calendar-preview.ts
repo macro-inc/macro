@@ -15,10 +15,6 @@ import {
 import { homeCalendarRoute } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { previewCalendarTarget } from '@components/app/previewTarget';
-import {
-  enableCalendarUi,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import deepEqual from 'fast-deep-equal';
@@ -41,7 +37,6 @@ export function useHomeCalendarPreview(withTab: WithTab) {
     entity: CalendarPreviewSelection,
     options: { activate?: boolean } = {}
   ) => {
-    if (!isFeatureEnabled(enableCalendarUi)) return false;
     const calendarTarget = previewCalendarTarget(entity);
     const navigation = homeCalendarNavigation(calendarTarget);
     if (!navigation) return false;
