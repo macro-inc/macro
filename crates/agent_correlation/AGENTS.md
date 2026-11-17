@@ -61,6 +61,9 @@ code, not in its prompt. The harness also signs the scope into the credential
   recorded a sharing refusal with 403 `SharingRefused`, whatever error the
   handler mapped it to). `enforce_signed_scope` is the
   check alone, for a service with no database to look a correlation up in.
+  `refuse_signed_scopes` refuses every credential that signs a scope, for a
+  service no scope may reach at all (the image proxy, which fetches what
+  its caller names).
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
