@@ -533,7 +533,9 @@ pub enum SendAuthority {
     UserApiToken,
     /// Acting for the person without being them: a session carrying an agent
     /// attribution. Bots, harnesses and internal callers never reach these use
-    /// cases (`UserOnly` rejects them). Never sends to WhatsApp.
+    /// cases (`UserOnly` rejects them). Never sends to WhatsApp. An agent's
+    /// program on an API credential is `UserApiToken`; the send route checks
+    /// it for the user's quoted approval.
     Automation,
 }
 

@@ -40733,6 +40733,12 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41969,6 +41975,12 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42054,6 +42066,12 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    userConfirmation: zod
+      .string()
+      .nullish()
+      .describe(
+        "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+      ),
   })
   .describe(
     'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42131,6 +42149,12 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'

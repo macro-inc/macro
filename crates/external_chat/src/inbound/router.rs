@@ -123,7 +123,10 @@ pub fn refuse_unconfirmed_program_send(
     headers: &axum::http::HeaderMap,
     confirmation: Option<&str>,
 ) -> Result<(), ApiError> {
-    let _ = (attribution, headers, confirmation, is_agent_run);
+    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    if is_agent_run(attribution, headers) && !confirmed {
+        return Err(ApiError(ExternalChatError::ConfirmationRequired));
+    }
     Ok(())
 }
 

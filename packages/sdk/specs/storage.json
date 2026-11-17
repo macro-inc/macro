@@ -19145,6 +19145,9 @@
               }
             }
           },
+          "403": {
+            "description": "An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send"
+          },
           "429": {
             "description": "One send request per second per user; Retry-After: 1"
           }
@@ -46912,6 +46915,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message being quoted, within this chat."
+          },
+          "userConfirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
           }
         }
       },

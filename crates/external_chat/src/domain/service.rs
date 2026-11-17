@@ -304,7 +304,10 @@ impl<P: ChatProvider> ExternalChatService<P> {
 /// gates the request at the route, and is neither stored nor part of the
 /// idempotency digest a retry is compared by.
 pub(crate) fn send_intent(request: &SendReply) -> SendReply {
-    request.clone()
+    SendReply {
+        user_confirmation: None,
+        ..request.clone()
+    }
 }
 
 fn human(authority: SendAuthority) -> ExternalChatResult<()> {
