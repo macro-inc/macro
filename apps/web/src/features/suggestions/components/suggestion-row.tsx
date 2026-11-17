@@ -103,6 +103,20 @@ function RowNotes(props: { failed: boolean; changed: boolean }) {
   );
 }
 
+/**
+ * The last slot of every row, the width of one icon button: dismiss, shown
+ * while the row is pointed at or focused in. A row that can't be dismissed
+ * keeps the slot empty, so what stands before it lines up down the page and
+ * no button moves when dismiss appears.
+ */
+function EndSlot(props: { children?: JSX.Element }) {
+  return (
+    <span class="flex size-7 shrink-0 items-center justify-center opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
+      {props.children}
+    </span>
+  );
+}
+
 function DismissButton(props: RowState) {
   return (
     <Button
@@ -296,10 +310,9 @@ export function MacroRow(props: MacroRowProps) {
         <RowNotes failed={props.failed} changed={props.changed} />
       </Item.Content>
       <Item.Actions>
-        <span class="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
-          <DismissButton {...props} />
-          <Show when={lookLabel(props)}>
-            {(label) => (
+        <Show when={lookLabel(props)}>
+          {(label) => (
+            <span class="opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
               <Button
                 variant="ghost"
                 size="sm"
@@ -308,9 +321,9 @@ export function MacroRow(props: MacroRowProps) {
               >
                 {label()}
               </Button>
-            )}
-          </Show>
-        </span>
+            </span>
+          )}
+        </Show>
         <Show
           when={props.status !== 'running'}
           fallback={
@@ -329,6 +342,9 @@ export function MacroRow(props: MacroRowProps) {
             {acceptLabel(props)}
           </Button>
         </Show>
+        <EndSlot>
+          <DismissButton {...props} />
+        </EndSlot>
       </Item.Actions>
     </Item>
   );
@@ -403,32 +419,38 @@ export function ToDoRow(props: ToDoRowProps) {
         </RowText>
         <RowNotes failed={props.failed} changed={props.changed} />
       </Item.Content>
-      <div class="relative flex h-7 min-w-36 shrink-0 items-center justify-end">
-        <Item.Metadata
-          class="text-ink-placeholder transition-opacity group-focus-within/suggestion:opacity-0 not-touch:group-hover/suggestion:opacity-0"
-          data-suggestion-time
-        >
-          {ageLabel(props.suggestion)}
-        </Item.Metadata>
-        <div class="absolute right-0 flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={props.busy}
-            onClick={props.onOpen}
-            data-suggestion-accept
+      <Item.Actions>
+        <div class="relative flex h-7 min-w-32 shrink-0 items-center justify-end">
+          <Item.Metadata
+            class="text-ink-placeholder transition-opacity group-focus-within/suggestion:opacity-0 not-touch:group-hover/suggestion:opacity-0"
+            data-suggestion-time
           >
-            {drafted() ? t('suggestions.openDraft') : t('suggestions.openItem')}
-            {/* Enter opens the row only while the keyboard is in it. */}
-            <Hotkey
-              shortcut="enter"
-              aria-hidden="true"
-              class="-mr-1.5 hidden size-4.5 justify-center rounded-[5px] bg-ink/10 text-xs text-ink-muted group-focus-within/suggestion:inline-flex"
-            />
-          </Button>
-          <DismissButton {...props} />
+            {ageLabel(props.suggestion)}
+          </Item.Metadata>
+          <div class="absolute right-0 flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={props.busy}
+              onClick={props.onOpen}
+              data-suggestion-accept
+            >
+              {drafted()
+                ? t('suggestions.openDraft')
+                : t('suggestions.openItem')}
+              {/* Enter opens the row only while the keyboard is in it. */}
+              <Hotkey
+                shortcut="enter"
+                aria-hidden="true"
+                class="-mr-1.5 hidden size-4.5 justify-center rounded-[5px] bg-ink/10 text-xs text-ink-muted group-focus-within/suggestion:inline-flex"
+              />
+            </Button>
+          </div>
         </div>
-      </div>
+        <EndSlot>
+          <DismissButton {...props} />
+        </EndSlot>
+      </Item.Actions>
     </Item>
   );
 }
@@ -468,9 +490,12 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
           </Show>
         </RowText>
       </Item.Content>
-      <Item.Metadata class="text-ink-placeholder" data-suggestion-time>
-        {formatTime(props.suggestion.stateChangedAt)}
-      </Item.Metadata>
+      <Item.Actions>
+        <Item.Metadata class="text-ink-placeholder" data-suggestion-time>
+          {formatTime(props.suggestion.stateChangedAt)}
+        </Item.Metadata>
+        <EndSlot />
+      </Item.Actions>
     </Item>
   );
 }
@@ -517,14 +542,17 @@ export function DismissedSuggestion(props: {
           </p>
         </Show>
       </Item.Content>
-      <Button
-        variant="ghost"
-        size="sm"
-        loading={props.busy}
-        onClick={props.onUndo}
-      >
-        {t('suggestions.undo')}
-      </Button>
+      <Item.Actions>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={props.busy}
+          onClick={props.onUndo}
+        >
+          {t('suggestions.undo')}
+        </Button>
+        <EndSlot />
+      </Item.Actions>
     </Item>
   );
 }

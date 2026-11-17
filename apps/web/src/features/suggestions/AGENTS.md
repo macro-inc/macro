@@ -125,6 +125,10 @@ only, behind `enable-suggestions`.
   Pressing the text opens it too. Rows don't open in place.
 - A Done today row (`DoneRow`) is a green check, a quieter title, what was
   done and when; pressing its text opens what it left (`feed.open`).
+- Every row ends in a slot one icon button wide (`EndSlot`): dismiss, shown
+  on hover or focus, and empty on rows that can't be dismissed. So ages,
+  times and buttons share one right edge down the page, and no button moves
+  when dismiss appears. Don't put dismiss before a row's button.
 - Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
   `primary`), and colour is left to the kind's mark and a failed run.
 - The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,

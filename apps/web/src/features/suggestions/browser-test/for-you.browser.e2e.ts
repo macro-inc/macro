@@ -191,6 +191,31 @@ test('pointing at a run offers Open chat beside Run, and a routine Review', asyn
   await expect(requests(page)).toContainText('review routine-draft-1');
 });
 
+test('dismiss sits at the end of the row, and Run stays where it was', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const run = row(page, 'suggestion-background');
+  const button = run.getByRole('button', { name: 'Run', exact: true });
+  const before = await button.boundingBox();
+
+  await run.hover();
+  const dismiss = await run
+    .getByRole('button', { name: 'Dismiss “Post the weekly status summary”' })
+    .boundingBox();
+  const after = await button.boundingBox();
+  if (!before || !after || !dismiss) throw new Error('expected both buttons');
+  expect(after.x).toBe(before.x);
+  expect(dismiss.x).toBeGreaterThan(after.x + after.width);
+
+  // What stands before the slot lines up down the page.
+  const age = await row(page, 'suggestion-reply')
+    .locator('[data-suggestion-time]')
+    .boundingBox();
+  if (!age) throw new Error('expected the age');
+  expect(Math.round(age.x + age.width)).toBe(Math.round(after.x + after.width));
+});
+
 test('a failed run says so and Retry runs it again', async ({ page }) => {
   await page.goto('/');
   const suggestion = row(page, 'suggestion-failed');
