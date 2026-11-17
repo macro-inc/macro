@@ -163,12 +163,12 @@ where
             let mut request_context = request_context;
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
                 && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
-            // A native tool that uses nobody's access (looking things up on
-            // the web, Macro's help) takes no account and waits for nobody,
-            // but still asks the gate: a scoped session's gate refuses it.
-            let spends_owner_access =
-                agent_egress::domain::approval::spends_owner_access("macro", tool_name);
             let arguments = if native {
+                // A tool that uses nobody's access (the web, Macro's help)
+                // takes no account and waits for nobody, but still asks the
+                // gate: a scoped session's gate refuses it.
+                let spends_owner_access =
+                    agent_egress::domain::approval::spends_owner_access("macro", tool_name);
                 let _waiting = spends_owner_access.then(|| self.awaiting.begin());
                 let verdict = if spends_owner_access
                     && self.reviewed_tools.iter().any(|name| name == tool_name)
@@ -185,8 +185,11 @@ where
                     .await
                 };
                 match verdict {
-                    NativeToolVerdict::RunAs(user) => request_context.user_id = user,
-                    NativeToolVerdict::Run => {}
+                    NativeToolVerdict::RunAs(user) if spends_owner_access => {
+                        request_context.user_id = user;
+                    }
+                    // An identity-free tool takes no account to run as.
+                    NativeToolVerdict::RunAs(_) | NativeToolVerdict::Run => {}
                     NativeToolVerdict::Refuse(reason) => {
                         return Ok(Err(ai_toolset::ToolCallError {
                             internal_error: anyhow::anyhow!("{tool_name} was not approved"),
@@ -194,9 +197,7 @@ where
                         }));
                     }
                 }
-                if !spends_owner_access {
-                    json.clone()
-                } else {
+                if spends_owner_access {
                     match ai_toolset::actor::ToolActor::take(json) {
                         Ok((_, arguments)) => arguments,
                         Err(error) => {
@@ -206,6 +207,8 @@ where
                             }));
                         }
                     }
+                } else {
+                    json.clone()
                 }
             } else {
                 json.clone()
