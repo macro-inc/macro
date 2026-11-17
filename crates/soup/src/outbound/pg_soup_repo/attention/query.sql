@@ -146,6 +146,8 @@ attention_page AS (
         WHEN 'crm_contact' THEN {crm_contact_gate}
         -- Runtimes have no own work: only their notifications place them.
         WHEN 'harness' THEN {harness_gate}
+        -- Teams too: only team-scoped notifications place them.
+        WHEN 'team' THEN {team_gate}
         ELSE FALSE
     END
     ORDER BY nc.attention_at DESC, nc.entity_id DESC

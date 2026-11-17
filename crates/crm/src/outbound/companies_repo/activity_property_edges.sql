@@ -1,6 +1,6 @@
 -- Items whose Companies or Contacts property names a record of the activity
--- scope. $1 is the viewer (every team they belong to), $2 a verified bot's
--- team; $3 the item kinds to return.
+-- scope. $1 is the permitted team ids checked on the primary (or a verified
+-- bot's team); $2 is the item kinds to return. The replica cannot grant access.
 --
 -- Reads only the scope's visible company and contact ids, from their team
 -- indexes (companies index-only), without domains or addresses. Each id then
@@ -14,11 +14,7 @@
 -- buffers each warm: 38 ms for 4k companies and 10k contacts, 1 ms for 30
 -- companies. Revisit if a team's records near 40k (100 ms).
 WITH scope AS MATERIALIZED (
-    SELECT ARRAY(
-        SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
-        UNION ALL
-        SELECT $2::uuid
-    ) AS teams
+    SELECT $1::uuid[] AS teams
 ), companies AS MATERIALIZED (
     -- Fence companies too so stale statistics cannot scan other teams.
     SELECT co.id, co.team_id
@@ -60,7 +56,7 @@ CROSS JOIN LATERAL (
     FROM entity_properties ep
     WHERE ep.property_definition_id = '00000001-0000-0000-0000-00000000000c'
       AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', co.id::text))
-      AND ep.entity_type = ANY($3::property_entity_type[])
+      AND ep.entity_type = ANY($2::property_entity_type[])
     OFFSET 0
 ) ep
 UNION
@@ -71,6 +67,6 @@ CROSS JOIN LATERAL (
     FROM entity_properties ep
     WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000013'
       AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', ct.id::text))
-      AND ep.entity_type = ANY($3::property_entity_type[])
+      AND ep.entity_type = ANY($2::property_entity_type[])
     OFFSET 0
 ) ep

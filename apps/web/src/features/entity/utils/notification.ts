@@ -276,6 +276,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
     .with('calendar_event_join_request', () => 'asked to join')
+    .with('password_access_requested', () => 'requested access to')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('external_chat_account_ended', () => 'disconnected')
     .with('agent_session_settled', () => 'finished')
@@ -383,6 +384,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
+    .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'external_chat_account_ended' },

@@ -26,9 +26,9 @@ pub use metadata::{
     GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
     InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
-    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    NotificationTitle, PasswordAccessRequestedMetadata, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
+    RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -288,6 +288,8 @@ define_notif_event!(
 
         /// Someone asked to join a channel the user participates in.
         ChannelAccessRequested(ChannelAccessRequestedMetadata),
+        /// An agent asked for access to a vault item the user manages.
+        PasswordAccessRequested(PasswordAccessRequestedMetadata),
         /// One of the user's routines finished a run, successfully or not.
         RoutineRunFinished(RoutineRunFinishedMetadata),
 
@@ -331,6 +333,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::ChannelMessageReaction(m) => m.format_title(sender_id),
             NotifEvent::CalendarEventJoinRequest(m) => m.format_title(sender_id),
+            NotifEvent::PasswordAccessRequested(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_title(sender_id)
             }
@@ -407,6 +410,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::ChannelMessageReaction(m) => m.format_body(sender_id),
             NotifEvent::CalendarEventJoinRequest(m) => m.format_body(sender_id),
+            NotifEvent::PasswordAccessRequested(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_body(sender_id)
             }

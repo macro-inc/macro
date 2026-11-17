@@ -4,16 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ComputerSetupMetadata } from './computerSetupMetadata';
+import type { AgentSignInExpiryMetadata } from './agentSignInExpiryMetadata';
 import type { NotifEventOneOfSeventhreeTag } from './notifEventOneOfSeventhreeTag';
 
 /**
- * A Macro computer the user bought finished first-time setup, or
-could not be set up.
+ * An agent's sign-in on one of the team's Macro computers is about
+to expire, expired, or was rejected.
  */
 export type NotifEventOneOfSeventhree = {
-  /** A Macro computer the user bought finished first-time setup, or
-could not be set up. */
-  content: ComputerSetupMetadata;
+  /** An agent's sign-in on one of the team's Macro computers is about
+to expire, expired, or was rejected. */
+  content: AgentSignInExpiryMetadata;
   tag: NotifEventOneOfSeventhreeTag;
 };
