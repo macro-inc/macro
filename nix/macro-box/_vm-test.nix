@@ -268,8 +268,14 @@ pkgs.testers.runNixOSTest {
           # Rejected before git sends any request.
           agent.fail("test -e /srv/git/traceparents")
 
-      with subtest("a rewritten agent environment restarts the agent, which clones and runs"):
-          agent.succeed("install -m 0600 -o macro -g macro ${goodAgentEnvironment} /var/lib/macrod/agent.env")
+      with subtest("an environment macrod stages after boot is installed, which restarts the agent, which clones and runs"):
+          # A warm pool computer's agent arrives over macrod's socket; macrod,
+          # as macro, can write only the inbox, and macro-agent-apply installs it.
+          agent.fail("su macro -s /bin/sh -c 'touch /var/lib/macrod/agent.env.macro'")
+          agent.succeed("su macro -s /bin/sh -c 'install -m 0600 ${goodAgentEnvironment} /run/macro-agent-inbox/agent.env'")
+          agent.wait_until_fails("test -e /run/macro-agent-inbox/agent.env")
+          agent.succeed("cmp ${goodAgentEnvironment} /var/lib/macrod/agent.env")
+          agent.succeed("[ \"$(stat -c '%U %a' /var/lib/macrod/agent.env)\" = 'macro 600' ]")
           agent.wait_until_succeeds("journalctl -u macro-agent.service | grep -F 'starting the runtime at'")
           agent.wait_until_succeeds("pgrep -u macro -f 'bun /home/macro/agent/workspace/cli.ts run'")
           agent.succeed("[ $(systemctl show macro-agent.service --property=User --value) = macro ]")
